@@ -1,0 +1,31 @@
+/* The run site's frame on the tokens in /rer-theme.css: warm paper, ink type,
+   the header (mark + Nectar · Docs, Source) and the one-line footer. */
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--n-page); color: var(--n-ink); font: 400 17px/1.55 var(--n-font); -webkit-font-smoothing: antialiased; overflow-x: clip; }
+h1, h2, h3, p, ul, dl, dd, figure { margin: 0; padding: 0; }
+a { color: inherit; }
+:focus-visible { outline: 3px solid var(--n-ink); outline-offset: 3px; border-radius: 6px; }
+.fig, .glass dd, .glass .row, .grid { font-feature-settings: "tnum"; }
+.site-bar, .site-foot { max-width: 1440px; margin: 0 auto; padding: 0 48px; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+.site-bar { position: relative; z-index: 2; min-height: 96px; }
+.site-bar::after, .site-foot::before { content: ''; position: absolute; left: 48px; right: 48px; border-top: 1px solid var(--n-line); }
+.site-bar::after { bottom: 0; }
+.site-brand { display: inline-flex; align-items: center; gap: 12px; font-size: 22px; font-weight: 700; letter-spacing: -.01em; text-decoration: none; }
+.site-bar nav, .site-foot nav { display: flex; gap: 44px; font-size: 18px; }
+.site-bar nav a, .site-foot nav a { color: var(--n-muted); text-decoration: none; }
+.site-bar nav a:hover, .site-foot nav a:hover, .site-bar nav a[aria-current="page"] { color: var(--n-ink); text-decoration: underline; text-underline-offset: 6px; text-decoration-thickness: 1.5px; }
+.site-foot { position: relative; min-height: 104px; }
+.site-foot::before { top: 0; }
+.site-foot .site-brand { font-size: 18px; }
+.site-foot nav { gap: 36px; font-size: 15px; }
+@media (max-width: 760px) {
+  body { font-size: 16px; }
+  .site-bar, .site-foot { padding: 0 16px; }
+  .site-bar { min-height: 68px; }
+  .site-bar::after, .site-foot::before { left: 16px; right: 16px; }
+  .site-brand { font-size: 20px; gap: 10px; }
+  .site-bar nav { gap: 24px; font-size: 16px; }
+  .site-foot { flex-direction: column; align-items: flex-start; justify-content: center; gap: 14px; padding-top: 28px; padding-bottom: 32px; }
+  .site-foot nav { gap: 22px; flex-wrap: wrap; }
+}

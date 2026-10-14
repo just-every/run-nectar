@@ -1,0 +1,17 @@
+{
+  "object": "list",
+  "url": "/v1/billing/meters",
+  "has_more": false,
+  "data": [
+    {
+      "id": "mtr_NcApiCalls",
+      "object": "billing.meter",
+      "display_name": "API call",
+      "event_name": "api_calls",
+      "default_aggregation": {
+        "formula": "sum"
+      },
+      "status": "active"
+    }
+  ]
+}

@@ -1,0 +1,199 @@
+{
+  "object": "list",
+  "url": "/v1/invoices",
+  "has_more": false,
+  "data": [
+    {
+      "id": "in_NcAtlasAug",
+      "object": "invoice",
+      "number": "ATLAS-0003",
+      "customer": "cus_NcAtlasFreight01",
+      "subscription": "sub_NcAtlas01",
+      "status": "paid",
+      "currency": "usd",
+      "period_start": 1785567600,
+      "period_end": 1788246000,
+      "subtotal": 39900,
+      "total": 35910,
+      "tax": 0,
+      "total_discount_amounts": [
+        {
+          "amount": 3990,
+          "discount": "di_NcAtlasLaunch"
+        }
+      ],
+      "amount_paid": 35910,
+      "amount_remaining": 0,
+      "created": 1785567600,
+      "lines": {
+        "object": "list",
+        "data": [
+          {
+            "id": "il_a1",
+            "object": "line_item",
+            "amount": 19900,
+            "description": "Platform",
+            "quantity": 1,
+            "price": {
+              "id": "price_NcPlatform199",
+              "object": "price"
+            },
+            "period": {
+              "start": 1785567600,
+              "end": 1788246000
+            },
+            "proration": false
+          },
+          {
+            "id": "il_a2",
+            "object": "line_item",
+            "amount": 20000,
+            "description": "8 \u00d7 Team seats",
+            "quantity": 8,
+            "price": {
+              "id": "price_NcSeat25",
+              "object": "price"
+            },
+            "period": {
+              "start": 1785567600,
+              "end": 1788246000
+            },
+            "proration": false
+          }
+        ],
+        "has_more": false
+      }
+    },
+    {
+      "id": "in_NcAtlasSep",
+      "object": "invoice",
+      "number": "ATLAS-0004",
+      "customer": "cus_NcAtlasFreight01",
+      "subscription": "sub_NcAtlas01",
+      "status": "open",
+      "currency": "usd",
+      "period_start": 1788246000,
+      "period_end": 1790838000,
+      "subtotal": 39900,
+      "total": 35910,
+      "tax": 0,
+      "total_discount_amounts": [
+        {
+          "amount": 3990,
+          "discount": "di_NcAtlasLaunch"
+        }
+      ],
+      "amount_paid": 0,
+      "amount_remaining": 35910,
+      "created": 1788246000,
+      "lines": {
+        "object": "list",
+        "data": [
+          {
+            "id": "il_a3",
+            "object": "line_item",
+            "amount": 19900,
+            "description": "Platform",
+            "quantity": 1,
+            "price": {
+              "id": "price_NcPlatform199",
+              "object": "price"
+            },
+            "period": {
+              "start": 1788246000,
+              "end": 1790838000
+            },
+            "proration": false
+          },
+          {
+            "id": "il_a4",
+            "object": "line_item",
+            "amount": 20000,
+            "description": "8 \u00d7 Team seats",
+            "quantity": 8,
+            "price": {
+              "id": "price_NcSeat25",
+              "object": "price"
+            },
+            "period": {
+              "start": 1788246000,
+              "end": 1790838000
+            },
+            "proration": false
+          }
+        ],
+        "has_more": false
+      }
+    },
+    {
+      "id": "in_NcHarborAug",
+      "object": "invoice",
+      "number": "HARBOR-0002",
+      "customer": "cus_NcHarborAnalytics02",
+      "subscription": "sub_NcHarbor02",
+      "status": "paid",
+      "currency": "usd",
+      "period_start": 1786777200,
+      "period_end": 1789455600,
+      "subtotal": 69900,
+      "total": 69900,
+      "tax": 0,
+      "total_discount_amounts": [],
+      "amount_paid": 69900,
+      "amount_remaining": 0,
+      "created": 1786777200,
+      "lines": {
+        "object": "list",
+        "data": [
+          {
+            "id": "il_h1",
+            "object": "line_item",
+            "amount": 19900,
+            "description": "Platform",
+            "quantity": 1,
+            "price": {
+              "id": "price_NcPlatform199",
+              "object": "price"
+            },
+            "period": {
+              "start": 1786777200,
+              "end": 1789455600
+            },
+            "proration": false
+          },
+          {
+            "id": "il_h2",
+            "object": "line_item",
+            "amount": 50000,
+            "description": "1,250,000 \u00d7 API calls",
+            "quantity": 1250000,
+            "price": {
+              "id": "price_NcApi0004",
+              "object": "price"
+            },
+            "period": {
+              "start": 1786777200,
+              "end": 1789455600
+            },
+            "proration": false
+          }
+        ],
+        "has_more": false
+      }
+    },
+    {
+      "id": "in_NcHarborDraft",
+      "object": "invoice",
+      "number": null,
+      "customer": "cus_NcHarborAnalytics02",
+      "subscription": "sub_NcHarbor02",
+      "status": "draft",
+      "total": 0,
+      "lines": {
+        "object": "list",
+        "data": [],
+        "has_more": false
+      }
+    }
+  ]
+}

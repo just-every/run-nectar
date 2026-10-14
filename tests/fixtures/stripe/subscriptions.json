@@ -1,0 +1,129 @@
+{
+  "object": "list",
+  "url": "/v1/subscriptions",
+  "has_more": false,
+  "data": [
+    {
+      "id": "sub_NcAtlas01",
+      "object": "subscription",
+      "customer": "cus_NcAtlasFreight01",
+      "status": "active",
+      "collection_method": "send_invoice",
+      "start_date": 1780297200,
+      "billing_cycle_anchor": 1780297200,
+      "trial_start": null,
+      "trial_end": null,
+      "cancel_at": null,
+      "canceled_at": null,
+      "ended_at": null,
+      "schedule": null,
+      "items": {
+        "object": "list",
+        "data": [
+          {
+            "id": "si_NcAtlasPlatform",
+            "object": "subscription_item",
+            "price": {
+              "id": "price_NcPlatform199",
+              "object": "price"
+            },
+            "quantity": 1
+          },
+          {
+            "id": "si_NcAtlasSeats",
+            "object": "subscription_item",
+            "price": {
+              "id": "price_NcSeat25",
+              "object": "price"
+            },
+            "quantity": 8
+          }
+        ],
+        "has_more": false
+      },
+      "discounts": [
+        {
+          "id": "di_NcAtlasLaunch",
+          "object": "discount",
+          "coupon": {
+            "id": "LAUNCH10",
+            "object": "coupon",
+            "name": "Launch 10%",
+            "percent_off": 10,
+            "amount_off": null,
+            "duration": "forever"
+          },
+          "start": 1780297200,
+          "end": null
+        }
+      ],
+      "default_tax_rates": []
+    },
+    {
+      "id": "sub_NcHarbor02",
+      "object": "subscription",
+      "customer": "cus_NcHarborAnalytics02",
+      "status": "active",
+      "collection_method": "charge_automatically",
+      "start_date": 1781506800,
+      "billing_cycle_anchor": 1781506800,
+      "trial_start": null,
+      "trial_end": null,
+      "cancel_at": null,
+      "canceled_at": null,
+      "ended_at": null,
+      "schedule": "sub_sched_NcHarbor",
+      "items": {
+        "object": "list",
+        "data": [
+          {
+            "id": "si_NcHarborPlatform",
+            "object": "subscription_item",
+            "price": {
+              "id": "price_NcPlatform199",
+              "object": "price"
+            },
+            "quantity": 1
+          },
+          {
+            "id": "si_NcHarborApi",
+            "object": "subscription_item",
+            "price": {
+              "id": "price_NcApi0004",
+              "object": "price"
+            },
+            "quantity": null
+          }
+        ],
+        "has_more": false
+      },
+      "discounts": [],
+      "default_tax_rates": []
+    },
+    {
+      "id": "sub_NcBend03",
+      "object": "subscription",
+      "customer": "cus_NcWillowBend03",
+      "status": "incomplete",
+      "collection_method": "charge_automatically",
+      "start_date": 1788246000,
+      "billing_cycle_anchor": 1788246000,
+      "items": {
+        "object": "list",
+        "data": [
+          {
+            "id": "si_NcBend",
+            "object": "subscription_item",
+            "price": {
+              "id": "price_NcPlatform199",
+              "object": "price"
+            },
+            "quantity": 1
+          }
+        ],
+        "has_more": false
+      },
+      "discounts": []
+    }
+  ]
+}

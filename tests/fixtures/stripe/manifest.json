@@ -1,0 +1,43 @@
+{
+  "source": "stripe",
+  "captured_at": "2026-10-02T16:00:00Z",
+  "api_version": "2025-09-30.clover",
+  "captured_by": "owner, Stripe API with a restricted read-only key",
+  "expand": [
+    "data.items",
+    "data.discounts"
+  ],
+  "files": {
+    "customers": {
+      "endpoint": "/v1/customers",
+      "count": 3,
+      "has_more": false
+    },
+    "products": {
+      "endpoint": "/v1/products",
+      "count": 4,
+      "has_more": false
+    },
+    "prices": {
+      "endpoint": "/v1/prices",
+      "count": 5,
+      "has_more": false
+    },
+    "subscriptions": {
+      "endpoint": "/v1/subscriptions",
+      "count": 3,
+      "has_more": false
+    },
+    "invoices": {
+      "endpoint": "/v1/invoices",
+      "count": 4,
+      "has_more": false
+    },
+    "meters": {
+      "endpoint": "/v1/billing/meters",
+      "count": 1,
+      "has_more": false
+    }
+  },
+  "coverage": "All customers, products, prices, subscriptions (status=all), invoices and billing meters for the account at capture time."
+}

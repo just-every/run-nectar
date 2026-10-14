@@ -1,0 +1,91 @@
+// Proposals (agent-prepared work awaiting a person), the Stripe move-in kit
+// (preview, apply, undo, shadow comparison and cutover) and exports.
+import type { Bindings } from '../../auth.server'
+import { can, type Actor } from '../actor'
+import { runs } from '../billruns'
+import { business } from '../business'
+import { formatDate, formatPeriod } from '../dates'
+import type { Input } from '../input'
+import { FILES, importJobs, previewImport, shadowSubscriptions, type Preview } from '../movein/stripe'
+import { proposalDetail, proposals } from '../proposals'
+import { area, cents, check, details, field, fileField, form, h, hidden, page, table, tag, when } from './html'
+
+const KIND_LABELS: Record<string, string> = { amendment: 'Contract terms', price_change: 'Price change', usage_correction: 'Usage correction', collection: 'Collections reminder' }
+
+export async function proposalsPage(env: Bindings, actor: Actor, url: URL) {
+  const rows = await proposals(env, actor)
+  const zone = (await business(env))!.timezone
+  return page('Proposals', actor, h`<h1>Proposals</h1><p class="hint">Work prepared by an agent or a colleague. Nectar recomputes every amount itself; nothing changes until a person approves, and a proposal whose records moved since it was prepared cannot be approved.</p>
+    <section class="card">${table(['Proposal', 'Kind', 'Prepared by', 'When', 'Status'], rows.map((p: any) => [h`<a href="/app/proposals/${p.id}">${p.title}</a>`, KIND_LABELS[p.kind], p.created_by_kind === 'agent' ? `${p.created_by} (agent)` : p.created_by, when(p.created_at, zone), tag(p.status === 'pending' ? 'Pending' : p.status === 'approved' ? 'Approved' : 'Rejected')]), { empty: 'No proposals. An agent with a "prepare" credential posts them to /api/nectar/proposal.create.', lead: true })}</section>`, { current: '/app/proposals', url })
+}
+
+const impactRows = (periods: any[]) => table(['Period', 'Before$', 'After$', 'Difference$'], periods.map((p: any) => [formatPeriod(p.period.start, p.period.end), cents(p.before.subtotalCents), cents(p.after.subtotalCents), cents(p.after.subtotalCents - p.before.subtotalCents)]))
+
+export async function proposalPage(env: Bindings, actor: Actor, id: string, url: URL) {
+  const p = await proposalDetail(env, actor, id)
+  const zone = (await business(env))!.timezone
+  const decider = p.status === 'pending' && actor.kind === 'member' && can(actor, 'approve')
+  const evidence = p.evidence as any, impact = p.impact as any, payload = p.payload as any
+  const body = p.kind === 'amendment' ? h`<p>Proposed: ${payload.kind === 'discount_percent' ? `${payload.value}% discount` : payload.kind === 'fixed_credit' ? `$${payload.value} one-time credit` : `contract price $${payload.value}`} from ${formatDate(payload.effective_from)}${payload.effective_to ? ` until ${formatDate(payload.effective_to)}` : ''} on <a href="/app/subscriptions/${payload.subscription}">the subscription</a>.</p>
+      <h3>Quoted clauses</h3><ul class="quotes">${(evidence.clauses ?? []).map((c: any) => h`<li><blockquote>${c.quote}</blockquote>${c.reference ? h`<span class="sub">${c.reference}</span>` : ''}</li>`)}</ul>
+      ${evidence.ambiguities?.length ? h`<h3>Flagged ambiguities</h3><ul class="flags">${evidence.ambiguities.map((a: string) => h`<li>${a}</li>`)}</ul>` : ''}
+      <h3>Effect on invoices (computed by Nectar)</h3>${impactRows(impact)}`
+    : p.kind === 'price_change' ? h`<p>New ${payload.kind} price $${payload.unit_amount} from ${formatDate(payload.effective_date)} for ${impact.length} subscription(s).</p>
+      ${impact.map((s: any) => h`<h3>${s.customer} (× ${s.quantity})</h3>${impactRows(s.periods)}`)}`
+    : p.kind === 'usage_correction' ? h`<h3>Corrections</h3>${table(['Action', 'Event', 'Quantity$', 'Occurred', 'Reason'], impact.rows.map((r: any) => [r.action === 'void' ? 'Void' : 'Add', r.event, r.quantity, r.occurredAt, r.reason]))}
+      ${impact.invoices.length ? h`<h3>Effect on invoices (computed by Nectar)</h3>${impact.invoices.map((s: any) => h`<h4>${s.customer}</h4>${impactRows([s])}`)}` : ''}
+      <h3>Sources</h3><ul>${(evidence.sources ?? []).map((s: string) => h`<li>${s}</li>`)}</ul>${payload.run ? h`<p class="hint">Approving re-prepares the draft bill run; its invoices still need their own approval.</p>` : ''}`
+    : h`<p>Overdue: ${cents(impact.balanceCents)} across ${impact.overdue.length} invoice(s).</p>`
+  const decide = !decider ? '' : p.stale ? h`<p class="flash error" role="alert">The records changed after this was prepared. Reject it and ask for a new proposal.</p>${form('proposal.decide', `/app/proposals/${p.id}`, h`${hidden('proposal', p.id)}${hidden('decision', 'rejected')}`, 'Reject', { secondary: true })}`
+    : h`${form('proposal.decide', `/app/proposals/${p.id}`, h`${hidden('proposal', p.id)}${hidden('decision', 'approved')}${p.kind === 'collection' ? h`${field('To', 'recipient', { type: 'email', value: payload.recipient })}${field('Subject', 'subject', { value: payload.subject })}${area('Message', 'body', payload.body, true, 10)}` : ''}${field('Note (optional)', 'note', { required: false })}`, p.kind === 'collection' ? 'Approve recipient and wording' : 'Approve')}
+       ${form('proposal.decide', `/app/proposals/${p.id}`, h`${hidden('proposal', p.id)}${hidden('decision', 'rejected')}${field('Why not (optional)', 'note', { required: false })}`, 'Reject', { secondary: true })}`
+  return page(p.title, actor, h`<p class="crumbs"><a href="/app/proposals">Proposals</a></p><div class="title-row"><h1>${p.title}</h1>${tag(p.status === 'pending' ? (p.stale ? 'Stale' : 'Pending') : p.status === 'approved' ? 'Approved' : 'Rejected')}</div>
+    <p class="sub">${KIND_LABELS[p.kind]} · prepared by ${p.created_by}${p.created_by_kind === 'agent' ? ' (agent)' : ''} · ${when(p.created_at, zone)}${p.decided_by ? ` · decided by ${p.decided_by}` : ''}</p>
+    <section class="card">${body}</section>${decide ? h`<section class="card" aria-labelledby="decide"><h2 id="decide">Decide</h2>${decide}</section>` : ''}
+    ${details({ Proposal: p.id, Payload: payload, Basis: p.basis, Result: p.result ?? '—', 'Decision note': p.decision_note ?? '—' })}`, { current: '/app/proposals', url })
+}
+
+const uploadFields = () => h`${fileField('Manifest (manifest.json)', 'manifest', { required: true, accept: '.json', hint: 'Lists each captured file with its object count and has_more: false.' })}
+  ${fileField('Customers (GET /v1/customers)', 'customers', { required: true, accept: '.json' })}${fileField('Products (GET /v1/products)', 'products', { required: true, accept: '.json' })}
+  ${fileField('Prices (GET /v1/prices)', 'prices', { required: true, accept: '.json' })}${fileField('Subscriptions (GET /v1/subscriptions?status=all)', 'subscriptions', { required: true, accept: '.json' })}
+  ${fileField('Invoices (GET /v1/invoices), for shadow comparison', 'invoices', { accept: '.json' })}${fileField('Billing meters (GET /v1/billing/meters), for metered prices', 'meters', { accept: '.json' })}`
+
+export async function importPage(env: Bindings, actor: Actor, url: URL) {
+  const jobs = await importJobs(env, actor)
+  const shadow = await shadowSubscriptions(env, actor)
+  const owner = actor.role === 'owner'
+  const zone = (await business(env))!.timezone
+  return page('Move in', actor, h`<h1>Move in from Stripe Billing</h1>
+    <section class="card" aria-labelledby="upload"><h2 id="upload">1. Preview</h2><p class="hint">Upload the Stripe API list responses you captured (expanded with <code>data.items</code> and <code>data.discounts</code> where present). The preview writes nothing.</p>
+      <form method="post" action="/app/import/preview" enctype="multipart/form-data" class="columns">${uploadFields()}<button type="submit">Preview the move</button></form></section>
+    <section class="card" aria-labelledby="jobs"><h2 id="jobs">2. Moves applied</h2>${table(['Applied', 'State', 'Records$', 'Undo'], jobs.map((j: any) => [when(j.appliedAt, zone), tag(j.state === 'completed' ? 'Completed' : j.state), j.effects,
+      j.state === 'completed' ? (j.blockers.length ? h`<span class="sub">Blocked: ${j.blockers.length} record(s) were edited or billed since</span>` : form('import.job', '/app/import', h`${hidden('job', j.id)}${hidden('action', 'undo')}`, 'Undo this move', { secondary: true })) : '']), { empty: 'Nothing moved in yet.' })}</section>
+    <section class="card" aria-labelledby="shadow"><h2 id="shadow">3. Shadow and cutover</h2><p class="hint">Moved-in subscriptions bill nothing. Prepare a bill run for a month Stripe already billed and compare. When it agrees, the owner adopts each subscription from a period Stripe has not billed, so no period is billed twice.</p>
+      ${table(['Customer', 'Last period Stripe billed', 'Earliest cutover', 'Shadow comparison', ''], shadow.map((s: any) => [s.customer_name, formatDate(s.lastBilledPeriodStart), formatDate(s.earliestCutover), tag(s.reconciled ? 'Reconciled' : 'Not reconciled'),
+        owner ? form('subscription.adopt', '/app/import', h`${hidden('subscription', s.id)}${field('Cutover period start', 'cutover_start', { type: 'date', value: s.earliestCutover })}${s.reconciled ? '' : check('Adopt even though no shadow period agrees', 'acknowledge_unreconciled')}`, 'Adopt', { layout: 'row-form' }) : '']), { empty: 'No subscriptions in shadow.' })}</section>`, { current: '/app/import', url })
+}
+
+export async function previewPage(env: Bindings, actor: Actor, input: Input, url: URL) {
+  let preview: Preview
+  try { preview = await previewImport(env, actor, input) } catch (error: any) {
+    const detail = error?.detail ? JSON.stringify(error.detail) : ''
+    return page('Move in', actor, h`<h1>Move in from Stripe Billing</h1><p class="flash error" role="alert">That did not work: ${String(error?.code ?? error?.message ?? 'error').replace(/_/g, ' ')}. ${detail}</p><p><a class="button" href="/app/import">Back</a></p>`, { current: '/app/import', url, status: error?.status ?? 400 })
+  }
+  return page('Move-in preview', actor, h`<h1>Move-in preview</h1>
+    <section class="card summary"><dl class="figures">${Object.entries(preview.create).map(([kind, n]) => h`<div><dt>New ${kind}s</dt><dd>${n}</dd></div>`)}<div><dt>Rejected</dt><dd>${preview.rejected.length}</dd></div></dl></section>
+    <section class="card"><h2>Capture coverage</h2>${table(['File', 'Manifest count$', 'Found$', 'Complete'], preview.coverage.map(c => [c.file, c.manifest ?? '—', c.found, tag(c.complete ? 'Reconciled' : 'Not reconciled')]))}</section>
+    ${preview.rejected.length ? h`<section class="card"><h2>Not moved</h2>${table(['Record', 'Reason'], preview.rejected.map(r => [r.location, r.reason]))}</section>` : ''}
+    ${preview.attention.length ? h`<section class="card"><h2>Check after the move</h2>${table(['Record', 'Note'], preview.attention.map(r => [r.location, r.reason]))}</section>` : ''}
+    <section class="card"><h2>Before you apply</h2><ul>${preview.gaps.map(g => h`<li>${g}</li>`)}</ul>
+      <form method="post" action="/app/do/import.apply">${hidden('returnTo', '/app/import')}${hidden('fingerprint', preview.fingerprint)}${FILES.filter(name => preview.carry[`${name}_b64`]).map(name => h`${hidden(`${name}_b64`, preview.carry[`${name}_b64`])}${hidden(`${name}_name`, preview.carry[`${name}_name`])}`)}<button type="submit">Apply this exact move</button></form>
+      ${details({ Fingerprint: preview.fingerprint, Counts: preview.counts })}</section>`, { current: '/app/import', url })
+}
+
+export async function exportsPage(env: Bindings, actor: Actor, url: URL) {
+  const list = (await runs(env, actor)).filter((r: any) => r.status === 'finalised' || r.status === 'draft')
+  return page('Exports', actor, h`<h1>Exports</h1>
+    <section class="card"><h2>Records</h2><ul class="downloads"><li><a class="download" href="/app/exports/invoices.csv">Issued invoices (CSV)</a> — totals, credits, payments and balance, with each invoice's calculation fingerprint.</li>
+      <li><a class="download" href="/app/exports/usage.csv">Usage events (CSV)</a> — every event, its status and the invoice that billed it.</li><li><a class="download" href="/app/exports/subscriptions.csv">Subscriptions (CSV)</a> — plans, quantities, dates and cutovers.</li></ul></section>
+    <section class="card"><h2>Bill runs</h2>${table(['Month', 'Status', ''], list.map((r: any) => [r.period, tag(r.status === 'finalised' ? 'Finalised' : 'Draft'), h`<a class="download" href="/app/billing/${r.id}.json">Bill run with calculation evidence (JSON)</a>`]), { empty: 'No bill runs yet.' })}</section>
+    <section class="card"><h2>Complete restore package</h2><p>The whole installation — every record, approval, calculation and the audit trail — exports as one archive from the computer that runs Nectar:</p><pre class="message">rer export --output nectar.rer</pre><p class="hint">Restore it into a fresh installation with <code>rer import --input nectar.rer --yes</code>. Sign-in accounts are not part of the archive; the owner signs in again.</p></section>`, { current: '/app/exports', url })
+}

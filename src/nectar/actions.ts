@@ -1,0 +1,61 @@
+// Every state change in Nectar, by name. The same handler serves the HTML form
+// door (/app/do/NAME) and the JSON door (/api/nectar/NAME) used by agents.
+// Each handler checks the actor's capability itself before touching data.
+import type { Bindings } from '../auth.server'
+import type { Actor } from './actor'
+import { endAccess, giveAccess, issueKey, revokeKey } from './access'
+import { approve, finalise, prepareRun } from './billruns'
+import { configureBusiness, declareTax, reviewTax } from './business'
+import { createMeter, createPrice, createProduct, grantFeature, retirePrice } from './catalog'
+import { approveReminder, completeTask, createTask, discardReminder, prepareReminder } from './collections'
+import { addContact, createCustomer, updateCustomer } from './customers'
+import type { Input } from './input'
+import { adopt, applyImport, importAction, previewImport } from './movein/stripe'
+import { decide, propose } from './proposals'
+import { allocate, issueCreditNote, recordPayment } from './receivables'
+import { createSubscription, decideAmendment, decideChange, endSubscription, prepareChange, proposeAmendment } from './subscriptions'
+import { submitUsage } from './usage'
+
+type Handler = (env: Bindings, actor: Actor, input: Input, request: Request) => Promise<unknown>
+
+export const actions: Record<string, Handler> = {
+  'business.configure': configureBusiness,
+  'tax.declare': declareTax,
+  'tax.review': reviewTax,
+  'access.give': giveAccess,
+  'access.end': endAccess,
+  'credential.issue': issueKey,
+  'credential.revoke': revokeKey,
+  'customer.create': createCustomer,
+  'customer.update': updateCustomer,
+  'contact.add': addContact,
+  'product.create': createProduct,
+  'meter.create': createMeter,
+  'price.create': createPrice,
+  'price.retire': retirePrice,
+  'feature.grant': grantFeature,
+  'subscription.create': createSubscription,
+  'subscription.end': endSubscription,
+  'amendment.propose': proposeAmendment,
+  'amendment.decide': decideAmendment,
+  'change.prepare': prepareChange,
+  'change.decide': decideChange,
+  'usage.submit': submitUsage,
+  'billrun.prepare': prepareRun,
+  'invoice.approve': approve,
+  'invoice.finalise': finalise,
+  'credit.issue': issueCreditNote,
+  'payment.record': recordPayment,
+  'payment.allocate': allocate,
+  'reminder.prepare': prepareReminder,
+  'reminder.approve': approveReminder,
+  'reminder.discard': discardReminder,
+  'task.create': createTask,
+  'task.complete': completeTask,
+  'proposal.create': propose,
+  'proposal.decide': decide,
+  'import.preview': previewImport,
+  'import.apply': applyImport,
+  'import.job': importAction,
+  'subscription.adopt': adopt,
+}

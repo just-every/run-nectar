@@ -1,0 +1,29 @@
+{
+  "sections": [
+    {
+      "title": "Start here",
+      "pages": [
+        { "slug": "overview", "title": "What Nectar does", "file": "overview.md", "summary": "Plans, seats and usage turned into invoices that show every line’s calculation, and what happens to them after they are issued." },
+        { "slug": "getting-started", "title": "Getting started", "file": "getting-started.md", "summary": "Run Nectar on your computer, sign in, and enter the business and its tax policy." }
+      ]
+    },
+    {
+      "title": "Billing",
+      "pages": [
+        { "slug": "catalog-and-customers", "title": "Prices, customers and subscriptions", "file": "catalog-and-customers.md", "summary": "Products, versioned prices and meters, customers by their own id, and subscriptions with contract exceptions." },
+        { "slug": "usage", "title": "Usage", "file": "usage.md", "summary": "Bring usage in by file or from a pipeline, and check each period's totals before anything is rated." },
+        { "slug": "bill-runs", "title": "Bill runs and invoices", "file": "bill-runs.md", "summary": "Draft a month, review its exceptions, approve and finalise numbered invoices whose every line shows its rule." },
+        { "slug": "receivables", "title": "Credits, payments and reminders", "file": "receivables.md", "summary": "Credit notes, payments recorded with their reference, ageing and reminders you send from your own mail." },
+        { "slug": "agents-and-access", "title": "People, roles and agents", "file": "agents-and-access.md", "summary": "Invite a finance operator or an accountant, and let an agent prepare work that a person approves." }
+      ]
+    },
+    {
+      "title": "Your data",
+      "pages": [
+        { "slug": "move-in", "title": "Moving in from Stripe Billing", "file": "move-in.md", "summary": "Capture your Stripe records, preview the move, compare in shadow and cut over without billing a period twice." },
+        { "slug": "backup-and-restore", "title": "Backup, export and restore", "file": "backup-and-restore.md", "summary": "Download invoices, usage and bill runs, and save or restore the whole installation." },
+        { "slug": "limits", "title": "What Nectar does not do", "file": "limits.md", "summary": "Payments, sending, tax determination and the other things left out, stated plainly." }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "object": "list",
+  "url": "/v1/customers",
+  "has_more": false,
+  "data": [
+    {
+      "id": "cus_NcAtlasFreight01",
+      "object": "customer",
+      "name": "Atlas Freight Inc",
+      "email": "billing@atlas-freight.example",
+      "address": {
+        "line1": "200 Harbor Way",
+        "city": "Oakland",
+        "state": "CA",
+        "postal_code": "94607",
+        "country": "US"
+      },
+      "tax_exempt": "none",
+      "created": 1779260400,
+      "metadata": {}
+    },
+    {
+      "id": "cus_NcHarborAnalytics02",
+      "object": "customer",
+      "name": "Harbor Analytics LLC",
+      "email": "ap@harbor-analytics.example",
+      "address": null,
+      "tax_exempt": "exempt",
+      "created": 1781074800,
+      "metadata": {}
+    },
+    {
+      "id": "cus_NcWillowBend03",
+      "object": "customer",
+      "name": "Willow Bend Studio",
+      "email": "",
+      "address": null,
+      "tax_exempt": "none",
+      "created": 1788246000,
+      "metadata": {}
+    }
+  ]
+}

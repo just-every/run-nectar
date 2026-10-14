@@ -1,0 +1,105 @@
+{
+  "id": "nectar",
+  "name": "Nectar",
+  "version": "0.1.0",
+  "maturity": "first-release-local",
+  "category": "billing",
+  "spine": {
+    "id": "invoice",
+    "record": "An issued invoice with its approved calculation inputs, lines, credits and payment allocations"
+  },
+  "description": "B2B subscription billing owned by the business: customers, versioned prices and meters, subscriptions with approved contract exceptions, usage with stable ids, deterministic rating, approved and numbered invoices, credit notes, payment evidence, ageing and reminders, agent proposals and a Stripe Billing move-in kit.",
+  "capabilities": [
+    {
+      "id": "subscription-billing",
+      "clauses": [
+        "NEC-01",
+        "NEC-02",
+        "NEC-03",
+        "NEC-04",
+        "NEC-05",
+        "NEC-06",
+        "NEC-07",
+        "NEC-08",
+        "NEC-09",
+        "NEC-10",
+        "NEC-11",
+        "NEC-12",
+        "NEC-13",
+        "NEC-14",
+        "NEC-15",
+        "NEC-16"
+      ]
+    }
+  ],
+  "nonGoals": [
+    "Payment collection, card custody or payment retries",
+    "Sending invoices or reminders",
+    "Merchant-of-record service",
+    "Tax determination or filing beyond one declared US state policy",
+    "Multiple entities or currencies",
+    "Revenue recognition",
+    "Graduated tiers, commitments and prepaid wallets",
+    "Model-generated output in phase one"
+  ],
+  "externals": [
+    {
+      "id": "cloudflare",
+      "required": true,
+      "why": "Worker hosting and D1 records",
+      "data": [
+        "Customer identities and billing contacts",
+        "Subscriptions, prices and usage events",
+        "Invoices, credits and payment evidence"
+      ],
+      "adapters": []
+    }
+  ],
+  "env": [],
+  "deploy": {
+    "healthPath": "/health",
+    "publicPaths": [
+      "/",
+      "/health",
+      "/signin"
+    ],
+    "notes": "Native sessions guard /app and /api/nectar; scoped bearer credentials reach /api/nectar only; unknown paths return real 404s; the development outbox is local-only."
+  },
+  "extensionPoints": {
+    "contributions": [],
+    "policies": [],
+    "events": [],
+    "slots": [],
+    "adapters": []
+  },
+  "limits": {
+    "status": "unmeasured"
+  },
+  "accessibility": {
+    "level": "WCAG 2.2 AA",
+    "status": "target; unaudited"
+  },
+  "operatingCost": {
+    "status": "unmeasured"
+  },
+  "composition": {
+    "base": "base",
+    "family": "billing",
+    "edition": "nectar",
+    "modules": [
+      "job-queue",
+      "release",
+      "deploy-kit",
+      "container",
+      "demo-host",
+      "integrations",
+      "mail",
+      "ai",
+      "portability",
+      "erasure",
+      "dependencies",
+      "operator-auth",
+      "owner-claim"
+    ]
+  }
+}
