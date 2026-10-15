@@ -1,5 +1,5 @@
 import type { Bindings } from './auth.server'
-import { addDays, addMonths } from './nectar/dates'
+import { addDays, addMonths, daysBetween } from './nectar/dates'
 import { fingerprint, sha256Hex } from './nectar/core'
 import { customers, products, insert, finance, pipeline } from './demo/records'
 import { seedBilling } from './demo/billing'
@@ -37,15 +37,20 @@ export async function seedDemo(env: Bindings, { ownerEmail, now }: { ownerEmail:
   }
   statements.push(insert(env, 'nc_amendments', { id: 'demo-northwind-discount', subscription_id: 'demo-sub-northwind', kind: 'discount_percent', value: '10', effective_from: start, note: 'Launch partner discount', clause: '10% discount on platform and seat fees for the contract term.', status: 'approved', created_by: actor, created_at: at, decided_by: actor, decided_at: at }))
   await env.DB.batch(statements)
+  // The metering pipeline reports each finished day; the current month runs to yesterday.
+  const todayDate = now.toISOString().slice(0, 10)
   for (const offset of [-2, -1, 0]) {
-    const period = addMonths(month, offset), batch = `demo-usage-${offset}`
-    const rows = [insert(env, 'nc_usage_batches', { id: batch, source: 'api', accepted: customers.length * 3, duplicates: 0, rejected: 0, report_json: '[]', actor: pipeline, created_at: at })]
+    const period = addMonths(month, offset), next = addMonths(period, 1), batch = `demo-usage-${offset}`
+    const days = Array.from({ length: daysBetween(period, next) }, (_, i) => addDays(period, i)).filter(date => date < todayDate)
+    if (!days.length) continue
+    const rows = [insert(env, 'nc_usage_batches', { id: batch, source: 'api', accepted: customers.length * days.length, duplicates: 0, rejected: 0, report_json: '[]', actor: pipeline, created_at: offset === 0 ? at - 20 * 60000 : Date.parse(next) - 4 * hour })]
     for (const [key, , , , , volume] of customers) {
-      for (const [i, day] of [1, 5, 10].entries()) {
-        // Current-month events never lie in the future, even on the first day.
-        const occurred = Math.min(Date.parse(addDays(period, day - 1) + 'T12:00:00Z'), at)
-        const event = { event_id: `demo-event-${key}-${offset}-${i}`, customer: `demo-${key}`, meter: 'demo-meter', quantity: String(Math.round(volume * (1 + offset * 0.06) / 3)), occurred_at: new Date(occurred).toISOString() }
-        rows.push(insert(env, 'nc_usage_events', { id: event.event_id, event_id: event.event_id, customer_id: event.customer, meter_id: event.meter, quantity: event.quantity, occurred_at: occurred, occurred_text: event.occurred_at, received_at: occurred, batch_id: batch, payload_hash: await fingerprint(event) }))
+      for (const [i, date] of days.entries()) {
+        // Weekdays carry most traffic; growth of about 6% a month.
+        const weekday = new Date(date + 'T00:00:00Z').getUTCDay() % 6 ? 1.15 : 0.6
+        const occurred = Date.parse(date + 'T18:00:00Z')
+        const event = { event_id: `demo-event-${key}-${offset}-${i}`, customer: `demo-${key}`, meter: 'demo-meter', quantity: String(Math.round(volume * (1 + offset * 0.06) * weekday / 30 / 10) * 10), occurred_at: new Date(occurred).toISOString() }
+        rows.push(insert(env, 'nc_usage_events', { id: event.event_id, event_id: event.event_id, customer_id: event.customer, meter_id: event.meter, quantity: event.quantity, occurred_at: occurred, occurred_text: event.occurred_at, received_at: occurred + hour, batch_id: batch, payload_hash: await fingerprint(event) }))
       }
     }
     await env.DB.batch(rows)

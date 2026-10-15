@@ -8,7 +8,7 @@ import { actorLabel, requireCapability, type Actor } from './actor'
 import { requireBusiness } from './business'
 import { NectarError, all, canonical, commit, insist, newId, now, one, sha256Hex, stmt, type Row } from './core'
 import { decimalText, micros } from './decimal'
-import { addDays, daysBetween, isMonth, localDate, parseInstant, periodStartingIn, zonedStart } from './dates'
+import { addDays, daysBetween, isMonth, localDate, parseInstant, periodStartingIn, today, zonedStart } from './dates'
 import type { Input } from './input'
 
 export interface RawEvent { event_id: string; customer: string; meter: string; quantity: string; occurred_at: string }
@@ -156,7 +156,9 @@ export async function inspect(env: Bindings, actor: Actor, month: string) {
       const total = events.reduce((sum, event) => sum + micros(event.quantity, 'quantity'), 0n)
       const days = new Set(events.map(event => localDate(event.occurred_at, zone)))
       const activeFrom = sub.start_date > period.start ? sub.start_date : period.start
-      const activeTo = sub.end_date && sub.end_date < period.end ? sub.end_date : period.end
+      // Only finished days can be quiet: a month in progress stops at today.
+      const ends = [period.end, today(zone), ...(sub.end_date ? [sub.end_date] : [])].sort()
+      const activeTo = ends[0]
       const gaps = Array.from({ length: Math.max(0, daysBetween(activeFrom, activeTo)) }, (_, i) => addDays(activeFrom, i)).filter(day => !days.has(day))
       const lateReceived = events.filter(event => event.received_at >= to).map(event => event.event_id)
       perMeter.push({ meter: meter.code, unit: meter.unit_label, events: events.length, total: decimalText(total), billed: events.filter(event => event.invoice_id).length, daysWithoutUsage: gaps, receivedAfterPeriodEnd: lateReceived })

@@ -449,7 +449,7 @@
       "executable": false
     },
     "src/demo.ts": {
-      "sha256": "5300b645148335977ef37ebf64772c49ec3ba6df5d040d4032ecb869f80ec4b3",
+      "sha256": "1fa3c2d9bbb36ea3e917a82eeeb7e8877021711b9d9d8c7f43bbf863ce5fe851",
       "executable": false
     },
     "src/demo/billing.ts": {
@@ -2045,7 +2045,7 @@
       "executable": false
     },
     "src/nectar/usage.ts": {
-      "sha256": "47ecb59571d1561bb0b6fda452b6d787a13dea564a49821d67aaa6f9e9d8699f",
+      "sha256": "c63fdab32982563bd0e3545c92542083a0f2f44e133460df5b4fd5f33997dead",
       "executable": false
     },
     "src/nectar/views.ts": {
