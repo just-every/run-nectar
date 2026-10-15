@@ -1,3 +1,5 @@
+import { withDemo } from './modules/demo/index.mjs'
+import { seedDemo } from './demo'
 import start from '@tanstack/react-start/server-entry'
 import { Hono } from 'hono'
 import { dispatch } from './base/dispatch'
@@ -21,7 +23,7 @@ function noTransform(response: Response): Response {
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers })
 }
 
-export default {
+export default withDemo({
   async fetch(request, env, execution) {
     const asset = await staticAssetResponse(request, env)
     if (asset) return asset
@@ -37,4 +39,4 @@ export default {
     if (lobby) return lobby
     return dispatch(request, () => api.fetch(request, env, execution), async () => noTransform(await start.fetch(request)))
   },
-} satisfies ExportedHandler<Bindings>
+} satisfies ExportedHandler<Bindings>, { seed: seedDemo })

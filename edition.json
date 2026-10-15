@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "id": "just-every/run-nectar",
+  "toolchain": {
+    "id": "runeditrun/edition-authoring",
+    "version": "1.1.0"
+  },
+  "parent": null,
+  "components": [
+    {
+      "id": "runeditrun/base",
+      "role": "foundation",
+      "source": {
+        "kind": "local",
+        "paths": [
+          "src/modules/demo",
+          "src/modules/operator-auth",
+          "src/modules/owner-claim"
+        ]
+      }
+    },
+    {
+      "id": "just-every/run-nectar",
+      "role": "edition",
+      "source": {
+        "kind": "local",
+        "paths": [
+          "src/nectar",
+          "src/demo.ts",
+          "src/demo",
+          "package.json"
+        ]
+      }
+    }
+  ]
+}

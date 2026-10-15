@@ -54,7 +54,7 @@ export function page(title: string, actor: Actor | null, body: Html, { current =
   const name = actor && (!actor.name.trim() || actor.name.trim() === role) && actor.email ? actor.email : actor?.name
   const who = actor ? h`<span class="who${nav ? '' : ' alone'}"><span class="who-name">${name}</span>${role ? h` <span class="role">${role}</span>` : ''}</span>` : ''
   const document = h`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title} · ${branding.name}</title><link rel="preload" href="/fonts/hanken-grotesk/hanken-grotesk-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin="anonymous"><link rel="stylesheet" href="/fonts/fonts.css"><link rel="stylesheet" href="/rer-theme.css"><link rel="stylesheet" href="/nectar.css"></head><body>
-<header class="top"><div class="top-inner"><a class="brand" href="/app"><img src="/brand/mark.svg" alt="" width="28" height="28">${branding.name}</a>${nav}${who}</div></header>
+<header class="top"><div class="top-inner"><a class="brand" href="/app"><img src="/brand/mark.svg" alt="" width="28" height="28"><span data-rer-name>${branding.name}</span></a>${nav}${who}</div></header>
 <main>${notice ? h`<p class="flash" role="status">${notice}</p>` : ''}${error ? h`<p class="flash error" role="alert">That did not work: ${describeError(error)}</p>` : ''}${body}</main></body></html>`
   return new Response(document.html, { status, headers })
 }

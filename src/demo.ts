@@ -1,0 +1,50 @@
+import type { Bindings } from './auth.server'
+import { addDays, addMonths } from './nectar/dates'
+import { fingerprint } from './nectar/core'
+import { customers, products, insert } from './demo/records'
+import { seedBilling } from './demo/billing'
+import { seedWork } from './demo/work'
+
+/** A real, private customer book; all dates move with the visitor's session. */
+export async function seedDemo(env: Bindings, { ownerEmail, now }: { ownerEmail: string; now: Date }) {
+  const at = now.getTime(), month = now.toISOString().slice(0, 7) + '-01'
+  const start = addMonths(month, -3), actor = ownerEmail.toLowerCase()
+  const statements = [
+    env.DB.prepare("INSERT INTO oa_first_run(singleton, completed_by, completed_at) SELECT 1, id, ? FROM oa_operators WHERE email = ? AND role = 'owner' ON CONFLICT DO NOTHING").bind(at, actor),
+    insert(env, 'nc_members', { id: 'demo-owner', email: actor, name: 'Rosa Bennett', role: 'owner', created_at: at, updated_at: at }),
+    insert(env, 'nc_business', { singleton: 1, legal_name: 'Riverbend Software Inc', address: '1 River Road, Sacramento, CA', billing_email: 'billing@riverbend.example', timezone: 'UTC', invoice_prefix: 'RB', next_invoice_number: 7, next_credit_number: 2, payment_terms_days: 14, tax_jurisdiction: 'CA', tax_mode: 'flat_rate', tax_rate: '8.25', tax_note: 'Illustrative policy for this sample business; reviewed by Rosa Bennett.', tax_reviewed_by: actor, tax_reviewed_at: at, updated_at: at }),
+    insert(env, 'nc_meters', { id: 'demo-meter', code: 'events', name: 'Processed events', unit_label: 'events', revision: 'demo-v1', created_at: at }),
+  ]
+  for (const [code, name, kind, amount, description] of products) {
+    statements.push(
+      insert(env, 'nc_products', { id: `demo-${code}`, code, name, description, revision: 'demo-v1', created_at: at }),
+      insert(env, 'nc_prices', { id: `demo-price-${code}`, product_id: `demo-${code}`, version: 1, kind, unit_amount: amount, meter_id: kind === 'unit' ? 'demo-meter' : null, revision: 'demo-v1', created_by: actor, created_at: at }),
+      insert(env, 'nc_features', { product_id: `demo-${code}`, feature: code === 'core' ? 'workspace' : code === 'seats' ? 'team_access' : 'api_access', note: description, created_by: actor, created_at: at }),
+    )
+  }
+  for (const [key, external, name, contact, seats] of customers) {
+    statements.push(
+      insert(env, 'nc_customers', { id: `demo-${key}`, external_id: external, name, billing_email: `billing@${key}.example`, address: `${10 + seats} Market Street, San Francisco, CA`, tax_exempt: key === 'pinecrest' ? 1 : 0, tax_exempt_ref: key === 'pinecrest' ? 'CA-RESALE-PC-2026' : '', revision: 'demo-v1', created_at: at, updated_at: at }),
+      insert(env, 'nc_contacts', { id: `demo-contact-${key}`, customer_id: `demo-${key}`, name: contact, email: `accounts@${key}.example`, role: 'Accounts payable', created_by: actor, created_at: at }),
+      insert(env, 'nc_subscriptions', { id: `demo-sub-${key}`, customer_id: `demo-${key}`, external_id: `SUB-${external}`, anchor_day: 1, start_date: start, revision: 'demo-v1', created_by: actor, created_at: at, updated_at: at }),
+      ...products.map(([code]) => insert(env, 'nc_items', { id: `demo-item-${key}-${code}`, subscription_id: `demo-sub-${key}`, price_id: `demo-price-${code}`, quantity: code === 'seats' ? seats : 1, effective_from: start, created_at: at })),
+    )
+  }
+  statements.push(insert(env, 'nc_amendments', { id: 'demo-northwind-discount', subscription_id: 'demo-sub-northwind', kind: 'discount_percent', value: '10', effective_from: start, note: 'Launch partner discount', clause: '10% discount on platform and seat fees for the contract term.', status: 'approved', created_by: actor, created_at: at, decided_by: actor, decided_at: at }))
+  await env.DB.batch(statements)
+  for (const offset of [-2, -1, 0]) {
+    const period = addMonths(month, offset), batch = `demo-usage-${offset}`
+    const rows = [insert(env, 'nc_usage_batches', { id: batch, source: 'api', accepted: customers.length * 3, duplicates: 0, rejected: 0, report_json: '[]', actor, created_at: at })]
+    for (const [key, , , , , volume] of customers) {
+      for (const [i, day] of [1, 5, 10].entries()) {
+        // Current-month events never lie in the future, even on the first day.
+        const occurred = Math.min(Date.parse(addDays(period, day - 1) + 'T12:00:00Z'), at)
+        const event = { event_id: `demo-event-${key}-${offset}-${i}`, customer: `demo-${key}`, meter: 'demo-meter', quantity: String(Math.round(volume * (1 + offset * 0.06) / 3)), occurred_at: new Date(occurred).toISOString() }
+        rows.push(insert(env, 'nc_usage_events', { id: event.event_id, event_id: event.event_id, customer_id: event.customer, meter_id: event.meter, quantity: event.quantity, occurred_at: occurred, occurred_text: event.occurred_at, received_at: occurred, batch_id: batch, payload_hash: await fingerprint(event) }))
+      }
+    }
+    await env.DB.batch(rows)
+  }
+  await seedBilling(env, actor, month, at)
+  await seedWork(env, actor, month, at)
+}

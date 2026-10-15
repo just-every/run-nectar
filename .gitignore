@@ -12,3 +12,6 @@ dist/
 .rer/local/
 exports/
 .evidence/
+
+.rer/demo/
+.rer/demo-host/
