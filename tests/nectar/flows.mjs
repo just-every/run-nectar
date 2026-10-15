@@ -2,7 +2,8 @@ import { queuedEntrypoint } from '@runeditrun/rer/queued-entry'
 const queued = await queuedEntrypoint(import.meta.url, 'test:flows'); if (queued !== null) process.exit(queued)
 // Nectar's acceptance clauses (ACCEPTANCE.md), each exercised through public
 // doors (JSON door, form door, pages and downloads) against the built Worker
-// with real local D1. No provider is involved. All businesses are invented.
+// with real local D1. Mail reaches a fake Resend at the network edge; no other
+// provider is involved. All businesses are invented.
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { API_DOORS, PAGE_DOORS } from '../../src/nectar/doors.ts'
@@ -442,9 +443,6 @@ try {
   // Every main screen renders for the owner without an error.
   for (const path of ['/app', '/app/more', '/app/settings', '/app/customers', `/app/customers/${ids.northwind}`, `/app/subscriptions/${ids.s1}`, '/app/catalog', '/app/usage', '/app/billing', `/app/billing/${ids.augustRun}`, `/app/invoices/${ids.julyNorthwind}`, '/app/receivables', '/app/proposals', '/app/import', '/app/exports', '/app/access', '/app/audit']) await h.page(path, cookie.owner)
   assert.equal((await h.raw('/app/nothing-here', { cookie: cookie.owner })).status, 404)
-} catch (error) {
-  console.error(h.output())
-  throw error
 } finally {
   await h.close()
 }

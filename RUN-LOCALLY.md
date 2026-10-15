@@ -5,7 +5,11 @@ After the script or `npx` install, activate it in the current shell with
 `export PATH="$HOME/.local/bin:$PATH"`. First-party commands fetch and verify
 the exact pnpm version declared in `package.json` when it is missing, using
 `$HOME/.rer/pnpm`; no global pnpm installation or sudo is needed.
-Package-mode seeds pin an exact `@runeditrun/rer` devDependency. The checkout's `OPERATIONS.json` argv and `package.json` aliases select the version that `rer VERB` runs.
+First-party seeds pin the command implementation in either vendored mode or
+package mode. Vendored mode carries Base's exported CLI; package mode pins an
+exact `@runeditrun/rer` devDependency. In both modes the checkout's
+`OPERATIONS.json` argv and `package.json` aliases select the version that
+`rer VERB` runs.
 
 ## Launch with one command
 
@@ -74,18 +78,13 @@ this computer set differently (each distinct pin keeps its own copy), and about
 a checkout on another volume than your home folder, where pnpm cannot clone
 packages from its store.
 
-After `RER_READY`, a seed with dev identity normally prints `RER_SIGNED_IN EMAIL`
+After `RER_READY`, a seed with dev identity prints `RER_SIGNED_IN EMAIL`
 and `RER_OPEN URL`: open that URL on this computer and the app opens signed in
-as the owner, at `/setup` until first-run is finished. With `rer dev --login`,
-open the printed `RER_OPEN` URL at `/__dev/key`: it exchanges the fragment's dev
-key for a cookie, then opens `/__dev/outbox`. Treat `RER_OPEN` as a credential;
-do not share it. A fresh browser needs that exchange before the outbox can open.
-For seeds without dev identity, open the printed `RER_SIGN_IN` URL directly.
-In the outbox, follow the newest ordinary sign-in link and finish first-run setup
-at `/setup`. Until first-run completion is stored durably, app routes send the
-signed-in owner to `/setup`; signed-out visitors sign in and return there.
-Once complete, `/setup` opens the app or settings. The local outbox sends no
-external email.
+as the owner, at `/setup` until first-run is finished. Legacy `rer dev --login`
+uses the same automatic sign-in. Treat `RER_OPEN` as a credential; do not share it.
+Until first-run completion is stored durably, app routes send the signed-in owner
+to `/setup`; signed-out visitors sign in and return there. Once complete,
+`/setup` opens the app or settings.
 
 The saved local port is used; a first setup saves the first free port from 8787. Explicit ports are decimal
 integers from 1 through 65535 and must be free; a busy requested port fails
@@ -124,7 +123,11 @@ Conflicting saved identity or origin reports an actionable recovery path.
 Review reset's exact removal inventory before confirmation; export domain data
 first if it should be restored, and import only into an empty destination.
 
-Queue waits report their reason and live position while the command waits. Package mode has no queue status command.
+Queue waits report immediately with a reason and numeric one-based position,
+then refresh about every 15 seconds while waiting. The running command reports
+its live queue position. Package mode has no queue status verb; vendored mode
+can inspect the live queue from the runnable project root with
+`node scripts/base-cli/modules/job-queue/cli.mjs status`.
 
 For the real owner mailbox, `rer setup` can prompt instead of receiving
 `--owner-email` on the command line. Setup builds the app, applies local
@@ -138,13 +141,10 @@ after the application health check. With dev identity it then prints
 checkout's dev key in its fragment: opening it signs the browser in through a
 real dev session, and the key is removed from the address bar and kept only as a
 host-only cookie. Treat that line as a credential and open it only on this
-computer. A dev-only badge switches between the owner, signed out and the
-seed's personas (`admin@dev.localhost` and so on). `rer dev --as PERSONA` starts as
-another persona or `signed-out`; `rer dev --login` turns dev identity off and uses
-the outbox: it prints `RER_SIGN_IN URL` and a `RER_OPEN` URL that opens that
-outbox. Choose the newest ordinary sign-in message and follow its link. No
-external email is sent. A successful sign-in consumes the link once. Seeds
-without dev identity print only `RER_SIGN_IN URL` for the local outbox.
+computer. The app name and browser title identify Dev mode.
+`rer dev --as PERSONA` starts as
+another persona or `signed-out`. Legacy `rer dev --login` uses the same automatic
+sign-in. Captured email and its browser UI have been retired.
 
 Dev and preview are managed servers. In a terminal the first invocation stays
 active while serving; without one, `rer dev` returns once the app is ready and
@@ -209,14 +209,14 @@ Other supported operations are `rer verify`, `rer deploy` and `rer describe`.
 Use `rer dev --stop` or `rer preview --stop` (or Ctrl-C) before `rer build`,
 `rer verify`, `rer reset` and data transfer. Reset removes only the
 declared local inventory: local database/storage state, owner and sessions,
-outbox, CLI and installer bookkeeping, and generated private settings. It
+CLI and installer bookkeeping, and generated private settings. It
 keeps source, dependencies, exports and deployment receipts. It refuses active
 operations and ambiguous or linked state.
 
 Local export creates a private archive with an integrity receipt and explicit
 exclusions. Import validates the archive and restores into an empty destination.
 After import, run setup to establish the owner and local configuration. Auth,
-outbox, private settings and transient runtime state are excluded. Remote
+private settings and transient runtime state are excluded. Remote
 transfer is unsupported by the maintained references and fails visibly.
 
 Real deployment uses the owner-account procedure and its private credentials.
@@ -240,7 +240,7 @@ installer state is `.seed/installer`, and the default private settings file is
 `.dev.vars` with mode 0600. Setup writes this checkout's dev key to
 `.rer/local/dev-key.env` (mode 0600); a repeat setup keeps it and reset removes
 it, which also ends every browser's earlier dev cookie. Dev sign-in, personas
-and the development outbox answer only a request holding that key's cookie, so
+answer only a request holding that key's cookie, so
 a tunnel or local proxy to the app cannot reach them; anything else returns 404.
 Any local user or process that can read the checkout can read the key and sign
 in as the owner. `rer deploy` refuses the key, and `rer build` refuses output
@@ -249,7 +249,7 @@ that contains the dev layer.
 The first-party command profile is optional for independently authored
 projects. They may keep their own runtime, tools, installer, commands and
 provider choices. RER executes only their declared operations and does not
-impose Base pins, aliases, outbox or state layout.
+impose Base pins, aliases or state layout.
 
 ## The front door (opt-in)
 

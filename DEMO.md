@@ -7,8 +7,8 @@ All sample IDs are fixed, and dates follow the session start.
 
 Nectar has no public fetch/check flow: Stripe move-in reads uploaded files,
 reminders are exported for the operator, and payments are external evidence.
-Access invitations and sign-in mail use Base’s demo effect helper and complete
-without delivery or an outbox. The homepage link is enabled only after the
+Access invitations and sign-in mail complete as Base's suppressed development
+delivery, with nothing sent and no outbox. The homepage link is enabled only after the
 production demo answers successfully. Deploy this repository by dispatching
 **Run demo**, using the `run-demo` environment.
 

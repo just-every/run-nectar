@@ -47,27 +47,9 @@ export async function devKey(root) {
   return (await readFile(`${root}/.rer/local/dev-key.env`, 'utf8')).trim().split('=')[1]
 }
 
-/** An ordinary emailed sign-in link from the key-gated local outbox. */
-export async function signIn(origin, key, email, { form = false } = {}) {
-  let action = '/auth/magic-link'
-  if (form) {
-    const page = await fetch(`${origin}/signin`)
-    assert.equal(page.status, 200)
-    const html = await page.text()
-    action = html.match(/<form method="post" action="([^"]+)"/)?.[1]
-    assert.ok(action?.startsWith('/') && !action.startsWith('//'), 'the actual sign-in page supplies a local form')
-  }
-  const requested = await fetch(origin + action, { method: 'POST', redirect: 'manual', headers: { origin, 'content-type': form ? 'application/x-www-form-urlencoded' : 'application/json' }, body: form ? new URLSearchParams({ email, returnTo: '/app' }) : JSON.stringify({ email, returnTo: '/app' }) })
-  assert.equal(requested.status, form ? 303 : 202)
-  const listing = await (await fetch(`${origin}/__dev/outbox`, { headers: { 'x-rer-dev-key': key } })).text()
-  for (const match of listing.matchAll(/href="(\/__dev\/outbox\?message=[^"]+)"/g)) {
-    const detail = await (await fetch(origin + match[1].replaceAll('&amp;', '&'), { headers: { 'x-rer-dev-key': key } })).text()
-    const link = detail.includes(email) && detail.match(/href="([^"]*\/auth\/confirm\?token=[^"]+)"/)
-    if (!link) continue
-    const token = new URL(link[1].replaceAll('&amp;', '&'), origin).searchParams.get('token')
-    const confirmed = await fetch(`${origin}/auth/confirm`, { method: 'POST', redirect: 'manual', headers: { origin, 'content-type': 'application/json' }, body: JSON.stringify({ token }) })
-    assert.equal(confirmed.status, 303)
-    return confirmed.headers.getSetCookie().map(line => line.split(';')[0]).join('; ')
-  }
-  throw new Error(`no sign-in message for ${email}`)
+/** Local dev identity: the key-gated one-click owner sign-in `rer dev` serves. */
+export async function signIn(origin, key) {
+  const entered = await fetch(`${origin}/auth/dev/enter?as=owner&returnTo=%2Fapp`, { redirect: 'manual', headers: { 'x-rer-dev-key': key } })
+  assert.equal(entered.status, 303)
+  return entered.headers.getSetCookie().map(line => line.split(';')[0]).join('; ')
 }

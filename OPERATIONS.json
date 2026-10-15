@@ -125,17 +125,6 @@
       ],
       "effects": "Produce releases; keygen writes a public anchor and, on success, its private key to non-terminal stdout; sign writes a detached signature and prints (but does not execute) the GitHub upload command; receipt verifies against local anchors offline."
     },
-    "outbox": {
-      "argv": [
-        "rer",
-        "outbox"
-      ],
-      "inputs": [
-        "package.json",
-        "scripts/installer/local.mjs"
-      ],
-      "effects": "See SEED-COMMAND-CONTRACT.md for outbox effects."
-    },
     "doctor": {
       "argv": [
         "rer",

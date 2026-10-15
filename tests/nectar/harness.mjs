@@ -1,14 +1,16 @@
-// Runs the built Worker (dist/) with its own local D1 state in a temporary
-// directory, and drives it only through public HTTP doors: the JSON API, the
-// HTML form door and pages, signed in through ordinary email links.
+// Runs the built Worker (dist/) on Miniflare with its own in-memory D1, and
+// drives it only through public HTTP doors: the JSON API, the HTML form door
+// and pages, signed in through ordinary email links. Mail is the network edge:
+// the Worker sends through Resend's API, which this fake answers and records.
 import assert from 'node:assert/strict'
-import { execFileSync, spawn } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { readFile, readdir } from 'node:fs/promises'
+import { createRequire } from 'node:module'
 import { createServer } from 'node:net'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { workerEnvironment } from '../worker-environment.mjs'
+
+// Wrangler's own Miniflare and SQL splitter, so the runtime matches `rer build`.
+const wrangler = createRequire(import.meta.url)('wrangler')
+const { Miniflare, convertV4MiniflareOptions } = createRequire(createRequire(import.meta.url).resolve('wrangler'))('miniflare')
 
 async function freePort() {
   const socket = createServer()
@@ -21,30 +23,29 @@ async function freePort() {
 export async function harness() {
   const port = await freePort()
   const origin = `http://127.0.0.1:${port}`
-  const directory = await mkdtemp(join(tmpdir(), 'nectar-flows-'))
   const secret = () => randomBytes(32).toString('base64url')
-  const vars = { AUTH_LOCAL: 'true', AUTH_ORIGIN: origin, OWNER_EMAIL: 'owner@example.test', SESSION_SECRET: secret(), SETUP_TOKEN: secret(), MAIL_PROVIDER: 'development', MAIL_FROM: 'auth@localhost.test', RER_DEV_KEY: secret() }
-  await writeFile(join(directory, 'local.env'), Object.entries(vars).map(([key, value]) => `${key}=${value}`).join('\n') + '\n', { mode: 0o600 })
-  const wrangler = 'node_modules/wrangler/bin/wrangler.js'
-  const env = workerEnvironment()
-  execFileSync(process.execPath, [wrangler, 'd1', 'migrations', 'apply', 'DB', '--local', '--persist-to', directory, '--config', 'dist/server/wrangler.json', '--env-file', join(directory, 'local.env')], { stdio: 'ignore', env })
-  let output = ''
-  const worker = spawn(process.execPath, [wrangler, 'dev', '--config', 'dist/server/wrangler.json', '--inspector-port', '0', '--local', '--persist-to', directory, '--ip', '127.0.0.1', '--port', String(port), '--env-file', join(directory, 'local.env')], { stdio: ['ignore', 'pipe', 'pipe'], env })
-  for (const stream of [worker.stdout, worker.stderr]) stream.on('data', chunk => { output = (output + chunk).slice(-20_000) })
-  const close = async () => {
-    if (worker.exitCode === null) { worker.kill('SIGTERM'); await new Promise(resolve => worker.exitCode !== null ? resolve() : worker.once('exit', resolve)) }
-    await rm(directory, { recursive: true, force: true })
+  const vars = { AUTH_LOCAL: 'true', AUTH_ORIGIN: origin, OWNER_EMAIL: 'owner@example.test', SESSION_SECRET: secret(), SETUP_TOKEN: secret(), MAIL_PROVIDER: 'resend', MAIL_API_KEY: 'test-only-resend-key', MAIL_FROM: 'auth@example.test' }
+  const chunks = (await readdir('dist/server', { recursive: true })).filter(path => path.endsWith('.js') && path !== 'index.js')
+  const mails = []
+  const outboundService = async request => {
+    if (request.url !== 'https://api.resend.com/emails') return new Response('Unexpected outbound request', { status: 599 })
+    mails.push(await request.json())
+    return Response.json({ id: `test-${mails.length}` })
   }
+  const mf = new Miniflare(convertV4MiniflareOptions({
+    host: '127.0.0.1', port, modulesRoot: 'dist/server', modules: ['index.js', ...chunks].map(path => ({ type: 'ESModule', path: `dist/server/${path}` })), compatibilityDate: '2026-09-08', compatibilityFlags: ['nodejs_compat'],
+    d1Databases: { DB: 'nectar' }, bindings: vars, outboundService,
+  }))
+  const close = () => mf.dispose()
   try {
-    let ready = false
-    for (let attempt = 0; attempt < 240 && !ready; attempt++) {
-      assert.equal(worker.exitCode, null, 'the Worker stays up')
-      try { ready = (await fetch(`${origin}/health`)).ok } catch { await new Promise(resolve => setTimeout(resolve, 250)) }
-    }
-    assert.ok(ready, 'the Worker became healthy')
+    await mf.ready
+    // Every committed migration, as `rer setup` leaves a database.
+    const db = await mf.getD1Database('DB')
+    for (const name of (await readdir('migrations/core')).filter(name => name.endsWith('.sql')).sort())
+      await db.batch(wrangler.unstable_splitSqlQuery(await readFile(`migrations/core/${name}`, 'utf8')).map(query => db.prepare(query)))
+    assert.ok((await fetch(`${origin}/health`)).ok, 'the Worker is healthy')
   } catch (error) { await close(); throw error }
 
-  const devKey = { 'x-rer-dev-key': vars.RER_DEV_KEY }
   const raw = (path, { cookie, body, form, method, bearer, headers = {} } = {}) => fetch(origin + path, {
     method: method ?? (body !== undefined || form ? 'POST' : 'GET'), redirect: 'manual',
     headers: { 'CF-Connecting-IP': '127.0.0.1', ...(cookie ? { cookie } : {}), ...(bearer ? { authorization: `Bearer ${bearer}` } : {}), ...((body !== undefined || form) && !bearer ? { origin } : {}), ...(body !== undefined ? { 'content-type': 'application/json' } : {}), ...headers },
@@ -77,14 +78,12 @@ export async function harness() {
     return text
   }
 
-  /** Signs in through an ordinary email link from the key-gated development outbox. */
+  /** Signs in through the newest ordinary email link sent to `email`. */
   async function signIn(email, { requested = false } = {}) {
     if (!requested) assert.equal((await raw('/auth/magic-link', { body: { email, returnTo: '/app' } })).status, 202)
-    const listing = await (await fetch(`${origin}/__dev/outbox`, { headers: devKey })).text()
-    for (const match of listing.matchAll(/href="(\/__dev\/outbox\?message=[^"]+)"/g)) {
-      const detail = await (await fetch(origin + match[1].replaceAll('&amp;', '&'), { headers: devKey })).text()
-      if (!detail.includes(email)) continue
-      const link = detail.match(/href="([^"]*\/auth\/(?:confirm|accept)[^"]*token=[^"]+)"/)
+    for (const mail of mails.toReversed()) {
+      if (![mail.to].flat().some(to => to.includes(email))) continue
+      const link = `${mail.html ?? ''} ${mail.text ?? ''}`.match(/(https?:\/\/[^\s"<]*\/auth\/(?:confirm|accept)[^\s"<]*token=[^\s"<&]+)/)
       if (!link) continue
       const target = new URL(link[1].replaceAll('&amp;', '&'), origin)
       const confirmed = await raw(target.pathname, { body: { token: target.searchParams.get('token') } })
@@ -94,8 +93,7 @@ export async function harness() {
     throw new Error(`no sign-in message for ${email}`)
   }
 
-  const redacted = () => Object.values(vars).reduce((text, value) => text.replaceAll(value, '[redacted]'), output)
-  return { origin, vars, raw, api, submit, page, signIn, close, output: redacted }
+  return { origin, vars, raw, api, submit, page, signIn, close, mails }
 }
 
 export const file = (filename, content, type = 'application/octet-stream') => ({ filename, base64: Buffer.from(content).toString('base64'), type })

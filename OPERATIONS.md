@@ -14,8 +14,8 @@ rer dev
 ```
 
 Use the setup prompt instead of the owner-email flag when entering the real
-mailbox. Follow the newest ordinary sign-in message in the printed local
-outbox; no external email is sent. Stop `dev` with
+mailbox. Open the `RER_OPEN` URL printed by `dev` on this computer; the app
+opens signed in as the owner and no external email is sent. Stop `dev` with
 `rer dev --stop` or Ctrl-C, and stop `preview` with
 `rer preview --stop` before build or verification.
 
@@ -36,9 +36,9 @@ provider.
 ## Local data and recovery
 
 Setup and development use explicit owner identity and real local migrations.
-Dev and preview use the same owner and canonical `.wrangler/state`; the local
-development outbox is available only on loopback. Any process with access to
-the machine can read that outbox and sign in as the owner. Private settings are
+Dev and preview use the same owner and canonical `.wrangler/state`; dev identity
+answers only on loopback to a holder of the checkout's dev key, and local mail
+is suppressed. Private settings are
 kept in `.dev.vars` with mode 0600 and are not copied into build output.
 
 Local export creates a private archive with an integrity receipt and explicit

@@ -42,11 +42,10 @@ Help, check, describe, doctor and stop do not select or acquire Node.
 After `RER_READY`, `dev` prints `RER_SIGNED_IN EMAIL` and `RER_OPEN URL`.
 Open that URL on this computer: the app opens signed in as the owner and
 finishes first-run setup at `/setup`. Treat the line as a credential.
-`dev --as PERSONA` starts as a persona or signed out; `dev --login` prints
-the outbox instead: follow its newest ordinary sign-in link. Until first-run
+`dev --as PERSONA` starts as a persona or signed out. Until first-run
 completion is stored durably, app routes send the signed-in owner to `/setup`;
 signed-out visitors sign in and return there. Once complete, `/setup` opens the
-app or settings. The local outbox sends no external email.
+app or settings. Local mail is suppressed; no external email is sent.
 
 The saved local port is used; a first setup saves the first free port from 8787. Explicit ports are decimal
 integers from 1 through 65535 and must be free; a busy requested port fails
@@ -69,9 +68,7 @@ then refresh about every 15 seconds while waiting. Package mode has no queue sta
 
 Use the setup prompt instead of `--owner-email` when entering the real owner
 mailbox. Open the `RER_OPEN` URL printed by `dev` on this computer; the app opens
-signed in as the owner. With `dev --login`, open the outbox it prints, choose
-the newest ordinary sign-in message and follow its link. No external email is
-sent. `dev` serves
+signed in as the owner. No external email is sent. `dev` serves
 live editing with HMR and stays in the foreground on its first invocation; a
 compatible repeated invocation reuses the server and exits. Stop `dev` with
 `rer dev --stop` or Ctrl-C, and stop `preview` with

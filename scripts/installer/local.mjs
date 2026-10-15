@@ -27,8 +27,8 @@ export const commandAdapter = createCommandAdapter(lifecycle, {
  // edition identity and Run data, written to an ignored folder; its domain is in deploy-site.json.
  site: { entry: 'src/site/pages.ts', output: 'dist/site', declaration: 'deploy-site.json' },
  // Local dev identity: the local-only Worker entry, the build output rer build
- // scans for the dev layer, and the kept end-to-end email-link test.
- devIdentity: { entry: 'src/server.dev.ts', output: ['dist'], emailLinkTest: 'tests/email-link.mjs' },
+ // scans for the dev layer.
+ devIdentity: { entry: 'src/server.dev.ts', output: ['dist'] },
  localOnlyKeys: ['RER_DEV_ORIGIN', 'RER_DEV_IDENTITY'],
  product: model.product.name, input: { names: { email: 'OWNER_EMAIL', name: 'displayName' }, async defaults(root) { const { readFile } = await import('node:fs/promises'); const branding = JSON.parse(await readFile(join(root, 'src/branding.json'), 'utf8')); return { APP_NAME: branding.name, PRIMARY_COLOR: branding.primaryColor }; } },
 });

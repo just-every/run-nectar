@@ -278,9 +278,9 @@ try {
   const restorePort = await freePort()
   await writeFile(join(target, 'exports/answers.json'), JSON.stringify({ OWNER_EMAIL: 'owner@example.test' }), { mode: 0o600 })
   await command(target, ['setup', '--answers', 'exports/answers.json', '--non-interactive', '--port', String(restorePort)])
-  server = await serving(target, 'preview', restorePort)
+  server = await serving(target, 'dev', restorePort)
   const restoredOrigin = `http://127.0.0.1:${restorePort}`
-  const cookie = await signIn(restoredOrigin, await devKey(target), 'owner@example.test')
+  const cookie = await signIn(restoredOrigin, await devKey(target))
   assert.equal((await fetch(`${restoredOrigin}/setup`, { method: 'POST', redirect: 'manual', headers: { cookie, origin: restoredOrigin, 'content-type': 'application/x-www-form-urlencoded' }, body: 'confirm=yes' })).status, 303)
   for (const row of issued) {
     const invoice = await (await fetch(`${restoredOrigin}/api/nectar/invoices/${row.row.id}`, { headers: { cookie } })).json()

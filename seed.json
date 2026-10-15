@@ -63,7 +63,7 @@
       "/health",
       "/signin"
     ],
-    "notes": "Native sessions guard /app and /api/nectar; scoped bearer credentials reach /api/nectar only; unknown paths return real 404s; the development outbox is local-only."
+    "notes": "Native sessions guard /app and /api/nectar; scoped bearer credentials reach /api/nectar only; unknown paths return real 404s; local and demo mail is suppressed."
   },
   "extensionPoints": {
     "contributions": [],

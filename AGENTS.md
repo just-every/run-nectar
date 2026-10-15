@@ -16,8 +16,7 @@ rer dev
   email, port, password or answers file.
 - Give the owner the `RER_READY` address and the `RER_OPEN` link, and ask
   nothing. `RER_OPEN` is a credential: share it only with the owner, in this
-  chat. A seed without dev identity prints `RER_SIGN_IN` (its local outbox)
-  instead.
+  chat. Independently authored apps use their own declared sign-in flow.
 - Stop the app with `rer dev --stop`. If a start is refused, the message names
   the cause and the next command: run that command.
 
@@ -51,11 +50,10 @@ Help, check, describe, doctor and stop do not select or acquire Node.
 After `RER_READY`, `dev` prints `RER_SIGNED_IN EMAIL` and `RER_OPEN URL`.
 Open that URL on this computer: the app opens signed in as the owner and
 finishes first-run setup at `/setup`. Treat the line as a credential.
-`dev --as PERSONA` starts as a persona or signed out; `dev --login` prints
-the outbox instead: follow its newest ordinary sign-in link. Until first-run
+`dev --as PERSONA` starts as a persona or signed out. Until first-run
 completion is stored durably, app routes send the signed-in owner to `/setup`;
 signed-out visitors sign in and return there. Once complete, `/setup` opens the
-app or settings. The local outbox sends no external email.
+app or settings. Local mail is suppressed; no external email is sent.
 
 The saved local port is used; a first setup saves the first free port from 8787. Explicit ports are decimal
 integers from 1 through 65535 and must be free; a busy requested port fails
@@ -77,9 +75,7 @@ Queue waits report their reason and live position while the command waits. Packa
 
 Use the setup prompt instead of `--owner-email` when entering the real owner
 mailbox. Open the `RER_OPEN` URL printed by `dev` on this computer; the app opens
-signed in as the owner. With `dev --login`, open the outbox it prints, choose
-the newest ordinary sign-in message and follow its link. No external email is
-sent. Stop `dev` with
+signed in as the owner. No external email is sent. Stop `dev` with
 `rer dev --stop` or Ctrl-C, and stop `preview` with
 `rer preview --stop` before build or verification.
 
