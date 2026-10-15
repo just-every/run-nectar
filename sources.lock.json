@@ -73,7 +73,7 @@
       "executable": false
     },
     "base-copies.json": {
-      "sha256": "7d2172662743e66e1cbd8c14966c9df70c611063490088e4beea67737bf541ac",
+      "sha256": "7741d834f5f36ed4d6a4edaa8873c6281df7287c50cbf4cdbc52208ec09cadf4",
       "executable": false
     },
     "CONTRACT.md": {
@@ -237,11 +237,11 @@
       "executable": false
     },
     "package.json": {
-      "sha256": "e109eaca3be4e9f687b73414211d7cbc017e80cdf154a7f36249ea6fadfc08c1",
+      "sha256": "e5c1784220a8ed9f79a254fbf8e3f9d4c86c7f9137e83ca23afc7fd8ac16c2c0",
       "executable": false
     },
     "pnpm-lock.yaml": {
-      "sha256": "8625db98434035e28e62279e0e1dc91637f71314994c4072064f93f0583d683a",
+      "sha256": "0d281dfa45feed0ee4d0505989ed7e9cabdd034124abf54e51d90b2d83bc5333",
       "executable": false
     },
     "public/brand/band.svg": {

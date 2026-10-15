@@ -15,7 +15,7 @@
     {
       "path": "src/modules/demo",
       "originPath": "modules/demo",
-      "revision": "5dbbda36b26fbb6d8d905cdc631c5fc6e2c626f1",
+      "revision": "38aa7efdb3cceec585d2344ed54dd559295b9059",
       "files": {
         "src/modules/demo/effects.mjs": "2e523da1d9fcffc4b6e3e0e4901b6bd45e6f08adfb380b397e775acb0358c395",
         "src/modules/demo/index.d.mts": "71caa39f5001ab8bd2891ae5bdb9bf1ab4910c121fb038d83ae549adaf8fcf10",
