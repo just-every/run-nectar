@@ -35,7 +35,7 @@ async function incumbentComparison(env: Bindings, sub: Row, period: { start: str
   return { found: true, invoices: [...new Set(lines.map(line => line.invoice))], rows, incumbentSubtotalCents: incumbentTotal, nectarSubtotalCents: rating.subtotalCents, reconciled: rows.every(row => row.nectarCents === row.incumbentCents) }
 }
 
-async function draftFor(env: Bindings, business: Business, sub: Row, period: { start: string; end: string }): Promise<Draft> {
+export async function draftFor(env: Bindings, business: Business, sub: Row, period: { start: string; end: string }): Promise<Draft> {
   const { rating, fingerprint, input } = await rated(env, business, sub.id, period)
   const exceptions = [...rating.exceptions]
   const previous = await one(env, "SELECT number, period_start, total_cents, subtotal_cents FROM nc_invoices WHERE subscription_id = ? AND status = 'issued' AND period_start < ? ORDER BY period_start DESC LIMIT 1", sub.id, period.start)

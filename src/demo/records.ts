@@ -10,6 +10,9 @@ export const customers = [
   ['atlas', 'AT-1006', 'Atlas Field Services', 'Noah Williams', 4, 920000],
 ] as const
 
+// Riverbend's finance operator and metering pipeline do the routine work; the owner approves.
+export const finance = 'marcus@riverbend.example', pipeline = 'agent:Metering pipeline'
+
 export const products = [
   ['core', 'Core plan', 'flat', '499.00', 'Workspace, reporting and monthly billing'],
   ['seats', 'Team seats', 'seat', '30.00', 'Additional team members'],

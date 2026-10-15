@@ -449,19 +449,19 @@
       "executable": false
     },
     "src/demo.ts": {
-      "sha256": "c5d4ab338f24199974434404796dbd70bcdff68ef6aca90e7d4371efec807b89",
+      "sha256": "5300b645148335977ef37ebf64772c49ec3ba6df5d040d4032ecb869f80ec4b3",
       "executable": false
     },
     "src/demo/billing.ts": {
-      "sha256": "d098d282dcdf33b20b97e27ea8bf244ab99769dba9b4a21348c396b90d8f488a",
+      "sha256": "72c06341ca562723260f8a9b0998e10020c1e0ba315253bc177613ab75365d61",
       "executable": false
     },
     "src/demo/records.ts": {
-      "sha256": "ab854e4aa316b465b2dd1fd50a35f3ca0c1b2b0cc928ec0b7e48f3325489a896",
+      "sha256": "3800722cd5c4776a3d2c3d4e66923d1b8896819cb28a93b0ce547ecddb7c7c52",
       "executable": false
     },
     "src/demo/work.ts": {
-      "sha256": "a48ca9a23c9e1992a59dad80c4916cda22d8eb3d0b382fd7f8c41a4a095451fa",
+      "sha256": "5492fae067e04da505587e789eeb7143ac48c0f31f7456eed4fe8283c434a1e4",
       "executable": false
     },
     "src/dev-personas.ts": {
@@ -1941,7 +1941,7 @@
       "executable": false
     },
     "src/nectar/billruns.ts": {
-      "sha256": "c953a1d36480635bd56e0f4eb8b454bdc47e3a2f7bb634c35eafa29d881b270d",
+      "sha256": "56ee4f254dcb1397c5099d7ecac9e12c9aa2c1e523da76f6fa74c3d43da1af9f",
       "executable": false
     },
     "src/nectar/business.ts": {
@@ -2017,7 +2017,7 @@
       "executable": false
     },
     "src/nectar/ui/billing.ts": {
-      "sha256": "5f93b0b70b2a633bf74c1299dee42f5085f80d05d952e43fad8e367543c86d8e",
+      "sha256": "c590f4247407d97c47bdac9b50ed7e18e8fc0cede10a37601e6c2f4a91f53e49",
       "executable": false
     },
     "src/nectar/ui/customers.ts": {

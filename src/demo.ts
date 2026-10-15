@@ -1,7 +1,7 @@
 import type { Bindings } from './auth.server'
 import { addDays, addMonths } from './nectar/dates'
 import { fingerprint, sha256Hex } from './nectar/core'
-import { customers, products, insert } from './demo/records'
+import { customers, products, insert, finance, pipeline } from './demo/records'
 import { seedBilling } from './demo/billing'
 import { seedWork } from './demo/work'
 
@@ -12,7 +12,7 @@ export async function seedDemo(env: Bindings, { ownerEmail, now }: { ownerEmail:
   const statements = [
     env.DB.prepare("INSERT INTO oa_first_run(singleton, completed_by, completed_at) SELECT 1, id, ? FROM oa_operators WHERE email = ? AND role = 'owner' ON CONFLICT DO NOTHING").bind(at, actor),
     insert(env, 'nc_members', { id: 'demo-owner', email: actor, name: 'Rosa Bennett', role: 'owner', created_at: at, updated_at: at }),
-    insert(env, 'nc_members', { id: 'demo-member-finance', email: 'marcus@riverbend.example', name: 'Marcus Lee', role: 'finance', created_at: at - 60 * day, updated_at: at - 60 * day }),
+    insert(env, 'nc_members', { id: 'demo-member-finance', email: finance, name: 'Marcus Lee', role: 'finance', created_at: at - 60 * day, updated_at: at - 60 * day }),
     insert(env, 'nc_members', { id: 'demo-member-accountant', email: 'priya@ledgerwise.example', name: 'Priya Shah', role: 'accountant', created_at: at - 45 * day, updated_at: at - 45 * day }),
     // Keys nobody holds: only a hash of fresh random bytes is stored, as issueKey stores it.
     insert(env, 'nc_agent_keys', { id: 'demo-key-agent', name: 'Finance agent', key_hash: await sha256Hex(crypto.randomUUID()), scopes: 'prepare', created_by: actor, created_at: at - 40 * day, last_used_at: at - 2 * hour }),
@@ -39,7 +39,7 @@ export async function seedDemo(env: Bindings, { ownerEmail, now }: { ownerEmail:
   await env.DB.batch(statements)
   for (const offset of [-2, -1, 0]) {
     const period = addMonths(month, offset), batch = `demo-usage-${offset}`
-    const rows = [insert(env, 'nc_usage_batches', { id: batch, source: 'api', accepted: customers.length * 3, duplicates: 0, rejected: 0, report_json: '[]', actor, created_at: at })]
+    const rows = [insert(env, 'nc_usage_batches', { id: batch, source: 'api', accepted: customers.length * 3, duplicates: 0, rejected: 0, report_json: '[]', actor: pipeline, created_at: at })]
     for (const [key, , , , , volume] of customers) {
       for (const [i, day] of [1, 5, 10].entries()) {
         // Current-month events never lie in the future, even on the first day.
