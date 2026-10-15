@@ -5,12 +5,12 @@ import { copy } from './copy'
 import { chargesCard, heroFlow, included, licenceCard, monthCard, owedCard, shadowCard } from './drawings'
 
 const ARROW = '<span aria-hidden="true">→</span>'
-const actions = () => `<div class="actions"><a class="run" href="/run">${esc(copy.run)} ${ARROW}</a><a class="docs-link" href="/docs">${esc(copy.docs)}</a></div>`
+const actions = (demo = false) => `<div class="actions"><a class="run" href="/run">${esc(copy.run)} ${ARROW}</a>${demo ? `<a class="run" href="https://demo.run-nectar.com/">Try the demo ${ARROW}</a>` : ''}<a class="docs-link" href="/docs">${esc(copy.docs)}</a></div>`
 
 export function hero(): string {
   const [first, second, third] = copy.rivals.map(name => `<strong>${esc(name)}</strong>`)
   return `<section class="hero" id="top" aria-labelledby="hero-title"><h1 id="hero-title">${esc(copy.headline)}</h1><p class="subhead">${esc(copy.subhead)}</p>`
-    + `<p class="alternative">100% free, open source alternative to ${first}, ${second} and ${third}</p>${actions()}<p class="small">${esc(copy.small)}</p>`
+    + `<p class="alternative">100% free, open source alternative to ${first}, ${second} and ${third}</p>${actions(true)}<p class="small">${esc(copy.small)}</p>`
     + `<div class="art hero-art">${heroFlow()}</div></section>`
 }
 
