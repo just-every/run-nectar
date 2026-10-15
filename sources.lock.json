@@ -449,7 +449,7 @@
       "executable": false
     },
     "src/demo.ts": {
-      "sha256": "5aa2a183d8544dd092de855506a255b45f7be442d0e357115626fe3076fe9986",
+      "sha256": "c5d4ab338f24199974434404796dbd70bcdff68ef6aca90e7d4371efec807b89",
       "executable": false
     },
     "src/demo/billing.ts": {

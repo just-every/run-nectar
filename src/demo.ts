@@ -1,6 +1,6 @@
 import type { Bindings } from './auth.server'
 import { addDays, addMonths } from './nectar/dates'
-import { fingerprint } from './nectar/core'
+import { fingerprint, sha256Hex } from './nectar/core'
 import { customers, products, insert } from './demo/records'
 import { seedBilling } from './demo/billing'
 import { seedWork } from './demo/work'
@@ -8,10 +8,15 @@ import { seedWork } from './demo/work'
 /** A real, private customer book; all dates move with the visitor's session. */
 export async function seedDemo(env: Bindings, { ownerEmail, now }: { ownerEmail: string; now: Date }) {
   const at = now.getTime(), month = now.toISOString().slice(0, 7) + '-01'
-  const start = addMonths(month, -3), actor = ownerEmail.toLowerCase()
+  const start = addMonths(month, -3), actor = ownerEmail.toLowerCase(), hour = 3600000, day = 24 * hour
   const statements = [
     env.DB.prepare("INSERT INTO oa_first_run(singleton, completed_by, completed_at) SELECT 1, id, ? FROM oa_operators WHERE email = ? AND role = 'owner' ON CONFLICT DO NOTHING").bind(at, actor),
     insert(env, 'nc_members', { id: 'demo-owner', email: actor, name: 'Rosa Bennett', role: 'owner', created_at: at, updated_at: at }),
+    insert(env, 'nc_members', { id: 'demo-member-finance', email: 'marcus@riverbend.example', name: 'Marcus Lee', role: 'finance', created_at: at - 60 * day, updated_at: at - 60 * day }),
+    insert(env, 'nc_members', { id: 'demo-member-accountant', email: 'priya@ledgerwise.example', name: 'Priya Shah', role: 'accountant', created_at: at - 45 * day, updated_at: at - 45 * day }),
+    // Keys nobody holds: only a hash of fresh random bytes is stored, as issueKey stores it.
+    insert(env, 'nc_agent_keys', { id: 'demo-key-agent', name: 'Finance agent', key_hash: await sha256Hex(crypto.randomUUID()), scopes: 'prepare', created_by: actor, created_at: at - 40 * day, last_used_at: at - 2 * hour }),
+    insert(env, 'nc_agent_keys', { id: 'demo-key-metering', name: 'Metering pipeline', key_hash: await sha256Hex(crypto.randomUUID()), scopes: 'usage', created_by: actor, created_at: at - 90 * day, last_used_at: at - 20 * 60000 }),
     insert(env, 'nc_business', { singleton: 1, legal_name: 'Riverbend Software Inc', address: '1 River Road, Sacramento, CA', billing_email: 'billing@riverbend.example', timezone: 'UTC', invoice_prefix: 'RB', next_invoice_number: 7, next_credit_number: 2, payment_terms_days: 14, tax_jurisdiction: 'CA', tax_mode: 'flat_rate', tax_rate: '8.25', tax_note: 'Illustrative policy for this sample business; reviewed by Rosa Bennett.', tax_reviewed_by: actor, tax_reviewed_at: at, updated_at: at }),
     insert(env, 'nc_meters', { id: 'demo-meter', code: 'events', name: 'Processed events', unit_label: 'events', revision: 'demo-v1', created_at: at }),
   ]
