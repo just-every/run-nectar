@@ -2,7 +2,6 @@
   "version": 1,
   "domain": "run-nectar.com",
   "name": "Nectar",
-  "instanceType": "basic",
   "ownerEmail": "rosa@riverbend.example",
   "settings": {
     "MAIL_PROVIDER": "development",

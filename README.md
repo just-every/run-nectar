@@ -16,8 +16,13 @@ anything for you.
 
 ## Run it locally
 
-Install the `rer` command once with `npx -y @runeditrun/rer cli install`, or the
-installer script on the RER site (`curl -fsSL https://runeditrun.com/install.sh | sh`).
+Run one line to clone Nectar, install the `rer` command and start it:
+
+```sh
+npx -y @runeditrun/rer dev just-every/run-nectar
+```
+
+To start it again later, run `cd run-nectar && rer dev`.
 From a checkout, `rer dev` alone launches it for review: it installs pinned
 dependencies, sets up a local owner on a free port, starts the real app and
 prints `RER_READY` and a sign-in link. To install for a real owner, run the

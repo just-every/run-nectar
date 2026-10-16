@@ -1,4 +1,4 @@
-Nectar runs on your own computer with two commands. Your data stays in your
+Nectar runs on your own computer with one line. Your data stays in your
 installation.
 
 ## Run it
@@ -6,21 +6,13 @@ installation.
 You need Node 22 or later and pnpm 10.12.4, on macOS, Linux or Windows with
 WSL2.
 
-1. Install `rer`, the Run Edit Run command, once per computer:
+Get Nectar and start it:
 
-   ```sh
-   curl -fsSL https://runeditrun.com/install.sh | sh
-   export PATH="$HOME/.local/bin:$PATH"
-   ```
+```sh
+npx -y @runeditrun/rer dev just-every/run-nectar
+```
 
-2. Get Nectar and start it:
-
-   ```sh
-   git clone https://github.com/just-every/run-nectar.git nectar
-   cd nectar && rer dev
-   ```
-
-`rer dev` installs everything, sets up a local owner on a free port, starts the
+That one line installs `rer`, the Run Edit Run command, and clones Nectar; to start it again later, run `cd run-nectar && rer dev`. `rer dev` installs everything, sets up a local owner on a free port, starts the
 app and prints a link that opens Nectar signed in. Open that link on the same
 computer and treat it like a password: it signs the browser in as the owner.
 
