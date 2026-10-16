@@ -1517,7 +1517,7 @@
       "executable": false
     },
     "src/modules/mail/src/inbound/headers.mjs": {
-      "sha256": "79673d562647f4e15e7fe10ca3b13241acd5b2cc25a651a32918cee45e02235c",
+      "sha256": "303c9144dca05d998d35081d3fc2cb8a106c143bf7c0894fc3338677629d796e",
       "executable": false
     },
     "src/modules/mail/src/inbound/index.mjs": {
