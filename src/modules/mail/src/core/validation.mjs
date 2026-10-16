@@ -47,9 +47,20 @@ export function validateConfig(config, dependencies = {}) {
   return config;
 }
 
+// Linear-time equivalent of /^(?:(.*?)\s*<([^<>]+)>|([^<>]+))$/u: "Name <addr>" or "addr".
+function splitAddress(text) {
+  const open = text.lastIndexOf('<');
+  if (open >= 0 && text.endsWith('>')) {
+    const inner = text.slice(open + 1, -1);
+    const name = text.slice(0, open).trimEnd();
+    if (inner && !/[<>]/.test(inner) && !/[\n\r\u2028\u2029]/.test(name)) return [text, name, inner];
+  }
+  return /[<>]/.test(text) || !text ? null : [text, undefined, undefined, text];
+}
+
 export function parseAddress(value) {
   bounded(value, 998, 'invalid_address');
-  const match = value.trim().match(/^(?:(.*?)\s*<([^<>]+)>|([^<>]+))$/u);
+  const match = splitAddress(value.trim());
   const email = (match?.[2] ?? match?.[3] ?? '').trim();
   // Conservative mailbox subset; never serialize multiple mailboxes as one.
   const parts = email.split('@');
