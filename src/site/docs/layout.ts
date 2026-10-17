@@ -9,7 +9,7 @@ import type { Rendered } from './render'
 function nav(current?: string): string {
   return `<nav class="docs-nav" aria-label="Docs"><a class="docs-home${current ? '' : ' current'}" href="/docs"${current ? '' : ' aria-current="page"'}>All guides</a>`
     + docsSections.map(section => `<p class="docs-nav-title">${esc(section.title)}</p><ul>${section.pages.map(page => `<li><a href="/docs/${page.slug}"${page.slug === current ? ' aria-current="page"' : ''}>${esc(page.title)}</a></li>`).join('')}</ul>`).join('')
-    + '</nav>'
+    + '<p class="docs-nav-title">Project</p><ul><li><a href="/contract">Contract</a></li></ul></nav>'
 }
 
 const hexagon = '<span class="docs-hex" aria-hidden="true"><svg viewBox="0 0 34 38"><path d="M17 1.5 32 10.2v17.6L17 36.5 2 27.8V10.2Z" fill="#F6B23E" stroke="#F6B23E" stroke-width="2" stroke-linejoin="round"/></svg></span>'

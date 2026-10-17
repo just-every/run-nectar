@@ -1,5 +1,5 @@
 // The run site's shared frame: the document head, the header (mark + Nectar,
-// Docs, Source) and the one-line footer. The homepage and every docs page use
+// Docs, Contract, Source) and the one-line footer. The homepage and every docs page use
 // it; /run and /404 are Base's pages, themed by the same tokens.
 import type { RunData } from '../base/run-site'
 
@@ -20,7 +20,7 @@ export function siteDocument({ title, description, styles, body }: { title: stri
 
 export function siteHeader(run: RunData, current: 'home' | 'docs' = 'home'): string {
   return `<header class="site-bar"><a class="site-brand" href="/">${mark(26)}<span>${esc(run.name)}</span></a>`
-    + `<nav aria-label="Site"><a href="/docs"${current === 'docs' ? ' aria-current="page"' : ''}>Docs</a><a href="${esc(run.repository)}">Source</a></nav></header>`
+    + `<nav aria-label="Site"><a href="/docs"${current === 'docs' ? ' aria-current="page"' : ''}>Docs</a><a href="/contract">Contract</a><a href="${esc(run.repository)}">Source</a></nav></header>`
 }
 
 export function siteFooter(run: RunData): string {
