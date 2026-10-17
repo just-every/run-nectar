@@ -1,62 +1,497 @@
 # Nectar product contract
 
-Nectar is subscription billing owned by the business that uses it. Its first
-buyer is one US B2B software or service business billing monthly plans, seats
-and simple metered usage, run by an owner and a finance operator, with an
-outside accountant. Nectar turns agreed subscriptions and recorded usage into
-invoices that can be explained line by line, then tracks credits, payment
-evidence and overdue follow-up. It is an invoicing engine, not a merchant of
-record and not a payment collector.
+Target edition: 17 October 2026. Nectar is a complete subscription and
+usage-based billing platform owned by the business that uses it. A US buyer of
+Stripe Billing, Chargebee, Recurly or Maxio can switch to it, and a buyer
+weighing Orb, Metronome or Tabs gets usage depth and billing agents too. It
+manages the pricing catalogue and entitlements, meters usage in real time,
+rates it exactly, issues and delivers invoices automatically, collects through
+the merchant's own payment processor (card and ACH), recovers failed payments,
+gives customers a self-service portal, calculates US sales tax through a tax
+provider, syncs the books and produces ASC 606 revenue schedules.
 
-This document sets the required behaviour of the first release. Each numbered
-clause says what a person can do; [ACCEPTANCE.md](ACCEPTANCE.md) names the test
-that proves it and its current status. A named test is a target, not evidence,
-until its result is recorded there.
+This is a target contract: it describes the product Nectar is being built
+towards, not only what ships today. Every named clause states what a buyer gets
+and the acceptance journey that proves it through a public door (screen, form,
+JSON API, download, command or provider webhook), with fakes only at the paid
+or network edge (processor, tax, accounting, CRM and mail sandboxes). The
+[Status](#status) table at the end marks each clause `done`, `partial` or
+`missing` at a named commit; [ACCEPTANCE.md](ACCEPTANCE.md) lists every
+clause's acceptance evidence with the same status, so a build round can work
+towards it. A gap in today's implementation never narrows this destination.
+
+## Product target
+
+| | |
+| --- | --- |
+| Category | Subscription billing and usage-based billing |
+| Incumbents a buyer switches from | Stripe Billing, Chargebee, Recurly, Maxio (and the usage-billing challengers Orb, Metronome and Tabs) |
+| First buyer | A US B2B software or service business billing subscriptions, seats and metered usage in US dollars, run by an owner, a finance lead and an engineer, with an outside accountant |
+
+**The whole job.** Turn commercial terms and product usage into correct
+recurring charges, deliver them, collect the money through the merchant's
+processor, and keep subscriptions, customer access, tax and financial records
+in agreement. That means: a versioned catalogue with every common pricing model
+(flat, seat, tiered, volume, package, commitments, ramps, prepaid credits,
+annual and multi-year terms); a metering pipeline with stable event identity;
+the full subscription lifecycle; an entitlements API and SDKs; automatic invoice
+runs with real email delivery; card and ACH collection through Stripe, Adyen or
+Braintree; smart retries and dunning; B2B collections and cash application; a
+customer portal; US sales tax through Stripe Tax or Avalara; QuickBooks Online,
+Xero and NetSuite sync; ASC 606 revenue schedules; SaaS metrics; CRM contract
+inputs; and move-in from every named incumbent with a reconciled shadow run.
+
+**Neighbouring products stay separate.** Nectar links to its siblings rather
+than rebuilding them: [Orbit](https://github.com/just-every/run-orbit) is the
+CRM that sends closed-won deals; [Platter](https://github.com/just-every/run-platter)
+writes proposals and quotes; [Inkwell](https://github.com/just-every/run-inkwell)
+collects signatures; [Locket](https://github.com/just-every/run-locket) manages
+the contract lifecycle; [Pantry](https://github.com/just-every/run-pantry) is
+the general ledger; [Easel](https://github.com/just-every/run-easel) forecasts;
+[Buoy](https://github.com/just-every/run-buoy) and
+[HappyToHelp](https://github.com/just-every/run-happytohelp) read billing
+context for customer success and support; [Purse](https://github.com/just-every/run-purse)
+is the buyer-side procurement system that receives Nectar invoices;
+[Nook](https://github.com/just-every/run-nook) carries chat alerts;
+[Crank](https://github.com/just-every/run-crank) automates cross-tool
+workflows; [Auth](https://github.com/just-every/run-auth) is an identity
+provider. Each integration is a clause below; none of those products is part
+of Nectar.
+
+**How to read this contract.** The sixteen published clauses (`NEC-01` to
+`NEC-16`) are the released first edition and keep their IDs and behaviour; they
+are the exact rating and invoicing core the target builds on. Target clauses
+extend them. Where a target clause widens a published one (for example
+`TAX-001` replaces the single declared state rate with provider calculation),
+the published clause still holds as written, as the provider-free mode.
 
 ## Operating rules
 
-- **A fresh installation starts empty.** The owner enters the business, its catalog and its customers, or moves them in. Nothing is pre-filled with sample data.
-- **Exact money.** Unit prices and quantities are exact decimals with at most six fractional places; nothing passes through binary floating point. Each invoice line rounds once to whole cents, half away from zero; tax is the declared rate on the taxable total, rounded once. The rule set is versioned (`nectar-rating-1`) and recorded on every invoice.
-- **Same inputs, same bill.** Rating is a pure function of recorded inputs: the business's timezone and tax declaration, the customer's exemption, the subscription's dates, items, prices and approved contract exceptions, and the unbilled usage events. Those inputs are fingerprinted on every draft.
-- **Approval names exact inputs.** Approving a draft records its input fingerprint. Finalising recomputes it; if usage, a price, a contract exception or the tax declaration changed, the approval no longer holds and the invoice is not issued.
-- **History is append-only.** Price versions, issued invoices and their lines, credit notes, payments, allocations, the usage ledger and the audit trail are never edited or deleted. Corrections are new records: a credit note, a voided-and-replaced usage event, a new price version, a scheduled change.
-- **Each period bills once.** A subscription period has at most one issued invoice, and a usage event is billed on at most one invoice; both are enforced inside the issuing transaction.
-- **Roles are checked in every handler.** The owner does everything; a finance operator keeps records, imports usage, prepares and approves bill runs and works receivables; an accountant reads and exports. Every server handler checks the actor's capability itself, for pages, form posts, the JSON API and downloads alike; routes are not the boundary.
-- **Agents prepare; people decide.** An application credential (scope `prepare` or `usage`) can read and propose, or submit usage. It can never approve, finalise, issue a credit, change a record directly or manage access. Every approval records the person who made it.
-- **Nothing is sent or charged.** Nectar never collects a payment, holds card data, sends an invoice or a reminder, or marks anything as sent. Approved reminders are exported for the operator to send themselves.
+These rules bind every clause, published and target.
+
+- **A fresh installation starts empty.** The owner enters the business, its catalogue and its customers, or moves them in. Nothing is pre-filled with sample data.
+- **Exact money.** Unit prices and quantities are exact decimals with at most six fractional places; nothing passes through binary floating point. Each invoice line rounds once to whole cents, half away from zero; tax is the declared or provider-returned amount, rounded once. The rule set is versioned (`nectar-rating-1` today) and recorded on every invoice; a new pricing model ships as a new rule version, never as a silent change to an old one.
+- **Same inputs, same bill.** Rating is a pure function of recorded inputs: the business's timezone and tax basis, the customer's exemption, the subscription's dates, items, prices, commitments, credits and approved contract exceptions, and the unbilled usage events. Those inputs are fingerprinted on every draft.
+- **Approval names exact inputs.** Approving a draft, a change or a proposal records its input fingerprint. Executing it recomputes the fingerprint; if anything changed, the approval no longer holds.
+- **History is append-only.** Price versions, issued invoices and their lines, credit notes, payments, refunds, allocations, revenue schedules, the usage ledger and the audit trail are never edited or deleted. Corrections are new records.
+- **Each period bills once; each invoice collects once.** A subscription period has at most one issued invoice, a usage event is billed on at most one invoice, and a payment attempt carries an idempotency key derived from the invoice and attempt number, so a retry, a restart or a duplicate provider webhook can never charge twice.
+- **Money moves only through the merchant's processor.** Nectar never holds card or bank-account numbers, never takes custody of funds and never acts as merchant of record. It instructs the merchant's own Stripe, Adyen or Braintree account, using processor-hosted fields for payment details, and records the processor's references and outcomes.
+- **Policy decides what runs unattended.** The owner sets which actions run automatically (issuing clean invoices, charging stored payment methods, sending invoices, retries and notices) and which wait for a person (exceptions, credits, write-offs, refunds and price changes above set limits). Every automated action is audited with the policy that allowed it.
+- **Roles are checked in every handler.** Every server handler checks the actor's capability itself, for pages, form posts, the JSON API, webhooks and downloads alike; routes are not the boundary.
+- **Agents prepare; people decide.** An agent or application credential reads and proposes within its scope. It never approves its own proposal, issues a credit, refunds, writes off, changes a price or manages access. Every approval records the person who made it.
 
 ## First release: sixteen clauses
 
-Thirteen billing flows, then the agent, access and move-in requirements.
+The released first edition, kept as released with its acceptance evidence added. Each is proven by its named check
+in `tests/nectar/flows.mjs` (`pnpm run test:flows`, part of `rer verify`).
 
-1. **Set up the business.** The owner records the legal name, billing address and email, a billing timezone, an invoice number prefix and payment terms, in US dollars only. The owner declares a tax policy for one US state (no sales tax, or one flat rate on taxable lines) with its basis, and reviews it. Invoices cannot be finalised until a declared policy has been reviewed; any later change needs a new review. The timezone cannot change once an invoice is issued.
-2. **Keep customers and billing contacts.** Operators add customers under the business's own external id (the id a CRM or previous biller uses; usage files refer to customers by it), with a billing email, address and an optional tax exemption backed by a certificate reference, and add billing contacts. External ids and contact emails are unique; edits are guarded against concurrent changes.
-3. **Version the catalog.** Operators define products, simple meters and prices: flat monthly, per seat monthly, or per unit of a meter. A price is an immutable version; a new price is the next version and earlier versions keep billing the subscriptions that use them. A retired version is unavailable to new subscriptions. Products grant named features.
-4. **Start subscriptions.** Operators start a subscription with an explicit billing day (1–28), a start date, an optional trial end and one to twenty plan items with seat quantities. Contract exceptions — a discount on fixed and seat charges, a one-time credit, or a contract price for one plan price, each with dates, a note and the quoted clause — are recorded as proposed and bill only after a person approves them. One customer cannot have two live subscriptions rating the same meter.
-5. **Bring in usage.** Operators upload a CSV, or an application credential posts events, each with a stable event id, customer id, meter, exact quantity and an ISO 8601 time with an explicit offset. An id already recorded with the same values is a duplicate and changes nothing; reused with different values, or with an unknown customer or meter or an unreadable time, it is rejected and reported by row. Each import is one atomic batch with its own report.
-6. **Inspect before rating.** For any month, a person sees each metered subscription's exact period totals per meter, the period's boundaries in the billing timezone, days with no usage, events that arrived after the period ended, unbilled events from earlier periods and events no price rates.
-7. **Rate deterministically.** Fixed and seat charges bill for the days of the period they are in effect, outside any trial; usage sums exact event quantities per price and multiplies once; late usage bills in the next period at the price in effect when it occurred; contract discounts and credits apply as approved. Preparing again from the same inputs yields the same lines and fingerprint.
-8. **Schedule plan and quantity changes.** Operators prepare a change to one plan item from a date and see the affected period's charges before and after (with proration) and the next full period. A person approves that exact preview; it is refused if the subscription changed since, or if the date falls in a period already invoiced. The bill run charges exactly what the approved preview showed.
-9. **Draft a bill run and compare it.** For a month, Nectar drafts one invoice per subscription period that started in it and has ended, lists periods not yet ended and periods already invoiced, compares each draft with the subscription's previous invoice and the run with the previous run, and lists exceptions (missing usage, large change, unrated usage, missing billing email, undeclared tax, credits beyond charges, disagreement with the previous biller). Preparing again replaces the draft.
-10. **Approve and finalise numbered invoices.** A person approves one draft or every clean draft, acknowledging any listed exceptions; blocking exceptions cannot be approved. Finalising issues approved invoices whose inputs are unchanged with the next sequential number, an invoice date from the end of the period up to today and a due date from the payment terms, marks the billed usage, and keeps the accepted calculation, its fingerprint and rule version with the invoice. Issued invoices never change.
-11. **Credit and record payments.** A person issues a numbered credit note against an issued invoice for no more than it still owes, with a reason. Operators record payments received outside Nectar with their method, unique reference and evidence, and allocate them to the customer's invoices, never beyond the payment's unallocated amount or the invoice's balance. For every invoice, total = credited + paid + owed.
-12. **Follow up overdue balances.** Operators see ageing (not yet due, 1–30, 31–60, 61–90, over 90 days) per customer and invoice, draft a reminder stating the overdue invoices, balances and recent payments, and a person approves the exact recipient and wording while those balances still hold. The approved reminder downloads as a message to send from the operator's own mail, and approval opens a dated follow-up task that is closed with its outcome.
-13. **Leave with the data and explain entitlements.** Accountants and operators download issued invoices, usage events and subscriptions as CSV, and any bill run as one JSON document with every invoice's lines, calculation inputs, fingerprint, approval and issue events. The whole installation exports with `rer export` and restores with `rer import` into a fresh installation with every portable row, including the calculation evidence, unchanged. For any customer, feature and date, Nectar explains whether the feature is granted, subscription by subscription, step by step.
-14. **Let an agent prepare the work.** The owner issues scoped credentials. With `prepare`, an agent reads records and proposes (a) contract terms from a signed agreement, quoting each clause and flagging ambiguity; (b) a new price version for selected subscriptions from an exact date; (c) bill-run usage corrections with their sources; and (d) a collections reminder. Nectar computes the invoice effect of each proposal itself. A person approves or rejects; a proposal whose records changed since it was prepared is refused. Approving a usage correction re-prepares the draft run and approves no invoice. With `usage`, a pipeline submits usage events. Credentials are revocable.
-15. **Control access.** The owner invites finance operators and accountants through Base operator sign-in, ends access (ending every session), and is the only one who changes business settings, the tax policy, access, credentials or a move-in cutover. Every page, form, API call and download enforces the role, signed-out requests get nothing, and cross-site form posts are refused.
-16. **Move in from Stripe Billing.** Operators upload owner-captured Stripe API list responses for customers, products, prices, subscriptions, invoices and billing meters with a manifest of counts. Nectar refuses an incomplete capture, previews every record it would create or reject without writing anything, applies the exact reviewed preview as one journaled batch with its original files retained, adds nothing on a repeated apply, and undoes an untouched batch. Moved-in subscriptions arrive in shadow: they are rated and compared with Stripe's own invoices price by price but can never be approved or issued, until the owner adopts each one from a period Stripe has not billed. Once its records have been billed on, a move cannot be undone silently.
+### Billing flows
+
+- **NEC-01 — Set up the business.** The owner records the legal name, billing address and email, a billing timezone, an invoice number prefix and payment terms, in US dollars only. The owner declares a tax policy for one US state (no sales tax, or one flat rate on taxable lines) with its basis, and reviews it. Invoices cannot be finalised until a declared policy has been reviewed; any later change needs a new review. The timezone cannot change once an invoice is issued. **Acceptance evidence:** `NEC-01 business, currency, timezone and declared tax`; finalising refused until review in `NEC-10`.
+
+- **NEC-02 — Keep customers and billing contacts.** Operators add customers under the business's own external id (the id a CRM or previous biller uses; usage files refer to customers by it), with a billing email, address and an optional tax exemption backed by a certificate reference, and add billing contacts. External ids and contact emails are unique; edits are guarded against concurrent changes. **Acceptance evidence:** `NEC-02 customers and billing contacts with external ids`.
+
+- **NEC-03 — Version the catalog.** Operators define products, simple meters and prices: flat monthly, per seat monthly, or per unit of a meter. A price is an immutable version; a new price is the next version and earlier versions keep billing the subscriptions that use them. A retired version is unavailable to new subscriptions. Products grant named features. **Acceptance evidence:** `NEC-03 products, immutable price versions and meters`.
+
+- **NEC-04 — Start subscriptions.** Operators start a subscription with an explicit billing day (1–28), a start date, an optional trial end and one to twenty plan items with seat quantities. Contract exceptions — a discount on fixed and seat charges, a one-time credit, or a contract price for one plan price, each with dates, a note and the quoted clause — are recorded as proposed and bill only after a person approves them. One customer cannot have two live subscriptions rating the same meter. **Acceptance evidence:** `NEC-04 subscriptions with anchor, trial and approved exceptions` and `NEC-04 a subscription with an end date still holds its meter until it ends`.
+
+- **NEC-05 — Bring in usage.** Operators upload a CSV, or an application credential posts events, each with a stable event id, customer id, meter, exact quantity and an ISO 8601 time with an explicit offset. An id already recorded with the same values is a duplicate and changes nothing; reused with different values, or with an unknown customer or meter or an unreadable time, it is rejected and reported by row. Each import is one atomic batch with its own report. **Acceptance evidence:** `NEC-05 usage with stable ids and duplicate rejection`; credential submission in `NEC-14`.
+
+- **NEC-06 — Inspect before rating.** For any month, a person sees each metered subscription's exact period totals per meter, the period's boundaries in the billing timezone, days with no usage, events that arrived after the period ended, unbilled events from earlier periods and events no price rates. **Acceptance evidence:** `NEC-06 missing and late usage and exact totals before rating` (23:30 on 31 July in Los Angeles belongs to July).
+
+- **NEC-07 — Rate deterministically.** Fixed and seat charges bill for the days of the period they are in effect, outside any trial; usage sums exact event quantities per price and multiplies once; late usage bills in the next period at the price in effect when it occurred; contract discounts and credits apply as approved. Preparing again from the same inputs yields the same lines and fingerprint. **Acceptance evidence:** `NEC-07 deterministic rating with explicit rounding` (Northwind's July invoice totals $2,081.44 line by line).
+
+- **NEC-08 — Schedule plan and quantity changes.** Operators prepare a change to one plan item from a date and see the affected period's charges before and after (with proration) and the next full period. A person approves that exact preview; it is refused if the subscription changed since, or if the date falls in a period already invoiced. The bill run charges exactly what the approved preview showed. **Acceptance evidence:** `NEC-08 scheduled changes bill exactly as previewed`.
+
+- **NEC-09 — Draft a bill run and compare it.** For a month, Nectar drafts one invoice per subscription period that started in it and has ended, lists periods not yet ended and periods already invoiced, compares each draft with the subscription's previous invoice and the run with the previous run, and lists exceptions (missing usage, large change, unrated usage, missing billing email, undeclared tax, credits beyond charges, disagreement with the previous biller). Preparing again replaces the draft. **Acceptance evidence:** `NEC-09 draft bill run comparison and exceptions`.
+
+- **NEC-10 — Approve and finalise numbered invoices.** A person approves one draft or every clean draft, acknowledging any listed exceptions; blocking exceptions cannot be approved. Finalising issues approved invoices whose inputs are unchanged with the next sequential number, an invoice date from the end of the period up to today and a due date from the payment terms, marks the billed usage, and keeps the accepted calculation, its fingerprint and rule version with the invoice. Issued invoices never change. **Acceptance evidence:** `NEC-10 approval, source changes and numbered finalisation`.
+
+- **NEC-11 — Credit and record payments.** A person issues a numbered credit note against an issued invoice for no more than it still owes, with a reason. Operators record payments received outside Nectar with their method, unique reference and evidence, and allocate them to the customer's invoices, never beyond the payment's unallocated amount or the invoice's balance. For every invoice, total = credited + paid + owed. **Acceptance evidence:** `NEC-11 credit notes, payment evidence and allocations`.
+
+- **NEC-12 — Follow up overdue balances.** Operators see ageing (not yet due, 1–30, 31–60, 61–90, over 90 days) per customer and invoice, draft a reminder stating the overdue invoices, balances and recent payments, and a person approves the exact recipient and wording while those balances still hold. The approved reminder downloads as a message to send from the operator's own mail, and approval opens a dated follow-up task that is closed with its outcome. Sending from Nectar itself is `AR-001`. **Acceptance evidence:** `NEC-12 ageing, reminder drafts and follow-up tasks`.
+
+- **NEC-13 — Leave with the data and explain entitlements.** Accountants and operators download issued invoices, usage events and subscriptions as CSV, and any bill run as one JSON document with every invoice's lines, calculation inputs, fingerprint, approval and issue events. The whole installation exports with `rer export` and restores with `rer import` into a fresh installation with every portable row, including the calculation evidence, unchanged. For any customer, feature and date, Nectar explains whether the feature is granted, subscription by subscription, step by step. **Acceptance evidence:** `NEC-13 exports and entitlement explanations`; the restore round trip in `tests/nectar/journey.mjs`.
+
+### Agents, access and move-in
+
+- **NEC-14 — Let an agent prepare the work.** The owner issues scoped credentials. With `prepare`, an agent reads records and proposes (a) contract terms from a signed agreement, quoting each clause and flagging ambiguity; (b) a new price version for selected subscriptions from an exact date; (c) bill-run usage corrections with their sources; and (d) a collections reminder. Nectar computes the invoice effect of each proposal itself. A person approves or rejects; a proposal whose records changed since it was prepared is refused. Approving a usage correction re-prepares the draft run and approves no invoice. With `usage`, a pipeline submits usage events. Credentials are revocable. **Acceptance evidence:** `NEC-14 agent prepares, a person approves`.
+
+- **NEC-15 — Control access.** The owner invites finance operators and accountants through Base operator sign-in, ends access (ending every session), and is the only one who changes business settings, the tax policy, access, credentials or a move-in cutover. Every page, form, API call and download enforces the role, signed-out requests get nothing, and cross-site form posts are refused. **Acceptance evidence:** `NEC-15 roles are enforced in every handler` (crawls every action and every GET door).
+
+- **NEC-16 — Move in from Stripe Billing.** Operators upload owner-captured Stripe API list responses for customers, products, prices, subscriptions, invoices and billing meters with a manifest of counts. Nectar refuses an incomplete capture, previews every record it would create or reject without writing anything, applies the exact reviewed preview as one journaled batch with its original files retained, adds nothing on a repeated apply, and undoes an untouched batch. Moved-in subscriptions arrive in shadow: they are rated and compared with Stripe's own invoices price by price but can never be approved or issued, until the owner adopts each one from a period Stripe has not billed. Once its records have been billed on, a move cannot be undone silently. **Acceptance evidence:** `NEC-16 Stripe Billing move-in with dry run, journal, undo and shadow cutover`.
+
+## Target clauses — 17 October 2026
+
+Binding requirements of the full product. Acceptance runs against the real
+Worker and D1 through public doors; processors, tax engines, accounting and CRM
+systems and mail are exercised through their sandboxes (Stripe test mode with
+test clocks, Adyen and Braintree sandboxes, Avalara sandbox, QuickBooks Online
+and Xero developer companies, NetSuite sandbox, Salesforce developer org,
+Postmark sandbox server).
+
+### Business setup and catalogue
+
+- **SET-001 — Multiple billing entities.** One installation can hold several US legal entities (for example an operating company and a subsidiary), each with its own legal name, address, EIN, invoice prefix and number sequence, payment terms, processor account, tax registration and accounting company. Customers bill from one entity; reports and exports filter by entity and consolidate across them. **Acceptance evidence:** Create two entities with separate Stripe test accounts and QuickBooks companies, bill one customer from each, and see independent invoice sequences, charges on the right processor account, entity-filtered and consolidated revenue reports, and journals posted to the right company.
+
+- **CAT-001 — Billing intervals and terms.** Prices bill weekly, monthly, quarterly, semi-annually, annually or every N months, in advance or in arrears, and a subscription has a contract term (monthly, 12, 24 or 36 months) separate from its billing interval. One subscription can mix intervals (an annual platform fee billed in advance with monthly usage in arrears), and new items co-term with the existing term end. **Acceptance evidence:** Start a 24-month subscription with an annual $12,000 platform fee billed in advance and monthly metered usage in arrears; advance a test clock through 25 months and see one platform invoice per year on the anniversary, 24 monthly usage invoices, a co-termed add-on prorated to the term end, and identical totals on re-preparation.
+
+- **CAT-002 — Tiered, volume, package and graduated pricing.** A price can be graduated (each tier's units at that tier's rate), volume (all units at the rate of the tier reached), package (per block of N units, rounding up) or stair-step (a flat amount per band), with optional flat fees per tier, for seats and for metered usage. Each line's calculation shows the tier breakdown. **Acceptance evidence:** Rate 0, 1, 1,000, 1,001 and 2,500,000 units under each model through the bill run and compare every line and its tier breakdown with hand-computed expected cents, including the exact tier boundaries.
+
+- **CAT-003 — Minimum commitments, overages and ramps.** A contract can commit to a minimum spend per period or per term (with a true-up line for the shortfall), price overage above an included quantity, and ramp prices or quantities on scheduled dates (year-one, year-two, year-three pricing). Commitment burn-down is visible to operators and the customer. **Acceptance evidence:** Sign a three-year ramp with a $50,000 annual minimum; under-use in year one and over-use in year two; see the true-up line at the year-one end, overage lines in year two, the ramp price switch on its date, and a burn-down that matches the issued invoices.
+
+- **CAT-004 — Prepaid credits and drawdown.** A customer can buy or be granted prepaid credits (in dollars or units) with an effective date, expiry and priority; usage draws them down before it bills, with rollover rules, top-ups (manual or automatic at a low-balance threshold, charged through `PAY-003`), and a credit ledger. Prepaid balances are a contract liability in `REV-001`. **Acceptance evidence:** Sell a $10,000 credit block, consume it across two periods with a promotional grant that expires first, trigger an automatic $5,000 top-up at a $1,000 balance, and see the ledger, the invoice lines drawing credits, the top-up charge and the expiry all agree.
+
+- **CAT-005 — Discounts, coupons, promotion codes and trials.** Beyond approved contract discounts, the catalogue holds reusable coupons (percentage or amount, once, for N periods or forever, restricted to products) and promotion codes with redemption limits, expiry and first-time-customer rules. Trials run with or without a payment method on file and convert, extend or end by policy. **Acceptance evidence:** Redeem a 20%-for-three-months promotion code at checkout, exhaust its redemption limit, refuse an expired code, and run a no-card trial that ends unpaid and a card trial that converts and charges on the trial end date.
+
+- **CAT-006 — One-time charges, add-ons and manual invoices.** Operators add one-time charges (setup fees, professional services) to the next invoice or bill them immediately, attach add-ons to a plan, and raise a standalone invoice for non-subscription work, all using catalogue prices or an approved custom amount. **Acceptance evidence:** Add a $2,500 implementation fee to a new subscription's first invoice, attach a seat-pack add-on mid-period, and issue a standalone services invoice; each appears once, with its tax and numbering.
+
+- **CAT-007 — Price changes across a customer base.** A commercial owner publishes a new price version and migrates a chosen cohort of subscriptions from an exact date (immediately, at renewal or at a later date), grandfathering the rest, with a preview of every affected invoice and an optional customer notice through `INV-002`. **Acceptance evidence:** Raise a plan from $499 to $549 for monthly customers at their next renewal while grandfathering annual contracts; the preview lists every affected subscription and its next invoice, approval schedules exactly those changes, and the bill runs charge the previewed amounts.
+
+- **CAT-008 — Multi-currency prices.** A US seller can price in USD and in other currencies (for example CAD, EUR and GBP) with per-currency price books; each customer bills in one currency, invoices and payments stay in that currency, and reports convert to USD at a recorded daily rate. **Acceptance evidence:** Bill a Canadian customer in CAD and collect through a Stripe test account; the invoice, payment, credit and report show CAD amounts and a USD reporting value with the rate source and date.
+
+- **CAT-009 — Customer hierarchies and consolidated billing.** A parent account can pay for its child accounts: usage and subscriptions roll up to one consolidated invoice with per-child sections, or each child bills separately with the parent as payer; commitments and credits can be shared across the hierarchy. **Acceptance evidence:** Create a parent with three divisions, bill them on one consolidated invoice with per-division subtotals, then switch one division to its own invoice paid by the parent's card, and see a shared commitment drawn down by all three.
+
+### Usage and metering
+
+- **USE-001 — Metering API at production scale.** Product usage arrives through the authenticated API, the SDKs (`DEV-003`) or batch files, keyed by stable event ids, and is acknowledged durably before it is aggregated. Nectar publishes the capacity it has measured: at least 1,000 events a second sustained and 100 million events a month in one installation, with raw events retained for replay. **Acceptance evidence:** Drive 100 million synthetic events through the API with duplicates and out-of-order times, measure sustained throughput and acknowledgement latency, and show period totals equal to an independent count with no event billed twice.
+
+- **USE-002 — Billable metrics and dimensions.** A meter defines its aggregation (sum, count, maximum, unique count, latest value, or time-weighted such as seat-hours or GB-months) and filters and group-by properties (for example model, region or tier), so one event stream can price several ways. An advanced meter can be a read-only SQL query over the event store, previewed against past periods before a person activates it as a new meter version. **Acceptance evidence:** Define sum, count, max, unique-users and GB-month meters over one event stream with a `model` property, price two models differently, and compare each period total with an independent computation over the raw events; define a SQL meter, preview it on three past months, and see a write statement refused.
+
+- **USE-003 — Bulk usage from storage and warehouses.** Usage loads from files dropped in Amazon S3 or Google Cloud Storage and from scheduled Snowflake or BigQuery queries, with the same identity, duplicate and rejection rules as the API, and a per-load report. **Acceptance evidence:** Drop a 10-million-row Parquet file in an S3 test bucket and schedule a BigQuery query; re-delivering the same file changes nothing, a malformed row is reported, and totals match the source counts.
+
+- **USE-004 — Usage corrections after billing.** A late or corrected event that touches an already issued invoice follows the business's policy: bill it in the next period (today's behaviour), raise a correcting invoice, or issue a credit note, always with a line naming the original period and event ids. Backfilling a historical range replays rating without changing any issued invoice. **Acceptance evidence:** Void 10,000 events from an issued July invoice under each policy and see the August late line, a correcting invoice, or a credit note, each citing the original events, with July's issued invoice unchanged.
+
+- **USE-005 — Usage alerts and threshold invoicing.** Operators and customers set usage and spend thresholds per customer, meter or commitment; crossing one fires a signed webhook (`DEV-001`), an email and an in-app alert, and can issue a threshold invoice mid-period (bill when accrued charges reach $X) or apply an entitlement change (`ENT-002`). **Acceptance evidence:** Set a $5,000 threshold invoice and an 80% commitment alert, stream usage past both, and see one webhook and email per crossing, a mid-period invoice charged once, and the remaining period billing only the rest.
+
+- **USE-006 — Live usage and the upcoming invoice.** At any moment the API, the operator screens and the customer portal show current-period usage per meter, credits remaining and an upcoming-invoice preview computed by the same rating engine, refreshed within one minute of ingestion. **Acceptance evidence:** Stream usage during a period and read the upcoming invoice through the API and portal; it matches the final issued invoice for the same inputs to the cent.
+
+- **USE-007 — Reconcile usage with its source.** Nectar compares daily ingested counts and totals with the totals the sending system reports (a control total per day and meter sent with each batch or through the API), flags gaps and surpluses before the bill run, and blocks issue of affected invoices until a person resolves or acknowledges them. **Acceptance evidence:** Send control totals that disagree with ingested events for two days; the bill run lists both as blocking exceptions naming the day, meter and difference, and resolving them by replay clears the block.
+
+### Subscription lifecycle
+
+- **SUB-001 — Lifecycle states driven by dates and payments.** Subscriptions move through trialing, active, past due, unpaid, paused, canceled and ended on a schedule and on payment outcomes, without a person running anything; each transition is recorded with its cause and fires a webhook. **Acceptance evidence:** With a Stripe test clock, run a card trial to active, fail its renewal payment to past due, exhaust dunning to unpaid, pay to recover to active, and cancel to ended; read the state history and the webhook for each step.
+
+- **SUB-002 — Immediate and scheduled plan changes with proration policy.** Besides scheduled changes (`NEC-08`), an upgrade or downgrade can take effect immediately or at period end, with the business's proration policy (prorate and invoice now, prorate on the next invoice, or no proration), and in-advance plans charge or credit the difference at once. **Acceptance evidence:** Upgrade an annual in-advance plan mid-term with "invoice now", downgrade another at period end, and change a third without proration; each invoice or credit matches its preview and the payment collects through `PAY-003`.
+
+- **SUB-003 — Pause, resume and cancel.** A subscription can pause (no charges, access per policy) and resume on a date, or cancel immediately (with a prorated credit or refund per policy) or at term end, with a recorded reason; a canceled subscription can reactivate within a set window. **Acceptance evidence:** Pause for two months and resume, cancel immediately with a prorated credit, cancel another at term end, and reactivate a third; invoices, credits, entitlements and state history agree for each.
+
+- **SUB-004 — Renewals and renewal notices.** Term subscriptions renew automatically or end, with optional price uplift at renewal, and Nectar sends renewal notices on the schedule the business sets, including the notices US state automatic-renewal laws such as California's require for consumer and small-business plans, with a cancellation path as easy as sign-up. **Acceptance evidence:** Advance a test clock to 30 days before an annual renewal; the notice goes out with the new price and a cancellation link; one customer renews with a 5% uplift, one cancels online and does not renew.
+
+- **SUB-005 — Cancellation saves and win-backs.** A cancellation flow asks for a reason and, by merchant policy, offers a save (discount, pause or downgrade) before cancelling; win-back offers go to recently canceled customers. Offers are recorded and reported. **Acceptance evidence:** Cancel through the portal, accept a two-month 50% save offer and see it applied to the next two invoices; decline it on another account and see the cancellation complete with its reason.
+
+### Entitlements and developer platform
+
+- **ENT-001 — Real-time entitlements API.** The product asks Nectar whether a customer has a feature and what limit applies (boolean, numeric limit or metered quota); answers reflect the subscription's current state within seconds of a change, are served at the edge with a p95 under 50 ms, and are explainable step by step (`NEC-13`). **Acceptance evidence:** Upgrade, downgrade, pause and fail payment on a subscription and poll the entitlements API from a test product; each change is visible within 5 seconds, measured p95 latency is under 50 ms, and each answer's explanation names the subscription and price.
+
+- **ENT-002 — Quotas and enforcement policy.** A metered entitlement carries a soft limit (warn), a hard limit (deny) or an overage policy (allow and bill), and past-due or unpaid states can restrict features after a grace period the business sets. **Acceptance evidence:** Exhaust a 10,000-call quota under each policy; the entitlement API warns, denies or allows and bills accordingly; an unpaid subscription loses a gated feature after its three-day grace period and regains it on payment.
+
+- **DEV-001 — Signed outbound webhooks.** Every lifecycle event (customer, subscription, invoice, payment, credit, usage threshold, entitlement change) can go to registered endpoints, signed with HMAC-SHA256 and a timestamp, retried with backoff for at least three days, with a delivery log, manual replay and secret rotation. **Acceptance evidence:** Register an endpoint, take it down for an hour during a bill run, and see retries deliver every event once it returns; verify signatures, replay one event, rotate the secret with an overlap window and refuse a forged delivery in the receiving test app.
+
+- **DEV-002 — Documented public API.** Everything in the product is a versioned REST call described by an OpenAPI document, with idempotency keys on every write, cursor pagination, expandable objects and a dated API version per credential. **Acceptance evidence:** Generate a client from the published OpenAPI document and run the full billing cycle with it; repeat each write with the same idempotency key and get the original result with no second record.
+
+- **DEV-003 — SDKs and embeddable components.** Maintained TypeScript, Python and Go SDKs cover metering, entitlements, checkout and the portal; embeddable components give the merchant's app a pricing table, checkout and portal without handling card data. **Acceptance evidence:** A sample app uses each SDK to meter usage, gate a feature and open checkout and the portal; the components render the live catalogue and complete a test-mode purchase.
+
+- **DEV-004 — Test mode and test clocks.** Each installation has a sandbox that mirrors the live configuration with processor test keys, and test clocks advance a customer's time through trials, renewals, dunning and annual terms in minutes, so a business can prove its pricing before going live. **Acceptance evidence:** Copy the live catalogue into test mode, advance a test clock 13 months on an annual plan with a failing card, and see every invoice, retry, notice and state change happen; live data is untouched.
+
+### Invoicing and delivery
+
+- **INV-001 — Automatic invoice runs.** On each billing day Nectar prepares, rates and finalises invoices on its own schedule; clean drafts issue automatically under the owner's policy and exceptions (`NEC-09`) wait in a review queue, so month-end never depends on someone remembering to run billing. In-advance and arrears periods, threshold invoices and one-time charges flow through the same run. **Acceptance evidence:** Enable auto-issue for clean drafts, advance a test clock across a billing day with one clean and one exception draft, and see the clean invoice issued, delivered and charged without a person while the exception waits for review.
+
+- **INV-002 — Invoice and receipt email delivery.** Issued invoices, receipts, credit notes, payment confirmations and notices go out by email through the configured provider (Postmark by default, or the installation's Base mail adapter), from the business's own domain with SPF and DKIM, to the customer's billing contacts with CC/BCC rules; each message records delivery, bounce and open events, and a bounce raises a collections exception. **Acceptance evidence:** Issue an invoice through the Postmark sandbox; the message carries the PDF and the hosted-page link; delivery and a forced bounce are recorded on the invoice and the bounce opens a task to fix the contact.
+
+- **INV-003 — Hosted invoice page and PDF.** Every invoice has an unguessable hosted page and a PDF showing lines, tier and calculation detail, tax, credits, payments and balance due, where the customer pays by card or ACH through the processor (`PAY-002`) and downloads past receipts. **Acceptance evidence:** Open an invoice's hosted link signed out, pay it with a Stripe test ACH account, and see the page and PDF move to paid with the receipt; an altered link returns nothing.
+
+- **INV-004 — Branded, B2B-ready invoices.** Invoices carry the business's logo, colours, footer and remit-to details, custom fields, the customer's PO number, memo and per-customer net terms (Net 15, 30, 45, 60), and can show or hide usage detail. **Acceptance evidence:** Set a logo and Net 45 for one customer with a required PO number; the invoice, PDF and email show them, and finalising without the PO is blocked as an exception.
+
+- **INV-005 — Credit notes, voids and refunds.** Beyond credit notes against what an invoice still owes (`NEC-11`), a person can void an unpaid issued invoice (a new record; the original is never edited) and refund a paid one in full or part, to the original payment method through the processor or to the customer's credit balance, with tax reversed through the tax provider. **Acceptance evidence:** Void an unpaid invoice and reissue it, refund half of a card-paid invoice through Stripe test mode and credit the other half to balance; the processor refund, tax reversal, invoice state and customer ledger agree.
+
+- **INV-006 — Customer credit balance.** Overpayments, credit notes and goodwill credits sit on a customer balance that applies automatically to the next invoices by policy, and can be refunded; the balance has its own ledger. **Acceptance evidence:** Overpay an invoice by $200 with a wire, issue a $100 goodwill credit, and see both applied to the next invoice, with the remaining balance refundable and the ledger balanced.
+
+### Payments and collection
+
+- **PAY-001 — Processor connections.** The owner connects the business's own Stripe account (Connect OAuth or a restricted key), Adyen account or Braintree account; card, ACH debit (with Plaid or Stripe Financial Connections account verification) and wallets (Apple Pay, Google Pay) are offered where the processor supports them, and one installation can route by entity or currency. **Acceptance evidence:** Connect a Stripe test account, an Adyen sandbox and a Braintree sandbox, take a card and an ACH payment through each where supported, and see processor references recorded; disconnecting one blocks new charges on it without losing history.
+
+- **PAY-002 — Hosted checkout and payment-method capture.** New customers subscribe through a hosted checkout from the merchant's pricing page, and existing customers add or update a payment method through processor-hosted fields (Stripe Checkout and Elements, Adyen Drop-in, Braintree Drop-in); ACH mandates are captured with their authorisation text. Nectar never receives card or account numbers. **Acceptance evidence:** Complete a test checkout for a monthly plan with a card and another with ACH; the subscription, mandate and default payment method appear, and a search of Nectar's database, logs and exports finds no card or account number.
+
+- **PAY-003 — Automatic collection.** When an invoice issues, Nectar charges the customer's default payment method for invoices set to auto-charge, using an idempotency key per invoice attempt; invoices set to "send invoice" wait for payment by the due date. ACH payments show as pending until they settle or return. **Acceptance evidence:** Issue a card auto-charge invoice and an ACH one; the card pays immediately, the ACH shows pending and settles four business days later on the test clock; replaying the issue step and the processor webhook never creates a second charge.
+
+- **PAY-004 — Payment events, refunds and payouts reconciled.** Processor webhooks are verified, deduplicated and applied in order regardless of arrival order; payments, refunds, disputes, ACH returns (R01, R02 and the rest) and processor fees are recorded against invoices, and each processor payout reconciles to the invoices and fees it contains. **Acceptance evidence:** Deliver Stripe test webhooks twice and out of order for payment, refund, dispute and an R01 return, then a payout; invoice states, fees and the payout reconciliation match Stripe's balance transactions exactly.
+
+- **PAY-005 — Card lifecycle and expiry.** Nectar uses the processor's card account updater, warns customers of expiring cards before renewal with an update link, and marks payment methods that hard-declined as unusable. **Acceptance evidence:** Set a test card to expire before renewal; the customer receives the expiry email 14 days ahead, updates the card through the link, and the renewal charges the new card.
+
+### Dunning and recovery
+
+- **DUN-001 — Smart retries.** Failed payments retry on the business's schedule or the processor's optimised timing (Stripe Smart Retries), distinguish soft from hard declines by decline code, stop on hard declines, missing methods and disputes, and never exceed the retry limit. **Acceptance evidence:** Fail renewals with insufficient-funds, do-not-honor and stolen-card codes on a test clock; the first two retry on schedule and one recovers, the stolen card stops at once, and no invoice is retried beyond the limit.
+
+- **DUN-002 — Dunning sequences.** A dunning policy sends a sequence of emails (and optional in-app notices through webhooks) with a one-click payment-update link, and ends with the business's chosen action (keep active, mark unpaid, restrict features through `ENT-002`, or cancel); different policies apply by plan or customer segment. **Acceptance evidence:** Run a four-email, 21-day dunning policy on a failing card; each email arrives on schedule with a working update link, updating the card mid-sequence stops the sequence and pays the invoice, and a second customer ends restricted after day 21.
+
+- **DUN-003 — Trial, renewal and payment notices.** Customers receive trial-ending, upcoming-renewal, payment-receipt, payment-failed and payment-method-required emails, each editable per template and switchable per notice. **Acceptance evidence:** Run a trial to conversion and a failed payment on a test clock and see each notice arrive once with the right figures; switching one off stops only that notice.
+
+- **DUN-004 — Recovery reporting.** Reports show failed-payment amounts, recovered revenue, recovery rate by decline reason, retry attempt and dunning step, and involuntary churn. **Acceptance evidence:** After a test-clock run with known outcomes, the recovery report's counts and dollar figures equal the payments and failures recorded.
+
+### Receivables and collections
+
+- **AR-001 — Collections cadences sent from Nectar.** For invoices paid by transfer, collections cadences send reminders before and after the due date from Nectar through `INV-002`, tailored by segment and balance, with escalation to an owner, promises to pay that pause reminders until their date, and disputes that stop chasing the disputed amount. Approval rules (`NEC-12`) can still require a person to approve the wording. **Acceptance evidence:** Run a Net 30 invoice past due; reminders go out on days −3, +1, +7 and +15; a promise to pay pauses them until its date; a dispute on one line stops reminders for that line only; payment stops the cadence.
+
+- **AR-002 — Cash application.** Bank deposits (from Plaid bank feeds), processor payouts and lockbox or remittance files match to invoices automatically by amount, reference, remittance advice and customer, with a queue for partial and unmatched receipts that a person allocates. **Acceptance evidence:** Feed a Plaid sandbox account with a wire paying three invoices, an ACH credit with a remittance email, a short payment and an unknown deposit; the first two apply automatically, the short payment leaves the right balance and the unknown deposit waits in the queue.
+
+- **AR-003 — Disputes and chargebacks.** Card disputes from the processor and invoice disputes raised by the customer are tracked with reason, amount, deadline and evidence; Nectar assembles the evidence pack (invoice, usage, signed terms, delivery and access records) for the processor and records the outcome. **Acceptance evidence:** Trigger a Stripe test dispute; Nectar opens a dispute with its deadline, assembles evidence from the invoice, usage and delivery log, submits it, and records the won outcome with the funds returned.
+
+- **AR-004 — Write-offs and bad debt.** A person with approval writes off an uncollectable balance with a reason; the write-off posts to accounting as bad debt and stops collection, and a later recovery is recorded against it. **Acceptance evidence:** Write off a 120-day balance, see it leave ageing, post to QuickBooks as bad debt and stop reminders; then record a partial recovery and see the reversal.
+
+- **AR-005 — Accounts-payable portal submission.** Invoices for customers who require it are submitted to their AP portal (Coupa, SAP Ariba, Bill.com or a [Purse](https://github.com/just-every/run-purse) installation), and the portal's approval and payment status flows back to the invoice. **Acceptance evidence:** Submit an invoice to a Coupa test supplier portal and to a Purse installation; each portal's received, approved and paid states appear on the invoice.
+
+### Customer portal
+
+- **PORT-001 — Customer billing portal.** Billing contacts sign in by email link (no password) to see and pay invoices, download invoices, receipts and credit notes, manage billing contacts, addresses, tax IDs and exemption certificates, and download the merchant's W-9. **Acceptance evidence:** A billing contact signs in by link, pays an open invoice by ACH, adds a contact and uploads an exemption certificate; another customer's contact can see none of it.
+
+- **PORT-002 — Usage, credits and upcoming charges in the portal.** The portal shows live usage against quotas and commitments, prepaid credit balance and the upcoming invoice (`USE-006`), with usage downloadable as CSV. **Acceptance evidence:** Stream usage and refresh the portal; usage, credit balance and the upcoming invoice match the operator view and the next issued invoice.
+
+- **PORT-003 — Self-service plan changes within policy.** Customers upgrade, downgrade, change seats, pause or cancel themselves within the rules the merchant sets (which plans, when, minimum terms), seeing the proration preview before they confirm; changes outside policy become requests for a person. **Acceptance evidence:** A customer upgrades with a proration preview and pays the difference, a downgrade below the contract minimum becomes a request, and a cancellation completes through the `SUB-005` flow.
+
+- **PORT-004 — Payment methods in the portal.** Customers add, replace and remove payment methods and choose a default through processor-hosted fields (`PAY-002`), and set up ACH with verification. **Acceptance evidence:** Replace an expiring card and add a verified ACH account in the portal; the next invoice charges the new default.
+
+- **PORT-005 — Embedded portal and branded domain.** The merchant embeds the portal in its own app through a signed session (`DEV-003`) or serves it on its own subdomain with its branding. **Acceptance evidence:** Open the portal embedded in a sample app with a server-signed session and on `billing.example.com`; both show only that customer's data, and an expired session is refused.
+
+### Tax
+
+- **TAX-001 — US sales tax through a tax provider.** The owner connects Stripe Tax, Avalara AvaTax, Anrok or TaxJar; Nectar validates addresses, assigns product tax codes (SaaS, services, digital goods), gets a per-line calculation at draft time, commits the transaction when the invoice issues and reverses it on credit, refund or void. The one-state declared rate (`NEC-01`) stays as the provider-free mode. The seller remains responsible for registration and filing; Nectar never claims a flat rate makes a business compliant. **Acceptance evidence:** With the Avalara sandbox, bill customers in Texas, New York and Oregon for SaaS; each line's tax matches AvaTax's response, the issued invoices are committed in AvaTax, and a credit note reverses its share.
+
+- **TAX-002 — Exemption certificates.** Exempt customers' certificates are collected (in the portal or by operators), validated and stored per state with expiry, through Avalara ECM or in Nectar; an expired or missing certificate raises an exception and reminders before expiry. **Acceptance evidence:** Upload a Texas resale certificate for a customer, bill them tax-free in Texas but taxed in New York, let the certificate expire on a test clock and see the exception and reminder.
+
+- **TAX-003 — Tax reports for filing.** Reports give taxable, exempt and tax amounts by state and jurisdiction per period, reconciled to issued invoices and credits, and exports in the provider's filing format. **Acceptance evidence:** After a quarter of test-clock billing, the tax report's totals per state equal the sum of invoice tax lines less credits, and equal the tax provider's committed transactions.
+
+### Accounting and revenue
+
+- **BOOK-001 — QuickBooks Online, Xero and Pantry sync.** Customers, invoices, credit notes, payments, refunds, processor fees, write-offs and payouts sync to QuickBooks Online, Xero or [Pantry](https://github.com/just-every/run-pantry) with the business's account, item and tax mapping, idempotently, with an error queue and a reconciliation report. **Acceptance evidence:** Run a month of billing against a QuickBooks Online sandbox company and a Xero demo company; every record appears once with the right accounts, re-running the sync creates nothing new, and the reconciliation report shows Nectar's and the ledger's AR balances equal.
+
+- **BOOK-002 — NetSuite and Sage Intacct sync.** The same sync runs into NetSuite and Sage Intacct, including subsidiaries, departments, classes and locations, for larger buyers. **Acceptance evidence:** Sync a month of two-entity billing to a NetSuite sandbox with subsidiaries; invoices, payments and journals land in the right subsidiary and the AR balance agrees.
+
+- **REV-001 — ASC 606 revenue schedules.** Each invoice line gets a revenue schedule: subscription fees recognised ratably over the service period, usage recognised as consumed, one-time fees per their policy, prepaid credits and commitments held as contract liabilities until used or expired, with deferred revenue and journal entries per period. **Acceptance evidence:** Bill an annual $12,000 plan in advance, monthly usage and a prepaid credit block; the schedules recognise $1,000 a month, usage in its month and credits as consumed, and the deferred-revenue waterfall ties to invoices issued.
+
+- **REV-002 — Revenue close and journal export.** Finance closes each period: Nectar locks it, produces deferred-revenue roll-forward, billings, collections and revenue reports, and posts summarised journal entries to the connected ledger (`BOOK-001`, `BOOK-002`); later changes post to the open period. **Acceptance evidence:** Close September, then issue a credit note dated in September; the closed period is unchanged, the credit posts in October, and the roll-forward ties opening balance + billings − revenue = closing balance.
+
+### Reporting and analytics
+
+- **RPT-001 — SaaS metrics.** MRR and ARR with movements (new, expansion, contraction, churn, reactivation), customer counts, logo and revenue churn, net and gross revenue retention, ARPA, trial conversion and cohort tables, filterable by plan, segment and entity. **Acceptance evidence:** Load a known 18-month test history and compare every metric and MRR movement with an independent spreadsheet computation; each figure drills to the subscriptions that make it up.
+
+- **RPT-002 — Financial reports.** Billings, collections, outstanding AR and ageing, credits, refunds, tax collected, credit balances and unbilled usage per period, scheduled for email delivery and exportable as CSV. **Acceptance evidence:** After a test month, the billings report equals issued invoices, collections equals settled payments, and AR equals the sum of open balances; a scheduled report arrives by email with the same figures.
+
+- **RPT-003 — Drill-through from every figure.** Any report figure opens to the invoices, lines, calculation evidence and usage events behind it. **Acceptance evidence:** From the MRR, billings and AR reports, drill one figure down to an invoice line and from there to its usage events; the totals at each level agree.
+
+- **RPT-004 — Warehouse and BI export.** Nectar syncs its records (customers, subscriptions, invoices, lines, payments, usage aggregates, revenue schedules) on a schedule to Snowflake, BigQuery or S3 with a documented schema. **Acceptance evidence:** Sync to a BigQuery test dataset and recompute MRR and AR from the synced tables; they equal Nectar's reports.
+
+### CRM, contracts and workflow integrations
+
+- **CRM-001 — Closed-won deals become subscriptions.** A closed-won deal in [Orbit](https://github.com/just-every/run-orbit), Salesforce or HubSpot (with its line items, term, start date and quote) creates a draft customer and subscription for a person to approve; billing status (MRR, open balance, overdue, payment failures) syncs back to the CRM account. **Acceptance evidence:** Close a deal in a Salesforce developer org and in Orbit; each creates one draft subscription matching the quote, approval starts billing, and the account shows MRR and an overdue flag after a missed payment.
+
+- **CRM-002 — Signed order forms and contracts as inputs.** Executed order forms and amendments arrive from [Inkwell](https://github.com/just-every/run-inkwell), Docusign, PandaDoc, [Platter](https://github.com/just-every/run-platter) quotes or [Locket](https://github.com/just-every/run-locket); Nectar stores the document, links it to the subscription, and starts the `AGENT-006` setup proposal. **Acceptance evidence:** Complete a Docusign sandbox envelope and an Inkwell envelope; each attaches to its customer and opens a setup proposal quoting the document.
+
+- **INT-001 — Chat alerts and approvals.** Billing events (exceptions waiting, failed payments, disputes, large invoices, proposals to approve) post to Slack or [Nook](https://github.com/just-every/run-nook) channels, and approvers can open the exact item from the message. **Acceptance evidence:** Fail a payment and prepare a bill run with an exception; each posts one message to a Slack test workspace and to Nook with a link that opens the item for a signed-in approver only.
+
+- **INT-002 — Workflow automation and support context.** Triggers and actions for [Crank](https://github.com/just-every/run-crank) and Zapier, and read access for [HappyToHelp](https://github.com/just-every/run-happytohelp) and [Buoy](https://github.com/just-every/run-buoy), let other tools react to billing events and show a customer's plan, invoices and balance next to their tickets and health scores. **Acceptance evidence:** A Zapier test zap fires on `invoice.paid`; HappyToHelp shows the customer's plan and open balance on a ticket through a scoped read credential that cannot change billing.
+
+### Move-in from every incumbent
+
+- **MOVE-001 — Chargebee move-in.** Customers, plans, item prices, addons, coupons, subscriptions, invoices, credit notes and unbilled charges move in from Chargebee's API with the `NEC-16` preview, journal, undo, shadow comparison and cutover rules. **Acceptance evidence:** Import from a Chargebee test site, shadow-rate a month and compare with Chargebee's invoices line by line, then adopt one subscription from an unbilled period and see Chargebee's renewal cancelled and no duplicate invoice.
+
+- **MOVE-002 — Recurly move-in.** The same journey from Recurly's API, including plans, add-ons, coupons, subscriptions and invoices. **Acceptance evidence:** Import from a Recurly sandbox, shadow-compare a month and adopt one subscription with no duplicate charge.
+
+- **MOVE-003 — Maxio move-in.** The same journey from Maxio (Chargify and SaaSOptics), including components, price points, metered and quantity-based components and contracts. **Acceptance evidence:** Import a Maxio test site's metered and quantity components, shadow-compare a month and adopt one subscription with no duplicate charge.
+
+- **MOVE-004 — Orb and Metronome move-in.** Usage-billing customers move from Orb or Metronome with plans, prices, billable metrics, commitments, credit grants and historical usage, replayed through Nectar's engine for a shadow comparison. **Acceptance evidence:** Import an Orb test account's plans, credits and three months of events; replaying them reproduces Orb's invoices within the listed rounding differences, each explained.
+
+- **MOVE-005 — Payment methods move with the customer.** When the processor stays the same, Nectar reuses the existing Stripe, Adyen or Braintree customer and payment-method references in place; when it changes, Nectar runs the processors' PCI-compliant token migration and maps the new references, so no customer re-enters a card. **Acceptance evidence:** Move in from Stripe Billing and charge the existing test payment method with no customer action; then map a Braintree-to-Stripe token export file and charge a migrated card.
+
+- **MOVE-006 — Live Stripe connection and two-sided cutover.** Instead of uploaded files, Nectar reads the Stripe account live through a restricted key, keeps the shadow in sync until cutover, and at adoption cancels the Stripe subscription at the period boundary in the same step, so exactly one system bills each period. **Acceptance evidence:** Connect a Stripe test account, let it change during the shadow run, adopt a subscription and advance the test clock; Stripe issues no further invoice, Nectar issues the next one, and the customer is charged once.
+
+### Roles, security and governance
+
+- **GOV-001 — Billing roles.** Beyond owner, finance operator and accountant (`NEC-15`), roles cover collections, sales (read, quotes and draft subscriptions), support (read a customer and issue credits up to a set limit) and developer (credentials, webhooks and test mode), and the owner can define custom roles from capabilities. **Acceptance evidence:** Sign in as each role and crawl every action and door as `NEC-15` does; each role reaches exactly its capabilities, and a support agent's $500 credit succeeds while a $600 credit is refused.
+
+- **GOV-002 — Approval policies and separation of duties.** The owner sets amount limits and two-person rules: credits, refunds and write-offs above a threshold, price changes and policy changes need a second approver who did not prepare them. **Acceptance evidence:** Set a $1,000 two-person limit; a $1,500 credit prepared by one operator cannot be approved by the same person and issues after a second approver; a $900 credit needs one.
+
+- **GOV-003 — Single sign-on and provisioning.** Members sign in through SAML or OIDC (Okta, Microsoft Entra ID, Google Workspace, JumpCloud or [Auth](https://github.com/just-every/run-auth)), are provisioned and removed by SCIM, and finance roles can require multi-factor sign-in. **Acceptance evidence:** Configure an Okta developer tenant; a SCIM-created user signs in by SAML with the mapped role, and deprovisioning ends their sessions within a minute.
+
+- **GOV-004 — Durable audit trail.** Every write records the actor (person, credential or automated policy), time, action, subject and detail in the same atomic batch as the change; the owner and accountant read the trail, it travels in `rer export`, and it is never edited. **Acceptance evidence:** Perform each billing action through the API and forms, read `/app/audit` and the issued invoice's audit events, and find `nc_audit` complete in the exported archive.
+
+- **GOV-005 — Personal-data erasure with financial retention.** On a verified request, the owner erases or anonymises a customer's contacts and personal fields, while invoices, payments and tax records are retained in minimal form for the business's statutory retention period (seven years by default under US tax-record practice) and then removed; each erasure returns a receipt. **Acceptance evidence:** Erase a former customer's contacts; their names and emails disappear from screens, exports and the archive, issued invoices remain with the legal name the law requires, and a receipt lists what changed.
+
+- **GOV-006 — Provider secret custody.** Processor, tax, accounting, CRM and mail credentials are stored encrypted, scoped to least privilege (for example Stripe restricted keys), shown once, rotatable, excluded from exports and logs, and revoked on disconnect; agent credentials store only their hash. **Acceptance evidence:** Connect Stripe, Avalara and QuickBooks, export the installation and search logs, the archive and the database for the planted secrets; none appears in clear, and rotating each keeps billing working.
+
+### Mobile and operations
+
+- **MOB-001 — Every screen works on a phone.** Every main screen (home, customers, subscriptions, catalogue, usage, bill runs, invoices, receivables, proposals, move-in, exports, settings, access and audit) renders and works at 390 pixels wide. **Acceptance evidence:** `tests/nectar/journey.mjs` renders every main screen at 390 × 844 after a full billing cycle.
+
+- **MOB-002 — Nectar for iOS and Android.** Native iOS and Android apps give owners and finance leads revenue and AR at a glance, customer and invoice lookup, push notifications for failed payments, disputes and approvals waiting, and approval of bill runs, credits and proposals with the same rules as the web. **Acceptance evidence:** On iOS and Android test devices, receive a push for a failed payment and an exception draft, open each, approve the draft (refused for a role without approval) and see the audit name the person and device.
+
+- **OPS-001 — Measured capacity and unattended jobs.** Scheduled jobs (invoice runs, charges, retries, notices, syncs, revenue schedules) run idempotently, resume after restarts and report failures; Nectar publishes measured capacity of at least 10,000 active subscriptions with a 10,000-invoice bill run completed in under 15 minutes. **Acceptance evidence:** Seed 10,000 subscriptions, run a billing day with the Worker restarted mid-run, and see every invoice issued and charged exactly once within 15 minutes, with the timing recorded in `seed.json` limits.
+
+## Push further with agents
+
+Agents serve the whole billing job beyond today's billing and collections
+agents: they reconcile across systems, pursue each problem to resolution and
+prepare every customer-facing change, while people authorize anything that
+changes money, terms or access. Agents act through scoped credentials
+(`NEC-14`); every finding cites immutable evidence and every proposal shows its
+computed effect before approval.
+
+- **AGENT-001 — Continuous revenue assurance.** An agent continuously compares signed terms (`CRM-002`), raw usage and its source control totals, rating output, entitlements, issued invoices and settled payments for every customer. It opens a case for each mismatch (under-billing, over-billing, access without payment, payment without access, a commitment not trued up, a credit never applied), assigns an owner and pursues it to resolution, re-checking until the records agree. Human control: the agent can only open cases, gather evidence and propose; finance approves every adjustment, raw events and signed terms stay immutable, and a disputed item pauses collection. **Acceptance evidence:** Plant five mismatches (an unbilled ramp step, an over-billed seat, a feature left on after cancellation, a missing true-up and an unapplied credit); the agent opens five evidenced cases with owners, re-checks after each approved fix, closes them, and changes nothing without approval.
+
+- **AGENT-002 — Simulate the fix and explain it to the customer.** For each proposed correction, the agent simulates the financial effect (invoice deltas, tax, revenue schedule and MRR changes) and the customer effect (what they will see on their next invoice and in the portal), and drafts a customer-ready explanation citing the lines and terms involved. Human control: an authorized person reviews the before/after preview and the wording; the change and the message execute together only after approval. **Acceptance evidence:** For a planted over-billing, the agent proposes a credit note with its tax and revenue effect and a cited email; approval issues the credit and sends the email once; a rejection changes nothing.
+
+- **AGENT-003 — Collections that resolve the cause of nonpayment.** Using delivery events, bounces, AP-portal status, correspondence, disputes, promises and bank remittances, the agent distinguishes an undelivered invoice, a missing PO, a wrong contact, a failed payment method and a genuine dispute, requests the missing item from the right person, and verifies resolution. Human control: the business sets tone, channels, cadence and escalation limits; people approve concessions, write-offs and contested notices; the agent stops chasing a paid or disputed balance. **Acceptance evidence:** Plant a bounced invoice, a missing PO and an expired card on three overdue accounts; the agent identifies each cause, sends the right request within its limits, and each account pays after the fix; it never contacts a disputed account.
+
+- **AGENT-004 — Price-change simulation with customer explanations.** Before a pricing change, the agent replays retained usage against proposed prices, commitments and packaging, shows invoice-level changes per customer, the revenue and margin effect and the customers most affected, and drafts a cited explanation per cohort. Human control: commercial owners approve cohorts, effective dates and messaging (`CAT-007`); the agent cannot rewrite signed terms or migrate a subscription silently. **Acceptance evidence:** Simulate moving from per-seat to usage pricing over six months of history; the per-customer deltas equal a re-rating through the engine, and approving one cohort schedules exactly those changes with their notices.
+
+- **AGENT-005 — Migration followed through to the first settled cycle.** During a move-in (`NEC-16`, `MOVE-001` to `MOVE-006`), the agent compares the old and new billers' customers, periods, invoices, payment methods and webhook events through the shadow run and cutover, investigates each difference, and verifies exactly one issued invoice and one collection per intended period after cutover. Human control: the owner authorizes each cutover after reviewing discrepancies; a rollback plan and processor references are kept; a shadow subscription never charges. **Acceptance evidence:** Move in a test Stripe account with three planted differences; the agent explains each, the owner adopts, and after the first cycle the agent's report shows one invoice and one charge per subscription, matching both processors.
+
+- **AGENT-006 — Contract-to-billing setup.** From an executed order form or amendment, the agent drafts the complete billing setup (customer, entity, prices, ramps, commitments, credits, discounts, terms and PO requirements), quoting each clause, flagging ambiguity, and runs a first-invoice and full-term preview. Human control: a person approves the setup; ambiguous clauses must be resolved before approval; the signed document stays the source of record. **Acceptance evidence:** Give the agent a three-year order form with a ramp, a commitment and an uplift; its proposal quotes each clause, the term preview matches a hand calculation, and approving it starts billing with no manual edits.
+
+- **AGENT-007 — Cited billing answers for staff and customers.** Finance, support and customers (in the portal) ask questions such as "why is this invoice higher than last month?"; the agent answers from the calculation evidence, usage and terms, citing lines and events, and never states a figure the engine did not compute. Human control: answers are read-only; any change it suggests becomes a proposal; customers only see their own records. **Acceptance evidence:** Ask ten scripted questions as an operator and as a customer; every figure in each answer matches a cited record, a question about another customer's data is refused, and a suggested credit appears only as a proposal.
+
+- **AGENT-008 — Month-end close tie-out.** At period end the agent ties issued invoices, payments, payouts, credit balances, tax commitments, the ledger sync and revenue schedules together, lists each break with its cause and proposed fix, and assembles a close packet for the accountant. Human control: finance approves fixes and closes the period (`REV-002`); the agent cannot post journals or close on its own. **Acceptance evidence:** Plant a payout missing one fee, an unsynced credit note and a tax commitment failure; the close packet lists all three with causes, approved fixes clear them, and the accountant closes the period.
+
+## Honest boundaries
+
+What Nectar does not do, and how a buyer gets that job done. These are product
+lines, not gaps in the target.
+
+- **Card and bank data, acquiring and money movement.** Nectar is not a payment processor, card vault or money transmitter. Stripe, Adyen or Braintree (the merchant's own account) holds card and bank data, moves funds and pays out; processor-hosted fields keep Nectar out of card-data scope (the merchant's PCI responsibility becomes the processor's SAQ A path), and Nectar records the processor's references.
+- **Merchant of record and tax filing.** The business stays the seller. Sales-tax registration and filing are done by the business or bought from its tax provider (Avalara Returns, Stripe Tax's filing partners, TaxJar AutoFile, Anrok); Nectar supplies the calculations and reports. Sellers wanting a merchant of record use one (Paddle, Stripe's managed payments) alongside Nectar's records.
+- **The general ledger and audit opinions.** Nectar produces revenue schedules and journal entries; the ledger is Pantry, QuickBooks Online, Xero, NetSuite or Sage Intacct, and the business's accountant or auditor signs off ASC 606 policies and statements.
+- **Sales, proposals, signatures and contract management.** CRM is Orbit, Salesforce or HubSpot; proposals and quotes are Platter or PandaDoc; signatures are Inkwell or Docusign; contract lifecycle is Locket. Nectar reads their outputs (`CRM-001`, `CRM-002`).
+- **Debt collection and legal action.** Nectar sends reminders the business authorizes; third-party collection agencies, legal demands and court action stay with the business and its counsel. Delivery evidence and a reminder do not prove collection.
+- **Revenue financing and payments acceptance for storefronts.** Financing against recurring revenue (Capchase, Pipe) is a partner choice; one-off ecommerce checkout for physical goods is [Stall](https://github.com/just-every/run-stall)'s job.
+- **Jurisdiction.** The US is the first market: USD by default, US sales tax, ACH, US state renewal-law notices and US business norms. Multi-currency billing (`CAT-008`) serves US sellers with foreign customers; non-US VAT/GST registration, e-invoicing mandates and local payment schemes are reached through the processor and tax provider and are not claimed until tested.
+- **Capacity.** Nectar claims only the capacity it has measured (`USE-001`, `OPS-001`); very high-volume raw event warehousing beyond that stays in the buyer's own storage, loaded through `USE-003`.
 
 ## Decided defaults
 
-These defaults are decided:
-
 - **Name:** Nectar (owner-adopted 10 October 2026; `run-nectar.com` registered 14 October).
-- **Scope:** one business, B2B subscriptions, seats and simple per-unit metering; an owned rating engine; payment adapters later.
-- **Jurisdiction and currency:** US and USD, with the state and tax policy declared and reviewed before any invoice is final; no global compliance claim.
-- **Move-in order:** Stripe Billing records first, then Chargebee, Recurly and Maxio; an existing merchant of record stays in place.
-- **Start order:** the provider-free rating and invoice loop first; then shadow migration; then payments and sending; then embedded agents and advanced wallets.
-- **Billing timing:** each invoice covers one subscription period after it ends (arrears), dated from the period end up to the day it is issued; billing days are 1–28.
+- **Scope:** the full subscription and usage billing job for one business with one or more US entities, through the merchant's own processor, tax provider and ledger.
+- **Jurisdiction and currency:** US and USD first, with US sales tax through a provider; other currencies for US sellers' foreign customers.
+- **Move-in order:** Stripe Billing first, then Chargebee, Recurly and Maxio, then Orb and Metronome; an existing merchant of record stays in place.
+- **Build order:** the provider-free rating and invoice loop (done); shadow migration (done for Stripe files); then Stripe collection, invoice delivery, automatic runs and dunning; then the portal, tax and accounting sync; then pricing breadth, revenue recognition, metrics and the remaining move-ins; agents throughout.
+- **Billing timing:** each published-mode invoice covers one subscription period after it ends (arrears), dated from the period end up to the day it is issued; billing days are 1–28. In-advance billing and other intervals arrive with `CAT-001`.
 
-## Out of the first release
+## Status
 
-Payment collection, card custody and payment retries; sending invoices or reminders; merchant-of-record service; global or multi-state tax determination and filing; multiple entities or currencies; revenue recognition; graduated or volume tiers, minimum commitments and prepaid wallets; yearly or other non-monthly intervals; an embedded model account; agent-supplied SQL; Chargebee, Recurly and Maxio move-in kits; Stripe subscription schedules (recorded, not executed); high-volume metering claims; hosted operation, provider integrations and legal name clearance, which remain separate evidence.
+Judged from the code and tests at commit `a38323a4ad258045cbe8a23a79d616d796433767` (17 October 2026).
+
+| Clauses | Done | Partial | Missing | Total |
+| --- | ---: | ---: | ---: | ---: |
+| Published | 16 | 0 | 0 | 16 |
+| Target and push further | 2 | 33 | 56 | 91 |
+| All | 18 | 33 | 56 | 107 |
+
+| Clause | Title | Kind | Status | Evidence | Gap |
+| --- | --- | --- | --- | --- | --- |
+| `NEC-01` | Set up the business | published | done | `src/nectar/business.ts`; `tests/nectar/flows.mjs` |  |
+| `NEC-02` | Keep customers and billing contacts | published | done | `src/nectar/customers.ts`; `tests/nectar/flows.mjs` |  |
+| `NEC-03` | Version the catalog | published | done | `src/nectar/catalog.ts`; `tests/nectar/flows.mjs` |  |
+| `NEC-04` | Start subscriptions | published | done | `src/nectar/subscriptions.ts`; `tests/nectar/flows.mjs` |  |
+| `NEC-05` | Bring in usage | published | done | `src/nectar/usage.ts`; `tests/nectar/flows.mjs` |  |
+| `NEC-06` | Inspect before rating | published | done | `src/nectar/usage.ts`; `tests/nectar/flows.mjs` |  |
+| `NEC-07` | Rate deterministically | published | done | `src/nectar/rating.ts`; `src/nectar/decimal.ts`; `tests/nectar/flows.mjs` |  |
+| `NEC-08` | Schedule plan and quantity changes | published | done | `src/nectar/subscriptions.ts`; `tests/nectar/flows.mjs` |  |
+| `NEC-09` | Draft a bill run and compare it | published | done | `src/nectar/billruns.ts`; `tests/nectar/flows.mjs` |  |
+| `NEC-10` | Approve and finalise numbered invoices | published | done | `src/nectar/billruns.ts`; `tests/nectar/flows.mjs` |  |
+| `NEC-11` | Credit and record payments | published | done | `src/nectar/receivables.ts`; `tests/nectar/flows.mjs` |  |
+| `NEC-12` | Follow up overdue balances | published | done | `src/nectar/collections.ts`; `tests/nectar/flows.mjs` |  |
+| `NEC-13` | Leave with the data and explain entitlements | published | done | `src/nectar/exports.ts`; `tests/nectar/flows.mjs`; `tests/nectar/journey.mjs` |  |
+| `NEC-14` | Let an agent prepare the work | published | done | `src/nectar/proposals.ts`; `src/nectar/access.ts`; `tests/nectar/flows.mjs` |  |
+| `NEC-15` | Control access | published | done | `src/nectar/actor.ts`; `src/nectar/doors.ts`; `tests/nectar/flows.mjs` |  |
+| `NEC-16` | Move in from Stripe Billing | published | done | `src/nectar/movein/stripe.ts`; `tests/fixtures/stripe/manifest.json`; `tests/nectar/flows.mjs` |  |
+| `SET-001` | Multiple billing entities | target | missing |  | One business record per installation; no entities, EINs, per-entity sequences or processor/ledger routing. |
+| `CAT-001` | Billing intervals and terms | target | missing |  | Monthly periods in arrears only; no other intervals, in-advance billing, contract terms or co-terming. |
+| `CAT-002` | Tiered, volume, package and graduated pricing | target | missing |  | Price kinds are flat, seat and per unit only; no tiered, volume, package or stair-step pricing. |
+| `CAT-003` | Minimum commitments, overages and ramps | target | missing |  | No minimum commitments, true-ups, included quantities or ramps. |
+| `CAT-004` | Prepaid credits and drawdown | target | missing |  | Only a one-time approved contract credit; no prepaid credit ledger, drawdown, expiry or top-ups. |
+| `CAT-005` | Discounts, coupons, promotion codes and trials | target | partial | `src/nectar/subscriptions.ts`; `src/nectar/rating.ts`; `tests/nectar/flows.mjs` | Trials and approved contract discounts ship; no reusable coupons, promotion codes, redemption limits or card/no-card trial conversion. |
+| `CAT-006` | One-time charges, add-ons and manual invoices | target | missing |  | No one-time charges, add-ons or standalone invoices. |
+| `CAT-007` | Price changes across a customer base | target | partial | `src/nectar/proposals.ts`; `tests/nectar/flows.mjs` | A proposed price version for selected subscriptions from a date ships (NEC-14); no cohort selection, renewal-timed migration, grandfathering rules or customer notices. |
+| `CAT-008` | Multi-currency prices | target | missing |  | USD only. |
+| `CAT-009` | Customer hierarchies and consolidated billing | target | missing |  | No parent/child accounts or consolidated invoices. |
+| `USE-001` | Metering API at production scale | target | partial | `src/nectar/usage.ts`; `tests/nectar/flows.mjs` | Authenticated API with stable ids (5,000 events per call) ships; no durable high-volume pipeline, measured throughput or replay store. |
+| `USE-002` | Billable metrics and dimensions | target | partial | `src/nectar/rating.ts`; `src/nectar/usage.ts`; `tests/nectar/flows.mjs` | Meters sum quantities only; no count, max, unique, latest or time-weighted aggregation, filters, dimensions or SQL meters. |
+| `USE-003` | Bulk usage from storage and warehouses | target | missing |  | No S3, GCS, Snowflake or BigQuery loads. |
+| `USE-004` | Usage corrections after billing | target | partial | `src/nectar/rating.ts`; `src/nectar/proposals.ts`; `tests/nectar/flows.mjs` | Late usage bills in the next period and draft corrections ship; no correcting-invoice or credit-note policy and no historical backfill replay. |
+| `USE-005` | Usage alerts and threshold invoicing | target | missing |  | No usage or spend thresholds, alerts or threshold invoices. |
+| `USE-006` | Live usage and the upcoming invoice | target | partial | `src/nectar/usage.ts`; `src/nectar/billruns.ts`; `tests/nectar/flows.mjs` | Operators inspect period usage and draft charges; no live upcoming-invoice API or customer view. |
+| `USE-007` | Reconcile usage with its source | target | partial | `src/nectar/usage.ts`; `tests/nectar/flows.mjs` | Days with no usage and late events are listed before rating; no source control totals or blocking reconciliation. |
+| `SUB-001` | Lifecycle states driven by dates and payments | target | partial | `src/nectar/subscriptions.ts`; `src/nectar/rating.ts`; `tests/nectar/flows.mjs` | Trial and end dates shape rating; no past-due, unpaid or paused states, payment-driven transitions or state webhooks. |
+| `SUB-002` | Immediate and scheduled plan changes with proration policy | target | partial | `src/nectar/subscriptions.ts`; `tests/nectar/flows.mjs` | Scheduled changes with previewed proration ship (NEC-08); no immediate changes, proration policies or in-advance charges and credits. |
+| `SUB-003` | Pause, resume and cancel | target | partial | `src/nectar/subscriptions.ts`; `tests/nectar/flows.mjs` | An approver can end a subscription on a date; no pause, resume, immediate cancellation credit, reasons or reactivation. |
+| `SUB-004` | Renewals and renewal notices | target | missing |  | No terms, automatic renewals, uplifts or renewal notices. |
+| `SUB-005` | Cancellation saves and win-backs | target | missing |  | No cancellation flow, save offers or win-backs. |
+| `ENT-001` | Real-time entitlements API | target | partial | `src/nectar/catalog.ts`; `src/nectar/exports.ts`; `tests/nectar/flows.mjs` | Feature grants and step-by-step entitlement explanations ship; no numeric limits or quotas, no edge-served latency target, no payment-state effect. |
+| `ENT-002` | Quotas and enforcement policy | target | missing |  | No quotas, soft or hard limits, overage policy or grace periods. |
+| `DEV-001` | Signed outbound webhooks | target | missing |  | No outbound webhooks. |
+| `DEV-002` | Documented public API | target | partial | `src/nectar/doors.ts`; `API.md`; `tests/nectar/flows.mjs` | A JSON API covers every action with role and scope checks; no OpenAPI document, idempotency keys, pagination or API versions. |
+| `DEV-003` | SDKs and embeddable components | target | missing |  | No SDKs or embeddable components. |
+| `DEV-004` | Test mode and test clocks | target | missing |  | No test mode or test clocks. |
+| `INV-001` | Automatic invoice runs | target | partial | `src/nectar/billruns.ts`; `tests/nectar/flows.mjs` | Bill runs draft and finalise when a person runs and approves them; no schedule, auto-issue policy or in-advance periods. |
+| `INV-002` | Invoice and receipt email delivery | target | missing |  | Nectar sends nothing; reminders download for the operator to send. |
+| `INV-003` | Hosted invoice page and PDF | target | missing |  | No hosted invoice page or PDF. |
+| `INV-004` | Branded, B2B-ready invoices | target | partial | `src/nectar/business.ts`; `tests/nectar/flows.mjs` | Invoice prefix and business-wide payment terms ship; no logo, branding, custom fields, PO numbers or per-customer terms. |
+| `INV-005` | Credit notes, voids and refunds | target | partial | `src/nectar/receivables.ts`; `tests/nectar/flows.mjs` | Numbered credit notes against owed balances ship; no voids, refunds through a processor or tax reversal. |
+| `INV-006` | Customer credit balance | target | partial | `src/nectar/receivables.ts`; `tests/nectar/flows.mjs` | Unallocated payment amounts are tracked; no customer credit balance, automatic application or refund of balance. |
+| `PAY-001` | Processor connections | target | missing |  | No processor connection. |
+| `PAY-002` | Hosted checkout and payment-method capture | target | missing |  | No checkout or payment-method capture. |
+| `PAY-003` | Automatic collection | target | missing |  | No automatic collection. |
+| `PAY-004` | Payment events, refunds and payouts reconciled | target | missing |  | No processor webhooks, refunds, disputes, ACH returns or payout reconciliation. |
+| `PAY-005` | Card lifecycle and expiry | target | missing |  | No stored payment methods, so no expiry handling. |
+| `DUN-001` | Smart retries | target | missing |  | No payment retries. |
+| `DUN-002` | Dunning sequences | target | missing |  | No dunning sequences. |
+| `DUN-003` | Trial, renewal and payment notices | target | missing |  | No customer notices are sent. |
+| `DUN-004` | Recovery reporting | target | missing |  | No recovery reporting. |
+| `AR-001` | Collections cadences sent from Nectar | target | partial | `src/nectar/collections.ts`; `tests/nectar/flows.mjs` | Ageing, approved reminder drafts and follow-up tasks ship; reminders are not sent, and there are no cadences, promises to pay or dispute holds. |
+| `AR-002` | Cash application | target | partial | `src/nectar/receivables.ts`; `tests/nectar/flows.mjs` | Manual payment evidence allocates to invoices; no Plaid bank feed, payout or remittance matching. |
+| `AR-003` | Disputes and chargebacks | target | missing |  | No dispute or chargeback tracking. |
+| `AR-004` | Write-offs and bad debt | target | missing |  | No write-offs. |
+| `AR-005` | Accounts-payable portal submission | target | missing |  | No AP portal submission. |
+| `PORT-001` | Customer billing portal | target | missing |  | No customer-facing portal. |
+| `PORT-002` | Usage, credits and upcoming charges in the portal | target | missing |  | No customer-facing usage view. |
+| `PORT-003` | Self-service plan changes within policy | target | missing |  | No customer self-service changes. |
+| `PORT-004` | Payment methods in the portal | target | missing |  | No payment methods. |
+| `PORT-005` | Embedded portal and branded domain | target | missing |  | No portal to embed. |
+| `TAX-001` | US sales tax through a tax provider | target | partial | `src/nectar/business.ts`; `src/nectar/rating.ts`; `tests/nectar/flows.mjs` | One reviewed flat state rate with exemptions ships (NEC-01); no Stripe Tax, Avalara, Anrok or TaxJar calculation, commit or reversal. |
+| `TAX-002` | Exemption certificates | target | partial | `src/nectar/customers.ts`; `tests/nectar/flows.mjs` | A customer exemption with a certificate reference ships; no per-state certificates, validation, expiry or reminders. |
+| `TAX-003` | Tax reports for filing | target | missing |  | No tax reports. |
+| `BOOK-001` | QuickBooks Online, Xero and Pantry sync | target | missing |  | No QuickBooks Online, Xero or Pantry sync; CSV exports only. |
+| `BOOK-002` | NetSuite and Sage Intacct sync | target | missing |  | No NetSuite or Sage Intacct sync. |
+| `REV-001` | ASC 606 revenue schedules | target | missing |  | No revenue schedules. |
+| `REV-002` | Revenue close and journal export | target | missing |  | No period close or journal export. |
+| `RPT-001` | SaaS metrics | target | missing |  | No MRR, ARR, churn or retention metrics. |
+| `RPT-002` | Financial reports | target | partial | `src/nectar/collections.ts`; `src/nectar/exports.ts`; `tests/nectar/flows.mjs` | Ageing and CSV exports of invoices, usage and subscriptions ship; no billings, collections, tax or credit reports or scheduled delivery. |
+| `RPT-003` | Drill-through from every figure | target | partial | `src/nectar/billruns.ts`; `src/nectar/exports.ts`; `tests/nectar/flows.mjs` | Each invoice line carries its calculation evidence and usage; no reports to drill from. |
+| `RPT-004` | Warehouse and BI export | target | missing |  | No warehouse sync. |
+| `CRM-001` | Closed-won deals become subscriptions | target | missing |  | No Orbit, Salesforce or HubSpot connection. |
+| `CRM-002` | Signed order forms and contracts as inputs | target | partial | `src/nectar/proposals.ts`; `tests/nectar/flows.mjs` | An agent can propose contract terms quoting a signed agreement (NEC-14); no document intake from Inkwell, Docusign, PandaDoc, Platter or Locket. |
+| `INT-001` | Chat alerts and approvals | target | missing |  | No Slack or Nook messages. |
+| `INT-002` | Workflow automation and support context | target | missing |  | No Crank or Zapier triggers and no support or success read integration. |
+| `MOVE-001` | Chargebee move-in | target | missing |  | Stripe Billing is the only move-in source. |
+| `MOVE-002` | Recurly move-in | target | missing |  | Stripe Billing is the only move-in source. |
+| `MOVE-003` | Maxio move-in | target | missing |  | Stripe Billing is the only move-in source. |
+| `MOVE-004` | Orb and Metronome move-in | target | missing |  | Stripe Billing is the only move-in source. |
+| `MOVE-005` | Payment methods move with the customer | target | missing |  | Stripe payment-method references are not used and no token migration exists. |
+| `MOVE-006` | Live Stripe connection and two-sided cutover | target | partial | `src/nectar/movein/stripe.ts`; `tests/nectar/flows.mjs` | Uploaded Stripe captures, shadow comparison and adoption from an unbilled period ship; no live API sync and no cancellation of the Stripe subscription at cutover. |
+| `GOV-001` | Billing roles | target | partial | `src/nectar/actor.ts`; `tests/nectar/flows.mjs` | Owner, finance and accountant roles are enforced in every handler; no collections, sales, support or developer roles, credit limits or custom roles. |
+| `GOV-002` | Approval policies and separation of duties | target | partial | `src/nectar/proposals.ts`; `src/nectar/billruns.ts`; `tests/nectar/flows.mjs` | Every approval is a named person bound to exact inputs; no amount thresholds or two-person rules. |
+| `GOV-003` | Single sign-on and provisioning | target | missing |  | Base operator sign-in only; no SAML, OIDC, SCIM or required MFA. |
+| `GOV-004` | Durable audit trail | target | done | `src/nectar/core.ts`; `src/nectar/views.ts`; `tests/nectar/flows.mjs`; `tests/nectar/journey.mjs` |  |
+| `GOV-005` | Personal-data erasure with financial retention | target | missing |  | No erasure or retention-based removal. |
+| `GOV-006` | Provider secret custody | target | partial | `src/nectar/access.ts`; `tests/nectar/flows.mjs` | Agent credentials are shown once, stored as SHA-256 and revocable; no provider secrets exist yet to encrypt, scope or rotate. |
+| `MOB-001` | Every screen works on a phone | target | done | `tests/nectar/journey.mjs`; `src/nectar/ui/html.ts` |  |
+| `MOB-002` | Nectar for iOS and Android | target | missing |  | No native apps or push notifications. |
+| `OPS-001` | Measured capacity and unattended jobs | target | missing |  | No scheduled jobs; capacity is unmeasured (seed.json limits). |
+| `AGENT-001` | Continuous revenue assurance | push-further | partial | `src/nectar/proposals.ts`; `src/nectar/collections.ts`; `tests/nectar/flows.mjs` | Agents read records and submit reviewed proposals; no cross-system comparison, cases, owners or follow-through. |
+| `AGENT-002` | Simulate the fix and explain it to the customer | push-further | partial | `src/nectar/proposals.ts`; `tests/nectar/flows.mjs` | Nectar computes each proposal's invoice effect; no tax, revenue or MRR effect and no customer explanation sent with the approved change. |
+| `AGENT-003` | Collections that resolve the cause of nonpayment | push-further | partial | `src/nectar/collections.ts`; `src/nectar/proposals.ts`; `tests/nectar/flows.mjs` | Agents can propose a balance-aware reminder; no cause diagnosis from delivery, AP portal, payment or remittance data. |
+| `AGENT-004` | Price-change simulation with customer explanations | push-further | partial | `src/nectar/subscriptions.ts`; `src/nectar/proposals.ts`; `tests/nectar/flows.mjs` | Per-subscription proration previews and price-version proposals ship; no portfolio replay or cohort explanations. |
+| `AGENT-005` | Migration followed through to the first settled cycle | push-further | partial | `src/nectar/movein/stripe.ts`; `tests/nectar/flows.mjs` | Shadow comparison and non-overlapping adoption ship; no agent investigation or settled-cycle verification. |
+| `AGENT-006` | Contract-to-billing setup | push-further | partial | `src/nectar/proposals.ts`; `src/nectar/subscriptions.ts`; `tests/nectar/flows.mjs` | Agent-proposed contract terms quote clauses and flag ambiguity; no full setup (prices, ramps, commitments, credits) or full-term preview. |
+| `AGENT-007` | Cited billing answers for staff and customers | push-further | missing |  | No question answering for staff or customers. |
+| `AGENT-008` | Month-end close tie-out | push-further | missing |  | No close tie-out. |
