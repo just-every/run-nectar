@@ -3,8 +3,8 @@ installation.
 
 ## Run it
 
-You need Node 22 or later and pnpm 10.12.4, on macOS, Linux or Windows with
-WSL2.
+Nectar runs on macOS, Linux or Windows with WSL2. It brings the Node and pnpm
+versions it needs.
 
 Get Nectar and start it:
 
@@ -12,14 +12,13 @@ Get Nectar and start it:
 npx -y @runeditrun/rer dev just-every/run-nectar
 ```
 
-That one line installs `rer`, the Run Edit Run command, and clones Nectar; to start it again later, run `cd run-nectar && rer dev`. `rer dev` installs everything, sets up a local owner on a free port, starts the
+That one line installs `rer`, the Run Edit Run command, and clones Nectar. Without Node, `curl -fsSL https://runeditrun.com/install.sh | sh -s -- dev just-every/run-nectar` does the same. To start it again later, run `cd run-nectar && rer dev`. `rer dev` installs everything, sets up a local owner on a free port, starts the
 app and prints a link that opens Nectar signed in. Open that link on the same
 computer and treat it like a password: it signs the browser in as the owner.
 
-To install for a real owner mailbox, run the steps yourself:
+To install for a real owner mailbox, run `npx -y @runeditrun/rer install just-every/run-nectar`, then from the checkout:
 
 ```sh
-rer install
 rer setup
 rer dev
 ```

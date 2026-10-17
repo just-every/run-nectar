@@ -16,20 +16,18 @@ anything for you.
 
 ## Run it locally
 
-Run one line to clone Nectar, install the `rer` command and start it:
+Run one line to clone Nectar, install it, set up a local owner and start it:
 
 ```sh
 npx -y @runeditrun/rer dev just-every/run-nectar
 ```
 
-To start it again later, run `cd run-nectar && rer dev`.
+Without Node, `curl -fsSL https://runeditrun.com/install.sh | sh -s -- dev just-every/run-nectar` does the same. To start it again later, run `cd run-nectar && rer dev`.
 From a checkout, `rer dev` alone launches it for review: it installs pinned
 dependencies, sets up a local owner on a free port, starts the real app and
-prints `RER_READY` and a sign-in link. To install for a real owner, run the
-verbs yourself:
+prints `RER_READY` and a sign-in link. To install for a real owner, run `npx -y @runeditrun/rer install just-every/run-nectar`, then from the checkout:
 
 ```sh
-rer install
 rer setup --owner-email you@example.com
 rer dev
 ```

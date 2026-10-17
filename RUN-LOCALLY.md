@@ -1,8 +1,10 @@
 # Run it locally
 
-Install the `rer` command once using the [RER installer](https://runeditrun.com).
-After the script or `npx` install, activate it in the current shell with
-`export PATH="$HOME/.local/bin:$PATH"`. First-party commands fetch and verify
+Start Nectar from nothing with one line:
+`npx -y @runeditrun/rer dev just-every/run-nectar` (set up only:
+`npx -y @runeditrun/rer setup just-every/run-nectar`; without Node:
+`curl -fsSL https://runeditrun.com/install.sh | sh -s -- dev just-every/run-nectar`).
+The commands below run inside that checkout. First-party commands fetch and verify
 the exact pnpm version declared in `package.json` when it is missing, using
 `$HOME/.rer/pnpm`; no global pnpm installation or sudo is needed.
 First-party seeds pin the command implementation in either vendored mode or
