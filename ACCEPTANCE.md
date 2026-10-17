@@ -5,9 +5,9 @@ every clause in [CONTRACT.md](CONTRACT.md), with the same status as its Status
 table, judged at commit `a38323a4ad258045cbe8a23a79d616d796433767`. Clause IDs
 are stable; a build round works down this list and records each result here.
 
-Status: **107 clauses: 18 done, 33 partial, 56 missing.**
+Status: **118 clauses: 18 done, 35 partial, 65 missing.**
 All sixteen first-release clauses are **LOCAL PROVEN** (16 of 16); of the
-83 target clauses 2 are proven, 27 partial and 54 missing; of the
+94 target clauses 2 are proven, 29 partial and 63 missing; of the
 8 push-further agent clauses 6 are partial and 2 missing.
 
 Each first-release clause has one flow check in `tests/nectar/flows.mjs`
@@ -64,6 +64,13 @@ with a cited test and the rest is listed in CONTRACT.md's Status table;
 | CAT-008 | Multi-currency prices | Bill a Canadian customer in CAD and collect through a Stripe test account; the invoice, payment, credit and report show CAD amounts and a USD reporting value with the rate source and date. | **MISSING** |
 | CAT-009 | Customer hierarchies and consolidated billing | Create a parent with three divisions, bill them on one consolidated invoice with per-division subtotals, then switch one division to its own invoice paid by the parent's card, and see a shared commitment drawn down by all three. | **MISSING** |
 
+## Target: Customer record and search
+
+| # | What a person can do | Test target | Status |
+| --- | --- | --- | --- |
+| CUS-001 | Find any customer and see the whole billing record | After a full billing cycle with card and ACH payments, a refund, a credit note and a moved-in Stripe history, search by billing email, partial name, invoice number, Stripe charge reference and card last four; each search returns the customer, and a search for one customer's email returns no other customer. The record lists every subscription, invoice, payment, refund, credit note, payment method, credit balance and audit event for that customer; its invoiced, paid, credited and owed totals equal the sum of its invoices; a signed-in support member sees it and issues a credit within their limit; a signed-out request and an accountant's attempt to act get nothing. | **PARTIAL** |
+| CUS-002 | Notes and mentions on customers, invoices and payments | A support member adds a note to a payment mentioning the finance lead; the finance lead receives one email naming the payment, the note appears on the customer record and in the customer export, and an edit attempt is refused while a follow-up note is added. | **MISSING** |
+
 ## Target: Usage and metering
 
 | # | What a person can do | Test target | Status |
@@ -94,7 +101,8 @@ with a cited test and the rest is listed in CONTRACT.md's Status table;
 | ENT-002 | Quotas and enforcement policy | Exhaust a 10,000-call quota under each policy; the entitlement API warns, denies or allows and bills accordingly; an unpaid subscription loses a gated feature after its three-day grace period and regains it on payment. | **MISSING** |
 | DEV-001 | Signed outbound webhooks | Register an endpoint, take it down for an hour during a bill run, and see retries deliver every event once it returns; verify signatures, replay one event, rotate the secret with an overlap window and refuse a forged delivery in the receiving test app. | **MISSING** |
 | DEV-002 | Documented public API | Generate a client from the published OpenAPI document and run the full billing cycle with it; repeat each write with the same idempotency key and get the original result with no second record. | **PARTIAL** |
-| DEV-003 | SDKs and embeddable components | A sample app uses each SDK to meter usage, gate a feature and open checkout and the portal; the components render the live catalogue and complete a test-mode purchase. | **MISSING** |
+| DEV-003 | SDKs and embeddable components | A sample app in each of the seven languages uses its SDK to meter usage, gate a feature and open checkout and the portal; the components render the live catalogue and complete a test-mode purchase. | **MISSING** |
+| DEV-005 | Metadata on every object | Set `app_account_id` on a customer and a subscription through the API, find the customer by that value in search, receive it in the `invoice.paid` webhook payload, and read it back after `rer export` and `rer import`. | **MISSING** |
 | DEV-004 | Test mode and test clocks | Copy the live catalogue into test mode, advance a test clock 13 months on an annual plan with a failing card, and see every invoice, retry, notice and state change happen; live data is untouched. | **MISSING** |
 
 ## Target: Invoicing and delivery
@@ -102,29 +110,31 @@ with a cited test and the rest is listed in CONTRACT.md's Status table;
 | # | What a person can do | Test target | Status |
 | --- | --- | --- | --- |
 | INV-001 | Automatic invoice runs | Enable auto-issue for clean drafts, advance a test clock across a billing day with one clean and one exception draft, and see the clean invoice issued, delivered and charged without a person while the exception waits for review. | **PARTIAL** |
-| INV-002 | Invoice and receipt email delivery | Issue an invoice through the Postmark sandbox; the message carries the PDF and the hosted-page link; delivery and a forced bounce are recorded on the invoice and the bounce opens a task to fix the contact. | **MISSING** |
+| INV-002 | Invoice and receipt email delivery | Issue an invoice through the Postmark sandbox; the message carries the PDF and the hosted-page link and goes to the billing contacts with a customer's CC rule and the business's BCC archive address applied; an operator resends the issued invoice to a corrected address and both sends are recorded; delivery and a forced bounce are recorded on the invoice and the bounce opens a task to fix the contact. | **MISSING** |
 | INV-003 | Hosted invoice page and PDF | Open an invoice's hosted link signed out, pay it with a Stripe test ACH account, and see the page and PDF move to paid with the receipt; an altered link returns nothing. | **MISSING** |
 | INV-004 | Branded, B2B-ready invoices | Set a logo and Net 45 for one customer with a required PO number; the invoice, PDF and email show them, and finalising without the PO is blocked as an exception. | **PARTIAL** |
 | INV-005 | Credit notes, voids and refunds | Void an unpaid invoice and reissue it, refund half of a card-paid invoice through Stripe test mode and credit the other half to balance; the processor refund, tax reversal, invoice state and customer ledger agree. | **PARTIAL** |
 | INV-006 | Customer credit balance | Overpay an invoice by $200 with a wire, issue a $100 goodwill credit, and see both applied to the next invoice, with the remaining balance refundable and the ledger balanced. | **PARTIAL** |
+| INV-007 | Partial and scheduled payments on the invoice page | Pay $400 of a $1,000 invoice by test card on its hosted page and schedule the remaining $600 by ACH for the due date; the invoice shows $600 owed until the scheduled payment settles on the test clock, then paid, with two payments recorded and one reminder suppressed. | **MISSING** |
 
 ## Target: Payments and collection
 
 | # | What a person can do | Test target | Status |
 | --- | --- | --- | --- |
-| PAY-001 | Processor connections | Connect a Stripe test account, an Adyen sandbox and a Braintree sandbox, take a card and an ACH payment through each where supported, and see processor references recorded; disconnecting one blocks new charges on it without losing history. | **MISSING** |
+| PAY-001 | Processor connections | Connect a Stripe test account, an Adyen sandbox and a Braintree sandbox, take a card and an ACH payment through each where supported, pay a Stripe Checkout session with a test Apple Pay or Google Pay wallet, route a CAD customer to a second Stripe account by currency, and see processor references recorded; disconnecting one blocks new charges on it without losing history. | **MISSING** |
 | PAY-002 | Hosted checkout and payment-method capture | Complete a test checkout for a monthly plan with a card and another with ACH; the subscription, mandate and default payment method appear, and a search of Nectar's database, logs and exports finds no card or account number. | **MISSING** |
 | PAY-003 | Automatic collection | Issue a card auto-charge invoice and an ACH one; the card pays immediately, the ACH shows pending and settles four business days later on the test clock; replaying the issue step and the processor webhook never creates a second charge. | **MISSING** |
 | PAY-004 | Payment events, refunds and payouts reconciled | Deliver Stripe test webhooks twice and out of order for payment, refund, dispute and an R01 return, then a payout; invoice states, fees and the payout reconciliation match Stripe's balance transactions exactly. | **MISSING** |
 | PAY-005 | Card lifecycle and expiry | Set a test card to expire before renewal; the customer receives the expiry email 14 days ahead, updates the card through the link, and the renewal charges the new card. | **MISSING** |
+| PAY-006 | No-code payment links | Create a monthly-plan link with a 14-day trial, open it signed out, subscribe with a test card, and see the customer, subscription and link attribution appear; deactivate the link and see it refuse a second visitor. | **MISSING** |
 
 ## Target: Dunning and recovery
 
 | # | What a person can do | Test target | Status |
 | --- | --- | --- | --- |
 | DUN-001 | Smart retries | Fail renewals with insufficient-funds, do-not-honor and stolen-card codes on a test clock; the first two retry on schedule and one recovers, the stolen card stops at once, and no invoice is retried beyond the limit. | **MISSING** |
-| DUN-002 | Dunning sequences | Run a four-email, 21-day dunning policy on a failing card; each email arrives on schedule with a working update link, updating the card mid-sequence stops the sequence and pays the invoice, and a second customer ends restricted after day 21. | **MISSING** |
-| DUN-003 | Trial, renewal and payment notices | Run a trial to conversion and a failed payment on a test clock and see each notice arrive once with the right figures; switching one off stops only that notice. | **MISSING** |
+| DUN-002 | Dunning sequences | Run a four-email, 21-day dunning policy on a failing card; each email arrives on schedule with a working update link, updating the card mid-sequence stops the sequence and pays the invoice, and a second customer ends restricted after day 21; a customer on the enterprise plan follows a second, invoice-only policy with different timing and is never restricted. | **MISSING** |
+| DUN-003 | Trial, renewal and payment notices | Run a trial to conversion and a failed payment on a test clock and see each notice arrive once with the right figures; renew on a Stripe test card that requires authentication, receive the authentication-required notice, confirm on the linked page and see the invoice paid once; switching one notice off stops only that notice. | **MISSING** |
 | DUN-004 | Recovery reporting | After a test-clock run with known outcomes, the recovery report's counts and dollar figures equal the payments and failures recorded. | **MISSING** |
 
 ## Target: Receivables and collections
@@ -146,6 +156,7 @@ with a cited test and the rest is listed in CONTRACT.md's Status table;
 | PORT-003 | Self-service plan changes within policy | A customer upgrades with a proration preview and pays the difference, a downgrade below the contract minimum becomes a request, and a cancellation completes through the `SUB-005` flow. | **MISSING** |
 | PORT-004 | Payment methods in the portal | Replace an expiring card and add a verified ACH account in the portal; the next invoice charges the new default. | **MISSING** |
 | PORT-005 | Embedded portal and branded domain | Open the portal embedded in a sample app with a server-signed session and on `billing.example.com`; both show only that customer's data, and an expired session is refused. | **MISSING** |
+| PORT-006 | Customer-facing language | Set a customer to Spanish; their invoice email, hosted page, PDF, portal and dunning email render in Spanish with the same figures as the English version; add a French translation file and see a French customer's pages switch with no code change; a missing string fails the check instead of showing a key. | **MISSING** |
 
 ## Target: Tax
 
@@ -154,6 +165,7 @@ with a cited test and the rest is listed in CONTRACT.md's Status table;
 | TAX-001 | US sales tax through a tax provider | With the Avalara sandbox, bill customers in Texas, New York and Oregon for SaaS; each line's tax matches AvaTax's response, the issued invoices are committed in AvaTax, and a credit note reverses its share. | **PARTIAL** |
 | TAX-002 | Exemption certificates | Upload a Texas resale certificate for a customer, bill them tax-free in Texas but taxed in New York, let the certificate expire on a test clock and see the exception and reminder. | **PARTIAL** |
 | TAX-003 | Tax reports for filing | After a quarter of test-clock billing, the tax report's totals per state equal the sum of invoice tax lines less credits, and equal the tax provider's committed transactions. | **MISSING** |
+| TAX-004 | Economic-nexus monitoring | Bill a test customer base so that Colorado reaches 80% and then 100% of its threshold; the owner receives one warning at each step naming the state, the measurement period and the figures, which equal the issued invoices in that state. | **MISSING** |
 
 ## Target: Accounting and revenue
 
@@ -168,8 +180,8 @@ with a cited test and the rest is listed in CONTRACT.md's Status table;
 
 | # | What a person can do | Test target | Status |
 | --- | --- | --- | --- |
-| RPT-001 | SaaS metrics | Load a known 18-month test history and compare every metric and MRR movement with an independent spreadsheet computation; each figure drills to the subscriptions that make it up. | **MISSING** |
-| RPT-002 | Financial reports | After a test month, the billings report equals issued invoices, collections equals settled payments, and AR equals the sum of open balances; a scheduled report arrives by email with the same figures. | **PARTIAL** |
+| RPT-001 | SaaS metrics | Move in an 18-month Stripe test account through the live connection (`MOVE-006`) and, separately, through the uploaded capture (`NEC-16`), and adopt its subscriptions; with no data written except through those move-in doors and later billing, the MRR, movements, churn, net and gross retention and cohort tables for every pre-cutover month equal an independent computation over the Stripe objects captured, and equal Stripe's "Subscription metrics per month" report for the same account except for listed definition differences, each explained; the months after cutover continue the same series without a break; each figure drills to the subscriptions that make it up. | **MISSING** |
+| RPT-002 | Financial reports | After a test month, the billings report equals issued invoices, collections equals settled payments, AR equals the sum of open balances, tax collected equals invoice tax lines less credits, credit balances equal the customer balance ledgers, and unbilled usage equals rated events not yet invoiced; a scheduled report arrives by email with the same figures. | **PARTIAL** |
 | RPT-003 | Drill-through from every figure | From the MRR, billings and AR reports, drill one figure down to an invoice line and from there to its usage events; the totals at each level agree. | **PARTIAL** |
 | RPT-004 | Warehouse and BI export | Sync to a BigQuery test dataset and recompute MRR and AR from the synced tables; they equal Nectar's reports. | **MISSING** |
 
@@ -181,6 +193,7 @@ with a cited test and the rest is listed in CONTRACT.md's Status table;
 | CRM-002 | Signed order forms and contracts as inputs | Complete a Docusign sandbox envelope and an Inkwell envelope; each attaches to its customer and opens a setup proposal quoting the document. | **PARTIAL** |
 | INT-001 | Chat alerts and approvals | Fail a payment and prepare a bill run with an exception; each posts one message to a Slack test workspace and to Nook with a link that opens the item for a signed-in approver only. | **MISSING** |
 | INT-002 | Workflow automation and support context | A Zapier test zap fires on `invoice.paid`; HappyToHelp shows the customer's plan and open balance on a ticket through a scoped read credential that cannot change billing. | **MISSING** |
+| INT-003 | Team email notifications | With the finance lead subscribed to disputes and mismatched payments, trigger a Stripe test dispute and a short payment; the finance lead receives one email each through the Postmark sandbox with a working link, and an unsubscribed member receives none. | **MISSING** |
 
 ## Target: Move-in from every incumbent
 
@@ -192,6 +205,7 @@ with a cited test and the rest is listed in CONTRACT.md's Status table;
 | MOVE-004 | Orb and Metronome move-in | Import an Orb test account's plans, credits and three months of events; replaying them reproduces Orb's invoices within the listed rounding differences, each explained. | **MISSING** |
 | MOVE-005 | Payment methods move with the customer | Move in from Stripe Billing and charge the existing test payment method with no customer action; then map a Braintree-to-Stripe token export file and charge a migrated card. | **MISSING** |
 | MOVE-006 | Live Stripe connection and two-sided cutover | Connect a Stripe test account, let it change during the shadow run, adopt a subscription and advance the test clock; Stripe issues no further invoice, Nectar issues the next one, and the customer is charged once. | **PARTIAL** |
+| MOVE-007 | Moved-in history counts from day one | Move in an 18-month Stripe test account with an annual plan paid in advance four months before cutover; the customer record shows its Stripe invoices, payments and refunds; the MRR series and billings report start 18 months back and equal the Stripe objects; opening deferred revenue for the annual plan equals eight months of its fee and recognises monthly after cutover; no moved-in invoice can be approved, issued or charged. | **PARTIAL** |
 
 ## Target: Roles, security and governance
 
@@ -199,16 +213,18 @@ with a cited test and the rest is listed in CONTRACT.md's Status table;
 | --- | --- | --- | --- |
 | GOV-001 | Billing roles | Sign in as each role and crawl every action and door as `NEC-15` does; each role reaches exactly its capabilities, and a support agent's $500 credit succeeds while a $600 credit is refused. | **PARTIAL** |
 | GOV-002 | Approval policies and separation of duties | Set a $1,000 two-person limit; a $1,500 credit prepared by one operator cannot be approved by the same person and issues after a second approver; a $900 credit needs one. | **PARTIAL** |
-| GOV-003 | Single sign-on and provisioning | Configure an Okta developer tenant; a SCIM-created user signs in by SAML with the mapped role, and deprovisioning ends their sessions within a minute. | **MISSING** |
+| GOV-003 | Single sign-on and provisioning | Configure an Okta developer tenant; a SCIM-created user signs in by SAML with the mapped role, and deprovisioning ends their sessions within a minute; with `GOV-007` required, an assertion without a multi-factor authentication context is refused. | **MISSING** |
 | GOV-004 | Durable audit trail | Perform each billing action through the API and forms, read `/app/audit` and the issued invoice's audit events, and find `nc_audit` complete in the exported archive. | **LOCAL PROVEN** |
 | GOV-005 | Personal-data erasure with financial retention | Erase a former customer's contacts; their names and emails disappear from screens, exports and the archive, issued invoices remain with the legal name the law requires, and a receipt lists what changed. | **MISSING** |
 | GOV-006 | Provider secret custody | Connect Stripe, Avalara and QuickBooks, export the installation and search logs, the archive and the database for the planted secrets; none appears in clear, and rotating each keeps billing working. | **PARTIAL** |
+| GOV-007 | Required multi-factor sign-in | The owner turns on "require multi-factor" for finance operators; a finance operator signed in by email link is held at enrolment and every door (page, form post, JSON API, download) refuses them until they enrol a TOTP factor and present a code; a refund approval 20 minutes later asks for a fresh code and is refused with a wrong one; the owner then requires it installation-wide and an accountant is held the same way; enrolling a passkey works in a WebAuthn virtual authenticator; resetting the operator's factor ends their open sessions at once; the audit trail lists each step. | **MISSING** |
 
 ## Target: Mobile and operations
 
 | # | What a person can do | Test target | Status |
 | --- | --- | --- | --- |
-| MOB-001 | Every screen works on a phone | `tests/nectar/journey.mjs` renders every main screen at 390 × 844 after a full billing cycle. | **LOCAL PROVEN** |
+| MOB-001 | Every operator screen works on a phone | `tests/nectar/journey.mjs`, after a full billing cycle at 1440 pixels, opens every main screen at 390 × 844 and fails if any scrolls sideways or lacks its heading, then records a payment through the receivables form at that width. | **LOCAL PROVEN** |
+| MOB-003 | Customer-facing pages and emails work on a phone | In a 390 × 844 touch browser against Stripe test mode, open an issued invoice's emailed link and pay it with a test card, open another and pay by test ACH; complete a checkout from a payment link; open a dunning email's update link and replace a failing card, which pays the invoice; in the portal, change plan with its proration preview and download a receipt. Every step completes, every page fails the test if `scrollWidth` exceeds the viewport, and each delivered email's HTML rendered at 390 pixels has no sideways scroll and a tappable primary button. | **MISSING** |
 | MOB-002 | Nectar for iOS and Android | On iOS and Android test devices, receive a push for a failed payment and an exception draft, open each, approve the draft (refused for a role without approval) and see the audit name the person and device. | **MISSING** |
 | OPS-001 | Measured capacity and unattended jobs | Seed 10,000 subscriptions, run a billing day with the Worker restarted mid-run, and see every invoice issued and charged exactly once within 15 minutes, with the timing recorded in `seed.json` limits. | **MISSING** |
 
