@@ -1,0 +1,7 @@
+{
+  "schema": 1,
+  "projectId": "just-every/run-nectar",
+  "name": "Nectar",
+  "sourceRepository": "https://github.com/just-every/run-nectar",
+  "license": "MIT"
+}
