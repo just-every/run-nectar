@@ -1,3 +1,5 @@
+<img src="public/brand/mark.svg" width="72" height="72" alt="Nectar">
+
 # Nectar
 
 Nectar is free, open source subscription billing for a B2B software or service
@@ -16,13 +18,19 @@ anything for you.
 
 ## Run it locally
 
-Run one line to clone Nectar, install it, set up a local owner and start it:
+Install `rer`, the Run Edit Run command, then start Nectar (the same two lines
+as [run-nectar.com/run](https://run-nectar.com/run)):
 
 ```sh
-npx -y @runeditrun/rer dev just-every/run-nectar
+curl -fsSL https://runeditrun.com/install.sh | sh
+rer dev just-every/run-nectar
 ```
 
-Without Node, `curl -fsSL https://runeditrun.com/install.sh | sh -s -- dev just-every/run-nectar` does the same. To start it again later, run `cd run-nectar && rer dev`.
+The first line installs `rer` for you alone, with its own Node if you have no
+Node 22 or later. The second clones Nectar, installs it, sets up a local owner
+and starts it. Already have Node 22 or later? `npx -y @runeditrun/rer dev just-every/run-nectar`
+does both in one line. To start it again later, run `cd run-nectar && rer dev`.
+
 From a checkout, `rer dev` alone launches it for review: it installs pinned
 dependencies, sets up a local owner on a free port, starts the real app and
 prints `RER_READY` and a sign-in link. To install for a real owner, run `npx -y @runeditrun/rer install just-every/run-nectar`, then from the checkout:

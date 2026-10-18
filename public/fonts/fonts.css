@@ -63,3 +63,20 @@
   font-family: var(--font-body);
 }
 button, input, select, textarea { font-family: inherit; }
+
+/* The run site's hand face for the sticky notes and its code face, both SIL
+   Open Font License 1.1 (kalam/LICENSE.txt, jetbrains-mono/LICENSE.txt). */
+@font-face {
+  font-family: 'Kalam';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/kalam/kalam-latin-400-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/jetbrains-mono/jetbrains-mono-latin-400-normal.woff2') format('woff2');
+}

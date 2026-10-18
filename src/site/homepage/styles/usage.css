@@ -1,0 +1,56 @@
+/* 06 Mascot moment (page-06.png, 1536 × 833): the only painted art between
+   the hero and the closing is the small peach at its ledger. */
+.s-usage .board { --h: 833; }
+.s-usage .total { --x: 420; --y: 98; --w: 695; display: flex; flex-direction: column; align-items: center; padding: calc(26 * var(--u)) calc(24 * var(--u)) calc(18 * var(--u)); border-radius: calc(26 * var(--u)); text-align: center; }
+.s-usage .total h2 { font-size: calc(40 * var(--u)); font-weight: 880; letter-spacing: -.02em; line-height: 1.2; }
+.s-usage .total .pill { margin-top: calc(12 * var(--u)); padding: calc(8 * var(--u)) calc(26 * var(--u)); font-size: calc(26 * var(--u)); }
+.s-usage .sources { list-style: none; }
+.s-usage .src { display: flex; align-items: center; gap: calc(26 * var(--u)); padding: calc(20 * var(--u)) calc(22 * var(--u)); }
+.s-usage .src .tile { width: calc(72 * var(--u)); height: calc(72 * var(--u)); }
+.s-usage .src p { display: flex; flex-direction: column; gap: calc(2 * var(--u)); }
+.s-usage .src b { font-size: calc(24 * var(--u)); }
+.s-usage .src span { font-size: calc(22 * var(--u)); color: #4a5160; }
+.s-api { --x: 45; --y: 278; --w: 335; }
+.s-sdk { --x: 47; --y: 430; --w: 333; }
+.s-s3 { --x: 47; --y: 583; --w: 333; }
+.s-usage .streams { --x: 0; --y: 0; --w: 1536; height: calc(833 * var(--u)); pointer-events: none; }
+.s-usage .streams path { fill: none; stroke: #a3a9b4; stroke-width: 2.4; stroke-dasharray: 7 8; stroke-linecap: round; }
+.s-usage .streams .b1 { fill: #fb5a4a; }
+.s-usage .streams .b2 { fill: #fd9a1c; }
+.s-usage .mascot { --x: 490; --y: 320; --w: 595; z-index: 1; }
+.s-usage .mascot img { display: block; width: 100%; height: auto; }
+.s-usage .st-usage { --x: 431; --y: 291; --w: 154; --sr: -10.6; padding: calc(20 * var(--u)) calc(12 * var(--u)) calc(12 * var(--u)) calc(16 * var(--u)); font-size: calc(25 * var(--u)); text-align: center; min-width: calc(162 * var(--u)); min-height: calc(94 * var(--u)); }
+.s-usage .stack { --x: 1110; --y: 362; --w: 400; z-index: 1; }
+.s-usage .sheet { position: absolute; display: block; width: calc(338 * var(--u)); height: calc(210 * var(--u)); border: 1px solid var(--nc-card-edge); border-radius: calc(20 * var(--u)); background: #fff; box-shadow: var(--nc-card-shadow); rotate: 5deg; }
+.s-usage .sheet.s3 { left: calc(62 * var(--u)); top: 0; }
+.s-usage .sheet.s2 { left: calc(40 * var(--u)); top: calc(32 * var(--u)); }
+.s-usage .stack .top { position: relative; display: flex; align-items: flex-start; gap: calc(22 * var(--u)); width: calc(383 * var(--u)); margin-top: calc(63 * var(--u)); padding: calc(28 * var(--u)) calc(24 * var(--u)) calc(30 * var(--u)); rotate: 5deg; }
+.s-usage .stack .tile { width: calc(54 * var(--u)); height: calc(54 * var(--u)); }
+.s-usage .stack p { display: flex; flex-direction: column; gap: calc(4 * var(--u)); }
+.s-usage .stack b { font-size: calc(21 * var(--u)); white-space: nowrap; }
+.s-usage .stack span { font-size: calc(20 * var(--u)); color: #5b6270; }
+.s-usage .stack .pill { margin-top: calc(10 * var(--u)); padding: calc(10 * var(--u)) calc(20 * var(--u)); font-size: calc(22 * var(--u)); }
+.sp-u1 { --x: 362; --y: 70; --s: 48; }
+.sp-u2 { --x: 1140; --y: 152; --s: 46; --sr: 92; }
+.sp-u3 { --x: 660; --y: 343; --s: 46; }
+.sp-u4 { --x: 920; --y: 392; --s: 44; --sr: 92; }
+.sp-u5 { --x: 1450; --y: 348; --s: 42; --sr: 92; }
+
+@media (max-width: 1179px) {
+  .s-usage .board { align-items: stretch; }
+  .s-usage .total { order: -1; }
+  .s-usage .sources { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+  .s-usage .src { flex-direction: column; align-items: flex-start; gap: 12px; padding: 16px; }
+  .s-usage .mascot { width: min(100%, 420px); margin: 0 auto; }
+  .s-usage .stack { width: min(100%, 420px); margin: 0 auto; }
+  .s-usage .sheet { display: none; }
+  .s-usage .stack .top { width: 100%; margin-top: 0; rotate: none; }
+}
+@media (max-width: 759px) {
+  .s-usage .total { padding: 20px 14px 16px; }
+  .s-usage .total h2 { font-size: 26px; }
+  .s-usage .total h2 .fig { display: block; font-size: 34px; }
+  .s-usage .sources { grid-template-columns: 1fr; gap: 10px; }
+  .s-usage .src { flex-direction: row; align-items: center; }
+  .s-usage .stack .pill { white-space: normal; }
+}

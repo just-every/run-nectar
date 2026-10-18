@@ -147,7 +147,7 @@ async function cycle(page) {
   await submit(page, form(page, 'invoice.approve'), 'Approve clean drafts')
   const finalise = form(page, 'invoice.finalise')
   await finalise.getByLabel('Invoice date (default today)', { exact: true }).fill('2026-08-15')
-  await submit(page, finalise, 'Finalise approved')
+  await submit(page, finalise, 'Finalize approved')
   await page.getByRole('link', { name: 'Northwind Robotics' }).first().click()
   await page.getByRole('heading', { name: /^Invoice RB-/ }).waitFor()
   const invoiceUrl = page.url()

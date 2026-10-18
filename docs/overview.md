@@ -25,8 +25,8 @@ operator run it, with an outside accountant who reads and exports.
    month's, and lists anything unusual.
 5. **Approval.** A person approves the drafts. Approval names the exact inputs:
    if usage, a price, a contract term or the tax policy changes before
-   finalising, the approval no longer holds.
-6. **Finalising.** Approved invoices are numbered in order (`INV-000001`
+   finalizing, the approval no longer holds.
+6. **Finalizing.** Approved invoices are numbered in order (`INV-000001`
    upward) and never change. Corrections are credit notes.
 7. **After the invoice.** Payments you received are recorded with their
    reference and allocated, ageing shows who owes what, and reminders are

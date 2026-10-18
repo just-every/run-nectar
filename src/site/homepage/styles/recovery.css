@@ -1,0 +1,52 @@
+/* 04 Recovery (page-04.png, 1536 × 871). */
+.s-recovery .board { --h: 871; --hs: 72; }
+.s-recovery .copy { --x: 82; --y: 220; --w: 545; }
+.s-recovery .copy .body { max-width: calc(490 * var(--u)); font-size: calc(24 * var(--u)); }
+.s-recovery .summary { display: flex; align-items: center; gap: calc(14 * var(--u)); width: fit-content; margin-top: calc(32 * var(--u)); padding: calc(12 * var(--u)) calc(24 * var(--u)) calc(12 * var(--u)) calc(16 * var(--u)); border-radius: 999px; background: var(--nc-mint); font-size: calc(20 * var(--u)); color: #1f5133; }
+
+.s-recovery .card { padding: calc(30 * var(--u)) calc(28 * var(--u)); }
+.c-mesa { --x: 643; --y: 128; --w: 467; padding-bottom: calc(26 * var(--u)) !important; }
+.c-mesa .head { display: flex; justify-content: space-between; gap: calc(16 * var(--u)); font-size: calc(23 * var(--u)); }
+.c-mesa .head h3 { font-size: inherit; }
+.c-mesa > .pill { margin-top: calc(12 * var(--u)); padding: calc(9 * var(--u)) calc(16 * var(--u)); font-size: calc(18 * var(--u)); }
+.timeline { list-style: none; position: relative; }
+.c-mesa .timeline { margin-top: calc(34 * var(--u)); }
+.c-mesa .timeline::before { content: ''; position: absolute; left: calc(7 * var(--u)); top: calc(14 * var(--u)); bottom: calc(10 * var(--u)); width: 1.5px; background: #dcdfe4; }
+.c-mesa .timeline li { position: relative; padding-left: calc(36 * var(--u)); }
+.c-mesa .timeline li + li { margin-top: calc(46 * var(--u)); }
+.c-mesa .timeline li::before { content: ''; position: absolute; left: 0; top: calc(5 * var(--u)); width: calc(15 * var(--u)); height: calc(15 * var(--u)); border-radius: 50%; background: #a5abb5; }
+.c-mesa .timeline li.red::before { background: #f04646; }
+.c-mesa .timeline li.green::before { background: var(--nc-green); }
+.c-mesa .when { font-size: calc(17 * var(--u)); color: #4a5160; }
+.c-mesa .what { margin-top: calc(6 * var(--u)); font-size: calc(20 * var(--u)); color: #23272e; }
+.c-mesa .what .tick { width: .9em; height: .9em; vertical-align: -.08em; }
+.c-mesa .note { width: fit-content; margin-top: calc(16 * var(--u)); padding: calc(11 * var(--u)) calc(16 * var(--u)); border-radius: calc(14 * var(--u)); background: #f3f4f6; font-size: calc(16.5 * var(--u)); color: #3b414b; }
+.c-mesa .foot { margin-top: calc(46 * var(--u)); padding: calc(22 * var(--u)) 0 0 calc(52 * var(--u)); border-top: 1px solid var(--nc-line); font-size: calc(18 * var(--u)); color: #6b7280; }
+.c-mesa .cu-mesa { --x: 350; --y: 466; }
+.c-mesa .st-recovery { --x: -92; --y: 492; --w: 152; --sr: -12; font-size: calc(28 * var(--u)); padding: calc(24 * var(--u)) calc(22 * var(--u)); }
+.c-mesa .sp-mesa { --x: -46; --y: -32; --s: 42; }
+.cn-pine { --x: 1110; --y: 204; --w: 52; --hh: 90; }
+.cn-birch { --x: 1110; --y: 490; --w: 52; --hh: 92; }
+
+.c-pine, .c-birch { --w: 315; --x: 1162; display: flex; flex-direction: column; align-items: flex-start; }
+.c-pine { --y: 145; }
+.c-birch { --y: 462; padding-bottom: calc(24 * var(--u)) !important; }
+.c-pine h3, .c-birch h3 { font-size: calc(20.5 * var(--u)); }
+.c-pine .sub, .c-birch .sub { margin-top: calc(6 * var(--u)); font-size: calc(19 * var(--u)); color: #23272e; }
+.c-pine .pill, .c-birch .pill { margin-top: calc(16 * var(--u)); padding: calc(9 * var(--u)) calc(16 * var(--u)); font-size: calc(17 * var(--u)); font-weight: 500; }
+.c-pine .down { margin: calc(10 * var(--u)) 0 calc(-6 * var(--u)) calc(6 * var(--u)); font-size: calc(20 * var(--u)); }
+.c-birch .pill.small { margin-top: calc(14 * var(--u)); font-size: calc(15 * var(--u)); }
+.c-pine .sp-pine { --x: 254; --y: -52; --s: 40; --sr: 92; }
+.c-birch .sp-birch { --x: 312; --y: 222; --s: 40; --sr: 180; }
+
+@media (max-width: 1179px) {
+  .c-mesa .st-recovery { position: relative; left: auto; top: auto; width: fit-content; margin: 22px 0 0 auto; }
+  .c-mesa .cu-mesa { --x: 300; }
+}
+@media (max-width: 759px) {
+  .s-recovery .card { padding: 22px 18px; }
+  .c-mesa .head { flex-wrap: wrap; gap: 4px 12px; }
+  .c-mesa > .pill, .c-pine .pill, .c-birch .pill { white-space: normal; }
+  .c-mesa .foot { padding-left: 0; }
+  .c-mesa .cu-mesa { --x: 230; }
+}

@@ -25,7 +25,7 @@ scopes:
 The key is shown once; Nectar keeps only its fingerprint. Send it as
 `Authorization: Bearer …` to `/api/nectar/`. **Revoke** ends it immediately.
 
-A credential never approves, finalises, issues a credit, changes a record
+A credential never approves, finalizes, issues a credit, changes a record
 directly or manages access.
 
 ## Proposals

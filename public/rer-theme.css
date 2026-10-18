@@ -31,39 +31,91 @@
 
   --rer-font-body: var(--n-font);
   --rer-font-heading: var(--n-font);
-  --rer-page: var(--n-page);
+  --rer-page: #ffffff;
   --rer-surface: var(--n-surface);
   --rer-text: var(--n-ink);
   --rer-muted: var(--n-muted);
   --rer-border: var(--n-field);
   --rer-focus: var(--n-ink);
-  --rer-link: var(--n-honey-ink);
+  --rer-link: #c2410c;
+  --rer-code-background: #17191e;
+  --rer-code-text: #e7e9ee;
   --rer-accent: var(--n-ink);
   --rer-accent-text: var(--n-page);
   --rer-radius: var(--n-radius);
   --rer-button-radius: 999px;
   --rer-wordmark-weight: 800;
   --rer-logo: url('/brand/mark.svg');
+
+  /* The run site (homepage, docs, /run, 404) and Base's sign-in, setup and
+     Lobby frames: a crisp white page with a faint square grid, ink #14171b,
+     the coral-to-tangerine pair on the second line of every heading, white
+     hairline cards, mint for paid, soft red for failure, pale-yellow stickies
+     in a hand face, and one colour per collaborator cursor. */
+  --nc-page: #ffffff;
+  --nc-grid-line: rgba(20, 23, 27, .045);
+  --nc-grid: linear-gradient(var(--nc-grid-line) 1px, transparent 1px) 0 0 / 64px 64px, linear-gradient(90deg, var(--nc-grid-line) 1px, transparent 1px) 0 0 / 64px 64px, var(--nc-page);
+  --nc-ink: #14171b;
+  --nc-body: #4a5160;
+  --nc-muted: #6b7280;
+  --nc-faint: #9aa1ad;
+  --nc-line: #e9ebef;
+  --nc-rule: #3a3f48;
+  --nc-surface: #ffffff;
+  --nc-wash: #f4f5f7;
+  --nc-card-edge: rgba(20, 23, 27, .08);
+  --nc-card-shadow: 0 1px 2px rgba(20, 23, 27, .04), 0 12px 32px -8px rgba(20, 23, 27, .12);
+  --nc-coral: #fc5450;
+  --nc-tangerine: #fe961c;
+  --nc-orange: #fd7a1f;
+  --nc-gradient: linear-gradient(90deg, #fc5450 0%, #fd6f42 45%, #fe961c 100%);
+  --nc-icon-gradient: linear-gradient(135deg, #fc5450, #fd7a3a);
+  --nc-mint: #e2f7e9;
+  --nc-mint-ink: #157a3f;
+  --nc-green: #21b35b;
+  --nc-red-soft: #fde6e6;
+  --nc-red-ink: #d42c2c;
+  --nc-peach: #fff1e7;
+  --nc-peach-ink: #e4521d;
+  --nc-blue-soft: #e9effb;
+  --nc-blue-ink: #3d5a9e;
+  --nc-yellow-soft: #fff3cf;
+  --nc-yellow-ink: #e59a00;
+  --nc-pink-soft: #fde7e7;
+  --nc-sticky: #fdf2b5;
+  --nc-dana: #fb5455;
+  --nc-marcus: #fd7a1f;
+  --nc-leo: #12a59b;
+  --nc-code: #17191e;
+  --nc-code-text: #e7e9ee;
+  --nc-code-key: #f3f4f6;
+  --nc-code-string: #fd8f3a;
+  --nc-code-true: #4fd584;
+  --nc-font: 'Hanken Grotesk', 'Hanken Grotesk Fallback', Arial, sans-serif;
+  --nc-hand: 'Kalam', 'Comic Sans MS', 'Segoe Print', cursive;
+  --nc-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --nc-radius: 20px;
 }
 
 /* Sign-in (operator-auth) and first-run /setup: Base's no-script frames wear
-   the theme through these rules. A centred white card on paper with the honey
-   glow behind it, the mark and name centred above the heading, a dark pill. */
+   the run site's look through these rules. A centred white card on the faint
+   grid with a soft coral and tangerine light behind it, the mark and name
+   centred above the heading, an ink pill. */
 html.rer-themed body {
   min-height: 100vh;
   background:
-    radial-gradient(ellipse 30% 34% at 30% 30%, rgba(249, 194, 90, .42), rgba(253, 227, 173, .22) 55%, rgba(253, 227, 173, 0)),
-    radial-gradient(ellipse 26% 30% at 76% 42%, rgba(249, 194, 90, .32), rgba(253, 227, 173, .18) 55%, rgba(253, 227, 173, 0)),
-    var(--n-page);
-  color: var(--n-ink);
+    radial-gradient(ellipse 30% 34% at 28% 26%, rgba(252, 84, 80, .10), rgba(252, 84, 80, 0)),
+    radial-gradient(ellipse 26% 30% at 76% 40%, rgba(254, 150, 28, .12), rgba(254, 150, 28, 0)),
+    var(--nc-grid);
+  color: var(--nc-ink);
   font-family: var(--n-font);
   -webkit-font-smoothing: antialiased;
   display: block;
   padding: 48px 20px;
 }
-html.rer-themed body main { width: 100%; max-width: 680px; margin: 10vh auto 0; padding: 56px 80px 60px; background: var(--n-surface); border: 1px solid var(--n-line); border-radius: var(--n-radius-glass); box-shadow: 0 1px 2px rgba(60, 40, 10, .05), 0 24px 60px rgba(178, 112, 20, .14); }
+html.rer-themed body main { width: 100%; max-width: 680px; margin: 10vh auto 0; padding: 56px 80px 60px; background: var(--n-surface); border: 1px solid var(--n-line); border-radius: var(--n-radius-glass); box-shadow: var(--nc-card-shadow); }
 html.rer-themed body .brand,
-html.rer-themed body .rer-brand { justify-content: center; gap: 12px; margin: 0 0 36px; color: var(--n-ink); font-size: 30px; font-weight: 800; letter-spacing: -.02em; line-height: 1; }
+html.rer-themed body .rer-brand { justify-content: center; gap: 12px; margin: 0 0 36px; color: var(--nc-ink); font-size: 32px; font-weight: 900; letter-spacing: -.04em; line-height: 1; }
 html.rer-themed body .brand::before,
 html.rer-themed body .rer-brand::before { width: 34px; height: 34px; }
 html.rer-themed body h1 { margin: 0 0 16px; font-size: 52px; font-weight: 800; line-height: 1.05; letter-spacing: -.03em; text-align: center; color: var(--n-ink); }
@@ -79,8 +131,8 @@ html.rer-themed body .action { min-height: 60px; border: 0; border-radius: 999px
 html.rer-themed body button:hover,
 html.rer-themed body .action:hover { background: #33302a; box-shadow: none; }
 html.rer-themed body button.secondary { background: transparent; color: var(--n-ink); border: 1.5px solid rgba(28, 26, 23, .25); }
-html.rer-themed body .notice { border: 0; border-radius: var(--n-radius-field); background: var(--n-honey-wash); color: var(--n-ink); padding: 14px 16px; }
-html.rer-themed body .secondary-link a { color: var(--n-honey-ink); }
+html.rer-themed body .notice { border: 0; border-radius: var(--n-radius-field); background: var(--nc-peach); color: var(--n-ink); padding: 14px 16px; }
+html.rer-themed body .secondary-link a { color: #c2410c; }
 html.rer-themed body :focus-visible { outline: 3px solid var(--n-ink); outline-offset: 3px; }
 /* /setup: the owner as ruled rows, then the confirmation and the action. */
 html.rer-themed body dl { grid-template-columns: 150px minmax(0, 1fr); gap: 0; margin: 0 0 30px; border-top: 1px solid var(--n-line); }
@@ -90,7 +142,7 @@ html.rer-themed body dt { color: var(--n-muted); }
 html.rer-themed body form { gap: 32px; }
 html.rer-themed body form p { color: var(--n-ink); font-size: 17px; }
 @media (max-width: 600px) {
-  html.rer-themed body { padding: 24px 16px; background-size: 200% 70%, 200% 70%, auto; background-position: 20% 0, 80% 30%, 0 0; background-repeat: no-repeat; background-color: var(--n-page); }
+  html.rer-themed body { padding: 24px 16px; }
   html.rer-themed body main { margin-top: 4vh; padding: 40px 24px 36px; }
   html.rer-themed body .brand,
   html.rer-themed body .rer-brand { font-size: 26px; margin-bottom: 28px; }
@@ -101,7 +153,8 @@ html.rer-themed body form p { color: var(--n-ink); font-size: 17px; }
 }
 
 /* The Lobby (Base's door at /) sits in the same white card as sign-in. */
-.door > .door-card { width: 100%; max-width: 680px; padding: 56px 64px 52px; background: var(--n-surface); border: 1px solid var(--n-line); border-radius: var(--n-radius-glass); box-shadow: 0 1px 2px rgba(60, 40, 10, .05), 0 24px 60px rgba(178, 112, 20, .14); }
+body:has(> main.door) { background: var(--nc-grid); }
+.door > .door-card { width: 100%; max-width: 680px; padding: 56px 64px 52px; background: var(--nc-surface); border: 1px solid var(--nc-card-edge); border-radius: var(--n-radius-glass); box-shadow: var(--nc-card-shadow); }
 .door > .door-card .line { color: var(--n-muted); }
 main.door { padding-top: 16vh; }
 @media (max-width: 640px) {
@@ -109,19 +162,33 @@ main.door { padding-top: 16vh; }
   .door > .door-card { padding: 40px 22px 36px; }
 }
 
-/* Base's /run and not-found pages wear the homepage's header and its 800 headings. */
-body > header.bar { max-width: 1440px; min-height: 96px; padding: 0 48px; }
-body > header.bar::after { content: ''; position: absolute; left: 48px; right: 48px; bottom: 0; border-top: 1px solid var(--n-line); }
-body > header.bar .brand { gap: 12px; font-size: 22px; font-weight: 700; letter-spacing: -.01em; }
-body > header.bar .brand img { width: 26px; height: 26px; }
-body > header.bar nav { gap: 44px; font-size: 18px; font-weight: 400; }
-body > header.bar nav a { color: var(--n-muted); }
-body > header.bar nav a:hover { color: var(--n-ink); text-decoration-thickness: 1.5px; text-underline-offset: 6px; }
-body > header.bar ~ main h1 { font-weight: 800; }
+/* Base's /run and not-found pages wear the homepage's look: the grid page,
+   the header lockup, a heavy ink headline, white hairline step cards, coral
+   step numbers and ink code cards. */
+body:has(> header.bar) { background: var(--nc-grid); color: var(--nc-ink); }
+body > header.bar { max-width: 1440px; min-height: 94px; padding: 0 54px 0 62px; }
+body > header.bar .brand { gap: 13px; font-size: 47px; font-weight: 900; letter-spacing: -.04em; color: var(--nc-ink); }
+body > header.bar .brand img { width: 52px; height: 52px; }
+body > header.bar nav { gap: 36px; font-size: 19px; font-weight: 400; }
+body > header.bar nav a { color: #23272e; }
+body > header.bar nav a:hover { color: var(--nc-ink); text-decoration-thickness: 1.5px; text-underline-offset: 6px; }
+body > header.bar ~ main h1 { font-weight: 900; letter-spacing: -.045em; color: var(--nc-ink); }
+body > header.bar ~ main .intro h1 { font-size: 72px; line-height: 1; }
+body > header.bar ~ main .sub { color: var(--nc-body); }
+body > header.bar ~ main .step { background: var(--nc-surface); border-color: var(--nc-card-edge); border-radius: var(--nc-radius); box-shadow: var(--nc-card-shadow); backdrop-filter: none; }
+body > header.bar ~ main .num { background: var(--nc-icon-gradient); color: #fff; font-weight: 800; box-shadow: 0 6px 14px -6px rgba(252, 84, 80, .7); }
+body > header.bar ~ main .step h2 { font-weight: 800; letter-spacing: -.02em; }
+body > header.bar ~ main .code { border-radius: 14px; }
+body > header.bar ~ main .btn { background: var(--nc-ink); color: #fff; border-radius: 16px; }
+body > header.bar ~ main .link { color: var(--nc-ink); }
+@media (max-width: 900px) {
+  body > header.bar ~ main .code pre { padding: 46px 14px 14px; white-space: pre-wrap; overflow-wrap: anywhere; line-break: anywhere; }
+  body > header.bar ~ main .copy { top: 8px; right: 8px; transform: none; }
+}
 @media (max-width: 760px) {
   body > header.bar { min-height: 68px; padding: 0 16px; }
-  body > header.bar::after { left: 16px; right: 16px; }
-  body > header.bar .brand { gap: 10px; font-size: 20px; }
-  body > header.bar .brand img { width: 26px; height: 26px; }
-  body > header.bar nav { gap: 24px; font-size: 16px; }
+  body > header.bar .brand { gap: 8px; font-size: 28px; }
+  body > header.bar .brand img { width: 36px; height: 36px; }
+  body > header.bar nav { gap: 18px; font-size: 16px; }
+  body > header.bar ~ main .intro h1 { font-size: 42px; line-height: 1.05; }
 }

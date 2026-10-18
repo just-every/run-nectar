@@ -1,4 +1,4 @@
-Nectar runs on your own computer with one line. Your data stays in your
+Nectar runs on your own computer with two lines. Your data stays in your
 installation.
 
 ## Run it
@@ -6,15 +6,21 @@ installation.
 Nectar runs on macOS, Linux or Windows with WSL2. It brings the Node and pnpm
 versions it needs.
 
-Get Nectar and start it:
+Install `rer`, the Run Edit Run command, then start Nectar:
 
 ```sh
-npx -y @runeditrun/rer dev just-every/run-nectar
+curl -fsSL https://runeditrun.com/install.sh | sh
+rer dev just-every/run-nectar
 ```
 
-That one line installs `rer`, the Run Edit Run command, and clones Nectar. Without Node, `curl -fsSL https://runeditrun.com/install.sh | sh -s -- dev just-every/run-nectar` does the same. To start it again later, run `cd run-nectar && rer dev`. `rer dev` installs everything, sets up a local owner on a free port, starts the
-app and prints a link that opens Nectar signed in. Open that link on the same
-computer and treat it like a password: it signs the browser in as the owner.
+The first line installs `rer` for you alone, with its own Node if you have no
+Node 22 or later; it changes no shell settings, so if its last line puts `rer`
+on your PATH, run that line before the second. The second line gets Nectar,
+installs everything, sets up a local owner on a free port, starts the app and
+prints a link that opens Nectar signed in. Open that link on the same computer
+and treat it like a password: it signs the browser in as the owner. Already
+have Node 22 or later? `npx -y @runeditrun/rer dev just-every/run-nectar` does
+both in one line. To start it again later, run `cd run-nectar && rer dev`.
 
 To install for a real owner mailbox, run `npx -y @runeditrun/rer install just-every/run-nectar`, then from the checkout:
 
@@ -45,7 +51,7 @@ Before anything else, Nectar opens **Business and tax**:
   **Declare tax policy**, then **I have reviewed this tax policy**.
 
 Nectar applies the policy you declare; it does not work out where you owe tax
-or file returns. Invoices cannot be finalised until the owner has reviewed the
+or file returns. Invoices cannot be finalized until the owner has reviewed the
 declaration, and any change needs a new review.
 
 ## The first billing cycle
@@ -57,7 +63,7 @@ Home lists the steps that remain:
 3. Add a product and its price ([Prices, customers and subscriptions](/docs/catalog-and-customers)).
 4. Add a customer, or move in from Stripe ([Moving in](/docs/move-in)).
 5. Start a subscription.
-6. Prepare, approve and finalise a bill run ([Bill runs and invoices](/docs/bill-runs)).
+6. Prepare, approve and finalize a bill run ([Bill runs and invoices](/docs/bill-runs)).
 
 Once they are done, Home shows **Your work**: draft bill runs to review,
 proposals waiting for a decision and overdue invoices.

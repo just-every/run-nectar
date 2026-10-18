@@ -140,7 +140,7 @@ export function rate(input: RatingInput): Rating {
   const taxableBase = lines.filter(line => line.taxable).reduce((sum, line) => sum + line.amountCents, 0)
   let taxCents = 0
   const tax: Record<string, unknown> = { mode: input.tax.mode, jurisdiction: input.tax.jurisdiction, taxableBaseCents: taxableBase }
-  if (input.tax.mode === 'undeclared') exceptions.push({ code: 'tax_undeclared', message: 'The business has not declared its tax policy; this invoice cannot be finalised.' })
+  if (input.tax.mode === 'undeclared') exceptions.push({ code: 'tax_undeclared', message: 'The business has not declared its tax policy; this invoice cannot be finalized.' })
   else if (input.tax.exempt) Object.assign(tax, { exempt: true, exemptRef: input.tax.exemptRef, rule: 'customer is tax exempt' })
   else if (input.tax.mode === 'flat_rate' && taxableBase > 0) {
     taxCents = Number(percentOf(BigInt(taxableBase), micros(input.tax.rate)))

@@ -19,7 +19,7 @@ export async function homePage(env: Bindings, actor: Actor, url: URL) {
     { done: await count(env, 'SELECT COUNT(*) AS n FROM nc_prices') > 0, label: 'Add a product and its price', href: '/app/catalog' },
     { done: await count(env, 'SELECT COUNT(*) AS n FROM nc_customers') > 0, label: 'Add a customer, or move in from Stripe', href: '/app/customers' },
     { done: await count(env, 'SELECT COUNT(*) AS n FROM nc_subscriptions') > 0, label: 'Start a subscription', href: '/app/customers' },
-    { done: await count(env, "SELECT COUNT(*) AS n FROM nc_invoices WHERE status = 'issued'") > 0, label: 'Prepare, approve and finalise a bill run', href: '/app/billing' },
+    { done: await count(env, "SELECT COUNT(*) AS n FROM nc_invoices WHERE status = 'issued'") > 0, label: 'Prepare, approve and finalize a bill run', href: '/app/billing' },
   ]
   const remaining = steps.filter(step => !step.done)
   const pending = await count(env, "SELECT COUNT(*) AS n FROM nc_proposals WHERE status = 'pending'")
@@ -62,7 +62,7 @@ export async function settingsPage(env: Bindings, actor: Actor, url: URL) {
   const tax = b ? h`<section class="card" aria-labelledby="tax"><div class="card-head"><h2 id="tax">Tax policy</h2>${b.tax_mode !== 'undeclared' ? tag(taxReady(b) ? 'Reviewed' : 'Not reviewed') : ''}</div>
     <p class="declared">Declared: ${b.tax_mode === 'undeclared' ? tag('Not declared') : h`<strong>${b.tax_mode === 'no_tax' ? 'No sales tax applies' : `Flat rate ${b.tax_rate}%`} in ${b.tax_jurisdiction}</strong>`}</p>
     ${b.tax_note ? h`<p class="hint">${b.tax_note}</p>` : ''}
-    <p class="hint">Nectar applies the policy you declare; it does not determine where you owe tax or file returns. Invoices cannot be finalised until the owner reviews the declaration, and any change needs a new review.</p>
+    <p class="hint">Nectar applies the policy you declare; it does not determine where you owe tax or file returns. Invoices cannot be finalized until the owner reviews the declaration, and any change needs a new review.</p>
     ${owner ? h`${form('tax.declare', '/app/settings', h`${select('State', 'tax_jurisdiction', US_STATES.map(s => ({ value: s, label: s })), b.tax_jurisdiction || 'NY')}
       ${select('Policy', 'tax_mode', [{ value: 'no_tax', label: 'No sales tax applies to what we sell' }, { value: 'flat_rate', label: 'Charge one flat rate on taxable lines' }], b.tax_mode === 'undeclared' ? 'no_tax' : b.tax_mode)}
       ${field('Rate (%) for a flat rate', 'tax_rate', { value: b.tax_mode === 'flat_rate' ? b.tax_rate : '', required: false })}
@@ -82,7 +82,7 @@ export async function accessPage(env: Bindings, actor: Actor, url: URL, issued?:
     <section class="card" aria-labelledby="people"><h2 id="people">People</h2>
     ${table(['Name', 'Email', 'Role', 'Status', ''], people.map(m => [m.name, m.email, m.role, tag(m.status === 'active' ? 'Active' : 'Ended'), m.role !== 'owner' && m.status === 'active' ? form('access.end', '/app/access', hidden('member', m.id), 'End access', { secondary: true }) : '']))}
     <h3>Give someone access</h3>${form('access.give', '/app/access', h`${field('Name', 'name')}${field('Email', 'email', { type: 'email' })}${select('Role', 'role', [{ value: 'finance', label: ROLE_LABELS.finance }, { value: 'accountant', label: ROLE_LABELS.accountant }], 'finance')}`, 'Invite', { layout: 'columns' })}</section>
-    <section class="card" aria-labelledby="agents"><h2 id="agents">Agent credentials</h2><p class="hint">A credential lets your own agent read and prepare proposals, or lets a metering pipeline submit usage. Credentials never approve, finalise or change records directly.</p>
+    <section class="card" aria-labelledby="agents"><h2 id="agents">Agent credentials</h2><p class="hint">A credential lets your own agent read and prepare proposals, or lets a metering pipeline submit usage. Credentials never approve, finalize or change records directly.</p>
     ${table(['Name', 'Scopes', 'Last used', 'Status', ''], keys.map(k => [k.name, k.scopes, when(k.last_used_at, zone), tag(k.revoked_at ? 'Revoked' : 'Active'), k.revoked_at ? '' : form('credential.revoke', '/app/access', hidden('key', k.id), 'Revoke', { secondary: true })]), { empty: 'No credentials issued.' })}
     <h3>Issue a credential</h3><form method="post" action="/app/access/credential" class="columns">${field('Name', 'name', { hint: 'For example: "Finance agent" or "Metering pipeline".' })}${checks('Scopes', 'scopes', Object.keys(SCOPES).map(scope => ({ value: scope, label: scope === 'prepare' ? 'prepare — read records and propose work for approval' : 'usage — submit usage events' })), ['prepare'])}<button type="submit">Issue credential</button></form></section>`, { current: '/app/access', url })
 }

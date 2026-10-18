@@ -36,12 +36,12 @@ exceptions are listed, tick **I reviewed the exceptions** and press **Approve
 reviewed drafts**, or approve one invoice from its page.
 
 Approval names the exact inputs. If usage, a price, a contract exception or the
-tax policy changes before finalising, the approval no longer holds: prepare the
+tax policy changes before finalizing, the approval no longer holds: prepare the
 bill run again and review it.
 
-## Finalise
+## Finalize
 
-**Finalise approved** numbers and issues every approved invoice whose inputs are
+**Finalize approved** numbers and issues every approved invoice whose inputs are
 unchanged. The invoice date can be any day from the end of the billed period up
 to today (it defaults to today); the due date follows your payment terms. Each
 period is billed once, and each usage event is billed on one invoice only.

@@ -65,7 +65,7 @@ const ERRORS: Record<string, string> = {
   already_billed: 'some of this usage has already been billed on an issued invoice.',
   exceeds_balance: 'that is more than the invoice still owes.',
   exceeds_payment: 'that is more than is left unallocated on this payment.',
-  tax_not_reviewed: 'the owner must review the declared tax policy before invoices can be finalised.',
+  tax_not_reviewed: 'the owner must review the declared tax policy before invoices can be finalized.',
   tax_not_declared: 'declare the tax policy first.',
   blocking_exception: 'this draft has an exception that must be fixed before approval.',
   exceptions_not_acknowledged: 'tick that you reviewed the exceptions listed for this draft.',

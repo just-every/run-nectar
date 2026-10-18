@@ -12,7 +12,7 @@
       "pages": [
         { "slug": "catalog-and-customers", "title": "Prices, customers and subscriptions", "file": "catalog-and-customers.md", "summary": "Products, versioned prices and meters, customers by their own id, and subscriptions with contract exceptions." },
         { "slug": "usage", "title": "Usage", "file": "usage.md", "summary": "Bring usage in by file or from a pipeline, and check each period's totals before anything is rated." },
-        { "slug": "bill-runs", "title": "Bill runs and invoices", "file": "bill-runs.md", "summary": "Draft a month, review its exceptions, approve and finalise numbered invoices whose every line shows its rule." },
+        { "slug": "bill-runs", "title": "Bill runs and invoices", "file": "bill-runs.md", "summary": "Draft a month, review its exceptions, approve and finalize numbered invoices whose every line shows its rule." },
         { "slug": "receivables", "title": "Credits, payments and reminders", "file": "receivables.md", "summary": "Credit notes, payments recorded with their reference, ageing and reminders you send from your own mail." },
         { "slug": "agents-and-access", "title": "People, roles and agents", "file": "agents-and-access.md", "summary": "Invite a finance operator or an accountant, and let an agent prepare work that a person approves." }
       ]

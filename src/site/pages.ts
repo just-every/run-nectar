@@ -7,12 +7,11 @@ import { contractPageHtml } from '../base/contract-page'
 import { runPageHtml, siteNotFoundHtml, type RunData, type SiteBuild, type SiteContext } from '../base/run-site'
 import { identity } from '../identity'
 import './site.css'
-import './homepage/homepage.css'
 import './docs/docs.css'
 import { docsIndexBody, docsPageBody } from './docs/layout'
 import { docsLead, renderedPages } from './docs/pages'
 import { copy } from './homepage/copy'
-import { landing } from './homepage/sections'
+import { landing } from './homepage/landing'
 import run from './run.json'
 import { siteDocument, siteFooter, siteHeader } from './shell'
 
@@ -28,6 +27,6 @@ export function sitePages({ styles, contract }: SiteContext): SiteBuild {
       ...docs,
       { path: '/404', html: siteNotFoundHtml(identity, data, contract) },
     ],
-    assets: ['rer-theme.css', 'fonts', 'brand'],
+    assets: ['rer-theme.css', 'fonts', 'brand', 'site', 'favicon.ico'],
   }
 }
