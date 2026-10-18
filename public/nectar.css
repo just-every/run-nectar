@@ -18,6 +18,7 @@ h4 { font-size: 15px; font-weight: 700; }
 /* Long hashes and ids break anywhere only when they cannot fit a line; addresses break at their <wbr>. */
 code { font-family: var(--nc-mono); font-size: 13px; overflow-wrap: anywhere; }
 dd, td, .figures, .totals, .tiles, .fact-rows { font-variant-numeric: tabular-nums; }
+.joined { white-space: nowrap; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .icon { width: 22px; height: 22px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 
@@ -416,6 +417,11 @@ blockquote { margin: 0 0 6px; padding: 10px 16px; border-left: 3px solid var(--n
   td[data-label]:not(:first-child) > .sub { grid-column: 2; margin-top: -8px; }
   td[data-label=""]::before { content: none; }
   td[data-empty] { display: none; }
+  /* A Details disclosure takes the whole card row and its facts stack, so each value has the full width and an address breaks only at its <wbr>. */
+  td:has(> details.facts) { display: block; }
+  td:has(> details.facts)::before { content: none; }
+  td details.facts dl { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  td details.facts dd + dt { margin-top: 8px; }
   .ledger-card { overflow: visible; background: transparent; border: 0; box-shadow: none; }
   .ledger td { height: auto; }
   .ledger td.num { font-size: 15px; }

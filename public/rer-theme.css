@@ -153,6 +153,9 @@ main.door { padding-top: 16vh; }
 /* Base's /run and not-found pages wear the homepage's look: the grid page,
    the header lockup, a heavy ink headline, white hairline step cards, coral
    step numbers and ink code cards. */
+/* They keep the Base tokens they are live with on run-nectar.com; the app's
+   greys and 10px fields above are for the app, sign-in, setup and the Lobby. */
+body:has(> header.bar) { --rer-text: #1c1a17; --rer-muted: #5f5a52; --rer-border: #cfc6b6; --rer-accent: #1c1a17; --rer-accent-text: #fffcf5; --rer-focus: #1c1a17; --rer-radius: 18px; --rer-button-radius: 999px; }
 body:has(> header.bar) { background: var(--nc-grid); color: var(--nc-ink); }
 body > header.bar { max-width: 1440px; min-height: 94px; padding: 0 54px 0 62px; }
 body > header.bar .brand { gap: 13px; font-size: 47px; font-weight: 900; letter-spacing: -.04em; color: var(--nc-ink); }

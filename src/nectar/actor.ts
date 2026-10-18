@@ -17,6 +17,9 @@ export const ROLE_LABELS: Record<Role, string> = {
   accountant: 'Accountant: read and export only',
 }
 
+/** A role as people read it, in the sidebar and on Access. */
+export const ROLE_NAMES: Record<Role, string> = { owner: 'Owner', finance: 'Finance', accountant: 'Accountant' }
+
 const ROLE_CAPABILITIES: Record<Role, Capability[]> = {
   owner: [...CAPABILITIES],
   finance: ['read', 'records', 'usage', 'approve', 'receivables', 'export', 'propose'],

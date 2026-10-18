@@ -2,7 +2,7 @@
 // settings, access and credentials, and the audit trail.
 import type { Bindings } from '../../auth.server'
 import { agentKeys, members } from '../access'
-import { ROLE_LABELS, SCOPES, can, type Actor } from '../actor'
+import { ROLE_LABELS, ROLE_NAMES, SCOPES, can, type Actor } from '../actor'
 import { US_STATES, business, taxReady } from '../business'
 import { one, parseJson } from '../core'
 import { money } from '../decimal'
@@ -81,18 +81,25 @@ export async function accessPage(env: Bindings, actor: Actor, url: URL, issued?:
   return page('Access', actor, h`<h1>Access</h1>
     ${issued ? h`<section class="card key" aria-labelledby="new-key"><h2 id="new-key">Credential for ${issued.name}</h2><p>Copy it now; Nectar keeps only its fingerprint and cannot show it again.</p><p><code class="secret">${issued.key}</code></p><p class="hint">Send it as <code>Authorization: Bearer …</code> to <code>/api/nectar/</code>.</p></section>` : ''}
     <section class="card" aria-labelledby="people"><h2 id="people">People</h2>
-    ${table(['Name', 'Email', 'Role', 'Status', ''], people.map(m => [m.name, m.email, m.role, tag(m.status === 'active' ? 'Active' : 'Ended'), m.role !== 'owner' && m.status === 'active' ? form('access.end', '/app/access', hidden('member', m.id), 'End access', { secondary: true }) : '']))}
+    ${table(['Name', 'Email', 'Role', 'Status', ''], people.map(m => [m.name, m.email, ROLE_NAMES[m.role], tag(m.status === 'active' ? 'Active' : 'Ended'), m.role !== 'owner' && m.status === 'active' ? form('access.end', '/app/access', hidden('member', m.id), 'End access', { secondary: true }) : '']))}
     <h3>Give someone access</h3>${form('access.give', '/app/access', h`${field('Name', 'name')}${field('Email', 'email', { type: 'email' })}${select('Role', 'role', [{ value: 'finance', label: ROLE_LABELS.finance }, { value: 'accountant', label: ROLE_LABELS.accountant }], 'finance')}`, 'Invite', { layout: 'columns' })}</section>
     <section class="card" aria-labelledby="agents"><h2 id="agents">Agent credentials</h2><p class="hint">A credential lets your own agent read and prepare proposals, or lets a metering pipeline submit usage. Credentials never approve, finalize or change records directly.</p>
     ${table(['Name', 'Scopes', 'Last used', 'Status', ''], keys.map(k => [k.name, k.scopes, when(k.last_used_at, zone), tag(k.revoked_at ? 'Revoked' : 'Active'), k.revoked_at ? '' : form('credential.revoke', '/app/access', hidden('key', k.id), 'Revoke', { secondary: true })]), { empty: 'No credentials issued.' })}
     <h3>Issue a credential</h3><form method="post" action="/app/access/credential" class="columns">${field('Name', 'name', { hint: 'For example: "Finance agent" or "Metering pipeline".' })}${checks('Scopes', 'scopes', Object.keys(SCOPES).map(scope => ({ value: scope, label: scope === 'prepare' ? 'prepare — read records and propose work for approval' : 'usage — submit usage events' })), ['prepare'])}<button type="submit">Issue credential</button></form></section>`, { current: '/app/access', url })
 }
 
+// An audit entry's detail reads as fact rows: one per field, named in words ("legalName" reads "Legal name").
+const words = (key: string) => key.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/_/g, ' ').toLowerCase().replace(/^./, first => first.toUpperCase())
+const auditFacts = (subject: string, detail: unknown) => ({
+  Record: subject,
+  ...(detail && typeof detail === 'object' && !Array.isArray(detail) ? Object.fromEntries(Object.entries(detail).map(([key, value]) => [words(key), value ?? '—'])) : { Detail: detail }),
+})
+
 export async function auditPage(env: Bindings, actor: Actor, url: URL) {
   const rows = await audit(env, actor)
   const zone = (await business(env))!.timezone
   return page('Audit trail', actor, h`<h1>Audit trail</h1><p class="hint">Every change, approval and issue, newest first. The trail cannot be edited.</p>
-    ${table(['When', 'Who', 'What', 'Details'], rows.map(r => [when(r.at, zone), personName(actor, r.actor), r.action.replace('.', ' '), details({ subject: r.subject, detail: parseJson(r.detail, r.detail) })]))}`, { current: '/app/audit', url })
+    ${table(['When', 'Who', 'What', 'Details'], rows.map(r => [when(r.at, zone), personName(actor, r.actor), r.action.replace('.', ' '), details(auditFacts(r.subject, parseJson(r.detail, r.detail)))]))}`, { current: '/app/audit', url })
 }
 
 export const canExport = (actor: Actor) => can(actor, 'export')

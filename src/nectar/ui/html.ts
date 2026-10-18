@@ -1,6 +1,6 @@
 // Page frame and small form helpers. Every value is escaped; pages need no script.
 import branding from '../../branding.json'
-import { can, type Actor } from '../actor'
+import { ROLE_NAMES, can, type Actor } from '../actor'
 import { formatInstant } from '../dates'
 import { money } from '../decimal'
 import { icon, type IconName } from './icons'
@@ -17,13 +17,13 @@ export function h(strings: TemplateStringsArray, ...values: unknown[]): Html {
 }
 
 // An email address in running text may wrap only after its "@" or before a ".",
-// never mid-word: <wbr> marks those points and nothing else breaks it.
+// never mid-word: <wbr> marks those points, and a hyphen stays joined to its neighbours.
 const ADDRESS = /[^\s@<>()"',;:]+@[^\s@<>()"',;:]+\.[A-Za-z]{2,}/g
 export function addresses(text: unknown): Html {
   const value = String(text ?? '')
   let out = '', last = 0
   for (const found of value.matchAll(ADDRESS)) {
-    out += esc(value.slice(last, found.index)) + esc(found[0]).replace('@', '@<wbr>').replace(/\./g, '<wbr>.')
+    out += esc(value.slice(last, found.index)) + esc(found[0]).replace(/\w(?:-+\w)+/g, joined => `<span class="joined">${joined}</span>`).replace('@', '@<wbr>').replace(/\./g, '<wbr>.')
     last = found.index! + found[0].length
   }
   return raw(out + esc(value.slice(last)))
@@ -64,8 +64,6 @@ const headers = {
   'x-robots-tag': 'noindex, nofollow',
   'content-security-policy': "default-src 'none'; style-src 'self'; font-src 'self'; img-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
 }
-
-const ROLE_NAMES = { owner: 'Owner', finance: 'Finance', accountant: 'Accountant' } as const
 
 const initials = (name: string) => name.split(/[\s@.]+/).filter(Boolean).slice(0, 2).map(word => word[0]!.toUpperCase()).join('')
 const ago = (ms: number, zone: string) => {

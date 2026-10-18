@@ -8,7 +8,7 @@ import type { Input } from './input'
 
 export async function members(env: Bindings, actor: Actor) {
   requireOwner(actor)
-  return await all(env, 'SELECT id, email, name, role, status, created_at FROM nc_members ORDER BY status, name')
+  return await all<{ id: string; email: string; name: string; role: Role; status: string; created_at: number }>(env, 'SELECT id, email, name, role, status, created_at FROM nc_members ORDER BY status, name')
 }
 
 export async function agentKeys(env: Bindings, actor: Actor) {
