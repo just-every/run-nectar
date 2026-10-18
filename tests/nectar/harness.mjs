@@ -20,7 +20,7 @@ async function freePort() {
   return port
 }
 
-export async function harness() {
+export async function harness({ assets = false } = {}) {
   const port = await freePort()
   const origin = `http://127.0.0.1:${port}`
   const secret = () => randomBytes(32).toString('base64url')
@@ -35,6 +35,7 @@ export async function harness() {
   const mf = new Miniflare(convertV4MiniflareOptions({
     host: '127.0.0.1', port, modulesRoot: 'dist/server', modules: ['index.js', ...chunks].map(path => ({ type: 'ESModule', path: `dist/server/${path}` })), compatibilityDate: '2026-09-08', compatibilityFlags: ['nodejs_compat'],
     d1Databases: { DB: 'nectar' }, bindings: vars, outboundService,
+    ...(assets ? { assets: { directory: 'dist/client', binding: 'ASSETS', run_worker_first: true, routerConfig: { has_user_worker: true, invoke_user_worker_ahead_of_assets: true } } } : {}),
   }))
   const close = () => mf.dispose()
   try {
