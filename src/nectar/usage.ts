@@ -9,6 +9,7 @@ import { requireBusiness } from './business'
 import { NectarError, all, canonical, commit, insist, newId, now, one, sha256Hex, stmt, type Row } from './core'
 import { decimalText, micros } from './decimal'
 import { addDays, daysBetween, isMonth, localDate, parseInstant, periodStartingIn, today, zonedStart } from './dates'
+import { controlTotals } from './reconciliation'
 import type { Input } from './input'
 
 export interface RawEvent { event_id: string; customer: string; meter: string; quantity: string; occurred_at: string }
@@ -169,5 +170,5 @@ export async function inspect(env: Bindings, actor: Actor, month: string) {
   const unattributed = await all(env, `SELECT e.event_id, c.external_id AS customer, m.code AS meter, e.quantity, e.occurred_text FROM nc_usage_events e JOIN nc_customers c ON c.id = e.customer_id JOIN nc_meters m ON m.id = e.meter_id
     WHERE e.status = 'active' AND e.invoice_id IS NULL AND NOT EXISTS (SELECT 1 FROM nc_items i JOIN nc_prices p ON p.id = i.price_id JOIN nc_subscriptions s ON s.id = i.subscription_id WHERE s.customer_id = e.customer_id AND p.meter_id = e.meter_id)
     ORDER BY e.occurred_at LIMIT 200`)
-  return { month, timezone: zone, subscriptions, unattributed }
+  return { month, timezone: zone, subscriptions, unattributed, controls: await controlTotals(env, actor, month) }
 }
