@@ -3,6 +3,7 @@
 // quantity changes, prepared with their proration preview and applied only
 // when a person approves that preview against the same subscription revision.
 import type { Bindings } from '../auth.server'
+import { requirePrice } from './catalog'
 import { actorLabel, requireCapability, requireMember, type Actor } from './actor'
 import { requireBusiness } from './business'
 import { all, commit, guard, insist, newId, now, one, parseJson, stmt, type Row } from './core'
@@ -22,7 +23,7 @@ export async function subscriptionDetail(env: Bindings, actor: Actor, id: string
   requireCapability(actor, 'read')
   const sub = await requireSubscription(env, id)
   const [items, amendments, changes, invoices] = await Promise.all([
-    all(env, 'SELECT i.*, p.kind, p.unit_amount, p.version, p.nickname, pr.name AS product_name, m.code AS meter_code FROM nc_items i JOIN nc_prices p ON p.id = i.price_id JOIN nc_products pr ON pr.id = p.product_id LEFT JOIN nc_meters m ON m.id = p.meter_id WHERE i.subscription_id = ? ORDER BY i.effective_from, i.id', id),
+    all(env, 'SELECT i.*, p.kind, p.unit_amount, p.pricing_model, p.version, p.nickname, pr.name AS product_name, m.code AS meter_code FROM nc_items i JOIN nc_prices p ON p.id = i.price_id JOIN nc_products pr ON pr.id = p.product_id LEFT JOIN nc_meters m ON m.id = p.meter_id WHERE i.subscription_id = ? ORDER BY i.effective_from, i.id', id),
     all(env, 'SELECT * FROM nc_amendments WHERE subscription_id = ? ORDER BY created_at', id),
     all(env, 'SELECT * FROM nc_changes WHERE subscription_id = ? ORDER BY created_at DESC', id),
     all(env, "SELECT id, number, status, period_start, period_end, total_cents FROM nc_invoices WHERE subscription_id = ? AND status <> 'discarded' ORDER BY period_start DESC", id),
@@ -78,14 +79,17 @@ export async function createSubscription(env: Bindings, actor: Actor, input: Inp
     const price = await one(env, "SELECT * FROM nc_prices WHERE id = ? AND status = 'active'", line.price)
     insist(price, 'price_not_found', 404)
     const quantity = price.kind === 'seat' ? Number(line.quantity) : 1
-    insist(Number.isSafeInteger(quantity) && quantity >= 1 && quantity <= 1_000_000, 'invalid_quantity')
+    insist(Number.isSafeInteger(quantity) && quantity >= (price.pricing_model === 'simple' ? 1 : 0) && quantity <= (price.pricing_model === 'simple' ? 1_000_000 : 1_000_000_000), 'invalid_quantity')
     items.push({ id: newId(), price, quantity })
   }
   const meters = items.flatMap(item => item.price.meter_id ? [item.price.meter_id] : [])
   insist(new Set(meters).size === meters.length && !await meterClash(env, customer.id, meters, start), 'meter_already_billed', 409)
   const id = newId(), at = now(), by = actorLabel(actor)
   const exception = input.has('exception_kind') ? readAmendment(input, 'exception_') : null
-  if (exception?.kind === 'price_override') insist(items.some(item => item.price.id === exception.priceId), 'override_price_not_on_subscription')
+  if (exception?.kind === 'price_override') {
+    insist(items.some(item => item.price.id === exception.priceId), 'override_price_not_on_subscription')
+    insist(items.find(item => item.price.id === exception.priceId)!.price.pricing_model === 'simple', 'override_price_model')
+  }
   const statements = [
     ...(meters.length ? [guard(env, 'meter_already_billed', `NOT EXISTS(${CLASH(meters.length)})`, customer.id, id, start, start, ...meters)] : []),
     stmt(env, "INSERT INTO nc_subscriptions (id, customer_id, external_id, anchor_day, start_date, trial_end, billing_mode, origin, revision, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'live', 'native', ?, ?, ?, ?)", id, customer.id, externalId, anchor, start, trialEnd, newId(), by, at, at),
@@ -102,6 +106,7 @@ export async function proposeAmendment(env: Bindings, actor: Actor, input: Input
   requireCapability(actor, 'records')
   const sub = await requireSubscription(env, input.text('subscription', { max: 100 }))
   const amendment = readAmendment(input)
+  if (amendment.priceId) insist((await requirePrice(env, amendment.priceId)).pricing_model === 'simple', 'override_price_model')
   if (amendment.priceId) insist(await one(env, 'SELECT 1 FROM nc_items WHERE subscription_id = ? AND price_id = ?', sub.id, amendment.priceId), 'override_price_not_on_subscription')
   insist(!await startsInIssuedPeriod(env, sub.id, amendment.from), 'period_already_invoiced', 409)
   const id = newId()
@@ -125,6 +130,7 @@ export async function decideAmendment(env: Bindings, actor: Actor, input: Input)
   insist(amendment.status === 'proposed', 'already_decided', 409)
   const decision = input.text('decision', { max: 10 })
   insist(decision === 'approved' || decision === 'rejected', 'invalid_decision')
+  if (decision === 'approved' && amendment.price_id) insist((await requirePrice(env, amendment.price_id)).pricing_model === 'simple', 'override_price_model')
   if (decision === 'approved') insist(!await startsInIssuedPeriod(env, amendment.subscription_id, amendment.effective_from), 'period_already_invoiced', 409)
   await commit(env, [guard(env, 'stale', "EXISTS(SELECT 1 FROM nc_amendments WHERE id = ? AND status = 'proposed')", amendment.id), ...(decision === 'approved' ? [notIssuedGuard(env, amendment.subscription_id, amendment.effective_from)] : []), ...amendmentStatements(env, actor, amendment, decision)],
     { actor: actorLabel(actor), action: `amendment.${decision === 'approved' ? 'approve' : 'reject'}`, subject: amendment.id, detail: { subscription: amendment.subscription_id, kind: amendment.kind, value: amendment.value } })
@@ -149,7 +155,7 @@ export async function prepareChange(env: Bindings, actor: Actor, input: Input) {
   insist(price, 'price_not_found', 404)
   const old = await one(env, 'SELECT * FROM nc_prices WHERE id = ?', item.price_id)
   insist((price.meter_id ?? '') === (old!.meter_id ?? '') || price.kind !== 'unit', 'change_meter_separately')
-  const quantity = price.kind === 'seat' ? input.integer('quantity', { min: 1, max: 1_000_000 })! : 1
+  const quantity = price.kind === 'seat' ? input.integer('quantity', { min: price.pricing_model === 'simple' ? 1 : 0, max: price.pricing_model === 'simple' ? 1_000_000 : 1_000_000_000 })! : 1
   insist(price.id !== item.price_id || quantity !== item.quantity, 'nothing_changes')
   const items: ItemIn[] = (await all(env, 'SELECT * FROM nc_items WHERE subscription_id = ? ORDER BY effective_from, id', sub.id)).map(row => ({ id: row.id, priceId: row.price_id, quantity: row.quantity, from: row.effective_from, to: row.effective_to }))
   const changed: ItemIn[] = [...items.map(row => row.id === item.id ? { ...row, to: date } : row), { id: 'change', priceId: price.id, quantity, from: date, to: item.effective_to }]

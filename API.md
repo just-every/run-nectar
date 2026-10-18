@@ -9,7 +9,7 @@ role or credential scope itself.
 - **A signed-in person** sends their session cookie. Posts must carry this installation's `Origin` header.
 - **An agent or pipeline** sends `Authorization: Bearer nectar_…`, a credential the owner issues under More → Access (or `credential.issue`). The key is shown once; Nectar stores only its SHA-256. Scopes:
   - `prepare`: every read below, and `proposal.create`.
-  - `usage`: `usage.submit` only.
+  - `usage`: `usage.submit` and `usage.control` only.
 
   A credential never approves, finalises, issues a credit, edits a record or manages access; those calls answer `403`. A revoked key answers `401`.
 
@@ -75,3 +75,35 @@ curl -X POST "$ORIGIN/api/nectar/proposal.create" \
 ```
 
 `usage/inspect` includes daily `controls` with expected and ingested counts and exact quantities, differences, acknowledgement and basis. A mismatch blocks invoice approval even with the generic exception checkbox. Replaying missing usage or acknowledging the exact difference clears it on re-preparation. Changes after invoice approval invalidate issue.
+
+## Quantity pricing (`CAT-002`)
+
+`price.create` keeps `kind: "seat"` or `"unit"` and accepts `pricing_model`:
+`graduated`, `volume`, `package`, or `stair_step`. Supply `tiers` as an array
+of `{up_to, unit_amount, flat_amount}`. All quantities and dollar amounts are
+exact decimal strings with at most six places; the final `up_to` is `null`
+(no limit), earlier limits increase strictly and are inclusive. Omit the
+simple `unit_amount` field when supplying a model.
+
+Graduated pricing charges each occupied band's units and optional flat fee.
+Volume pricing charges all units at the band reached, plus its optional fee.
+Stair-step pricing charges only the band's required `flat_amount` (unit rate
+is omitted or zero). Package pricing uses one unlimited tier and a positive
+`package_size`: it charges whole blocks, rounded up, plus the optional fee.
+Zero units activate no band or fee. Tier sums remain exact until the invoice
+line is prorated and rounded once. Seat quantities may be zero for these
+models. A scalar contract price override is refused for a tiered price;
+create an immutable price version with the agreed tiers instead.
+
+```json
+{"product":"PRODUCT_ID","kind":"unit","meter":"api_calls",
+ "pricing_model":"graduated","tiers":[
+   {"up_to":"1000","unit_amount":"0.002","flat_amount":"0.006"},
+   {"up_to":null,"unit_amount":"0.0014","flat_amount":"0.006"}]}
+```
+
+The catalogue returns parsed `pricing` terms. Invoice lines expose the exact
+band quantities, rates, fees and amounts in `evidence.tiers`, with the exact
+sum and proration used for final rounding. The catalogue and invoice screens
+show the same breakdown. Modeled invoices record a separate calculation rule
+version; existing simple-price inputs and issued invoices retain their rules.
