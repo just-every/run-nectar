@@ -1,49 +1,24 @@
 /* Nectar's tokens, defined once: the app (/nectar.css), the run site, the
-   Lobby, sign-in, /setup and the installer all read them. Ink on warm paper;
-   honey is a light (the glow behind glass, the current place, state), never a
-   flat fill on a button. Hanken Grotesk is self-hosted (/fonts/fonts.css). */
+   Lobby, sign-in, /setup and the installer all read them. Hanken Grotesk is
+   self-hosted (/fonts/fonts.css). */
 @import url('/fonts/fonts.css');
 
 :root {
-  --n-page: #fffcf5;
-  --n-surface: #ffffff;
-  --n-ink: #1c1a17;
-  --n-muted: #5f5a52;
-  --n-line: #eee8dc;
-  --n-head: #faf6ee;
-  --n-field: #cfc6b6;
-  --n-honey: #f6b23e;
-  --n-honey-facet: #fbcb6e;
-  --n-honey-pill: #fdcb68;
-  --n-honey-soft: #fde7b8;
-  --n-honey-wash: #fff5e1;
-  --n-honey-ink: #8a4b06;
-  --n-pending-ink: #6b4a12;
-  --n-glow: radial-gradient(closest-side, rgba(249, 194, 90, .55), rgba(253, 227, 173, .3) 55%, rgba(253, 227, 173, 0));
-  --n-glass: rgba(255, 248, 232, .62);
-  --n-glass-edge: rgba(255, 255, 255, .7);
-  --n-glass-shadow: 0 20px 50px rgba(178, 112, 20, .18);
-  --n-card-shadow: 0 1px 2px rgba(60, 40, 10, .05), 0 8px 24px rgba(120, 80, 20, .06);
-  --n-font: 'Hanken Grotesk', 'Hanken Grotesk Fallback', Arial, sans-serif;
-  --n-radius: 18px;
-  --n-radius-glass: 22px;
-  --n-radius-field: 12px;
-
-  --rer-font-body: var(--n-font);
-  --rer-font-heading: var(--n-font);
+  --rer-font-body: var(--nc-font);
+  --rer-font-heading: var(--nc-font);
   --rer-page: #ffffff;
-  --rer-surface: var(--n-surface);
-  --rer-text: var(--n-ink);
-  --rer-muted: var(--n-muted);
-  --rer-border: var(--n-field);
-  --rer-focus: var(--n-ink);
+  --rer-surface: var(--nc-surface);
+  --rer-text: var(--nc-ink);
+  --rer-muted: var(--nc-muted);
+  --rer-border: var(--nc-field);
+  --rer-focus: var(--nc-ink);
   --rer-link: #c2410c;
   --rer-code-background: #17191e;
   --rer-code-text: #e7e9ee;
-  --rer-accent: var(--n-ink);
-  --rer-accent-text: var(--n-page);
-  --rer-radius: var(--n-radius);
-  --rer-button-radius: 999px;
+  --rer-accent: var(--nc-ink);
+  --rer-accent-text: #ffffff;
+  --rer-radius: var(--nc-radius-panel);
+  --rer-button-radius: var(--nc-radius-field);
   --rer-wordmark-weight: 800;
   --rer-logo: url('/brand/mark.svg');
 
@@ -95,67 +70,80 @@
   --nc-hand: 'Kalam', 'Comic Sans MS', 'Segoe Print', cursive;
   --nc-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --nc-radius: 20px;
+
+  /* The app (the owner's pick, 18 Oct): white cards with hairline edges, quiet
+     1px fields, a coral wash and marker for the current place and the row in
+     focus, amber for due soon, and the gradient on one decision per screen. */
+  --nc-field: #d7dbe2;
+  --nc-field-hover: #a9b0bc;
+  --nc-head: #fafafb;
+  --nc-focus-wash: #fff0f2;
+  --nc-coral-ink: #e8323d;
+  --nc-amber-soft: #fff5e0;
+  --nc-amber-ink: #a35200;
+  --nc-focus-ring: 0 0 0 3px rgba(252, 84, 80, .22);
+  --nc-radius-card: 12px;
+  --nc-radius-panel: 15px;
+  --nc-radius-field: 10px;
 }
 
 /* Sign-in (operator-auth) and first-run /setup: Base's no-script frames wear
-   the run site's look through these rules. A centred white card on the faint
-   grid with a soft coral and tangerine light behind it, the mark and name
-   centred above the heading, an ink pill. */
+   the app's look through these rules. A white hairline card on the faint grid,
+   the peach and the heavy wordmark above a heavy black heading, quiet 1px
+   fields with a coral focus ring, and an ink button. */
 html.rer-themed body {
   min-height: 100vh;
-  background:
-    radial-gradient(ellipse 30% 34% at 28% 26%, rgba(252, 84, 80, .10), rgba(252, 84, 80, 0)),
-    radial-gradient(ellipse 26% 30% at 76% 40%, rgba(254, 150, 28, .12), rgba(254, 150, 28, 0)),
-    var(--nc-grid);
+  background: var(--nc-grid);
   color: var(--nc-ink);
-  font-family: var(--n-font);
+  font-family: var(--nc-font);
   -webkit-font-smoothing: antialiased;
   display: block;
   padding: 48px 20px;
 }
-html.rer-themed body main { width: 100%; max-width: 680px; margin: 10vh auto 0; padding: 56px 80px 60px; background: var(--n-surface); border: 1px solid var(--n-line); border-radius: var(--n-radius-glass); box-shadow: var(--nc-card-shadow); }
+html.rer-themed body main { width: 100%; max-width: 520px; margin: 9vh auto 0; padding: 40px 44px 44px; background: var(--nc-surface); border: 1px solid var(--nc-card-edge); border-radius: var(--nc-radius-panel); box-shadow: var(--nc-card-shadow); }
 html.rer-themed body .brand,
-html.rer-themed body .rer-brand { justify-content: center; gap: 12px; margin: 0 0 36px; color: var(--nc-ink); font-size: 32px; font-weight: 900; letter-spacing: -.04em; line-height: 1; }
+html.rer-themed body .rer-brand { justify-content: flex-start; gap: 10px; margin: 0 0 30px; color: #080808; font-size: 30px; font-weight: 900; letter-spacing: -.05em; line-height: 1; }
 html.rer-themed body .brand::before,
 html.rer-themed body .rer-brand::before { width: 34px; height: 34px; }
-html.rer-themed body h1 { margin: 0 0 16px; font-size: 52px; font-weight: 800; line-height: 1.05; letter-spacing: -.03em; text-align: center; color: var(--n-ink); }
-html.rer-themed body h1 + p { text-align: center; font-size: 17px; margin: 0 0 32px; }
-html.rer-themed body p { color: var(--n-muted); }
-html.rer-themed body h2 { font-size: 22px; font-weight: 800; letter-spacing: -.01em; }
-html.rer-themed body label { color: var(--n-ink); font-size: 16px; font-weight: 500; margin: 32px 0 10px; }
-html.rer-themed body label:has(input[type=checkbox]) { align-items: center; gap: 14px; margin: 0; }
-html.rer-themed body input:not([type=checkbox]):not([type=hidden]) { min-height: 56px; margin: 0 0 24px; padding: 12px 16px; border: 1px solid var(--n-field); border-radius: var(--n-radius-field); background: var(--n-surface); color: var(--n-ink); font-size: 17px; }
-html.rer-themed body input[type=checkbox] { width: 22px; height: 22px; margin: 0; accent-color: var(--n-ink); }
+html.rer-themed body h1 { margin: 0 0 10px; font-size: 38px; font-weight: 900; line-height: 1.1; letter-spacing: -.04em; text-align: left; color: var(--nc-ink); }
+html.rer-themed body h1 + p { text-align: left; font-size: 16px; margin: 0 0 24px; }
+html.rer-themed body p { color: var(--nc-muted); font-size: 15px; }
+html.rer-themed body h2 { font-size: 19px; font-weight: 800; letter-spacing: -.02em; }
+html.rer-themed body label { color: var(--nc-ink); font-size: 14px; font-weight: 600; margin: 20px 0 6px; }
+html.rer-themed body label:has(input[type=checkbox]) { align-items: center; gap: 12px; margin: 0; font-weight: 500; font-size: 15px; }
+html.rer-themed body input:not([type=checkbox]):not([type=hidden]) { min-height: 46px; margin: 0 0 16px; padding: 10px 14px; border: 1px solid var(--nc-field); border-radius: var(--nc-radius-field); background: var(--nc-surface); color: var(--nc-ink); font-size: 15px; box-shadow: none; }
+html.rer-themed body input:not([type=checkbox]):not([type=hidden]):hover { border-color: var(--nc-field-hover); }
+html.rer-themed body input:not([type=checkbox]):not([type=hidden]):focus-visible { outline: none; border-color: var(--nc-ink); box-shadow: var(--nc-focus-ring); }
+html.rer-themed body input[type=checkbox] { width: 20px; height: 20px; margin: 0; accent-color: var(--nc-coral); }
 html.rer-themed body button,
-html.rer-themed body .action { min-height: 60px; border: 0; border-radius: 999px; background: var(--n-ink); color: var(--n-page); font-size: 18px; font-weight: 600; }
+html.rer-themed body .action { min-height: 48px; border: 1px solid #222; border-radius: var(--nc-radius-field); background: linear-gradient(#2a2c31, #15171b); color: #fff; font-size: 16px; font-weight: 600; box-shadow: 0 2px 5px rgba(20, 23, 27, .1); }
 html.rer-themed body button:hover,
-html.rer-themed body .action:hover { background: #33302a; box-shadow: none; }
-html.rer-themed body button.secondary { background: transparent; color: var(--n-ink); border: 1.5px solid rgba(28, 26, 23, .25); }
-html.rer-themed body .notice { border: 0; border-radius: var(--n-radius-field); background: var(--nc-peach); color: var(--n-ink); padding: 14px 16px; }
-html.rer-themed body .secondary-link a { color: #c2410c; }
-html.rer-themed body :focus-visible { outline: 3px solid var(--n-ink); outline-offset: 3px; }
+html.rer-themed body .action:hover { background: #33363d; box-shadow: none; }
+html.rer-themed body button.secondary { background: var(--nc-surface); color: var(--nc-ink); border: 1px solid #cbd0d8; box-shadow: none; }
+html.rer-themed body .notice { border: 0; border-radius: var(--nc-radius-field); background: var(--nc-peach); color: var(--nc-ink); padding: 12px 14px; }
+html.rer-themed body .secondary-link a { color: var(--nc-coral-ink); }
+html.rer-themed body :focus-visible { outline: 2px solid var(--nc-ink); outline-offset: 2px; }
 /* /setup: the owner as ruled rows, then the confirmation and the action. */
-html.rer-themed body dl { grid-template-columns: 150px minmax(0, 1fr); gap: 0; margin: 0 0 30px; border-top: 1px solid var(--n-line); }
+html.rer-themed body dl { grid-template-columns: 130px minmax(0, 1fr); gap: 0; margin: 0 0 24px; border-top: 1px solid var(--nc-line); }
 html.rer-themed body dt,
-html.rer-themed body dd { padding: 18px 0; border-bottom: 1px solid var(--n-line); font-size: 17px; }
-html.rer-themed body dt { color: var(--n-muted); }
-html.rer-themed body form { gap: 32px; }
-html.rer-themed body form p { color: var(--n-ink); font-size: 17px; }
+html.rer-themed body dd { padding: 12px 0; border-bottom: 1px solid var(--nc-line); font-size: 15px; }
+html.rer-themed body dt { color: var(--nc-muted); }
+html.rer-themed body form { gap: 20px; }
+html.rer-themed body form p { color: var(--nc-ink); font-size: 15px; }
 @media (max-width: 600px) {
-  html.rer-themed body { padding: 24px 16px; }
-  html.rer-themed body main { margin-top: 4vh; padding: 40px 24px 36px; }
+  html.rer-themed body { padding: 20px 16px; }
+  html.rer-themed body main { margin-top: 3vh; padding: 28px 20px 28px; }
   html.rer-themed body .brand,
-  html.rer-themed body .rer-brand { font-size: 26px; margin-bottom: 28px; }
-  html.rer-themed body h1 { font-size: 38px; }
+  html.rer-themed body .rer-brand { font-size: 26px; margin-bottom: 22px; }
+  html.rer-themed body h1 { font-size: 32px; }
   html.rer-themed body dl { grid-template-columns: 90px minmax(0, 1fr); }
-  html.rer-themed body button,
-  html.rer-themed body .action { min-height: 56px; }
 }
 
 /* The Lobby (Base's door at /) sits in the same white card as sign-in. */
 body:has(> main.door) { background: var(--nc-grid); }
-.door > .door-card { width: 100%; max-width: 680px; padding: 56px 64px 52px; background: var(--nc-surface); border: 1px solid var(--nc-card-edge); border-radius: var(--n-radius-glass); box-shadow: var(--nc-card-shadow); }
-.door > .door-card .line { color: var(--n-muted); }
+.door > .door-card { width: 100%; max-width: 560px; padding: 40px 44px 40px; background: var(--nc-surface); border: 1px solid var(--nc-card-edge); border-radius: var(--nc-radius-panel); box-shadow: var(--nc-card-shadow); }
+.door > .door-card .line { color: var(--nc-muted); }
+.door > .door-card h1 { font-weight: 900; letter-spacing: -.04em; }
 main.door { padding-top: 16vh; }
 @media (max-width: 640px) {
   main.door { padding-top: 96px; }

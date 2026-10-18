@@ -1,39 +1,12 @@
-// Receivables (ageing, payments, reminders, follow-up tasks), usage (import,
-// batches, inspection before rating) and the catalog.
+// Usage (import, batches, inspection before rating) and the catalog.
 import type { Bindings } from '../../auth.server'
 import { can, type Actor } from '../actor'
 import { business } from '../business'
 import { catalog } from '../catalog'
-import { BUCKETS, ageing, notices, tasks } from '../collections'
-import { customers } from '../customers'
-import { formatDate, formatPeriod, isMonth, today } from '../dates'
+import { formatPeriod, isMonth, today } from '../dates'
 import { quantityText } from '../decimal'
-import { payments } from '../receivables'
 import { batches, inspect } from '../usage'
-import { area, cents, check, details, field, fileField, form, h, hidden, page, select, table, tag, when } from './html'
-
-export async function receivablesPage(env: Bindings, actor: Actor, url: URL) {
-  const age = await ageing(env, actor)
-  const [pays, drafts, todo, people] = await Promise.all([payments(env, actor), notices(env, actor), tasks(env, actor), customers(env, actor)])
-  const operator = can(actor, 'receivables')
-  return page('Receivables', actor, h`<h1>Receivables</h1>
-    <section class="card" aria-labelledby="ageing"><h2 id="ageing">Ageing on ${formatDate(age.asOf)}</h2>
-      ${table(['Customer', 'Not yet due$', '1–30 days$', '31–60 days$', '61–90 days$', 'Over 90$', 'Owed$', ''], age.customers.map((c: any) => [h`<a href="/app/customers/${c.customer}">${c.name}</a>`, ...BUCKETS.map(b => cents(c[b])), cents(c.total),
-        operator && c.oldest > 0 ? form('reminder.prepare', '/app/receivables', hidden('customer', c.customer), 'Draft reminder', { secondary: true }) : '']), { empty: 'Nothing is owed.' })}
-      ${age.customers.length ? h`<p class="hint">Total owed ${cents((age.totals as any).total)}, of which ${cents((age.totals as any).total - (age.totals as any).current)} is past due.</p>` : ''}</section>
-    <section class="card" aria-labelledby="reminders"><h2 id="reminders">Reminders</h2><p class="hint">Nectar drafts reminders and exports approved ones for you to send from your own mail. It never sends them.</p>
-      ${drafts.filter((n: any) => n.status !== 'discarded').length ? drafts.filter((n: any) => n.status !== 'discarded').map((n: any) => h`<article class="notice"><h3>${n.customer_name} — ${cents(n.balance_cents)} ${tag(n.status === 'draft' ? 'Draft' : n.status === 'approved' ? 'Approved' : 'Exported')}</h3>
-        ${n.status === 'draft' && actor.kind === 'member' && operator ? h`${form('reminder.approve', '/app/receivables', h`${hidden('notice', n.id)}${field('To', 'recipient', { type: 'email', value: n.recipient })}${field('Subject', 'subject', { value: n.subject })}${area('Message', 'body', n.body, true, 10)}`, 'Approve recipient and wording')}
-          ${form('reminder.discard', '/app/receivables', hidden('notice', n.id), 'Discard', { secondary: true })}`
-        : h`<p><strong>To:</strong> ${n.recipient}<br><strong>Subject:</strong> ${n.subject}</p><pre class="message">${n.body}</pre>${n.status !== 'draft' ? h`<p><a class="download" href="/app/notices/${n.id}.txt">Download message</a> <span class="sub">Approved by ${n.approved_by}</span></p>` : ''}`}</article>`) : h`<p class="empty">No reminders. Draft one from the ageing table when an invoice is past due.</p>`}</section>
-    <section class="card" aria-labelledby="tasks"><h2 id="tasks">Follow-up tasks</h2>
-      ${table(['Task', 'Customer', 'Due', 'Status', ''], todo.map((t: any) => [t.title, t.customer_name, formatDate(t.due_date), tag(t.status === 'open' ? 'Open' : 'Done'), t.status === 'open' && operator && actor.kind === 'member' ? form('task.complete', '/app/receivables', h`${hidden('task', t.id)}${field('Outcome', 'outcome')}`, 'Mark done', { layout: 'row-form', secondary: true }) : t.outcome ?? '']), { empty: 'No follow-up tasks.' })}
-      ${operator && people.length ? form('task.create', '/app/receivables', h`${select('Customer', 'customer', people.map((c: any) => ({ value: c.id, label: c.name })), people[0].id)}${field('Task', 'title')}${field('Due', 'due_date', { type: 'date' })}`, 'Add task', { layout: 'columns', secondary: true }) : ''}</section>
-    <section class="card" aria-labelledby="payments"><h2 id="payments">Payments received</h2><p class="hint">Record money that arrived outside Nectar (bank transfer, check, card taken elsewhere) with its reference, then allocate it on the invoice.</p>
-      ${table(['Customer', 'Received', 'Method', 'Reference', 'Amount$', 'Unallocated$'], pays.map((p: any) => [p.customer_name, formatDate(p.received_on), p.method.replace('_', ' '), p.reference, cents(p.amount_cents), cents(p.unallocated_cents)]), { empty: 'No payments recorded.' })}
-      ${operator && people.length ? form('payment.record', '/app/receivables', h`${select('Customer', 'customer', people.map((c: any) => ({ value: c.id, label: c.name })), people[0].id)}${field('Amount ($)', 'amount')}${field('Received on', 'received_on', { type: 'date' })}
-        ${select('Method', 'method', [{ value: 'bank_transfer', label: 'Bank transfer' }, { value: 'check', label: 'Check' }, { value: 'card_external', label: 'Card (taken outside Nectar)' }, { value: 'other', label: 'Other' }], 'bank_transfer')}${field('Reference', 'reference', { hint: 'The bank or remittance reference; it must be unique per customer.' })}${field('Evidence note', 'evidence', { required: false })}`, 'Record payment', { layout: 'columns' }) : ''}</section>`, { current: '/app/receivables', url })
-}
+import { check, details, field, fileField, form, h, hidden, page, select, table, tag, when } from './html'
 
 const monthName = (month: string) => new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', month: 'long', year: 'numeric' }).format(new Date(`${month}-01T00:00:00Z`))
 const dayName = (date: string) => new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' }).format(new Date(`${date}T00:00:00Z`))

@@ -5,9 +5,9 @@
 import type { Bindings } from '../auth.server'
 import { actorLabel, requireCapability, requireMember, type Actor } from './actor'
 import { requireBusiness } from './business'
-import { all, commit, guard, insist, newId, now, one, stmt } from './core'
+import { all, commit, guard, insist, newId, now, one, stmt, type Row } from './core'
 import { cents } from './decimal'
-import { requireDate } from './dates'
+import { addDays, daysBetween, requireDate, today } from './dates'
 import type { Input } from './input'
 
 export const BALANCE_SQL = `(i.total_cents - COALESCE((SELECT SUM(amount_cents) FROM nc_credit_notes WHERE invoice_id = i.id), 0) - COALESCE((SELECT SUM(amount_cents) FROM nc_allocations WHERE invoice_id = i.id), 0))`
@@ -106,5 +106,30 @@ export async function customerLedger(env: Bindings, actor: Actor, customerId: st
     paidCents: invoices.reduce((sum, row) => sum + row.paid_cents, 0),
     balanceCents: invoices.reduce((sum, row) => sum + row.balance_cents, 0),
     unallocatedCents: pays.reduce((sum, row) => sum + row.unallocated_cents, 0),
+  }
+}
+
+/** The receivables desk: every issued invoice still owed, those settled in the last 30 days with how they
+ * were paid, the latest invoicing month's counts and what arrived this month. */
+export async function receivablesDesk(env: Bindings, actor: Actor) {
+  requireCapability(actor, 'read')
+  const business = await requireBusiness(env)
+  const day = today(business.timezone), month = day.slice(0, 7)
+  const rows = await all(env, `SELECT i.id, i.number, i.customer_id, c.name AS customer_name, c.address, i.issue_date, i.due_date, i.total_cents, ${BALANCE_SQL} AS balance_cents,
+    COALESCE((SELECT SUM(amount_cents) FROM nc_allocations WHERE invoice_id = i.id), 0) AS paid_cents,
+    (SELECT MAX(p.received_on) FROM nc_allocations a JOIN nc_payments p ON p.id = a.payment_id WHERE a.invoice_id = i.id) AS paid_on,
+    (SELECT p.method FROM nc_allocations a JOIN nc_payments p ON p.id = a.payment_id WHERE a.invoice_id = i.id ORDER BY p.received_on DESC LIMIT 1) AS method
+    FROM nc_invoices i JOIN nc_customers c ON c.id = i.customer_id WHERE i.status = 'issued'`)
+  const open = rows.filter(row => row.balance_cents > 0).map((row): Row => ({ ...row, daysOverdue: Math.max(0, daysBetween(row.due_date, day)) }))
+  const settled = rows.filter(row => row.balance_cents <= 0 && (row.paid_on ?? row.issue_date) >= addDays(day, -30)).sort((a, b) => String(b.paid_on ?? '').localeCompare(String(a.paid_on ?? ''))).slice(0, 10)
+  const issueMonth = rows.reduce((latest: string, row) => row.issue_date > latest ? row.issue_date : latest, '').slice(0, 7)
+  const ofMonth = rows.filter(row => issueMonth && row.issue_date.startsWith(issueMonth))
+  const collected = await one<{ cents: number }>(env, 'SELECT COALESCE(SUM(amount_cents), 0) AS cents FROM nc_payments WHERE received_on >= ? AND received_on <= ?', `${month}-01`, day)
+  return {
+    day, month, open, settled, issueMonth,
+    issued: ofMonth.length, paid: ofMonth.filter(row => row.balance_cents <= 0).length,
+    owedCents: open.reduce((sum, row) => sum + row.balance_cents, 0),
+    overdueCents: open.filter(row => row.daysOverdue > 0).reduce((sum, row) => sum + row.balance_cents, 0),
+    collectedCents: collected?.cents ?? 0,
   }
 }

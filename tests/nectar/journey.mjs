@@ -229,7 +229,7 @@ try {
   const open = server.open()
   assert.ok(open, 'dev prints a signed-in owner URL')
   origin = new URL(open).origin
-  browser = await chromium.launch()
+  browser = await chromium.launch({ args: ['--use-mock-keychain', '--password-store=basic'] })
   const desktop = await (await browser.newContext({ viewport: { width: 1440, height: 900 } })).newPage()
   await desktop.goto(open)
   await desktop.waitForURL(url => /^\/(app|setup)/.test(url.pathname))

@@ -11,7 +11,8 @@ import { billingPage, invoicePage, runPage } from './billing'
 import { customerPage, customersPage, subscriptionPage } from './customers'
 import { accessPage, auditPage, homePage, morePage, settingsPage } from './home'
 import { exportsPage, importPage, previewPage, proposalPage, proposalsPage } from './review'
-import { catalogPage, receivablesPage, usagePage } from './work'
+import { receivablesPage } from './receivables'
+import { catalogPage, usagePage } from './work'
 
 type Page = (env: Bindings, actor: Actor, request: Request, url: URL, id: string) => Promise<Response>
 

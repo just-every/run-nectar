@@ -3,6 +3,8 @@ import branding from '../../branding.json'
 import { can, type Actor } from '../actor'
 import { formatInstant } from '../dates'
 import { money } from '../decimal'
+import { icon, type IconName } from './icons'
+import { shellOf } from './shell'
 
 export const esc = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]!))
 
@@ -20,19 +22,21 @@ function render(value: unknown): string {
   return esc(value)
 }
 
-// Five work destinations and More (UI conventions §3).
-export const NAV: { href: string; label: string }[] = [
-  { href: '/app', label: 'Home' }, { href: '/app/customers', label: 'Customers' }, { href: '/app/usage', label: 'Usage' },
-  { href: '/app/billing', label: 'Billing' }, { href: '/app/receivables', label: 'Receivables' },
+// The sidebar: the five work destinations, then the rest of the product
+// (also listed with what each does on More), then the business settings.
+export const NAV: { href: string; label: string; icon: IconName }[] = [
+  { href: '/app', label: 'Home', icon: 'home' }, { href: '/app/receivables', label: 'Receivables', icon: 'receivables' },
+  { href: '/app/customers', label: 'Customers', icon: 'customers' }, { href: '/app/usage', label: 'Usage', icon: 'usage' },
+  { href: '/app/billing', label: 'Billing', icon: 'billing' },
 ]
-export const MORE: { href: string; label: string; about: string; show: (actor: Actor) => boolean }[] = [
-  { href: '/app/catalog', label: 'Catalog', about: 'Products, versioned prices, meters and the features each product grants.', show: () => true },
-  { href: '/app/proposals', label: 'Proposals', about: 'Work an agent or a colleague prepared for your approval.', show: () => true },
-  { href: '/app/import', label: 'Move in', about: 'Bring Stripe Billing records in, compare in shadow, then cut over.', show: actor => can(actor, 'records') },
-  { href: '/app/exports', label: 'Exports', about: 'Invoices, usage, subscriptions and bill runs to keep or hand to your accountant.', show: actor => can(actor, 'export') },
-  { href: '/app/settings', label: 'Business and tax', about: 'Billing identity, timezone, invoice numbering and the declared tax policy.', show: () => true },
-  { href: '/app/access', label: 'Access', about: 'Who can sign in, their roles, and agent credentials.', show: actor => actor.role === 'owner' },
-  { href: '/app/audit', label: 'Audit trail', about: 'Every change, approval and issue, with who made it.', show: actor => can(actor, 'export') },
+export const MORE: { href: string; label: string; about: string; icon: IconName; show: (actor: Actor) => boolean }[] = [
+  { href: '/app/catalog', label: 'Catalog', icon: 'catalog', about: 'Products, versioned prices, meters and the features each product grants.', show: () => true },
+  { href: '/app/proposals', label: 'Proposals', icon: 'proposals', about: 'Work an agent or a colleague prepared for your approval.', show: () => true },
+  { href: '/app/import', label: 'Move in', icon: 'movein', about: 'Bring Stripe Billing records in, compare in shadow, then cut over.', show: actor => can(actor, 'records') },
+  { href: '/app/exports', label: 'Exports', icon: 'exports', about: 'Invoices, usage, subscriptions and bill runs to keep or hand to your accountant.', show: actor => can(actor, 'export') },
+  { href: '/app/audit', label: 'Audit trail', icon: 'audit', about: 'Every change, approval and issue, with who made it.', show: actor => can(actor, 'export') },
+  { href: '/app/settings', label: 'Business and tax', icon: 'settings', about: 'Billing identity, timezone, invoice numbering and the declared tax policy.', show: () => true },
+  { href: '/app/access', label: 'Access', icon: 'access', about: 'Who can sign in, their roles, and agent credentials.', show: actor => actor.role === 'owner' },
 ]
 
 const headers = {
@@ -46,16 +50,31 @@ const headers = {
 
 const ROLE_NAMES = { owner: 'Owner', finance: 'Finance', accountant: 'Accountant' } as const
 
+const initials = (name: string) => name.split(/[\s@.]+/).filter(Boolean).slice(0, 2).map(word => word[0]!.toUpperCase()).join('')
+const ago = (ms: number, zone: string) => {
+  const minutes = Math.max(1, Math.round((Date.now() - ms) / 60000))
+  return minutes < 60 ? `${minutes} min ago` : minutes < 1440 ? `${Math.round(minutes / 60)} hr ago` : `on ${new Intl.DateTimeFormat('en-US', { timeZone: zone, month: 'short', day: 'numeric' }).format(new Date(ms))}`
+}
+const clock = (zone: string) => {
+  const at = new Date()
+  const day = new Intl.DateTimeFormat('en-US', { timeZone: zone, weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }).format(at).replace(/^(\w+),/, '$1')
+  return h`<span>${day}</span> <span>${new Intl.DateTimeFormat('en-US', { timeZone: zone, hour: 'numeric', minute: '2-digit' }).format(at)}</span>`
+}
+
 export function page(title: string, actor: Actor | null, body: Html, { current = '', url, status = 200, showNav = true }: { current?: string; url?: URL; status?: number; showNav?: boolean } = {}): Response {
   const notice = url?.searchParams.get('notice'), error = url?.searchParams.get('error')
-  const inMore = MORE.some(item => item.href === current) || current === '/app/more'
-  const nav = actor && showNav ? h`<nav aria-label="Main"><ul>${NAV.map(item => h`<li><a href="${item.href}"${item.href === current ? raw(' aria-current="page"') : ''}>${item.label}</a></li>`)}<li><a href="/app/more"${inMore ? raw(' aria-current="page"') : ''}>More</a></li></ul></nav>` : ''
+  const shell = shellOf(actor)
+  const link = (item: { href: string; label: string; icon: IconName }, count = 0) => h`<li><a href="${item.href}"${item.href === current ? raw(' aria-current="page"') : ''}>${icon(item.icon)}<span>${item.label}</span>${count ? h`<span class="count-pill" aria-label="${count} waiting">${count}</span>` : ''}</a></li>`
+  const nav = actor && showNav ? h`<nav aria-label="Main"><ul>${NAV.map(item => link(item))}</ul><ul>${MORE.filter(item => item.show(actor)).map(item => link(item, item.href === '/app/proposals' ? shell?.pending ?? 0 : 0))}</ul></nav>` : ''
   const role = actor?.role ? ROLE_NAMES[actor.role] : ''
-  const name = actor && (!actor.name.trim() || actor.name.trim() === role) && actor.email ? actor.email : actor?.name
-  const who = actor ? h`<span class="who${nav ? '' : ' alone'}"><span class="who-name">${name}</span>${role ? h` <span class="role">${role}</span>` : ''}</span>` : ''
-  const document = h`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title} · ${branding.name}</title><link rel="preload" href="/fonts/hanken-grotesk/hanken-grotesk-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin="anonymous"><link rel="stylesheet" href="/fonts/fonts.css"><link rel="stylesheet" href="/rer-theme.css"><link rel="stylesheet" href="/nectar.css"></head><body>
-<header class="top"><div class="top-inner"><a class="brand" href="/app"><img src="/brand/mark.svg" alt="" width="28" height="28"><span data-rer-name>${branding.name}</span></a>${nav}${who}</div></header>
-<main>${notice ? h`<p class="flash" role="status">${notice}</p>` : ''}${error ? h`<p class="flash error" role="alert">That did not work: ${describeError(error)}</p>` : ''}${body}</main></body></html>`
+  const name = actor && (!actor.name.trim() || actor.name.trim() === role) && actor.email ? actor.email : actor?.name ?? ''
+  const who = actor ? h`<div class="side-foot"><p class="who"><span class="avatar" aria-hidden="true">${initials(name)}</span><span class="who-lines"><span class="who-name">${name}</span>${role ? h`<span class="role">${role}</span>` : ''}${shell ? h`<span>${shell.legalName}</span>${shell.place ? h`<span>${shell.place}</span>` : ''}` : ''}</span></p>
+    ${shell && nav ? h`<p class="synced">${icon('synced')}<span>${shell.lastUsage ? h`Usage imported<br>${ago(shell.lastUsage, shell.timezone)}` : h`No usage imported yet`}</span></p>` : ''}</div>` : ''
+  const top = actor && shell && nav ? h`<header class="top"><p class="top-place">${shell.legalName}<span>Billing in ${new Intl.DateTimeFormat('en-US', { timeZone: shell.timezone, timeZoneName: 'longGeneric' }).formatToParts(new Date()).find(part => part.type === 'timeZoneName')?.value ?? shell.timezone}</span></p><p class="top-time">${clock(shell.timezone)}</p>${can(actor, 'records') ? h`<a class="button top-action" href="/app/billing#prepare">Prepare a bill run</a>` : ''}</header>` : ''
+  const menu = nav ? h`<label class="menu-button" for="menu">${icon('menu')}<span>Menu</span></label>` : ''
+  const document = h`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title} · ${branding.name}</title><link rel="icon" href="/favicon.ico" sizes="any"><link rel="icon" href="/brand/favicon-32.svg" type="image/svg+xml"><link rel="preload" href="/fonts/hanken-grotesk/hanken-grotesk-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin="anonymous"><link rel="stylesheet" href="/fonts/fonts.css"><link rel="stylesheet" href="/rer-theme.css"><link rel="stylesheet" href="/nectar.css"></head><body>
+<div class="shell${nav ? '' : ' bare'}"><aside class="side"><div class="side-head"><a class="brand" href="/app"><img src="/brand/mark.svg" alt="" width="36" height="36"><span data-rer-name>${branding.name}</span></a>${menu}</div>${nav ? raw('<input type="checkbox" id="menu" class="menu-toggle" aria-label="Show the menu">') : ''}${nav}${who}</aside>
+<div class="column">${top}<main>${notice ? h`<p class="flash" role="status">${icon('paid')}<span>${notice}</span></p>` : ''}${error ? h`<p class="flash error" role="alert">${icon('alert')}<span>That did not work: ${describeError(error)}</span></p>` : ''}${body}</main></div></div></body></html>`
   return new Response(document.html, { status, headers })
 }
 
@@ -91,8 +110,9 @@ export const describeError = (code: string) => ERRORS[code] ?? code.replace(/_/g
 export const hidden = (name: string, value: unknown) => h`<input type="hidden" name="${name}" value="${value}">`
 
 /** A POST form to the shared action door; returnTo may contain {id} for the created record. */
-export function form(action: string, returnTo: string, fields: unknown, submit: string, { multipart = false, secondary = false, layout = '' } = {}) {
-  return h`<form method="post" action="/app/do/${action}"${layout ? h` class="${layout}"` : ''}${multipart ? raw(' enctype="multipart/form-data"') : ''}>${hidden('returnTo', returnTo)}${fields}<button type="submit"${secondary ? raw(' class="secondary"') : ''}>${submit}</button></form>`
+/** `primary` marks the one decision a screen leads with: its button carries the brand gradient. */
+export function form(action: string, returnTo: string, fields: unknown, submit: string, { multipart = false, secondary = false, primary = false, layout = '' } = {}) {
+  return h`<form method="post" action="/app/do/${action}"${layout ? h` class="${layout}"` : ''}${multipart ? raw(' enctype="multipart/form-data"') : ''}>${hidden('returnTo', returnTo)}${fields}<button type="submit"${secondary ? raw(' class="secondary"') : primary ? raw(' class="cta"') : ''}>${submit}</button></form>`
 }
 
 // Several forms share a page, so every control gets its own id.
@@ -129,7 +149,7 @@ export const checks = (legend: string, name: string, options: { value: string; l
 
 // On a phone each row stacks as label and value pairs; data-label carries the column heading.
 // Columns whose heading ends in '$' are right-aligned numbers (the '$' is not shown).
-// `lead` marks a page's main list: its empty state gets the glass hexagons.
+// `lead` marks a page's main list: its empty state is drawn larger, with an icon.
 // `lines` marks invoice lines: on a phone their quantity, unit and amount share one row.
 // Empty cells are marked so a phone card leaves out their label.
 const isEmpty = (cell: unknown) => cell === '' || cell === null || cell === undefined
@@ -141,23 +161,13 @@ export const table = (headers: string[], rows: unknown[][], { empty = 'Nothing h
 export function emptyState(text: string, lead = false) {
   const stop = text.indexOf('. ')
   const [first, rest] = stop === -1 ? [text, ''] : [text.slice(0, stop + 1), text.slice(stop + 2)]
-  return h`<p class="empty${lead ? ' lead' : ''}">${lead ? raw(GLASS) : ''}<b>${first}</b>${rest ? ` ${rest}` : ''}</p>`
+  return h`<p class="empty${lead ? ' lead' : ''}">${lead ? h`<span class="empty-art">${icon('proposals')}</span>` : ''}<b>${first}</b>${rest ? ` ${rest}` : ''}</p>`
 }
 
-// Nectar's one shape. A pointy-top hexagon marker: filled honey (with a tick,
-// a mark or nothing) or a hollow outline for a step still to do.
-const HEX = 'M17 1.5 32 10.2v17.6L17 36.5 2 27.8V10.2Z'
-export function hexMarker(kind: 'done' | 'open' | 'alert' | 'plain') {
-  const shape = kind === 'open' ? `<path d="${HEX}" fill="#FFFFFF" stroke="#CFC6B6" stroke-width="1.6" stroke-linejoin="round"/>` : `<path d="${HEX}" fill="#F6B23E" stroke="#F6B23E" stroke-width="2" stroke-linejoin="round"/>`
-  const tick = kind === 'done' ? '<path d="m11 19 4.2 4.2L23.5 14" fill="none" stroke="#1C1A17" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>' : ''
-  return raw(`<span class="hex" aria-hidden="true"><svg viewBox="0 0 34 38">${shape}${tick}</svg>${kind === 'alert' ? '<b>!</b>' : ''}</span>`)
+/** A state marker beside a step or an exception: done, still open, needs attention, or a plain item. */
+export function marker(kind: 'done' | 'open' | 'alert' | 'plain') {
+  return h`<span class="marker marker-${kind}">${icon(kind === 'done' ? 'paid' : kind === 'open' ? 'open' : kind === 'alert' ? 'alert' : 'arrow')}</span>`
 }
-const GLASS_CELL = (x: number, y: number, r: number, id: string) => {
-  const points = [0, 1, 2, 3, 4, 5].map(i => { const a = Math.PI / 3 * i; return `${(x + r * Math.cos(a)).toFixed(1)},${(y + r * Math.sin(a)).toFixed(1)}` }).join(' ')
-  return `<polygon points="${points}" fill="url(#${id})" stroke="#F2B347" stroke-opacity=".75" stroke-width="2.5" stroke-linejoin="round"/><polygon points="${points}" fill="none" stroke="#FFFFFF" stroke-opacity=".7" stroke-width="1" transform="translate(${(x * 0.06).toFixed(1)} ${(y * 0.06).toFixed(1)}) scale(.94)"/>`
-}
-const GLASS = '<span class="empty-art" aria-hidden="true"><svg viewBox="0 0 240 200"><defs><linearGradient id="nglass" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFF1CF"/><stop offset=".55" stop-color="#FAD27E"/><stop offset="1" stop-color="#F3B54A"/></linearGradient></defs>'
-  + GLASS_CELL(92, 118, 62, 'nglass') + GLASS_CELL(158, 60, 40, 'nglass') + GLASS_CELL(178, 128, 34, 'nglass') + '</svg></span>'
 
 const TONES: Record<string, 'good' | 'pending' | 'alert'> = {
   issued: 'good', approved: 'good', paid: 'good', active: 'good', live: 'good', done: 'good', exported: 'good', completed: 'good', reconciled: 'good', reviewed: 'good', allowed: 'good', finalised: 'good',

@@ -13,6 +13,7 @@ import { PAGE_DOORS, match } from './doors'
 import { route } from './views'
 import { h, page } from './ui/html'
 import { pages, postPages } from './ui/pages'
+import { loadShell } from './ui/shell'
 
 const json = (body: unknown, status = 200) => Response.json(body, { status, headers: { 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' } })
 
@@ -72,7 +73,10 @@ async function pageResponse(env: Bindings, actor: Actor, request: Request, url: 
   const path = url.pathname
   if (request.method === 'POST') {
     const special = postPages[path]
-    if (special) return await special(env, actor, await Input.from(request), url, request)
+    if (special) {
+      await loadShell(env, actor)
+      return await special(env, actor, await Input.from(request), url, request)
+    }
     const name = path.match(/^\/app\/do\/([\w.]+)$/)?.[1]
     const action = name ? actions[name] : undefined
     if (!action) throw new NectarError('not_found', 404)
@@ -93,6 +97,7 @@ async function pageResponse(env: Bindings, actor: Actor, request: Request, url: 
     return page('Not ready', actor, h`<div class="first-run"><h1>Nectar is not set up yet</h1><p>The owner needs to enter the business's billing details first.</p></div>`, { showNav: false })
   }
   const found = match(PAGE_DOORS, path)
+  await loadShell(env, actor)
   if (!found) throw new NectarError('not_found', 404)
   return await pages[found.name](env, actor, request, url, found.id)
 }

@@ -1,8 +1,10 @@
 # Nectar demo
 
-The signed-in demo opens Riverbend Software with six customer accounts,
-subscriptions, metered usage, a finalised bill run and a draft run. Try reviewing
-and issuing an invoice, recording a payment, or approving the renewal proposal.
+The signed-in demo opens Fieldnote Software (Denver, CO) with six customer
+accounts, subscriptions, metered usage, a finalized bill run (three invoices paid,
+one partly paid, two open), a drafted reminder waiting on Receivables, and a draft
+run. Try approving the reminder, reviewing and issuing an invoice, recording a
+payment, or approving the renewal proposal.
 All sample IDs are fixed, and dates follow the session start.
 
 Nectar has no public fetch/check flow: Stripe move-in reads uploaded files,

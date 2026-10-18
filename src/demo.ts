@@ -11,31 +11,31 @@ export async function seedDemo(env: Bindings, { ownerEmail, now }: { ownerEmail:
   const start = addMonths(month, -3), actor = ownerEmail.toLowerCase(), hour = 3600000, day = 24 * hour
   const statements = [
     env.DB.prepare("INSERT INTO oa_first_run(singleton, completed_by, completed_at) SELECT 1, id, ? FROM oa_operators WHERE email = ? AND role = 'owner' ON CONFLICT DO NOTHING").bind(at, actor),
-    insert(env, 'nc_members', { id: 'demo-owner', email: actor, name: 'Rosa Bennett', role: 'owner', created_at: at, updated_at: at }),
+    insert(env, 'nc_members', { id: 'demo-owner', email: actor, name: 'Dana Brooks', role: 'owner', created_at: at, updated_at: at }),
     insert(env, 'nc_members', { id: 'demo-member-finance', email: finance, name: 'Marcus Lee', role: 'finance', created_at: at - 60 * day, updated_at: at - 60 * day }),
-    insert(env, 'nc_members', { id: 'demo-member-accountant', email: 'priya@ledgerwise.example', name: 'Priya Shah', role: 'accountant', created_at: at - 45 * day, updated_at: at - 45 * day }),
+    insert(env, 'nc_members', { id: 'demo-member-accountant', email: 'leo@ledgerwise.example', name: 'Leo Park', role: 'accountant', created_at: at - 45 * day, updated_at: at - 45 * day }),
     // Keys nobody holds: only a hash of fresh random bytes is stored, as issueKey stores it.
     insert(env, 'nc_agent_keys', { id: 'demo-key-agent', name: 'Finance agent', key_hash: await sha256Hex(crypto.randomUUID()), scopes: 'prepare', created_by: actor, created_at: at - 40 * day, last_used_at: at - 2 * hour }),
     insert(env, 'nc_agent_keys', { id: 'demo-key-metering', name: 'Metering pipeline', key_hash: await sha256Hex(crypto.randomUUID()), scopes: 'usage', created_by: actor, created_at: at - 90 * day, last_used_at: at - 20 * 60000 }),
-    insert(env, 'nc_business', { singleton: 1, legal_name: 'Riverbend Software Inc', address: '1 River Road, Sacramento, CA', billing_email: 'billing@riverbend.example', timezone: 'UTC', invoice_prefix: 'RB', next_invoice_number: 7, next_credit_number: 2, payment_terms_days: 14, tax_jurisdiction: 'CA', tax_mode: 'flat_rate', tax_rate: '8.25', tax_note: 'Illustrative policy for this sample business; reviewed by Rosa Bennett.', tax_reviewed_by: actor, tax_reviewed_at: at, updated_at: at }),
-    insert(env, 'nc_meters', { id: 'demo-meter', code: 'events', name: 'Processed events', unit_label: 'events', revision: 'demo-v1', created_at: at }),
+    insert(env, 'nc_business', { singleton: 1, legal_name: 'Fieldnote Software', address: '1600 Wynkoop St, Denver, CO 80202', billing_email: 'billing@fieldnote.example', timezone: 'America/Denver', invoice_prefix: 'FN', next_invoice_number: 2045, next_credit_number: 2, payment_terms_days: 30, tax_jurisdiction: 'CO', tax_mode: 'no_tax', tax_rate: '0.00', tax_note: 'Illustrative policy for this sample business; reviewed by Dana Brooks.', tax_reviewed_by: actor, tax_reviewed_at: at, updated_at: at }),
+    insert(env, 'nc_meters', { id: 'demo-meter', code: 'api_calls', name: 'API calls', unit_label: 'calls', revision: 'demo-v1', created_at: at }),
   ]
   for (const [code, name, kind, amount, description] of products) {
     statements.push(
       insert(env, 'nc_products', { id: `demo-${code}`, code, name, description, revision: 'demo-v1', created_at: at }),
       insert(env, 'nc_prices', { id: `demo-price-${code}`, product_id: `demo-${code}`, version: 1, kind, unit_amount: amount, meter_id: kind === 'unit' ? 'demo-meter' : null, revision: 'demo-v1', created_by: actor, created_at: at }),
-      insert(env, 'nc_features', { product_id: `demo-${code}`, feature: code === 'core' ? 'workspace' : code === 'seats' ? 'team_access' : 'api_access', note: description, created_by: actor, created_at: at }),
+      insert(env, 'nc_features', { product_id: `demo-${code}`, feature: code === 'seats' ? 'team_access' : 'api_access', note: description, created_by: actor, created_at: at }),
     )
   }
-  for (const [key, external, name, contact, seats] of customers) {
+  for (const [key, external, name, contact, seats, , address] of customers) {
     statements.push(
-      insert(env, 'nc_customers', { id: `demo-${key}`, external_id: external, name, billing_email: `billing@${key}.example`, address: `${10 + seats} Market Street, San Francisco, CA`, tax_exempt: key === 'pinecrest' ? 1 : 0, tax_exempt_ref: key === 'pinecrest' ? 'CA-RESALE-PC-2026' : '', revision: 'demo-v1', created_at: at, updated_at: at }),
-      insert(env, 'nc_contacts', { id: `demo-contact-${key}`, customer_id: `demo-${key}`, name: contact, email: `accounts@${key}.example`, role: 'Accounts payable', created_by: actor, created_at: at }),
+      insert(env, 'nc_customers', { id: `demo-${key}`, external_id: external, name, billing_email: `billing@${key}.example`, address, tax_exempt: key === 'lumen' ? 1 : 0, tax_exempt_ref: key === 'lumen' ? 'OR-EXEMPT-LH-2026' : '', revision: 'demo-v1', created_at: at, updated_at: at }),
+      insert(env, 'nc_contacts', { id: `demo-contact-${key}`, customer_id: `demo-${key}`, name: contact, email: `ap@${key}.example`, role: 'Accounts payable', created_by: actor, created_at: at }),
       insert(env, 'nc_subscriptions', { id: `demo-sub-${key}`, customer_id: `demo-${key}`, external_id: `SUB-${external}`, anchor_day: 1, start_date: start, revision: 'demo-v1', created_by: actor, created_at: at, updated_at: at }),
       ...products.map(([code]) => insert(env, 'nc_items', { id: `demo-item-${key}-${code}`, subscription_id: `demo-sub-${key}`, price_id: `demo-price-${code}`, quantity: code === 'seats' ? seats : 1, effective_from: start, created_at: at })),
     )
   }
-  statements.push(insert(env, 'nc_amendments', { id: 'demo-northwind-discount', subscription_id: 'demo-sub-northwind', kind: 'discount_percent', value: '10', effective_from: start, note: 'Launch partner discount', clause: '10% discount on platform and seat fees for the contract term.', status: 'approved', created_by: actor, created_at: at, decided_by: actor, decided_at: at }))
+  statements.push(insert(env, 'nc_amendments', { id: 'demo-birchwood-discount', subscription_id: 'demo-sub-birchwood', kind: 'discount_percent', value: '10', effective_from: start, note: 'Launch partner discount', clause: '10% discount on seat fees for the contract term.', status: 'approved', created_by: actor, created_at: at, decided_by: actor, decided_at: at }))
   await env.DB.batch(statements)
   // The metering pipeline reports each finished day; the current month runs to yesterday.
   const todayDate = now.toISOString().slice(0, 10)

@@ -7,7 +7,7 @@ import { US_STATES, business, taxReady } from '../business'
 import { one } from '../core'
 import { money } from '../decimal'
 import { audit } from '../views'
-import { MORE, check, checks, details, emptyState, field, form, h, hexMarker, hidden, page, select, table, tag, when } from './html'
+import { MORE, check, checks, details, emptyState, field, form, h, marker, hidden, page, select, table, tag, when } from './html'
 
 const count = async (env: Bindings, sql: string, ...params: unknown[]) => (await one<{ n: number }>(env, sql, ...params))!.n
 
@@ -35,8 +35,8 @@ export async function homePage(env: Bindings, actor: Actor, url: URL) {
     overdue?.n && { label: `${overdue.n} overdue invoice${overdue.n === 1 ? '' : 's'}, ${money(overdue.total)} outstanding`, href: '/app/receivables' },
     tasksOpen && { label: `${tasksOpen} open follow-up task${tasksOpen === 1 ? '' : 's'}`, href: '/app/receivables' },
   ].filter(Boolean) as { label: string; href: string }[]
-  const checklist = remaining.length ? h`<section class="card checklist" aria-labelledby="first-run"><h2 id="first-run">Finish your first billing cycle</h2><ol>${steps.map(step => h`<li class="${step.done ? 'done' : ''}">${hexMarker(step.done ? 'done' : 'open')}${step.done ? h`<span>${step.label}</span><span class="sr"> (done)</span>` : h`<a href="${step.href}">${step.label}</a>`}</li>`)}</ol></section>` : ''
-  const today = h`<section class="card" aria-labelledby="today"><h2 id="today">Your work</h2>${work.length ? h`<ul class="work">${work.map(item => h`<li><a href="${item.href}">${hexMarker('plain')}<span>${item.label}</span></a></li>`)}</ul>` : emptyState('Nothing is waiting for you. New proposals, draft bill runs and overdue invoices appear here.')}</section>`
+  const checklist = remaining.length ? h`<section class="card checklist" aria-labelledby="first-run"><h2 id="first-run">Finish your first billing cycle</h2><ol>${steps.map(step => h`<li class="${step.done ? 'done' : ''}">${marker(step.done ? 'done' : 'open')}${step.done ? h`<span>${step.label}</span><span class="sr"> (done)</span>` : h`<a href="${step.href}">${step.label}</a>`}</li>`)}</ol></section>` : ''
+  const today = h`<section class="card" aria-labelledby="today"><h2 id="today">Your work</h2>${work.length ? h`<ul class="work">${work.map(item => h`<li><a href="${item.href}">${marker('plain')}<span>${item.label}</span></a></li>`)}</ul>` : emptyState('Nothing is waiting for you. New proposals, draft bill runs and overdue invoices appear here.')}</section>`
   return page('Home', actor, h`<h1>${b.legal_name}</h1>${checklist ? h`<div class="split home">${checklist}${today}</div>` : today}`, { current: '/app', url })
 }
 
