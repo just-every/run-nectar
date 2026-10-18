@@ -383,6 +383,10 @@ blockquote { margin: 0 0 6px; padding: 10px 16px; border-left: 3px solid var(--n
   .figures > div:nth-child(odd) { padding-left: 2px; }
   .figures > div:last-child:nth-child(odd) { grid-column: 1 / -1; }
   .figures-card .figures dd, .figures dd.money, .summary .figures dd.money { font-size: 22px; }
+  /* A summary holding an address stacks one figure per row, so the address keeps the whole width. */
+  .summary .figures:has(> .wide) { grid-template-columns: minmax(0, 1fr); }
+  .summary .figures:has(> .wide) > div { border-left: 0; padding-left: 2px; border-top: 1px solid var(--nc-line); }
+  .summary .figures:has(> .wide) > div:first-child { border-top: 0; }
   .exception { grid-template-columns: 28px 1fr; gap: 2px 12px; padding: 12px 14px; align-items: start; }
   .exception .marker { grid-row: span 3; }
   .exception span, .exception a { grid-column: 2; }

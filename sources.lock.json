@@ -325,7 +325,7 @@
       "executable": false
     },
     "public/nectar.css": {
-      "sha256": "f2986698c75fc31c818e66077e29173e6fa0be488d181c53e2946a40b45a3622",
+      "sha256": "96d202ae648709be944091d0da7da1ffd7b7b3f5e0117290a9af990f5cc19f4f",
       "executable": false
     },
     "public/rer-theme.css": {
@@ -2225,7 +2225,7 @@
       "executable": false
     },
     "src/nectar/ui/customers.ts": {
-      "sha256": "e37f5b850d39333bd1e998c8d4f87317f091b0c3a3010aed556e06ffd94bf893",
+      "sha256": "75d11eac9ce63f573487a4a94cec33b7eaafcb80b07001ef00ddffc161bcaa4b",
       "executable": false
     },
     "src/nectar/ui/home.ts": {

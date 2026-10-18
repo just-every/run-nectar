@@ -40,7 +40,7 @@ export async function customerPage(env: Bindings, actor: Actor, id: string, url:
   const ledger = c.ledger
   return page(c.name, actor, h`<p class="crumbs"><a href="/app/customers">Customers</a></p><h1>${c.name}</h1>
     <section class="card summary"><dl class="figures">
-      <div><dt>Customer ID</dt><dd>${c.external_id}</dd></div><div><dt>Billing email</dt><dd>${addresses(c.billing_email || '—')}</dd></div>
+      <div><dt>Customer ID</dt><dd>${c.external_id}</dd></div><div class="wide"><dt>Billing email</dt><dd>${addresses(c.billing_email || '—')}</dd></div>
       <div><dt>Owed now</dt><dd>${cents(ledger.balanceCents)}</dd></div><div><dt>Unallocated payments</dt><dd>${cents(ledger.unallocatedCents)}</dd></div>
       <div><dt>Tax</dt><dd>${c.tax_exempt ? `Exempt (${c.tax_exempt_ref})` : 'Taxable'}</dd></div></dl>
       ${details({ 'Internal id': c.id, Source: c.origin, 'Provider reference': c.provider_ref ?? '—', Revision: c.revision })}</section>
