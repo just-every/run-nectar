@@ -512,13 +512,13 @@ Every capability claim on the owner-approved homepage (`src/site/homepage/`, des
 
 Judged from the code and tests at commit `0b59539c38405c7cc627a27666242516d33448ad` (19 October 2026).
 
-Round update: `USE-007` is proven by its named public-door journey in `tests/nectar/reconciliation.mjs`.
+Round update: `USE-007` and `CAT-002` are proven by their named public-door journeys in `tests/nectar/reconciliation.mjs` and `tests/nectar/pricing-models.mjs`.
 
 | Clauses | Done | Partial | Missing | Total |
 | --- | ---: | ---: | ---: | ---: |
 | Published | 16 | 0 | 0 | 16 |
-| Target and push further | 3 | 37 | 68 | 108 |
-| All | 19 | 37 | 68 | 124 |
+| Target and push further | 4 | 37 | 67 | 108 |
+| All | 20 | 37 | 67 | 124 |
 
 | Clause | Title | Kind | Status | Evidence | Gap |
 | --- | --- | --- | --- | --- | --- |
@@ -540,7 +540,7 @@ Round update: `USE-007` is proven by its named public-door journey in `tests/nec
 | `NEC-16` | Move in from Stripe Billing | published | done | `src/nectar/movein/stripe.ts`; `tests/fixtures/stripe/manifest.json`; `tests/nectar/flows.mjs` |  |
 | `SET-001` | Multiple billing entities | target | missing |  | One business record per installation; no entities, EINs, per-entity sequences or processor/ledger routing. |
 | `CAT-001` | Billing intervals and terms | target | missing |  | Monthly periods in arrears only; no other intervals, in-advance billing, contract terms or co-terming. |
-| `CAT-002` | Tiered, volume, package and graduated pricing | target | missing |  | Price kinds are flat, seat and per unit only; no tiered, volume, package or stair-step pricing. |
+| `CAT-002` | Tiered, volume, package and graduated pricing | target | done | `src/nectar/price-model.ts`; `src/nectar/catalog.ts`; `src/nectar/rating.ts`; `tests/nectar/pricing-models.mjs` — CAT-002 public HTTP journey |  |
 | `CAT-003` | Minimum commitments, overages and ramps | target | missing |  | No minimum commitments, true-ups, included quantities or ramps. |
 | `CAT-004` | Prepaid credits and drawdown | target | missing |  | Only a one-time approved contract credit; no prepaid credit ledger, drawdown, expiry or top-ups. |
 | `CAT-005` | Discounts, coupons, promotion codes and trials | target | partial | `src/nectar/subscriptions.ts`; `src/nectar/rating.ts`; `tests/nectar/flows.mjs` | Trials and approved contract discounts ship; no reusable coupons, promotion codes, redemption limits or card/no-card trial conversion. |

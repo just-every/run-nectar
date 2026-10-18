@@ -9,6 +9,7 @@ import { money, quantityText } from '../decimal'
 import { payments } from '../receivables'
 import { cents, check, details, field, form, h, marker, hidden, page, select, table, tag, who, type Html } from './html'
 import { personName } from './shell'
+import { linePricing } from './pricing'
 
 const monthName = (period: string) => new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', month: 'long', year: 'numeric' }).format(new Date(`${period}-01T00:00:00Z`))
 const statusLabel = (status: string, exceptions = 0) => status === 'draft' && exceptions ? 'Needs review' : ({ draft: 'Draft', approved: 'Approved', issued: 'Issued', shadow: 'Shadow', discarded: 'Discarded', finalised: 'Finalized' } as Record<string, string>)[status] ?? status
@@ -58,7 +59,7 @@ export async function runPage(env: Bindings, actor: Actor, id: string, url: URL)
 // Lines read plan, seats, usage, then adjustments; each shows its rule under it,
 // and its own dates when they differ from the invoice's period.
 const LINE_ORDER: Record<string, number> = { flat: 0, seat: 1, usage: 2, late_usage: 2, trial_usage: 2, discount: 3, credit: 4, trial: 5 }
-const lineTable = (lines: any[], period: { start: string; end: string }): Html => table(['Charge', 'Quantity$', 'Unit$', 'Amount$', ''], [...lines].sort((a, b) => (LINE_ORDER[a.kind] ?? 6) - (LINE_ORDER[b.kind] ?? 6)).map(line => [h`${line.description}${line.period_start !== period.start || line.period_end !== period.end ? h`<span class="sub">${formatPeriod(line.period_start, line.period_end)}</span>` : ''}${line.evidence?.rule ? h`<span class="line-rule">Rule: ${line.evidence.rule}.</span>` : ''}`, quantityText(line.quantity), line.unit_amount ? `$${line.unit_amount}` : '', cents(line.amount_cents), details({ Rule: line.evidence.rule, ...Object.fromEntries(Object.entries(line.evidence).filter(([key]) => key !== 'rule')) })]), { lines: true })
+const lineTable = (lines: any[], period: { start: string; end: string }): Html => table(['Charge', 'Quantity$', 'Unit$', 'Amount$', ''], [...lines].sort((a, b) => (LINE_ORDER[a.kind] ?? 6) - (LINE_ORDER[b.kind] ?? 6)).map(line => [h`${line.description}${line.period_start !== period.start || line.period_end !== period.end ? h`<span class="sub">${formatPeriod(line.period_start, line.period_end)}</span>` : ''}${line.evidence?.rule ? h`<span class="line-rule">Rule: ${line.evidence.rule}.</span>` : ''}${linePricing(line)}`, quantityText(line.quantity), line.unit_amount ? `$${line.unit_amount}` : '', cents(line.amount_cents), details({ Rule: line.evidence.rule, ...Object.fromEntries(Object.entries(line.evidence).filter(([key]) => key !== 'rule')) })]), { lines: true })
 
 export async function invoicePage(env: Bindings, actor: Actor, id: string, url: URL) {
   const i = await invoiceDetail(env, actor, id)

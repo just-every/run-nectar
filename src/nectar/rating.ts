@@ -12,10 +12,12 @@
 // - tax is the declared flat rate on the taxable total, rounded once.
 import { addDays, daysBetween, formatDate, localDate, periodContaining } from './dates'
 import { decimalText, lineCents, micros, percentOf, quantityText } from './decimal'
+import { insist } from './core'
+import { PRICE_MODEL_RATING_VERSION, rateQuantityPrice, type QuantityPrice } from './price-model'
 
 export const RATING_VERSION = 'nectar-rating-1'
 
-export interface PriceIn { id: string; kind: 'flat' | 'seat' | 'unit'; unitAmount: string; meterId: string | null; taxable: boolean; label: string; unitLabel: string }
+export interface PriceIn { id: string; kind: 'flat' | 'seat' | 'unit'; unitAmount: string; meterId: string | null; taxable: boolean; label: string; unitLabel: string; pricing?: QuantityPrice }
 export interface ItemIn { id: string; priceId: string; quantity: number; from: string; to: string | null }
 export interface AmendmentIn { id: string; kind: 'discount_percent' | 'fixed_credit' | 'price_override'; value: string; priceId: string | null; from: string; to: string | null; note: string }
 export interface EventIn { eventId: string; meterId: string; quantity: string; occurredAt: number }
@@ -49,10 +51,13 @@ function split(from: string, to: string, boundaries: (string | null)[]): [string
 const covers = (a: AmendmentIn, from: string, to: string) => a.from <= from && (a.to ?? FAR) >= to
 const unitFor = (input: RatingInput, price: PriceIn, from: string, to: string) => {
   const override = input.amendments.find(a => a.kind === 'price_override' && a.priceId === price.id && covers(a, from, to))
+  insist(!override || !price.pricing, 'override_price_model')
   return { unit: override ? override.value : price.unitAmount, override }
 }
 
 export function rate(input: RatingInput): Rating {
+  insist(input.version === RATING_VERSION || input.version === PRICE_MODEL_RATING_VERSION, 'unsupported_rating_version')
+  insist(!Object.values(input.prices).some(price => price.pricing) || input.version === PRICE_MODEL_RATING_VERSION, 'unsupported_rating_version')
   const { period, subscription: sub } = input
   const periodDays = BigInt(daysBetween(period.start, period.end))
   const lines: Line[] = [], exceptions: Exception[] = [], consumed: string[] = []
@@ -74,12 +79,13 @@ export function rate(input: RatingInput): Rating {
       const days = BigInt(daysBetween(start, end))
       const { unit, override } = unitFor(input, price, start, end)
       const quantity = BigInt(item.quantity) * 1_000_000n
-      const amount = lineCents(micros(unit), quantity, days, periodDays)
+      const modeled = price.pricing ? rateQuantityPrice(price.pricing, quantity, days, periodDays) : null
+      const amount = modeled ? BigInt(modeled.amountCents) : lineCents(micros(unit), quantity, days, periodDays)
       const prorated = days !== periodDays
       const line: Line = {
-        kind: price.kind, quantity: String(item.quantity), unitAmount: unit, amountCents: Number(amount), taxable: price.taxable, priceId: price.id, meterId: null, periodStart: start, periodEnd: end,
+        kind: price.kind, quantity: String(item.quantity), unitAmount: modeled ? '' : unit, amountCents: Number(amount), taxable: price.taxable, priceId: price.id, meterId: null, periodStart: start, periodEnd: end,
         description: `${label(price)}${price.kind === 'seat' ? ` × ${item.quantity} seat${item.quantity === 1 ? '' : 's'}` : ''}${prorated ? ` (${days} of ${periodDays} days)` : ''}${override ? ' at contract price' : ''}`,
-        evidence: { rule: prorated ? 'unit × quantity × days ÷ period days, rounded half away from zero' : 'unit × quantity', item: item.id, days: Number(days), periodDays: Number(periodDays), unit, quantity: item.quantity, override: override?.id ?? null },
+        evidence: modeled ? { ...modeled.evidence, item: item.id } : { rule: prorated ? 'unit × quantity × days ÷ period days, rounded half away from zero' : 'unit × quantity', item: item.id, days: Number(days), periodDays: Number(periodDays), unit, quantity: item.quantity, override: override?.id ?? null },
       }
       lines.push(line)
       recurring.push({ line, from: start, to: end })
@@ -124,13 +130,14 @@ export function rate(input: RatingInput): Rating {
   }
   for (const group of [...groups.values()].sort((a, b) => a.start.localeCompare(b.start) || a.price.id.localeCompare(b.price.id))) {
     const total = group.events.reduce((sum, event) => sum + micros(event.quantity, 'quantity'), 0n)
-    const amount = group.trial ? 0n : lineCents(micros(group.unit), total)
+    const modeled = group.price.pricing ? rateQuantityPrice(group.price.pricing, total) : null
+    const amount = group.trial ? 0n : modeled ? BigInt(modeled.amountCents) : lineCents(micros(group.unit), total)
     consumed.push(...group.events.map(event => event.eventId))
     lines.push({
       kind: group.trial ? 'trial_usage' : group.late ? 'late_usage' : 'usage',
       description: `${group.late ? `Late usage from the period starting ${formatDate(group.start)}: ` : ''}${group.price.label} — ${quantityText(decimalText(total))} ${group.price.unitLabel}${group.trial ? ' during trial (not charged)' : ''}`,
-      quantity: decimalText(total), unitAmount: group.unit, amountCents: Number(amount), taxable: group.price.taxable, priceId: group.price.id, meterId: group.price.meterId, periodStart: group.start, periodEnd: group.end,
-      evidence: { rule: group.trial ? 'usage during a trial is recorded and not charged' : 'sum of event quantities × unit, rounded half away from zero once', events: group.events.length, eventIds: group.events.map(event => event.eventId), first: new Date(group.events[0].occurredAt).toISOString(), last: new Date(group.events[group.events.length - 1].occurredAt).toISOString(), override: group.override, late: group.late },
+      quantity: decimalText(total), unitAmount: modeled ? '' : group.unit, amountCents: Number(amount), taxable: group.price.taxable, priceId: group.price.id, meterId: group.price.meterId, periodStart: group.start, periodEnd: group.end,
+      evidence: { ...(modeled ? modeled.evidence : { rule: 'sum of event quantities × unit, rounded half away from zero once' }), ...(group.trial ? { rule: 'usage during a trial is recorded and not charged', unchargedAmountCents: modeled?.amountCents } : {}), events: group.events.length, eventIds: group.events.map(event => event.eventId), first: new Date(group.events[0].occurredAt).toISOString(), last: new Date(group.events[group.events.length - 1].occurredAt).toISOString(), override: group.override, late: group.late },
     })
   }
   if (unrated.length) exceptions.push({ code: 'unrated_usage', message: `${unrated.length} usage event(s) for this customer have no metered price in effect when they occurred; they are not billed.`, detail: unrated.map(event => event.eventId) })
