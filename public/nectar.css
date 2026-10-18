@@ -135,8 +135,8 @@ form { margin: 10px 0; }
 .field .hint { margin: 0; font-size: 14px; }
 label { font-size: 16px; font-weight: 500; }
 input, select, textarea { font: inherit; font-size: 17px; color: var(--n-ink); background: var(--n-surface); border: 1px solid var(--n-field); border-radius: var(--n-radius-field); padding: 10px 16px; min-height: 52px; width: 100%; }
-/* The chevron is drawn with gradients: the app's CSP admits no data: images. */
-select { appearance: none; padding-right: 48px; background-image: linear-gradient(45deg, transparent 50%, var(--n-ink) 50%, var(--n-ink) calc(50% + 1.6px), transparent calc(50% + 1.6px)), linear-gradient(-45deg, transparent 50%, var(--n-ink) 50%, var(--n-ink) calc(50% + 1.6px), transparent calc(50% + 1.6px)); background-position: calc(100% - 26px) 50%, calc(100% - 19px) 50%; background-size: 7px 7px; background-repeat: no-repeat; }
+/* The chevron is drawn with gradients: the app's CSP admits no data: images. Its right edge sits 14px in from the border; multiple and size>1 lists stay native. */
+select:not([multiple]):not([size]), select[size="1"]:not([multiple]) { -webkit-appearance: none; appearance: none; padding-right: 48px; background-image: linear-gradient(45deg, transparent 50%, var(--n-ink) 50%, var(--n-ink) calc(50% + 1.6px), transparent calc(50% + 1.6px)), linear-gradient(-45deg, transparent 50%, var(--n-ink) 50%, var(--n-ink) calc(50% + 1.6px), transparent calc(50% + 1.6px)); background-position: calc(100% - 21px) 50%, calc(100% - 14px) 50%; background-size: 7px 7px; background-repeat: no-repeat; }
 textarea { min-height: 96px; resize: vertical; }
 input[type="checkbox"] { width: 22px; height: 22px; min-height: 0; accent-color: var(--n-ink); margin: 0; flex: none; }
 input[type="file"] { padding: 12px 14px; }
