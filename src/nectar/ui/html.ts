@@ -4,7 +4,7 @@ import { can, type Actor } from '../actor'
 import { formatInstant } from '../dates'
 import { money } from '../decimal'
 import { icon, type IconName } from './icons'
-import { shellOf } from './shell'
+import { personName, shellOf } from './shell'
 
 export const esc = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]!))
 
@@ -15,6 +15,23 @@ export function h(strings: TemplateStringsArray, ...values: unknown[]): Html {
   values.forEach((value, index) => { out += render(value) + strings[index + 1] })
   return { html: out }
 }
+
+// An email address in running text may wrap only after its "@" or before a ".",
+// never mid-word: <wbr> marks those points and nothing else breaks it.
+const ADDRESS = /[^\s@<>()"',;:]+@[^\s@<>()"',;:]+\.[A-Za-z]{2,}/g
+export function addresses(text: unknown): Html {
+  const value = String(text ?? '')
+  let out = '', last = 0
+  for (const found of value.matchAll(ADDRESS)) {
+    out += esc(value.slice(last, found.index)) + esc(found[0]).replace('@', '@<wbr>').replace(/\./g, '<wbr>.')
+    last = found.index! + found[0].length
+  }
+  return raw(out + esc(value.slice(last)))
+}
+
+/** Who did something, by name; an address only when the person has no name on record. */
+export const who = (actor: Actor, label: unknown) => addresses(personName(actor, label))
+
 function render(value: unknown): string {
   if (value === null || value === undefined || value === false) return ''
   if (Array.isArray(value)) return value.map(render).join('')
@@ -68,7 +85,7 @@ export function page(title: string, actor: Actor | null, body: Html, { current =
   const nav = actor && showNav ? h`<nav aria-label="Main"><ul>${NAV.map(item => link(item))}</ul><ul>${MORE.filter(item => item.show(actor)).map(item => link(item, item.href === '/app/proposals' ? shell?.pending ?? 0 : 0))}</ul></nav>` : ''
   const role = actor?.role ? ROLE_NAMES[actor.role] : ''
   const name = actor && (!actor.name.trim() || actor.name.trim() === role) && actor.email ? actor.email : actor?.name ?? ''
-  const who = actor ? h`<div class="side-foot"><p class="who"><span class="avatar" aria-hidden="true">${initials(name)}</span><span class="who-lines"><span class="who-name">${name}</span>${role ? h`<span class="role">${role}</span>` : ''}${shell ? h`<span>${shell.legalName}</span>${shell.place ? h`<span>${shell.place}</span>` : ''}` : ''}</span></p>
+  const who = actor ? h`<div class="side-foot"><p class="who"><span class="avatar" aria-hidden="true">${initials(name)}</span><span class="who-lines"><span class="who-name">${addresses(name)}</span>${role ? h`<span class="role">${role}</span>` : ''}${shell ? h`<span>${shell.legalName}</span>${shell.place ? h`<span>${shell.place}</span>` : ''}` : ''}</span></p>
     ${shell && nav ? h`<p class="synced">${icon('synced')}<span>${shell.lastUsage ? h`Usage imported<br>${ago(shell.lastUsage, shell.timezone)}` : h`No usage imported yet`}</span></p>` : ''}</div>` : ''
   const top = actor && shell && nav ? h`<header class="top"><p class="top-place">${shell.legalName}<span>Billing in ${new Intl.DateTimeFormat('en-US', { timeZone: shell.timezone, timeZoneName: 'longGeneric' }).formatToParts(new Date()).find(part => part.type === 'timeZoneName')?.value ?? shell.timezone}</span></p><p class="top-time">${clock(shell.timezone)}</p>${can(actor, 'records') ? h`<a class="button top-action" href="/app/billing#prepare">Prepare a bill run</a>` : ''}</header>` : ''
   const menu = nav ? h`<label class="menu-button" for="menu">${icon('menu')}<span>Menu</span></label>` : ''
@@ -151,10 +168,10 @@ export const checks = (legend: string, name: string, options: { value: string; l
 // Columns whose heading ends in '$' are right-aligned numbers (the '$' is not shown).
 // `lead` marks a page's main list: its empty state is drawn larger, with an icon.
 // `lines` marks invoice lines: on a phone their quantity, unit and amount share one row.
-// Empty cells are marked so a phone card leaves out their label.
+// Empty cells are marked so a phone card leaves out their label; text cells wrap addresses only at "@" or ".".
 const isEmpty = (cell: unknown) => cell === '' || cell === null || cell === undefined
 export const table = (headers: string[], rows: unknown[][], { empty = 'Nothing here yet.', lead = false, lines = false } = {}) => rows.length
-  ? h`<div class="table-wrap${lines ? ' lines' : ''}"><table><thead><tr>${headers.map(header => h`<th scope="col"${header.endsWith('$') ? raw(' class="num"') : ''}>${header.replace(/\$$/, '')}</th>`)}</tr></thead><tbody>${rows.map(row => h`<tr>${row.map((cell, index) => h`<td${headers[index] ? h` data-label="${headers[index].replace(/\$$/, '')}"` : ''}${headers[index]?.endsWith('$') ? raw(' class="num"') : ''}${isEmpty(cell) ? raw(' data-empty') : ''}>${cell}</td>`)}</tr>`)}</tbody></table></div>`
+  ? h`<div class="table-wrap${lines ? ' lines' : ''}"><table><thead><tr>${headers.map(header => h`<th scope="col"${header.endsWith('$') ? raw(' class="num"') : ''}>${header.replace(/\$$/, '')}</th>`)}</tr></thead><tbody>${rows.map(row => h`<tr>${row.map((cell, index) => h`<td${headers[index] ? h` data-label="${headers[index].replace(/\$$/, '')}"` : ''}${headers[index]?.endsWith('$') ? raw(' class="num"') : ''}${isEmpty(cell) ? raw(' data-empty') : ''}>${typeof cell === 'string' ? addresses(cell) : cell}</td>`)}</tr>`)}</tbody></table></div>`
   : emptyState(empty, lead)
 
 /** An empty state: its first sentence carries the news, the rest says what to do. */
@@ -181,7 +198,7 @@ export const cents = (value: number | null | undefined) => value === null || val
 
 /** Machine facts stay out of the work view, inside a keyboard-operable Details disclosure. */
 export const details = (facts: Record<string, unknown>, summary = 'Details') =>
-  h`<details class="facts"><summary>${summary}</summary><dl>${Object.entries(facts).map(([key, value]) => h`<dt>${key}</dt><dd><code>${typeof value === 'string' ? value : JSON.stringify(value, null, 1)}</code></dd>`)}</dl></details>`
+  h`<details class="facts"><summary>${summary}</summary><dl>${Object.entries(facts).map(([key, value]) => h`<dt>${key}</dt><dd><code>${addresses(typeof value === 'string' ? value : JSON.stringify(value, null, 1))}</code></dd>`)}</dl></details>`
 
 /** An instant as people read it, in the business's billing timezone. */
 export const when = (ms: number | null | undefined, zone: string) => ms ? formatInstant(ms, zone) : '—'

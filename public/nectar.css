@@ -15,7 +15,8 @@ h1 { font-size: 54px; font-weight: 900; letter-spacing: -.045em; line-height: 1.
 h2 { font-size: 21px; font-weight: 800; letter-spacing: -.02em; }
 h3 { font-size: 17px; font-weight: 700; letter-spacing: -.01em; margin-top: 16px; }
 h4 { font-size: 15px; font-weight: 700; }
-code { font-family: var(--nc-mono); font-size: 13px; word-break: break-all; }
+/* Long hashes and ids break anywhere only when they cannot fit a line; addresses break at their <wbr>. */
+code { font-family: var(--nc-mono); font-size: 13px; overflow-wrap: anywhere; }
 dd, td, .figures, .totals, .tiles, .fact-rows { font-variant-numeric: tabular-nums; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .icon { width: 22px; height: 22px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
@@ -42,7 +43,7 @@ nav[aria-label="Main"] a[aria-current="page"]::before { content: ''; position: a
 .side-foot p { margin: 0; }
 .who { display: flex; gap: 12px; }
 .avatar { flex: none; width: 40px; height: 40px; border-radius: 50%; background: #e7e8eb; display: grid; place-items: center; font-weight: 700; font-size: 14px; color: var(--nc-ink); }
-.who-lines { display: flex; flex-direction: column; min-width: 0; color: var(--nc-muted); overflow-wrap: anywhere; }
+.who-lines { display: flex; flex-direction: column; min-width: 0; color: var(--nc-muted); overflow-wrap: break-word; }
 .who-name { color: var(--nc-ink); font-weight: 600; }
 .synced { display: flex; gap: 12px; align-items: flex-start; margin-top: 14px !important; color: #46484d; font-size: 13px; line-height: 18px; }
 .synced .icon { color: var(--nc-green); width: 22px; height: 22px; }
@@ -96,7 +97,7 @@ p { margin: 0 0 12px; }
 .figures > div { padding: 2px 22px; border-left: 1px solid var(--nc-line); min-width: 0; }
 .figures > div:first-child { border-left: 0; padding-left: 2px; }
 .figures dt { color: var(--nc-muted); font-size: 14px; }
-.figures dd { margin: 4px 0 0; font-size: 18px; font-weight: 600; overflow-wrap: anywhere; }
+.figures dd { margin: 4px 0 0; font-size: 18px; font-weight: 600; }
 .figures-card .figures dd, .figures dd.money { font-size: 30px; font-weight: 800; letter-spacing: -.03em; line-height: 1.15; }
 .figures dd .sub { font-size: 13px; font-weight: 400; margin-top: 2px; }
 .summary .figures { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: auto; }
@@ -299,7 +300,7 @@ blockquote { margin: 0 0 6px; padding: 10px 16px; border-left: 3px solid var(--n
 .fact-rows { margin: 16px 0 0; padding-bottom: 16px; border-bottom: 1px solid var(--nc-field); display: grid; gap: 6px; font-size: 15px; }
 .fact-rows div { display: grid; grid-template-columns: 110px minmax(0, 1fr); }
 .fact-rows dt { color: var(--nc-muted); }
-.fact-rows dd { margin: 0; overflow-wrap: anywhere; }
+.fact-rows dd { margin: 0; overflow-wrap: break-word; }
 .fact-rows div:nth-child(2) dd { font-size: 17px; font-weight: 600; }
 .decision > form, .decision > .hint { margin: 14px 0 0; }
 .decision form.decide-form { display: contents; }
@@ -308,7 +309,7 @@ blockquote { margin: 0 0 6px; padding: 10px 16px; border-left: 3px solid var(--n
 .choice { display: flex; gap: 14px; align-items: flex-start; margin: 0 0 12px; font-weight: 400; font-size: 15px; line-height: 21px; clear: both; }
 .choice input { appearance: none; -webkit-appearance: none; width: 20px; height: 20px; margin-top: 1px; border: 1.5px solid #6e7484; border-radius: 50%; background: #fff; }
 .choice input:checked { border: 6px solid var(--nc-coral); }
-.choice .sub { font-size: 13px; overflow-wrap: anywhere; }
+.choice .sub { font-size: 13px; }
 .choices .field { margin: 0 0 4px 34px; }
 .choices .field label { font-weight: 500; font-size: 13px; color: var(--nc-muted); }
 .decision form.decide-form > button { order: 2; width: 100%; min-height: 48px; margin-top: 8px; }
@@ -321,12 +322,16 @@ blockquote { margin: 0 0 6px; padding: 10px 16px; border-left: 3px solid var(--n
 .decision .panel-hint { order: 5; font-size: 13px; }
 .decision > form:not(.decide-form):not(.discard-form) button { width: 100%; min-height: 48px; }
 
-/* Long names and addresses in the panel break inside their box rather than push it wider. */
-.decision-head h2, .banner > span, .choice > span { overflow-wrap: anywhere; min-width: 0; }
+/* Long names in the panel break inside their box rather than push it wider; addresses break only at "@" or ".". */
+.decision-head h2, .banner > span, .choice > span { overflow-wrap: break-word; min-width: 0; }
+.nowrap { white-space: nowrap; }
+.ledger td:first-child a.jump { display: none; }
 
 /* Narrower desktops: the decision panel moves under the invoices. */
 @media (max-width: 1279px) {
   .desk { grid-template-columns: minmax(0, 1fr); }
+  .ledger td:first-child a.jump { display: inline-block; margin-top: 6px; font-size: 14px; font-weight: 600; letter-spacing: 0; color: var(--nc-coral-ink); text-decoration: underline; }
+  .ledger td:first-child a.jump::after { content: ' ↓'; }
   .decision { grid-column: 1; grid-row: auto; position: static; margin-top: 4px; }
   .tiles dd { font-size: 30px; }
 }
@@ -395,8 +400,9 @@ blockquote { margin: 0 0 6px; padding: 10px 16px; border-left: 3px solid var(--n
   thead { display: none; }
   table, tbody, tr, td { display: block; width: 100%; }
   tr { border: 1px solid var(--nc-line); border-radius: 12px; padding: 4px 14px 8px; margin-bottom: 10px; background: #fff; }
-  td { height: auto; border: 0; padding: 6px 0; display: grid; grid-template-columns: 36% minmax(0, 1fr); gap: 10px; text-align: left; min-width: 0; overflow-wrap: anywhere; }
-  th:first-child, td:first-child, .card .table-wrap td:first-child, .card .table-wrap td:last-child, .ledger td:first-child { padding-left: 0; padding-right: 0; }
+  td { height: auto; border: 0; padding: 6px 0; display: grid; grid-template-columns: 36% minmax(0, 1fr); gap: 10px; text-align: left; min-width: 0; }
+  /* Every label in a phone card starts on one left edge. */
+  td, td:first-child, .card .table-wrap td, .card .table-wrap td:first-child, .card .table-wrap td:last-child { padding-left: 0; padding-right: 0; }
   td.num { text-align: left; }
   td[data-label]::before { content: attr(data-label); color: var(--nc-muted); font-size: 13px; }
   td:first-child { display: block; padding: 10px 0; margin-bottom: 4px; border-bottom: 1px solid var(--nc-line); font-size: 16px; }
@@ -414,7 +420,7 @@ blockquote { margin: 0 0 6px; padding: 10px 16px; border-left: 3px solid var(--n
   .ledger tr.focus td:first-child { box-shadow: none; }
   .ledger .row-menu { position: absolute; right: 8px; top: 8px; width: auto; padding: 0; }
   .ledger tr { position: relative; }
-  .ledger td:first-child { padding-right: 40px; }
+  .card .ledger td:first-child { padding-right: 40px; }
   .lines tr { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 10px; }
   .lines td:first-child, .lines td:last-child { grid-column: 1 / -1; }
   .lines td[data-label]:not(:first-child) { display: flex; flex-direction: column; gap: 0; }

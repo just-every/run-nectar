@@ -7,7 +7,8 @@ import { business } from '../business'
 import { addDays, formatDate, formatPeriod, today } from '../dates'
 import { money, quantityText } from '../decimal'
 import { payments } from '../receivables'
-import { cents, check, details, field, form, h, marker, hidden, page, select, table, tag, type Html } from './html'
+import { cents, check, details, field, form, h, marker, hidden, page, select, table, tag, who, type Html } from './html'
+import { personName } from './shell'
 
 const monthName = (period: string) => new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', month: 'long', year: 'numeric' }).format(new Date(`${period}-01T00:00:00Z`))
 const statusLabel = (status: string, exceptions = 0) => status === 'draft' && exceptions ? 'Needs review' : ({ draft: 'Draft', approved: 'Approved', issued: 'Issued', shadow: 'Shadow', discarded: 'Discarded', finalised: 'Finalized' } as Record<string, string>)[status] ?? status
@@ -39,7 +40,7 @@ export async function runPage(env: Bindings, actor: Actor, id: string, url: URL)
   const row = (i: any): unknown[] => [h`<a href="/app/invoices/${i.id}">${i.customer_name}</a><span class="sub">${i.external_id}${i.number ? ` · ${i.number}` : ''}</span>`, formatPeriod(i.period_start, i.period_end), cents(i.subtotal_cents), cents(i.tax_cents), cents(i.total_cents),
     i.comparison.previous ? h`<span class="delta"><span class="arrow">${i.comparison.previous.deltaCents >= 0 ? '↑' : '↓'}</span>${money(Math.abs(i.comparison.previous.deltaCents))}</span>` : h`<span class="sub">first invoice</span>`, tag(statusLabel(i.status, i.exceptions.length)), h`<a class="go" href="/app/invoices/${i.id}">Review →</a>`]
   return page(`${monthName(run.period)} bill run`, actor, h`<div class="title-row"><h1>${monthName(run.period)} bill run</h1>${tag(statusLabel(run.status))}</div>
-    <p class="sub">Prepared ${formatDate(new Date(run.created_at).toISOString().slice(0, 10))} by ${run.created_by}</p>
+    <p class="sub">Prepared ${formatDate(new Date(run.created_at).toISOString().slice(0, 10))} by ${who(actor, run.created_by)}</p>
     <section class="card figures-card"><dl class="figures">
       <div><dt>Invoices</dt><dd>${s.invoices}</dd></div><div><dt>Subtotal</dt><dd>${cents(s.totals.subtotal)}</dd></div><div><dt>Tax</dt><dd>${cents(s.totals.tax)}</dd></div><div><dt>Total</dt><dd>${cents(s.totals.total)}</dd></div>
       <div><dt>${s.previous ? `vs ${monthName(s.previous.period)}` : 'Previous run'}</dt><dd class="delta">${previous === null ? '—' : h`<span class="arrow">${previous >= 0 ? '↑' : '↓'}</span>${previous >= 0 ? '+' : '−'}${money(Math.abs(previous))}${s.previous.totals.total ? h`<span class="sub">${(Math.abs(previous) * 100 / s.previous.totals.total).toFixed(1)}% change</span>` : ''}`}</dd></div></dl></section>
@@ -51,7 +52,7 @@ export async function runPage(env: Bindings, actor: Actor, id: string, url: URL)
       ${table(['Customer', 'Period', 'Subtotal$', 'Tax$', 'Total$', 'Change vs last$', 'Status', ''], live.map(row), { empty: 'No invoices in this run.' })}</section>
     ${shadow.length ? h`<section class="card" aria-labelledby="shadow"><h2 id="shadow">Shadow drafts (${shadow.length})</h2><p class="hint">Moved-in subscriptions, rated for comparison with the previous biller. They cannot be approved until the owner adopts the subscription.</p>
       ${table(['Customer', 'Period', 'Subtotal$', 'Previous biller$', 'Agrees'], shadow.map((i: any) => [h`<a href="/app/invoices/${i.id}">${i.customer_name}</a>`, formatPeriod(i.period_start, i.period_end), cents(i.subtotal_cents), i.comparison.incumbent?.found ? cents(i.comparison.incumbent.incumbentSubtotalCents) : '—', tag(i.comparison.incumbent?.found ? (i.comparison.incumbent.reconciled ? 'Reconciled' : 'Not reconciled') : 'No Stripe invoice')]))}</section>` : ''}
-    ${details({ Run: run.id, 'Rating rules': run.calc_version, Cutoff: new Date(run.cutoff_at).toISOString(), 'Finalized by': run.finalised_by ?? '—' })}`, { current: '/app/billing', url })
+    ${details({ Run: run.id, 'Rating rules': run.calc_version, Cutoff: new Date(run.cutoff_at).toISOString(), 'Finalized by': personName(actor, run.finalised_by) })}`, { current: '/app/billing', url })
 }
 
 // Lines read plan, seats, usage, then adjustments; each shows its rule under it,
@@ -86,5 +87,5 @@ export async function invoicePage(env: Bindings, actor: Actor, id: string, url: 
       <p>Invoiced ${cents(i.total_cents)} = credited ${cents(i.creditedCents)} + paid ${cents(i.paidCents)} + owed ${cents(i.balanceCents)}.</p>
       ${approver && i.balanceCents > 0 ? form('credit.issue', `/app/invoices/${i.id}`, h`${hidden('invoice', i.id)}${field('Credit amount ($)', 'amount')}${field('Reason', 'reason')}`, 'Issue credit note', { layout: 'columns', secondary: true }) : ''}
       ${pays.length && i.balanceCents > 0 ? form('payment.allocate', `/app/invoices/${i.id}`, h`${hidden('invoice', i.id)}${select('Payment', 'payment', pays.map((p: any) => ({ value: p.id, label: `${p.reference} — ${money(p.unallocated_cents)} unallocated` })), pays[0].id)}${field('Amount ($)', 'amount')}`, 'Allocate payment', { layout: 'columns', secondary: true }) : ''}</section>` : ''}
-    ${details({ Invoice: i.id, 'Rating rules': i.calc_version, 'Source fingerprint': i.source_fingerprint, 'Approved fingerprint': i.approved_fingerprint ?? '—', 'Approved by': i.approved_by ?? '—', 'Issued by': i.issued_by ?? '—', 'Usage events billed': (i.calculation.consumedEvents ?? []).length }, 'Calculation details')}`, { current: '/app/billing', url })
+    ${details({ Invoice: i.id, 'Rating rules': i.calc_version, 'Source fingerprint': i.source_fingerprint, 'Approved fingerprint': i.approved_fingerprint ?? '—', 'Approved by': personName(actor, i.approved_by), 'Issued by': personName(actor, i.issued_by), 'Usage events billed': (i.calculation.consumedEvents ?? []).length }, 'Calculation details')}`, { current: '/app/billing', url })
 }

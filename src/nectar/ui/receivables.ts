@@ -10,9 +10,9 @@ import { customers } from '../customers'
 import { formatDate } from '../dates'
 import { money } from '../decimal'
 import { payments, receivablesDesk } from '../receivables'
-import { area, cents, field, form, h, hidden, page, raw, select, table, tag, type Html } from './html'
+import { addresses, area, cents, field, form, h, hidden, page, raw, select, table, tag, who, type Html } from './html'
 import { icon, type IconName } from './icons'
-import { placeOf } from './shell'
+import { personName, placeOf } from './shell'
 
 const dayText = (date: string, year = false) => new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', weekday: 'short', month: 'short', day: 'numeric', ...(year ? { year: 'numeric' } : {}) }).format(new Date(`${date}T00:00:00Z`)).replace(/^(\w+),/, '$1')
 const monthText = (month: string) => new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', month: 'long' }).format(new Date(`${month}-01T00:00:00Z`))
@@ -22,9 +22,11 @@ const pill = (tone: string, glyph: IconName, text: string) => h`<span class="pil
 
 type Desk = Awaited<ReturnType<typeof receivablesDesk>>
 
-function ledger(desk: Desk, focus: string | null): Html {
+function ledger(desk: Desk, focus: string | null, jump: string): Html {
   const open = [...desk.open].sort((a, b) => Number(b.customer_id === focus) - Number(a.customer_id === focus) || b.daysOverdue - a.daysOverdue || a.due_date.localeCompare(b.due_date))
   const rows = [...open, ...desk.settled]
+  // Where the decision panel sits below the table, the row in focus links down to it.
+  const lead = open.find(r => r.customer_id === focus && r.balance_cents > 0)?.id
   if (!rows.length) return h`<section class="card ledger-card">${table([], [], { empty: 'No issued invoices yet. Invoices appear here once a bill run is approved and finalized under Billing.', lead: true })}</section>`
   const row = (r: any) => {
     const owed = r.balance_cents > 0
@@ -33,7 +35,7 @@ function ledger(desk: Desk, focus: string | null): Html {
       : pill('quiet', 'clock', `Due ${dayText(r.due_date)}`)
     const method = r.method ? METHODS[r.method] : null
     return h`<tr${r.customer_id === focus && owed ? raw(' class="focus"') : ''}>
-      <td data-label="Customer"><a href="/app/customers/${r.customer_id}">${r.customer_name}</a><span class="sub">${placeOf(r.address ?? '') || '—'}</span></td>
+      <td data-label="Customer"><a href="/app/customers/${r.customer_id}">${r.customer_name}</a><span class="sub">${placeOf(r.address ?? '') || '—'}</span>${r.id === lead ? h`<a class="jump" href="#decide">${jump}</a>` : ''}</td>
       <td data-label="Invoice"><a class="mono" href="/app/invoices/${r.id}">${r.number}</a></td>
       <td data-label="Amount" class="num">${money(owed ? r.balance_cents : r.total_cents)}${owed && r.balance_cents !== r.total_cents ? h`<span class="sub">of ${money(r.total_cents)}</span>` : ''}</td>
       <td data-label="Method"${method ? '' : raw(' data-empty')}>${method ? h`<span class="chip">${icon(method[1])}${method[0]}</span>` : ''}</td>
@@ -46,7 +48,7 @@ function ledger(desk: Desk, focus: string | null): Html {
 
 const factRows = (facts: [string, unknown][]) => h`<dl class="fact-rows">${facts.map(([term, value]) => h`<div><dt>${term}</dt><dd>${value}</dd></div>`)}</dl>`
 
-async function decision(env: Bindings, actor: Actor, desk: Desk, drafts: any[], chosen: string | null, by: (label: string) => string): Promise<{ panel: Html; focus: string | null; shown?: string }> {
+async function decision(env: Bindings, actor: Actor, desk: Desk, drafts: any[], chosen: string | null): Promise<{ panel: Html; focus: string | null; shown?: string }> {
   const operator = can(actor, 'receivables'), person = actor.kind === 'member'
   if (chosen === 'none') return { panel: h``, focus: null }
   const notice = drafts.find(n => n.id === chosen) ?? drafts[0]
@@ -58,17 +60,17 @@ async function decision(env: Bindings, actor: Actor, desk: Desk, drafts: any[], 
     const customer = (await all(env, 'SELECT billing_email, address FROM nc_customers WHERE id = ?', notice.customer_id))[0] ?? {}
     const options = [{ email: customer.billing_email, label: 'Billing email', from: 'on the customer record' }, ...contacts.filter(c => c.email !== customer.billing_email).map(c => ({ email: c.email, label: `${c.name}, ${c.role}`, from: 'billing contact' }))].filter(o => o.email)
     const known = options.some(o => o.email === notice.recipient)
-    const choice = (value: string, label: string, sub: string, checked: boolean) => h`<label class="choice"><input type="radio" name="recipient" value="${value}"${checked ? raw(' checked') : ''}><span>${label}<span class="sub">${sub}</span></span></label>`
+    const choice = (value: string, label: string, sub: unknown, checked: boolean) => h`<label class="choice"><input type="radio" name="recipient" value="${value}"${checked ? raw(' checked') : ''}><span>${label}<span class="sub">${sub}</span></span></label>`
     const decide = operator && person ? h`${form('reminder.approve', '/app/receivables', h`${hidden('notice', notice.id)}
-        <fieldset class="choices"><legend>Who should get this reminder?</legend>${options.map(o => choice(o.email, o.label, `${o.email} (${o.from})`, o.email === notice.recipient))}
+        <fieldset class="choices"><legend>Who should get this reminder?</legend>${options.map(o => choice(o.email, o.label, addresses(`${o.email} (${o.from})`), o.email === notice.recipient))}
           ${choice('other', 'Another address', 'Type it below', !known)}${field('Other address', 'recipient_other', { type: 'email', value: known ? '' : notice.recipient, required: false })}</fieldset>
         <div class="mail"><p class="mail-head">Message to ${notice.customer_name}</p>${field('Subject', 'subject', { value: notice.subject })}${area('Message', 'body', notice.body, true, 9)}</div>`, 'Approve recipient and wording', { layout: 'decide-form', primary: true })}
       ${form('reminder.discard', '/app/receivables', hidden('notice', notice.id), 'Discard draft', { secondary: true, layout: 'discard-form' })}`
-      : h`<div class="mail"><p class="mail-head">To ${notice.recipient}</p><p><strong>${notice.subject}</strong></p><pre class="message">${notice.body}</pre></div>`
+      : h`<div class="mail"><p class="mail-head">To ${addresses(notice.recipient)}</p><p><strong>${notice.subject}</strong></p><pre class="message">${notice.body}</pre></div>`
     return {
       focus: notice.customer_id, shown: notice.id,
       panel: h`<aside class="decision" aria-labelledby="decide"><div class="decision-head"><div><h2 id="decide">${notice.customer_name}</h2><p class="sub">${placeOf(customer.address ?? '') || 'Reminder draft'}</p></div><a class="icon-link" href="/app/receivables?draft=none" aria-label="Close the panel">${icon('close')}</a></div>
-        <p class="banner">${icon('alert')}<span>Reminder drafted by ${by(notice.created_by)}: ${money(notice.balance_cents)} ${oldest ? `is ${plural(oldest.daysOverdue, 'day')} past due` : 'past due'}.</span></p>
+        <p class="banner">${icon('alert')}<span>Reminder drafted by ${personName(actor, notice.created_by)}: ${money(notice.balance_cents)} ${oldest ? `is ${plural(oldest.daysOverdue, 'day')} past due` : 'past due'}.</span></p>
         ${factRows([['Invoice', owed.map(r => r.number).join(', ') || '—'], ['Amount', money(notice.balance_cents)], ['Due date', oldest ? dayText(oldest.due_date, true) : '—']])}
         ${decide}<p class="hint panel-hint">Nectar exports the approved message for you to send from your own mail; it never sends it. Amounts and due dates stay as invoiced.</p></aside>`,
     }
@@ -93,17 +95,15 @@ export async function receivablesPage(env: Bindings, actor: Actor, url: URL) {
   const operator = can(actor, 'receivables')
   const drafts = noticeList.filter((n: any) => n.status === 'draft')
   const pending = (await all(env, "SELECT COUNT(*) AS n FROM nc_proposals WHERE status = 'pending'"))[0]?.n ?? 0
-  const names = new Map((await all(env, 'SELECT email, name FROM nc_members')).map(m => [m.email, m.name]))
-  const by = (label: string) => label.startsWith('agent:') ? `${label.slice(6)} (agent)` : names.get(label) ?? label
-  const { panel, focus, shown } = await decision(env, actor, desk, drafts, url.searchParams.get('draft'), by)
-  const waiting = [drafts.length && `${drafts.length === 1 ? `${by(drafts[0].created_by)} drafted a reminder to ${drafts[0].customer_name}` : `${drafts.length} reminder drafts are ready`}`, pending && `${plural(pending, 'proposal')} ${pending === 1 ? 'waits' : 'wait'} for a decision`].filter(Boolean)
+  const { panel, focus, shown } = await decision(env, actor, desk, drafts, url.searchParams.get('draft'))
+  const waiting = [drafts.length && `${drafts.length === 1 ? `${personName(actor, drafts[0].created_by)} drafted a reminder to ${drafts[0].customer_name}` : `${drafts.length} reminder drafts are ready`}`, pending && `${plural(pending, 'proposal')} ${pending === 1 ? 'waits' : 'wait'} for a decision`].filter(Boolean)
   const asks = drafts.length + pending
   const strip = h`<section class="assurance" aria-label="Nectar assurance"><img src="/brand/mark.svg" alt="" width="34" height="34"><p><b>Nectar assurance:</b> ${desk.open.length + desk.settled.length ? `every balance below equals its invoice less credits and payments` : 'balances appear here once invoices are issued'}${waiting.length ? `; ${waiting.join(', and ')}.` : '. Nothing is waiting for a decision.'}</p>${asks ? h`<a class="ask-pill" href="${drafts.length ? '#decide' : '/app/proposals'}">${asks} ${asks === 1 ? 'change needs' : 'changes need'} your approval</a>` : ''}</section>`
   const subline = desk.issueMonth ? `${plural(desk.issued, `${monthText(desk.issueMonth)} invoice`)}, ${desk.paid} paid, ${desk.issued - desk.paid} open` : 'No invoices issued yet'
   const others = noticeList.filter((n: any) => n.status !== 'discarded' && n.id !== shown)
   const main = h`<div class="desk-main"><h1>Receivables</h1><p class="lede">${subline}</p>${strip}
     <dl class="tiles"><div><dt>Owed</dt><dd>${money(desk.owedCents)}</dd></div><div${desk.overdueCents ? raw(' class="hot"') : ''}><dt>Overdue</dt><dd>${money(desk.overdueCents)}</dd></div><div><dt>Collected in ${monthText(desk.month)}</dt><dd>${money(desk.collectedCents)}</dd></div></dl>
-    ${ledger(desk, focus)}
+    ${ledger(desk, focus, shown ? 'Review the reminder' : operator ? 'Draft a reminder' : 'See what is past due')}
     <section class="ask" aria-label="Agents">${icon('sparkle')}<p>Your own agent can draft reminders and proposals here through a <b>prepare</b> credential. A person approves each one.</p>${actor.role === 'owner' ? h`<a href="/app/access#agents">Agent credentials</a>` : ''}</section></div>`
   const rest = h`<div class="desk-rest"><section class="card" aria-labelledby="ageing"><h2 id="ageing">Ageing on ${formatDate(age.asOf)}</h2>
       ${table(['Customer', 'Not yet due$', '1–30 days$', '31–60 days$', '61–90 days$', 'Over 90$', 'Owed$', ''], age.customers.map((c: any) => [h`<a href="/app/customers/${c.customer}">${c.name}</a>`, ...BUCKETS.map(b => cents(c[b])), cents(c.total),
@@ -112,7 +112,7 @@ export async function receivablesPage(env: Bindings, actor: Actor, url: URL) {
     <section class="card" aria-labelledby="reminders"><h2 id="reminders">Reminders</h2><p class="hint">Nectar drafts reminders and exports approved ones for you to send from your own mail. It never sends them.</p>
       ${others.length ? others.map((n: any) => h`<article class="notice"><h3>${n.customer_name} — ${cents(n.balance_cents)} ${tag(n.status === 'draft' ? 'Draft' : n.status === 'approved' ? 'Approved' : 'Exported')}</h3>
         ${n.status === 'draft' ? h`<p><a class="go" href="/app/receivables?draft=${n.id}#decide">Review this draft</a></p>`
-        : h`<p><strong>To:</strong> ${n.recipient}<br><strong>Subject:</strong> ${n.subject}</p><pre class="message">${n.body}</pre><p><a class="download" href="/app/notices/${n.id}.txt">Download message</a> <span class="sub">Approved by ${n.approved_by}</span></p>`}</article>`) : h`<p class="empty">No other reminders. Draft one from the ageing table when an invoice is past due.</p>`}</section>
+        : h`<p><strong>To:</strong> ${addresses(n.recipient)}<br><strong>Subject:</strong> ${n.subject}</p><pre class="message">${n.body}</pre><p><a class="download" href="/app/notices/${n.id}.txt">Download message</a> <span class="sub">Approved by ${who(actor, n.approved_by)}</span></p>`}</article>`) : h`<p class="empty">No other reminders. Draft one from the ageing table when an invoice is past due.</p>`}</section>
     <section class="card" aria-labelledby="tasks"><h2 id="tasks">Follow-up tasks</h2>
       ${table(['Task', 'Customer', 'Due', 'Status', ''], todo.map((t: any) => [t.title, t.customer_name, formatDate(t.due_date), tag(t.status === 'open' ? 'Open' : 'Done'), t.status === 'open' && operator && actor.kind === 'member' ? form('task.complete', '/app/receivables', h`${hidden('task', t.id)}${field('Outcome', 'outcome')}`, 'Mark done', { layout: 'row-form', secondary: true }) : t.outcome ?? '']), { empty: 'No follow-up tasks.' })}
       ${operator && people.length ? form('task.create', '/app/receivables', h`${select('Customer', 'customer', people.map((c: any) => ({ value: c.id, label: c.name })), people[0].id)}${field('Task', 'title')}${field('Due', 'due_date', { type: 'date' })}`, 'Add task', { layout: 'columns', secondary: true }) : ''}</section>

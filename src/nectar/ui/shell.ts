@@ -4,12 +4,23 @@
 import type { Bindings } from '../../auth.server'
 import type { Actor } from '../actor'
 import { business } from '../business'
-import { one } from '../core'
+import { all, one } from '../core'
 
 export interface Shell { legalName: string; place: string; timezone: string; pending: number; lastUsage: number | null }
 
 const shells = new WeakMap<Actor, Shell>()
 export const shellOf = (actor: Actor | null) => actor ? shells.get(actor) ?? null : null
+
+// Records keep who acted as the sign-in email (or agent:<name>); pages show the
+// person's name from their access record, and the email only when no name exists.
+const people = new WeakMap<Actor, Map<string, string>>()
+export function personName(actor: Actor, label: unknown) {
+  const text = String(label ?? '')
+  if (!text) return '—'
+  if (text.startsWith('agent:')) return `${text.slice(6)} (agent)`
+  const name = people.get(actor)?.get(text.toLowerCase())?.trim()
+  return name && name.toLowerCase() !== text.toLowerCase() ? name : text
+}
 
 /** "1600 Wynkoop St, Denver, CO 80202" reads as "Denver, CO". */
 export function placeOf(address: string) {
@@ -19,6 +30,7 @@ export function placeOf(address: string) {
 }
 
 export async function loadShell(env: Bindings, actor: Actor) {
+  people.set(actor, new Map((await all<{ email: string; name: string }>(env, 'SELECT email, name FROM nc_members')).map(m => [m.email.toLowerCase(), m.name])))
   const b = await business(env)
   if (!b) return
   const pending = await one<{ n: number }>(env, "SELECT COUNT(*) AS n FROM nc_proposals WHERE status = 'pending'")

@@ -8,7 +8,8 @@ import { customers } from '../customers'
 import { addDays, formatDate, formatPeriod } from '../dates'
 import { subscriptionDetail } from '../subscriptions'
 import { customerView } from '../views'
-import { area, cents, check, details, field, form, h, hidden, page, select, table, tag, type Html } from './html'
+import { addresses, area, cents, check, details, field, form, h, hidden, page, select, table, tag, type Html } from './html'
+import { personName } from './shell'
 
 const subscriptionState = (s: Record<string, any>, today: string) => s.billing_mode === 'shadow' ? 'Shadow' : s.end_date && s.end_date <= today ? 'Ended' : s.trial_end && s.trial_end > today ? 'Trial' : 'Active'
 
@@ -39,7 +40,7 @@ export async function customerPage(env: Bindings, actor: Actor, id: string, url:
   const ledger = c.ledger
   return page(c.name, actor, h`<p class="crumbs"><a href="/app/customers">Customers</a></p><h1>${c.name}</h1>
     <section class="card summary"><dl class="figures">
-      <div><dt>Customer ID</dt><dd>${c.external_id}</dd></div><div><dt>Billing email</dt><dd>${c.billing_email || '—'}</dd></div>
+      <div><dt>Customer ID</dt><dd>${c.external_id}</dd></div><div><dt>Billing email</dt><dd>${addresses(c.billing_email || '—')}</dd></div>
       <div><dt>Owed now</dt><dd>${cents(ledger.balanceCents)}</dd></div><div><dt>Unallocated payments</dt><dd>${cents(ledger.unallocatedCents)}</dd></div>
       <div><dt>Tax</dt><dd>${c.tax_exempt ? `Exempt (${c.tax_exempt_ref})` : 'Taxable'}</dd></div></dl>
       ${details({ 'Internal id': c.id, Source: c.origin, 'Provider reference': c.provider_ref ?? '—', Revision: c.revision })}</section>
@@ -63,7 +64,7 @@ export async function subscriptionPage(env: Bindings, actor: Actor, id: string, 
   const approver = actor.kind === 'member' && can(actor, 'approve'), records = can(actor, 'records')
   const open = s.items.filter((i: any) => !i.effective_to)
   const prices = records ? await all(env, "SELECT p.id, pr.name, p.version, p.kind, p.unit_amount, p.nickname FROM nc_prices p JOIN nc_products pr ON pr.id = p.product_id WHERE p.status = 'active' AND p.kind <> 'unit' ORDER BY pr.name, p.version DESC") : []
-  return page('Subscription', actor, h`<p class="crumbs"><a href="/app/customers/${s.customer_id}">${s.customer_name}</a></p><h1>Subscription ${s.external_id ?? ''}</h1>
+  return page('Subscription', actor, h`<p class="crumbs"><a href="/app/customers/${s.customer_id}">${s.customer_name}</a></p><h1>Subscription ${s.external_id ? h`<span class="nowrap">${s.external_id}</span>` : ''}</h1>
     <section class="card summary"><dl class="figures"><div><dt>Status</dt><dd>${tag(subscriptionState(s, today))}</dd></div><div><dt>Started</dt><dd>${formatDate(s.start_date)}</dd></div>
       <div><dt>Billing day</dt><dd>${s.anchor_day}</dd></div><div><dt>Trial ends</dt><dd>${formatDate(s.trial_end)}</dd></div><div><dt>Ends</dt><dd>${formatDate(s.end_date)}</dd></div>
       ${s.cutover_start ? h`<div><dt>Billed by Nectar from</dt><dd>${formatDate(s.cutover_start)}</dd></div>` : ''}</dl>
@@ -81,7 +82,7 @@ export async function subscriptionPage(env: Bindings, actor: Actor, id: string, 
         <div><h4>With this change: ${cents(c.preview.after?.cents)}</h4>${previewTable(c.preview.after?.lines ?? [])}</div></div>
         <p>Next full period from ${formatDate(c.preview.nextPeriod?.period?.start)}: ${cents(c.preview.nextPeriod?.cents)}</p>
         ${c.status === 'draft' && approver ? h`<div class="actions">${form('change.decide', `/app/subscriptions/${s.id}`, h`${hidden('change', c.id)}${hidden('decision', 'approved')}`, 'Approve this preview')}${form('change.decide', `/app/subscriptions/${s.id}`, h`${hidden('change', c.id)}${hidden('decision', 'discarded')}`, 'Discard', { secondary: true })}</div>` : ''}
-        ${details({ Change: c.id, 'Prepared by': c.created_by, 'Decided by': c.decided_by ?? '—', 'Subscription revision': c.subscription_revision })}</article>`) : h`<p class="empty">No changes prepared.</p>`}
+        ${details({ Change: c.id, 'Prepared by': personName(actor, c.created_by), 'Decided by': personName(actor, c.decided_by), 'Subscription revision': c.subscription_revision })}</article>`) : h`<p class="empty">No changes prepared.</p>`}
       ${records && open.length && prices.length ? form('change.prepare', `/app/subscriptions/${s.id}`, h`${hidden('subscription', s.id)}${select('Change', 'item', open.map((i: any) => ({ value: i.id, label: `${i.product_name} v${i.version} × ${i.quantity}` })), open[0].id)}
         ${select('New price', 'price', prices.map((p: any) => ({ value: p.id, label: `${p.name}${p.nickname ? ` — ${p.nickname}` : ''} v${p.version}: $${p.unit_amount}${p.kind === 'seat' ? ' per seat' : ''}` })), open[0].price_id)}${field('Seats', 'quantity', { type: 'number', value: open[0].quantity })}${field('Effective date', 'effective_date', { type: 'date' })}`, 'Preview change', { layout: 'columns' }) : ''}
       ${approver && !s.end_date ? form('subscription.end', `/app/subscriptions/${s.id}`, h`${hidden('subscription', s.id)}${field('End the subscription on', 'end_date', { type: 'date' })}`, 'End subscription', { layout: 'columns', secondary: true }) : ''}</section>

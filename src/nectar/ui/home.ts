@@ -4,10 +4,11 @@ import type { Bindings } from '../../auth.server'
 import { agentKeys, members } from '../access'
 import { ROLE_LABELS, SCOPES, can, type Actor } from '../actor'
 import { US_STATES, business, taxReady } from '../business'
-import { one } from '../core'
+import { one, parseJson } from '../core'
 import { money } from '../decimal'
 import { audit } from '../views'
 import { MORE, check, checks, details, emptyState, field, form, h, marker, hidden, page, select, table, tag, when } from './html'
+import { personName } from './shell'
 
 const count = async (env: Bindings, sql: string, ...params: unknown[]) => (await one<{ n: number }>(env, sql, ...params))!.n
 
@@ -68,7 +69,7 @@ export async function settingsPage(env: Bindings, actor: Actor, url: URL) {
       ${field('Rate (%) for a flat rate', 'tax_rate', { value: b.tax_mode === 'flat_rate' ? b.tax_rate : '', required: false })}
       ${field('Basis for this declaration', 'tax_note', { value: b.tax_note, hint: 'For example: who advised it and when.' })}`, 'Declare tax policy', { layout: 'columns' })}
       ${b.tax_mode !== 'undeclared' && !taxReady(b) ? form('tax.review', '/app/settings', hidden('revision', b.revision), 'I have reviewed this tax policy') : ''}` : ''}
-    ${b.tax_reviewed_at ? details({ 'Reviewed by': b.tax_reviewed_by, 'Reviewed at': when(b.tax_reviewed_at, b.timezone) }) : ''}</section>` : ''
+    ${b.tax_reviewed_at ? details({ 'Reviewed by': personName(actor, b.tax_reviewed_by), 'Reviewed at': when(b.tax_reviewed_at, b.timezone) }) : ''}</section>` : ''
   const identityCard = h`<section class="card" aria-labelledby="identity"><h2 id="identity">Billing identity</h2>${identity}</section>`
   return page('Business and tax', actor, h`<h1>Business and tax</h1>${tax ? h`<div class="split settings">${identityCard}${tax}</div>` : identityCard}`, { current: '/app/settings', url, showNav: !!b })
 }
@@ -91,7 +92,7 @@ export async function auditPage(env: Bindings, actor: Actor, url: URL) {
   const rows = await audit(env, actor)
   const zone = (await business(env))!.timezone
   return page('Audit trail', actor, h`<h1>Audit trail</h1><p class="hint">Every change, approval and issue, newest first. The trail cannot be edited.</p>
-    ${table(['When', 'Who', 'What', 'Details'], rows.map(r => [when(r.at, zone), r.actor, r.action.replace('.', ' '), details({ subject: r.subject, detail: r.detail })]))}`, { current: '/app/audit', url })
+    ${table(['When', 'Who', 'What', 'Details'], rows.map(r => [when(r.at, zone), personName(actor, r.actor), r.action.replace('.', ' '), details({ subject: r.subject, detail: parseJson(r.detail, r.detail) })]))}`, { current: '/app/audit', url })
 }
 
 export const canExport = (actor: Actor) => can(actor, 'export')

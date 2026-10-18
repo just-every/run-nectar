@@ -8,7 +8,8 @@ import { formatDate, formatPeriod } from '../dates'
 import type { Input } from '../input'
 import { FILES, importJobs, previewImport, shadowSubscriptions, type Preview } from '../movein/stripe'
 import { proposalDetail, proposals } from '../proposals'
-import { area, cents, check, details, field, fileField, form, h, hidden, page, table, tag, when } from './html'
+import { area, cents, check, details, field, fileField, form, h, hidden, page, table, tag, when, who } from './html'
+import { personName } from './shell'
 
 const KIND_LABELS: Record<string, string> = { amendment: 'Contract terms', price_change: 'Price change', usage_correction: 'Usage correction', collection: 'Collections reminder' }
 
@@ -16,7 +17,7 @@ export async function proposalsPage(env: Bindings, actor: Actor, url: URL) {
   const rows = await proposals(env, actor)
   const zone = (await business(env))!.timezone
   return page('Proposals', actor, h`<h1>Proposals</h1><p class="hint">Work prepared by an agent or a colleague. Nectar recomputes every amount itself; nothing changes until a person approves, and a proposal whose records moved since it was prepared cannot be approved.</p>
-    <section class="card">${table(['Proposal', 'Kind', 'Prepared by', 'When', 'Status'], rows.map((p: any) => [h`<a href="/app/proposals/${p.id}">${p.title}</a>`, KIND_LABELS[p.kind], p.created_by_kind === 'agent' ? `${p.created_by} (agent)` : p.created_by, when(p.created_at, zone), tag(p.status === 'pending' ? 'Pending' : p.status === 'approved' ? 'Approved' : 'Rejected')]), { empty: 'No proposals. An agent with a "prepare" credential posts them to /api/nectar/proposal.create.', lead: true })}</section>`, { current: '/app/proposals', url })
+    <section class="card">${table(['Proposal', 'Kind', 'Prepared by', 'When', 'Status'], rows.map((p: any) => [h`<a href="/app/proposals/${p.id}">${p.title}</a>`, KIND_LABELS[p.kind], personName(actor, p.created_by), when(p.created_at, zone), tag(p.status === 'pending' ? 'Pending' : p.status === 'approved' ? 'Approved' : 'Rejected')]), { empty: 'No proposals. An agent with a "prepare" credential posts them to /api/nectar/proposal.create.', lead: true })}</section>`, { current: '/app/proposals', url })
 }
 
 const impactRows = (periods: any[]) => table(['Period', 'Before$', 'After$', 'Difference$'], periods.map((p: any) => [formatPeriod(p.period.start, p.period.end), cents(p.before.subtotalCents), cents(p.after.subtotalCents), cents(p.after.subtotalCents - p.before.subtotalCents)]))
@@ -40,7 +41,7 @@ export async function proposalPage(env: Bindings, actor: Actor, id: string, url:
     : h`${form('proposal.decide', `/app/proposals/${p.id}`, h`${hidden('proposal', p.id)}${hidden('decision', 'approved')}${p.kind === 'collection' ? h`${field('To', 'recipient', { type: 'email', value: payload.recipient })}${field('Subject', 'subject', { value: payload.subject })}${area('Message', 'body', payload.body, true, 10)}` : ''}${field('Note (optional)', 'note', { required: false })}`, p.kind === 'collection' ? 'Approve recipient and wording' : 'Approve', { primary: true })}
        ${form('proposal.decide', `/app/proposals/${p.id}`, h`${hidden('proposal', p.id)}${hidden('decision', 'rejected')}${field('Why not (optional)', 'note', { required: false })}`, 'Reject', { secondary: true })}`
   return page(p.title, actor, h`<p class="crumbs"><a href="/app/proposals">Proposals</a></p><div class="title-row"><h1>${p.title}</h1>${tag(p.status === 'pending' ? (p.stale ? 'Stale' : 'Pending') : p.status === 'approved' ? 'Approved' : 'Rejected')}</div>
-    <p class="sub">${KIND_LABELS[p.kind]} · prepared by ${p.created_by}${p.created_by_kind === 'agent' ? ' (agent)' : ''} · ${when(p.created_at, zone)}${p.decided_by ? ` · decided by ${p.decided_by}` : ''}</p>
+    <p class="sub">${KIND_LABELS[p.kind]} · prepared by ${who(actor, p.created_by)} · ${when(p.created_at, zone)}${p.decided_by ? h` · decided by ${who(actor, p.decided_by)}` : ''}</p>
     <section class="card">${body}</section>${decide ? h`<section class="card" aria-labelledby="decide"><h2 id="decide">Decide</h2>${decide}</section>` : ''}
     ${details({ Proposal: p.id, Payload: payload, Basis: p.basis, Result: p.result ?? '—', 'Decision note': p.decision_note ?? '—' })}`, { current: '/app/proposals', url })
 }
