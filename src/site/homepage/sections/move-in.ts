@@ -6,6 +6,8 @@ import '../styles/move-in.css'
 import { connector, cursor, eyebrow, heading, spark, sticky, story, TICK } from '../parts'
 import run from '../../run.json'
 
+const start = run.clone.lastIndexOf(' ') + 1
+
 const step = (when: string, what: string, last = false) => `<li${last ? ' class="now"' : ''}><p class="when">${when}</p><p class="what">${what}</p></li>`
 
 export const moveIn = () => story('moving-in', 's-move',
@@ -19,5 +21,5 @@ export const moveIn = () => story('moving-in', 's-move',
   + `<div class="copy at">${eyebrow('Moving in · August')}${heading('moving-in-title', 'Off Stripe Billing', 'in one shadow month.')}`
   + '<p class="body">Nectar reads your Stripe account, bills August in shadow beside it and takes over at the period boundary. Cards stay where they are.</p></div>'
   + connector('cn-move at', '0 0 100 110', 'M2 2C40 10 50 80 90 104', true)
-  + `<figure class="terminal at"><p class="dots" aria-hidden="true"><i></i><i></i><i></i></p><pre aria-label="Start Nectar"><code><span class="prompt" aria-hidden="true">$ </span>${run.clone}\n<span class="comment"># installs and starts Nectar on your computer</span></code></pre>${spark('sp-term')}</figure>`
+  + `<figure class="terminal at"><p class="dots" aria-hidden="true"><i></i><i></i><i></i></p><pre aria-label="Start Nectar"><code><span class="prompt" aria-hidden="true">$ </span>${run.clone.slice(0, start)}<span class="repo">${run.clone.slice(start)}</span>\n<span class="comment"># installs and starts Nectar on your computer</span></code></pre>${spark('sp-term')}</figure>`
   + '<p class="also at">Also moves in from Chargebee, Recurly, Maxio, Orb and Metronome</p>')

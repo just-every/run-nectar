@@ -1,6 +1,6 @@
 /* 09 Month-end (page-09.png, 1536 × 1008). Marcus's cursor sits on the
    Billed row, clear of "Marcus Webb, CPA" (critic's build note). */
-.s-close .board { --h: 1008; --hs: 66; }
+.s-close .board { --h: 1008; --hs: 62; }
 .s-close .copy { --x: 100; --y: 195; --w: 535; }
 .s-close .copy .body { max-width: calc(500 * var(--u)); font-size: calc(23.5 * var(--u)); }
 
@@ -41,9 +41,9 @@
 .c-close .sp-close { --x: 614; --y: -50; --s: 40; }
 
 @media (max-width: 1179px) {
-  .c-close { order: 1; margin-top: 40px; }
+  .c-close { order: 1; margin-top: 96px; }
   .c-mrr { order: 2; }
-  .c-close .st-close { --x: auto; left: auto; right: -4px; top: -64px; }
+  .c-close .st-close { --x: auto; left: auto; right: -4px; top: auto; bottom: calc(100% - 6px); }
   .c-close .cu-close { --x: 300; }
 }
 @media (max-width: 759px) {

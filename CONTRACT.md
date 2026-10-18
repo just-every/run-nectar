@@ -425,6 +425,89 @@ lines, not gaps in the target.
 - **Build order:** the provider-free rating and invoice loop (done); shadow migration (done for Stripe files); then Stripe collection, invoice delivery, automatic runs and dunning; then the portal, tax and accounting sync; then pricing breadth, revenue recognition, metrics and the remaining move-ins; agents throughout.
 - **Billing timing:** each published-mode invoice covers one subscription period after it ends (arrears), dated from the period end up to the day it is issued; billing days are 1–28. In-advance billing and other intervals arrive with `CAT-001`.
 
+## Homepage claims
+
+Every capability claim on the owner-approved homepage (`src/site/homepage/`, desk page-s1, 18 October 2026), in the order of its claims table, with the clauses that promise it (claims truth table `evidence/br-nectar/desk-built/CLAIMS.md`). A claim's status comes from its clauses in the Status table below: `done` when every clause is done, `missing` when every one is missing, otherwise `partial`. A claim marked — needs no clause (the licence, the start line and the hosted demo). 76 claims: 8 done, 35 partial, 33 missing.
+
+| # | Section | Claim | Clause(s) | Status |
+| --- | --- | --- | --- | --- |
+| 1 | Hero | "Nectar prices every plan and meter" | `NEC-03`, `NEC-07`, `CAT-002` | partial |
+| 2 | Hero | "sends exact invoices" | `NEC-07`, `NEC-10`, `INV-001`, `INV-002` | partial |
+| 3 | Hero | "collects by card and ACH through your processor" | `PAY-001`, `PAY-003` | missing |
+| 4 | Hero | "recovers failed payments" | `DUN-001`, `DUN-002` | missing |
+| 5 | Hero | "ties out the month" | `AGENT-008`, `REV-002` | missing |
+| 6 | Hero | "100% free, open source alternative to Stripe Billing, Chargebee and Recurly" | — | done |
+| 7 | Hero cards | October bill run · 212 invoices · issued 6:00 am · 100% | `INV-001`, `NEC-09` | partial |
+| 8 | Hero cards | Lakeview Freight · 48 seats · 1.2M API calls · $6,840.00 · Paid by card | `NEC-07`, `PAY-003` | partial |
+| 9 | Hero cards | Mesa Solar · Card declined → Retried Mon Oct 5 · paid | `DUN-001` | missing |
+| 10 | Hero cards | Pinecrest Dental · $2,150.00 ACH · Settled Wed Oct 7 | `PAY-003`, `PAY-004` | missing |
+| 11 | Hero cards | API calls · 1.2M this month · 60% (quota) | `ENT-002`, `USE-006` | partial |
+| 12 | Hero cards | QuickBooks Online · 209 payments synced · 0 errors | `BOOK-001` | missing |
+| 13 | Billing day | "Nectar prepares the run the evening before" | `INV-001`, `NEC-09` | partial |
+| 14 | Billing day | "Clean invoices issue on their own; anything unusual waits for you" | `INV-001`, `NEC-09` | partial |
+| 15 | Billing day | Exception: "PO number required → PO 4471 added" | `INV-004` | partial |
+| 16 | Billing day | Exception: "+38% vs September → 15 seats added Sep 18" | `NEC-09` | done |
+| 17 | Billing day | Exception: "Sep 29 usage short 2,140 events → replayed" | `USE-007`, `USE-004` | partial |
+| 18 | Billing day | Plans and seats, usage, sales tax on 87 invoices, total | `NEC-07`, `TAX-001` | partial |
+| 19 | Billing day | Card 131 · ACH 37 · Invoice terms 44 | `PAY-003`, `INV-004` | partial |
+| 20 | Billing day | "September: 206 invoices" comparison | `NEC-09` | done |
+| 21 | One invoice | "Seats, tiers and usage are rated exactly, to the cent" | `NEC-07`, `CAT-002` | partial |
+| 22 | One invoice | "every invoice keeps the inputs that made it" (rule, inputs fingerprint) | `NEC-07`, `NEC-10` | done |
+| 23 | One invoice | Events billed once · duplicates ignored | `NEC-05`, `USE-001` | partial |
+| 24 | One invoice | Graduated API tiers (first 1,000,000 at $2.00 per 1,000, next at $1.40) | `CAT-002` | missing |
+| 25 | One invoice | Seats billed Oct 1–31 in advance beside September usage | `CAT-001` | missing |
+| 26 | One invoice | Sales tax (Avalara) | `TAX-001` | partial |
+| 27 | One invoice | Paid by card · Visa •• 8817 · 6:02 am | `PAY-003` | missing |
+| 28 | One invoice | Quota card "API calls · September · 1.2M of 2M" | `ENT-002` | missing |
+| 29 | Recovery | "retries each failed payment when it is most likely to clear" (retry table, attempt 2 of 8) | `DUN-001` | missing |
+| 30 | Recovery | "emails a one-click update link" | `DUN-002`, `DUN-003`, `PORT-004` | missing |
+| 31 | Recovery | "never retries a stolen card" | `DUN-001`, `PAY-005` | missing |
+| 32 | Recovery | "Dunning stopped · receipt sent" | `DUN-002`, `DUN-003` | missing |
+| 33 | Recovery | ACH pending Thu Oct 1 → settled Wed Oct 7 | `PAY-003`, `PAY-004` | missing |
+| 34 | Recovery | "October: 9 failed · 9 recovered" | `DUN-004` | missing |
+| 35 | Collections | "The collections agent finds why an invoice is unpaid" (bounce → AP moved) | `AGENT-003`, `INV-002` | partial |
+| 36 | Collections | "asks the right person for the missing piece" (approved contact, resent) | `AGENT-003`, `AR-001` | partial |
+| 37 | Collections | "and checks that it lands" (opened 10:02 am) | `INV-002` | missing |
+| 38 | Collections | Paid by ACH credit | `PAY-007`, `AR-002` | partial |
+| 39 | Collections | Lumen Health · sent to Coupa → approved → paid | `AR-005` | missing |
+| 40 | Collections | Orchard Labs · promised to pay · reminders paused | `AR-001` | partial |
+| 41 | Usage moment | "41,812,406 October usage events · each billed once" from API, SDK and an S3 file | `USE-001`, `USE-003`, `DEV-003`, `NEC-05` | partial |
+| 42 | Usage moment | FN-2253 · API calls Oct 1–31 · Ready for Nov 1 | `INV-001` | partial |
+| 43 | Portal | "Customers change plans in their portal" | `PORT-001`, `PORT-003` | missing |
+| 44 | Portal | "and see the proration first" | `SUB-002`, `PORT-003`, `NEC-08` | partial |
+| 45 | Portal | Pay by ACH · First Citizens •• 2210 in the portal | `PORT-004` | missing |
+| 46 | Portal | "Your app asks Nectar what they can use, and the answer changes in seconds" (entitlements API, 18 ms) | `ENT-001`, `DEV-002` | partial |
+| 47 | Portal | Portal on the business's own domain (billing.fieldnote.io) | `PORT-005` | missing |
+| 48 | Revenue assurance | "An agent compares signed terms, usage, access, invoices and payments for every customer" | `AGENT-001` | partial |
+| 49 | Revenue assurance | "opens a case for each mismatch and drafts the fix" | `AGENT-001`, `AGENT-002` | partial |
+| 50 | Revenue assurance | "You approve it" (approved by Dana Brooks) | `AGENT-002`, `GOV-002`, `NEC-14` | partial |
+| 51 | Revenue assurance | Signed order form §3.2 quoted as the source | `CRM-002` | partial |
+| 52 | Revenue assurance | Seat ramp $95 → $120 and the catch-up | `CAT-003` | missing |
+| 53 | Revenue assurance | Customer email drafted and sent with the fix | `AGENT-002` | partial |
+| 54 | Month-end | "The close agent ties invoices, payments, payouts, tax, the ledger and revenue together" | `AGENT-008` | missing |
+| 55 | Month-end | "and hands your accountant one packet" · Locked | `AGENT-008`, `REV-002` | missing |
+| 56 | Month-end | Stripe payouts · 6 · amounts + fees | `PAY-004` | missing |
+| 57 | Month-end | QuickBooks Online · 212 invoices · 209 payments · 0 errors | `BOOK-001` | missing |
+| 58 | Month-end | Sales tax · 14 states · report ready to file | `TAX-003` | missing |
+| 59 | Month-end | Deferred revenue $96,000 → $88,000 | `REV-001` | missing |
+| 60 | Month-end | "1 break found … missing in QuickBooks → synced" | `AGENT-008`, `BOOK-001` | missing |
+| 61 | Month-end | MRR $171,500 → $178,230 with expansion and churn | `RPT-001` | missing |
+| 62 | Month-end | Open · 3 invoices · Net 60 · due Mon Nov 30 | `NEC-12`, `INV-004` | partial |
+| 63 | Moving in | "Nectar reads your Stripe account" | `NEC-16`, `MOVE-006` | partial |
+| 64 | Moving in | "bills August in shadow beside it" | `NEC-16`, `MOVE-006` | partial |
+| 65 | Moving in | "and takes over at the period boundary" | `NEC-16`, `MOVE-006` | partial |
+| 66 | Moving in | "Cards stay where they are" · 168 payment methods reused · 0 customers asked | `MOVE-005` | missing |
+| 67 | Moving in | Usage relayed to Stripe · 0 differences | `MOVE-010` | partial |
+| 68 | Moving in | 201 August invoices shadow-rated · 200 equal to the cent · 1 explained | `NEC-16` | done |
+| 69 | Moving in | "Stripe bills no September period" | `MOVE-006` | partial |
+| 70 | Moving in | "Numbering continues · FN-1834 → FN-1835" | `MOVE-011` | partial |
+| 71 | Moving in | Terminal: `npx -y @runeditrun/rer dev just-every/run-nectar` starts Nectar | — | done |
+| 72 | Moving in | "Also moves in from Chargebee, Recurly, Maxio, Orb and Metronome" | `MOVE-001`, `MOVE-002`, `MOVE-003`, `MOVE-004` | missing |
+| 73 | Closing | "100% free and open source. MIT licensed." | — | done |
+| 74 | Closing | October close · Locked | `REV-002` | missing |
+| 75 | Closing | December bill run · scheduled · 6:00 am | `INV-001` | partial |
+| 76 | Hero | "Try the demo" opens the hosted demo | — | done |
+
 ## Status
 
 Judged from the code and tests at commit `a38323a4ad258045cbe8a23a79d616d796433767` (17 October 2026).

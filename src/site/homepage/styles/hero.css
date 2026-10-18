@@ -80,6 +80,10 @@
 @media (max-width: 1179px) {
   .hc h3, .hc .small { white-space: normal; }
 }
+@media (max-width: 539px) {
+  .h-mesa, .h-pine { grid-column: 1 / -1; grid-template-columns: auto minmax(0, 1fr); align-items: center; }
+  .hc .paid .pill { white-space: nowrap; }
+}
 @media (min-width: 760px) and (max-width: 1179px) {
   .hero-cards { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
