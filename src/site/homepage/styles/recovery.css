@@ -23,7 +23,7 @@
 .c-mesa .note { width: fit-content; margin-top: calc(16 * var(--u)); padding: calc(11 * var(--u)) calc(16 * var(--u)); border-radius: calc(14 * var(--u)); background: #f3f4f6; font-size: calc(16.5 * var(--u)); color: #3b414b; }
 .c-mesa .foot { margin-top: calc(46 * var(--u)); padding: calc(22 * var(--u)) 0 0 calc(52 * var(--u)); border-top: 1px solid var(--nc-line); font-size: calc(18 * var(--u)); color: #6b7280; }
 .c-mesa .cu-mesa { --x: 350; --y: 466; }
-.c-mesa .st-recovery { --x: -92; --y: 492; --w: 152; --sr: -12; font-size: calc(28 * var(--u)); padding: calc(24 * var(--u)) calc(22 * var(--u)); }
+.c-mesa .st-recovery { --x: -122; --y: 492; --w: 152; --sr: -12; font-size: calc(28 * var(--u)); padding: calc(24 * var(--u)) calc(22 * var(--u)); }
 .c-mesa .sp-mesa { --x: -46; --y: -32; --s: 42; }
 .cn-pine { --x: 1110; --y: 204; --w: 52; --hh: 90; }
 .cn-birch { --x: 1110; --y: 490; --w: 52; --hh: 92; }

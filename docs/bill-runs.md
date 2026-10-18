@@ -15,7 +15,7 @@ The bill run shows the month on one page:
   invoice, unrated usage, no billing email, tax not declared, credits that
   exceed charges, and a mismatch with the previous biller. Tax not declared and
   credits exceeding charges block approval until they are fixed.
-- **Draft invoices**, each with its change against the last invoice. **Review →**
+- **Draft invoices**, each with its change against the last invoice. **Review →**
   opens one.
 
 ## Read an invoice

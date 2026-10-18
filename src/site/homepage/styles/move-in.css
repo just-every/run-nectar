@@ -1,5 +1,5 @@
 /* 10 Moving in (page-10.png, 1536 × 929). */
-.s-move .board { --h: 929; --hs: 68; }
+.s-move .board { --h: 929; --hs: 61; }
 .s-move .copy { --x: 898; --y: 192; --w: 615; }
 .s-move .copy .body { max-width: calc(600 * var(--u)); font-size: calc(23 * var(--u)); }
 
@@ -30,6 +30,7 @@
 .s-move .terminal pre { margin-top: calc(26 * var(--u)); font: calc(16 * var(--u)) / 2 var(--nc-mono); white-space: pre; }
 .s-move .terminal .prompt { color: #9aa1ad; }
 .s-move .terminal .comment { color: #8d95a3; }
+.s-move .terminal .repo { white-space: nowrap; }
 .s-move .terminal .sp-term { --x: 490; --y: -40; --s: 46; --sr: 92; }
 .s-move .also { --x: 928; --y: 772; --w: 550; font-size: calc(17.5 * var(--u)); text-align: center; color: #4a5160; white-space: nowrap; }
 

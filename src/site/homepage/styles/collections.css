@@ -1,5 +1,5 @@
 /* 05 Collections (page-05.png, 1536 × 1004). */
-.s-collections .board { --h: 1004; --hs: 88; }
+.s-collections .board { --h: 1004; --hs: 77; }
 .s-collections .copy { --x: 1010; --y: 183; --w: 500; }
 .s-collections .copy .sp-copy { --x: 260; --y: 355; --s: 42; }
 
@@ -58,5 +58,6 @@
   .stages p { margin-top: 0; }
   .stages .pill { margin-top: 0; }
   .c-orchard { flex-direction: column; align-items: flex-start; padding: 18px 16px; }
-  .c-cedar .st-collections { right: 0; }
+  .c-cedar { margin-top: 96px; }
+  .c-cedar .st-collections { right: 0; top: auto; bottom: calc(100% - 4px); padding: 16px 18px 10px; font-size: 24px; }
 }
