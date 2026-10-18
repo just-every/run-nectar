@@ -1,5 +1,5 @@
 /* 04 Recovery (page-04.png, 1536 × 871). */
-.s-recovery .board { --h: 871; --hs: 72; }
+.s-recovery .board { --h: 871; --hs: 68; }
 .s-recovery .copy { --x: 82; --y: 220; --w: 545; }
 .s-recovery .copy .body { max-width: calc(490 * var(--u)); font-size: calc(24 * var(--u)); }
 .s-recovery .summary { display: flex; align-items: center; gap: calc(14 * var(--u)); width: fit-content; margin-top: calc(32 * var(--u)); padding: calc(12 * var(--u)) calc(24 * var(--u)) calc(12 * var(--u)) calc(16 * var(--u)); border-radius: 999px; background: var(--nc-mint); font-size: calc(20 * var(--u)); color: #1f5133; }

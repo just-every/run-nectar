@@ -2377,7 +2377,7 @@
       "executable": false
     },
     "src/site/homepage/styles/invoice.css": {
-      "sha256": "0e8d9f658be4efdace20c994319c82f646e805a635107065d2450ff3fa7a0957",
+      "sha256": "306b8a6c61fe24cf0e2056d889e852137b93721dd06126b3ce03a0e6f1e0ce57",
       "executable": false
     },
     "src/site/homepage/styles/landing.css": {
@@ -2397,7 +2397,7 @@
       "executable": false
     },
     "src/site/homepage/styles/recovery.css": {
-      "sha256": "b0102ca41665f0b57a42f242e73d4ce1ab6f04383c8e0232e552ac231b662bf0",
+      "sha256": "06ac71ced961f9db26bf806ebf4fa62c49dd94c1d352e637067d0373741adb5d",
       "executable": false
     },
     "src/site/homepage/styles/usage.css": {

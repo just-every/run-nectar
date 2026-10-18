@@ -1,5 +1,5 @@
 /* 03 One invoice (page-03.png, 1536 × 921). */
-.s-invoice .board { --h: 921; --hs: 80; }
+.s-invoice .board { --h: 921; --hs: 77; }
 .s-invoice .copy .body { font-size: calc(26.5 * var(--u)); }
 .s-invoice .copy { --x: 1030; --y: 292; --w: 490; }
 
