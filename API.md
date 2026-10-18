@@ -36,6 +36,8 @@ step by step; `CUSTOMER` may be the internal id or the external id), `imports`,
 | `change.prepare` / `change.decide` | finance / a person with approval | `subscription`, `item`, `price`, `quantity`, `effective_date` / `change`, `decision` |
 | `subscription.end` | a person with approval | `subscription`, `end_date` |
 | `usage.submit` | owner, finance, `usage` credential | `events: [{event_id, customer, meter, quantity, occurred_at}]` (up to 5,000; times ISO 8601 with an offset) or a CSV `file` |
+| `usage.control` | owner, finance, `usage` credential | `customer`, `meter`, `day` (billing timezone), `expected_count`, `expected_quantity`; identical submissions change nothing |
+| `usage.acknowledge` | a person with approval | `control`, exact `basis` from `usage/inspect`, `reason`; any later event or source change invalidates acknowledgement |
 | `billrun.prepare` | owner, finance | `period` (`YYYY-MM`) |
 | `invoice.approve` | a person with approval | `invoice` or `run`, `acknowledge` when exceptions are listed |
 | `invoice.finalise` | a person with approval | `invoice` or `run`, optional `issue_date` |
@@ -71,3 +73,5 @@ curl -X POST "$ORIGIN/api/nectar/proposal.create" \
   -H "Authorization: Bearer $NECTAR_KEY" -H 'content-type: application/json' \
   -d '{"kind":"amendment","title":"Renewal discount","payload":{"subscription":"SUB_ID","kind":"discount_percent","value":"20","effective_from":"2026-09-15"},"evidence":{"clauses":[{"quote":"…reduced by twenty percent (20%).","reference":"Order form §2"}]}}'
 ```
+
+`usage/inspect` includes daily `controls` with expected and ingested counts and exact quantities, differences, acknowledgement and basis. A mismatch blocks invoice approval even with the generic exception checkbox. Replaying missing usage or acknowledging the exact difference clears it on re-preparation. Changes after invoice approval invalidate issue.

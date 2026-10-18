@@ -6,13 +6,14 @@
 import type { Bindings } from '../auth.server'
 import { actorLabel, requireCapability, requireMember, type Actor } from './actor'
 import { requireBusiness, taxReady, type Business } from './business'
-import { all, commit, guard, insist, newId, now, one, parseJson, stmt, type Row } from './core'
+import { all, commit, fingerprint as hashInputs, guard, insist, newId, now, one, parseJson, stmt, type Row } from './core'
 import { addDays, isMonth, periodStartingIn, requireDate, today } from './dates'
 import { rated } from './inputs'
+import { reconciliationFor } from './reconciliation'
 import { RATING_VERSION, type Exception, type Rating } from './rating'
 import type { Input } from './input'
 
-const BLOCKING = new Set(['tax_undeclared', 'negative_total'])
+const BLOCKING = new Set(['tax_undeclared', 'negative_total', 'usage_reconciliation'])
 
 interface Draft { sub: Row; period: { start: string; end: string }; rating: Rating; fingerprint: string; input: unknown; comparison: Row; exceptions: Exception[] }
 
@@ -35,8 +36,19 @@ async function incumbentComparison(env: Bindings, sub: Row, period: { start: str
   return { found: true, invoices: [...new Set(lines.map(line => line.invoice))], rows, incumbentSubtotalCents: incumbentTotal, nectarSubtotalCents: rating.subtotalCents, reconciled: rows.every(row => row.nectarCents === row.incumbentCents) }
 }
 
+async function reconciledRating(env: Bindings, business: Business, subscription: string, period: { start: string; end: string }) {
+  const result = await rated(env, business, subscription, period)
+  const reconciliation = await reconciliationFor(env, subscription, period, business.timezone)
+  if (!reconciliation.length) return result
+  const input = { ...result.input, reconciliation }
+  const exceptions = reconciliation.filter(row => row.mismatch && !row.acknowledged).map(row => ({
+    code: 'usage_reconciliation', message: `${row.day} · ${row.meter}: source expects ${row.expectedCount} events / ${row.expectedQuantity}; ingested ${row.actualCount} / ${row.actualQuantity} (difference ${row.countDifference} events / ${row.quantityDifference}). Resolve or acknowledge before issue.`, detail: row,
+  }))
+  return { input, rating: { ...result.rating, exceptions: [...result.rating.exceptions, ...exceptions] }, fingerprint: await hashInputs(input) }
+}
+
 export async function draftFor(env: Bindings, business: Business, sub: Row, period: { start: string; end: string }): Promise<Draft> {
-  const { rating, fingerprint, input } = await rated(env, business, sub.id, period)
+  const { rating, fingerprint, input } = await reconciledRating(env, business, sub.id, period)
   const exceptions = [...rating.exceptions]
   const previous = await one(env, "SELECT number, period_start, total_cents, subtotal_cents FROM nc_invoices WHERE subscription_id = ? AND status = 'issued' AND period_start < ? ORDER BY period_start DESC LIMIT 1", sub.id, period.start)
   const incumbent = await incumbentComparison(env, sub, period, rating)
@@ -126,7 +138,7 @@ export async function invoiceDetail(env: Bindings, actor: Actor, id: string): Pr
 }
 
 async function currentFingerprint(env: Bindings, business: Business, invoice: Row) {
-  return (await rated(env, business, invoice.subscription_id, { start: invoice.period_start, end: invoice.period_end })).fingerprint
+  return (await reconciledRating(env, business, invoice.subscription_id, { start: invoice.period_start, end: invoice.period_end })).fingerprint
 }
 
 async function approveOne(env: Bindings, actor: Actor, business: Business, invoice: Row, acknowledged: boolean) {

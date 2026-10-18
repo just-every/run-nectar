@@ -510,13 +510,15 @@ Every capability claim on the owner-approved homepage (`src/site/homepage/`, des
 
 ## Status
 
-Judged from the code and tests at commit `a38323a4ad258045cbe8a23a79d616d796433767` (17 October 2026).
+Baseline judged from the code and tests at commit `a38323a4ad258045cbe8a23a79d616d796433767` (17 October 2026).
+
+Round update: `USE-007` is proven by its named public-door journey in `tests/nectar/reconciliation.mjs`.
 
 | Clauses | Done | Partial | Missing | Total |
 | --- | ---: | ---: | ---: | ---: |
 | Published | 16 | 0 | 0 | 16 |
-| Target and push further | 2 | 38 | 68 | 108 |
-| All | 18 | 38 | 68 | 124 |
+| Target and push further | 3 | 37 | 68 | 108 |
+| All | 19 | 37 | 68 | 124 |
 
 | Clause | Title | Kind | Status | Evidence | Gap |
 | --- | --- | --- | --- | --- | --- |
@@ -554,7 +556,7 @@ Judged from the code and tests at commit `a38323a4ad258045cbe8a23a79d616d7964337
 | `USE-004` | Usage corrections after billing | target | partial | `src/nectar/rating.ts`; `src/nectar/proposals.ts`; `tests/nectar/flows.mjs` | Late usage bills in the next period and draft corrections ship; no correcting-invoice or credit-note policy and no historical backfill replay. |
 | `USE-005` | Usage alerts and threshold invoicing | target | missing |  | No usage or spend thresholds, alerts or threshold invoices. |
 | `USE-006` | Live usage and the upcoming invoice | target | partial | `src/nectar/usage.ts`; `src/nectar/billruns.ts`; `tests/nectar/flows.mjs` | Operators inspect period usage and draft charges; no live upcoming-invoice API or customer view. |
-| `USE-007` | Reconcile usage with its source | target | partial | `src/nectar/usage.ts`; `tests/nectar/flows.mjs` | Days with no usage and late events are listed before rating; no source control totals or blocking reconciliation. |
+| `USE-007` | Reconcile usage with its source | target | done | `src/nectar/reconciliation.ts`; `src/nectar/billruns.ts`; `tests/nectar/reconciliation.mjs` — USE-007 public HTTP journey |  |
 | `SUB-001` | Lifecycle states driven by dates and payments | target | partial | `src/nectar/subscriptions.ts`; `src/nectar/rating.ts`; `tests/nectar/flows.mjs` | Trial and end dates shape rating; no past-due, unpaid or paused states, payment-driven transitions or state webhooks. |
 | `SUB-002` | Immediate and scheduled plan changes with proration policy | target | partial | `src/nectar/subscriptions.ts`; `tests/nectar/flows.mjs` | Scheduled changes with previewed proration ship (NEC-08); no immediate changes, proration policies or in-advance charges and credits. |
 | `SUB-003` | Pause, resume and cancel | target | partial | `src/nectar/subscriptions.ts`; `tests/nectar/flows.mjs` | An approver can end a subscription on a date; no pause, resume, immediate cancellation credit, reasons or reactivation. |
