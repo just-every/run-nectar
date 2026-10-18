@@ -15,7 +15,7 @@ import type { Input } from './input'
 
 const BLOCKING = new Set(['tax_undeclared', 'negative_total', 'usage_reconciliation'])
 
-interface Draft { sub: Row; period: { start: string; end: string }; rating: Rating; fingerprint: string; input: unknown; comparison: Row; exceptions: Exception[] }
+interface Draft { sub: Row; period: { start: string; end: string }; rating: Rating; fingerprint: string; input: { version: string }; comparison: Row; exceptions: Exception[] }
 
 async function incumbentComparison(env: Bindings, sub: Row, period: { start: string }, rating: Rating) {
   if (!sub.provider_ref) return null
@@ -87,19 +87,20 @@ export async function prepareRun(env: Bindings, actor: Actor, input: Input) {
     invoices: drafts.filter(d => d.sub.billing_mode === 'live').length, shadow: drafts.filter(d => d.sub.billing_mode === 'shadow').length, totals, exceptions: exceptionCounts, skipped, open,
     previous: previousRun ? { run: previousRun.id, period: previousRun.period, totals: parseJson<Row>(previousRun.summary_json, {}).totals ?? null } : null,
   }
+  const runVersion = drafts.find(draft => draft.input.version !== RATING_VERSION)?.input.version ?? RATING_VERSION
   const runId = newId(), at = now(), statements: D1PreparedStatement[] = []
   const prior = await one(env, "SELECT id FROM nc_bill_runs WHERE period = ? AND status = 'draft'", month)
   // A replaced draft keeps any invoice it already issued: it closes as finalised, otherwise it is discarded.
   if (prior) statements.push(
     stmt(env, "UPDATE nc_invoices SET status = 'discarded' WHERE bill_run_id = ? AND status IN ('draft', 'shadow', 'approved')", prior.id),
     stmt(env, "UPDATE nc_bill_runs SET status = CASE WHEN EXISTS(SELECT 1 FROM nc_invoices WHERE bill_run_id = ?1 AND status = 'issued') THEN 'finalised' ELSE 'discarded' END WHERE id = ?1 AND status = 'draft'", prior.id))
-  statements.push(stmt(env, "INSERT INTO nc_bill_runs (id, period, cutoff_at, calc_version, status, summary_json, created_by, created_at) VALUES (?, ?, ?, ?, 'draft', ?, ?, ?)", runId, month, at, RATING_VERSION, JSON.stringify(summary), actorLabel(actor), at))
+  statements.push(stmt(env, "INSERT INTO nc_bill_runs (id, period, cutoff_at, calc_version, status, summary_json, created_by, created_at) VALUES (?, ?, ?, ?, 'draft', ?, ?, ?)", runId, month, at, runVersion, JSON.stringify(summary), actorLabel(actor), at))
   for (const draft of drafts) {
     const invoiceId = newId()
     statements.push(stmt(env, `INSERT INTO nc_invoices (id, bill_run_id, customer_id, subscription_id, period_start, period_end, status, subtotal_cents, tax_cents, total_cents, calc_version, source_fingerprint, calculation_json, comparison_json, exceptions_json, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, invoiceId, runId, draft.sub.customer_id, draft.sub.id, draft.period.start, draft.period.end, draft.sub.billing_mode === 'shadow' ? 'shadow' : 'draft',
-      draft.rating.subtotalCents, draft.rating.taxCents, draft.rating.totalCents, RATING_VERSION, draft.fingerprint,
-      JSON.stringify({ version: RATING_VERSION, fingerprint: draft.fingerprint, tax: draft.rating.tax, consumedEvents: draft.rating.consumedEvents, inputs: draft.input }), JSON.stringify(draft.comparison), JSON.stringify(draft.exceptions), at))
+      draft.rating.subtotalCents, draft.rating.taxCents, draft.rating.totalCents, draft.input.version, draft.fingerprint,
+      JSON.stringify({ version: draft.input.version, fingerprint: draft.fingerprint, tax: draft.rating.tax, consumedEvents: draft.rating.consumedEvents, inputs: draft.input }), JSON.stringify(draft.comparison), JSON.stringify(draft.exceptions), at))
     draft.rating.lines.forEach((line, index) => statements.push(stmt(env, `INSERT INTO nc_invoice_lines (id, invoice_id, seq, kind, description, quantity, unit_amount, amount_cents, taxable, price_id, meter_id, period_start, period_end, evidence_json)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, newId(), invoiceId, index + 1, line.kind, line.description, line.quantity, line.unitAmount, line.amountCents, line.taxable ? 1 : 0, line.priceId, line.meterId, line.periodStart, line.periodEnd, JSON.stringify(line.evidence))))
   }

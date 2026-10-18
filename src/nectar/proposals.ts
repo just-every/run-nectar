@@ -11,6 +11,7 @@ import { all, canonical, commit, guard, insist, newId, now, one, parseJson, stmt
 import { canonicalDecimal, micros } from './decimal'
 import { addDays, isDate, localDate, periodContaining, periodStartingIn, zonedStart } from './dates'
 import { ratingInputs } from './inputs'
+import { requirePrice } from './catalog'
 import { Input } from './input'
 import { rate, type AmendmentIn, type RatingInput } from './rating'
 import { basisKey, reminderBasis, reminderDraft } from './collections'
@@ -34,6 +35,7 @@ async function amendmentPlan(env: Bindings, business: Business, payload: Row) {
   insist(isDate(payload.effective_from), 'effective_from_required')
   insist(!payload.effective_to || (isDate(payload.effective_to) && payload.effective_to > payload.effective_from), 'invalid_effective_to')
   const priceId = kind === 'price_override' ? String(payload.price ?? '') : null
+  if (priceId) insist((await requirePrice(env, priceId)).pricing_model === 'simple', 'override_price_model')
   if (priceId) insist(await one(env, 'SELECT 1 FROM nc_items WHERE subscription_id = ? AND price_id = ?', sub.id, priceId), 'override_price_not_on_subscription')
   insist(!await startsInIssuedPeriod(env, sub.id, payload.effective_from), 'period_already_invoiced', 409)
   const amendment: AmendmentIn = { id: 'proposed', kind: kind as AmendmentIn['kind'], value, priceId, from: payload.effective_from, to: payload.effective_to || null, note: String(payload.note ?? '').slice(0, 200) }
