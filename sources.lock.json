@@ -81,7 +81,7 @@
       "executable": false
     },
     "DEMO.md": {
-      "sha256": "fe91d8c258ce1b07568829ca70e60eb42b429cd3b217cd41a34b466bf8443770",
+      "sha256": "7948b42c69f907782684e74dcf2ed0dba571d6a234e95814a52431736c9d156d",
       "executable": false
     },
     "deploy-demo.json": {
@@ -325,11 +325,11 @@
       "executable": false
     },
     "public/nectar.css": {
-      "sha256": "ab1d62afb9234d0e942b44ba9a4e02a69149086948e6762b82a8cae0aaf878b5",
+      "sha256": "d7c6025655f2a33c55e4c39ad2d1864e6e0bf7d2476768121a2c68d5c5e1c3e3",
       "executable": false
     },
     "public/rer-theme.css": {
-      "sha256": "5e3448a12ea72daa6b80cfdfdc18edc1beb70d55cbb17f674e64b9fcfbc7ec5e",
+      "sha256": "1b17739c3ae76da76b78f26e1ce496f2ca84a11b26047985b5e919c813a680dd",
       "executable": false
     },
     "public/site/closing-peach-300.avif": {
@@ -577,19 +577,19 @@
       "executable": false
     },
     "src/demo.ts": {
-      "sha256": "1fa3c2d9bbb36ea3e917a82eeeb7e8877021711b9d9d8c7f43bbf863ce5fe851",
+      "sha256": "e6a43c87831a1be0274e9dc524f345b69b1cdf69b6ac2ad887e41c20f826b647",
       "executable": false
     },
     "src/demo/billing.ts": {
-      "sha256": "72c06341ca562723260f8a9b0998e10020c1e0ba315253bc177613ab75365d61",
+      "sha256": "b4c1a89c4d7c6f6abf0823d4c08c6dd100f800fa40d18ff84a563462d0faaa36",
       "executable": false
     },
     "src/demo/records.ts": {
-      "sha256": "3800722cd5c4776a3d2c3d4e66923d1b8896819cb28a93b0ce547ecddb7c7c52",
+      "sha256": "a9c0b4c14e1deef8f735aff54298efe25c5c55de8a651209e20d275fda1719ee",
       "executable": false
     },
     "src/demo/work.ts": {
-      "sha256": "5492fae067e04da505587e789eeb7143ac48c0f31f7456eed4fe8283c434a1e4",
+      "sha256": "eb389bd5c68b00668c29aecd415bd43481bfaf46f6aec22c803f34dca9945733",
       "executable": false
     },
     "src/dev-personas.ts": {
@@ -2153,7 +2153,7 @@
       "executable": false
     },
     "src/nectar/collections.ts": {
-      "sha256": "fd50ead900b3c120ca1d2781452e36980228a75eddadc4a0643ca33d6f3cbfac",
+      "sha256": "1a20a0668a7f09f3a61ba31a6d269d33b29255f5dd6f9670c30ce3dd8fbd021a",
       "executable": false
     },
     "src/nectar/core.ts": {
@@ -2181,7 +2181,7 @@
       "executable": false
     },
     "src/nectar/http.ts": {
-      "sha256": "8111cc2288f2bb007f07bf0e601c38bc8543d64dda8f7e3f9643cbd6fcf13826",
+      "sha256": "258b119a6e71994aab1410694fdd43d2cc9964d361aef2f9a9cf7d1619b83d6e",
       "executable": false
     },
     "src/nectar/input.ts": {
@@ -2209,7 +2209,7 @@
       "executable": false
     },
     "src/nectar/receivables.ts": {
-      "sha256": "eb561b670779537425820549da457ab79e0d471da3167614fad29bd5b7ba37f6",
+      "sha256": "11a16f5321629c2035e0bdb1d1d51a9be57aa76b92c3b94e9d45e1fe39399052",
       "executable": false
     },
     "src/nectar/subscriptions.ts": {
@@ -2217,7 +2217,7 @@
       "executable": false
     },
     "src/nectar/ui/billing.ts": {
-      "sha256": "25f0dbace4182a9d6d30276000d8a3f125f775f27fe1f5e624ad928781d156f5",
+      "sha256": "dbc024f10c0707b457babff572a522a22016b0635c4f17583a5dd6e1f8e66f0a",
       "executable": false
     },
     "src/nectar/ui/customers.ts": {
@@ -2225,23 +2225,35 @@
       "executable": false
     },
     "src/nectar/ui/home.ts": {
-      "sha256": "617382b17740d2d84e462f74b572f19611393adf3fb8bd849074fffb21a7db48",
+      "sha256": "a533e90cd1c035f5240c1f3d7ff930aefedf38480ccc4950d240f6f412f3cfe3",
       "executable": false
     },
     "src/nectar/ui/html.ts": {
-      "sha256": "fe7af1ccc2c8495d8cacc7353b7606800b6603f2ac4a9b87315172881f383b50",
+      "sha256": "35c5d42f1c4362af45f638623f2c0783f1b5ce7cd4951e6a7260e46cd4d9ed08",
+      "executable": false
+    },
+    "src/nectar/ui/icons.ts": {
+      "sha256": "b388911b75efed4bc8d92a67f7e89fb8e0447ed07c875ff3c3ac54360bba8c67",
       "executable": false
     },
     "src/nectar/ui/pages.ts": {
-      "sha256": "32530abad05b9f132788077738d6ea373c548d5024b4bdd0159cc7a582280d99",
+      "sha256": "f84b35a70129a6175d709c431a6a8b75a68a3feebc8ab295f8d18a2dc9019fd6",
+      "executable": false
+    },
+    "src/nectar/ui/receivables.ts": {
+      "sha256": "88d139670b399c815f66a7052d117f9fdcbe8670d05d608f48999f6c17777662",
       "executable": false
     },
     "src/nectar/ui/review.ts": {
-      "sha256": "d8297811f76203066d9930ac4fe7200cc37510798f64150138743d92e39d6062",
+      "sha256": "4cb62ab508f856aa9017c557c28c58af5db3976d021fdb0f528981d7f94bf55d",
+      "executable": false
+    },
+    "src/nectar/ui/shell.ts": {
+      "sha256": "3777d022a7046aa11d58af7929ab05dcb80a76af9c76e3e048e5e9aa2a857b33",
       "executable": false
     },
     "src/nectar/ui/work.ts": {
-      "sha256": "8ffe9935acc741f3cb003bcb55a986abf886f94cbae15a559ad68b2f319411d3",
+      "sha256": "adbba3efa138c0095646a73c7b760412b1c27dd784eb52407d62d5bef8eeb185",
       "executable": false
     },
     "src/nectar/usage.ts": {
@@ -2469,7 +2481,7 @@
       "executable": false
     },
     "tests/nectar/journey.mjs": {
-      "sha256": "69459653138581d5cd009305d3e64b0ef4714c825136bc07b6c991713c8826b6",
+      "sha256": "12f3e3a52b803032c6fba980c4a564f4413d0413d8c05f50090432d98a98a0ba",
       "executable": false
     },
     "tests/runtime.mjs": {
