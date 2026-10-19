@@ -1,3 +1,4 @@
+import { applyPolicy } from './policy-helper.mjs'
 import assert from 'node:assert/strict'
 
 export async function creditPolicy(h, owner) {
@@ -38,7 +39,7 @@ export async function creditPolicy(h, owner) {
   }
 
   let request
-  await h.api('credit.policy', owner, { two_person_above: '1000.00' })
+  await applyPolicy(h, owner, 'credit.policy', { two_person_above: '1000.00' })
   try {
     for (const who of [finance, accountant, agent]) {
       await h.api('credit.policy', who, { two_person_above: '' }, 403)
@@ -80,11 +81,11 @@ export async function creditPolicy(h, owner) {
     // The request retains the exact policy it was prepared under. The new
     // threshold still requires two people; its revision alone makes it stale.
     const stalePolicy = await prepare('Credit prepared before the policy changed')
-    await h.api('credit.policy', owner, { two_person_above: '1200.00' })
+    await applyPolicy(h, owner, 'credit.policy', { two_person_above: '1200.00' })
     await h.api('credit.approve', owner, { request: stalePolicy }, 409)
     await credits(expected)
   } finally {
-    await h.api('credit.policy', owner, { two_person_above: '' })
+    await applyPolicy(h, owner, 'credit.policy', { two_person_above: '' })
   }
   console.log('GOV-002 credit threshold, separate approver, exact balance and policy approvals passed')
   return { invoice, request }

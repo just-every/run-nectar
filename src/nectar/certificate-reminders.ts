@@ -2,6 +2,7 @@
 import type { Bindings } from '../auth.server'
 import { operatorMail } from '../mail.server.mjs'
 import { actorLabel, requireMember, requireOwner, type Actor } from './actor'
+import { preparePolicyChange } from './policy-changes'
 import { business } from './business'
 import { all, commit, now, one, stmt } from './core'
 import { esc } from './ui/html'
@@ -57,7 +58,5 @@ export async function remindCertificates(env: Bindings, actor: Actor) {
 export async function configureCertificatePolicy(env: Bindings, actor: Actor, input: import('./input').Input) {
   requireOwner(actor)
   const enabled = input.flag('enabled')
-  await commit(env, [stmt(env, 'INSERT INTO nc_certificate_policy (singleton,enabled,revision,changed_by,changed_at) VALUES (1,?,1,?,?) ON CONFLICT(singleton) DO UPDATE SET enabled=excluded.enabled,revision=revision+1,changed_by=excluded.changed_by,changed_at=excluded.changed_at', enabled ? 1 : 0, actorLabel(actor), now())],
-    { actor: actorLabel(actor), action: 'certificate.policy', subject: 'business', detail: { enabled } })
-  return { enabled }
+  return await preparePolicyChange(env, actor, 'certificate', { enabled })
 }

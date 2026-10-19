@@ -13,6 +13,7 @@ import { customers, requireCustomer } from './customers'
 import { API_DOORS, match } from './doors'
 import { entitlements, explainEntitlement } from './exports'
 import { importJobs, shadowSubscriptions } from './movein/stripe'
+import { policyChanges, policySettings } from './policy-changes'
 import { proposalDetail, proposals } from './proposals'
 import { customerLedger, payments } from './receivables'
 import { subscriptionDetail } from './subscriptions'
@@ -54,6 +55,8 @@ export const views: Record<string, View> = {
   payments: (env, actor) => payments(env, actor),
   notices: (env, actor) => notices(env, actor),
   tasks: (env, actor) => tasks(env, actor),
+  policySettings: (env, actor) => policySettings(env, actor),
+  policies: (env, actor) => policyChanges(env, actor),
   proposals: (env, actor) => proposals(env, actor),
   proposal: (env, actor, _request, id) => proposalDetail(env, actor, id),
   entitlement: (env, actor, _request, id, url) => url.searchParams.get('feature') ? explainEntitlement(env, actor, id, url.searchParams.get('feature')!, url.searchParams.get('date') ?? undefined) : entitlements(env, actor, id),

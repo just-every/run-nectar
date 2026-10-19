@@ -17,6 +17,7 @@ import { decide, propose } from './proposals'
 import { allocate, approveCredit, issueCreditNote, prepareCredit, recordPayment } from './receivables'
 import { createSubscription, decideAmendment, decideChange, endSubscription, prepareChange, proposeAmendment } from './subscriptions'
 import { acknowledgeControl, recordControl } from './reconciliation'
+import { decidePolicyChange } from './policy-changes'
 import { configureCreditPolicy } from './credit-policy'
 import { addCharge } from './one-time-charges'
 import { prepareManualInvoice } from './manual-invoices'
@@ -61,6 +62,7 @@ export const actions: Record<string, Handler> = {
   'billrun.prepare': prepareRun,
   'invoice.approve': approve,
   'invoice.finalise': finalise,
+  'policy.decide': decidePolicyChange,
   'credit.policy': configureCreditPolicy,
   'credit.prepare': prepareCredit,
   'credit.approve': approveCredit,

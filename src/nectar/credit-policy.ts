@@ -3,6 +3,7 @@ import type { Bindings } from '../auth.server'
 import { actorLabel, requireCapability, requireMember, requireOwner, type Actor } from './actor'
 import { all, commit, fingerprint, guard, insist, newId, now, one, stmt, type Row } from './core'
 import { cents } from './decimal'
+import { preparePolicyChange } from './policy-changes'
 import type { Input } from './input'
 
 export async function creditPolicy(env: Bindings) {
@@ -13,9 +14,7 @@ export async function configureCreditPolicy(env: Bindings, actor: Actor, input: 
   requireOwner(actor)
   const text = input.text('two_person_above', { max: 20, optional: true })
   const limit = text ? cents(text, 'two_person_above') : null
-  await commit(env, [stmt(env, 'INSERT INTO nc_credit_policy (singleton,two_person_above_cents,revision,changed_by,changed_at) VALUES (1,?,1,?,?) ON CONFLICT(singleton) DO UPDATE SET two_person_above_cents=excluded.two_person_above_cents,revision=revision+1,changed_by=excluded.changed_by,changed_at=excluded.changed_at', limit, actorLabel(actor), now())],
-    { actor: actorLabel(actor), action: 'credit.policy', subject: 'business', detail: { twoPersonAboveCents: limit } })
-  return await creditPolicy(env)
+  return await preparePolicyChange(env, actor, 'credit', { twoPersonAboveCents: limit })
 }
 
 export const creditBasis = (invoice: Row, policy: Row) => fingerprint({ invoice: invoice.id, balanceCents: invoice.balance_cents, totalCents: invoice.total_cents, policyRevision: policy.revision, threshold: policy.two_person_above_cents })

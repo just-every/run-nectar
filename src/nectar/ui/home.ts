@@ -8,6 +8,7 @@ import { one, parseJson } from '../core'
 import { money } from '../decimal'
 import { audit } from '../views'
 import { MORE, check, checks, details, emptyState, field, form, h, marker, hidden, page, select, table, tag, when } from './html'
+import { policySection } from './policies'
 import { personName } from './shell'
 
 const count = async (env: Bindings, sql: string, ...params: unknown[]) => (await one<{ n: number }>(env, sql, ...params))!.n
@@ -67,11 +68,11 @@ export async function settingsPage(env: Bindings, actor: Actor, url: URL) {
     ${owner ? h`${form('tax.declare', '/app/settings', h`${select('State', 'tax_jurisdiction', US_STATES.map(s => ({ value: s, label: s })), b.tax_jurisdiction || 'NY')}
       ${select('Policy', 'tax_mode', [{ value: 'no_tax', label: 'No sales tax applies to what we sell' }, { value: 'flat_rate', label: 'Charge one flat rate on taxable lines' }], b.tax_mode === 'undeclared' ? 'no_tax' : b.tax_mode)}
       ${field('Rate (%) for a flat rate', 'tax_rate', { value: b.tax_mode === 'flat_rate' ? b.tax_rate : '', required: false })}
-      ${field('Basis for this declaration', 'tax_note', { value: b.tax_note, hint: 'For example: who advised it and when.' })}`, 'Declare tax policy', { layout: 'columns' })}
+      ${field('Basis for this declaration', 'tax_note', { value: b.tax_note, hint: 'For example: who advised it and when.' })}`, 'Prepare tax policy', { layout: 'columns' })}
       ${b.tax_mode !== 'undeclared' && !taxReady(b) ? form('tax.review', '/app/settings', hidden('revision', b.revision), 'I have reviewed this tax policy') : ''}` : ''}
     ${b.tax_reviewed_at ? details({ 'Reviewed by': personName(actor, b.tax_reviewed_by), 'Reviewed at': when(b.tax_reviewed_at, b.timezone) }) : ''}</section>` : ''
   const identityCard = h`<section class="card" aria-labelledby="identity"><h2 id="identity">Billing identity</h2>${identity}</section>`
-  return page('Business and tax', actor, h`<h1>Business and tax</h1>${tax ? h`<div class="split settings">${identityCard}${tax}</div>` : identityCard}`, { current: '/app/settings', url, showNav: !!b })
+  return page('Business and tax', actor, h`<h1>Business and tax</h1>${tax ? h`<div class="split settings">${identityCard}${tax}</div>` : identityCard}${await policySection(env, actor)}`, { current: '/app/settings', url, showNav: !!b })
 }
 
 export async function accessPage(env: Bindings, actor: Actor, url: URL, issued?: { name: string; key: string }) {

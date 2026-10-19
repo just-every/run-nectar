@@ -62,7 +62,10 @@ async function cycle(page) {
   await tax.getByLabel('Policy', { exact: true }).selectOption('flat_rate')
   await tax.getByLabel('Rate (%) for a flat rate', { exact: true }).fill('8.25')
   await tax.getByLabel('Basis for this declaration', { exact: true }).fill('Advised by our CPA, September 2026')
-  await submit(page, tax, 'Declare tax policy')
+  await submit(page, tax, 'Prepare tax policy')
+  const confirmation = form(page, 'policy.decide').filter({ has: page.locator('input[value="approved"]') })
+  await confirmation.getByLabel('I confirm this exact policy change as the single approver').check()
+  await submit(page, confirmation, 'Confirm single-approver change')
   await submit(page, form(page, 'tax.review'), 'I have reviewed this tax policy')
 
   // Catalog: products, price versions and a meter.

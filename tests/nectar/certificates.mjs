@@ -1,10 +1,11 @@
+import { applyPolicy } from './policy-helper.mjs'
 import assert from 'node:assert/strict'
 import { file } from './harness.mjs'
 
 export async function exemptionCertificates(h, owner) {
   const before = await h.api('business', owner)
   const policy = async state => {
-    await h.api('tax.declare', owner, { tax_jurisdiction: state, tax_mode: 'flat_rate', tax_rate: '10', tax_note: 'Reviewed declared test rate for certificate journey' })
+    await applyPolicy(h, owner, 'tax.declare', { tax_jurisdiction: state, tax_mode: 'flat_rate', tax_rate: '10', tax_note: 'Reviewed declared test rate for certificate journey' })
     await h.api('tax.review', owner, { revision: (await h.api('business', owner)).revision })
   }
   const customer = (await h.api('customer.create', owner, { external_id: 'CERT-TEXAS', name: 'Lone Star Laboratory', billing_email: 'ap@lonestar.example' })).id
@@ -58,7 +59,7 @@ export async function exemptionCertificates(h, owner) {
   const count = notices().length
   await tick('2026-07-10')
   assert.equal(notices().length, count, 'owner policy starts disabled')
-  await h.api('certificate.policy', owner, { enabled: true })
+  await applyPolicy(h, owner, 'certificate.policy', { enabled: true })
   await tick('2026-07-10'); await tick('2026-07-10')
   assert.equal(notices().length, count + 1)
   assert.match(notices().at(-1).text, /TX.*expiring.*2026-07-31/)
@@ -76,7 +77,7 @@ export async function exemptionCertificates(h, owner) {
   assert.equal(august.tax_cents, 0)
   await h.api('invoice.approve', owner, { invoice: august.id, acknowledge: true })
   // Another claim changes the recorded tax basis and invalidates exact-input approval.
-  await h.api('tax.declare', owner, { tax_jurisdiction: 'NY', tax_mode: 'flat_rate', tax_rate: '10', tax_note: 'Changed jurisdiction' })
+  await applyPolicy(h, owner, 'tax.declare', { tax_jurisdiction: 'NY', tax_mode: 'flat_rate', tax_rate: '10', tax_note: 'Changed jurisdiction' })
   await h.api('tax.review', owner, { revision: (await h.api('business', owner)).revision })
   await h.api('invoice.finalise', owner, { invoice: august.id, issue_date: '2026-09-01' }, 409)
   const detail = await h.api(`customers/${customer}`, owner)
@@ -85,7 +86,7 @@ export async function exemptionCertificates(h, owner) {
   assert.match(await h.page(`/app/customers/${customer}`, owner), /TX-RESALE-RENEWED/)
   const audit = await h.api('audit', owner)
   assert.ok(audit.some(x => x.action === 'certificate.review' && x.subject === collected.certificate))
-  await h.api('tax.declare', owner, { tax_jurisdiction: before.tax_jurisdiction, tax_mode: before.tax_mode, tax_rate: before.tax_rate, tax_note: before.tax_note })
+  await applyPolicy(h, owner, 'tax.declare', { tax_jurisdiction: before.tax_jurisdiction, tax_mode: before.tax_mode, tax_rate: before.tax_rate, tax_note: before.tax_note })
   if (before.taxReady) await h.api('tax.review', owner, { revision: (await h.api('business', owner)).revision })
   console.log('TAX-002 state-scoped certificate custody, review, expiry, reminder and unchanged issued evidence passed')
   return { customer, certificate: renewed.certificate }

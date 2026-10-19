@@ -17,7 +17,7 @@ export function certificateSection(c: Row, actor: Actor) {
     <details><summary>Request an exemption before the document arrives</summary>${form('exemption.claim', back, h`${hidden('customer', c.id)}${select('Claim state', 'state', states)}`, 'Request exemption', { secondary: true })}</details>
     <p class="hint">A daily check requests missing or expired documents and reminds customers within 30 days of expiry. Mail status records provider acceptance; it does not prove mailbox delivery.</p>
     ${form('certificate.remind', back, '', 'Check certificate reminders now', { secondary: true })}` : ''}
-    ${actor.role === 'owner' ? form('certificate.policy', back, check('Enable certificate reminder mail for all customers', 'enabled', { checked: !!c.certificatePolicy?.enabled }), 'Save reminder policy', { secondary: true }) : ''}
+    ${actor.role === 'owner' ? form('certificate.policy', '/app/settings#policy-changes', check('Enable certificate reminder mail for all customers', 'enabled', { checked: !!c.certificatePolicy?.enabled }), 'Prepare reminder policy', { secondary: true }) : ''}
     <p>Automatic reminder mail: ${c.certificatePolicy?.enabled ? 'enabled by the owner' : 'disabled; the owner can enable it here'}.</p>
     ${table(['State', 'Reminder', 'Mail status'], c.certificateReminders.map((x: Row) => [x.state, x.kind, x.status]), { empty: 'No certificate reminders yet.' })}
   </section>`

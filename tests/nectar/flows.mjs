@@ -1,3 +1,5 @@
+import { policyApprovals } from './policy-approvals.mjs'
+import { applyPolicy } from './policy-helper.mjs'
 import { queuedEntrypoint } from '@runeditrun/rer/queued-entry'
 const queued = await queuedEntrypoint(import.meta.url, 'test:flows'); if (queued !== null) process.exit(queued)
 // Nectar's acceptance clauses (ACCEPTANCE.md), each exercised through public
@@ -42,10 +44,12 @@ try {
     const business = await h.api('business', cookie.owner)
     assert.equal(business.currency, 'USD'); assert.equal(business.invoice_prefix, 'RB'); assert.equal(business.taxReady, false)
     await h.api('tax.declare', cookie.owner, { tax_jurisdiction: 'CA', tax_mode: 'flat_rate', tax_rate: '0', tax_note: 'x' }, 400)
-    await h.api('tax.declare', cookie.owner, { tax_jurisdiction: 'CA', tax_mode: 'flat_rate', tax_rate: '8.25', tax_note: 'Advised by our CPA, September 2026' })
+    await applyPolicy(h, cookie.owner, 'tax.declare', { tax_jurisdiction: 'CA', tax_mode: 'flat_rate', tax_rate: '8.25', tax_note: 'Advised by our CPA, September 2026' })
     assert.equal((await h.api('business', cookie.owner)).tax_rate, '8.25')
     assert.match(await h.page('/app/settings', cookie.owner), /Not reviewed/)
   })
+
+  await policyApprovals(h, cookie.owner)
 
   await check('NEC-02 customers and billing contacts with external ids', async () => {
     const created = await h.submit('customer.create', cookie.owner, { external_id: 'NW-1001', name: 'Northwind Robotics', billing_email: 'ap@northwind.example', address: '9 Dock St, Seattle, WA' }, '/app/customers/{id}')

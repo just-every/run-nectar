@@ -1,8 +1,9 @@
+import { applyPolicy } from './policy-helper.mjs'
 import assert from 'node:assert/strict'
 
 export async function oneTimeBilling(h, owner) {
   const previous = await h.api('business', owner)
-  await h.api('tax.declare', owner, { tax_jurisdiction: 'CA', tax_mode: 'flat_rate', tax_rate: '10', tax_note: 'Reviewed declared rate for services and recurring charges' })
+  await applyPolicy(h, owner, 'tax.declare', { tax_jurisdiction: 'CA', tax_mode: 'flat_rate', tax_rate: '10', tax_note: 'Reviewed declared rate for services and recurring charges' })
   await h.api('tax.review', owner, { revision: (await h.api('business', owner)).revision })
   const customer = (await h.api('customer.create', owner, { external_id: 'CAT006-SUB', name: 'Juniper Engineering', billing_email: 'ap@juniper.example' })).id
   const standalone = (await h.api('customer.create', owner, { external_id: 'CAT006-SERVICE', name: 'Harbor Services', billing_email: 'ap@harbor.example' })).id
@@ -76,7 +77,7 @@ export async function oneTimeBilling(h, owner) {
   assert.equal((await h.api(`customers/${customer}`, owner)).charges.filter(c => c.invoice_id).length, 2)
   assert.match(await (await h.raw('/app/exports/invoices.csv', { cookie: owner })).text(), new RegExp(services.number))
   assert.match(await h.page(`/app/invoices/${services.id}`, owner), /Architecture workshop/)
-  await h.api('tax.declare', owner, { tax_jurisdiction: previous.tax_jurisdiction, tax_mode: previous.tax_mode, tax_rate: previous.tax_rate, tax_note: previous.tax_note })
+  await applyPolicy(h, owner, 'tax.declare', { tax_jurisdiction: previous.tax_jurisdiction, tax_mode: previous.tax_mode, tax_rate: previous.tax_rate, tax_note: previous.tax_note })
   if (previous.taxReady) await h.api('tax.review', owner, { revision: (await h.api('business', owner)).revision })
   console.log('CAT-006 queued and immediate one-time charges, prorated add-ons, standalone approval, tax, numbering and exactly-once billing passed')
   return { customer, standalone, subscription, invoice: services.id }

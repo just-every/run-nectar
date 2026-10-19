@@ -6,7 +6,7 @@ export const API_DOORS: [string, string][] = [
   ['^me$', 'me'], ['^business$', 'business'], ['^customers$', 'customers'], ['^customers/([\\w-]+)$', 'customer'], ['^catalog$', 'catalog'],
   ['^subscriptions/([\\w-]+)$', 'subscription'], ['^usage/batches$', 'batches'], ['^usage/inspect$', 'inspect'], ['^runs$', 'runs'], ['^runs/([\\w-]+)$', 'run'],
   ['^invoices/([\\w-]+)$', 'invoice'], ['^ageing$', 'ageing'], ['^payments$', 'payments'], ['^notices$', 'notices'], ['^tasks$', 'tasks'],
-  ['^proposals$', 'proposals'], ['^proposals/([\\w-]+)$', 'proposal'], ['^entitlements/([\\w.:-]+)$', 'entitlement'], ['^imports$', 'imports'], ['^shadow$', 'shadow'],
+  ['^policies/current$', 'policySettings'], ['^policies$', 'policies'], ['^proposals$', 'proposals'], ['^proposals/([\\w-]+)$', 'proposal'], ['^entitlements/([\\w.:-]+)$', 'entitlement'], ['^imports$', 'imports'], ['^shadow$', 'shadow'],
   ['^members$', 'members'], ['^credentials$', 'credentials'], ['^audit$', 'audit'],
 ]
 

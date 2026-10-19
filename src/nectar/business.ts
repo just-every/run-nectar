@@ -6,6 +6,7 @@ import { actorLabel, requireCapability, requireOwner, type Actor } from './actor
 import { commit, guard, insist, now, one, stmt } from './core'
 import { canonicalDecimal, micros } from './decimal'
 import { validTimeZone } from './dates'
+import { preparePolicyChange } from './policy-changes'
 import type { Input } from './input'
 
 export interface Business {
@@ -66,7 +67,7 @@ export async function configureBusiness(env: Bindings, actor: Actor, input: Inpu
   return await business(env)
 }
 
-/** Declares the tax policy. Any change clears the review: it must be reviewed again before finalising. */
+/** Prepares a tax policy change. Applying it clears the review before finalising. */
 export async function declareTax(env: Bindings, actor: Actor, input: Input) {
   requireOwner(actor)
   const current = await requireBusiness(env)
@@ -77,11 +78,7 @@ export async function declareTax(env: Bindings, actor: Actor, input: Input) {
   const rate = mode === 'flat_rate' ? canonicalDecimal(input.text('tax_rate', { max: 12 }), 'tax_rate') : '0.00'
   insist(mode === 'no_tax' || (micros(rate) > 0n && micros(rate) < 100n * 1_000_000n), 'invalid_tax_rate')
   const note = input.text('tax_note', { max: 1000 })
-  await commit(env, [
-    guard(env, 'stale', 'EXISTS(SELECT 1 FROM nc_business WHERE singleton = 1 AND revision = ?)', current.revision),
-    stmt(env, 'UPDATE nc_business SET tax_jurisdiction = ?, tax_mode = ?, tax_rate = ?, tax_note = ?, tax_reviewed_by = NULL, tax_reviewed_at = NULL, revision = revision + 1, updated_at = ? WHERE singleton = 1', jurisdiction, mode, rate, note, now()),
-  ], { actor: actorLabel(actor), action: 'tax.declare', subject: 'business', detail: { jurisdiction, mode, rate, note } })
-  return await business(env)
+  return await preparePolicyChange(env, actor, 'tax', { jurisdiction, mode, rate, note })
 }
 
 /** The owner confirms the declared policy has been reviewed (for example with their accountant). */
