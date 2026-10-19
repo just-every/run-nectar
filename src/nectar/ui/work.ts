@@ -6,6 +6,7 @@ import { catalog } from '../catalog'
 import { formatPeriod, isMonth, today } from '../dates'
 import { quantityText } from '../decimal'
 import { batches, inspect } from '../usage'
+import { catalogueApprovals } from './price-approvals'
 import { pricingTiers, quantityPriceForm } from './pricing'
 import { check, details, field, fileField, form, h, hidden, page, select, table, tag, when } from './html'
 
@@ -43,9 +44,10 @@ export async function catalogPage(env: Bindings, actor: Actor, url: URL) {
         ${table(['Version$', 'Kind', 'Unit price / tiers', 'Meter', 'Taxable', 'Status', ''], c.prices.filter((x: any) => x.product_id === p.id).map((x: any) => [x.version, x.pricing ? `${x.pricing.model.replace('_', '-')} ${x.kind === 'seat' ? 'seats' : 'usage'}` : x.kind === 'flat' ? 'Flat monthly' : x.kind === 'seat' ? 'Per seat monthly' : 'Per unit', x.pricing ? pricingTiers(x.pricing) : `$${x.unit_amount}`, x.meter_code ?? '—', x.taxable ? 'Yes' : 'No', tag(x.status === 'active' ? 'Active' : 'Retired'), records && x.status === 'active' ? form('price.retire', '/app/catalog', hidden('price', x.id), 'Retire', { secondary: true }) : '']), { empty: 'No prices yet.' })}
         <p>Grants: ${c.features.filter((f: any) => f.product_id === p.id).map((f: any) => f.feature).join(', ') || 'no features'}</p>
         ${records ? h`<div class="inline-forms">${form('price.create', '/app/catalog', h`${hidden('product', p.id)}${select('Kind', 'kind', [{ value: 'flat', label: 'Flat monthly' }, { value: 'seat', label: 'Per seat monthly' }, { value: 'unit', label: 'Per unit (metered)' }], 'flat')}${field('Unit price ($)', 'unit_amount', { hint: 'Up to six decimal places, e.g. 0.0004' })}
-          ${select('Meter (per unit only)', 'meter', c.meters.map((m: any) => ({ value: m.id, label: `${m.code} (${m.unit_label})` })), '', { required: false, blank: '—' })}${field('Name for this price', 'nickname', { required: false })}${check('Taxable', 'taxable', { checked: true })}`, 'Add price version', { layout: 'columns', secondary: true })}
-          ${quantityPriceForm(p.id, c.meters)}${form('feature.grant', '/app/catalog', h`${hidden('product', p.id)}${field('Feature code', 'feature')}${field('Note', 'note', { required: false })}`, 'Grant feature', { layout: 'columns', secondary: true })}</div>` : ''}</article>`) : h`<p class="empty">No products yet.</p>`}
+          ${select('Meter (per unit only)', 'meter', c.meters.map((m: any) => ({ value: m.id, label: `${m.code} (${m.unit_label})` })), '', { required: false, blank: '—' })}${field('Name for this price', 'nickname', { required: false })}${check('Taxable', 'taxable', { checked: true })}`, c.prices.some((x: any) => x.product_id === p.id) ? 'Prepare price version' : 'Add price version', { layout: 'columns', secondary: true })}
+          ${quantityPriceForm(p.id, c.meters, !c.prices.some((x: any) => x.product_id === p.id))}${form('feature.grant', '/app/catalog', h`${hidden('product', p.id)}${field('Feature code', 'feature')}${field('Note', 'note', { required: false })}`, 'Grant feature', { layout: 'columns', secondary: true })}</div>` : ''}</article>`) : h`<p class="empty">No products yet.</p>`}
       ${records ? h`<h3>Add a product</h3>${form('product.create', '/app/catalog', h`${field('Code', 'code', { hint: 'Lowercase letters, digits, dots, dashes.' })}${field('Name', 'name')}${field('Description', 'description', { required: false })}`, 'Add product', { layout: 'columns' })}` : ''}</section>
+    ${catalogueApprovals(c.priceRequests, c.meters, actor)}
     <section class="card" aria-labelledby="meters"><h2 id="meters">Meters</h2>${table(['Code', 'Name', 'Unit'], c.meters.map((m: any) => [m.code, m.name, m.unit_label]), { empty: 'No meters yet.' })}
       ${records ? form('meter.create', '/app/catalog', h`${field('Code (the meter name in usage files)', 'code')}${field('Name', 'name')}${field('Unit', 'unit_label', { hint: 'For example: API call, GB, message.' })}`, 'Add meter', { layout: 'columns', secondary: true }) : ''}</section>`, { current: '/app/catalog', url })
 }

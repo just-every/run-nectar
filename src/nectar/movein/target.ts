@@ -35,8 +35,8 @@ const noDependents = (expression: string, id: string) => ({ text: `${expression.
 const CUSTOMER_DEPENDENTS = `((SELECT COUNT(*) FROM nc_subscriptions WHERE customer_id = ?1 AND origin = 'native') + (SELECT COUNT(*) FROM nc_usage_events WHERE customer_id = ?1)
   + (SELECT COUNT(*) FROM nc_invoices WHERE customer_id = ?1) + (SELECT COUNT(*) FROM nc_contacts WHERE customer_id = ?1) + (SELECT COUNT(*) FROM nc_payments WHERE customer_id = ?1)
   + (SELECT COUNT(*) FROM nc_tasks WHERE customer_id = ?1) + (SELECT COUNT(*) FROM nc_notices WHERE customer_id = ?1))`
-const PRODUCT_DEPENDENTS = `((SELECT COUNT(*) FROM nc_prices WHERE product_id = ?1 AND origin = 'native') + (SELECT COUNT(*) FROM nc_features WHERE product_id = ?1))`
-const METER_DEPENDENTS = `((SELECT COUNT(*) FROM nc_prices WHERE meter_id = ?1 AND origin = 'native') + (SELECT COUNT(*) FROM nc_usage_events WHERE meter_id = ?1))`
+const PRODUCT_DEPENDENTS = `((SELECT COUNT(*) FROM nc_prices WHERE product_id = ?1 AND origin = 'native') + (SELECT COUNT(*) FROM nc_features WHERE product_id = ?1) + (SELECT COUNT(*) FROM nc_price_requests WHERE product_id = ?1))`
+const METER_DEPENDENTS = `((SELECT COUNT(*) FROM nc_prices WHERE meter_id = ?1 AND origin = 'native') + (SELECT COUNT(*) FROM nc_usage_events WHERE meter_id = ?1) + (SELECT COUNT(*) FROM nc_price_requests WHERE meter_id = ?1))`
 const PRICE_DEPENDENTS = `((SELECT COUNT(*) FROM nc_items WHERE price_id = ?1 AND origin = 'native') + (SELECT COUNT(*) FROM nc_amendments WHERE price_id = ?1 AND origin <> 'import') + (SELECT COUNT(*) FROM nc_changes WHERE new_price_id = ?1))`
 const SUBSCRIPTION_DEPENDENTS = `((SELECT COUNT(*) FROM nc_invoices WHERE subscription_id = ?1) + (SELECT COUNT(*) FROM nc_items WHERE subscription_id = ?1 AND origin = 'native')
   + (SELECT COUNT(*) FROM nc_amendments WHERE subscription_id = ?1 AND origin <> 'import') + (SELECT COUNT(*) FROM nc_changes WHERE subscription_id = ?1))`

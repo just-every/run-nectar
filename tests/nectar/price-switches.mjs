@@ -1,3 +1,4 @@
+import { publishPrice } from './price-helper.mjs'
 import assert from 'node:assert/strict'
 
 export async function priceSwitches(h, owner) {
@@ -7,7 +8,7 @@ export async function priceSwitches(h, owner) {
   const customer = (await h.api('customer.create', owner, { external_id: 'GOV002-SWITCH', name: 'Aspen Research', billing_email: 'ap@aspen.example' })).id
   const product = (await h.api('product.create', owner, { code: 'gov002-seat-switch', name: 'Research seats' })).id
   const price = (await h.api('price.create', owner, { product, kind: 'seat', unit_amount: '10.00', taxable: false })).id
-  const next = (await h.api('price.create', owner, { product, kind: 'seat', unit_amount: '20.00', taxable: false })).id
+  const next = (await publishPrice(h, owner, { product, kind: 'seat', unit_amount: '20.00', taxable: false })).id
   const subscription = (await h.api('subscription.create', owner, { customer, start_date: '2026-01-01', price: [price], quantity: ['5'] })).id
   const read = () => h.api(`subscriptions/${subscription}`, owner)
   const original = await read()

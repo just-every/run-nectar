@@ -1,3 +1,4 @@
+import { publishPrice } from './price-helper.mjs'
 // CAT-002: real catalogue -> subscriptions -> usage -> bill run -> invoices.
 // Hand-computed dollars below retain every fractional cent until the line
 // rounds. Both seats and usage use the same commercial terms and expectations.
@@ -93,7 +94,7 @@ export async function pricingModels(h, cookie) {
 
   // Replacements and retirement never change the terms a subscriber already holds.
   for (const old of prices.filter(price => price.model === 'graduated')) {
-    const replacement = await api('price.create', { ...old.body, tiers: [{ up_to: null, unit_amount: '99' }] })
+    const replacement = await publishPrice(h, cookie, { ...old.body, tiers: [{ up_to: null, unit_amount: '99' }] })
     const catalogue = await api('catalog')
     const previous = catalogue.prices.find(price => price.id === old.id)
     const next = catalogue.prices.find(price => price.id === replacement.id)

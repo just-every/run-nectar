@@ -104,6 +104,8 @@ const ERRORS: Record<string, string> = {
   blocking_exception: 'this draft has an exception that must be fixed before approval.',
   exceptions_not_acknowledged: 'tick that you reviewed the exceptions listed for this draft.',
   shadow_invoice: 'this is a shadow draft for comparison with the previous biller; it cannot be approved until the subscription is adopted.',
+  price_request_stale: 'another price version was published. Reject this request and prepare it again.',
+  price_already_decided: 'this price request was already decided.',
   policy_changed: 'this policy changed after preparation. Reject the request and prepare it again.',
   single_confirmation_required: 'confirm the exact change as single approver before applying it.',
   policy_already_decided: 'this policy request was already decided.',

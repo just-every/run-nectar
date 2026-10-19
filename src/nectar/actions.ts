@@ -17,6 +17,7 @@ import { decide, propose } from './proposals'
 import { allocate, approveCredit, issueCreditNote, prepareCredit, recordPayment } from './receivables'
 import { createSubscription, decideAmendment, decideChange, endSubscription, prepareChange, proposeAmendment } from './subscriptions'
 import { acknowledgeControl, recordControl } from './reconciliation'
+import { decidePrice } from './price-versions'
 import { decidePolicyChange } from './policy-changes'
 import { configureCreditPolicy } from './credit-policy'
 import { addCharge } from './one-time-charges'
@@ -45,6 +46,7 @@ export const actions: Record<string, Handler> = {
   'product.create': createProduct,
   'meter.create': createMeter,
   'price.create': createPrice,
+  'price.decide': decidePrice,
   'price.retire': retirePrice,
   'feature.grant': grantFeature,
   'charge.add': addCharge,

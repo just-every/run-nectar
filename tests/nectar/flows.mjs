@@ -1,3 +1,5 @@
+import { catalogueApprovals, catalogueSingleApproval } from './catalogue-approvals.mjs'
+import { publishPrice } from './price-helper.mjs'
 import { policyApprovals } from './policy-approvals.mjs'
 import { applyPolicy } from './policy-helper.mjs'
 import { queuedEntrypoint } from '@runeditrun/rer/queued-entry'
@@ -49,6 +51,8 @@ try {
     assert.match(await h.page('/app/settings', cookie.owner), /Not reviewed/)
   })
 
+  await catalogueSingleApproval(h, cookie.owner)
+
   await policyApprovals(h, cookie.owner)
 
   await check('NEC-02 customers and billing contacts with external ids', async () => {
@@ -75,7 +79,7 @@ try {
     await h.api('price.create', cookie.owner, { product: ids.eventsProduct, kind: 'unit', unit_amount: '0.0004' }, 400)
     await h.api('price.create', cookie.owner, { product: ids.eventsProduct, kind: 'unit', unit_amount: '0.0000001', meter: 'events' }, 400)
     ids.events = (await h.api('price.create', cookie.owner, { product: ids.eventsProduct, kind: 'unit', unit_amount: '0.0004', meter: 'events' })).id
-    const second = await h.api('price.create', cookie.owner, { product: ids.seatsProduct, kind: 'seat', unit_amount: '35' })
+    const second = await publishPrice(h, cookie.owner, { product: ids.seatsProduct, kind: 'seat', unit_amount: '35' })
     assert.equal(second.version, 2)
     const catalog = await h.api('catalog', cookie.owner)
     const v1 = catalog.prices.find(price => price.id === ids.seat)
@@ -414,6 +418,14 @@ try {
     assert.equal((await h.api('customers', cookie.owner)).length, customersBefore)
     const again = await h.api('import.apply', cookie.finance, { ...files, fingerprint: preview.fingerprint })
     assert.notEqual(again.job, applied.job)
+    // GOV-002: a prepared native revision retains its imported product/meter;
+    // undo reports the dependency instead of orphaning the saved exact terms.
+    const importedPrice = (await h.api('catalog', cookie.owner)).prices.find(p => p.origin === 'import')
+    const pendingRevision = await h.api('price.create', cookie.owner, { product: importedPrice.product_id, kind: 'flat', unit_amount: '600' })
+    assert.equal(pendingRevision.status, 'pending')
+    const protectedMove = await h.api('import.job', cookie.owner, { job: again.job, action: 'undo' }, 409)
+    assert.equal(protectedMove.error, 'undo_blocked')
+    console.log('GOV-002 prepared catalogue revision protects move-in history from undo passed')
     const atlas = (await h.api('customers', cookie.owner)).find(c => c.external_id === 'cus_NcAtlasFreight01')
     const atlasView = await h.api(`customers/${atlas.id}`, cookie.owner)
     assert.equal(atlasView.subscriptions[0].billing_mode, 'shadow')
@@ -464,6 +476,8 @@ try {
   await priceOverrides(h, cookie.owner)
 
   await priceSwitches(h, cookie.owner)
+
+  await catalogueApprovals(h, cookie.owner)
 
   await oneTimeBilling(h, cookie.owner)
 
