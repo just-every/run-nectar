@@ -1,3 +1,5 @@
+import { withMetadata } from './metadata'
+import { metadataFilter,metadataPredicate } from './metadata-query'
 import { alertStatements } from './notifications'
 import { deliverAlerts } from './notification-mail'
 // Flow 11: issued invoices are never edited. A credit note reduces what is
@@ -103,9 +105,10 @@ export async function allocate(env: Bindings, actor: Actor, input: Input) {
   return { id: invoice.id, allocation: id }
 }
 
-export async function payments(env: Bindings, actor: Actor, customerId?: string) {
+export async function payments(env: Bindings, actor: Actor, customerId?: string,url?:URL) {
   requireCapability(actor, 'read')
-  return await all(env, `SELECT p.*, c.name AS customer_name, ${UNALLOCATED_SQL} AS unallocated_cents FROM nc_payments p JOIN nc_customers c ON c.id = p.customer_id ${customerId ? 'WHERE p.customer_id = ?' : ''} ORDER BY p.received_on DESC, p.recorded_at DESC LIMIT 200`, ...(customerId ? [customerId] : []))
+  const filter=metadataPredicate('payment','p.id',url?metadataFilter(url):null)
+  return await withMetadata(env,'payment',await all(env, `SELECT p.*, c.name AS customer_name, ${UNALLOCATED_SQL} AS unallocated_cents FROM nc_payments p JOIN nc_customers c ON c.id = p.customer_id WHERE ${filter.sql} ${customerId ? 'AND p.customer_id = ?' : ''} ORDER BY p.received_on DESC, p.recorded_at DESC LIMIT 200`, ...filter.params,...(customerId ? [customerId] : [])))
 }
 
 /** Open (issued, unpaid) invoices with their balances. */
@@ -123,7 +126,7 @@ export async function customerLedger(env: Bindings, actor: Actor, customerId: st
   const pays = await payments(env, actor, customerId)
   const credits = await all(env, 'SELECT * FROM nc_credit_notes WHERE customer_id = ? ORDER BY issued_at', customerId)
   return {
-    invoices, payments: pays, credits,
+    invoices:await withMetadata(env,'invoice',invoices), payments: pays, credits:await withMetadata(env,'credit-note',credits),
     invoicedCents: invoices.reduce((sum, row) => sum + row.total_cents, 0),
     creditedCents: invoices.reduce((sum, row) => sum + row.credited_cents, 0),
     paidCents: invoices.reduce((sum, row) => sum + row.paid_cents, 0),

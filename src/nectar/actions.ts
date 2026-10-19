@@ -24,6 +24,7 @@ import { addCharge } from './one-time-charges'
 import { prepareManualInvoice } from './manual-invoices'
 import { attachAddon } from './addons'
 import { addNote } from './notes'
+import { writeMetadata } from './metadata'
 import { setNotificationPreferences } from './notifications'
 import { submitUsage } from './usage'
 
@@ -43,6 +44,7 @@ export const actions: Record<string, Handler> = {
   'certificate.policy': configureCertificatePolicy,
   'certificate.remind': remindCertificates,
   'note.add': addNote,
+  'metadata.write': writeMetadata,
   'notification.preferences': setNotificationPreferences,
   'customer.create': createCustomer,
   'customer.update': updateCustomer,

@@ -1,5 +1,6 @@
 // Usage (import, batches, inspection before rating) and the catalog.
 import type { Bindings } from '../../auth.server'
+import { metadataLink } from './metadata'
 import { can, type Actor } from '../actor'
 import { business } from '../business'
 import { catalog } from '../catalog'
@@ -37,12 +38,12 @@ export async function usagePage(env: Bindings, actor: Actor, url: URL) {
 }
 
 export async function catalogPage(env: Bindings, actor: Actor, url: URL) {
-  const c = await catalog(env, actor)
+  const c = await catalog(env, actor,url)
   const records = can(actor, 'records')
   return page('Catalog', actor, h`<h1>Catalog</h1>
     <section class="card" aria-labelledby="products"><h2 id="products">Products and prices</h2><p class="hint">A price never changes once written: a new price is a new version, and subscriptions keep the version they use until a change moves them.</p>
       ${c.products.length ? c.products.map((p: any) => h`<article class="product"><h3>${p.name} <span class="sub">${p.code}${p.origin === 'import' ? ' · moved in' : ''}</span></h3>
-        ${table(['Version$', 'Kind', 'Unit price / tiers', 'Meter', 'Taxable', 'Status', ''], c.prices.filter((x: any) => x.product_id === p.id).map((x: any) => [x.version, x.pricing ? `${x.pricing.model.replace('_', '-')} ${x.kind === 'seat' ? 'seats' : 'usage'}` : x.kind === 'flat' ? 'Flat monthly' : x.kind === 'seat' ? 'Per seat monthly' : 'Per unit', x.pricing ? pricingTiers(x.pricing) : `$${x.unit_amount}`, x.meter_code ?? '—', x.taxable ? 'Yes' : 'No', tag(x.status === 'active' ? 'Active' : 'Retired'), records && x.status === 'active' ? form('price.retire', '/app/catalog', hidden('price', x.id), 'Retire', { secondary: true }) : '']), { empty: 'No prices yet.' })}
+        ${table(['Version$', 'Kind', 'Unit price / tiers', 'Meter', 'Taxable', 'Status', ''], c.prices.filter((x: any) => x.product_id === p.id).map((x: any) => [h`<span id="price-${x.id}">${x.version}</span> ${metadataLink('price',x.id)}`, x.pricing ? `${x.pricing.model.replace('_', '-')} ${x.kind === 'seat' ? 'seats' : 'usage'}` : x.kind === 'flat' ? 'Flat monthly' : x.kind === 'seat' ? 'Per seat monthly' : 'Per unit', x.pricing ? pricingTiers(x.pricing) : `$${x.unit_amount}`, x.meter_code ?? '—', x.taxable ? 'Yes' : 'No', tag(x.status === 'active' ? 'Active' : 'Retired'), records && x.status === 'active' ? form('price.retire', '/app/catalog', hidden('price', x.id), 'Retire', { secondary: true }) : '']), { empty: 'No prices yet.' })}
         <p>Grants: ${c.features.filter((f: any) => f.product_id === p.id).map((f: any) => f.feature).join(', ') || 'no features'}</p>
         ${records ? h`<div class="inline-forms">${form('price.create', '/app/catalog', h`${hidden('product', p.id)}${select('Kind', 'kind', [{ value: 'flat', label: 'Flat monthly' }, { value: 'seat', label: 'Per seat monthly' }, { value: 'unit', label: 'Per unit (metered)' }], 'flat')}${field('Unit price ($)', 'unit_amount', { hint: 'Up to six decimal places, e.g. 0.0004' })}
           ${select('Meter (per unit only)', 'meter', c.meters.map((m: any) => ({ value: m.id, label: `${m.code} (${m.unit_label})` })), '', { required: false, blank: '—' })}${field('Name for this price', 'nickname', { required: false })}${check('Taxable', 'taxable', { checked: true })}`, c.prices.some((x: any) => x.product_id === p.id) ? 'Prepare price version' : 'Add price version', { layout: 'columns', secondary: true })}

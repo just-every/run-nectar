@@ -2,6 +2,7 @@ import { catalogueApprovals, catalogueSingleApproval } from './catalogue-approva
 import { publishPrice } from './price-helper.mjs'
 import { policyApprovals } from './policy-approvals.mjs'
 import { notificationsFlow } from './notifications.mjs'
+import { metadataFlow } from './metadata.mjs'
 import { applyPolicy } from './policy-helper.mjs'
 import { queuedEntrypoint } from '@runeditrun/rer/queued-entry'
 const queued = await queuedEntrypoint(import.meta.url, 'test:flows'); if (queued !== null) process.exit(queued)
@@ -492,6 +493,7 @@ try {
   await notesFlow(h, cookie.owner)
   await upcomingFlow(h, cookie.owner)
   await notificationsFlow(h,cookie.owner)
+  await metadataFlow(h,cookie.owner)
 
   // Every main screen renders for the owner without an error.
   for (const path of ['/app', '/app/more', '/app/settings', '/app/customers', `/app/customers/${ids.northwind}`, `/app/subscriptions/${ids.s1}`, '/app/catalog', '/app/usage', '/app/billing', `/app/billing/${ids.augustRun}`, `/app/invoices/${ids.julyNorthwind}`, '/app/receivables', '/app/proposals', '/app/import', '/app/exports', '/app/access', '/app/audit']) await h.page(path, cookie.owner)

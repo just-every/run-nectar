@@ -10,6 +10,7 @@ import { all, commit, guard, insist, newId, now, one, parseJson, stmt, type Row 
 import { canonicalDecimal, micros } from './decimal'
 import { isDate, periodContaining, requireDate } from './dates'
 import { rated } from './inputs'
+import { metadataFor,withMetadata } from './metadata'
 import type { Input } from './input'
 import type { ItemIn, Line } from './rating'
 
@@ -28,7 +29,7 @@ export async function subscriptionDetail(env: Bindings, actor: Actor, id: string
     all(env, 'SELECT * FROM nc_changes WHERE subscription_id = ? ORDER BY created_at DESC', id),
     all(env, "SELECT id, number, status, period_start, period_end, total_cents FROM nc_invoices WHERE subscription_id = ? AND status <> 'discarded' ORDER BY period_start DESC", id),
   ])
-  return { ...sub, items, amendments, changes: changes.map(change => ({ ...change, preview: parseJson(change.preview_json, {}), preview_json: undefined })), invoices }
+  return { ...sub,...await metadataFor(env,'subscription',id), items, amendments, changes: changes.map(change => ({ ...change, preview: parseJson(change.preview_json, {}), preview_json: undefined })), invoices:await withMetadata(env,'invoice',invoices) }
 }
 
 // A subscription holds its meters while it is live on or after `from`: no end

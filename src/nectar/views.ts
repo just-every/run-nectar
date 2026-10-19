@@ -24,6 +24,8 @@ import { invoiceList } from './invoice-list'
 import { invoiceView } from './invoice-expansions'
 import { notes, noteMembers } from './notes'
 import { notifications } from './notifications'
+import { metadataView,metadataFor,withMetadata } from './metadata'
+import { metadataObjects } from './metadata-lists'
 import { customerNotes } from './note-records'
 import { reportLine } from './report-lines'
 
@@ -44,18 +46,20 @@ export async function customerView(env: Bindings, actor: Actor, id: string): Pro
     entitlements(env, actor, id),
     all(env, 'SELECT provider_ref, number, status, period_start, period_end, total_cents, paid_cents, remaining_cents FROM nc_incumbent_invoices WHERE customer_id = ? ORDER BY period_start DESC', id),
   ])
-  return { ...customer, notes: await customerNotes(env, id), contacts, subscriptions, ledger, entitlements: features, incumbentInvoices: incumbent, charges: await all(env, 'SELECT * FROM nc_charges WHERE customer_id=? ORDER BY effective_date,id', id), certificatePolicy: await one(env, 'SELECT enabled,revision FROM nc_certificate_policy WHERE singleton=1'), certificates: await certificates(env, actor, id), exemptionClaims: await all(env, 'SELECT state FROM nc_exemption_claims WHERE customer_id=? ORDER BY state', id), certificateReminders: await all(env, 'SELECT state,kind,status,created_at FROM nc_certificate_reminders WHERE customer_id=? ORDER BY created_at DESC', id) }
+  return { ...customer,...await metadataFor(env,'customer',id), notes: await customerNotes(env, id), contacts, subscriptions:await withMetadata(env,'subscription',subscriptions), ledger, entitlements: features, incumbentInvoices: incumbent, charges: await all(env, 'SELECT * FROM nc_charges WHERE customer_id=? ORDER BY effective_date,id', id), certificatePolicy: await one(env, 'SELECT enabled,revision FROM nc_certificate_policy WHERE singleton=1'), certificates: await certificates(env, actor, id), exemptionClaims: await all(env, 'SELECT state FROM nc_exemption_claims WHERE customer_id=? ORDER BY state', id), certificateReminders: await all(env, 'SELECT state,kind,status,created_at FROM nc_certificate_reminders WHERE customer_id=? ORDER BY created_at DESC', id) }
 }
 
 export const views: Record<string, View> = {
   notifications: (env,actor) => notifications(env,actor),
+  metadata: (env,actor,_r,id) => {const [kind,record]=id.split('/');return metadataView(env,actor,kind,record)},
+  metadataObjects: (env,actor,_r,id,url) => metadataObjects(env,actor,id,url),
   notes: (env, actor, _r, id) => { const [kind,record] = id.split('/'); return notes(env,actor,kind,record) },
   noteMembers: (env,actor) => noteMembers(env,actor),
   me: async (_env, actor) => ({ id: actor.id, kind: actor.kind, name: actor.name, email: actor.email, role: actor.role, capabilities: [...actor.capabilities] }),
   business: (env, actor) => businessView(env, actor),
-  customers: (env, actor) => customers(env, actor),
+  customers: (env, actor,_r,_id,url) => customers(env, actor,url),
   customer: (env, actor, _request, id) => customerView(env, actor, id),
-  catalog: (env, actor) => catalog(env, actor),
+  catalog: (env, actor,_r,_id,url) => catalog(env, actor,url),
   upcoming: (env, actor, _r, id, url) => upcoming(env,actor,id,url.searchParams.get('period')),
   subscription: (env, actor, _request, id) => subscriptionDetail(env, actor, id),
   batches: (env, actor) => batches(env, actor),
@@ -65,7 +69,7 @@ export const views: Record<string, View> = {
   invoices: (env, actor, _r, _id, url) => invoiceList(env,actor,url),
   invoice: (env, actor, _request, id, url) => invoiceView(env, actor, id, url),
   ageing: (env, actor) => ageing(env, actor),
-  payments: (env, actor) => payments(env, actor),
+  payments: (env, actor,_r,_id,url) => payments(env, actor,undefined,url),
   notices: (env, actor) => notices(env, actor),
   tasks: (env, actor) => tasks(env, actor),
   policySettings: (env, actor) => policySettings(env, actor),

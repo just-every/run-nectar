@@ -8,6 +8,8 @@ import type { Actor } from '../actor'
 import { exportReminder } from '../collections'
 import { billRunJson, customersCsv, invoicesCsv, subscriptionsCsv, usageCsv } from '../exports'
 import type { Input } from '../input'
+import { metadataPage,metadataListPage } from './metadata'
+import { metadataCsv } from '../metadata-lists'
 import { billingPage, invoicePage, runPage } from './billing'
 import { customerPage, customersPage, subscriptionPage } from './customers'
 import { accessPage, auditPage, homePage, morePage, settingsPage } from './home'
@@ -19,6 +21,9 @@ import { reportPage, reportInvoicePage, reportLinePage } from './reports'
 type Page = (env: Bindings, actor: Actor, request: Request, url: URL, id: string) => Promise<Response>
 
 export const pages: Record<string, Page> = {
+  metadata: (env,actor,_r,url,id) => {const [kind,record]=id.split('/');return metadataPage(env,actor,kind,record,url)},
+  metadataList: (env,actor,_r,url) => metadataListPage(env,actor,url),
+  metadataCsv: (env,actor,_r,url,id) => metadataCsv(env,actor,id,url),
   home: (env, actor, _r, url) => homePage(env, actor, url),
   more: (env, actor, _r, url) => morePage(env, actor, url),
   settings: (env, actor, _r, url) => settingsPage(env, actor, url),
@@ -38,10 +43,10 @@ export const pages: Record<string, Page> = {
   proposal: (env, actor, _r, url, id) => proposalPage(env, actor, id, url),
   import: (env, actor, _r, url) => importPage(env, actor, url),
   exports: (env, actor, _r, url) => exportsPage(env, actor, url),
-  customersFile: (env, actor) => customersCsv(env, actor),
-  invoicesFile: (env, actor) => invoicesCsv(env, actor),
+  customersFile: (env, actor,_r,url) => customersCsv(env, actor,url),
+  invoicesFile: (env, actor,_r,url) => invoicesCsv(env, actor,url),
   usageFile: (env, actor) => usageCsv(env, actor),
-  subscriptionsFile: (env, actor) => subscriptionsCsv(env, actor),
+  subscriptionsFile: (env, actor,_r,url) => subscriptionsCsv(env, actor,url),
   access: (env, actor, _r, url) => accessPage(env, actor, url),
   audit: (env, actor, _r, url) => auditPage(env, actor, url),
   report: (env, actor, _r, url, id) => reportPage(env, actor, id, url),

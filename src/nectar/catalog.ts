@@ -4,21 +4,24 @@
 import type { Bindings } from '../auth.server'
 import { actorLabel, requireCapability, type Actor } from './actor'
 import { all, commit, insist, newId, now, one, stmt } from './core'
+import { metadataFilter,metadataPredicate } from './metadata-query'
+import { withMetadata } from './metadata'
 import type { Input } from './input'
 import { priceRequests } from './price-versions'
 import { storedQuantityPrice } from './price-model'
 
 const CODE = /^[a-z0-9][a-z0-9_.-]{0,59}$/
 
-export async function catalog(env: Bindings, actor: Actor) {
+export async function catalog(env: Bindings, actor: Actor,url?:URL) {
   requireCapability(actor, 'read')
+  const filter=metadataPredicate('price','p.id',url?metadataFilter(url):null)
   const [products, prices, meters, features] = await Promise.all([
     all(env, 'SELECT * FROM nc_products ORDER BY status, name COLLATE NOCASE'),
-    all(env, 'SELECT p.*, m.code AS meter_code, m.unit_label FROM nc_prices p LEFT JOIN nc_meters m ON m.id = p.meter_id ORDER BY p.product_id, p.version DESC'),
+    all(env, `SELECT p.*, m.code AS meter_code, m.unit_label FROM nc_prices p LEFT JOIN nc_meters m ON m.id = p.meter_id WHERE ${filter.sql} ORDER BY p.product_id, p.version DESC`,...filter.params),
     all(env, 'SELECT * FROM nc_meters ORDER BY code'),
     all(env, 'SELECT * FROM nc_features ORDER BY product_id, feature'),
   ])
-  return { products, priceRequests: await priceRequests(env, actor), prices: prices.map(price => ({ ...price, ...(price.pricing_model === 'simple' ? {} : { pricing: storedQuantityPrice(price as any) }) })), meters, features }
+  return { products, priceRequests: await priceRequests(env, actor), prices: await withMetadata(env,'price',prices.map(price => ({ ...price, ...(price.pricing_model === 'simple' ? {} : { pricing: storedQuantityPrice(price as any) }) }))), meters, features }
 }
 
 export async function requirePrice(env: Bindings, id: string) {

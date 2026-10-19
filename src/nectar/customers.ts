@@ -3,16 +3,32 @@
 import type { Bindings } from '../auth.server'
 import { actorLabel, requireCapability, type Actor } from './actor'
 import { all, commit, guard, insist, newId, now, one, stmt } from './core'
+import { withMetadata } from './metadata'
+import { metadataFilter,metadataPredicate } from './metadata-query'
 import type { Input } from './input'
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const EXTERNAL_ID = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,79}$/
 
-export async function customers(env: Bindings, actor: Actor) {
+export async function customers(env: Bindings, actor: Actor,url?:URL) {
   requireCapability(actor, 'read')
-  return await all(env, `SELECT c.id, c.external_id, c.name, c.billing_email, c.status, c.origin, c.tax_exempt,
+  const filter=metadataPredicate('customer','c.id',url?metadataFilter(url):null)
+  const search=url?.searchParams.get('search')??''
+  const rows=await all(env, `SELECT c.id, c.external_id, c.name, c.billing_email, c.status, c.origin, c.tax_exempt,
     (SELECT COUNT(*) FROM nc_subscriptions s WHERE s.customer_id = c.id) AS subscriptions
-    FROM nc_customers c ORDER BY c.name COLLATE NOCASE`)
+    FROM nc_customers c WHERE ${filter.sql} ORDER BY c.name COLLATE NOCASE`,...filter.params)
+  const projected=await withMetadata(env,'customer',rows)
+  if(!search)return projected
+  const matches=await all(env,`SELECT m.kind,m.record_id,m.metadata_json FROM nc_metadata_revisions m WHERE m.revision=(SELECT MAX(x.revision) FROM nc_metadata_revisions x WHERE x.kind=m.kind AND x.record_id=m.record_id)`)
+  const found=new Set<string>()
+  for(const m of matches){
+    if(!Object.values(JSON.parse(m.metadata_json)).some(v=>String(v).toLowerCase().includes(search.toLowerCase())))continue
+    if(m.kind==='customer')found.add(m.record_id)
+    else if(m.kind==='price'){for(const r of await all(env,'SELECT DISTINCT s.customer_id FROM nc_items i JOIN nc_subscriptions s ON s.id=i.subscription_id WHERE i.price_id=?',m.record_id))found.add(r.customer_id)}
+    else {const table=({'subscription':'nc_subscriptions','invoice':'nc_invoices','payment':'nc_payments','credit-note':'nc_credit_notes'} as Record<string,string>)[m.kind];if(table)for(const r of await all(env,`SELECT customer_id FROM ${table} WHERE id=?`,m.record_id))found.add(r.customer_id)}
+  }
+  const text=search.toLowerCase()
+  return projected.filter(r=>found.has(r.id)||[r.name,r.external_id,r.billing_email].some(v=>String(v).toLowerCase().includes(text)))
 }
 
 export async function requireCustomer(env: Bindings, id: string) {

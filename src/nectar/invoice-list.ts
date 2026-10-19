@@ -3,6 +3,7 @@
 // created earlier or backdated to the same invoice date.
 import type { Bindings } from '../auth.server'
 import { requireCapability, type Actor } from './actor'
+import { withMetadata } from './metadata'
 import { all, insist, one } from './core'
 
 interface Cursor { v: 1; snapshot: number; after: number; customer: string; limit: number }
@@ -40,5 +41,5 @@ export async function invoiceList(env: Bindings, actor: Actor, url: URL) {
   const more = rows.length > limit
   const page = rows.slice(0,limit)
   const next: Cursor | null = more ? { v:1,snapshot,after:page[page.length-1].issue_sequence,customer,limit } : null
-  return { data: page.map(({issue_sequence: _sequence,...invoice}) => invoice), nextCursor:next ? btoa(JSON.stringify(next)) : null }
+  return { data: await withMetadata(env,'invoice',page.map(({issue_sequence: _sequence,...invoice}) => invoice)), nextCursor:next ? btoa(JSON.stringify(next)) : null }
 }

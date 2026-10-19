@@ -2,6 +2,7 @@
 // previous-biller history) and one subscription (items, contract exceptions,
 // scheduled changes with their proration preview).
 import type { Bindings } from '../../auth.server'
+import { metadataLink } from './metadata'
 import { can, type Actor } from '../actor'
 import { all } from '../core'
 import { customers } from '../customers'
@@ -19,12 +20,12 @@ import { priceRate } from './pricing'
 const subscriptionState = (s: Record<string, any>, today: string) => s.billing_mode === 'shadow' ? 'Shadow' : s.end_date && s.end_date <= today ? 'Ended' : s.trial_end && s.trial_end > today ? 'Trial' : 'Active'
 
 export async function customersPage(env: Bindings, actor: Actor, url: URL) {
-  const rows = await customers(env, actor)
+  const rows = await customers(env, actor,url)
   const create = can(actor, 'records') ? h`<section class="card" aria-labelledby="new"><h2 id="new">Add a customer</h2>${form('customer.create', '/app/customers/{id}', h`
     ${field('Customer ID', 'external_id', { hint: 'The id your CRM or previous biller uses; usage files refer to customers by it.' })}${field('Name', 'name')}
     ${field('Billing email', 'billing_email', { type: 'email' })}${field('Billing address', 'address', { required: false })}
     ${check('Tax exempt', 'tax_exempt')}${field('Exemption certificate reference', 'tax_exempt_ref', { required: false })}`, 'Add customer', { layout: 'columns' })}</section>` : ''
-  return page('Customers', actor, h`<h1>Customers</h1>
+  return page('Customers', actor, h`<h1>Customers</h1><section class="card"><form method="get" action="/app/customers" class="row-form">${field('Search customers or metadata','search',{value:url.searchParams.get('search')??'',required:false})}<button type="submit">Search</button></form></section>
     <section class="card">${table(['Customer', 'Customer ID', 'Billing email', 'Subscriptions$', 'Source'], rows.map(r => [h`<a href="/app/customers/${r.id}">${r.name}</a>`, r.external_id, r.billing_email || '—', r.subscriptions, r.origin === 'import' ? 'Moved in' : 'Nectar']), { empty: 'No customers yet. Add one below, or move in from Stripe under More.', lead: true })}</section>${create}`, { current: '/app/customers', url })
 }
 
@@ -43,7 +44,7 @@ export async function customerPage(env: Bindings, actor: Actor, id: string, url:
     ${field('Value', 'exception_value', { required: false })}${field('From', 'exception_effective_from', { type: 'date', required: false })}${field('Until (optional)', 'exception_effective_to', { type: 'date', required: false })}
     ${field('Note', 'exception_note', { required: false })}${area('Contract clause (quote it)', 'exception_clause', '', false, 2)}</fieldset>`, 'Start subscription', { layout: 'columns' })}</section>` : ''
   const ledger = c.ledger
-  return page(c.name, actor, h`<p class="crumbs"><a href="/app/customers">Customers</a></p><h1>${c.name}</h1>
+  return page(c.name, actor, h`<p class="crumbs"><a href="/app/customers">Customers</a></p><h1>${c.name}</h1><p>${metadataLink('customer',c.id)}</p>
     <section class="card summary"><dl class="figures">
       <div><dt>Customer ID</dt><dd>${c.external_id}</dd></div><div class="wide"><dt>Billing email</dt><dd>${addresses(c.billing_email || '—')}</dd></div>
       <div><dt>Owed now</dt><dd>${cents(ledger.balanceCents)}</dd></div><div><dt>Unallocated payments</dt><dd>${cents(ledger.unallocatedCents)}</dd></div>
@@ -56,7 +57,7 @@ export async function customerPage(env: Bindings, actor: Actor, id: string, url:
     ${chargeSection(c, named, actor, today)}
     <section class="card" aria-labelledby="money"><h2 id="money">Invoices and payments</h2>
       ${table(['Invoice', 'Issued', 'Due', 'Total$', 'Credited$', 'Paid$', 'Owed$'], ledger.invoices.map((i: any) => [h`<a href="/app/invoices/${i.id}">${i.number}</a>`, formatDate(i.issue_date), formatDate(i.due_date), cents(i.total_cents), cents(i.credited_cents), cents(i.paid_cents), cents(i.balance_cents)]), { empty: 'No issued invoices yet.' })}
-      ${ledger.payments.length ? table(['Payment', 'Received', 'Amount$', 'Unallocated$'], ledger.payments.map((p: any) => [h`<span id="payment-${p.id}">${p.reference}</span>`, formatDate(p.received_on), cents(p.amount_cents), cents(p.unallocated_cents)])) : ''}</section>
+      ${ledger.payments.length ? table(['Payment', 'Received', 'Amount$', 'Unallocated$'], ledger.payments.map((p: any) => [h`<span id="payment-${p.id}">${p.reference}</span> ${metadataLink('payment',p.id)}`, formatDate(p.received_on), cents(p.amount_cents), cents(p.unallocated_cents)])) : ''}</section>
     <section class="card" aria-labelledby="ents"><h2 id="ents">Entitlements</h2>${c.entitlements.length ? h`<ul class="explain">${c.entitlements.map((e: any) => h`<li>${tag(e.allowed ? 'Allowed' : 'Denied')} <strong>${e.feature}</strong><ul>${e.paths.flatMap((path: any) => path.steps).map((step: string) => h`<li>${step}</li>`)}</ul></li>`)}</ul>` : h`<p class="empty">No features granted. Products grant features in the Catalog.</p>`}</section>
     <section class="card" aria-labelledby="contacts"><h2 id="contacts">Billing contacts</h2>${table(['Name', 'Email', 'Role'], c.contacts.map((x: any) => [x.name, x.email, x.role]), { empty: 'No extra contacts.' })}
       ${can(actor, 'records') ? form('contact.add', `/app/customers/${c.id}`, h`${hidden('customer', c.id)}${field('Name', 'name')}${field('Email', 'email', { type: 'email' })}${field('Role', 'role', { value: 'billing', required: false })}`, 'Add contact', { layout: 'columns', secondary: true }) : ''}</section>
@@ -72,7 +73,7 @@ export async function subscriptionPage(env: Bindings, actor: Actor, id: string, 
   const approver = actor.kind === 'member' && can(actor, 'approve'), records = can(actor, 'records')
   const open = s.items.filter((i: any) => !i.effective_to)
   const prices = records ? await all(env, "SELECT p.id, pr.name, p.version, p.kind, p.unit_amount, p.pricing_model, p.nickname FROM nc_prices p JOIN nc_products pr ON pr.id = p.product_id WHERE p.status = 'active' AND p.kind <> 'unit' ORDER BY pr.name, p.version DESC") : []
-  return page('Subscription', actor, h`<p class="crumbs"><a href="/app/customers/${s.customer_id}">${s.customer_name}</a></p><h1>Subscription ${s.external_id ? h`<span class="nowrap">${s.external_id}</span>` : ''}</h1>
+  return page('Subscription', actor, h`<p class="crumbs"><a href="/app/customers/${s.customer_id}">${s.customer_name}</a></p><h1>Subscription ${s.external_id ? h`<span class="nowrap">${s.external_id}</span>` : ''}</h1><p>${metadataLink('subscription',s.id)}</p>
     <section class="card summary"><dl class="figures"><div><dt>Status</dt><dd>${tag(subscriptionState(s, today))}</dd></div><div><dt>Started</dt><dd>${formatDate(s.start_date)}</dd></div>
       <div><dt>Billing day</dt><dd>${s.anchor_day}</dd></div><div><dt>Trial ends</dt><dd>${formatDate(s.trial_end)}</dd></div><div><dt>Ends</dt><dd>${formatDate(s.end_date)}</dd></div>
       ${s.cutover_start ? h`<div><dt>Billed by Nectar from</dt><dd>${formatDate(s.cutover_start)}</dd></div>` : ''}</dl>

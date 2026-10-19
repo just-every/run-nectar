@@ -1,3 +1,4 @@
+import { metadataFor,withMetadata } from './metadata'
 import { alertStatements } from './notifications'
 import { deliverAlerts } from './notification-mail'
 // Flows 9 and 10: a bill run drafts one invoice per subscription period that
@@ -138,10 +139,10 @@ export async function invoiceDetail(env: Bindings, actor: Actor, id: string): Pr
   const allocations = await all(env, 'SELECT a.*, p.reference, p.received_on, p.method FROM nc_allocations a JOIN nc_payments p ON p.id = a.payment_id WHERE a.invoice_id = ? ORDER BY a.allocated_at', id)
   const credited = credits.reduce((sum, row) => sum + row.amount_cents, 0), paid = allocations.reduce((sum, row) => sum + row.amount_cents, 0)
   return {
-    ...invoice, creditPolicy: await creditPolicy(env), creditRequests: await creditRequests(env, actor, id), calculation: parseJson(invoice.calculation_json, {}), comparison: parseJson(invoice.comparison_json, {}), exceptions: parseJson(invoice.exceptions_json, []),
+    ...invoice,...await metadataFor(env,'invoice',id), creditPolicy: await creditPolicy(env), creditRequests: await creditRequests(env, actor, id), calculation: parseJson(invoice.calculation_json, {}), comparison: parseJson(invoice.comparison_json, {}), exceptions: parseJson(invoice.exceptions_json, []),
     calculation_json: undefined, comparison_json: undefined, exceptions_json: undefined,
     lines: lines.map(line => ({ ...line, evidence: parseJson(line.evidence_json, {}), evidence_json: undefined })),
-    credits, allocations, creditedCents: credited, paidCents: paid, balanceCents: invoice.status === 'issued' ? invoice.total_cents - credited - paid : null,
+    credits:await withMetadata(env,'credit-note',credits), allocations, creditedCents: credited, paidCents: paid, balanceCents: invoice.status === 'issued' ? invoice.total_cents - credited - paid : null,
   }
 }
 

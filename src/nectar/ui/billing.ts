@@ -1,5 +1,6 @@
 // Billing: bill runs, the bill-run review
 // and one invoice with its lines, calculation evidence, credits and payments.
+import { metadataLink } from './metadata'
 import { creditApprovals } from './credit-approvals'
 import { notesSection } from './notes'
 import type { Bindings } from '../../auth.server'
@@ -71,7 +72,7 @@ export async function invoicePage(env: Bindings, actor: Actor, id: string, url: 
   const title = i.number ? `Invoice ${i.number}` : i.status === 'shadow' ? 'Shadow draft' : 'Draft invoice'
   const incumbent = i.comparison.incumbent
   return page(title, actor, h`<p class="crumbs"><a href="/app/billing/${i.bill_run_id}">Bill run</a> · <a href="/app/customers/${i.customer_id}">${i.customer_name}</a></p>
-    <div class="title-row"><h1>${title}</h1>${tag(statusLabel(i.status, i.status === 'draft' ? i.exceptions.length : 0))}</div>
+    <div class="title-row"><h1>${title}</h1>${tag(statusLabel(i.status, i.status === 'draft' ? i.exceptions.length : 0))}</div><p>${metadataLink('invoice',i.id)}</p>
     <section class="card summary"><dl class="figures"><div><dt>Customer</dt><dd>${i.customer_name}<span class="sub">${i.external_id}</span></dd></div><div><dt>Period</dt><dd>${formatPeriod(i.period_start, i.period_end)}</dd></div>
       ${i.issue_date ? h`<div><dt>Issued</dt><dd>${formatDate(i.issue_date)}</dd></div><div><dt>Due</dt><dd>${formatDate(i.due_date)}</dd></div>` : ''}
       <div><dt>Total</dt><dd class="money">${cents(i.total_cents)}</dd></div>${i.status === 'issued' ? h`<div><dt>Owed</dt><dd class="money">${cents(i.balanceCents)}</dd></div>` : ''}</dl></section>
@@ -86,7 +87,7 @@ export async function invoicePage(env: Bindings, actor: Actor, id: string, url: 
       ${form('invoice.approve', `/app/invoices/${i.id}`, h`${hidden('invoice', i.id)}${i.exceptions.length ? check('I reviewed the exceptions above', 'acknowledge') : ''}`, 'Approve this invoice', { primary: true })}</section>` : ''}
     ${i.status === 'approved' && approver ? h`<section class="card"><h2>Finalize</h2>${form('invoice.finalise', `/app/invoices/${i.id}`, h`${hidden('invoice', i.id)}${field('Invoice date (default today)', 'issue_date', { type: 'date', required: false, hint: 'Any day from the service date for standalone work, or the end of the subscription period, up to today.' })}`, 'Number and issue this invoice', { layout: 'row-form' })}</section>` : ''}
     ${i.status === 'issued' ? h`<section class="card" aria-labelledby="recv"><h2 id="recv">Credits and payments</h2>
-      ${table(['Credit note', 'Reason', 'Amount$'], i.credits.map((c: any) => [c.number, c.reason, cents(c.amount_cents)]), { empty: 'No credit notes.' })}
+      ${table(['Credit note', 'Reason', 'Amount$'], i.credits.map((c: any) => [h`<span id="credit-${c.id}">${c.number}</span> ${metadataLink('credit-note',c.id)}`, c.reason, cents(c.amount_cents)]), { empty: 'No credit notes.' })}
       ${table(['Payment', 'Received', 'Allocated$'], i.allocations.map((a: any) => [a.reference, formatDate(a.received_on), cents(a.amount_cents)]), { empty: 'No payments allocated.' })}
       <p>Invoiced ${cents(i.total_cents)} = credited ${cents(i.creditedCents)} + paid ${cents(i.paidCents)} + owed ${cents(i.balanceCents)}.</p>
       ${approver && i.balanceCents > 0 ? form('credit.issue', `/app/invoices/${i.id}`, h`${hidden('invoice', i.id)}${field('Credit amount ($)', 'amount')}${field('Reason', 'reason')}`, 'Issue credit note', { layout: 'columns', secondary: true }) : ''}
