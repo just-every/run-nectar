@@ -517,8 +517,8 @@ Round update: `USE-007` and `CAT-002` are proven by their named public-door jour
 | Clauses | Done | Partial | Missing | Total |
 | --- | ---: | ---: | ---: | ---: |
 | Published | 16 | 0 | 0 | 16 |
-| Target and push further | 4 | 37 | 67 | 108 |
-| All | 20 | 37 | 67 | 124 |
+| Target and push further | 5 | 36 | 67 | 108 |
+| All | 21 | 36 | 67 | 124 |
 
 | Clause | Title | Kind | Status | Evidence | Gap |
 | --- | --- | --- | --- | --- | --- |
@@ -571,7 +571,7 @@ Round update: `USE-007` and `CAT-002` are proven by their named public-door jour
 | `DEV-006` | Stripe Billing call map for the app switch-over | target | missing |  | No published Stripe-call map and no pass-through of app writes to shadow subscriptions. |
 | `DEV-004` | Test mode and test clocks | target | missing |  | No test mode or test clocks. |
 | `INV-001` | Automatic invoice runs | target | partial | `src/nectar/billruns.ts`; `tests/nectar/flows.mjs` | Bill runs draft and finalise when a person runs and approves them; no schedule, auto-issue policy or in-advance periods. |
-| `INV-002` | Invoice and receipt email delivery | target | missing |  | Nectar sends nothing; reminders download for the operator to send. |
+| `INV-002` | Invoice and receipt email delivery | target | missing |  | Invoice reminders download for the operator to send; no invoice or receipt email delivery. |
 | `INV-003` | Hosted invoice page and PDF | target | missing |  | No hosted invoice page or PDF. |
 | `INV-004` | Branded, B2B-ready invoices | target | partial | `src/nectar/business.ts`; `tests/nectar/flows.mjs` | Invoice prefix and business-wide payment terms ship; no logo, branding, custom fields, PO numbers or per-customer terms. |
 | `INV-005` | Credit notes, voids and refunds | target | partial | `src/nectar/receivables.ts`; `tests/nectar/flows.mjs` | Numbered credit notes against owed balances ship; no voids, refunds through a processor or tax reversal. |
@@ -600,7 +600,7 @@ Round update: `USE-007` and `CAT-002` are proven by their named public-door jour
 | `PORT-005` | Embedded portal and branded domain | target | missing |  | No portal to embed. |
 | `PORT-006` | Customer-facing language | target | missing |  | English only; no customer-facing pages or locale files. |
 | `TAX-001` | US sales tax through a tax provider | target | partial | `src/nectar/business.ts`; `src/nectar/rating.ts`; `tests/nectar/flows.mjs` | One reviewed flat state rate with exemptions ships (NEC-01); no Stripe Tax, Avalara, Anrok or TaxJar calculation, commit or reversal. |
-| `TAX-002` | Exemption certificates | target | partial | `src/nectar/customers.ts`; `tests/nectar/flows.mjs` | A customer exemption with a certificate reference ships; no per-state certificates, validation, expiry or reminders. |
+| `TAX-002` | Exemption certificates | target | done | `src/nectar/certificates.ts`; `src/nectar/certificate-reminders.ts`; `tests/nectar/certificates.mjs` — TAX-002 public HTTP and scheduled-event journey |  |
 | `TAX-003` | Tax reports for filing | target | missing |  | No tax reports. |
 | `TAX-004` | Economic-nexus monitoring | target | missing |  | No per-state sales tracking or nexus warnings. |
 | `BOOK-001` | QuickBooks Online, Xero and Pantry sync | target | missing |  | No QuickBooks Online, Xero or Pantry sync; CSV exports only. |
@@ -615,7 +615,7 @@ Round update: `USE-007` and `CAT-002` are proven by their named public-door jour
 | `CRM-002` | Signed order forms and contracts as inputs | target | partial | `src/nectar/proposals.ts`; `tests/nectar/flows.mjs` | An agent can propose contract terms quoting a signed agreement (NEC-14); no document intake from Inkwell, Docusign, PandaDoc, Platter or Locket. |
 | `INT-001` | Chat alerts and approvals | target | missing |  | No Slack or Nook messages. |
 | `INT-002` | Workflow automation and support context | target | missing |  | No Crank or Zapier triggers and no support or success read integration. |
-| `INT-003` | Team email notifications | target | missing |  | Nectar sends no email. |
+| `INT-003` | Team email notifications | target | missing |  | Certificate renewal mail ships; no team lifecycle, invoice, payment or dispute notifications. |
 | `MOVE-001` | Chargebee move-in | target | missing |  | Stripe Billing is the only move-in source. |
 | `MOVE-002` | Recurly move-in | target | missing |  | Stripe Billing is the only move-in source. |
 | `MOVE-003` | Maxio move-in | target | missing |  | Stripe Billing is the only move-in source. |
@@ -635,9 +635,9 @@ Round update: `USE-007` and `CAT-002` are proven by their named public-door jour
 | `GOV-006` | Provider secret custody | target | partial | `src/nectar/access.ts`; `tests/nectar/flows.mjs` | Agent credentials are shown once, stored as SHA-256 and revocable; no provider secrets exist yet to encrypt, scope or rotate. |
 | `GOV-007` | Required multi-factor sign-in | target | missing |  | Base operator sign-in only; no TOTP, passkeys, required second factor or step-up. |
 | `MOB-001` | Every operator screen works on a phone | target | done | `tests/nectar/journey.mjs`; `src/nectar/ui/html.ts` |  |
-| `MOB-003` | Customer-facing pages and emails work on a phone | target | missing |  | No customer-facing pages or emails exist yet. |
+| `MOB-003` | Customer-facing pages and emails work on a phone | target | missing |  | No customer-facing pages, checkout, invoice or dunning emails exist yet. |
 | `MOB-002` | Nectar for iOS and Android | target | missing |  | No native apps or push notifications. |
-| `OPS-001` | Measured capacity and unattended jobs | target | missing |  | No scheduled jobs; capacity is unmeasured (seed.json limits). |
+| `OPS-001` | Measured capacity and unattended jobs | target | missing |  | Certificate reminders run daily; billing jobs and measured capacity are absent (seed.json limits). |
 | `AGENT-001` | Continuous revenue assurance | push-further | partial | `src/nectar/proposals.ts`; `src/nectar/collections.ts`; `tests/nectar/flows.mjs` | Agents read records and submit reviewed proposals; no cross-system comparison, cases, owners or follow-through. |
 | `AGENT-002` | Simulate the fix and explain it to the customer | push-further | partial | `src/nectar/proposals.ts`; `tests/nectar/flows.mjs` | Nectar computes each proposal's invoice effect; no tax, revenue or MRR effect and no customer explanation sent with the approved change. |
 | `AGENT-003` | Collections that resolve the cause of nonpayment | push-further | partial | `src/nectar/collections.ts`; `src/nectar/proposals.ts`; `tests/nectar/flows.mjs` | Agents can propose a balance-aware reminder; no cause diagnosis from delivery, AP portal, payment or remittance data. |

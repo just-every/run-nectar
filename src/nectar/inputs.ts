@@ -5,6 +5,7 @@
 import type { Bindings } from '../auth.server'
 import type { Business } from './business'
 import { all, fingerprint, insist, one, type Row } from './core'
+import { certificateBasis } from './certificates'
 import { zonedStart } from './dates'
 import { RATING_VERSION, rate, type ItemIn, type PriceIn, type RatingInput } from './rating'
 import { PRICE_MODEL_RATING_VERSION, storedQuantityPrice } from './price-model'
@@ -28,10 +29,11 @@ export async function ratingInputs(env: Bindings, business: Business, subscripti
   const meters = [...new Set(Object.values(prices).flatMap(price => price.meterId ? [price.meterId] : []))]
   const events = meters.length ? (await all(env, `SELECT event_id, meter_id, quantity, occurred_at FROM nc_usage_events WHERE customer_id = ? AND status = 'active' AND invoice_id IS NULL AND occurred_at < ? AND meter_id IN (${meters.map(() => '?').join(',')}) ORDER BY occurred_at, event_id`,
     sub.customer_id, zonedStart(period.end, business.timezone), ...meters)).map(row => ({ eventId: row.event_id, meterId: row.meter_id, quantity: row.quantity, occurredAt: row.occurred_at })) : []
+  const certificate = await certificateBasis(env, sub.customer_id, business.tax_jurisdiction, period)
   return {
     version: Object.values(prices).some(price => price.pricing) ? PRICE_MODEL_RATING_VERSION : RATING_VERSION,
     timezone: business.timezone,
-    tax: { mode: business.tax_mode, rate: business.tax_rate, jurisdiction: business.tax_jurisdiction, exempt: !!sub.tax_exempt, exemptRef: sub.tax_exempt_ref },
+    tax: { mode: business.tax_mode, rate: business.tax_rate, jurisdiction: business.tax_jurisdiction, exempt: certificate?.exempt ?? !!sub.tax_exempt, exemptRef: certificate?.exemptRef ?? sub.tax_exempt_ref, ...(certificate ? { certificate: certificate.certificate, exception: certificate.exception } : {}) },
     subscription: { id: sub.id, anchorDay: sub.anchor_day, startDate: sub.start_date, trialEnd: sub.trial_end, endDate: sub.end_date, billFrom: sub.cutover_start },
     period, items, prices, amendments, events,
   }

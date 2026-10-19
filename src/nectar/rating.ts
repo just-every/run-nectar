@@ -24,7 +24,7 @@ export interface EventIn { eventId: string; meterId: string; quantity: string; o
 export interface RatingInput {
   version: string
   timezone: string
-  tax: { mode: 'undeclared' | 'no_tax' | 'flat_rate'; rate: string; jurisdiction: string; exempt: boolean; exemptRef: string }
+  tax: { mode: 'undeclared' | 'no_tax' | 'flat_rate'; rate: string; jurisdiction: string; exempt: boolean; exemptRef: string; certificate?: unknown; exception?: Exception | null }
   subscription: { id: string; anchorDay: number; startDate: string; trialEnd: string | null; endDate: string | null; billFrom: string | null }
   period: { start: string; end: string }
   items: ItemIn[]
@@ -147,6 +147,8 @@ export function rate(input: RatingInput): Rating {
   const taxableBase = lines.filter(line => line.taxable).reduce((sum, line) => sum + line.amountCents, 0)
   let taxCents = 0
   const tax: Record<string, unknown> = { mode: input.tax.mode, jurisdiction: input.tax.jurisdiction, taxableBaseCents: taxableBase }
+  if (input.tax.exception) exceptions.push(input.tax.exception)
+  if (input.tax.certificate) tax.certificate = input.tax.certificate
   if (input.tax.mode === 'undeclared') exceptions.push({ code: 'tax_undeclared', message: 'The business has not declared its tax policy; this invoice cannot be finalized.' })
   else if (input.tax.exempt) Object.assign(tax, { exempt: true, exemptRef: input.tax.exemptRef, rule: 'customer is tax exempt' })
   else if (input.tax.mode === 'flat_rate' && taxableBase > 0) {

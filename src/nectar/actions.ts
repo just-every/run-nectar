@@ -9,6 +9,8 @@ import { configureBusiness, declareTax, reviewTax } from './business'
 import { createMeter, createPrice, createProduct, grantFeature, retirePrice } from './catalog'
 import { approveReminder, completeTask, createTask, discardReminder, prepareReminder } from './collections'
 import { addContact, createCustomer, updateCustomer } from './customers'
+import { claimExemption, collectCertificate, validateCertificate } from './certificates'
+import { configureCertificatePolicy, remindCertificates } from './certificate-reminders'
 import type { Input } from './input'
 import { adopt, applyImport, importAction, previewImport } from './movein/stripe'
 import { decide, propose } from './proposals'
@@ -27,6 +29,11 @@ export const actions: Record<string, Handler> = {
   'access.end': endAccess,
   'credential.issue': issueKey,
   'credential.revoke': revokeKey,
+  'exemption.claim': claimExemption,
+  'certificate.collect': collectCertificate,
+  'certificate.review': validateCertificate,
+  'certificate.policy': configureCertificatePolicy,
+  'certificate.remind': remindCertificates,
   'customer.create': createCustomer,
   'customer.update': updateCustomer,
   'contact.add': addContact,

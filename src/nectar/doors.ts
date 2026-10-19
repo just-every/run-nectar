@@ -16,6 +16,7 @@ export const PAGE_DOORS: [string, string][] = [
   ['^/app/billing/([\\w-]+)\\.json$', 'runFile'], ['^/app/billing/([\\w-]+)$', 'run'], ['^/app/invoices/([\\w-]+)$', 'invoice'], ['^/app/receivables$', 'receivables'],
   ['^/app/notices/([\\w-]+)\\.txt$', 'noticeFile'], ['^/app/proposals$', 'proposals'], ['^/app/proposals/([\\w-]+)$', 'proposal'], ['^/app/import$', 'import'],
   ['^/app/exports$', 'exports'], ['^/app/exports/invoices\\.csv$', 'invoicesFile'], ['^/app/exports/usage\\.csv$', 'usageFile'], ['^/app/exports/subscriptions\\.csv$', 'subscriptionsFile'],
+  ['^/app/certificates/([\\w-]+)$', 'certificateFile'],
   ['^/app/access$', 'access'], ['^/app/audit$', 'audit'],
 ]
 

@@ -10,6 +10,7 @@ import { subscriptionDetail } from '../subscriptions'
 import { customerView } from '../views'
 import { addresses, area, cents, check, details, field, form, h, hidden, page, select, table, tag, type Html } from './html'
 import { personName } from './shell'
+import { certificateSection } from './certificates'
 import { priceRate } from './pricing'
 
 const subscriptionState = (s: Record<string, any>, today: string) => s.billing_mode === 'shadow' ? 'Shadow' : s.end_date && s.end_date <= today ? 'Ended' : s.trial_end && s.trial_end > today ? 'Trial' : 'Active'
@@ -47,6 +48,7 @@ export async function customerPage(env: Bindings, actor: Actor, id: string, url:
       ${details({ 'Internal id': c.id, Source: c.origin, 'Provider reference': c.provider_ref ?? '—', Revision: c.revision })}</section>
     <section class="card" aria-labelledby="subs"><h2 id="subs">Subscriptions</h2>${table(['Subscription', 'Started', 'Billing day$', 'Status'], c.subscriptions.map((s: any) => [h`<a href="/app/subscriptions/${s.id}">${s.external_id || `Subscription from ${formatDate(s.start_date)}`}</a>`, formatDate(s.start_date), s.anchor_day, tag(subscriptionState(s, today))]), { empty: 'No subscriptions yet.' })}</section>
     ${newSubscription}
+    ${certificateSection(c, actor)}
     <section class="card" aria-labelledby="money"><h2 id="money">Invoices and payments</h2>
       ${table(['Invoice', 'Issued', 'Due', 'Total$', 'Credited$', 'Paid$', 'Owed$'], ledger.invoices.map((i: any) => [h`<a href="/app/invoices/${i.id}">${i.number}</a>`, formatDate(i.issue_date), formatDate(i.due_date), cents(i.total_cents), cents(i.credited_cents), cents(i.paid_cents), cents(i.balance_cents)]), { empty: 'No issued invoices yet.' })}
       ${ledger.payments.length ? table(['Payment', 'Received', 'Amount$', 'Unallocated$'], ledger.payments.map((p: any) => [p.reference, formatDate(p.received_on), cents(p.amount_cents), cents(p.unallocated_cents)])) : ''}</section>

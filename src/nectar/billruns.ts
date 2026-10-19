@@ -13,7 +13,7 @@ import { reconciliationFor } from './reconciliation'
 import { RATING_VERSION, type Exception, type Rating } from './rating'
 import type { Input } from './input'
 
-const BLOCKING = new Set(['tax_undeclared', 'negative_total', 'usage_reconciliation'])
+const BLOCKING = new Set(['tax_undeclared', 'exemption_certificate', 'negative_total', 'usage_reconciliation'])
 
 interface Draft { sub: Row; period: { start: string; end: string }; rating: Rating; fingerprint: string; input: { version: string }; comparison: Row; exceptions: Exception[] }
 

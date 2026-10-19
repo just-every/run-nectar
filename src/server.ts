@@ -9,6 +9,7 @@ import { lobbyResponse } from './base/lobby'
 import { setupStateResponse } from './base/setup-state'
 import { authResponse, runtimeBindings, type Bindings } from './auth.server'
 import { identity } from './identity'
+import { sendCertificateReminders } from './nectar/certificate-reminders'
 import { nectarResponse } from './nectar/http'
 
 const api = new Hono<{ Bindings: Bindings }>()
@@ -24,6 +25,9 @@ function noTransform(response: Response): Response {
 }
 
 export default withDemo({
+  async scheduled(controller, env) {
+    await sendCertificateReminders(env, controller.scheduledTime)
+  },
   async fetch(request, env, execution) {
     const asset = await staticAssetResponse(request, env)
     if (asset) return asset

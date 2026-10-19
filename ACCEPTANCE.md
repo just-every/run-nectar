@@ -165,7 +165,7 @@ with a cited test and the rest is listed in CONTRACT.md's Status table;
 | # | What a person can do | Test target | Status |
 | --- | --- | --- | --- |
 | TAX-001 | US sales tax through a tax provider | Connect a Stripe test account with Stripe Tax registrations in Texas, New York and Washington and bill SaaS customers in those states and in Oregon: each line's tax equals the Tax Calculation response; issuing records one Tax Transaction per invoice and re-issuing creates none; a credit note and a partial refund create reversals of exactly their share; Oregon returns zero with taxability reason `not_collecting`; a customer with the `customer_exempt` override bills tax-free; and the quarter's Stripe Tax transaction export equals `TAX-003`'s per-state totals. Repeat with the Avalara sandbox (lines match AvaTax's response, issued invoices are committed and a credit note reverses its share) and with Anrok and TaxJar sandboxes (lines match each response). | **PARTIAL** |
-| TAX-002 | Exemption certificates | Upload a Texas resale certificate for a customer, bill them tax-free in Texas but taxed in New York, let the certificate expire on a test clock and see the exception and reminder. | **PARTIAL** |
+| TAX-002 | Exemption certificates | Upload a Texas resale certificate for a customer, bill them tax-free in Texas but taxed in New York, let the certificate expire on a test clock and see the exception and reminder. | **DONE** |
 | TAX-003 | Tax reports for filing | After a quarter of test-clock billing with Stripe Tax connected, the tax report's totals per state equal the sum of invoice tax lines less credits, and equal the quarter's Stripe Tax transaction export for the same states; the same quarter with the Avalara sandbox equals AvaTax's committed transactions. | **MISSING** |
 | TAX-004 | Economic-nexus monitoring | Bill a test customer base so that Colorado reaches 80% and then 100% of its threshold; the owner receives one warning at each step naming the state, the measurement period and the figures, which equal the issued invoices in that state; with Stripe Tax connected and registered in Texas, Texas crossing its threshold is listed as registered, not due. | **MISSING** |
 
@@ -258,6 +258,8 @@ with a cited test and the rest is listed in CONTRACT.md's Status table;
 - **Restore retains the calculation evidence:** the journey exports the populated installation, refuses a corrupt and a second import, restores into a fresh clone, exports again with every portable row equal, and reads each issued invoice's calculation fingerprint back from the restored app.
 
 ## Evidence
+
+`TAX-002` is proven by `tests/nectar/certificates.mjs` (called by `flows.mjs`): private operator upload and named review, Texas exemption versus New York taxation, scheduled-job clock expiry, one renewal notice per state/certificate stage, blocking missing/expired custody, renewal and unchanged issued calculation evidence. The original `NEC-02` reference-only mode remains available until a customer has state exemption claims.
 
 Worked figures from the tests: Northwind's July invoice bills $499.00 + 5 seats × $30.00, a 10% contract discount of −$49.90 and −$15.00 (rounded per line), and 3,346,778.5 events × $0.0004 = $1,338.7114 → $1,338.71, subtotal $1,922.81, tax 8.25% = $158.632 → $158.63, total $2,081.44; Pinecrest's trial ends 29 July, so 17 of 31 days of $499.00 bill $273.65 with no tax for its exemption.
 

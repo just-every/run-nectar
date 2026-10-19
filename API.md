@@ -30,6 +30,11 @@ step by step; `CUSTOMER` may be the internal id or the external id), `imports`,
 | `business.configure` | owner | `legal_name`, `timezone`, `invoice_prefix`, `payment_terms_days`, optional `address`, `billing_email`, `revision` when editing |
 | `tax.declare`, `tax.review` | owner | `tax_jurisdiction` (state), `tax_mode` (`no_tax`, `flat_rate`), `tax_rate`, `tax_note`; review takes `revision` |
 | `customer.create`, `customer.update`, `contact.add` | owner, finance | `external_id`, `name`, `billing_email`, `address`, `tax_exempt`, `tax_exempt_ref`; update adds `customer`, `revision` |
+| `exemption.claim` | owner, finance | `customer`, `state`; records a claim while its document is missing |
+| `certificate.collect` | owner, finance | `customer`, `state`, `reference`, `valid_from`, `expires_on` (inclusive), `file` (PDF/PNG/JPEG, max 500 KB) |
+| `certificate.review` | a person with approval | `certificate`, `decision` (`validated`, `rejected`), `review_note`; a decision is permanent |
+| `certificate.policy` | owner | `enabled` (boolean); unattended certificate mail is off until the owner enables it |
+| `certificate.remind` | owner, finance (a person) | no fields; run the daily expiry check now |
 | `product.create`, `meter.create`, `price.create`, `price.retire`, `feature.grant` | owner, finance | price: `product`, `kind` (`flat`, `seat`, `unit`), `unit_amount` (decimal text), `meter` for `unit`, `taxable`, `nickname` |
 | `subscription.create` | owner, finance | `customer`, `start_date`, `anchor_day`, `trial_end`, `price[]`, `quantity[]`, optional `exception_*` |
 | `amendment.propose` / `amendment.decide` | finance / a person with approval | `subscription`, `kind`, `value`, `effective_from`, `effective_to`, `price`, `note`, `clause` / `amendment`, `decision` |
@@ -107,3 +112,9 @@ band quantities, rates, fees and amounts in `evidence.tiers`, with the exact
 sum and proration used for final rounding. The catalogue and invoice screens
 show the same breakdown. Modeled invoices record a separate calculation rule
 version; existing simple-price inputs and issued invoices retain their rules.
+
+## State exemption certificates (`TAX-002`)
+
+`customers/ID` includes state exemption claims, certificate metadata and reminder history. Documents download privately from `/app/certificates/ID`. The operator collects and an approver validates the document, identity, state and dates; Nectar records this attestation, not an automated legal certification. Once any state is claimed for a customer, only a validated certificate covering the entire service period exempts that state; other states are taxable. A missing or expired claimed document blocks invoice approval. Certificate evidence is fingerprinted with the calculation, so a changed basis invalidates approval and issued evidence never changes. The original reference-only exemption remains the `NEC-02` mode for customers without state claims.
+
+After the owner enables certificate mail, the daily 14:00 UTC cron checks dates in the billing timezone, requests missing/expired documents and sends one reminder within 30 days of expiry. It uses configured Base mail. Status distinguishes provider acceptance, local suppression and failure/uncertainty; acceptance is not mailbox delivery. Sending/uncertain records stay visible for investigation rather than risking duplicate notices.

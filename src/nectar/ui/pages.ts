@@ -2,6 +2,7 @@
 // that render a result instead of redirecting (a move-in preview, and a new
 // credential that is shown once and never put in a URL).
 import type { Bindings } from '../../auth.server'
+import { certificateFile } from '../certificates'
 import { issueKey } from '../access'
 import type { Actor } from '../actor'
 import { exportReminder } from '../collections'
@@ -21,6 +22,7 @@ export const pages: Record<string, Page> = {
   more: (env, actor, _r, url) => morePage(env, actor, url),
   settings: (env, actor, _r, url) => settingsPage(env, actor, url),
   customers: (env, actor, _r, url) => customersPage(env, actor, url),
+  certificateFile: (env, actor, _r, _url, id) => certificateFile(env, actor, id),
   customer: (env, actor, _r, url, id) => customerPage(env, actor, id, url),
   subscription: (env, actor, _r, url, id) => subscriptionPage(env, actor, id, url),
   catalog: (env, actor, _r, url) => catalogPage(env, actor, url),

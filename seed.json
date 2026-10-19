@@ -34,7 +34,7 @@
   ],
   "nonGoals": [
     "Payment collection, card custody or payment retries",
-    "Sending invoices or reminders",
+    "Sending invoices or payment reminders",
     "Merchant-of-record service",
     "Tax determination or filing beyond one declared US state policy",
     "Multiple entities or currencies",
