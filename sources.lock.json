@@ -57,7 +57,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "b95be8fbae4ca3433f3d5be0ec659aa0967359782f856707b9ab0b8522048bdf",
+      "sha256": "5a56e2e03d8381cbd7a41823b6f18cc8ab44cd6790d47700b734f2b33e9dfec1",
       "executable": false
     },
     "AGENTS.consumer.md": {
@@ -69,7 +69,7 @@
       "executable": false
     },
     "API.md": {
-      "sha256": "3bb28146a9e675d822798502344811b811c85facc6afb25f482ef800dfdf257d",
+      "sha256": "a727f444f442a89f2a7519dc68914c6f2675a97dfee23d9168c7478b4df3d5a5",
       "executable": false
     },
     "base-copies.json": {
@@ -77,7 +77,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "295509569a4a73eddd05fc09f60ba2967559c2491b064b0ad489c1f8b927aaaf",
+      "sha256": "6a32c06a7edea1a4dd26ad7547a49e54c85b302008a3f715e91640bb500d646d",
       "executable": false
     },
     "DEMO.md": {
@@ -2289,7 +2289,7 @@
       "executable": false
     },
     "src/nectar/actions.ts": {
-      "sha256": "ce748ee7b4dbf8064493defb896fcea4ac2a53f87eb6357d7831800a4450e21f",
+      "sha256": "598f73d94d9d059af4e5ebaf80ded18f536911b8f1b95e59a3fcc85e865a08ff",
       "executable": false
     },
     "src/nectar/actor.ts": {
@@ -2298,6 +2298,18 @@
     },
     "src/nectar/addons.ts": {
       "sha256": "6ccbb098a78408089f4fd22fda4b0c34b3a3c1799f10eebef75bec9380e2556a",
+      "executable": false
+    },
+    "src/nectar/answer-proposals.ts": {
+      "sha256": "670fd3664cb491b77b66c8c813448c8b8b58d586e22fc35c9526e1763e2a87c7",
+      "executable": false
+    },
+    "src/nectar/billing-answer-sources.ts": {
+      "sha256": "760aaef2d98c43e6e89d45b104a8cbcd2b3857966e31c93d622aa6ed232e99e0",
+      "executable": false
+    },
+    "src/nectar/billing-answers.ts": {
+      "sha256": "02b0baf87b25e866aa4e780aa6ee64e1ccb4559540d7314375fab33ea638833b",
       "executable": false
     },
     "src/nectar/billruns.ts": {
@@ -2369,7 +2381,7 @@
       "executable": false
     },
     "src/nectar/doors.ts": {
-      "sha256": "b7a38e9455c7fda8ffd7dbab7776eaad666e5f67cd429568614c2417433713e8",
+      "sha256": "4d474cb62faf79278d0e9bcd30382a1b23fa3309fea65fe727d450380dad28d0",
       "executable": false
     },
     "src/nectar/draft-correction-mail.ts": {
@@ -2652,8 +2664,12 @@
       "sha256": "67f9d001b364e7276bd6a43f71a8cce37c72e34faac48c70e262b65008384195",
       "executable": false
     },
+    "src/nectar/ui/billing-answers.ts": {
+      "sha256": "c7783b7baac16bd3a801f30c95aaf70ef805093cbb090c24de7ec8a28d3dba65",
+      "executable": false
+    },
     "src/nectar/ui/billing.ts": {
-      "sha256": "ba688a471170b8cdda34c343fda1709cd646c121249a5339312707ec2c4c9668",
+      "sha256": "25773142ae4f7606998688ed82e42cc6e34a3bd039cece8485ecf2ce0a41fd2c",
       "executable": false
     },
     "src/nectar/ui/certificates.ts": {
@@ -2689,7 +2705,7 @@
       "executable": false
     },
     "src/nectar/ui/html.ts": {
-      "sha256": "76e49d6b013ee5be6cae604957c2f0831c8f64b82d00cfc3e58544c7ee5f9ab0",
+      "sha256": "3bcc557d3a3f8dba008ea095578e9575a88d0fa7d6c3528fe04ef45072ada548",
       "executable": false
     },
     "src/nectar/ui/icons.ts": {
@@ -2717,7 +2733,7 @@
       "executable": false
     },
     "src/nectar/ui/pages.ts": {
-      "sha256": "0b3299feafd3b207205c9f615648e8a726d6a5134ea4b16360928149a44f416e",
+      "sha256": "7673f49e76c18e90c04d9c0621a4e895c1c50e221a7372ddce806c86cdb92cb3",
       "executable": false
     },
     "src/nectar/ui/policies.ts": {
@@ -2988,6 +3004,10 @@
       "sha256": "a11d6b89e7219137540c7052683c5f4d9ba7ddf16f66d34c1f56ae34029c0a95",
       "executable": false
     },
+    "tests/nectar/billing-answers.mjs": {
+      "sha256": "9fbe8028738b8542f4ddde00cbfb7a27ba64027336fe8fb708c62856a1dbe5ce",
+      "executable": false
+    },
     "tests/nectar/catalogue-approvals.mjs": {
       "sha256": "3fcef13b29d60a35f7bc99bbaa1e0f33c86c7b7ab5eb0ded73a07899cdebf6aa",
       "executable": false
@@ -3029,7 +3049,7 @@
       "executable": false
     },
     "tests/nectar/flows.mjs": {
-      "sha256": "f34b8c3fd54387697e09e852ad49e38ac22d77788f801a3cc259a6f6779f4c37",
+      "sha256": "863e6ba665d8e346d6f5a9d78de9c4eacec3d5f58ad475c954c452ac327f89bd",
       "executable": false
     },
     "tests/nectar/harness.mjs": {

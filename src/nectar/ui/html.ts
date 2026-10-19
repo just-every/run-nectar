@@ -47,6 +47,7 @@ export const NAV: { href: string; label: string; icon: IconName }[] = [
   { href: '/app/billing', label: 'Billing', icon: 'billing' },
 ]
 export const MORE: { href: string; label: string; about: string; icon: IconName; show: (actor: Actor) => boolean }[] = [
+  { href: '/app/answers', label: 'Billing answers', icon: 'sparkle', about: 'Ask about saved invoice calculations, source events and billing terms.', show: actor => can(actor, 'read') },
   { href: '/app/catalog', label: 'Catalog', icon: 'catalog', about: 'Products, versioned prices, meters and the features each product grants.', show: () => true },
   { href: '/app/proposals', label: 'Proposals', icon: 'proposals', about: 'Work an agent or a colleague prepared for your approval.', show: () => true },
   { href: '/app/import', label: 'Move in', icon: 'movein', about: 'Bring Stripe Billing records in, compare in shadow, then cut over.', show: actor => can(actor, 'records') },

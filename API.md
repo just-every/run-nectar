@@ -8,7 +8,7 @@ role or credential scope itself.
 
 - **A signed-in person** sends their session cookie. Posts must carry this installation's `Origin` header.
 - **An agent or pipeline** sends `Authorization: Bearer nectar_…`, a credential the owner issues under More → Access (or `credential.issue`). The key is shown once; Nectar stores only its SHA-256. Scopes:
-  - `prepare`: every read below, and `proposal.create`.
+  - `prepare`: every read below, `answer.read`, `answer.propose` and `proposal.create`.
   - `usage`: `usage.submit` and `usage.control` only.
 
   A credential never approves, finalises, issues a credit, edits a record or manages access; those calls answer `403`. A revoked key answers `401`.
@@ -266,3 +266,12 @@ Issuing a renewal cancellation link or its scheduled notice freezes one optional
 Daily Cron reserves one win-back per ended subscription in the inclusive business-local window and records actual configured mail-provider outcomes without retries. `GET /return/TOKEN` shows only the offer; its exact-origin `confirm=accept` POST rechecks eligibility, source and meter ownership and atomically resumes service with the quoted discount, without billing inactive days. Tokens are hashed and die after use, expiry or policy replacement. Neither provider acceptance nor a downloaded/prepared offer is called mailbox delivery.
 
 The public-door journey uses `h.advanceClock` on a disposable local installation. The `NECTAR_LOCAL_TIME` runtime binding is honored only in local mode; hosted billing uses real time. This test driver preserves D1 and ordinary auth and is not the future DEV-004 isolated processor sandbox.
+
+
+## Cited billing answers (`AGENT-007`)
+
+`POST answer.read` takes `customer`, an issued `invoice`, and `question`. It is read-only and requires record-read authority (owner, finance, accountant or prepare credential). The optional `topic` explicitly selects `total`, `comparison`, `seats`, `usage`, `events`, `tax`, `adjustments`, `commitment`, `balance` or `terms`; otherwise the deterministic interpreter identifies supported wording and refuses ambiguity or unavailable questions. Nothing is sent to a model provider.
+
+The answer returns its interpreted topic, exact typed `figures` with a public `source` and RFC 6901 `recordPath`, and operator calculation citations. Comparisons default to the latest earlier issued period of the same subscription; `comparison_invoice` can explicitly select another issued invoice of that subscription. Derived differences retain their before/after operands and grouped line contributions. Customer/invoice/comparison mismatches return 404. Saved invoice inputs, prices, tax, terms and event snapshots remain the evidence after later changes.
+
+Optional `credit_amount` (exact decimal dollars) and `reason` return a validated `proposalDraft` without writing. `POST answer.propose` takes those same fields, requires proposal authority, recomputes the source and saves only an ordinary pending AGENT-002 invoice-credit proposal. The explicit operator form has the same behavior. Original invoice amounts and tax remain unchanged; separate human approval, current recipient/source checks and GOV-002 controls remain mandatory. Unsupported questions return 400; signed-out and usage-only credentials receive 401/403.

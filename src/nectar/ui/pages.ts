@@ -1,3 +1,4 @@
+import { billingAnswersPage } from './billing-answers'
 import { retentionPage } from './retention'
 import { h,page } from './html'
 import { issueCancellationLink } from '../renewal-terms'
@@ -28,6 +29,7 @@ import { reportPage, reportInvoicePage, reportLinePage } from './reports'
 type Page = (env: Bindings, actor: Actor, request: Request, url: URL, id: string) => Promise<Response>
 
 export const pages: Record<string, Page> = {
+  billingAnswers:(env,actor,_r,url)=>billingAnswersPage(env,actor,url),
   retention:(env,actor,_r,url)=>retentionPage(env,actor,url),
   reportSchedule:(env,actor,_r,url)=>reportSchedulePage(env,actor,url),
   reportDelivery:(env,actor,_r,url,id)=>reportDeliveryPage(env,actor,id,url),
@@ -70,6 +72,7 @@ export const pages: Record<string, Page> = {
 type PostPage = (env: Bindings, actor: Actor, input: Input, url: URL, request: Request) => Promise<Response>
 
 export const postPages: Record<string, PostPage> = {
+  '/app/answers':(env,actor,input,url)=>billingAnswersPage(env,actor,url,input),
   '/app/renewal-link':async(env,actor,input)=>{const result=await issueCancellationLink(env,actor,input);return page('Cancellation link',actor,h`<h1>Cancellation link</h1><section class="card"><p>The previous link is now inactive. Share this private link only with this subscription’s customer. It allows cancellation of the next renewal only.</p><p><a href="${result.cancelUrl}">Open cancellation page</a></p><p><a href="/app/subscriptions/${result.id}#renewals">Back to subscription</a></p></section>`)},
   '/app/import/preview': (env, actor, input, url) => previewPage(env, actor, input, url),
   '/app/access/credential': async (env, actor, input, url) => {

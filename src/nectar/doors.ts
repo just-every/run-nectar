@@ -19,6 +19,7 @@ export const API_DOORS: [string, string][] = [
 ]
 
 export const PAGE_DOORS: [string, string][] = [
+  ['^/app/answers$', 'billingAnswers'],
   ['^/app/retention$','retention'],
   ['^/app/report-schedule$','reportSchedule'], ['^/app/report-deliveries/([\\w-]+)\\.csv$','reportDeliveryCsv'], ['^/app/report-deliveries/([\\w-]+)$','reportDelivery'], ['^/app/exports/reports/([\\w-]+)\\.csv$','reportCsv'],
   ['^/app/proposals/([\\w-]+)/source$', 'setupSource'],

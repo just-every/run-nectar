@@ -29,6 +29,7 @@ import { exemptionCertificates } from './certificates.mjs'
 import { pricingModels } from './pricing-models.mjs'
 
 const ACTIONS = [...(await readFile(new URL('../../src/nectar/actions.ts', import.meta.url), 'utf8')).matchAll(/^  '([\w.]+)':/gm)].map(match => match[1])
+await runIsolated('billing-answers','billingAnswersFlow')
 await runIsolated('retention','retentionFlow')
 await runIsolated('renewals','renewalsFlow')
 await runIsolated('renewal-pricing','renewalPricing')
@@ -367,7 +368,10 @@ try {
     const metricPreview = await h.api('meter.prepare', cookie.owner, { code:'role-preview', name:'Role preview', unit_label:'events', source_meter:ids.meter, definition:{ aggregation:'count' } })
     assert.ok(ACTIONS.length > 30)
     for (const name of ACTIONS) {
-      if (name === 'report.schedule') {
+      if (name === 'answer.read') {
+        const answer = await h.api(name,cookie.accountant,{customer:ids.northwind,invoice:ids.julyNorthwind,question:'What is the invoice total?'})
+        assert.equal(answer.invoiceId,ids.julyNorthwind,'AGENT-007 accountant reads cited invoice answers')
+      } else if (name === 'report.schedule') {
         await h.api(name,cookie.accountant,{enabled:false,day:1})
         assert.equal((await h.api('report-schedule',cookie.accountant)).schedule.enabled,false,'RPT-002 accountant controls their own report schedule')
       } else if (name === 'notification.preferences') await h.api(name,cookie.accountant,{ mentions:true,payment_mismatch:false,billrun_exceptions:false,proposals:false })
