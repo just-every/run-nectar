@@ -3,6 +3,7 @@
 // each role, so a new door cannot be added without being checked.
 // Patterns are relative to /api/nectar/ (API) or absolute (pages).
 export const API_DOORS: [string, string][] = [
+  ['^report-schedule$', 'reportSchedule'], ['^report-deliveries/([\\w-]+)$','reportDelivery'],
   ['^proposals/([\\w-]+)/source$', 'setupSource'],
   ['^metadata/([a-z-]+/[\\w-]+)$', 'metadata'], ['^objects/([a-z-]+)$', 'metadataObjects'],
   ['^notifications$', 'notifications'],
@@ -17,6 +18,7 @@ export const API_DOORS: [string, string][] = [
 ]
 
 export const PAGE_DOORS: [string, string][] = [
+  ['^/app/report-schedule$','reportSchedule'], ['^/app/report-deliveries/([\\w-]+)\\.csv$','reportDeliveryCsv'], ['^/app/report-deliveries/([\\w-]+)$','reportDelivery'], ['^/app/exports/reports/([\\w-]+)\\.csv$','reportCsv'],
   ['^/app/proposals/([\\w-]+)/source$', 'setupSource'],
   ['^/app/metadata$', 'metadataList'], ['^/app/metadata/([a-z-]+/[\\w-]+)$', 'metadata'], ['^/app/exports/objects/([a-z-]+)\\.csv$', 'metadataCsv'],
   ['^/app$', 'home'], ['^/app/more$', 'more'], ['^/app/settings$', 'settings'], ['^/app/customers$', 'customers'], ['^/app/customers/([\\w-]+)$', 'customer'],

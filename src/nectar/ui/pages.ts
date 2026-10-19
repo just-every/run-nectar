@@ -1,3 +1,6 @@
+import { reportSchedulePage,reportDeliveryPage } from './report-schedules'
+import { reportDeliveryCsv } from '../report-schedules'
+import { reportCsv } from '../report-csv'
 import { setupSourceDownload } from '../setup-download'
 // Every page door's renderer, by the name in doors.ts, and the two POST pages
 // that render a result instead of redirecting (a move-in preview, and a new
@@ -22,6 +25,10 @@ import { reportPage, reportInvoicePage, reportLinePage } from './reports'
 type Page = (env: Bindings, actor: Actor, request: Request, url: URL, id: string) => Promise<Response>
 
 export const pages: Record<string, Page> = {
+  reportSchedule:(env,actor,_r,url)=>reportSchedulePage(env,actor,url),
+  reportDelivery:(env,actor,_r,url,id)=>reportDeliveryPage(env,actor,id,url),
+  reportDeliveryCsv:(env,actor,_r,_url,id)=>reportDeliveryCsv(env,actor,id),
+  reportCsv:(env,actor,_r,url,id)=>reportCsv(env,actor,id,url),
   setupSource:(env,actor,_r,_url,id)=>setupSourceDownload(env,actor,id),
   metadata: (env,actor,_r,url,id) => {const [kind,record]=id.split('/');return metadataPage(env,actor,kind,record,url)},
   metadataList: (env,actor,_r,url) => metadataListPage(env,actor,url),

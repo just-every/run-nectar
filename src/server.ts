@@ -1,3 +1,4 @@
+import { sendScheduledReports } from './nectar/report-mail'
 import { withDemo } from './modules/demo/index.mjs'
 import { seedDemo } from './demo'
 import start from '@tanstack/react-start/server-entry'
@@ -29,6 +30,7 @@ export default withDemo({
   async scheduled(controller, env) {
     await sendCertificateReminders(env, controller.scheduledTime)
     await deliverPendingAlerts(runtimeBindings(env))
+    await sendScheduledReports(runtimeBindings(env),controller.scheduledTime)
   },
   async fetch(request, env, execution) {
     const asset = await staticAssetResponse(request, env)

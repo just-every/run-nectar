@@ -1,3 +1,4 @@
+import { reportSchedule,reportDelivery } from './report-schedules'
 import { setupSourceDownload } from './setup-download'
 // Read models served at GET /api/nectar/... Every view checks the actor's
 // capability itself and applies the same rules as the pages that render it.
@@ -52,6 +53,8 @@ export async function customerView(env: Bindings, actor: Actor, id: string): Pro
 }
 
 export const views: Record<string, View> = {
+  reportSchedule:(env,actor)=>reportSchedule(env,actor),
+  reportDelivery:(env,actor,_r,id)=>reportDelivery(env,actor,id),
   setupSource:(env,actor,_r,id)=>setupSourceDownload(env,actor,id),
   notifications: (env,actor) => notifications(env,actor),
   metadata: (env,actor,_r,id) => {const [kind,record]=id.split('/');return metadataView(env,actor,kind,record)},

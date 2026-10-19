@@ -29,6 +29,7 @@ import { exemptionCertificates } from './certificates.mjs'
 import { pricingModels } from './pricing-models.mjs'
 
 const ACTIONS = [...(await readFile(new URL('../../src/nectar/actions.ts', import.meta.url), 'utf8')).matchAll(/^  '([\w.]+)':/gm)].map(match => match[1])
+await runIsolated('financial-reports','financialReportsFlow')
 await runIsolated('contract-setup','contractSetup')
 await runIsolated('pricing-simulation','pricingSimulation')
 await runIsolated('lifecycle','lifecycleFlow')
@@ -361,7 +362,10 @@ try {
     const metricPreview = await h.api('meter.prepare', cookie.owner, { code:'role-preview', name:'Role preview', unit_label:'events', source_meter:ids.meter, definition:{ aggregation:'count' } })
     assert.ok(ACTIONS.length > 30)
     for (const name of ACTIONS) {
-      if (name === 'notification.preferences') await h.api(name,cookie.accountant,{ mentions:true,payment_mismatch:false,billrun_exceptions:false,proposals:false })
+      if (name === 'report.schedule') {
+        await h.api(name,cookie.accountant,{enabled:false,day:1})
+        assert.equal((await h.api('report-schedule',cookie.accountant)).schedule.enabled,false,'RPT-002 accountant controls their own report schedule')
+      } else if (name === 'notification.preferences') await h.api(name,cookie.accountant,{ mentions:true,payment_mismatch:false,billrun_exceptions:false,proposals:false })
       else if (name === 'meter.preview') {
         const preview = await h.api(name, cookie.accountant, { request:metricPreview.request, customer:ids.northwind, period:'2020-01' })
         assert.deepEqual(preview.results.map(row => row.exact), [{ numerator:'0', denominator:'1' }], 'USE-002 accountant can preview actual historical inputs')

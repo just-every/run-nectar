@@ -1,3 +1,4 @@
+import { financialReport, financialReportSource, type UnbilledReportEvidence } from './financial-reports'
 // Issued-invoice and recorded-receipt reports. Every total has the same source contributions and
 // signed detail components in the API and the operator pages.
 import type { Bindings } from '../auth.server'
@@ -8,12 +9,13 @@ import { all, insist, one, type Row } from './core'
 import { daysBetween, isMonth, today } from './dates'
 import { openInvoices } from './receivables'
 
-export type ReportMetric = 'mrr' | 'billings' | 'ar' | 'collections'
+export type ReportMetric = 'mrr' | 'billings' | 'ar' | 'collections' | 'credits' | 'tax' | 'unbilled'
 export interface ReportEntry {
   // invoiceId is the report source id; collections use the payment id here
   // for the shared detail route and identify it explicitly with sourceKind.
+  sourcePath?: string
   invoiceId: string; number: string; customerId: string; customerName: string; amountCents: number; href: string
-  sourceKind?: 'invoice' | 'payment'; paymentId?: string
+  sourceKind?: 'invoice' | 'payment' | 'credit_note' | 'subscription_period'; paymentId?: string
 }
 export interface Report {
   metric: ReportMetric; title: string; definition: string; period: string; totalCents: number; entries: ReportEntry[]
@@ -24,6 +26,8 @@ export interface ReportPayment {
   customerId: string; customerName: string; amountCents: number; recordedAt: number; recordedBy: string
 }
 export interface ReportInvoice extends ReportEntry {
+  unbilled?: UnbilledReportEvidence
+  credit?: {id:string;number:string;invoiceId:string;amountCents:number;reason:string;issuedAt:number;issuedOn:string;issuedBy:string}
   metric: ReportMetric; title: string; definition: string; period: string; totalCents: number; components: ReportComponent[]
   payment?: ReportPayment
   invoice: {
@@ -35,7 +39,7 @@ export interface ReportInvoice extends ReportEntry {
 
 const RECURRING = new Set(['flat', 'seat', 'usage', 'overage', 'metric_usage', 'discount', 'cancellation_credit'])
 const BUCKETS = new Set(['current', '1-30', '31-60', '61-90', '90+', 'overdue'])
-const DEFINITIONS: Record<ReportMetric, { title: string; definition: string }> = {
+const DEFINITIONS: Record<Exclude<ReportMetric,'credits'|'tax'|'unbilled'>, { title: string; definition: string }> = {
   mrr: {
     title: 'Billed monthly recurring revenue',
     definition: 'Billed monthly recurring revenue for subscription periods starting in the selected month: issued flat, seat, metered usage, recurring discount and cancellation-credit lines, including actual proration. Excludes late usage, one-time charges, fixed credits, credit notes and tax. This definition covers the current monthly catalogue; it is not a normalized subscription run rate.',
@@ -73,6 +77,7 @@ function inBucket(due: string, day: string, selected: string | null) {
 /** Reads contributions without inventing recurring amounts or allocating AR to individual lines. */
 export async function report(env: Bindings, actor: Actor, metric: string, url: URL): Promise<Report> {
   requireCapability(actor, 'read')
+  if (['credits','tax','unbilled'].includes(metric)) return await financialReport(env,actor,metric,url)
   const selected = filters(metric, url)
   const day = today((await requireBusiness(env)).timezone)
   const month = selected.period ?? day.slice(0, 7)
@@ -107,13 +112,14 @@ export async function report(env: Bindings, actor: Actor, metric: string, url: U
     amountCents: row.amount_cents, href: `/app/reports/${selected.metric}/${encodeURIComponent(row.id)}?${query}`,
     ...(selected.metric === 'collections' ? { sourceKind: 'payment' as const, paymentId: row.id } : {}),
   }))
-  return { metric: selected.metric, ...DEFINITIONS[selected.metric], period: selected.metric === 'ar' ? day : month,
+  return { metric: selected.metric, ...DEFINITIONS[selected.metric as keyof typeof DEFINITIONS], period: selected.metric === 'ar' ? day : month,
     totalCents: entries.reduce((sum, entry) => sum + entry.amountCents, 0), entries }
 }
 
 /** Original line and settlement components tie exactly to the selected invoice contribution. */
 export async function reportInvoice(env: Bindings, actor: Actor, metric: string, invoiceId: string, url: URL): Promise<ReportInvoice> {
   requireCapability(actor, 'read')
+  if (['credits','tax','unbilled'].includes(metric)) return await financialReportSource(env,actor,metric,invoiceId,url)
   const view = await report(env, actor, metric, url)
   const entry = view.entries.find(row => row.invoiceId === invoiceId)
   insist(entry, 'report_invoice_not_found', 404)
