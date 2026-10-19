@@ -1,3 +1,4 @@
+import { prepareSaveOffer } from './retention-offers'
 import { serviceEndSql } from './renewal-sql'
 import type { Bindings } from '../auth.server'
 import { actorLabel, requireCapability, requireMember, requireOwner, type Actor } from './actor'
@@ -56,5 +57,6 @@ export async function issueCancellationLink(env:Bindings,actor:Actor,input:Input
   const term=await one(env,"SELECT * FROM nc_renewal_terms WHERE id=? AND status='active' AND cancelled_at IS NULL",input.text('term',{max:100}));insist(term,'term_not_found',404)
   const link=await newCancellationLink(env,term)
   await commit(env,[guard(env,'stale',"EXISTS(SELECT 1 FROM nc_renewal_terms WHERE id=? AND revision=? AND status='active' AND cancelled_at IS NULL)",term.id,term.revision),stmt(env,'UPDATE nc_renewal_terms SET token_hash=? WHERE id=?',link.hash,term.id)],{actor:actorLabel(actor),action:'term.link.rotate',subject:term.id})
+  await prepareSaveOffer(env,term)
   return {id:term.subscription_id,cancelUrl:link.url}
 }

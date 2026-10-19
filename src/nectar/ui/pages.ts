@@ -1,3 +1,4 @@
+import { retentionPage } from './retention'
 import { h,page } from './html'
 import { issueCancellationLink } from '../renewal-terms'
 import { reportSchedulePage,reportDeliveryPage } from './report-schedules'
@@ -27,6 +28,7 @@ import { reportPage, reportInvoicePage, reportLinePage } from './reports'
 type Page = (env: Bindings, actor: Actor, request: Request, url: URL, id: string) => Promise<Response>
 
 export const pages: Record<string, Page> = {
+  retention:(env,actor,_r,url)=>retentionPage(env,actor,url),
   reportSchedule:(env,actor,_r,url)=>reportSchedulePage(env,actor,url),
   reportDelivery:(env,actor,_r,url,id)=>reportDeliveryPage(env,actor,id,url),
   reportDeliveryCsv:(env,actor,_r,_url,id)=>reportDeliveryCsv(env,actor,id),

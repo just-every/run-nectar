@@ -20,25 +20,28 @@ async function freePort() {
   return port
 }
 
-export async function harness({ assets = false } = {}) {
+export async function harness({ assets = false, localTime } = {}) {
   const port = await freePort()
   const origin = `http://127.0.0.1:${port}`
   const secret = () => randomBytes(32).toString('base64url')
   const vars = { AUTH_LOCAL: 'true', AUTH_ORIGIN: origin, OWNER_EMAIL: 'owner@example.test', SESSION_SECRET: secret(), SETUP_TOKEN: secret(), MAIL_PROVIDER: 'resend', MAIL_API_KEY: 'test-only-resend-key', MAIL_FROM: 'auth@example.test' }
+  if(localTime)vars.NECTAR_LOCAL_TIME=localTime
   const chunks = (await readdir('dist/server', { recursive: true })).filter(path => path.endsWith('.js') && path !== 'index.js')
   const mails = [], mailResponses = []
   const outboundService = async request => {
     if (request.url !== 'https://api.resend.com/emails') return new Response('Unexpected outbound request', { status: 599 })
-    mails.push(await request.json())
-    const queued = mailResponses.shift()
+    const message=await request.json();mails.push(message)
+    const index=mailResponses.findIndex(response=>!response.to||[message.to].flat().includes(response.to))
+    const queued=index<0?undefined:mailResponses.splice(index,1)[0]
     if (queued) return Response.json(queued.body, { status: queued.status })
     return Response.json({ id: `test-${mails.length}` })
   }
-  const mf = new Miniflare(convertV4MiniflareOptions({
+  const options = {
     unsafeTriggerHandlers: true, host: '127.0.0.1', port, modulesRoot: 'dist/server', modules: ['index.js', ...chunks].map(path => ({ type: 'ESModule', path: `dist/server/${path}` })), compatibilityDate: '2026-09-08', compatibilityFlags: ['nodejs_compat'],
     d1Databases: { DB: 'nectar' }, bindings: vars, outboundService,
     ...(assets ? { assets: { directory: 'dist/client', binding: 'ASSETS', run_worker_first: true, routerConfig: { has_user_worker: true, invoke_user_worker_ahead_of_assets: true } } } : {}),
-  }))
+  }
+  const mf = new Miniflare(convertV4MiniflareOptions(options))
   const close = () => mf.dispose()
   try {
     await mf.ready
@@ -96,7 +99,8 @@ export async function harness({ assets = false } = {}) {
     throw new Error(`no sign-in message for ${email}`)
   }
 
-  return { origin, vars, raw, api, submit, page, signIn, close, mails, mailResponses }
+  async function advanceClock(instant){assert.ok(Number.isFinite(Date.parse(instant)));vars.NECTAR_LOCAL_TIME=instant;await mf.setOptions(convertV4MiniflareOptions({...options,bindings:{...vars}}));await mf.ready}
+  return { origin, vars, raw, api, submit, page, signIn, close, mails, mailResponses,advanceClock }
 }
 
 export const file = (filename, content, type = 'application/octet-stream') => ({ filename, base64: Buffer.from(content).toString('base64'), type })

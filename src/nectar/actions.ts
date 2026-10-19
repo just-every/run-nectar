@@ -1,3 +1,4 @@
+import { prepareRetentionPolicy,decideRetentionPolicy } from './retention-policy'
 import { prepareTerm,decideTerm,issueCancellationLink } from './renewal-terms'
 import { prepareInvoiceCredit } from './credit-correction'
 import { setReportSchedule } from './report-schedules'
@@ -42,6 +43,8 @@ import { prepareMetric,previewMetric,activateMetric } from './meter-definitions'
 type Handler = (env: Bindings, actor: Actor, input: Input, request: Request) => Promise<unknown>
 
 export const actions: Record<string, Handler> = {
+  'retention.policy.prepare':prepareRetentionPolicy,
+  'retention.policy.decide':decideRetentionPolicy,
   'term.prepare':prepareTerm,
   'term.decide':decideTerm,
   'term.link':issueCancellationLink,

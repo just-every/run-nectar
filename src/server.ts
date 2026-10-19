@@ -1,3 +1,5 @@
+import { runWinbacks } from './nectar/retention-winback'
+import { retentionPublic } from './nectar/retention-public'
 import { runRenewals } from './nectar/renewal-jobs'
 import { renewalPublic } from './nectar/renewal-public'
 import { deliverPendingCorrectionMail } from './nectar/credit-correction-mail'
@@ -33,6 +35,7 @@ function noTransform(response: Response): Response {
 export default withDemo({
   async scheduled(controller, env) {
     await runRenewals(runtimeBindings(env),controller.scheduledTime)
+    await runWinbacks(runtimeBindings(env),controller.scheduledTime)
     await sendCertificateReminders(env, controller.scheduledTime)
     await deliverPendingAlerts(runtimeBindings(env))
     await sendScheduledReports(runtimeBindings(env),controller.scheduledTime)
@@ -44,6 +47,8 @@ export default withDemo({
     if (asset) return asset
     const auth = await authResponse(request, env)
     if (auth) return auth
+    const returned=await retentionPublic(request,runtimeBindings(env))
+    if(returned)return returned
     const renewal=await renewalPublic(request,runtimeBindings(env))
     if(renewal)return renewal
     const nectar = await nectarResponse(request, env)

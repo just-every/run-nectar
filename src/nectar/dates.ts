@@ -56,7 +56,7 @@ export function zonedStart(date: string, zone: string): number {
   return instant
 }
 
-export const today = (zone: string) => localDate(Date.now(), zone)
+export const today = (zone: string, instant=Date.now()) => localDate(instant, zone)
 
 /** An ISO 8601 instant with an explicit offset (or Z); naive local times are refused. */
 export function parseInstant(text: string, field = 'occurred_at'): number {

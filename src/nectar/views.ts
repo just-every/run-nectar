@@ -1,3 +1,4 @@
+import { retentionReport } from './retention-offers'
 import { reportSchedule,reportDelivery } from './report-schedules'
 import { setupSourceDownload } from './setup-download'
 // Read models served at GET /api/nectar/... Every view checks the actor's
@@ -53,6 +54,7 @@ export async function customerView(env: Bindings, actor: Actor, id: string): Pro
 }
 
 export const views: Record<string, View> = {
+  retention:(env,actor)=>retentionReport(env,actor),
   reportSchedule:(env,actor)=>reportSchedule(env,actor),
   reportDelivery:(env,actor,_r,id)=>reportDelivery(env,actor,id),
   setupSource:(env,actor,_r,id)=>setupSourceDownload(env,actor,id),

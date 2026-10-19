@@ -1,3 +1,4 @@
+import { prepareSaveOffer } from './retention-offers'
 import type { Bindings } from '../auth.server'
 import { operatorMail } from '../mail.server.mjs'
 import { business } from './business'
@@ -21,6 +22,7 @@ async function notice(env:Bindings,term:Row,day:string) {
   const sub=await one(env,'SELECT end_date FROM nc_subscriptions WHERE id=?',term.subscription_id)
   if(sub?.end_date!==term.end_date||!term.auto_renew||term.cancelled_at||day<addDays(term.end_date,-term.notice_days)||day>=term.end_date)return
   if(await one(env,'SELECT 1 FROM nc_renewal_notices WHERE term_id=? AND cycle=?',term.id,term.cycle))return
+  await prepareSaveOffer(env,term)
   const id=newId(),snapshot=await renewalPreview(env,term),link=await newCancellationLink(env,term),customer=await one(env,'SELECT c.billing_email FROM nc_customers c JOIN nc_subscriptions s ON s.customer_id=c.id WHERE s.id=?',term.subscription_id)
   try{await commit(env,[guard(env,'stale',"EXISTS(SELECT 1 FROM nc_renewal_terms WHERE id=? AND revision=? AND status='active' AND cancelled_at IS NULL) AND NOT EXISTS(SELECT 1 FROM nc_renewal_notices WHERE term_id=? AND cycle=?)",term.id,term.revision,term.id,term.cycle),stmt(env,"INSERT INTO nc_renewal_notices(id,term_id,cycle,due_date,renewal_date,recipient,snapshot_json,status,created_at) VALUES(?,?,?,?,?,?,?,'unconfirmed',?)",id,term.id,term.cycle,addDays(term.end_date,-term.notice_days),term.end_date,customer!.billing_email,JSON.stringify(snapshot),now()),stmt(env,'UPDATE nc_renewal_terms SET token_hash=? WHERE id=?',link.hash,term.id)],{actor:'system:renewals',action:'renewal.notice.reserve',subject:id,detail:{term:term.id,cycle:term.cycle,scheduledDate:addDays(term.end_date,-term.notice_days),actualDate:day}})}catch(e){if(e instanceof NectarError&&e.status===409)return;throw e}
   let status='not_configured',provider:string|null=null

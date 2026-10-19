@@ -1,3 +1,4 @@
+import { clockInstant } from './clock'
 import { cancellationApproval } from './lifecycle-approval'
 import { metadataFor,withMetadata } from './metadata'
 import { alertStatements } from './notifications'
@@ -74,7 +75,7 @@ export async function prepareRun(env: Bindings, actor: Actor, input: Input) {
   const business = await requireBusiness(env)
   const month = input.text('period', { max: 7 })
   insist(isMonth(month), 'invalid_period')
-  const day = today(business.timezone)
+  const day = today(business.timezone,clockInstant(env))
   const subs = await all(env, 'SELECT s.*, c.name AS customer_name, c.billing_email FROM nc_subscriptions s JOIN nc_customers c ON c.id = s.customer_id ORDER BY c.name, s.created_at')
   const drafts: Draft[] = [], skipped: Row[] = [], open: Row[] = []
   for (const sub of subs) {
@@ -201,7 +202,7 @@ export async function finalise(env: Bindings, actor: Actor, input: Input) {
     : await all(env, "SELECT * FROM nc_invoices WHERE id = ? AND status = 'approved'", input.text('invoice', { max: 100 }))
   insist(targets.length, 'nothing_approved', 409)
   // The invoice date defaults to today; it may be any day from the end of the billed period up to today.
-  const day = today(business.timezone)
+  const day = today(business.timezone,clockInstant(env))
   const issueDate = input.has('issue_date') ? requireDate(input.text('issue_date', { max: 10 }), 'issue_date') : day
   insist(issueDate <= day && targets.every(invoice => issueDate >= (invoice.invoice_kind === 'manual' ? invoice.period_start : invoice.period_end)), 'invalid_issue_date')
   const issued: string[] = [], refused: Row[] = []

@@ -32,7 +32,7 @@ export async function renewalsFlow(h,owner,{onState=async()=>{}}={}) {
   await clock('2026-12-01T14:00:00Z')
   for(const s of subscriptions)assert.equal((await s.detail()).renewal.notices.length,0,'SUB-004 no early mail')
   const before=h.mails.length
-  h.mailResponses.push({status:200,body:{id:'sub004-provider-accepted'}},{status:200,body:{id:'sub004-provider-cancel'}},{status:422,body:{message:'Rejected at mail edge'}},{status:200,body:{}})
+  h.mailResponses.push({to:'renew@renewals.example',status:200,body:{id:'sub004-provider-accepted'}},{to:'cancel@renewals.example',status:200,body:{id:'sub004-provider-cancel'}},{to:'reject@renewals.example',status:422,body:{message:'Rejected at mail edge'}},{to:'uncertain@renewals.example',status:200,body:{}})
   await clock('2026-12-02T14:00:00Z')
   const notices=h.mails.slice(before).filter(m=>m.subject.startsWith('Subscription renewal'))
   assert.equal(notices.length,4,'SUB-004 exactly one notice per auto-renewing annual subscription at 30 days')
@@ -46,6 +46,8 @@ export async function renewalsFlow(h,owner,{onState=async()=>{}}={}) {
     assert.equal(record.due_date,'2026-12-02')
     assert.equal(JSON.parse(record.snapshot_json).totalCents,10500,'SUB-004 frozen notice agrees with engine')
   }
+  assert.equal((await renew.detail()).renewal.notices[0].status,'accepted','SUB-004 renewing customer notice accepted at the provider edge')
+  assert.equal((await cancel.detail()).renewal.notices[0].status,'accepted','SUB-004 cancelling customer receives the accepted notice link')
   const outcomes=await Promise.all([renew,cancel,rejected,uncertain].map(async s=>(await s.detail()).renewal.notices[0].status))
   assert.deepEqual(outcomes.sort(),['accepted','accepted','rejected','uncertain'],'SUB-004 real adapter records each provider outcome honestly regardless of UUID processing order')
   await clock('2026-12-03T14:00:00Z')
