@@ -2857,7 +2857,7 @@
       "executable": false
     },
     "tests/nectar/flows.mjs": {
-      "sha256": "f420b9a050d4c84bbf0cb58b00889dd112b4ec92bfce260c4b3627f9cf1b9a98",
+      "sha256": "2561cdf66f73c057942d3549085a05bbc23973b6c2580725b6c7868f9939f241",
       "executable": false
     },
     "tests/nectar/harness.mjs": {

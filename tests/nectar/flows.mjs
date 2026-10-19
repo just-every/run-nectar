@@ -356,10 +356,14 @@ try {
     cookie.finance = await h.signIn('fran@example.test', { requested: true })
     cookie.accountant = await h.signIn('acct@example.test', { requested: true })
     const ownerOnly = ['lifecycle.policy', 'credit.policy', 'certificate.policy', 'business.configure', 'tax.declare', 'tax.review', 'access.give', 'access.end', 'credential.issue', 'credential.revoke', 'subscription.adopt']
+    const metricPreview = await h.api('meter.prepare', cookie.owner, { code:'role-preview', name:'Role preview', unit_label:'events', source_meter:ids.meter, definition:{ aggregation:'count' } })
     assert.ok(ACTIONS.length > 30)
     for (const name of ACTIONS) {
       if (name === 'notification.preferences') await h.api(name,cookie.accountant,{ mentions:true,payment_mismatch:false,billrun_exceptions:false,proposals:false })
-      else await h.api(name, cookie.accountant, {}, 403)
+      else if (name === 'meter.preview') {
+        const preview = await h.api(name, cookie.accountant, { request:metricPreview.request, customer:ids.northwind, period:'2020-01' })
+        assert.deepEqual(preview.results.map(row => row.exact), [{ numerator:'0', denominator:'1' }], 'USE-002 accountant can preview actual historical inputs')
+      } else await h.api(name, cookie.accountant, {}, 403)
       await h.api(name, undefined, {}, 401)
       if (ownerOnly.includes(name)) await h.api(name, cookie.finance, {}, 403)
     }
