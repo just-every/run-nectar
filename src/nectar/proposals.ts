@@ -24,6 +24,7 @@ import { ingestStatements, screen, type RawEvent } from './usage'
 import { notIssuedGuard } from './subscriptions'
 import { prepareRun } from './billruns'
 import { priceChangePlan } from './price-migrations'
+import { cadenceSourceGuard, cadenceSourceSequence } from './cadence-policy'
 
 const KINDS = ['amendment', 'price_change', 'usage_correction', 'collection'] as const
 type Kind = typeof KINDS[number]
@@ -59,6 +60,7 @@ export async function propose(env: Bindings, actor: Actor, input: Input) {
   requireCapability(actor, 'propose')
   const kind = input.text('kind', { max: 20 }) as Kind
   insist(KINDS.includes(kind), 'invalid_kind')
+  const collectionSeq = kind === 'collection' ? await cadenceSourceSequence(env) : null
   const title = input.text('title', { max: 200 })
   const payload = input.json('payload') as Row
   insist(payload && typeof payload === 'object' && !Array.isArray(payload), 'invalid_payload')
@@ -86,7 +88,7 @@ export async function propose(env: Bindings, actor: Actor, input: Input) {
   }
   if(payload.setup===true)insist(new TextEncoder().encode(JSON.stringify([prepared.normalized,prepared.impact,prepared.basis])).length<=1500000,'setup_proposal_too_large')
   const id = newId()
-  await commit(env, [...await alertStatements(env,'proposals',id,`/app/proposals/${id}`),stmt(env, "INSERT INTO nc_proposals (id, kind, title, payload_json, evidence_json, impact_json, basis_json, status, created_by, created_by_kind, created_at, prepared_by_id) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?)",
+  await commit(env, [...(collectionSeq === null ? [] : [cadenceSourceGuard(env,collectionSeq)]),...await alertStatements(env,'proposals',id,`/app/proposals/${id}`),stmt(env, "INSERT INTO nc_proposals (id, kind, title, payload_json, evidence_json, impact_json, basis_json, status, created_by, created_by_kind, created_at, prepared_by_id) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?)",
     id, kind, title, JSON.stringify(prepared.normalized), JSON.stringify(evidence), JSON.stringify(prepared.impact), JSON.stringify(prepared.basis), actorLabel(actor), actor.kind, now(), actor.id)],
   { actor: actorLabel(actor), action: 'proposal.create', subject: id, detail: { kind, title } })
   await deliverAlerts(env,'proposals',id,actorLabel(actor))
@@ -137,7 +139,7 @@ export async function decide(env: Bindings, actor: Actor, input: Input) {
     return { id: row.id, status: 'rejected' }
   }
   const payload = parseJson<Row>(row.payload_json, {})
-  const simulationSeq = payload.simulation === true || payload.setup === true || payload.invoice_credit === true || row.kind === 'usage_correction' || row.kind === 'amendment' ? (await one(env,'SELECT COALESCE(MAX(seq),0) AS seq FROM nc_audit'))!.seq : null
+  const simulationSeq = payload.simulation === true || payload.setup === true || payload.invoice_credit === true || row.kind === 'usage_correction' || row.kind === 'amendment' || row.kind === 'collection' ? (await one(env,'SELECT COALESCE(MAX(seq),0) AS seq FROM nc_audit'))!.seq : null
   if ((payload.setup === true || row.kind === 'price_change' || (row.kind === 'amendment' && payload.kind === 'price_override')) && row.created_by_kind === 'member') {
     insist(row.prepared_by_id, 'price_proposal_needs_preparation', 409)
     insist(row.prepared_by_id !== actor.id, 'second_approver_required', 409)

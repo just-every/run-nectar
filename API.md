@@ -275,3 +275,18 @@ The public-door journey uses `h.advanceClock` on a disposable local installation
 The answer returns its interpreted topic, exact typed `figures` with a public `source` and RFC 6901 `recordPath`, and operator calculation citations. Comparisons default to the latest earlier issued period of the same subscription; `comparison_invoice` can explicitly select another issued invoice of that subscription. Derived differences retain their before/after operands and grouped line contributions. Customer/invoice/comparison mismatches return 404. Saved invoice inputs, prices, tax, terms and event snapshots remain the evidence after later changes.
 
 Optional `credit_amount` (exact decimal dollars) and `reason` return a validated `proposalDraft` without writing. `POST answer.propose` takes those same fields, requires proposal authority, recomputes the source and saves only an ordinary pending AGENT-002 invoice-credit proposal. The explicit operator form has the same behavior. Original invoice amounts and tax remain unchanged; separate human approval, current recipient/source checks and GOV-002 controls remain mandatory. Unsupported questions return 400; signed-out and usage-only credentials receive 401/403.
+
+
+## Transfer collections cadences (`AR-001`)
+
+`GET cadences` returns the current policy, prepared policy requests, issued invoices with original balance, explicit disputed amount and collectible remainder, promises, disputes, reminder custody and owner escalations. Record readers may inspect; all collection mutations below require an owner/finance human with receivables authority. Prepare or usage credentials cannot mutate collection state.
+
+- `cadence.policy.prepare` is owner-only: `enabled`, `require_human`, and ordered `rules: [{segment,minimum_cents,subject,body}]`. Minimums are integer cents; templates accept `{invoice}`, `{balance}`, `{stage}` and `{business}`. The exact current collectible facts and excluded dispute amounts are appended. The policy starts disabled.
+- `cadence.policy.decide`: `request`, `decision` (`approved` or `rejected`), and explicit `confirm_single` only when the preparing owner has no other active owner/finance approver. Otherwise another approver is required.
+- `cadence.enroll`: issued `invoice`, explicit `segment`, and operator-recorded `transfer_terms`. This records agreed terms, not verified payment details.
+- `cadence.promise`: `invoice`, inclusive business-local `pay_date`, and evidence `note`. A new immutable promise retains the previous one.
+- `cadence.dispute`: `invoice`, its positive `line`, `amount_cents`, and `reason`. Open disputes on that line cannot cumulatively exceed its original amount. No debt or tax is changed. `cadence.resolve` takes `dispute` and evidence `outcome`.
+- `cadence.approve`: `delivery` and the exact frozen `recipient`, `subject`, `body`; source, holds and policy must still agree. HTML CRLF line endings normalize to LF after ordinary field trimming, with no other wording changes. It queues that reminder for the next daily tick or `cadence.run`.
+- `cadence.run` executes due checks now; the real scheduled handler executes the same checks daily.
+
+Stages use local dates −3/+1/+7/+15 relative to due date. A missed sequence selects only its latest eligible stage. Payments and credits reduce debt before explicit disputed cents are excluded; zero collectible balance or an inclusive promise prevents chase. Human approvals are invalidated by source/policy/recipient changes. The +15 stage assigns an owner task. Actual provider acceptance is never called delivery; claimed, terminal or uncertain sends are not automatically retried. Existing manual reminders and collection proposals honor the same holds.

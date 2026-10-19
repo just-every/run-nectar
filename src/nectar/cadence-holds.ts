@@ -1,0 +1,35 @@
+import type { Bindings } from '../auth.server'
+import { all, canonical, insist, one, type Row } from './core'
+import { requireBusiness, type Business } from './business'
+import { today } from './dates'
+import { BALANCE_SQL } from './receivables'
+import { clockInstant } from './clock'
+
+/** Payments and credits reduce the ledger balance first. Open disputed cents
+ * then reduce the collectible remainder, without changing books or attributing tax. */
+export async function collectibleInvoice(env: Bindings, invoiceId: string, instant=clockInstant(env)): Promise<Row & {
+  business: Business; day: string; disputes: Row[]; promise: Row | null; disputedCents: number;
+  collectibleCents: number; paused: boolean; hold: string | null; basis: string
+}> {
+  const business=await requireBusiness(env)
+  const invoice=await one(env,`SELECT i.*,${BALANCE_SQL} AS balance_cents,c.name AS customer_name,c.billing_email
+    FROM nc_invoices i JOIN nc_customers c ON c.id=i.customer_id WHERE i.id=? AND i.status='issued'`,invoiceId)
+  insist(invoice,'invoice_not_found',404)
+  const disputes=await all(env,'SELECT * FROM nc_cadence_disputes WHERE invoice_id=? AND resolved_at IS NULL ORDER BY id',invoiceId)
+  const disputedCents=disputes.reduce((sum,row)=>sum+row.amount_cents,0)
+  const promise=await one(env,'SELECT rowid AS ordinal,* FROM nc_cadence_promises WHERE invoice_id=? ORDER BY rowid DESC LIMIT 1',invoiceId)
+  const allocations=await all(env,'SELECT id,payment_id,amount_cents FROM nc_allocations WHERE invoice_id=? ORDER BY id',invoiceId)
+  const credits=await all(env,'SELECT id,amount_cents FROM nc_credit_notes WHERE invoice_id=? ORDER BY id',invoiceId)
+  const day=today(business.timezone,instant), paused=!!promise&&day<=promise.pay_date
+  const collectibleCents=Math.max(0,invoice.balance_cents-disputedCents)
+  const hold=invoice.balance_cents<=0?'paid':paused?'promise':collectibleCents<=0?'disputed':null
+  const basis=canonical({balanceCents:invoice.balance_cents,allocations,credits,disputes:disputes.map(row=>[row.id,row.line_id,row.amount_cents]),promise:promise?.id??null,paused})
+  return {...invoice,business,day,disputes,promise,disputedCents,collectibleCents,paused,hold,basis}
+}
+
+/** Works for every issued invoice, including invoices not enrolled in a cadence. */
+export async function collectionHold(env: Bindings, invoiceId: string, instant=clockInstant(env)) {
+  const row=await collectibleInvoice(env,invoiceId,instant)
+  return {invoice:invoiceId,balanceCents:row.balance_cents,disputedCents:row.disputedCents,collectibleCents:row.collectibleCents,
+    paused:row.paused,promisedThrough:row.promise?.pay_date??null,payDate:row.promise?.pay_date??null,hold:row.hold,basis:row.basis}
+}

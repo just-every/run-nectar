@@ -1,3 +1,4 @@
+import { runCadences } from './nectar/cadence-scheduler'
 import { runWinbacks } from './nectar/retention-winback'
 import { retentionPublic } from './nectar/retention-public'
 import { runRenewals } from './nectar/renewal-jobs'
@@ -34,6 +35,7 @@ function noTransform(response: Response): Response {
 
 export default withDemo({
   async scheduled(controller, env) {
+    await runCadences(runtimeBindings(env),controller.scheduledTime)
     await runRenewals(runtimeBindings(env),controller.scheduledTime)
     await runWinbacks(runtimeBindings(env),controller.scheduledTime)
     await sendCertificateReminders(env, controller.scheduledTime)

@@ -1,3 +1,4 @@
+import { cadenceReport } from './cadence-actions'
 import { retentionReport } from './retention-offers'
 import { reportSchedule,reportDelivery } from './report-schedules'
 import { setupSourceDownload } from './setup-download'
@@ -54,6 +55,7 @@ export async function customerView(env: Bindings, actor: Actor, id: string): Pro
 }
 
 export const views: Record<string, View> = {
+  cadences:(env,actor)=>cadenceReport(env,actor),
   retention:(env,actor)=>retentionReport(env,actor),
   reportSchedule:(env,actor)=>reportSchedule(env,actor),
   reportDelivery:(env,actor,_r,id)=>reportDelivery(env,actor,id),

@@ -3,6 +3,7 @@
 // each role, so a new door cannot be added without being checked.
 // Patterns are relative to /api/nectar/ (API) or absolute (pages).
 export const API_DOORS: [string, string][] = [
+  ['^cadences$', 'cadences'],
   ['^retention$','retention'],
   ['^report-schedule$', 'reportSchedule'], ['^report-deliveries/([\\w-]+)$','reportDelivery'],
   ['^proposals/([\\w-]+)/source$', 'setupSource'],
@@ -19,6 +20,7 @@ export const API_DOORS: [string, string][] = [
 ]
 
 export const PAGE_DOORS: [string, string][] = [
+  ['^/app/cadences$', 'cadences'],
   ['^/app/answers$', 'billingAnswers'],
   ['^/app/retention$','retention'],
   ['^/app/report-schedule$','reportSchedule'], ['^/app/report-deliveries/([\\w-]+)\\.csv$','reportDeliveryCsv'], ['^/app/report-deliveries/([\\w-]+)$','reportDelivery'], ['^/app/exports/reports/([\\w-]+)\\.csv$','reportCsv'],

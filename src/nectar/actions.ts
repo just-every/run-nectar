@@ -1,3 +1,7 @@
+import { prepareCadencePolicyFromDoor, disputeFromDoor } from './cadence-door'
+import { decideCadencePolicy } from './cadence-policy'
+import { enrollCadence, recordPromise, resolveDispute, approveCadenceStage } from './cadence-actions'
+import { runCadencesManually } from './cadence-scheduler'
 import { billingAnswer } from './billing-answers'
 import { proposeAnswerCredit } from './answer-proposals'
 import { prepareRetentionPolicy,decideRetentionPolicy } from './retention-policy'
@@ -45,6 +49,14 @@ import { prepareMetric,previewMetric,activateMetric } from './meter-definitions'
 type Handler = (env: Bindings, actor: Actor, input: Input, request: Request) => Promise<unknown>
 
 export const actions: Record<string, Handler> = {
+  'cadence.policy.prepare':prepareCadencePolicyFromDoor,
+  'cadence.policy.decide':decideCadencePolicy,
+  'cadence.enroll':enrollCadence,
+  'cadence.promise':recordPromise,
+  'cadence.dispute':disputeFromDoor,
+  'cadence.resolve':resolveDispute,
+  'cadence.approve':approveCadenceStage,
+  'cadence.run':runCadencesManually,
   'answer.read':billingAnswer,
   'answer.propose':proposeAnswerCredit,
   'retention.policy.prepare':prepareRetentionPolicy,

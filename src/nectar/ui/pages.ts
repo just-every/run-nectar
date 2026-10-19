@@ -1,3 +1,4 @@
+import { cadencesPage } from './cadences'
 import { billingAnswersPage } from './billing-answers'
 import { retentionPage } from './retention'
 import { h,page } from './html'
@@ -29,6 +30,7 @@ import { reportPage, reportInvoicePage, reportLinePage } from './reports'
 type Page = (env: Bindings, actor: Actor, request: Request, url: URL, id: string) => Promise<Response>
 
 export const pages: Record<string, Page> = {
+  cadences:(env,actor,_r,url)=>cadencesPage(env,actor,url),
   billingAnswers:(env,actor,_r,url)=>billingAnswersPage(env,actor,url),
   retention:(env,actor,_r,url)=>retentionPage(env,actor,url),
   reportSchedule:(env,actor,_r,url)=>reportSchedulePage(env,actor,url),
