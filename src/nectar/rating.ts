@@ -13,6 +13,8 @@
 import { addDays, daysBetween, formatDate, localDate, periodContaining } from './dates'
 import { decimalText, lineCents, micros, percentOf, quantityText } from './decimal'
 import { insist } from './core'
+import { invoiceTotals } from './invoice-tax'
+import { CHARGE_RATING_VERSION, chargeLines, type ChargeIn } from './charge-lines'
 import { PRICE_MODEL_RATING_VERSION, rateQuantityPrice, type QuantityPrice } from './price-model'
 
 export const RATING_VERSION = 'nectar-rating-1'
@@ -30,6 +32,7 @@ export interface RatingInput {
   items: ItemIn[]
   prices: Record<string, PriceIn>
   amendments: AmendmentIn[]
+  charges?: ChargeIn[]
   events: EventIn[]
 }
 
@@ -56,8 +59,8 @@ const unitFor = (input: RatingInput, price: PriceIn, from: string, to: string) =
 }
 
 export function rate(input: RatingInput): Rating {
-  insist(input.version === RATING_VERSION || input.version === PRICE_MODEL_RATING_VERSION, 'unsupported_rating_version')
-  insist(!Object.values(input.prices).some(price => price.pricing) || input.version === PRICE_MODEL_RATING_VERSION, 'unsupported_rating_version')
+  insist(input.version === RATING_VERSION || input.version === PRICE_MODEL_RATING_VERSION || input.version === CHARGE_RATING_VERSION, 'unsupported_rating_version')
+  insist(!Object.values(input.prices).some(price => price.pricing) || input.version === PRICE_MODEL_RATING_VERSION || input.version === CHARGE_RATING_VERSION, 'unsupported_rating_version')
   const { period, subscription: sub } = input
   const periodDays = BigInt(daysBetween(period.start, period.end))
   const lines: Line[] = [], exceptions: Exception[] = [], consumed: string[] = []
@@ -143,18 +146,7 @@ export function rate(input: RatingInput): Rating {
   if (unrated.length) exceptions.push({ code: 'unrated_usage', message: `${unrated.length} usage event(s) for this customer have no metered price in effect when they occurred; they are not billed.`, detail: unrated.map(event => event.eventId) })
   if (trialDays > 0) lines.push({ kind: 'trial', description: `Trial: ${trialDays} day(s) not charged`, quantity: String(trialDays), unitAmount: '', amountCents: 0, taxable: false, priceId: null, meterId: null, periodStart: activeFrom, periodEnd: min(sub.trialEnd!, activeTo), evidence: { rule: 'fixed and seat charges start when the trial ends', trialEnd: sub.trialEnd } })
 
-  const subtotal = lines.reduce((sum, line) => sum + line.amountCents, 0)
-  const taxableBase = lines.filter(line => line.taxable).reduce((sum, line) => sum + line.amountCents, 0)
-  let taxCents = 0
-  const tax: Record<string, unknown> = { mode: input.tax.mode, jurisdiction: input.tax.jurisdiction, taxableBaseCents: taxableBase }
-  if (input.tax.exception) exceptions.push(input.tax.exception)
-  if (input.tax.certificate) tax.certificate = input.tax.certificate
-  if (input.tax.mode === 'undeclared') exceptions.push({ code: 'tax_undeclared', message: 'The business has not declared its tax policy; this invoice cannot be finalized.' })
-  else if (input.tax.exempt) Object.assign(tax, { exempt: true, exemptRef: input.tax.exemptRef, rule: 'customer is tax exempt' })
-  else if (input.tax.mode === 'flat_rate' && taxableBase > 0) {
-    taxCents = Number(percentOf(BigInt(taxableBase), micros(input.tax.rate)))
-    Object.assign(tax, { rate: input.tax.rate, rule: 'declared rate × taxable total, rounded half away from zero once' })
-  } else Object.assign(tax, { rule: input.tax.mode === 'no_tax' ? 'declared: no sales tax applies' : 'no taxable charges' })
-  if (subtotal < 0) exceptions.push({ code: 'negative_total', message: 'Credits exceed the charges for this period; issue a credit note instead of a negative invoice.' })
-  return { lines, subtotalCents: subtotal, taxCents, totalCents: subtotal + taxCents, exceptions, tax, consumedEvents: consumed }
+  if (input.charges) lines.push(...chargeLines(input.charges))
+  const totals = invoiceTotals(input.tax, lines)
+  return { ...totals, lines, exceptions: [...exceptions, ...totals.exceptions], consumedEvents: consumed }
 }

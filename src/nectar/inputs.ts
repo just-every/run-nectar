@@ -8,6 +8,8 @@ import { all, fingerprint, insist, one, type Row } from './core'
 import { certificateBasis } from './certificates'
 import { zonedStart } from './dates'
 import { RATING_VERSION, rate, type ItemIn, type PriceIn, type RatingInput } from './rating'
+import { CHARGE_RATING_VERSION } from './charge-lines'
+import { pendingCharges } from './one-time-charges'
 import { PRICE_MODEL_RATING_VERSION, storedQuantityPrice } from './price-model'
 
 export const priceLabel = (row: Row) => `${row.product_name}${row.nickname ? ` — ${row.nickname}` : ''} (v${row.version})`
@@ -30,8 +32,10 @@ export async function ratingInputs(env: Bindings, business: Business, subscripti
   const events = meters.length ? (await all(env, `SELECT event_id, meter_id, quantity, occurred_at FROM nc_usage_events WHERE customer_id = ? AND status = 'active' AND invoice_id IS NULL AND occurred_at < ? AND meter_id IN (${meters.map(() => '?').join(',')}) ORDER BY occurred_at, event_id`,
     sub.customer_id, zonedStart(period.end, business.timezone), ...meters)).map(row => ({ eventId: row.event_id, meterId: row.meter_id, quantity: row.quantity, occurredAt: row.occurred_at })) : []
   const certificate = await certificateBasis(env, sub.customer_id, business.tax_jurisdiction, period)
+  const charges = await pendingCharges(env, sub.id, period.end)
   return {
-    version: Object.values(prices).some(price => price.pricing) ? PRICE_MODEL_RATING_VERSION : RATING_VERSION,
+    ...(charges.length ? { charges } : {}),
+    version: charges.length ? CHARGE_RATING_VERSION : Object.values(prices).some(price => price.pricing) ? PRICE_MODEL_RATING_VERSION : RATING_VERSION,
     timezone: business.timezone,
     tax: { mode: business.tax_mode, rate: business.tax_rate, jurisdiction: business.tax_jurisdiction, exempt: certificate?.exempt ?? !!sub.tax_exempt, exemptRef: certificate?.exemptRef ?? sub.tax_exempt_ref, ...(certificate ? { certificate: certificate.certificate, exception: certificate.exception } : {}) },
     subscription: { id: sub.id, anchorDay: sub.anchor_day, startDate: sub.start_date, trialEnd: sub.trial_end, endDate: sub.end_date, billFrom: sub.cutover_start },

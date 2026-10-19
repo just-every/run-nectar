@@ -512,13 +512,13 @@ Every capability claim on the owner-approved homepage (`src/site/homepage/`, des
 
 Judged from the code and tests at commit `0b59539c38405c7cc627a27666242516d33448ad` (19 October 2026).
 
-Round update: `USE-007` and `CAT-002` are proven by their named public-door journeys in `tests/nectar/reconciliation.mjs` and `tests/nectar/pricing-models.mjs`.
+Round updates: `USE-007`, `CAT-002`, `TAX-002` and `CAT-006` are proven by their named public-door journeys in `tests/nectar/`. `GOV-002` has a proven credit-approval slice and remains partial for its wider domains.
 
 | Clauses | Done | Partial | Missing | Total |
 | --- | ---: | ---: | ---: | ---: |
 | Published | 16 | 0 | 0 | 16 |
-| Target and push further | 5 | 36 | 67 | 108 |
-| All | 21 | 36 | 67 | 124 |
+| Target and push further | 6 | 36 | 66 | 108 |
+| All | 22 | 36 | 66 | 124 |
 
 | Clause | Title | Kind | Status | Evidence | Gap |
 | --- | --- | --- | --- | --- | --- |
@@ -544,7 +544,7 @@ Round update: `USE-007` and `CAT-002` are proven by their named public-door jour
 | `CAT-003` | Minimum commitments, overages and ramps | target | missing |  | No minimum commitments, true-ups, included quantities or ramps. |
 | `CAT-004` | Prepaid credits and drawdown | target | missing |  | Only a one-time approved contract credit; no prepaid credit ledger, drawdown, expiry or top-ups. |
 | `CAT-005` | Discounts, coupons, promotion codes and trials | target | partial | `src/nectar/subscriptions.ts`; `src/nectar/rating.ts`; `tests/nectar/flows.mjs` | Trials and approved contract discounts ship; no reusable coupons, promotion codes, redemption limits or card/no-card trial conversion. |
-| `CAT-006` | One-time charges, add-ons and manual invoices | target | missing |  | No one-time charges, add-ons or standalone invoices. |
+| `CAT-006` | One-time charges, add-ons and manual invoices | target | done | `src/nectar/one-time-charges.ts`; `src/nectar/manual-invoices.ts`; `src/nectar/addons.ts`; `tests/nectar/one-time.mjs` — CAT-006 public HTTP journey |  |
 | `CAT-007` | Price changes across a customer base | target | partial | `src/nectar/proposals.ts`; `tests/nectar/flows.mjs` | A proposed price version for selected subscriptions from a date ships (NEC-14); no cohort selection, renewal-timed migration, grandfathering rules or customer notices. |
 | `CAT-008` | Multi-currency prices | target | missing |  | USD only. |
 | `CAT-009` | Customer hierarchies and consolidated billing | target | missing |  | No parent/child accounts or consolidated invoices. |

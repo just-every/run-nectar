@@ -18,6 +18,9 @@ import { allocate, approveCredit, issueCreditNote, prepareCredit, recordPayment 
 import { createSubscription, decideAmendment, decideChange, endSubscription, prepareChange, proposeAmendment } from './subscriptions'
 import { acknowledgeControl, recordControl } from './reconciliation'
 import { configureCreditPolicy } from './credit-policy'
+import { addCharge } from './one-time-charges'
+import { prepareManualInvoice } from './manual-invoices'
+import { attachAddon } from './addons'
 import { submitUsage } from './usage'
 
 type Handler = (env: Bindings, actor: Actor, input: Input, request: Request) => Promise<unknown>
@@ -43,6 +46,9 @@ export const actions: Record<string, Handler> = {
   'price.create': createPrice,
   'price.retire': retirePrice,
   'feature.grant': grantFeature,
+  'charge.add': addCharge,
+  'invoice.manual': prepareManualInvoice,
+  'subscription.addon': attachAddon,
   'subscription.create': createSubscription,
   'subscription.end': endSubscription,
   'amendment.propose': proposeAmendment,

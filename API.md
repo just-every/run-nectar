@@ -36,6 +36,9 @@ step by step; `CUSTOMER` may be the internal id or the external id), `imports`,
 | `certificate.policy` | owner | `enabled` (boolean); unattended certificate mail is off until the owner enables it |
 | `certificate.remind` | owner, finance (a person) | no fields; run the daily expiry check now |
 | `product.create`, `meter.create`, `price.create`, `price.retire`, `feature.grant` | owner, finance | price: `product`, `kind` (`flat`, `seat`, `unit`), `unit_amount` (decimal text), `meter` for `unit`, `taxable`, `nickname` |
+| `charge.add` | owner, finance | `customer`, optional `subscription`, `effective_date`; either `price` and optional decimal `quantity`, or custom `amount`, `description`, `taxable` |
+| `invoice.manual` | owner, finance | `customer`, `charges[]` (1–20 unbilled charge ids), `service_date`; returns a standalone draft for normal approval and issue |
+| `subscription.addon` | a person with approval | `subscription`, `price`, seat `quantity`, `effective_date`; attaches an immutable catalogue price with recurring proration |
 | `subscription.create` | owner, finance | `customer`, `start_date`, `anchor_day`, `trial_end`, `price[]`, `quantity[]`, optional `exception_*` |
 | `amendment.propose` / `amendment.decide` | finance / a person with approval | `subscription`, `kind`, `value`, `effective_from`, `effective_to`, `price`, `note`, `clause` / `amendment`, `decision` |
 | `change.prepare` / `change.decide` | finance / a person with approval | `subscription`, `item`, `price`, `quantity`, `effective_date` / `change`, `decision` |
@@ -125,3 +128,11 @@ After the owner enables certificate mail, the daily 14:00 UTC cron checks dates 
 ## Credit approval slice (`GOV-002`, partial)
 
 The owner sets the credit threshold on an issued invoice. A direct `credit.issue` above it refuses even for the owner. `credit.prepare` saves the amount, reason, preparer, balance and policy revision; `credit.approve` requires another person above the threshold, rechecks the exact balance and policy, and atomically issues one numbered credit and closes the request. A duplicate, changed balance or changed policy refuses; prepare a new request. Credits at or below the threshold still need one authorized person. Refunds, write-offs, price changes and policy changes are not covered by this credit policy yet.
+
+## One-time and standalone billing (`CAT-006`)
+
+Add a charge on a customer record, choosing an immutable catalogue price or entering a custom total. Charges linked to a subscription join its next draft; other charges wait for a standalone invoice. Select pending charges and call `invoice.manual` to bill immediately, including a charge linked to a subscription. The standalone invoice has no subscription and uses the normal `invoice.approve` and `invoice.finalise` doors, numbering, declared tax, certificate checks, credits, payment allocation and exports. Custom amounts are approved with the exact invoice inputs before issue. For a standalone invoice, its issue date may start on the service date.
+
+Charge records never change. Issue consumes them in the same transaction as numbering, so another prepared draft cannot bill them again, and immediately billed charges disappear from later recurring drafts. A price retirement does not rewrite a queued charge. The new calculation rule version records one-time lines while unchanged recurring inputs retain their prior rule version. `customers/ID` includes charges and the invoice that consumed each one.
+
+`subscription.addon` requires a named approver, rejects overlaps, retired prices, previous-biller periods and already-issued recurring periods, and records the effective date. The ordinary rating engine prorates the new fixed or seat item and records its exact evidence.

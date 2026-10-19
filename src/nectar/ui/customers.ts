@@ -10,6 +10,7 @@ import { subscriptionDetail } from '../subscriptions'
 import { customerView } from '../views'
 import { addresses, area, cents, check, details, field, form, h, hidden, page, select, table, tag, type Html } from './html'
 import { personName } from './shell'
+import { addonSection, chargeSection } from './charges'
 import { certificateSection } from './certificates'
 import { priceRate } from './pricing'
 
@@ -49,6 +50,7 @@ export async function customerPage(env: Bindings, actor: Actor, id: string, url:
     <section class="card" aria-labelledby="subs"><h2 id="subs">Subscriptions</h2>${table(['Subscription', 'Started', 'Billing day$', 'Status'], c.subscriptions.map((s: any) => [h`<a href="/app/subscriptions/${s.id}">${s.external_id || `Subscription from ${formatDate(s.start_date)}`}</a>`, formatDate(s.start_date), s.anchor_day, tag(subscriptionState(s, today))]), { empty: 'No subscriptions yet.' })}</section>
     ${newSubscription}
     ${certificateSection(c, actor)}
+    ${chargeSection(c, named, actor, today)}
     <section class="card" aria-labelledby="money"><h2 id="money">Invoices and payments</h2>
       ${table(['Invoice', 'Issued', 'Due', 'Total$', 'Credited$', 'Paid$', 'Owed$'], ledger.invoices.map((i: any) => [h`<a href="/app/invoices/${i.id}">${i.number}</a>`, formatDate(i.issue_date), formatDate(i.due_date), cents(i.total_cents), cents(i.credited_cents), cents(i.paid_cents), cents(i.balance_cents)]), { empty: 'No issued invoices yet.' })}
       ${ledger.payments.length ? table(['Payment', 'Received', 'Amount$', 'Unallocated$'], ledger.payments.map((p: any) => [p.reference, formatDate(p.received_on), cents(p.amount_cents), cents(p.unallocated_cents)])) : ''}</section>
@@ -74,6 +76,7 @@ export async function subscriptionPage(env: Bindings, actor: Actor, id: string, 
       ${s.billing_mode === 'shadow' ? h`<p class="hint">Moved in from Stripe. Nectar rates it in shadow for comparison and issues nothing until the owner adopts it under Move in.</p>` : ''}
       ${details({ 'Internal id': s.id, Revision: s.revision, 'Provider reference': s.provider_ref ?? '—', 'Provider schedule': s.provider_schedule_ref ?? '—', 'Provider collection': s.provider_collection ?? '—' })}</section>
     <section class="card" aria-labelledby="items"><h2 id="items">Plan</h2>${table(['Price', 'Quantity$', 'From', 'Until'], s.items.map((i: any) => [`${i.product_name}${i.nickname ? ` — ${i.nickname}` : ''} v${i.version} (${priceRate(i)})`, i.quantity, formatDate(i.effective_from), formatDate(i.effective_to)]))}</section>
+    ${addonSection(s, prices, actor)}
     <section class="card" aria-labelledby="exceptions"><h2 id="exceptions">Contract exceptions</h2>
       ${table(['Exception', 'From', 'Until', 'Status', ''], s.amendments.map((a: any) => [h`${a.kind === 'discount_percent' ? `${a.value}% discount` : a.kind === 'fixed_credit' ? `$${a.value} one-time credit` : `Contract price $${a.value}`}${a.note ? ` — ${a.note}` : ''}${a.clause ? details({ Clause: a.clause }, 'Clause') : ''}`, formatDate(a.effective_from), formatDate(a.effective_to), tag(a.status === 'proposed' ? 'Proposed' : a.status === 'approved' ? 'Approved' : 'Rejected'),
         a.status === 'proposed' && approver ? h`<div class="actions">${form('amendment.decide', `/app/subscriptions/${s.id}`, h`${hidden('amendment', a.id)}${hidden('decision', 'approved')}`, 'Approve')}${form('amendment.decide', `/app/subscriptions/${s.id}`, h`${hidden('amendment', a.id)}${hidden('decision', 'rejected')}`, 'Reject', { secondary: true })}</div>` : '']), { empty: 'No contract exceptions.' })}

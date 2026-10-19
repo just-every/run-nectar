@@ -9,6 +9,7 @@ import { requireBusiness, taxReady, type Business } from './business'
 import { all, commit, fingerprint as hashInputs, guard, insist, newId, now, one, parseJson, stmt, type Row } from './core'
 import { addDays, isMonth, periodStartingIn, requireDate, today } from './dates'
 import { rated } from './inputs'
+import { manualCalculation } from './manual-invoices'
 import { creditPolicy, creditRequests } from './credit-policy'
 import { reconciliationFor } from './reconciliation'
 import { RATING_VERSION, type Exception, type Rating } from './rating'
@@ -76,11 +77,11 @@ export async function prepareRun(env: Bindings, actor: Actor, input: Input) {
     const period = periodStartingIn(sub.anchor_day, month)
     if (sub.start_date >= period.end || (sub.end_date && sub.end_date <= period.start)) continue
     if (sub.cutover_start && period.end <= sub.cutover_start) { skipped.push({ subscription: sub.id, customer: sub.customer_name, reason: `billed by the previous biller before cutover on ${sub.cutover_start}` }); continue }
-    if (await one(env, "SELECT 1 FROM nc_invoices WHERE subscription_id = ? AND period_start = ? AND status = 'issued'", sub.id, period.start)) { skipped.push({ subscription: sub.id, customer: sub.customer_name, reason: 'already invoiced' }); continue }
+    if (await one(env, "SELECT 1 FROM nc_invoices WHERE subscription_id = ? AND invoice_kind = 'recurring' AND period_start = ? AND status = 'issued'", sub.id, period.start)) { skipped.push({ subscription: sub.id, customer: sub.customer_name, reason: 'already invoiced' }); continue }
     if (period.end > day) { open.push({ subscription: sub.id, customer: sub.customer_name, periodEnd: period.end }); continue }
     drafts.push(await draftFor(env, business, sub, period))
   }
-  const previousRun = await one(env, "SELECT id, period, summary_json FROM nc_bill_runs WHERE status = 'finalised' AND period < ? ORDER BY period DESC, finalised_at DESC LIMIT 1", month)
+  const previousRun = await one(env, "SELECT id, period, summary_json FROM nc_bill_runs WHERE status = 'finalised' AND kind = 'recurring' AND period < ? ORDER BY period DESC, finalised_at DESC LIMIT 1", month)
   const totals = drafts.reduce((sum, draft) => ({ subtotal: sum.subtotal + draft.rating.subtotalCents, tax: sum.tax + draft.rating.taxCents, total: sum.total + draft.rating.totalCents }), { subtotal: 0, tax: 0, total: 0 })
   const exceptionCounts: Record<string, number> = {}
   for (const draft of drafts) for (const exception of draft.exceptions) exceptionCounts[exception.code] = (exceptionCounts[exception.code] ?? 0) + 1
@@ -90,7 +91,7 @@ export async function prepareRun(env: Bindings, actor: Actor, input: Input) {
   }
   const runVersion = drafts.find(draft => draft.input.version !== RATING_VERSION)?.input.version ?? RATING_VERSION
   const runId = newId(), at = now(), statements: D1PreparedStatement[] = []
-  const prior = await one(env, "SELECT id FROM nc_bill_runs WHERE period = ? AND status = 'draft'", month)
+  const prior = await one(env, "SELECT id FROM nc_bill_runs WHERE period = ? AND kind = 'recurring' AND status = 'draft'", month)
   // A replaced draft keeps any invoice it already issued: it closes as finalised, otherwise it is discarded.
   if (prior) statements.push(
     stmt(env, "UPDATE nc_invoices SET status = 'discarded' WHERE bill_run_id = ? AND status IN ('draft', 'shadow', 'approved')", prior.id),
@@ -111,7 +112,7 @@ export async function prepareRun(env: Bindings, actor: Actor, input: Input) {
 
 export async function runs(env: Bindings, actor: Actor) {
   requireCapability(actor, 'read')
-  return (await all(env, "SELECT id, period, status, summary_json, created_by, created_at, finalised_at FROM nc_bill_runs WHERE status <> 'discarded' ORDER BY period DESC, created_at DESC LIMIT 60"))
+  return (await all(env, "SELECT id, period, kind, status, summary_json, created_by, created_at, finalised_at FROM nc_bill_runs WHERE status <> 'discarded' ORDER BY period DESC, created_at DESC LIMIT 60"))
     .map(row => ({ ...row, summary: parseJson(row.summary_json, {}), summary_json: undefined }))
 }
 
@@ -119,13 +120,13 @@ export async function runDetail(env: Bindings, actor: Actor, id: string): Promis
   requireCapability(actor, 'read')
   const run = await one(env, 'SELECT * FROM nc_bill_runs WHERE id = ?', id)
   insist(run, 'bill_run_not_found', 404)
-  const invoices = await all(env, 'SELECT i.id, i.status, i.number, i.period_start, i.period_end, i.subtotal_cents, i.tax_cents, i.total_cents, i.exceptions_json, i.comparison_json, i.approved_by, c.name AS customer_name, c.id AS customer_id, c.external_id, s.billing_mode FROM nc_invoices i JOIN nc_customers c ON c.id = i.customer_id JOIN nc_subscriptions s ON s.id = i.subscription_id WHERE i.bill_run_id = ? ORDER BY c.name', id)
+  const invoices = await all(env, `SELECT i.id, i.status, i.number, i.period_start, i.period_end, i.subtotal_cents, i.tax_cents, i.total_cents, i.exceptions_json, i.comparison_json, i.approved_by, c.name AS customer_name, c.id AS customer_id, c.external_id, COALESCE(s.billing_mode,'live') AS billing_mode, i.invoice_kind FROM nc_invoices i JOIN nc_customers c ON c.id = i.customer_id LEFT JOIN nc_subscriptions s ON s.id = i.subscription_id WHERE i.bill_run_id = ? ORDER BY c.name`, id)
   return { ...run, summary: parseJson(run.summary_json, {}), summary_json: undefined, invoices: invoices.map(row => ({ ...row, exceptions: parseJson(row.exceptions_json, []), comparison: parseJson(row.comparison_json, {}), exceptions_json: undefined, comparison_json: undefined })) }
 }
 
 export async function invoiceDetail(env: Bindings, actor: Actor, id: string): Promise<Row> {
   requireCapability(actor, 'read')
-  const invoice = await one(env, 'SELECT i.*, c.name AS customer_name, c.external_id, c.billing_email, c.address AS customer_address, s.billing_mode FROM nc_invoices i JOIN nc_customers c ON c.id = i.customer_id JOIN nc_subscriptions s ON s.id = i.subscription_id WHERE i.id = ?', id)
+  const invoice = await one(env, `SELECT i.*, c.name AS customer_name, c.external_id, c.billing_email, c.address AS customer_address, COALESCE(s.billing_mode,'live') AS billing_mode, i.invoice_kind FROM nc_invoices i JOIN nc_customers c ON c.id = i.customer_id LEFT JOIN nc_subscriptions s ON s.id = i.subscription_id WHERE i.id = ?`, id)
   insist(invoice, 'invoice_not_found', 404)
   const lines = await all(env, 'SELECT * FROM nc_invoice_lines WHERE invoice_id = ? ORDER BY seq', id)
   const credits = await all(env, 'SELECT * FROM nc_credit_notes WHERE invoice_id = ? ORDER BY issued_at', id)
@@ -140,6 +141,10 @@ export async function invoiceDetail(env: Bindings, actor: Actor, id: string): Pr
 }
 
 async function currentFingerprint(env: Bindings, business: Business, invoice: Row) {
+  if (invoice.invoice_kind === 'manual') {
+    const saved = parseJson<Row>(invoice.calculation_json, {}).inputs
+    return (await manualCalculation(env, business, invoice.customer_id, saved.charges.map((c: Row) => c.id), saved.date)).fingerprint
+  }
   return (await reconciledRating(env, business, invoice.subscription_id, { start: invoice.period_start, end: invoice.period_end })).fingerprint
 }
 
@@ -190,12 +195,13 @@ export async function finalise(env: Bindings, actor: Actor, input: Input) {
   // The invoice date defaults to today; it may be any day from the end of the billed period up to today.
   const day = today(business.timezone)
   const issueDate = input.has('issue_date') ? requireDate(input.text('issue_date', { max: 10 }), 'issue_date') : day
-  insist(issueDate <= day && targets.every(invoice => issueDate >= invoice.period_end), 'invalid_issue_date')
+  insist(issueDate <= day && targets.every(invoice => issueDate >= (invoice.invoice_kind === 'manual' ? invoice.period_start : invoice.period_end)), 'invalid_issue_date')
   const issued: string[] = [], refused: Row[] = []
   for (const invoice of targets) {
     if (await currentFingerprint(env, business, invoice) !== invoice.approved_fingerprint) { refused.push({ invoice: invoice.id, reason: 'source_changed' }); continue }
     const calculation = parseJson<Row>(invoice.calculation_json, {})
     const consumed: string[] = calculation.consumedEvents ?? []
+    const charges: string[] = (calculation.inputs?.charges ?? []).map((c: Row) => c.id)
     const sequence = business.next_invoice_number
     const number = `${business.invoice_prefix}-${String(sequence).padStart(6, '0')}`
     const due = addDays(issueDate, business.payment_terms_days)
@@ -203,10 +209,12 @@ export async function finalise(env: Bindings, actor: Actor, input: Input) {
       guard(env, 'stale', 'EXISTS(SELECT 1 FROM nc_business WHERE singleton = 1 AND next_invoice_number = ?)', sequence),
       guard(env, 'stale', "EXISTS(SELECT 1 FROM nc_invoices WHERE id = ? AND status = 'approved' AND approved_fingerprint = ?)", invoice.id, invoice.approved_fingerprint),
       ...(consumed.length ? [guard(env, 'already_billed', `NOT EXISTS(SELECT 1 FROM nc_usage_events WHERE event_id IN (${consumed.map(() => '?').join(',')}) AND (invoice_id IS NOT NULL OR status <> 'active'))`, ...consumed)] : []),
+      ...charges.map(id => guard(env, 'charges_already_billed_or_missing', 'EXISTS(SELECT 1 FROM nc_charges WHERE id=? AND invoice_id IS NULL)', id)),
+      ...charges.map(id => stmt(env, 'UPDATE nc_charges SET invoice_id=? WHERE id=?', invoice.id, id)),
       stmt(env, 'UPDATE nc_business SET next_invoice_number = next_invoice_number + 1 WHERE singleton = 1'),
       ...chunk(consumed, 90).map(ids => stmt(env, `UPDATE nc_usage_events SET invoice_id = ? WHERE event_id IN (${ids.map(() => '?').join(',')})`, invoice.id, ...ids)),
       stmt(env, "UPDATE nc_invoices SET status = 'issued', number = ?, issue_date = ?, due_date = ?, issued_by = ?, issued_at = ? WHERE id = ?", number, issueDate, due, actorLabel(actor), now(), invoice.id),
-    ], { actor: actorLabel(actor), action: 'invoice.issue', subject: invoice.id, detail: { number, total: invoice.total_cents, fingerprint: invoice.approved_fingerprint, events: consumed.length } })
+    ], { actor: actorLabel(actor), action: 'invoice.issue', subject: invoice.id, detail: { number, total: invoice.total_cents, fingerprint: invoice.approved_fingerprint, events: consumed.length, charges } })
     issued.push(number)
     business = await requireBusiness(env)
   }
