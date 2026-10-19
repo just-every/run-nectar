@@ -10,9 +10,12 @@ import { NectarError, all, canonical, commit, insist, newId, now, one, sha256Hex
 import { decimalText, micros } from './decimal'
 import { addDays, daysBetween, isMonth, localDate, parseInstant, periodStartingIn, today, zonedStart } from './dates'
 import { controlTotals } from './reconciliation'
+import { rated } from './inputs'
+import { eventProperties } from './meter-definitions'
+import { canonical as canonicalJson } from './core'
 import type { Input } from './input'
 
-export interface RawEvent { event_id: string; customer: string; meter: string; quantity: string; occurred_at: string }
+export interface RawEvent { event_id: string; customer: string; meter: string; quantity: string; occurred_at: string; properties?: Record<string,unknown> }
 interface Outcome { row: number; eventId: string; status: 'accepted' | 'duplicate' | 'rejected'; reason?: string }
 
 const MAX_EVENTS = 5000
@@ -35,25 +38,27 @@ export function parseCsv(text: string): string[][] {
   return rows.filter(cells => cells.some(value => value.trim()))
 }
 
-const HEADERS: Record<keyof RawEvent, string[]> = {
+const HEADERS: Record<Exclude<keyof RawEvent,'properties'>, string[]> = {
   event_id: ['event_id', 'id', 'idempotency_key'], customer: ['customer', 'customer_external_id', 'customer_id', 'external_id'],
   meter: ['meter', 'meter_code', 'event_name'], quantity: ['quantity', 'value', 'units'], occurred_at: ['occurred_at', 'timestamp', 'time'],
 }
+
+function csvProperties(text:string){try{return JSON.parse(text)}catch{throw new NectarError('invalid_properties_json',400)}}
 
 export function eventsFromCsv(text: string): RawEvent[] {
   const [header, ...rows] = parseCsv(text.replace(/^﻿/, ''))
   insist(header, 'empty_file')
   const columns = header.map(name => name.trim().toLowerCase())
-  const index = Object.fromEntries(Object.entries(HEADERS).map(([field, names]) => [field, columns.findIndex(column => names.includes(column))])) as Record<keyof RawEvent, number>
+  const index = Object.fromEntries(Object.entries(HEADERS).map(([field, names]) => [field, columns.findIndex(column => names.includes(column))])) as Record<Exclude<keyof RawEvent,'properties'>, number>
   const missing = Object.entries(index).filter(([, at]) => at < 0).map(([field]) => field)
   insist(!missing.length, 'missing_columns', 400, missing)
-  return rows.map(cells => Object.fromEntries(Object.entries(index).map(([field, at]) => [field, (cells[at] ?? '').trim()])) as unknown as RawEvent)
+  return rows.map(cells => ({...Object.fromEntries(Object.entries(index).map(([field, at]) => [field, (cells[at] ?? '').trim()])),...(columns.includes('properties_json')?{properties:csvProperties(cells[columns.indexOf('properties_json')]||'{}')}:{})}) as unknown as RawEvent)
 }
 
 /** Checks every event against the meters, customers and recorded ids, row by row; writes nothing. */
 export async function screen(env: Bindings, events: RawEvent[]) {
   insist(events.length > 0 && events.length <= MAX_EVENTS, 'invalid_event_count')
-  const meters = new Map((await all(env, 'SELECT id, code FROM nc_meters')).map(row => [row.code, row.id]))
+  const meters = new Map((await all(env, 'SELECT id, code FROM nc_meters WHERE source_meter_id IS NULL')).map(row => [row.code, row.id]))
   const customerIds = [...new Set(events.map(event => String(event.customer ?? '').trim()))]
   const customers = new Map<string, string>()
   for (let i = 0; i < customerIds.length; i += 90) {
@@ -72,12 +77,14 @@ export async function screen(env: Bindings, events: RawEvent[]) {
     let quantity: string, occurredAt: number
     try { const q = micros(String(event.quantity ?? ''), 'quantity'); quantity = decimalText(q) } catch { reject(`invalid quantity "${event.quantity}"`); continue }
     try { occurredAt = parseInstant(String(event.occurred_at ?? '')) } catch { reject(`invalid occurred_at "${event.occurred_at}" (use ISO 8601 with an offset, e.g. 2026-09-30T23:30:00-07:00)`); continue }
-    const hash = await sha256Hex(canonical({ eventId, meterId, customerId, quantity, occurredAt }))
+    let properties:ReturnType<typeof eventProperties>
+    try{properties=eventProperties(event.properties)}catch{reject('invalid event properties');continue}
+    const hash = await sha256Hex(canonical({ eventId, meterId, customerId, quantity, occurredAt, ...(Object.keys(properties).length?{properties}:{}) }))
     if (seen.has(eventId)) { seen.get(eventId) === hash ? outcomes.push({ row, eventId, status: 'duplicate', reason: 'repeated in this batch' }) : reject('event id repeated in this batch with different values'); continue }
     seen.set(eventId, hash)
     const existing = await one(env, 'SELECT payload_hash FROM nc_usage_events WHERE event_id = ?', eventId)
     if (existing) { existing.payload_hash === hash ? outcomes.push({ row, eventId, status: 'duplicate', reason: 'already recorded' }) : reject('event id already recorded with different values'); continue }
-    accepted.push({ eventId, meterId, customerId, quantity, occurredAt, occurredText: String(event.occurred_at).trim(), hash })
+    accepted.push({ eventId, meterId, customerId, quantity, occurredAt, occurredText: String(event.occurred_at).trim(), hash,properties })
     outcomes.push({ row, eventId, status: 'accepted' })
   }
   const counts = { accepted: accepted.length, duplicates: outcomes.filter(o => o.status === 'duplicate').length, rejected: outcomes.filter(o => o.status === 'rejected').length }
@@ -93,8 +100,8 @@ export function ingestStatements(env: Bindings, actor: Actor, screened: Screened
     batch: batchId,
     statements: [
       stmt(env, 'INSERT INTO nc_usage_batches (id, source, filename, sha256, accepted, duplicates, rejected, report_json, actor, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', batchId, source.kind, source.filename ?? '', source.sha256 ?? '', screened.counts.accepted, screened.counts.duplicates, screened.counts.rejected, JSON.stringify(screened.report.slice(0, 500)), actorLabel(actor), at),
-      ...screened.accepted.map(event => stmt(env, 'INSERT INTO nc_usage_events (id, event_id, meter_id, customer_id, quantity, occurred_at, occurred_text, received_at, batch_id, payload_hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        newId(), event.eventId, event.meterId, event.customerId, event.quantity, event.occurredAt, event.occurredText, at, batchId, event.hash)),
+      ...screened.accepted.map(event => stmt(env, 'INSERT INTO nc_usage_events (id, event_id, meter_id, customer_id, quantity, occurred_at, occurred_text, received_at, batch_id, payload_hash,properties_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?)',
+        newId(), event.eventId, event.meterId, event.customerId, event.quantity, event.occurredAt, event.occurredText, at, batchId, event.hash,canonicalJson(event.properties))),
     ],
     audit: { actor: actorLabel(actor), action: 'usage.ingest', subject: batchId, detail: { source: source.kind, filename: source.filename ?? null, ...screened.counts } },
   }
@@ -149,10 +156,12 @@ export async function inspect(env: Bindings, actor: Actor, month: string) {
   for (const sub of subs) {
     const period = periodStartingIn(sub.anchor_day, month)
     if (sub.start_date >= period.end || (sub.end_date && sub.end_date <= period.start)) continue
-    const meters = await all(env, "SELECT DISTINCT m.id, m.code, m.unit_label FROM nc_items i JOIN nc_prices p ON p.id = i.price_id JOIN nc_meters m ON m.id = p.meter_id WHERE i.subscription_id = ? AND i.effective_from < ? AND (i.effective_to IS NULL OR i.effective_to > ?)", sub.id, period.end, period.start)
+    const meters = await all(env, "SELECT DISTINCT m.id, m.code, m.unit_label,m.metric_plan_json FROM nc_items i JOIN nc_prices p ON p.id = i.price_id JOIN nc_meters m ON m.id = p.meter_id WHERE i.subscription_id = ? AND i.effective_from < ? AND (i.effective_to IS NULL OR i.effective_to > ?)", sub.id, period.end, period.start)
     const from = zonedStart(period.start, zone), to = zonedStart(period.end, zone)
     const perMeter = []
+    const metricLines=meters.some(m=>m.metric_plan_json)?(await rated(env,business,sub.id,period)).rating.lines.filter(l=>l.kind==='metric_usage'):[]
     for (const meter of meters) {
+      if(meter.metric_plan_json){for(const line of metricLines.filter(l=>l.meterId===meter.id&&l.periodStart===period.start))perMeter.push({meter:meter.code,unit:meter.unit_label,dimensions:line.evidence.dimensions,total:line.quantity,exact:line.evidence.exactQuantity,events:(line.evidence.eventIds as string[]).length,billed:0,daysWithoutUsage:[],receivedAfterPeriodEnd:[]});continue}
       const events = await all(env, "SELECT event_id, quantity, occurred_at, received_at, invoice_id FROM nc_usage_events WHERE customer_id = ? AND meter_id = ? AND status = 'active' AND occurred_at >= ? AND occurred_at < ? ORDER BY occurred_at", sub.customer_id, meter.id, from, to)
       const total = events.reduce((sum, event) => sum + micros(event.quantity, 'quantity'), 0n)
       const days = new Set(events.map(event => localDate(event.occurred_at, zone)))
@@ -164,11 +173,11 @@ export async function inspect(env: Bindings, actor: Actor, month: string) {
       const lateReceived = events.filter(event => event.received_at >= to).map(event => event.event_id)
       perMeter.push({ meter: meter.code, unit: meter.unit_label, events: events.length, total: decimalText(total), billed: events.filter(event => event.invoice_id).length, daysWithoutUsage: gaps, receivedAfterPeriodEnd: lateReceived })
     }
-    const earlier = await one<{ n: number }>(env, `SELECT COUNT(*) AS n FROM nc_usage_events WHERE customer_id = ? AND status = 'active' AND invoice_id IS NULL AND occurred_at < ? AND meter_id IN (SELECT p.meter_id FROM nc_items i JOIN nc_prices p ON p.id = i.price_id WHERE i.subscription_id = ? AND p.meter_id IS NOT NULL)`, sub.customer_id, from, sub.id)
+    const earlier = await one<{ n: number }>(env, `SELECT COUNT(*) AS n FROM nc_usage_events WHERE customer_id = ? AND status = 'active' AND invoice_id IS NULL AND occurred_at < ? AND meter_id IN (SELECT COALESCE(m.source_meter_id,p.meter_id) FROM nc_items i JOIN nc_prices p ON p.id = i.price_id JOIN nc_meters m ON m.id=p.meter_id WHERE i.subscription_id = ? AND p.meter_id IS NOT NULL)`, sub.customer_id, from, sub.id)
     subscriptions.push({ subscription: sub.id, customer: sub.customer_name, externalId: sub.external_id, period, boundaries: { from: new Date(from).toISOString(), to: new Date(to).toISOString(), timezone: zone }, meters: perMeter, unbilledFromEarlierPeriods: earlier?.n ?? 0 })
   }
   const unattributed = await all(env, `SELECT e.event_id, c.external_id AS customer, m.code AS meter, e.quantity, e.occurred_text FROM nc_usage_events e JOIN nc_customers c ON c.id = e.customer_id JOIN nc_meters m ON m.id = e.meter_id
-    WHERE e.status = 'active' AND e.invoice_id IS NULL AND NOT EXISTS (SELECT 1 FROM nc_items i JOIN nc_prices p ON p.id = i.price_id JOIN nc_subscriptions s ON s.id = i.subscription_id WHERE s.customer_id = e.customer_id AND p.meter_id = e.meter_id)
+    WHERE e.status = 'active' AND e.invoice_id IS NULL AND NOT EXISTS (SELECT 1 FROM nc_items i JOIN nc_prices p ON p.id = i.price_id JOIN nc_subscriptions s ON s.id = i.subscription_id WHERE s.customer_id = e.customer_id AND p.meter_id IN (SELECT id FROM nc_meters WHERE id=e.meter_id OR source_meter_id=e.meter_id))
     ORDER BY e.occurred_at LIMIT 200`)
   return { month, timezone: zone, subscriptions, unattributed, controls: await controlTotals(env, actor, month) }
 }

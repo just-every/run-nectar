@@ -33,9 +33,14 @@ import { submitUsage } from './usage'
 
 import { prepareContract,decideContract } from './contract-terms'
 
+import { prepareMetric,previewMetric,activateMetric } from './meter-definitions'
+
 type Handler = (env: Bindings, actor: Actor, input: Input, request: Request) => Promise<unknown>
 
 export const actions: Record<string, Handler> = {
+  'meter.prepare':prepareMetric,
+  'meter.preview':previewMetric,
+  'meter.activate':activateMetric,
   'contract.prepare':prepareContract,
   'contract.decide':decideContract,
   'business.configure': configureBusiness,

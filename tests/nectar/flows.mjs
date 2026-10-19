@@ -32,6 +32,8 @@ const ACTIONS = [...(await readFile(new URL('../../src/nectar/actions.ts', impor
 await runIsolated('lifecycle','lifecycleFlow')
 await runIsolated('price-migrations','priceMigrations')
 await runIsolated('commitments','commitments')
+await runIsolated('metrics','metricsFlow')
+await runIsolated('metric-zones','metricZones')
 const h = await harness()
 const check = async (id, run) => { await run(); console.log(`${id} passed`) }
 const ids = {}, cookie = {}

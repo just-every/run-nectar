@@ -37,9 +37,9 @@ export async function invoicesCsv(env: Bindings, actor: Actor,url?:URL) {
 
 export async function usageCsv(env: Bindings, actor: Actor) {
   requireCapability(actor, 'export')
-  const rows = await all(env, `SELECT e.event_id, c.external_id, m.code, e.quantity, e.occurred_text, e.received_at, e.status, e.void_reason, i.number FROM nc_usage_events e JOIN nc_customers c ON c.id = e.customer_id JOIN nc_meters m ON m.id = e.meter_id LEFT JOIN nc_invoices i ON i.id = e.invoice_id ORDER BY e.occurred_at, e.event_id`)
-  return file(csv(['event_id', 'customer_external_id', 'meter', 'quantity', 'occurred_at', 'received_at', 'status', 'void_reason', 'invoice_number'],
-    rows.map(r => [r.event_id, r.external_id, r.code, r.quantity, r.occurred_text, new Date(r.received_at).toISOString(), r.status, r.void_reason, r.number])), 'nectar-usage.csv', 'text/csv; charset=utf-8')
+  const rows = await all(env, `SELECT e.event_id, c.external_id, m.code, e.quantity, e.occurred_text, e.received_at, e.status, e.void_reason,e.properties_json, i.number FROM nc_usage_events e JOIN nc_customers c ON c.id = e.customer_id JOIN nc_meters m ON m.id = e.meter_id LEFT JOIN nc_invoices i ON i.id = e.invoice_id ORDER BY e.occurred_at, e.event_id`)
+  return file(csv(['event_id', 'customer_external_id', 'meter', 'quantity', 'occurred_at', 'received_at', 'status', 'void_reason', 'invoice_number','properties_json'],
+    rows.map(r => [r.event_id, r.external_id, r.code, r.quantity, r.occurred_text, new Date(r.received_at).toISOString(), r.status, r.void_reason, r.number,r.properties_json])), 'nectar-usage.csv', 'text/csv; charset=utf-8')
 }
 
 export async function subscriptionsCsv(env: Bindings, actor: Actor,url?:URL) {

@@ -19,10 +19,10 @@ const DUPLICATE_PRICE = `SELECT 1 FROM nc_items WHERE subscription_id = ? AND pr
 // interval, including this subscription's own scheduled items and subscriptions
 // that have ended today but overlapped the requested historical effective date.
 const METER_CLASH = `SELECT 1 FROM nc_items i
-  JOIN nc_prices p ON p.id = i.price_id JOIN nc_subscriptions s ON s.id = i.subscription_id
-  WHERE s.customer_id = ? AND p.meter_id = ?
+  JOIN nc_prices p ON p.id = i.price_id LEFT JOIN nc_meters m ON m.id=p.meter_id JOIN nc_subscriptions s ON s.id = i.subscription_id
+  WHERE s.customer_id = ? AND COALESCE(m.source_meter_id,p.meter_id) = ?
     AND MAX(s.start_date, i.effective_from, ?) <
-      MIN(COALESCE(s.end_date, '9999-12-31'), COALESCE(i.effective_to, '9999-12-31'), ?)`
+      MIN(COALESCE(s.end_date, '9999-12-31'), COALESCE(i.effective_to, '9999-12-31'), ?) AND (s.id<>? OR (p.meter_id=? AND p.dimensions_json=?))`
 
 export async function attachAddon(env: Bindings, actor: Actor, input: Input) {
   requireMember(actor, 'approve')
@@ -36,7 +36,7 @@ export async function attachAddon(env: Bindings, actor: Actor, input: Input) {
   const quantity = price.kind === 'seat'
     ? input.integer('quantity', { min: price.pricing_model === 'simple' ? 1 : 0, max: price.pricing_model === 'simple' ? 1_000_000 : 1_000_000_000 })!
     : 1
-  const meterParams = [sub.customer_id, price.meter_id, date, sub.end_date ?? '9999-12-31']
+  const meterParams = [sub.customer_id, price.source_meter_id??price.meter_id, date, sub.end_date ?? '9999-12-31',sub.id,price.meter_id,price.dimensions_json??'{}']
   const [issued, count, duplicate, clash] = await Promise.all([
     one(env, ISSUED, sub.id, date),
     one<{ count: number }>(env, ACTIVE_ITEMS, sub.id, date, date),

@@ -1,3 +1,4 @@
+import { metricUsage, METRIC_RATING_VERSION, type MetricPrice } from './metric-rating'
 import { commitmentLines, CONTRACT_RATING_VERSION, type ContractBasis } from './commitment-rating'
 // Flow 7: deterministic rating. A pure function from one subscription's
 // recorded inputs for one period to invoice lines. Same inputs, same lines:
@@ -23,10 +24,10 @@ import { PRICE_MODEL_RATING_VERSION, rateQuantityPrice, type QuantityPrice } fro
 
 export const RATING_VERSION = 'nectar-rating-1'
 
-export interface PriceIn { id: string; kind: 'flat' | 'seat' | 'unit'; unitAmount: string; meterId: string | null; taxable: boolean; label: string; unitLabel: string; pricing?: QuantityPrice }
+export interface PriceIn { id: string; kind: 'flat' | 'seat' | 'unit'; unitAmount: string; meterId: string | null; taxable: boolean; label: string; unitLabel: string; pricing?: QuantityPrice; metric?:MetricPrice }
 export interface ItemIn { id: string; priceId: string; quantity: number; from: string; to: string | null }
 export interface AmendmentIn { id: string; kind: 'discount_percent' | 'fixed_credit' | 'price_override'; value: string; priceId: string | null; from: string; to: string | null; note: string }
-export interface EventIn { eventId: string; meterId: string; quantity: string; occurredAt: number }
+export interface EventIn { eventId: string; meterId: string; quantity: string; occurredAt: number;properties?:Record<string,import('./metric-plan').PropertyValue>;invoiceId?:string|null }
 export interface RatingInput {
   version: string
   timezone: string
@@ -66,8 +67,8 @@ const unitFor = (input: RatingInput, price: PriceIn, from: string, to: string) =
 }
 
 export function rate(input: RatingInput, presentCancellationCredits = true): Rating {
-  insist(input.version === CONTRACT_RATING_VERSION || input.version === RATING_VERSION || input.version === CONTRACT_RATING_VERSION || input.version === PRICE_MODEL_RATING_VERSION || input.version === CHARGE_RATING_VERSION || input.version === LIFECYCLE_RATING_VERSION, 'unsupported_rating_version')
-  insist(!Object.values(input.prices).some(price => price.pricing) || input.version === CONTRACT_RATING_VERSION || input.version === PRICE_MODEL_RATING_VERSION || input.version === CHARGE_RATING_VERSION || input.version === LIFECYCLE_RATING_VERSION, 'unsupported_rating_version')
+  insist(input.version === METRIC_RATING_VERSION || input.version === CONTRACT_RATING_VERSION || input.version === RATING_VERSION || input.version === METRIC_RATING_VERSION || input.version === CONTRACT_RATING_VERSION || input.version === PRICE_MODEL_RATING_VERSION || input.version === CHARGE_RATING_VERSION || input.version === LIFECYCLE_RATING_VERSION, 'unsupported_rating_version')
+  insist(!Object.values(input.prices).some(price => price.pricing) || input.version === METRIC_RATING_VERSION || input.version === CONTRACT_RATING_VERSION || input.version === PRICE_MODEL_RATING_VERSION || input.version === CHARGE_RATING_VERSION || input.version === LIFECYCLE_RATING_VERSION, 'unsupported_rating_version')
   const { period, subscription: sub } = input
   const periodDays = BigInt(daysBetween(period.start, period.end))
   const lines: Line[] = [], exceptions: Exception[] = [], consumed: string[] = []
@@ -127,9 +128,14 @@ export function rate(input: RatingInput, presentCancellationCredits = true): Rat
   }
 
   // Usage: group by (original period, price in effect, override), sum exactly, then rate.
+  const metricResult=metricUsage(input)
+  lines.push(...metricResult.lines);exceptions.push(...metricResult.exceptions);consumed.push(...metricResult.consumed)
+  const metricSources=new Set(Object.values(input.prices).flatMap(p=>p.metric?[p.metric.sourceId]:[]))
   const groups = new Map<string, { late: boolean; start: string; end: string; price: PriceIn; unit: string; override: string | null; trial: boolean; paused: boolean; events: EventIn[] }>()
   const unrated: EventIn[] = []
   for (const event of [...input.events].sort((a, b) => a.occurredAt - b.occurredAt || a.eventId.localeCompare(b.eventId))) {
+    if(event.invoiceId)continue
+    if(metricSources.has(event.meterId)&&!input.items.some(i=>!input.prices[i.priceId]?.metric&&input.prices[i.priceId]?.meterId===event.meterId))continue
     const date = localDate(event.occurredAt, input.timezone)
     const item = input.items.find(candidate => input.prices[candidate.priceId]?.meterId === event.meterId && candidate.from <= date && (candidate.to ?? FAR) > date)
     const inactive = blockedAt(date, input.lifecycle ?? []).length > 0
@@ -175,5 +181,5 @@ export function rate(input: RatingInput, presentCancellationCredits = true): Rat
   const finalLines = presentCancellationCredits ? cancellationLines(input, lines, input => rate(input, false)) : lines
   const committed=commitmentLines(input,finalLines)
   const totals = invoiceTotals(input.tax, committed.lines)
-  return { ...totals, lines: committed.lines, exceptions: [...exceptions, ...committed.exceptions, ...totals.exceptions], consumedEvents: consumed }
+  return { ...totals, lines: committed.lines, exceptions: [...exceptions, ...committed.exceptions, ...totals.exceptions], consumedEvents: [...new Set(consumed)] }
 }

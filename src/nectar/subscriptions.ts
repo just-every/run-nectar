@@ -12,6 +12,7 @@ import { isDate, periodContaining, requireDate } from './dates'
 import { rated } from './inputs'
 import { lifecycleHistory, lifecycleIntervals } from './lifecycle-records'
 import { lifecyclePolicy } from './lifecycle-policy'
+import { sourceMeterIds,uniqueMeterItems } from './metric-ownership'
 import { contractsFor, contractBurnDown } from './contract-terms'
 import { metadataFor,withMetadata } from './metadata'
 import type { Input } from './input'
@@ -38,8 +39,8 @@ export async function subscriptionDetail(env: Bindings, actor: Actor, id: string
 
 // A subscription holds its meters while it is live on or after `from`: no end
 // date yet, or one after it. Checked before the write and again inside it.
-const CLASH = (count: number) => `SELECT 1 FROM nc_items i JOIN nc_prices p ON p.id = i.price_id JOIN nc_subscriptions s ON s.id = i.subscription_id
-    WHERE s.customer_id = ? AND s.id <> ? AND (s.end_date IS NULL OR s.end_date > ?) AND (i.effective_to IS NULL OR i.effective_to > ?) AND p.meter_id IN (${Array(count).fill('?').join(',')})`
+const CLASH = (count: number) => `SELECT 1 FROM nc_items i JOIN nc_prices p ON p.id = i.price_id LEFT JOIN nc_meters m ON m.id=p.meter_id JOIN nc_subscriptions s ON s.id = i.subscription_id
+    WHERE s.customer_id = ? AND s.id <> ? AND (s.end_date IS NULL OR s.end_date > ?) AND (i.effective_to IS NULL OR i.effective_to > ?) AND COALESCE(m.source_meter_id,p.meter_id) IN (${Array(count).fill('?').join(',')})`
 
 async function meterClash(env: Bindings, customerId: string, meterIds: string[], from: string, exceptSubscription = '') {
   if (!meterIds.length) return false
@@ -87,8 +88,9 @@ export async function createSubscription(env: Bindings, actor: Actor, input: Inp
     insist(Number.isSafeInteger(quantity) && quantity >= (price.pricing_model === 'simple' ? 1 : 0) && quantity <= (price.pricing_model === 'simple' ? 1_000_000 : 1_000_000_000), 'invalid_quantity')
     items.push({ id: newId(), price, quantity })
   }
-  const meters = items.flatMap(item => item.price.meter_id ? [item.price.meter_id] : [])
-  insist(new Set(meters).size === meters.length && !await meterClash(env, customer.id, meters, start), 'meter_already_billed', 409)
+  const meters = [...new Set(await sourceMeterIds(env,items.flatMap(item => item.price.meter_id ? [item.price.meter_id] : [])))]
+  await uniqueMeterItems(env,items.map(item=>({id:item.id,priceId:item.price.id,quantity:item.quantity,from:start,to:null})))
+  insist(!await meterClash(env, customer.id, meters, start), 'meter_already_billed', 409)
   const id = newId(), at = now(), by = actorLabel(actor)
   const exception = input.has('exception_kind') ? readAmendment(input, 'exception_') : null
   if (exception?.kind === 'price_override') {
@@ -168,6 +170,7 @@ export async function prepareChange(env: Bindings, actor: Actor, input: Input) {
   insist(price.id !== item.price_id || quantity !== item.quantity, 'nothing_changes')
   const items: ItemIn[] = (await all(env, 'SELECT * FROM nc_items WHERE subscription_id = ? ORDER BY effective_from, id', sub.id)).map(row => ({ id: row.id, priceId: row.price_id, quantity: row.quantity, from: row.effective_from, to: row.effective_to }))
   const changed: ItemIn[] = [...items.map(row => row.id === item.id ? { ...row, to: date } : row), { id: 'change', priceId: price.id, quantity, from: date, to: item.effective_to }]
+  await uniqueMeterItems(env,changed)
   const before = (await rated(env, business, sub.id, period, items)).rating
   const after = (await rated(env, business, sub.id, period, changed)).rating
   const next = periodContaining(sub.anchor_day, period.end)

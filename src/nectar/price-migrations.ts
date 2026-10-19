@@ -1,6 +1,6 @@
 import type { Bindings } from '../auth.server'
 import type { Business } from './business'
-import { all, fingerprint, insist, one, type Row } from './core'
+import { all, fingerprint, insist, one, parseJson, type Row } from './core'
 import { canonicalDecimal } from './decimal'
 import { isDate, periodContaining } from './dates'
 import { pricesById, ratingInputs } from './inputs'
@@ -10,6 +10,7 @@ import { startsInIssuedPeriod } from './subscriptions'
 
 const total = (input: RatingInput) => {
   const result = rate(input)
+  insist(!result.exceptions.some(e=>e.code==='metric_duplicate_selection'),'meter_already_billed',409)
   return { subtotalCents: result.subtotalCents, totalCents: result.totalCents, lines: result.lines.map(line => ({ description: line.description, amountCents: line.amountCents })) }
 }
 
@@ -49,10 +50,12 @@ export async function priceChangePlan(env: Bindings, business: Business, payload
     const kind = String(payload.kind ?? '')
     insist(kind === 'flat' || kind === 'seat' || kind === 'unit', 'invalid_kind')
     const amount = canonicalDecimal(String(payload.unit_amount ?? ''), 'unit_amount')
-    const meter = kind === 'unit' ? await one(env, 'SELECT id, unit_label FROM nc_meters WHERE id = ? OR code = ?', String(payload.meter ?? ''), String(payload.meter ?? '')) : null
+    const meter = kind === 'unit' ? await one(env, 'SELECT * FROM nc_meters WHERE id = ? OR code = ?', String(payload.meter ?? ''), String(payload.meter ?? '')) : null
     insist(kind !== 'unit' || meter, 'meter_not_found', 404)
     nickname = String(payload.nickname ?? '').slice(0, 80)
-    virtual = { id: 'proposed-price', kind, unitAmount: amount, meterId: meter?.id ?? null, taxable: payload.taxable !== false, label: `${product.name}${nickname ? ` — ${nickname}` : ''} (v${version})`, unitLabel: meter?.unit_label ?? '' }
+    const dimensions=payload.dimensions??{}
+    if(meter?.metric_plan_json){const plan=parseJson<Row>(meter.metric_plan_json,{});insist(dimensions&&typeof dimensions==='object'&&!Array.isArray(dimensions)&&Object.keys(dimensions).length===plan.groupBy.length&&plan.groupBy.every((key:string)=>Object.hasOwn(dimensions,key)),'invalid_metric_dimensions')}
+    virtual = { ...(meter?.metric_plan_json?{metric:{sourceId:meter.source_meter_id,plan:parseJson(meter.metric_plan_json,null as never),dimensions,version:meter.metric_version,code:meter.code}}:{}), id: 'proposed-price', kind, unitAmount: amount, meterId: meter?.id ?? null, taxable: payload.taxable !== false, label: `${product.name}${nickname ? ` — ${nickname}` : ''} (v${version})`, unitLabel: meter?.unit_label ?? '' }
   }
   const impact = [], resolvedDates: Record<string, string> = {}, basis: Record<string, unknown> = { productVersion: [product.id, version - 1], ratings: {} }
   for (const id of ids) {
@@ -90,5 +93,5 @@ export async function priceChangePlan(env: Bindings, business: Business, payload
     ;(basis.ratings as Record<string, string[]>)[sub.id] = fingerprints
     basis[sub.id] = sub.revision
   }
-  return { normalized: { product: product.id, ...(targetId ? { target_price: targetId } : {}), ...(payload.source_price ? {source_price:String(payload.source_price)} : {}), kind: virtual.kind, unit_amount: virtual.unitAmount, meter: virtual.meterId, nickname, taxable: virtual.taxable, timing, effective_date: reference, subscriptions: ids, resolved_dates: resolvedDates }, impact, basis }
+  return { normalized: { ...(virtual.metric?{dimensions:virtual.metric.dimensions}:{}),product: product.id, ...(targetId ? { target_price: targetId } : {}), ...(payload.source_price ? {source_price:String(payload.source_price)} : {}), kind: virtual.kind, unit_amount: virtual.unitAmount, meter: virtual.meterId, nickname, taxable: virtual.taxable, timing, effective_date: reference, subscriptions: ids, resolved_dates: resolvedDates }, impact, basis }
 }

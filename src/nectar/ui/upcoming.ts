@@ -23,7 +23,7 @@ export async function upcomingSection(env: Bindings, actor: Actor, sub: Row, url
     <p>${formatPeriod(view.period.start,view.period.end)} · ${view.timezone}</p>
     <p class="hint">${view.state==='issued' ? 'Saved issued inputs; later usage does not rewrite this invoice.' : 'Full-period fixed charges plus ingested usage. Future usage is not forecast. Refresh to read the latest recorded inputs; no invoice is prepared or approved.'}</p>
     ${selector}
-    <h3>Period usage</h3>${table(['Meter','Quantity$','Events$','Earlier usage$'],view.meters.map(m=>[m.code,`${quantityText(m.quantity)} ${m.unit_label}`,m.events,quantityText(m.lateQuantity)]),{empty:'No metered prices on this subscription.'})}
+    <h3>Period usage</h3>${table(['Meter','Quantity$','Events$','Earlier usage$'],view.meters.map(m=>[h`<span>${m.code}</span>${m.dimensions?h`<p>${Object.entries(m.dimensions).map(([k,v])=>`${k}: ${v}`).join(', ')}</p>`:''}`,`${quantityText(m.quantity)} ${m.unit_label}`,m.events,quantityText(m.lateQuantity)]),{empty:'No metered prices on this subscription.'})}
     <h3>Approved contract credits remaining: ${cents(view.remainingContractCreditCents)}</h3>
     ${table(['Credit','Effective from','Amount$','This period'],view.credits.map(c=>[c.note || 'Approved contract credit',c.effective_from,cents(c.amountCents),c.appliesThisPeriod ? 'Applies' : 'Scheduled for another period']),{empty:'No approved unused one-time contract credits. Prepaid credit balances are not yet available.'})}
     <h3>Calculation: ${cents(calc.totalCents)}</h3>${table(['Charge','Quantity$','Amount$'],calc.lines.map((l:any)=>[l.description,l.quantity,cents(l.amountCents)]))}

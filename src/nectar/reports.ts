@@ -33,7 +33,7 @@ export interface ReportInvoice extends ReportEntry {
   } | null
 }
 
-const RECURRING = new Set(['flat', 'seat', 'usage', 'discount', 'cancellation_credit'])
+const RECURRING = new Set(['flat', 'seat', 'usage', 'overage', 'metric_usage', 'discount', 'cancellation_credit'])
 const BUCKETS = new Set(['current', '1-30', '31-60', '61-90', '90+', 'overdue'])
 const DEFINITIONS: Record<ReportMetric, { title: string; definition: string }> = {
   mrr: {
@@ -92,7 +92,7 @@ export async function report(env: Bindings, actor: Actor, metric: string, url: U
       ${mrr ? 'SUM(l.amount_cents)' : 'COALESCE(SUM(l.amount_cents), 0) + i.tax_cents'} AS amount_cents
       FROM nc_invoices i JOIN nc_customers c ON c.id = i.customer_id
       ${mrr ? 'JOIN' : 'LEFT JOIN'} nc_invoice_lines l ON l.invoice_id = i.id
-      ${mrr ? "AND l.kind IN ('flat', 'seat', 'usage', 'discount', 'cancellation_credit')" : ''}
+      ${mrr ? "AND l.kind IN ('flat', 'seat', 'usage', 'overage', 'metric_usage', 'discount', 'cancellation_credit')" : ''}
       WHERE i.status = 'issued' AND substr(i.${mrr ? 'period_start' : 'issue_date'}, 1, 7) = ?
       ${mrr ? "AND i.invoice_kind = 'recurring' AND i.subscription_id IS NOT NULL" : ''}
       ${selected.customer ? 'AND i.customer_id = ?' : ''}

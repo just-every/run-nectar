@@ -1,4 +1,5 @@
 // Catalogue input and readable invoice evidence for immutable quantity prices.
+import { dimensionFields } from './meters'
 import type { Row } from '../core'
 import { check, field, form, h, hidden, select, table } from './html'
 
@@ -7,7 +8,7 @@ export function quantityPriceForm(product: string, meters: Row[], initial = fals
     ${form('price.create', '/app/catalog', h`${hidden('product', product)}${select('Kind', 'kind', [{ value: 'seat', label: 'Per seat monthly' }, { value: 'unit', label: 'Metered usage' }])}
       ${select('Pricing model', 'pricing_model', [{ value: 'graduated', label: 'Graduated: each band at its rate' }, { value: 'volume', label: 'Volume: all units at the band reached' }, { value: 'package', label: 'Package: round up to whole blocks' }, { value: 'stair_step', label: 'Stair-step: flat fee for the band reached' }])}
       ${select('Meter (usage only)', 'meter', meters.map(m => ({ value: m.id, label: m.code })), '', { required: false, blank: '—' })}
-      ${field('Block size (package only)', 'package_size', { required: false })}${field('Name for this price', 'nickname', { required: false })}
+      ${dimensionFields()}${field('Block size (package only)', 'package_size', { required: false })}${field('Name for this price', 'nickname', { required: false })}
       ${[1, 2, 3, 4].map(tier => h`<fieldset><legend>Band ${tier}</legend>${field('Upper quantity (blank means no limit)', 'tier_limit', { required: false })}${field('Unit price or price per block ($)', 'tier_unit_amount', { required: false })}${field('Flat fee ($; required for stair-step)', 'tier_flat_amount', { required: false })}</fieldset>`)}
       ${check('Taxable', 'taxable', { checked: true })}`, initial ? 'Add tiered price version' : 'Prepare tiered price version', { layout: 'columns', secondary: true })}</details>`
 }

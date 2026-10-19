@@ -48,8 +48,8 @@ export async function reactivateSubscription(env: Bindings, actor: Actor, input:
   insist(date >= canceled.effective_date && date <= addDays(canceled.effective_date,policy.reactivationDays),'reactivation_window_closed',409)
   insist(!await startsInIssuedPeriod(env,sub.id,date),'period_already_invoiced',409)
   // A canceled subscription releases its meter; claiming it again must be atomic.
-  const meters = (await all(env,'SELECT DISTINCT p.meter_id FROM nc_items i JOIN nc_prices p ON p.id=i.price_id WHERE i.subscription_id=? AND p.meter_id IS NOT NULL AND (i.effective_to IS NULL OR i.effective_to>?)',sub.id,date)).map(r=>r.meter_id)
-  const clash = `NOT EXISTS(SELECT 1 FROM nc_items i JOIN nc_prices p ON p.id=i.price_id JOIN nc_subscriptions s ON s.id=i.subscription_id WHERE s.customer_id=? AND s.id<>? AND (s.end_date IS NULL OR s.end_date>?) AND (i.effective_to IS NULL OR i.effective_to>?) AND p.meter_id IN (${meters.map(()=>'?').join(',')}))`
+  const meters = (await all(env,'SELECT DISTINCT COALESCE(m.source_meter_id,p.meter_id) AS meter_id FROM nc_items i JOIN nc_prices p ON p.id=i.price_id LEFT JOIN nc_meters m ON m.id=p.meter_id WHERE i.subscription_id=? AND p.meter_id IS NOT NULL AND (i.effective_to IS NULL OR i.effective_to>?)',sub.id,date)).map(r=>r.meter_id)
+  const clash = `NOT EXISTS(SELECT 1 FROM nc_items i JOIN nc_prices p ON p.id=i.price_id LEFT JOIN nc_meters m ON m.id=p.meter_id JOIN nc_subscriptions s ON s.id=i.subscription_id WHERE s.customer_id=? AND s.id<>? AND (s.end_date IS NULL OR s.end_date>?) AND (i.effective_to IS NULL OR i.effective_to>?) AND COALESCE(m.source_meter_id,p.meter_id) IN (${meters.map(()=>'?').join(',')}))`
   const reason=input.text('reason',{max:500}),id=newId(),at=now()
   await commit(env,[guard(env,'stale','EXISTS(SELECT 1 FROM nc_subscriptions WHERE id=? AND revision=?)',sub.id,revision),
     notIssuedGuard(env,sub.id,date),

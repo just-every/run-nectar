@@ -15,6 +15,9 @@ import { CHARGE_RATING_VERSION } from './charge-lines'
 import { pendingCharges } from './one-time-charges'
 import { PRICE_MODEL_RATING_VERSION, storedQuantityPrice } from './price-model'
 
+import { metricEvents } from './meter-definitions'
+import { METRIC_RATING_VERSION } from './metric-rating'
+import { parseJson } from './core'
 import { contractBasis } from './contract-terms'
 import { CONTRACT_RATING_VERSION } from './commitment-rating'
 
@@ -22,8 +25,8 @@ export const priceLabel = (row: Row) => `${row.product_name}${row.nickname ? ` â
 
 export async function pricesById(env: Bindings, ids: string[]): Promise<Record<string, PriceIn>> {
   if (!ids.length) return {}
-  const rows = await all(env, `SELECT p.*, pr.name AS product_name, m.unit_label FROM nc_prices p JOIN nc_products pr ON pr.id = p.product_id LEFT JOIN nc_meters m ON m.id = p.meter_id WHERE p.id IN (${ids.map(() => '?').join(',')})`, ...ids)
-  return Object.fromEntries(rows.map(row => [row.id, { id: row.id, kind: row.kind, unitAmount: row.unit_amount, meterId: row.meter_id, taxable: !!row.taxable, label: priceLabel(row), unitLabel: row.unit_label ?? '', ...(row.pricing_model === 'simple' ? {} : { pricing: storedQuantityPrice(row as any) }) }]))
+  const rows = await all(env, `SELECT p.*, pr.name AS product_name, m.unit_label,m.source_meter_id,m.metric_plan_json,m.metric_version,m.code AS meter_code FROM nc_prices p JOIN nc_products pr ON pr.id = p.product_id LEFT JOIN nc_meters m ON m.id = p.meter_id WHERE p.id IN (${ids.map(() => '?').join(',')})`, ...ids)
+  return Object.fromEntries(rows.map(row => [row.id, { id: row.id, kind: row.kind, unitAmount: row.unit_amount, meterId: row.meter_id, taxable: !!row.taxable, label: priceLabel(row), unitLabel: row.unit_label ?? '',...(row.metric_plan_json?{metric:{sourceId:row.source_meter_id,plan:parseJson(row.metric_plan_json,null as never),dimensions:parseJson(row.dimensions_json,{}),version:row.metric_version,code:row.meter_code}}:{}), ...(row.pricing_model === 'simple' ? {} : { pricing: storedQuantityPrice(row as any) }) }]))
 }
 
 export async function ratingInputs(env: Bindings, business: Business, subscriptionId: string, period: { start: string; end: string }, replaceItems?: ItemIn[]): Promise<RatingInput> {
@@ -35,8 +38,11 @@ export async function ratingInputs(env: Bindings, business: Business, subscripti
     .map(row => ({ id: row.id, kind: row.kind, value: row.value, priceId: row.price_id, from: row.effective_from, to: row.effective_to, note: row.note }))
   const prices = await pricesById(env, [...new Set([...items.map(item => item.priceId), ...amendments.flatMap(a => a.priceId ? [a.priceId] : [])])])
   const meters = [...new Set(Object.values(prices).flatMap(price => price.meterId ? [price.meterId] : []))]
-  const events = meters.length ? (await all(env, `SELECT event_id, meter_id, quantity, occurred_at FROM nc_usage_events WHERE customer_id = ? AND status = 'active' AND invoice_id IS NULL AND occurred_at < ? AND meter_id IN (${meters.map(() => '?').join(',')}) ORDER BY occurred_at, event_id`,
-    sub.customer_id, zonedStart(period.end, business.timezone), ...meters)).map(row => ({ eventId: row.event_id, meterId: row.meter_id, quantity: row.quantity, occurredAt: row.occurred_at })) : []
+  let events:RatingInput['events'] = meters.length ? (await all(env, `SELECT event_id, meter_id, quantity, occurred_at,properties_json,invoice_id FROM nc_usage_events WHERE customer_id = ? AND status = 'active' AND invoice_id IS NULL AND occurred_at < ? AND meter_id IN (${meters.map(() => '?').join(',')}) ORDER BY occurred_at, event_id`,
+    sub.customer_id, zonedStart(period.end, business.timezone), ...meters)).map(row => ({ eventId: row.event_id, meterId: row.meter_id, quantity: row.quantity, occurredAt: row.occurred_at,...(Object.keys(parseJson(row.properties_json,{})).length?{properties:parseJson(row.properties_json,{})}:{}) })) : []
+  const metricSources=[...new Set(Object.values(prices).flatMap(p=>p.metric?[p.metric.sourceId]:[]))]
+  for(const source of metricSources){const rows=await metricEvents(env,sub.customer_id,source,zonedStart(period.end,business.timezone));for(const event of rows)if(!events.some(e=>e.eventId===event.eventId))events.push(event)}
+  events.sort((a,b)=>a.occurredAt-b.occurredAt||a.eventId.localeCompare(b.eventId))
   const contracts=await contractBasis(env,sub.id)
   const hasContracts=contracts.commitments.length>0||contracts.included.length>0||(await all(env,"SELECT 1 FROM nc_contracts WHERE subscription_id=? AND status='approved' LIMIT 1",sub.id)).length>0
   const certificate = await certificateBasis(env, sub.customer_id, business.tax_jurisdiction, period)
@@ -48,7 +54,7 @@ export async function ratingInputs(env: Bindings, business: Business, subscripti
     ...(hasContracts ? {contracts} : {}),
     ...(charges.length ? { charges } : {}),
     ...(intervals.length ? { lifecycle: intervals, creditGovernance: {thresholdCents:creditGovernance!.two_person_above_cents, revision:creditGovernance!.revision} } : {}),
-    version: hasContracts ? CONTRACT_RATING_VERSION : intervals.length ? LIFECYCLE_RATING_VERSION : charges.length ? CHARGE_RATING_VERSION : Object.values(prices).some(price => price.pricing) ? PRICE_MODEL_RATING_VERSION : RATING_VERSION,
+    version: metricSources.length ? METRIC_RATING_VERSION : hasContracts ? CONTRACT_RATING_VERSION : intervals.length ? LIFECYCLE_RATING_VERSION : charges.length ? CHARGE_RATING_VERSION : Object.values(prices).some(price => price.pricing) ? PRICE_MODEL_RATING_VERSION : RATING_VERSION,
     timezone: business.timezone,
     tax: { mode: business.tax_mode, rate: business.tax_rate, jurisdiction: business.tax_jurisdiction, exempt: certificate?.exempt ?? !!sub.tax_exempt, exemptRef: certificate?.exemptRef ?? sub.tax_exempt_ref, ...(certificate ? { certificate: certificate.certificate, exception: certificate.exception } : {}) },
     subscription: { id: sub.id, anchorDay: sub.anchor_day, startDate: sub.start_date, trialEnd: sub.trial_end, endDate: sub.end_date, billFrom: sub.cutover_start },

@@ -6,6 +6,8 @@ import { draftFor, invoiceDetail } from './billruns'
 import { all, insist, now, one, type Row } from './core'
 import { isMonth, periodContaining, periodStartingIn, today, zonedStart } from './dates'
 import { cents, decimalText, micros } from './decimal'
+import { addRational,rational,type Rational } from './metric-plan'
+import { displayQuantity } from './metric-aggregate'
 import type { RatingInput } from './rating'
 import { requireSubscription } from './subscriptions'
 
@@ -42,6 +44,8 @@ export async function upcoming(env: Bindings, actor: Actor, subscriptionId: stri
   const meters: Row[]=[]
   for(const id of meterIds){
     const meter=await one(env,'SELECT id,code,name,unit_label FROM nc_meters WHERE id=?',id)
+    const metrics=Object.values(input.prices).filter(p=>p.meterId===id&&p.metric)
+    if(metrics.length){for(const p of metrics){const own=(calculation.lines as Row[]).filter(l=>l.priceId===p.id&&l.kind==='metric_usage'),current=own.filter(l=>l.periodStart===period.start),late=own.filter(l=>l.periodStart<period.start);const quantity=(rows:Row[])=>displayQuantity(rows.reduce<Rational>((n,l)=>{const exact=l.evidence.rawExactQuantity;return addRational(n,rational(BigInt(exact.numerator),BigInt(exact.denominator)))},rational(0n)));const eventIds=[...new Set(current.flatMap(l=>l.evidence.eventIds as string[]))];meters.push({...meter,dimensions:p.metric!.dimensions,quantity:quantity(current),events:eventIds.length,eventIds,lateQuantity:quantity(late),lateEventIds:[...new Set(late.flatMap(l=>l.evidence.eventIds as string[]))]})}continue}
     const events=input.events.filter(e=>e.meterId===id && e.occurredAt>=from && e.occurredAt<to)
     const late=input.events.filter(e=>e.meterId===id && e.occurredAt<from)
     meters.push({...meter,quantity:decimalText(events.reduce((sum,e)=>sum+micros(e.quantity,'quantity'),0n)),events:events.length,

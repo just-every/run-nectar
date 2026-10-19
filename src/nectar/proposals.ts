@@ -211,8 +211,8 @@ export async function decide(env: Bindings, actor: Actor, input: Input) {
     const statements = [...basisGuards,
       guard(env, 'stale', "EXISTS(SELECT 1 FROM nc_products WHERE id = ? AND status = 'active')", payload.product),
       ...(target ? [guard(env, 'stale', "EXISTS(SELECT 1 FROM nc_prices WHERE id = ? AND product_id = ? AND status = 'active')", priceId, payload.product)] : [
-        stmt(env, "INSERT INTO nc_prices (id, product_id, version, kind, unit_amount, meter_id, taxable, nickname, origin, revision, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'native', ?, ?, ?)",
-          priceId, payload.product, version, payload.kind, payload.unit_amount, payload.meter, payload.taxable ? 1 : 0, payload.nickname, newId(), by, at),
+        stmt(env, "INSERT INTO nc_prices (id, product_id, version, kind, unit_amount, meter_id, taxable, nickname, origin, revision, created_by, created_at,dimensions_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'native', ?, ?, ?,?)",
+          priceId, payload.product, version, payload.kind, payload.unit_amount, payload.meter, payload.taxable ? 1 : 0, payload.nickname, newId(), by, at,canonical(payload.dimensions??{})),
       ]),
     ]
     for (const entry of parseJson<Row[]>(row.impact_json, [])) {

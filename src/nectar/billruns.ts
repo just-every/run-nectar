@@ -19,7 +19,7 @@ import { reconciliationFor } from './reconciliation'
 import { RATING_VERSION, type Exception, type Rating } from './rating'
 import type { Input } from './input'
 
-const BLOCKING = new Set(['tax_undeclared', 'exemption_certificate', 'negative_total', 'usage_reconciliation','commitment_prior_periods'])
+const BLOCKING = new Set(['tax_undeclared', 'exemption_certificate', 'negative_total', 'usage_reconciliation','commitment_prior_periods','metric_late_correction','metric_duplicate_selection','metric_negative_quantity'])
 
 interface Draft { sub: Row; period: { start: string; end: string }; rating: Rating; fingerprint: string; input: { version: string }; comparison: Row; exceptions: Exception[] }
 
@@ -58,7 +58,7 @@ export async function draftFor(env: Bindings, business: Business, sub: Row, peri
   const exceptions = [...rating.exceptions]
   const previous = await one(env, "SELECT number, period_start, total_cents, subtotal_cents FROM nc_invoices WHERE subscription_id = ? AND status = 'issued' AND period_start < ? ORDER BY period_start DESC LIMIT 1", sub.id, period.start)
   const incumbent = await incumbentComparison(env, sub, period, rating)
-  const metered = rating.lines.some(line => line.kind === 'usage' || line.kind === 'overage' || line.kind === 'trial_usage' || line.kind === 'paused_usage')
+  const metered = rating.lines.some(line => line.kind === 'usage' || line.kind === 'overage' || line.kind === 'metric_usage' || line.kind === 'trial_usage' || line.kind === 'paused_usage')
   const hasMeteredItem = Object.values((input as any).prices as Record<string, Row>).some(price => price.kind === 'unit') && (input as any).items.some((item: Row) => (input as any).prices[item.priceId]?.kind === 'unit' && item.from < period.end && (item.to ?? '9999') > period.start)
   if (hasMeteredItem && !metered) exceptions.push({ code: 'missing_usage', message: 'This subscription has a metered price but no usage was recorded for the period. Check the usage feed before approving.' })
   if (!sub.billing_email) exceptions.push({ code: 'no_billing_email', message: 'The customer has no billing email.' })

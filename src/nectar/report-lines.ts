@@ -26,16 +26,19 @@ export async function reportLine(env: Bindings, actor: Actor, invoiceId: string,
   const calculation = parseJson<Row>(invoice.calculation_json, {})
   const inputs: Row = calculation.inputs ?? {}
   const eventIds = new Set<string>(Array.isArray(evidence.eventIds) ? evidence.eventIds.filter((id: unknown): id is string => typeof id === 'string') : [])
+  const contextIds=Array.isArray(evidence.contextEventIds)?evidence.contextEventIds.filter((v:unknown):v is string=>typeof v==='string'):[]
+  contextIds.forEach((id:string)=>eventIds.add(id))
+  const sourceMeter=typeof evidence.sourceMeter==='string'?evidence.sourceMeter:line.meter_id
   // Read only this customer's matching ledger records. Snapshots remain the
   // source of quantities/timestamps even if the current ledger event is voided.
   const ledger = line.meter_id && eventIds.size ? await all<{ event_id: string }>(env, `SELECT e.event_id FROM nc_usage_events e
     WHERE e.customer_id = ? AND e.meter_id = ? AND EXISTS (
       SELECT 1 FROM json_each(?) wanted WHERE wanted.value = e.event_id
-    )`, invoice.customer_id, line.meter_id, JSON.stringify([...eventIds])) : []
+    )`, invoice.customer_id, sourceMeter, JSON.stringify([...eventIds])) : []
   const scoped = new Set(ledger.map(event => event.event_id))
   const saved: EventIn[] = Array.isArray(inputs.events) ? inputs.events : []
-  const events: EventIn[] = saved.filter(event => eventIds.has(event.eventId) && scoped.has(event.eventId) && event.meterId === line.meter_id)
-    .map(event => ({ eventId: event.eventId, meterId: event.meterId, quantity: event.quantity, occurredAt: event.occurredAt }))
+  const events: EventIn[] = saved.filter(event => eventIds.has(event.eventId) && scoped.has(event.eventId) && event.meterId === sourceMeter)
+    .map(event => ({ eventId: event.eventId, meterId: event.meterId, quantity: event.quantity, occurredAt: event.occurredAt,...(event.properties?{properties:event.properties}:{}) }))
   const quantity = decimalText(events.reduce((sum, event) => sum + micros(event.quantity, 'quantity'), 0n))
   return {
     invoiceId: invoice.id, number: invoice.number, customerId: invoice.customer_id,
