@@ -1,3 +1,4 @@
+import { commitmentLines, CONTRACT_RATING_VERSION, type ContractBasis } from './commitment-rating'
 // Flow 7: deterministic rating. A pure function from one subscription's
 // recorded inputs for one period to invoice lines. Same inputs, same lines:
 // no clock, no database, no floating point. Rules (RATING_VERSION):
@@ -35,6 +36,7 @@ export interface RatingInput {
   items: ItemIn[]
   prices: Record<string, PriceIn>
   amendments: AmendmentIn[]
+  contracts?: ContractBasis
   charges?: ChargeIn[]
   creditGovernance?: {thresholdCents: number | null; revision: number}
   lifecycle?: LifecycleInterval[]
@@ -64,8 +66,8 @@ const unitFor = (input: RatingInput, price: PriceIn, from: string, to: string) =
 }
 
 export function rate(input: RatingInput, presentCancellationCredits = true): Rating {
-  insist(input.version === RATING_VERSION || input.version === PRICE_MODEL_RATING_VERSION || input.version === CHARGE_RATING_VERSION || input.version === LIFECYCLE_RATING_VERSION, 'unsupported_rating_version')
-  insist(!Object.values(input.prices).some(price => price.pricing) || input.version === PRICE_MODEL_RATING_VERSION || input.version === CHARGE_RATING_VERSION || input.version === LIFECYCLE_RATING_VERSION, 'unsupported_rating_version')
+  insist(input.version === CONTRACT_RATING_VERSION || input.version === RATING_VERSION || input.version === CONTRACT_RATING_VERSION || input.version === PRICE_MODEL_RATING_VERSION || input.version === CHARGE_RATING_VERSION || input.version === LIFECYCLE_RATING_VERSION, 'unsupported_rating_version')
+  insist(!Object.values(input.prices).some(price => price.pricing) || input.version === CONTRACT_RATING_VERSION || input.version === PRICE_MODEL_RATING_VERSION || input.version === CHARGE_RATING_VERSION || input.version === LIFECYCLE_RATING_VERSION, 'unsupported_rating_version')
   const { period, subscription: sub } = input
   const periodDays = BigInt(daysBetween(period.start, period.end))
   const lines: Line[] = [], exceptions: Exception[] = [], consumed: string[] = []
@@ -144,16 +146,26 @@ export function rate(input: RatingInput, presentCancellationCredits = true): Rat
     group.events.push(event)
     groups.set(key, group)
   }
+  const allowances=new Map<string,bigint>()
   for (const group of [...groups.values()].sort((a, b) => a.start.localeCompare(b.start) || a.price.id.localeCompare(b.price.id))) {
     const total = group.events.reduce((sum, event) => sum + micros(event.quantity, 'quantity'), 0n)
-    const modeled = group.price.pricing ? rateQuantityPrice(group.price.pricing, total) : null
-    const amount = group.trial || group.paused ? 0n : modeled ? BigInt(modeled.amountCents) : lineCents(micros(group.unit), total)
+    const allowance=input.contracts?.included.find(a=>a.price===group.price.id && a.from<=group.start && a.to>=group.end)
+    const allowanceKey=[group.price.id,group.start].join('|')
+    const usedBefore=(input.contracts?.invoices??[]).flatMap(i=>i.lines).filter(l=>l.priceId===group.price.id&&l.periodStart===group.start&&l.evidence.includedQuantity).reduce((n,l)=>n+micros(String(l.evidence.includedQuantity)),0n)
+    const originalAllowance=allowance?micros(allowance.quantity):0n
+    const available=originalAllowance>usedBefore?originalAllowance-usedBefore:0n
+    const left=allowance?(allowances.get(allowanceKey)??available):0n
+    const included=group.trial||group.paused?0n:total<left?total:left
+    if(allowance&&!group.trial&&!group.paused)allowances.set(allowanceKey,left-included)
+    const billable=total-included
+    const modeled = group.price.pricing ? rateQuantityPrice(group.price.pricing, billable) : null
+    const amount = group.trial || group.paused ? 0n : modeled ? BigInt(modeled.amountCents) : lineCents(micros(group.unit), billable)
     consumed.push(...group.events.map(event => event.eventId))
     lines.push({
-      kind: group.paused ? 'paused_usage' : group.trial ? 'trial_usage' : group.late ? 'late_usage' : 'usage',
-      description: `${group.late ? `Late usage from the period starting ${formatDate(group.start)}: ` : ''}${group.price.label} — ${quantityText(decimalText(total))} ${group.price.unitLabel}${group.paused ? ' while inactive (not charged)' : group.trial ? ' during trial (not charged)' : ''}`,
-      quantity: decimalText(total), unitAmount: modeled ? '' : group.unit, amountCents: Number(amount), taxable: group.price.taxable, priceId: group.price.id, meterId: group.price.meterId, periodStart: group.start, periodEnd: group.end,
-      evidence: { ...(modeled ? modeled.evidence : { rule: 'sum of event quantities × unit, rounded half away from zero once' }), ...(group.paused ? { rule: 'usage while paused or canceled is recorded and not charged' } : {}), ...(group.trial ? { rule: 'usage during a trial is recorded and not charged', unchargedAmountCents: modeled?.amountCents } : {}), events: group.events.length, eventIds: group.events.map(event => event.eventId), first: new Date(group.events[0].occurredAt).toISOString(), last: new Date(group.events[group.events.length - 1].occurredAt).toISOString(), override: group.override, late: group.late },
+      kind: group.paused ? 'paused_usage' : group.trial ? 'trial_usage' : group.late ? 'late_usage' : allowance ? 'overage' : 'usage',
+      description: `${group.late ? `Late usage from the period starting ${formatDate(group.start)}: ` : ''}${group.price.label} — ${quantityText(decimalText(billable))} ${group.price.unitLabel}${group.paused ? ' while inactive (not charged)' : group.trial ? ' during trial (not charged)' : ''}`,
+      quantity: decimalText(billable), unitAmount: modeled ? '' : group.unit, amountCents: Number(amount), taxable: group.price.taxable, priceId: group.price.id, meterId: group.price.meterId, periodStart: group.start, periodEnd: group.end,
+      evidence: { ...(allowance?{contract:allowance.contract,rawQuantity:decimalText(total),includedQuantity:decimalText(included),billableQuantity:decimalText(billable)}:{}), ...(modeled ? modeled.evidence : { rule: 'sum of event quantities × unit, rounded half away from zero once' }), ...(group.paused ? { rule: 'usage while paused or canceled is recorded and not charged' } : {}), ...(group.trial ? { rule: 'usage during a trial is recorded and not charged', unchargedAmountCents: modeled?.amountCents } : {}), events: group.events.length, eventIds: group.events.map(event => event.eventId), first: new Date(group.events[0].occurredAt).toISOString(), last: new Date(group.events[group.events.length - 1].occurredAt).toISOString(), override: group.override, late: group.late },
     })
   }
   if (unrated.length) exceptions.push({ code: 'unrated_usage', message: `${unrated.length} usage event(s) for this customer have no metered price in effect when they occurred; they are not billed.`, detail: unrated.map(event => event.eventId) })
@@ -161,6 +173,7 @@ export function rate(input: RatingInput, presentCancellationCredits = true): Rat
 
   if (input.charges) lines.push(...chargeLines(input.charges))
   const finalLines = presentCancellationCredits ? cancellationLines(input, lines, input => rate(input, false)) : lines
-  const totals = invoiceTotals(input.tax, finalLines)
-  return { ...totals, lines: finalLines, exceptions: [...exceptions, ...totals.exceptions], consumedEvents: consumed }
+  const committed=commitmentLines(input,finalLines)
+  const totals = invoiceTotals(input.tax, committed.lines)
+  return { ...totals, lines: committed.lines, exceptions: [...exceptions, ...committed.exceptions, ...totals.exceptions], consumedEvents: consumed }
 }

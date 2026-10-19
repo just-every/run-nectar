@@ -10,6 +10,7 @@ import { metadataFor,withMetadata } from './metadata'
 import { metadataFilter,metadataPredicate } from './metadata-query'
 import { customerNotes } from './note-records'
 import { plainMoney } from './decimal'
+import { contractsFor,contractBurnDown } from './contract-terms'
 import { lifecycleHistory, lifecycleIntervals } from './lifecycle-records'
 import { blockedAt } from './lifecycle-math'
 import { isDate, today } from './dates'
@@ -46,9 +47,9 @@ export async function subscriptionsCsv(env: Bindings, actor: Actor,url?:URL) {
   const filter=metadataPredicate('subscription','s.id',url?metadataFilter(url):null)
   const rows = await all(env, `SELECT s.id, s.external_id, c.external_id AS customer, s.anchor_day, s.start_date, s.trial_end, s.end_date, s.billing_mode, s.cutover_start, s.provider_ref, pr.code AS product, p.version, p.kind, p.unit_amount, i.quantity, i.effective_from, i.effective_to
     FROM nc_subscriptions s JOIN nc_customers c ON c.id = s.customer_id JOIN nc_items i ON i.subscription_id = s.id JOIN nc_prices p ON p.id = i.price_id JOIN nc_products pr ON pr.id = p.product_id WHERE ${filter.sql} ORDER BY c.external_id, s.id, i.effective_from`,...filter.params)
-  const meta: Row[]=await Promise.all((await withMetadata(env,'subscription',rows)).map(async r=>({...r,lifecycle:await lifecycleHistory(env,r.id)})))
-  return file(csv(['subscription_id', 'subscription_external_id', 'customer_external_id', 'anchor_day', 'start_date', 'trial_end', 'end_date', 'billing_mode', 'cutover_start', 'provider_ref', 'product', 'price_version', 'price_kind', 'unit_amount', 'quantity', 'item_from', 'item_to','metadata_json','lifecycle_json'],
-    meta.map(r => [r.id, r.external_id, r.customer, r.anchor_day, r.start_date, r.trial_end, r.end_date, r.billing_mode, r.cutover_start, r.provider_ref, r.product, r.version, r.kind, r.unit_amount, r.quantity, r.effective_from, r.effective_to,JSON.stringify(r.metadata),JSON.stringify(r.lifecycle)])), 'nectar-subscriptions.csv', 'text/csv; charset=utf-8')
+  const meta: Row[]=await Promise.all((await withMetadata(env,'subscription',rows)).map(async r=>({...r,lifecycle:await lifecycleHistory(env,r.id),contracts:await contractsFor(env,r.id),burnDown:await contractBurnDown(env,r.id)})))
+  return file(csv(['subscription_id', 'subscription_external_id', 'customer_external_id', 'anchor_day', 'start_date', 'trial_end', 'end_date', 'billing_mode', 'cutover_start', 'provider_ref', 'product', 'price_version', 'price_kind', 'unit_amount', 'quantity', 'item_from', 'item_to','metadata_json','lifecycle_json','contracts_json','commitment_burn_down_json'],
+    meta.map(r => [r.id, r.external_id, r.customer, r.anchor_day, r.start_date, r.trial_end, r.end_date, r.billing_mode, r.cutover_start, r.provider_ref, r.product, r.version, r.kind, r.unit_amount, r.quantity, r.effective_from, r.effective_to,JSON.stringify(r.metadata),JSON.stringify(r.lifecycle),JSON.stringify(r.contracts),JSON.stringify(r.burnDown)])), 'nectar-subscriptions.csv', 'text/csv; charset=utf-8')
 }
 
 /** One bill run with every invoice, line, calculation input, approval and issue event. */

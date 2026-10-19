@@ -31,9 +31,13 @@ import { configureLifecyclePolicy } from './lifecycle-policy'
 import { pauseSubscription, resumeSubscription } from './lifecycle'
 import { submitUsage } from './usage'
 
+import { prepareContract,decideContract } from './contract-terms'
+
 type Handler = (env: Bindings, actor: Actor, input: Input, request: Request) => Promise<unknown>
 
 export const actions: Record<string, Handler> = {
+  'contract.prepare':prepareContract,
+  'contract.decide':decideContract,
   'business.configure': configureBusiness,
   'tax.declare': declareTax,
   'tax.review': reviewTax,

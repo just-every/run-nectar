@@ -39,7 +39,7 @@ export async function reportLinePage(env: Bindings, actor: Actor, invoice: strin
       <p>${r.line.evidence.rule}</p>${linePricing(r.line)}${details(r.line.evidence, 'Saved line calculation')}</section>
     <section class="card"><h2>Usage events behind this line</h2>
       ${table(['Event', 'Quantity$', 'Occurred (UTC)'], r.events.map(e => [e.eventId, quantityText(e.quantity), new Date(e.occurredAt).toISOString()]), { empty: 'This line has no usage events. Its amount follows the saved price, dates and terms.' })}
-      ${r.events.length ? h`<p>Exact event quantity: ${quantityText(r.quantity)}. The engine rates the combined quantity and rounds the line once; it does not assign rounded cents to individual events.</p>` : ''}
+      ${r.events.length ? h`<p>Exact event quantity: ${quantityText(r.quantity)}. ${r.line.evidence.includedQuantity ? `Included quantity: ${r.line.evidence.includedQuantity}; billable overage: ${r.line.quantity}.` : ''} The engine rates the billable quantity and rounds the line once; it does not assign rounded cents to individual events.</p>` : ''}
       ${r.relatedLines.length ? h`<p>Other metered lines on this invoice:</p><ul>${r.relatedLines.map(l => h`<li><a href="${l.href}">${l.label}</a></li>`)}</ul>` : ''}</section>
     <section class="card"><h2>Saved invoice calculation</h2><p>These are the inputs recorded when the invoice was prepared. Later usage corrections do not rewrite this evidence.</p>
       ${details(r.calculation, 'Inputs, rule version and fingerprint')}</section>`, { current: '/app/billing', url })
