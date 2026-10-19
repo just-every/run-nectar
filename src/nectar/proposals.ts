@@ -20,6 +20,7 @@ import { basisKey, reminderBasis, reminderDraft } from './collections'
 import { ingestStatements, screen, type RawEvent } from './usage'
 import { notIssuedGuard, startsInIssuedPeriod } from './subscriptions'
 import { prepareRun } from './billruns'
+import { priceChangePlan } from './price-migrations'
 
 const KINDS = ['amendment', 'price_change', 'usage_correction', 'collection'] as const
 type Kind = typeof KINDS[number]
@@ -48,41 +49,6 @@ async function amendmentPlan(env: Bindings, business: Business, payload: Row) {
     impact.push({ period, before: total(inputs), after: total({ ...inputs, amendments: [...inputs.amendments, amendment] }) })
   }
   return { normalized: { ...payload, subscription: sub.id, kind, value, price: priceId, effective_to: payload.effective_to || null }, impact, basis: { subscription: [sub.id, sub.revision] } }
-}
-
-async function priceChangePlan(env: Bindings, business: Business, payload: Row) {
-  const product = await one(env, "SELECT * FROM nc_products WHERE id = ? AND status = 'active'", String(payload.product ?? ''))
-  insist(product, 'product_not_found', 404)
-  const kind = String(payload.kind ?? '')
-  insist(kind === 'flat' || kind === 'seat' || kind === 'unit', 'invalid_kind')
-  const amount = canonicalDecimal(String(payload.unit_amount ?? ''), 'unit_amount')
-  const meter = kind === 'unit' ? await one(env, 'SELECT id, unit_label FROM nc_meters WHERE id = ? OR code = ?', String(payload.meter ?? ''), String(payload.meter ?? '')) : null
-  insist(kind !== 'unit' || meter, 'meter_not_found', 404)
-  const date = String(payload.effective_date ?? '')
-  insist(isDate(date), 'effective_date_required')
-  const ids = Array.isArray(payload.subscriptions) ? [...new Set(payload.subscriptions.map(String))] : []
-  insist(ids.length > 0 && ids.length <= 200, 'subscriptions_required')
-  const version = ((await one<{ v: number }>(env, 'SELECT COALESCE(MAX(version), 0) AS v FROM nc_prices WHERE product_id = ?', product.id))!.v) + 1
-  const virtual = { id: 'proposed-price', kind, unitAmount: amount, meterId: meter?.id ?? null, taxable: payload.taxable !== false, label: `${product.name}${payload.nickname ? ` — ${payload.nickname}` : ''} (v${version})`, unitLabel: meter?.unit_label ?? '' } as const
-  const impact = [], basis: Record<string, unknown> = { productVersion: [product.id, version - 1] }
-  for (const id of ids) {
-    const sub = await one(env, 'SELECT s.*, c.name AS customer_name FROM nc_subscriptions s JOIN nc_customers c ON c.id = s.customer_id WHERE s.id = ?', id)
-    insist(sub, 'subscription_not_found', 404)
-    insist(!sub.end_date || sub.end_date > date, 'subscription_ended', 409)
-    const item = await one(env, 'SELECT i.* FROM nc_items i JOIN nc_prices p ON p.id = i.price_id WHERE i.subscription_id = ? AND p.product_id = ? AND i.effective_from < ? AND (i.effective_to IS NULL OR i.effective_to > ?) ORDER BY i.effective_from DESC LIMIT 1', sub.id, product.id, date, date)
-    insist(item, 'subscription_not_on_product', 409, { subscription: id })
-    insist(!await one(env, "SELECT 1 FROM nc_invoices WHERE subscription_id = ? AND status = 'issued' AND period_end > ?", sub.id, date), 'period_already_invoiced', 409, { subscription: id })
-    const period = periodContaining(sub.anchor_day, date), next = periodContaining(sub.anchor_day, period.end)
-    const rows = []
-    for (const p of [period, next]) {
-      const inputs = await ratingInputs(env, business, sub.id, p)
-      const items = [...inputs.items.map(row => row.id === item.id ? { ...row, to: date } : row), { id: 'proposed-item', priceId: virtual.id, quantity: item.quantity, from: date, to: item.effective_to }]
-      rows.push({ period: p, before: total(inputs), after: total({ ...inputs, items, prices: { ...inputs.prices, [virtual.id]: virtual } }) })
-    }
-    impact.push({ subscription: sub.id, customer: sub.customer_name, item: item.id, quantity: item.quantity, periods: rows })
-    basis[sub.id] = sub.revision
-  }
-  return { normalized: { product: product.id, kind, unit_amount: amount, meter: meter?.id ?? null, nickname: String(payload.nickname ?? '').slice(0, 80), taxable: payload.taxable !== false, effective_date: date, subscriptions: ids }, impact, basis }
 }
 
 /**
@@ -146,17 +112,17 @@ async function collectionPlan(env: Bindings, payload: Row) {
   }
 }
 
-async function plan(env: Bindings, kind: Kind, payload: Row) {
+async function plan(env: Bindings, kind: Kind, payload: Row, saved = false) {
   const business = await requireBusiness(env)
   if (kind === 'amendment') return await amendmentPlan(env, business, payload)
-  if (kind === 'price_change') return await priceChangePlan(env, business, payload)
+  if (kind === 'price_change') return await priceChangePlan(env, business, payload, saved)
   if (kind === 'usage_correction') return await correctionPlan(env, business, payload)
   return await collectionPlan(env, payload)
 }
 
 /** Reads the current value of everything a proposal was prepared against. */
 async function currentBasis(env: Bindings, kind: Kind, payload: Row) {
-  return (await plan(env, kind, payload)).basis
+  return (await plan(env, kind, payload, true)).basis
 }
 
 export async function propose(env: Bindings, actor: Actor, input: Input) {
@@ -240,15 +206,28 @@ export async function decide(env: Bindings, actor: Actor, input: Input) {
     return { id: row.id, status: 'approved', amendment }
   }
   if (row.kind === 'price_change') {
-    const priceId = newId(), version = parseJson<Row>(row.basis_json, {}).productVersion[1] + 1
-    const statements = [...basisGuards, stmt(env, "INSERT INTO nc_prices (id, product_id, version, kind, unit_amount, meter_id, taxable, nickname, origin, revision, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'native', ?, ?, ?)",
-      priceId, payload.product, version, payload.kind, payload.unit_amount, payload.meter, payload.taxable ? 1 : 0, payload.nickname, newId(), by, at)]
+    const target = payload.target_price ? await requirePrice(env, payload.target_price) : null
+    const priceId = target?.id ?? newId(), version = target?.version ?? parseJson<Row>(row.basis_json, {}).productVersion[1] + 1
+    const statements = [...basisGuards,
+      guard(env, 'stale', "EXISTS(SELECT 1 FROM nc_products WHERE id = ? AND status = 'active')", payload.product),
+      ...(target ? [guard(env, 'stale', "EXISTS(SELECT 1 FROM nc_prices WHERE id = ? AND product_id = ? AND status = 'active')", priceId, payload.product)] : [
+        stmt(env, "INSERT INTO nc_prices (id, product_id, version, kind, unit_amount, meter_id, taxable, nickname, origin, revision, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'native', ?, ?, ?)",
+          priceId, payload.product, version, payload.kind, payload.unit_amount, payload.meter, payload.taxable ? 1 : 0, payload.nickname, newId(), by, at),
+      ]),
+    ]
     for (const entry of parseJson<Row[]>(row.impact_json, [])) {
-      const item = await one(env, 'SELECT * FROM nc_items WHERE id = ?', entry.item)
-      statements.push(
-        stmt(env, 'UPDATE nc_items SET effective_to = ? WHERE id = ?', payload.effective_date, entry.item),
-        stmt(env, "INSERT INTO nc_items (id, subscription_id, price_id, quantity, effective_from, effective_to, change_id, origin, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'native', ?)", newId(), entry.subscription, priceId, entry.quantity, payload.effective_date, item!.effective_to, row.id, at),
-        stmt(env, 'UPDATE nc_subscriptions SET revision = ?, updated_at = ? WHERE id = ?', newId(), at, entry.subscription))
+      const date = entry.effective_date ?? payload.effective_date
+      statements.push(notIssuedGuard(env,entry.subscription,date))
+      for(const source of entry.sourceItems ?? [{id:entry.item,quantity:entry.quantity}]) {
+        const item = await one(env,'SELECT * FROM nc_items WHERE id=? AND subscription_id=?',source.id,entry.subscription)
+        insist(item,'proposal_stale',409)
+        statements.push(guard(env,'stale','EXISTS(SELECT 1 FROM nc_items WHERE id=? AND subscription_id=? AND price_id=? AND quantity=? AND effective_from=? AND effective_to IS ?)',item.id,entry.subscription,item.price_id,source.quantity,item.effective_from,item.effective_to),
+          ...(item.effective_from===date ? [stmt(env,'UPDATE nc_items SET price_id=?,change_id=? WHERE id=?',priceId,row.id,item.id)] : [
+            stmt(env,'UPDATE nc_items SET effective_to=? WHERE id=?',date,item.id),
+            stmt(env,"INSERT INTO nc_items (id,subscription_id,price_id,quantity,effective_from,effective_to,change_id,origin,created_at) VALUES (?,?,?,?,?,?,?,'native',?)",newId(),entry.subscription,priceId,source.quantity,date,item.effective_to,row.id,at),
+          ]))
+      }
+      statements.push(stmt(env,'UPDATE nc_subscriptions SET revision=?,updated_at=? WHERE id=?',newId(),at,entry.subscription))
     }
     await commit(env, [...statements, ...close({ price: priceId, version })], audit)
     return { id: row.id, status: 'approved', price: priceId }
@@ -285,7 +264,7 @@ async function basisGuardStatements(env: Bindings, kind: Kind, basis: Row) {
   if (kind === 'amendment') return [guard(env, 'stale', 'EXISTS(SELECT 1 FROM nc_subscriptions WHERE id = ? AND revision = ?)', basis.subscription[0], basis.subscription[1])]
   if (kind === 'price_change') return [
     guard(env, 'stale', 'COALESCE((SELECT MAX(version) FROM nc_prices WHERE product_id = ?), 0) = ?', basis.productVersion[0], basis.productVersion[1]),
-    ...Object.entries(basis).filter(([key]) => key !== 'productVersion').map(([id, revision]) => guard(env, 'stale', 'EXISTS(SELECT 1 FROM nc_subscriptions WHERE id = ? AND revision = ?)', id, revision)),
+    ...Object.entries(basis).filter(([key]) => key !== 'productVersion' && key !== 'ratings').map(([id, revision]) => guard(env, 'stale', 'EXISTS(SELECT 1 FROM nc_subscriptions WHERE id = ? AND revision = ?)', id, revision)),
   ]
   if (kind === 'usage_correction') return Object.keys(basis).filter(key => key.startsWith('event:')).map(key => guard(env, 'already_billed', "EXISTS(SELECT 1 FROM nc_usage_events WHERE event_id = ? AND status = 'active' AND invoice_id IS NULL)", key.slice('event:'.length)))
   return []

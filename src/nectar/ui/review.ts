@@ -31,8 +31,8 @@ export async function proposalPage(env: Bindings, actor: Actor, id: string, url:
       <h3>Quoted clauses</h3><ul class="quotes">${(evidence.clauses ?? []).map((c: any) => h`<li><blockquote>${c.quote}</blockquote>${c.reference ? h`<span class="sub">${c.reference}</span>` : ''}</li>`)}</ul>
       ${evidence.ambiguities?.length ? h`<h3>Flagged ambiguities</h3><ul class="flags">${evidence.ambiguities.map((a: string) => h`<li>${a}</li>`)}</ul>` : ''}
       <h3>Effect on invoices (computed by Nectar)</h3>${impactRows(impact)}`
-    : p.kind === 'price_change' ? h`<p>New ${payload.kind} price $${payload.unit_amount} from ${formatDate(payload.effective_date)} for ${impact.length} subscription(s).</p>
-      ${impact.map((s: any) => h`<h3>${s.customer} (× ${s.quantity})</h3>${impactRows(s.periods)}`)}`
+    : p.kind === 'price_change' ? h`<p>${payload.target_price ? 'Move to the selected catalogue price' : `New ${payload.kind} price $${payload.unit_amount}`} ${payload.timing === 'renewal' ? 'at each subscription’s first renewal on or after' : 'from'} ${formatDate(payload.effective_date)} for ${impact.length} subscription(s). Unselected subscriptions retain their existing prices.</p>
+      ${impact.map((s: any) => h`<h3><a href="/app/subscriptions/${s.subscription}">${s.customer} — ${s.subscriptionLabel ?? s.subscription}</a> (× ${s.quantity})</h3><p>Effective ${formatDate(s.effective_date ?? payload.effective_date)}</p>${impactRows(s.periods)}`)}`
     : p.kind === 'usage_correction' ? h`<h3>Corrections</h3>${table(['Action', 'Event', 'Quantity$', 'Occurred', 'Reason'], impact.rows.map((r: any) => [r.action === 'void' ? 'Void' : 'Add', r.event, r.quantity, r.occurredAt, r.reason]))}
       ${impact.invoices.length ? h`<h3>Effect on invoices (computed by Nectar)</h3>${impact.invoices.map((s: any) => h`<h4>${s.customer}</h4>${impactRows([s])}`)}` : ''}
       <h3>Sources</h3><ul>${(evidence.sources ?? []).map((s: string) => h`<li>${s}</li>`)}</ul>${payload.run ? h`<p class="hint">Approving re-prepares the draft bill run; its invoices still need their own approval.</p>` : ''}`
