@@ -3,7 +3,7 @@
 import type { Bindings } from '../auth.server'
 import { agentKeys, members } from './access'
 import { requireCapability, type Actor } from './actor'
-import { invoiceDetail, runDetail, runs } from './billruns'
+import { runDetail, runs } from './billruns'
 import { businessView } from './business'
 import { certificates } from './certificates'
 import { catalog } from './catalog'
@@ -19,6 +19,8 @@ import { customerLedger, payments } from './receivables'
 import { subscriptionDetail } from './subscriptions'
 import { batches, inspect } from './usage'
 import { report, reportInvoice } from './reports'
+import { invoiceList } from './invoice-list'
+import { invoiceView } from './invoice-expansions'
 import { reportLine } from './report-lines'
 
 type View = (env: Bindings, actor: Actor, request: Request, id: string, url: URL) => Promise<unknown>
@@ -52,7 +54,8 @@ export const views: Record<string, View> = {
   inspect: (env, actor, _request, _id, url) => inspect(env, actor, url.searchParams.get('period') ?? ''),
   runs: (env, actor) => runs(env, actor),
   run: (env, actor, _request, id) => runDetail(env, actor, id),
-  invoice: (env, actor, _request, id) => invoiceDetail(env, actor, id),
+  invoices: (env, actor, _r, _id, url) => invoiceList(env,actor,url),
+  invoice: (env, actor, _request, id, url) => invoiceView(env, actor, id, url),
   ageing: (env, actor) => ageing(env, actor),
   payments: (env, actor) => payments(env, actor),
   notices: (env, actor) => notices(env, actor),
