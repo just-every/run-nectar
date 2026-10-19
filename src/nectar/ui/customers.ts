@@ -11,6 +11,7 @@ import { customerView } from '../views'
 import { addresses, area, cents, check, details, field, form, h, hidden, page, select, table, tag, type Html } from './html'
 import { personName } from './shell'
 import { addonSection, chargeSection } from './charges'
+import { upcomingSection } from './upcoming'
 import { notesSection } from './notes'
 import { certificateSection } from './certificates'
 import { priceRate } from './pricing'
@@ -78,6 +79,7 @@ export async function subscriptionPage(env: Bindings, actor: Actor, id: string, 
       ${s.billing_mode === 'shadow' ? h`<p class="hint">Moved in from Stripe. Nectar rates it in shadow for comparison and issues nothing until the owner adopts it under Move in.</p>` : ''}
       ${details({ 'Internal id': s.id, Revision: s.revision, 'Provider reference': s.provider_ref ?? '—', 'Provider schedule': s.provider_schedule_ref ?? '—', 'Provider collection': s.provider_collection ?? '—' })}</section>
     <section class="card" aria-labelledby="items"><h2 id="items">Plan</h2>${table(['Price', 'Quantity$', 'From', 'Until'], s.items.map((i: any) => [`${i.product_name}${i.nickname ? ` — ${i.nickname}` : ''} v${i.version} (${priceRate(i)})`, i.quantity, formatDate(i.effective_from), formatDate(i.effective_to)]))}</section>
+    ${await upcomingSection(env,actor,s,url)}
     ${addonSection(s, prices, actor)}
     <section class="card" aria-labelledby="exceptions"><h2 id="exceptions">Contract exceptions</h2>
       ${table(['Exception', 'From', 'Until', 'Status', ''], s.amendments.map((a: any) => [h`${a.kind === 'discount_percent' ? `${a.value}% discount` : a.kind === 'fixed_credit' ? `$${a.value} one-time credit` : `Contract price $${a.value}`}${a.note ? ` — ${a.note}` : ''}${a.clause ? details({ Clause: a.clause }, 'Clause') : ''}`, formatDate(a.effective_from), formatDate(a.effective_to), tag(a.status === 'proposed' ? 'Proposed' : a.status === 'approved' ? 'Approved' : 'Rejected'),

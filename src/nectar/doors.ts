@@ -5,6 +5,7 @@
 export const API_DOORS: [string, string][] = [
   ['^notes/([\\w-]+/[\\w-]+)$', 'notes'], ['^note-members$', 'noteMembers'],
   ['^me$', 'me'], ['^business$', 'business'], ['^customers$', 'customers'], ['^customers/([\\w-]+)$', 'customer'], ['^catalog$', 'catalog'],
+  ['^subscriptions/([\\w-]+)/upcoming$', 'upcoming'],
   ['^subscriptions/([\\w-]+)$', 'subscription'], ['^usage/batches$', 'batches'], ['^usage/inspect$', 'inspect'], ['^runs$', 'runs'], ['^runs/([\\w-]+)$', 'run'],
   ['^invoices$', 'invoices'], ['^invoices/([\\w-]+)$', 'invoice'], ['^ageing$', 'ageing'], ['^payments$', 'payments'], ['^notices$', 'notices'], ['^tasks$', 'tasks'],
   ['^policies/current$', 'policySettings'], ['^policies$', 'policies'], ['^proposals$', 'proposals'], ['^proposals/([\\w-]+)$', 'proposal'], ['^entitlements/([\\w.:-]+)$', 'entitlement'], ['^imports$', 'imports'], ['^shadow$', 'shadow'],

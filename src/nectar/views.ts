@@ -19,6 +19,7 @@ import { customerLedger, payments } from './receivables'
 import { subscriptionDetail } from './subscriptions'
 import { batches, inspect } from './usage'
 import { report, reportInvoice } from './reports'
+import { upcoming } from './upcoming'
 import { invoiceList } from './invoice-list'
 import { invoiceView } from './invoice-expansions'
 import { notes, noteMembers } from './notes'
@@ -53,6 +54,7 @@ export const views: Record<string, View> = {
   customers: (env, actor) => customers(env, actor),
   customer: (env, actor, _request, id) => customerView(env, actor, id),
   catalog: (env, actor) => catalog(env, actor),
+  upcoming: (env, actor, _r, id, url) => upcoming(env,actor,id,url.searchParams.get('period')),
   subscription: (env, actor, _request, id) => subscriptionDetail(env, actor, id),
   batches: (env, actor) => batches(env, actor),
   inspect: (env, actor, _request, _id, url) => inspect(env, actor, url.searchParams.get('period') ?? ''),
