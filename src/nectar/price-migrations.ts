@@ -1,3 +1,4 @@
+import { pricingSimulationPlan } from './pricing-simulation-plan'
 import type { Bindings } from '../auth.server'
 import type { Business } from './business'
 import { all, fingerprint, insist, one, parseJson, type Row } from './core'
@@ -16,6 +17,7 @@ const total = (input: RatingInput) => {
 
 /** Existing catalogue versions and legacy new simple prices share one saved migration plan. */
 export async function priceChangePlan(env: Bindings, business: Business, payload: Row, saved = false) {
+  if (payload.simulation === true) return await pricingSimulationPlan(env,business,payload)
   const selectedTarget = payload.target_price ? await one(env,'SELECT * FROM nc_prices WHERE id=?',String(payload.target_price)) : null
   insist(!payload.target_price || selectedTarget,'price_not_found',404)
   const product = await one(env, "SELECT * FROM nc_products WHERE id = ? AND status = 'active'", String(payload.product ?? selectedTarget?.product_id ?? ''))

@@ -57,7 +57,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "ae3cd16b66ed4d720d8d2df0d016ef5f97c95c3a6bcd498ffd6eccdfe997ad91",
+      "sha256": "d982086170fd800f72f143b74805238b023cb6d059a47a619e48ef671cf74555",
       "executable": false
     },
     "AGENTS.consumer.md": {
@@ -69,7 +69,7 @@
       "executable": false
     },
     "API.md": {
-      "sha256": "3724af4f91013d79ba62f58336e1d5600c589aeb8e37e26ed5ddd9398bada573",
+      "sha256": "de73c2a4a8522d99f8c984286196efabe8762354faef22edbaff0bf196ee7452",
       "executable": false
     },
     "base-copies.json": {
@@ -77,7 +77,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "fcdb36bbff53ba92c22bf463efa626cba2d40d3ac387b05ac4fab16fe74591b2",
+      "sha256": "46c8fef278fc478ccf224770929e851e0ea2536025811a4bbb77a9ab239e479c",
       "executable": false
     },
     "DEMO.md": {
@@ -2481,7 +2481,7 @@
       "executable": false
     },
     "src/nectar/price-migrations.ts": {
-      "sha256": "bdfb01cc768fb8527240fc1c6b719aabfaf5cb26e0dc1b3486d53c671554932f",
+      "sha256": "793a1293bc82142a0013d2b04c609202644bd99483585309c4c8cada6cfeb141",
       "executable": false
     },
     "src/nectar/price-model.ts": {
@@ -2492,8 +2492,16 @@
       "sha256": "4aa8f1a28baec104bbccb0c028ecfe2a4718978bae624fc9d1c3ff40456160e3",
       "executable": false
     },
+    "src/nectar/pricing-replay.ts": {
+      "sha256": "bc4826e39fe65e024b3a99b8d0a64596181b40a6999b66d115fb2fe69586f3ce",
+      "executable": false
+    },
+    "src/nectar/pricing-simulation-plan.ts": {
+      "sha256": "96242039741133d0a3a61238cd2ee1fb60efd86253477c932c6e76e37071ff45",
+      "executable": false
+    },
     "src/nectar/proposals.ts": {
-      "sha256": "4e05439ec0dc69f5a378b20bd1053f47d62bb48c893dbd943da20c9bf7bf2901",
+      "sha256": "0b48fd7891be01ecb1a84ceb652f13240c7995020edc565929bb8b1bf15ba080",
       "executable": false
     },
     "src/nectar/rating.ts": {
@@ -2588,6 +2596,10 @@
       "sha256": "a998c2f960f3d0048da97803fc88d988aa3623bc89d1b779ccb57a56efd33621",
       "executable": false
     },
+    "src/nectar/ui/pricing-simulation.ts": {
+      "sha256": "f9ef6dd147fc96b83218c2374881bfb827fd048cd9325e01005d1e29c913112d",
+      "executable": false
+    },
     "src/nectar/ui/pricing.ts": {
       "sha256": "00630ed91d2915646d757d8c326495c48da18d458c8dfd8d8ea93d273603718d",
       "executable": false
@@ -2601,7 +2613,7 @@
       "executable": false
     },
     "src/nectar/ui/review.ts": {
-      "sha256": "4e327812038cbea6656030de62dc2a821ef41dbe97dd329e418885b08e3b7e7c",
+      "sha256": "508bc597a58c97dd675abe071177ea5d4b7b763c8f4ad37e51cf45f3eb73f003",
       "executable": false
     },
     "src/nectar/ui/shell.ts": {
@@ -2857,7 +2869,7 @@
       "executable": false
     },
     "tests/nectar/flows.mjs": {
-      "sha256": "2561cdf66f73c057942d3549085a05bbc23973b6c2580725b6c7868f9939f241",
+      "sha256": "69d3bcdd932dde8ef5f5558580891b75e6d81817561a1bd06411ff9e53a20976",
       "executable": false
     },
     "tests/nectar/harness.mjs": {
@@ -2958,6 +2970,10 @@
     },
     "tests/nectar/pricing-models.mjs": {
       "sha256": "b07981423c710f8b38257ba535e32bb432c658065c6c9065a437cfeade1d5586",
+      "executable": false
+    },
+    "tests/nectar/pricing-simulation.mjs": {
+      "sha256": "1ea881ed5b8a76d1f6b9c802bc58c2daa8c7a64c1a97e8afd5a5ac093ec5a761",
       "executable": false
     },
     "tests/nectar/reconciliation.mjs": {

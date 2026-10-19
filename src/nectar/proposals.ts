@@ -139,6 +139,7 @@ export async function propose(env: Bindings, actor: Actor, input: Input) {
     insist(clauses.length, 'quoted_clause_required')
   }
   if (kind === 'usage_correction') insist(Array.isArray(evidence.sources) && evidence.sources.length, 'source_reference_required')
+  if (kind === 'price_change' && payload.simulation === true && actor.kind === 'member') requireMember(actor,'records')
   const prepared = await plan(env, kind, payload)
   const id = newId()
   await commit(env, [...await alertStatements(env,'proposals',id,`/app/proposals/${id}`),stmt(env, "INSERT INTO nc_proposals (id, kind, title, payload_json, evidence_json, impact_json, basis_json, status, created_by, created_by_kind, created_at, prepared_by_id) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?)",
@@ -187,6 +188,7 @@ export async function decide(env: Bindings, actor: Actor, input: Input) {
     return { id: row.id, status: 'rejected' }
   }
   const payload = parseJson<Row>(row.payload_json, {})
+  const simulationSeq = payload.simulation === true ? (await one(env,'SELECT COALESCE(MAX(seq),0) AS seq FROM nc_audit'))!.seq : null
   if ((row.kind === 'price_change' || (row.kind === 'amendment' && payload.kind === 'price_override')) && row.created_by_kind === 'member') {
     insist(row.prepared_by_id, 'price_proposal_needs_preparation', 409)
     insist(row.prepared_by_id !== actor.id, 'second_approver_required', 409)
@@ -196,6 +198,7 @@ export async function decide(env: Bindings, actor: Actor, input: Input) {
   insist(canonical(basis) === canonical(parseJson(row.basis_json, {})), 'proposal_stale', 409)
   const audit = { actor: by, action: 'proposal.approve', subject: row.id, detail: { kind: row.kind, note } }
   const basisGuards = await basisGuardStatements(env, row.kind, parseJson<Row>(row.basis_json, {}))
+  if(simulationSeq!==null) basisGuards.push(guard(env,'proposal_stale','(SELECT COALESCE(MAX(seq),0) FROM nc_audit)=?',simulationSeq))
 
   if (row.kind === 'amendment') {
     const amendment = newId()
@@ -222,9 +225,9 @@ export async function decide(env: Bindings, actor: Actor, input: Input) {
         const item = await one(env,'SELECT * FROM nc_items WHERE id=? AND subscription_id=?',source.id,entry.subscription)
         insist(item,'proposal_stale',409)
         statements.push(guard(env,'stale','EXISTS(SELECT 1 FROM nc_items WHERE id=? AND subscription_id=? AND price_id=? AND quantity=? AND effective_from=? AND effective_to IS ?)',item.id,entry.subscription,item.price_id,source.quantity,item.effective_from,item.effective_to),
-          ...(item.effective_from===date ? [stmt(env,'UPDATE nc_items SET price_id=?,change_id=? WHERE id=?',priceId,row.id,item.id)] : [
+          ...(item.effective_from===date ? [stmt(env,'UPDATE nc_items SET price_id=?,quantity=?,change_id=? WHERE id=?',priceId,source.targetQuantity??source.quantity,row.id,item.id)] : [
             stmt(env,'UPDATE nc_items SET effective_to=? WHERE id=?',date,item.id),
-            stmt(env,"INSERT INTO nc_items (id,subscription_id,price_id,quantity,effective_from,effective_to,change_id,origin,created_at) VALUES (?,?,?,?,?,?,?,'native',?)",newId(),entry.subscription,priceId,source.quantity,date,item.effective_to,row.id,at),
+            stmt(env,"INSERT INTO nc_items (id,subscription_id,price_id,quantity,effective_from,effective_to,change_id,origin,created_at) VALUES (?,?,?,?,?,?,?,'native',?)",newId(),entry.subscription,priceId,source.targetQuantity??source.quantity,date,item.effective_to,row.id,at),
           ]))
       }
       statements.push(stmt(env,'UPDATE nc_subscriptions SET revision=?,updated_at=? WHERE id=?',newId(),at,entry.subscription))
@@ -264,7 +267,7 @@ async function basisGuardStatements(env: Bindings, kind: Kind, basis: Row) {
   if (kind === 'amendment') return [guard(env, 'stale', 'EXISTS(SELECT 1 FROM nc_subscriptions WHERE id = ? AND revision = ?)', basis.subscription[0], basis.subscription[1])]
   if (kind === 'price_change') return [
     guard(env, 'stale', 'COALESCE((SELECT MAX(version) FROM nc_prices WHERE product_id = ?), 0) = ?', basis.productVersion[0], basis.productVersion[1]),
-    ...Object.entries(basis).filter(([key]) => key !== 'productVersion' && key !== 'ratings').map(([id, revision]) => guard(env, 'stale', 'EXISTS(SELECT 1 FROM nc_subscriptions WHERE id = ? AND revision = ?)', id, revision)),
+    ...Object.entries(basis).filter(([key]) => key !== 'productVersion' && key !== 'ratings' && key !== 'replay').map(([id, revision]) => guard(env, 'stale', 'EXISTS(SELECT 1 FROM nc_subscriptions WHERE id = ? AND revision = ?)', id, revision)),
   ]
   if (kind === 'usage_correction') return Object.keys(basis).filter(key => key.startsWith('event:')).map(key => guard(env, 'already_billed', "EXISTS(SELECT 1 FROM nc_usage_events WHERE event_id = ? AND status = 'active' AND invoice_id IS NULL)", key.slice('event:'.length)))
   return []
