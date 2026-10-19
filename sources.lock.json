@@ -2785,7 +2785,7 @@
       "executable": false
     },
     "tests/nectar/clause-runner.mjs": {
-      "sha256": "4c8dee7e3abfc88629fae3aff09287ffc5c9fc4a2873cee732810c8130defb56",
+      "sha256": "0d8598994e851b51b8cce209781bd886fcf91bcd9448e8582e3ae92a008a2bba",
       "executable": false
     },
     "tests/nectar/cli.mjs": {
@@ -2797,7 +2797,7 @@
       "executable": false
     },
     "tests/nectar/flows.mjs": {
-      "sha256": "37dda9e7a8cec7efca876775177039ed5071b32fb22dcf4a92994a66ca1541a8",
+      "sha256": "c7890e14f76d0e11ab7b54e09a304383c1e79ca996206706c587f78f5cffe57a",
       "executable": false
     },
     "tests/nectar/harness.mjs": {
@@ -2806,6 +2806,10 @@
     },
     "tests/nectar/invoice-pagination.mjs": {
       "sha256": "3322e1351bd6bf488dd40603198cd8d0f36a1e80f9ca1debe6129406c037f4c6",
+      "executable": false
+    },
+    "tests/nectar/isolated.mjs": {
+      "sha256": "62992443821c39e54a12baade6eff537e759bf907083eed07978b28f0f03a708",
       "executable": false
     },
     "tests/nectar/journey.mjs": {

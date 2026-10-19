@@ -2,7 +2,7 @@ import { catalogueApprovals, catalogueSingleApproval } from './catalogue-approva
 import { publishPrice } from './price-helper.mjs'
 import { policyApprovals } from './policy-approvals.mjs'
 import { notificationsFlow } from './notifications.mjs'
-import { lifecycleFlow } from './lifecycle.mjs'
+import { runIsolated } from './isolated.mjs'
 import { metadataFlow } from './metadata.mjs'
 import { applyPolicy } from './policy-helper.mjs'
 import { queuedEntrypoint } from '@runeditrun/rer/queued-entry'
@@ -29,6 +29,7 @@ import { exemptionCertificates } from './certificates.mjs'
 import { pricingModels } from './pricing-models.mjs'
 
 const ACTIONS = [...(await readFile(new URL('../../src/nectar/actions.ts', import.meta.url), 'utf8')).matchAll(/^  '([\w.]+)':/gm)].map(match => match[1])
+await runIsolated('lifecycle','lifecycleFlow')
 const h = await harness()
 const check = async (id, run) => { await run(); console.log(`${id} passed`) }
 const ids = {}, cookie = {}
@@ -343,8 +344,6 @@ try {
     await h.api('credential.revoke', cookie.owner, { key: (await h.api('credentials', cookie.owner)).find(k => k.name === 'Finance agent').id })
     await h.api('customers', agent, undefined, 401)
   })
-
-  await lifecycleFlow(h, cookie.owner)
 
   await check('NEC-15 roles are enforced in every handler', async () => {
     await h.api('access.give', cookie.owner, { email: 'fran@example.test', name: 'Fran Finance', role: 'finance' })
