@@ -1,3 +1,5 @@
+import { alertStatements } from './notifications'
+import { deliverAlerts } from './notification-mail'
 // Agent-prepared work. An agent (or a person) proposes; a person approves.
 // Nectar computes every amount itself with the rating engine; a proposal's
 // own numbers are never trusted. Each proposal records the source versions it
@@ -173,9 +175,10 @@ export async function propose(env: Bindings, actor: Actor, input: Input) {
   if (kind === 'usage_correction') insist(Array.isArray(evidence.sources) && evidence.sources.length, 'source_reference_required')
   const prepared = await plan(env, kind, payload)
   const id = newId()
-  await commit(env, [stmt(env, "INSERT INTO nc_proposals (id, kind, title, payload_json, evidence_json, impact_json, basis_json, status, created_by, created_by_kind, created_at, prepared_by_id) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?)",
+  await commit(env, [...await alertStatements(env,'proposals',id,`/app/proposals/${id}`),stmt(env, "INSERT INTO nc_proposals (id, kind, title, payload_json, evidence_json, impact_json, basis_json, status, created_by, created_by_kind, created_at, prepared_by_id) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?)",
     id, kind, title, JSON.stringify(prepared.normalized), JSON.stringify(evidence), JSON.stringify(prepared.impact), JSON.stringify(prepared.basis), actorLabel(actor), actor.kind, now(), actor.id)],
   { actor: actorLabel(actor), action: 'proposal.create', subject: id, detail: { kind, title } })
+  await deliverAlerts(env,'proposals',id,actorLabel(actor))
   return { id, kind, impact: prepared.impact }
 }
 

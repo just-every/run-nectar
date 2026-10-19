@@ -6,6 +6,7 @@ import { all, commit, guard, insist, newId, now, one, stmt } from './core'
 import type { Input } from './input'
 import { customerNotes, noteRecord } from './note-records'
 import { esc } from './ui/html'
+import { memberPreferences } from './notifications'
 
 export async function noteMembers(env: Bindings, actor: Actor) {
   requireMember(actor, 'records')
@@ -55,14 +56,15 @@ async function deliverMentions(env: Bindings, noteId: string, by: string, href: 
     const member = await one(env, "SELECT email FROM nc_members WHERE id=? AND status='active' AND email=?",mention.member_id,mention.email)
     const mail = operatorMail(env)
     let status = 'failed', provider: string | null = null
-    if (member && mail && env.MAIL_FROM) {
+    if (member && !(await memberPreferences(env,mention.member_id)).mentions) status = 'suppressed'
+    else if (member && mail && env.MAIL_FROM) {
       const link = new URL(href, env.AUTH_ORIGIN).href
       const text = `${note.author} mentioned you on ${note.record_label}:\n\n${note.body}\n\n${link}`
       status = 'uncertain'
       try {
         const result = await mail.send({ deliveryId: `note-${noteId}-${mention.member_id}`, from: env.MAIL_FROM, to: [member.email],
           subject: `Mention on ${note.record_label}`, text, html: `<p>${esc(note.author)} mentioned you on ${esc(note.record_label)}:</p><pre>${esc(note.body)}</pre><p><a href="${esc(link)}">Open record</a></p>`, headers: { 'Auto-Submitted': 'auto-generated' } })
-        status = result.status === 'accepted' ? 'accepted' : result.status === 'development' ? 'suppressed' : result.status
+        status = result.status === 'accepted' ? 'accepted' : result.status === 'development' ? 'suppressed' : result.status === 'rejected' ? 'failed' : result.status
         provider = result.providerMessageId ?? null
       } catch { status = 'uncertain' }
     }

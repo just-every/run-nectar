@@ -1,3 +1,5 @@
+import { alertStatements } from './notifications'
+import { deliverAlerts } from './notification-mail'
 // Flows 9 and 10: a bill run drafts one invoice per subscription period that
 // started in the chosen month and has ended, compares each with the previous
 // period (and with the previous biller's invoice when one was moved in), and
@@ -106,7 +108,10 @@ export async function prepareRun(env: Bindings, actor: Actor, input: Input) {
     draft.rating.lines.forEach((line, index) => statements.push(stmt(env, `INSERT INTO nc_invoice_lines (id, invoice_id, seq, kind, description, quantity, unit_amount, amount_cents, taxable, price_id, meter_id, period_start, period_end, evidence_json)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, newId(), invoiceId, index + 1, line.kind, line.description, line.quantity, line.unitAmount, line.amountCents, line.taxable ? 1 : 0, line.priceId, line.meterId, line.periodStart, line.periodEnd, JSON.stringify(line.evidence))))
   }
+  const notify = Object.keys(exceptionCounts).length > 0
+  if (notify) statements.push(...await alertStatements(env,'billrun_exceptions',runId,`/app/billing/${runId}`))
   await commit(env, statements, { actor: actorLabel(actor), action: 'billrun.prepare', subject: runId, detail: { period: month, invoices: drafts.length, totals, replaced: prior?.id ?? null } })
+  if (notify) await deliverAlerts(env,'billrun_exceptions',runId,actorLabel(actor))
   return { id: runId, period: month, summary }
 }
 

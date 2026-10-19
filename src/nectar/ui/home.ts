@@ -10,6 +10,7 @@ import { audit } from '../views'
 import { MORE, check, checks, details, emptyState, field, form, h, marker, hidden, page, select, table, tag, when } from './html'
 import { policySection } from './policies'
 import { personName } from './shell'
+import { notificationSection } from './notifications'
 
 const count = async (env: Bindings, sql: string, ...params: unknown[]) => (await one<{ n: number }>(env, sql, ...params))!.n
 
@@ -42,8 +43,8 @@ export async function homePage(env: Bindings, actor: Actor, url: URL) {
   return page('Home', actor, h`<h1>${b.legal_name}</h1>${checklist ? h`<div class="split home">${checklist}${today}</div>` : today}`, { current: '/app', url })
 }
 
-export async function morePage(_env: Bindings, actor: Actor, url: URL) {
-  return page('More', actor, h`<h1>More</h1><ul class="more">${MORE.filter(item => item.show(actor)).map(item => h`<li><a href="${item.href}">${item.label}</a><p>${item.about}</p></li>`)}</ul>`, { current: '/app/more', url })
+export async function morePage(env: Bindings, actor: Actor, url: URL) {
+  return page('More', actor, h`<h1>More</h1><ul class="more">${MORE.filter(item => item.show(actor)).map(item => h`<li><a href="${item.href}">${item.label}</a><p>${item.about}</p></li>`)}</ul>${await notificationSection(env,actor)}`, { current: '/app/more', url })
 }
 
 const ZONES = ['America/New_York', 'America/Chicago', 'America/Denver', 'America/Phoenix', 'America/Los_Angeles', 'America/Anchorage', 'Pacific/Honolulu', 'UTC']
@@ -72,7 +73,7 @@ export async function settingsPage(env: Bindings, actor: Actor, url: URL) {
       ${b.tax_mode !== 'undeclared' && !taxReady(b) ? form('tax.review', '/app/settings', hidden('revision', b.revision), 'I have reviewed this tax policy') : ''}` : ''}
     ${b.tax_reviewed_at ? details({ 'Reviewed by': personName(actor, b.tax_reviewed_by), 'Reviewed at': when(b.tax_reviewed_at, b.timezone) }) : ''}</section>` : ''
   const identityCard = h`<section class="card" aria-labelledby="identity"><h2 id="identity">Billing identity</h2>${identity}</section>`
-  return page('Business and tax', actor, h`<h1>Business and tax</h1>${tax ? h`<div class="split settings">${identityCard}${tax}</div>` : identityCard}${await policySection(env, actor)}`, { current: '/app/settings', url, showNav: !!b })
+  return page('Business and tax', actor, h`<h1>Business and tax</h1><p><a href="/app/more#notifications">Manage your email notifications</a></p>${tax ? h`<div class="split settings">${identityCard}${tax}</div>` : identityCard}${await policySection(env, actor)}`, { current: '/app/settings', url, showNav: !!b })
 }
 
 export async function accessPage(env: Bindings, actor: Actor, url: URL, issued?: { name: string; key: string }) {

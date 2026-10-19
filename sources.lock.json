@@ -57,7 +57,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "f13ecb7cc1d3141567ddd0c0aba9b6d46ac695e9c6638532574207517c507963",
+      "sha256": "d6f0758fff76b45e31134493735bbf77c873e7565203279c38bb2de8fa80cb4e",
       "executable": false
     },
     "AGENTS.consumer.md": {
@@ -69,7 +69,7 @@
       "executable": false
     },
     "API.md": {
-      "sha256": "85e7bc5f3ca352b4cd91ead8f0a39230a58d87cebf56fc8ae5482e8912f42735",
+      "sha256": "4afcc32a22a6ea749561138031647306b6d20543e4496ff4a23249e04891768e",
       "executable": false
     },
     "base-copies.json": {
@@ -77,7 +77,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "bd874d5c0fb538d65157e3ffd59053be64d25b64df8195b5407143a901f57af3",
+      "sha256": "06f1eb3df52273dfdcb77d96da639ef75747f005f43e0553e2f3f9e579a3e0f9",
       "executable": false
     },
     "DEMO.md": {
@@ -262,6 +262,10 @@
     },
     "migrations/core/0025_customer_notes.sql": {
       "sha256": "434f74718a5d8692cf9788fdf6791624be0849670f5d101145d7eeaa48bef69f",
+      "executable": false
+    },
+    "migrations/core/0026_notifications.sql": {
+      "sha256": "eed8c3fb554df31a4f18a308b908cba54ce239da008a62321843872ad4a88531",
       "executable": false
     },
     "ONBOARDING.md": {
@@ -2245,7 +2249,7 @@
       "executable": false
     },
     "src/nectar/actions.ts": {
-      "sha256": "62bc61aaff6c8f9b1645e492041f9f18f9f91a337120b5161dbcb231f33956e5",
+      "sha256": "b42c879c819a6868bea17b167b4c5ae1e8762767ca6e5f01322c348e538f67c3",
       "executable": false
     },
     "src/nectar/actor.ts": {
@@ -2257,7 +2261,7 @@
       "executable": false
     },
     "src/nectar/billruns.ts": {
-      "sha256": "32461860d975a1999108c80073867edc518354868cfef4899a60fed5d459c877",
+      "sha256": "08a11a41f85f6a962591957fb53cbda01562747de7f2a1606c153bb11a55f4d1",
       "executable": false
     },
     "src/nectar/business.ts": {
@@ -2305,7 +2309,7 @@
       "executable": false
     },
     "src/nectar/doors.ts": {
-      "sha256": "2e71d260afa31ebd5065f1675e351143b43723836a51021faac51fed5538c558",
+      "sha256": "1df467035f191502606a26530dc7dad16659ad4beccfbc310815a66593e9c548",
       "executable": false
     },
     "src/nectar/exports.ts": {
@@ -2353,7 +2357,15 @@
       "executable": false
     },
     "src/nectar/notes.ts": {
-      "sha256": "5530f27f58a0563ffac6ce96156f8a41a250d5c129bcaed605764bccc2b6110a",
+      "sha256": "7b9c4514318187107ea44192d3ebcafdc3b70daa352ca0f9c88b44165112747f",
+      "executable": false
+    },
+    "src/nectar/notification-mail.ts": {
+      "sha256": "cc656b1177ef4dc4b1644859f9def595b8f22f2e18de37194668a6c6f8e28f35",
+      "executable": false
+    },
+    "src/nectar/notifications.ts": {
+      "sha256": "5e2468f7b2b0bad8c1abbc8ee60211c6d877b3418fbd67446b214b541c47ed08",
       "executable": false
     },
     "src/nectar/one-time-charges.ts": {
@@ -2377,7 +2389,7 @@
       "executable": false
     },
     "src/nectar/proposals.ts": {
-      "sha256": "98a33069da8cfe03d5d7c1b25496103d417de605e07244e5fe37329617375364",
+      "sha256": "3912252a66daa308fd2834fb496ece3623732afb707f9e5fad6c183c4d0564f7",
       "executable": false
     },
     "src/nectar/rating.ts": {
@@ -2385,7 +2397,7 @@
       "executable": false
     },
     "src/nectar/receivables.ts": {
-      "sha256": "bab76a0a3f9299eba1fa93959cd839b77ca84fba181c05525255fc4a47e3b940",
+      "sha256": "9858bac9dce6d12c198bc3833a91faf8382fbef2eef9fe22ad5f1c237397db6c",
       "executable": false
     },
     "src/nectar/reconciliation.ts": {
@@ -2421,11 +2433,11 @@
       "executable": false
     },
     "src/nectar/ui/customers.ts": {
-      "sha256": "47d7bdf93cb4b1e1af3b2d3977a6fdb9a3a6ded2f67ca6276148964a9adba494",
+      "sha256": "659d9069e936761eaf3af2a4c5579a341af39967a826f8ba5a0871d16814e2e9",
       "executable": false
     },
     "src/nectar/ui/home.ts": {
-      "sha256": "b432926a0a0737a1cddf376d06a00ef217c05cfdab8250efd592c324cd91286e",
+      "sha256": "f543c7232e16bfbafc5d3600c7d183c65ddf4a2968fbc8da1f6f5e29c79d7750",
       "executable": false
     },
     "src/nectar/ui/html.ts": {
@@ -2438,6 +2450,10 @@
     },
     "src/nectar/ui/notes.ts": {
       "sha256": "1ef78e6a96ddd1b940fc88fcae1f45a41137d11b528aaf96f7fdc282f33d482f",
+      "executable": false
+    },
+    "src/nectar/ui/notifications.ts": {
+      "sha256": "a2aebe95960e029b21265159641ddaf8144301d103dca520908a3862fef59406",
       "executable": false
     },
     "src/nectar/ui/pages.ts": {
@@ -2489,7 +2505,7 @@
       "executable": false
     },
     "src/nectar/views.ts": {
-      "sha256": "9fcaba825c71dcf67d9fbd3d4a1167a6eb198c81f4650b50f61c13704d8227a5",
+      "sha256": "0c3416cb57e42581b219af3cb56f3acfac435cbea97f2b0f6b1d7233775095da",
       "executable": false
     },
     "src/router.tsx": {
@@ -2509,7 +2525,7 @@
       "executable": false
     },
     "src/server.ts": {
-      "sha256": "7bafdac17fd363b1702ee006f0d4fe90817b2ae3d81bdfc9f45afc3851008bee",
+      "sha256": "614cd0c1dfa456410f763466b10fd611dd7050230ee9c708046d9a2f76ccc8da",
       "executable": false
     },
     "src/site/docs/docs.css": {
@@ -2717,11 +2733,11 @@
       "executable": false
     },
     "tests/nectar/flows.mjs": {
-      "sha256": "59d7908cc9ea040581003e57f6dfa3399e45644a4e76e9ce2ac786457399ddcb",
+      "sha256": "1589a590c06f50d7c22dd43b36d33f71f22ab9d1b242ed4badd6a9adab96a73c",
       "executable": false
     },
     "tests/nectar/harness.mjs": {
-      "sha256": "36ddfd366e85fcce7662077a7c6ba7895cbb619bca41ce16c8af839c7d0af94d",
+      "sha256": "a68dc6d7738b139ce46a28fb7ba7c348d475e2c589b625ce9b6f45b2a835c030",
       "executable": false
     },
     "tests/nectar/invoice-pagination.mjs": {
@@ -2734,6 +2750,10 @@
     },
     "tests/nectar/notes.mjs": {
       "sha256": "330549e7fef286b53be2b1a523581570262f3c408f1155b3e6298a74cac3da25",
+      "executable": false
+    },
+    "tests/nectar/notifications.mjs": {
+      "sha256": "c238c467a49ef2950fd85d8f45b21c2050c6b19eddde826c1fb8bef3fcda58c4",
       "executable": false
     },
     "tests/nectar/one-time.mjs": {

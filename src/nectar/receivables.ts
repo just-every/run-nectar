@@ -1,3 +1,5 @@
+import { alertStatements } from './notifications'
+import { deliverAlerts } from './notification-mail'
 // Flow 11: issued invoices are never edited. A credit note reduces what is
 // owed; a payment is evidence of money received outside Nectar, allocated to
 // invoices. For every invoice: total = credited + paid + balance, and no
@@ -72,8 +74,12 @@ export async function recordPayment(env: Bindings, actor: Actor, input: Input) {
   const evidence = input.text('evidence', { max: 1000, optional: true })
   insist(!await one(env, 'SELECT 1 FROM nc_payments WHERE customer_id = ? AND reference = ?', customer.id, reference), 'payment_reference_exists', 409)
   const id = newId()
-  await commit(env, [stmt(env, 'INSERT INTO nc_payments (id, customer_id, amount_cents, received_on, method, reference, evidence, recorded_by, recorded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', id, customer.id, amount, received, method, reference, evidence, actorLabel(actor), now())],
+  const owed = await all(env, `SELECT ${BALANCE_SQL} AS balance_cents FROM nc_invoices i WHERE i.customer_id=? AND i.status='issued'`,customer.id)
+  const mismatch = owed.some(i=>i.balance_cents>0) && !owed.some(i=>i.balance_cents===amount)
+  const alerts = mismatch ? await alertStatements(env,'payment_mismatch',id,`/app/customers/${customer.id}#payment-${id}`) : []
+  await commit(env, [...alerts,stmt(env, 'INSERT INTO nc_payments (id, customer_id, amount_cents, received_on, method, reference, evidence, recorded_by, recorded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', id, customer.id, amount, received, method, reference, evidence, actorLabel(actor), now())],
     { actor: actorLabel(actor), action: 'payment.record', subject: id, detail: { customer: customer.id, amount, received, method, reference } })
+  if (mismatch) await deliverAlerts(env,'payment_mismatch',id,actorLabel(actor))
   return { id: customer.id, payment: id }
 }
 

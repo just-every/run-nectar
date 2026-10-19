@@ -23,6 +23,7 @@ import { upcoming } from './upcoming'
 import { invoiceList } from './invoice-list'
 import { invoiceView } from './invoice-expansions'
 import { notes, noteMembers } from './notes'
+import { notifications } from './notifications'
 import { customerNotes } from './note-records'
 import { reportLine } from './report-lines'
 
@@ -47,6 +48,7 @@ export async function customerView(env: Bindings, actor: Actor, id: string): Pro
 }
 
 export const views: Record<string, View> = {
+  notifications: (env,actor) => notifications(env,actor),
   notes: (env, actor, _r, id) => { const [kind,record] = id.split('/'); return notes(env,actor,kind,record) },
   noteMembers: (env,actor) => noteMembers(env,actor),
   me: async (_env, actor) => ({ id: actor.id, kind: actor.kind, name: actor.name, email: actor.email, role: actor.role, capabilities: [...actor.capabilities] }),

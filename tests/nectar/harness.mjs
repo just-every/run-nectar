@@ -26,10 +26,12 @@ export async function harness({ assets = false } = {}) {
   const secret = () => randomBytes(32).toString('base64url')
   const vars = { AUTH_LOCAL: 'true', AUTH_ORIGIN: origin, OWNER_EMAIL: 'owner@example.test', SESSION_SECRET: secret(), SETUP_TOKEN: secret(), MAIL_PROVIDER: 'resend', MAIL_API_KEY: 'test-only-resend-key', MAIL_FROM: 'auth@example.test' }
   const chunks = (await readdir('dist/server', { recursive: true })).filter(path => path.endsWith('.js') && path !== 'index.js')
-  const mails = []
+  const mails = [], mailResponses = []
   const outboundService = async request => {
     if (request.url !== 'https://api.resend.com/emails') return new Response('Unexpected outbound request', { status: 599 })
     mails.push(await request.json())
+    const queued = mailResponses.shift()
+    if (queued) return Response.json(queued.body, { status: queued.status })
     return Response.json({ id: `test-${mails.length}` })
   }
   const mf = new Miniflare(convertV4MiniflareOptions({
@@ -94,7 +96,7 @@ export async function harness({ assets = false } = {}) {
     throw new Error(`no sign-in message for ${email}`)
   }
 
-  return { origin, vars, raw, api, submit, page, signIn, close, mails }
+  return { origin, vars, raw, api, submit, page, signIn, close, mails, mailResponses }
 }
 
 export const file = (filename, content, type = 'application/octet-stream') => ({ filename, base64: Buffer.from(content).toString('base64'), type })

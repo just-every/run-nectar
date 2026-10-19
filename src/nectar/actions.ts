@@ -24,6 +24,7 @@ import { addCharge } from './one-time-charges'
 import { prepareManualInvoice } from './manual-invoices'
 import { attachAddon } from './addons'
 import { addNote } from './notes'
+import { setNotificationPreferences } from './notifications'
 import { submitUsage } from './usage'
 
 type Handler = (env: Bindings, actor: Actor, input: Input, request: Request) => Promise<unknown>
@@ -42,6 +43,7 @@ export const actions: Record<string, Handler> = {
   'certificate.policy': configureCertificatePolicy,
   'certificate.remind': remindCertificates,
   'note.add': addNote,
+  'notification.preferences': setNotificationPreferences,
   'customer.create': createCustomer,
   'customer.update': updateCustomer,
   'contact.add': addContact,

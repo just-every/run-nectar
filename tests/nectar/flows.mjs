@@ -1,6 +1,7 @@
 import { catalogueApprovals, catalogueSingleApproval } from './catalogue-approvals.mjs'
 import { publishPrice } from './price-helper.mjs'
 import { policyApprovals } from './policy-approvals.mjs'
+import { notificationsFlow } from './notifications.mjs'
 import { applyPolicy } from './policy-helper.mjs'
 import { queuedEntrypoint } from '@runeditrun/rer/queued-entry'
 const queued = await queuedEntrypoint(import.meta.url, 'test:flows'); if (queued !== null) process.exit(queued)
@@ -350,7 +351,8 @@ try {
     const ownerOnly = ['credit.policy', 'certificate.policy', 'business.configure', 'tax.declare', 'tax.review', 'access.give', 'access.end', 'credential.issue', 'credential.revoke', 'subscription.adopt']
     assert.ok(ACTIONS.length > 30)
     for (const name of ACTIONS) {
-      await h.api(name, cookie.accountant, {}, 403)
+      if (name === 'notification.preferences') await h.api(name,cookie.accountant,{ mentions:true,payment_mismatch:false,billrun_exceptions:false,proposals:false })
+      else await h.api(name, cookie.accountant, {}, 403)
       await h.api(name, undefined, {}, 401)
       if (ownerOnly.includes(name)) await h.api(name, cookie.finance, {}, 403)
     }
@@ -489,6 +491,7 @@ try {
   await invoicePaginationFlow(h, cookie.owner)
   await notesFlow(h, cookie.owner)
   await upcomingFlow(h, cookie.owner)
+  await notificationsFlow(h,cookie.owner)
 
   // Every main screen renders for the owner without an error.
   for (const path of ['/app', '/app/more', '/app/settings', '/app/customers', `/app/customers/${ids.northwind}`, `/app/subscriptions/${ids.s1}`, '/app/catalog', '/app/usage', '/app/billing', `/app/billing/${ids.augustRun}`, `/app/invoices/${ids.julyNorthwind}`, '/app/receivables', '/app/proposals', '/app/import', '/app/exports', '/app/access', '/app/audit']) await h.page(path, cookie.owner)
