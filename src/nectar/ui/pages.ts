@@ -14,6 +14,7 @@ import { accessPage, auditPage, homePage, morePage, settingsPage } from './home'
 import { exportsPage, importPage, previewPage, proposalPage, proposalsPage } from './review'
 import { receivablesPage } from './receivables'
 import { catalogPage, usagePage } from './work'
+import { reportPage, reportInvoicePage, reportLinePage } from './reports'
 
 type Page = (env: Bindings, actor: Actor, request: Request, url: URL, id: string) => Promise<Response>
 
@@ -42,6 +43,9 @@ export const pages: Record<string, Page> = {
   subscriptionsFile: (env, actor) => subscriptionsCsv(env, actor),
   access: (env, actor, _r, url) => accessPage(env, actor, url),
   audit: (env, actor, _r, url) => auditPage(env, actor, url),
+  report: (env, actor, _r, url, id) => reportPage(env, actor, id, url),
+  reportInvoice: (env, actor, _r, url, id) => { const [metric, invoice] = id.split('/'); return reportInvoicePage(env, actor, metric, invoice, url) },
+  reportLine: (env, actor, _r, url, id) => { const [invoice, , line] = id.split('/'); return reportLinePage(env, actor, invoice, line, url) },
 }
 
 type PostPage = (env: Bindings, actor: Actor, input: Input, url: URL, request: Request) => Promise<Response>

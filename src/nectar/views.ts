@@ -18,6 +18,8 @@ import { proposalDetail, proposals } from './proposals'
 import { customerLedger, payments } from './receivables'
 import { subscriptionDetail } from './subscriptions'
 import { batches, inspect } from './usage'
+import { report, reportInvoice } from './reports'
+import { reportLine } from './report-lines'
 
 type View = (env: Bindings, actor: Actor, request: Request, id: string, url: URL) => Promise<unknown>
 
@@ -65,6 +67,9 @@ export const views: Record<string, View> = {
   members: (env, actor) => members(env, actor),
   credentials: (env, actor) => agentKeys(env, actor),
   audit: (env, actor) => audit(env, actor),
+  report: (env, actor, _r, id, url) => report(env, actor, id, url),
+  reportInvoice: (env, actor, _r, id, url) => { const [metric, invoice] = id.split('/'); return reportInvoice(env, actor, metric, invoice, url) },
+  reportLine: (env, actor, _r, id) => { const [invoice, , line] = id.split('/'); return reportLine(env, actor, invoice, line) },
 }
 
 export function route(path: string): { view: View; id: string } {

@@ -298,7 +298,7 @@ Postmark sandbox server).
 
 - **RPT-002 — Financial reports.** Billings, collections, outstanding AR and ageing, credits, refunds, tax collected, credit balances and unbilled usage per period, scheduled for email delivery and exportable as CSV. **Acceptance evidence:** After a test month, the billings report equals issued invoices, collections equals settled payments, AR equals the sum of open balances, tax collected equals invoice tax lines less credits, credit balances equal the customer balance ledgers, and unbilled usage equals rated events not yet invoiced; a scheduled report arrives by email with the same figures.
 
-- **RPT-003 — Drill-through from every figure.** Any report figure opens to the invoices, lines, calculation evidence and usage events behind it. **Acceptance evidence:** From the MRR, billings and AR reports, drill one figure down to an invoice line and from there to its usage events; the totals at each level agree.
+- **RPT-003 — Drill-through from every figure.** Any report figure opens to the invoices, lines, calculation evidence and usage events behind it. Current reports use issued records: billed monthly recurring revenue sums flat, seat, current-period usage and recurring discount lines for subscription periods starting in the selected month, including actual proration; it excludes late usage, one-time charges, fixed credits, credit notes and tax, and is not a normalized subscription run rate. Billings sums original lines plus tax by issue-date month. AR is the current balance (lines plus tax less actual credits and allocations), aged using today in the billing timezone; credits and payments are never proportionally attributed to lines. Collections sums recorded external payments by received-date month up to today in that timezone, with allocations and the unallocated remainder exposed separately; it makes no processor-settlement claim. Monetary contributions use integer cents; usage quantities use exact decimals and the saved once-rounded line calculation. Fixed lines and unallocated payments honestly show that no usage events or invoice exist behind them. Every report added by `RPT-001`, `RPT-002`, `RPT-004` or a future record/provider clause inherits this drill-through obligation before shipping. **Acceptance evidence:** From the MRR, billings and AR reports, drill one figure down to an invoice line and from there to its usage events; the totals at each level agree.
 
 - **RPT-004 — Warehouse and BI export.** Nectar syncs its records (customers, subscriptions, invoices, lines, payments, usage aggregates, revenue schedules) on a schedule to Snowflake, BigQuery or S3 with a documented schema. **Acceptance evidence:** Sync to a BigQuery test dataset and recompute MRR and AR from the synced tables; they equal Nectar's reports.
 
@@ -491,7 +491,7 @@ Every capability claim on the owner-approved homepage (`src/site/homepage/`, des
 | 58 | Month-end | Sales tax · 14 states · report ready to file | `TAX-003` | missing |
 | 59 | Month-end | Deferred revenue $96,000 → $88,000 | `REV-001` | missing |
 | 60 | Month-end | "1 break found … missing in QuickBooks → synced" | `AGENT-008`, `BOOK-001` | missing |
-| 61 | Month-end | MRR $171,500 → $178,230 with expansion and churn | `RPT-001` | missing |
+| 61 | Month-end | MRR $171,500 → $178,230 with expansion and churn | `RPT-001` | partial |
 | 62 | Month-end | Open · 3 invoices · Net 60 · due Mon Nov 30 | `NEC-12`, `INV-004` | partial |
 | 63 | Moving in | "Nectar reads your Stripe account" | `NEC-16`, `MOVE-006` | partial |
 | 64 | Moving in | "bills August in shadow beside it" | `NEC-16`, `MOVE-006` | partial |
@@ -512,13 +512,13 @@ Every capability claim on the owner-approved homepage (`src/site/homepage/`, des
 
 Judged from the code and tests at commit `0b59539c38405c7cc627a27666242516d33448ad` (19 October 2026).
 
-Round updates: `USE-007`, `CAT-002`, `TAX-002` and `CAT-006` are proven by their named public-door journeys in `tests/nectar/`. `GOV-002` has proven credit-approval, price-migration-proposal, contract-price-override, scheduled-price-switch, policy-change and catalogue-revision slices and remains partial for its wider domains.
+Round updates: `RPT-003` is proven by its named report-to-invoice-to-line-to-event journey; `RPT-001` has a partial billed-recurring-revenue snapshot. `USE-007`, `CAT-002`, `TAX-002` and `CAT-006` are proven by their named public-door journeys in `tests/nectar/`. `GOV-002` has proven credit-approval, price-migration-proposal, contract-price-override, scheduled-price-switch, policy-change and catalogue-revision slices and remains partial for its wider domains.
 
 | Clauses | Done | Partial | Missing | Total |
 | --- | ---: | ---: | ---: | ---: |
 | Published | 16 | 0 | 0 | 16 |
-| Target and push further | 6 | 36 | 66 | 108 |
-| All | 22 | 36 | 66 | 124 |
+| Target and push further | 7 | 36 | 65 | 108 |
+| All | 23 | 36 | 65 | 124 |
 
 | Clause | Title | Kind | Status | Evidence | Gap |
 | --- | --- | --- | --- | --- | --- |
@@ -607,9 +607,9 @@ Round updates: `USE-007`, `CAT-002`, `TAX-002` and `CAT-006` are proven by their
 | `BOOK-002` | NetSuite and Sage Intacct sync | target | missing |  | No NetSuite or Sage Intacct sync. |
 | `REV-001` | ASC 606 revenue schedules | target | missing |  | No revenue schedules. |
 | `REV-002` | Revenue close and journal export | target | missing |  | No period close or journal export. |
-| `RPT-001` | SaaS metrics | target | missing |  | No MRR, ARR, churn or retention metrics. |
-| `RPT-002` | Financial reports | target | partial | `src/nectar/collections.ts`; `src/nectar/exports.ts`; `tests/nectar/flows.mjs` | Ageing and CSV exports of invoices, usage and subscriptions ship; no billings, collections, tax or credit reports or scheduled delivery. |
-| `RPT-003` | Drill-through from every figure | target | partial | `src/nectar/billruns.ts`; `src/nectar/exports.ts`; `tests/nectar/flows.mjs` | Each invoice line carries its calculation evidence and usage; no reports to drill from. |
+| `RPT-001` | SaaS metrics | target | partial | `src/nectar/reports.ts`; `tests/nectar/reports.mjs` | A billed monthly recurring revenue snapshot drills to issued lines. Normalized MRR/ARR, movements, historical move-in metrics, churn, retention, cohorts and segmentation remain absent. |
+| `RPT-002` | Financial reports | target | partial | `src/nectar/collections.ts`; `src/nectar/exports.ts`; `tests/nectar/flows.mjs` | Billings, recorded external collections and current AR/ageing drill to their source records; invoice, usage and subscription CSV exports ship. Tax, credit/refund/balance and unbilled-usage reports, report CSVs and scheduled delivery remain absent. |
+| `RPT-003` | Drill-through from every figure | target | done | `src/nectar/reports.ts`; `src/nectar/report-lines.ts`; `src/nectar/ui/reports.ts`; `tests/nectar/reports.mjs` — RPT-003 named public-door journey |  |
 | `RPT-004` | Warehouse and BI export | target | missing |  | No warehouse sync. |
 | `CRM-001` | Closed-won deals become subscriptions | target | missing |  | No Orbit, Salesforce or HubSpot connection. |
 | `CRM-002` | Signed order forms and contracts as inputs | target | partial | `src/nectar/proposals.ts`; `tests/nectar/flows.mjs` | An agent can propose contract terms quoting a signed agreement (NEC-14); no document intake from Inkwell, Docusign, PandaDoc, Platter or Locket. |

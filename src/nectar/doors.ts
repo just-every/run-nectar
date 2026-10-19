@@ -7,6 +7,7 @@ export const API_DOORS: [string, string][] = [
   ['^subscriptions/([\\w-]+)$', 'subscription'], ['^usage/batches$', 'batches'], ['^usage/inspect$', 'inspect'], ['^runs$', 'runs'], ['^runs/([\\w-]+)$', 'run'],
   ['^invoices/([\\w-]+)$', 'invoice'], ['^ageing$', 'ageing'], ['^payments$', 'payments'], ['^notices$', 'notices'], ['^tasks$', 'tasks'],
   ['^policies/current$', 'policySettings'], ['^policies$', 'policies'], ['^proposals$', 'proposals'], ['^proposals/([\\w-]+)$', 'proposal'], ['^entitlements/([\\w.:-]+)$', 'entitlement'], ['^imports$', 'imports'], ['^shadow$', 'shadow'],
+  ['^reports/([\\w-]+)$', 'report'], ['^reports/([\\w-]+/[\\w-]+)$', 'reportInvoice'], ['^invoices/([\\w-]+/lines/[\\w-]+)$', 'reportLine'],
   ['^members$', 'members'], ['^credentials$', 'credentials'], ['^audit$', 'audit'],
 ]
 
@@ -17,6 +18,7 @@ export const PAGE_DOORS: [string, string][] = [
   ['^/app/notices/([\\w-]+)\\.txt$', 'noticeFile'], ['^/app/proposals$', 'proposals'], ['^/app/proposals/([\\w-]+)$', 'proposal'], ['^/app/import$', 'import'],
   ['^/app/exports$', 'exports'], ['^/app/exports/invoices\\.csv$', 'invoicesFile'], ['^/app/exports/usage\\.csv$', 'usageFile'], ['^/app/exports/subscriptions\\.csv$', 'subscriptionsFile'],
   ['^/app/certificates/([\\w-]+)$', 'certificateFile'],
+  ['^/app/reports/([\\w-]+)$', 'report'], ['^/app/reports/([\\w-]+/[\\w-]+)$', 'reportInvoice'], ['^/app/invoices/([\\w-]+/lines/[\\w-]+)$', 'reportLine'],
   ['^/app/access$', 'access'], ['^/app/audit$', 'audit'],
 ]
 

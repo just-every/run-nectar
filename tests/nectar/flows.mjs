@@ -14,6 +14,7 @@ import { API_DOORS, PAGE_DOORS } from '../../src/nectar/doors.ts'
 import { file, harness } from './harness.mjs'
 import { reconciliationFlow } from './reconciliation.mjs'
 import { oneTimeBilling } from './one-time.mjs'
+import { reportsFlow } from './reports.mjs'
 import { priceSwitches } from './price-switches.mjs'
 import { priceOverrides } from './price-overrides.mjs'
 import { priceApprovals } from './price-approvals.mjs'
@@ -480,6 +481,8 @@ try {
   await catalogueApprovals(h, cookie.owner)
 
   await oneTimeBilling(h, cookie.owner)
+
+  await reportsFlow(h, cookie.owner)
 
   // Every main screen renders for the owner without an error.
   for (const path of ['/app', '/app/more', '/app/settings', '/app/customers', `/app/customers/${ids.northwind}`, `/app/subscriptions/${ids.s1}`, '/app/catalog', '/app/usage', '/app/billing', `/app/billing/${ids.augustRun}`, `/app/invoices/${ids.julyNorthwind}`, '/app/receivables', '/app/proposals', '/app/import', '/app/exports', '/app/access', '/app/audit']) await h.page(path, cookie.owner)
