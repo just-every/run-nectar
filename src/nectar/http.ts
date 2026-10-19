@@ -66,7 +66,8 @@ async function apiResponse(env: Bindings, actor: Actor, request: Request, url: U
     return json(await action(env, actor, await Input.from(request), request))
   }
   const { view, id } = route(path)
-  return json(await view(env, actor, request, id, url))
+  const result=await view(env, actor, request, id, url)
+  return result instanceof Response ? result : json(result)
 }
 
 async function pageResponse(env: Bindings, actor: Actor, request: Request, url: URL): Promise<Response> {

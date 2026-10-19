@@ -1,3 +1,4 @@
+import { resolveSetup } from './setup-resolution'
 // Every state change in Nectar, by name. The same handler serves the HTML form
 // door (/app/do/NAME) and the JSON door (/api/nectar/NAME) used by agents.
 // Each handler checks the actor's capability itself before touching data.
@@ -38,6 +39,7 @@ import { prepareMetric,previewMetric,activateMetric } from './meter-definitions'
 type Handler = (env: Bindings, actor: Actor, input: Input, request: Request) => Promise<unknown>
 
 export const actions: Record<string, Handler> = {
+  'setup.resolve':resolveSetup,
   'meter.prepare':prepareMetric,
   'meter.preview':previewMetric,
   'meter.activate':activateMetric,

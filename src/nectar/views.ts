@@ -1,3 +1,4 @@
+import { setupSourceDownload } from './setup-download'
 // Read models served at GET /api/nectar/... Every view checks the actor's
 // capability itself and applies the same rules as the pages that render it.
 import type { Bindings } from '../auth.server'
@@ -51,6 +52,7 @@ export async function customerView(env: Bindings, actor: Actor, id: string): Pro
 }
 
 export const views: Record<string, View> = {
+  setupSource:(env,actor,_r,id)=>setupSourceDownload(env,actor,id),
   notifications: (env,actor) => notifications(env,actor),
   metadata: (env,actor,_r,id) => {const [kind,record]=id.split('/');return metadataView(env,actor,kind,record)},
   metadataObjects: (env,actor,_r,id,url) => metadataObjects(env,actor,id,url),

@@ -1,3 +1,5 @@
+import { setupPlan } from './setup-plan'
+import { setupStatements } from './setup-apply'
 import { alertStatements } from './notifications'
 import { deliverAlerts } from './notification-mail'
 // Agent-prepared work. An agent (or a person) proposes; a person approves.
@@ -112,8 +114,9 @@ async function collectionPlan(env: Bindings, payload: Row) {
   }
 }
 
-async function plan(env: Bindings, kind: Kind, payload: Row, saved = false) {
+async function plan(env: Bindings, kind: Kind, payload: Row, saved = false):Promise<{normalized:Row;impact:any;basis:Row}> {
   const business = await requireBusiness(env)
+  if (kind === 'amendment' && payload.setup === true) return await setupPlan(env,business,payload,saved)
   if (kind === 'amendment') return await amendmentPlan(env, business, payload)
   if (kind === 'price_change') return await priceChangePlan(env, business, payload, saved)
   if (kind === 'usage_correction') return await correctionPlan(env, business, payload)
@@ -134,13 +137,27 @@ export async function propose(env: Bindings, actor: Actor, input: Input) {
   insist(payload && typeof payload === 'object' && !Array.isArray(payload), 'invalid_payload')
   const evidence = (input.has('evidence') ? input.json('evidence') : {}) as Row
   insist(evidence && typeof evidence === 'object' && !Array.isArray(evidence), 'invalid_evidence')
-  if (kind === 'amendment') {
+  if (kind === 'amendment' && payload.setup !== true) {
     const clauses = Array.isArray(evidence.clauses) ? evidence.clauses.filter((c: Row) => typeof c?.quote === 'string' && c.quote.trim()) : []
     insist(clauses.length, 'quoted_clause_required')
   }
   if (kind === 'usage_correction') insist(Array.isArray(evidence.sources) && evidence.sources.length, 'source_reference_required')
   if (kind === 'price_change' && payload.simulation === true && actor.kind === 'member') requireMember(actor,'records')
+  if (kind === 'amendment' && payload.setup === true) {
+    if(actor.kind==='member')requireMember(actor,'records')
+    if(Array.isArray(payload.ambiguities)&&payload.ambiguities.some((a:Row)=>a?.resolution))requireMember(actor,'records')
+  }
   const prepared = await plan(env, kind, payload)
+  if(kind==='amendment'&&payload.setup===true&&payload.revises){
+    requireMember(actor,'records')
+    const previous=await one(env,"SELECT * FROM nc_proposals WHERE id=? AND status='pending'",String(payload.revises))
+    insist(previous,'proposal_not_found',404)
+    const old=parseJson<Row>(previous.payload_json,{})
+    insist(old.setup&&canonical(old.source)===canonical(prepared.normalized.source),'setup_source_changed',409)
+    const oldIssues=(old.input?.ambiguities??[]) as Row[]
+    insist(oldIssues.every(a=>(payload.ambiguities??[]).some((b:Row)=>b.issue===a.issue&&typeof b.resolution==='string'&&b.resolution.trim())),'setup_resolutions_required')
+  }
+  if(payload.setup===true)insist(new TextEncoder().encode(JSON.stringify([prepared.normalized,prepared.impact,prepared.basis])).length<=1500000,'setup_proposal_too_large')
   const id = newId()
   await commit(env, [...await alertStatements(env,'proposals',id,`/app/proposals/${id}`),stmt(env, "INSERT INTO nc_proposals (id, kind, title, payload_json, evidence_json, impact_json, basis_json, status, created_by, created_by_kind, created_at, prepared_by_id) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?)",
     id, kind, title, JSON.stringify(prepared.normalized), JSON.stringify(evidence), JSON.stringify(prepared.impact), JSON.stringify(prepared.basis), actorLabel(actor), actor.kind, now(), actor.id)],
@@ -163,7 +180,7 @@ export async function proposalDetail(env: Bindings, actor: Actor, id: string): P
   if (row.status === 'pending') {
     try { stale = canonical(await currentBasis(env, row.kind, payload)) !== canonical(parseJson(row.basis_json, {})) } catch { stale = true }
   }
-  const changesPrice = row.kind === 'price_change' || (row.kind === 'amendment' && payload.kind === 'price_override')
+  const changesPrice = payload.setup === true || row.kind === 'price_change' || (row.kind === 'amendment' && payload.kind === 'price_override')
   const needsPreparation = changesPrice && row.created_by_kind === 'member' && !row.prepared_by_id
   const needsOtherApprover = changesPrice && row.created_by_kind === 'member' && row.prepared_by_id === actor.id
   return { ...row, needsPreparation, needsOtherApprover, payload, evidence: parseJson(row.evidence_json, {}), impact: parseJson(row.impact_json, {}), basis: parseJson(row.basis_json, {}), result: parseJson(row.result_json, null), stale, payload_json: undefined, evidence_json: undefined, impact_json: undefined, basis_json: undefined, result_json: undefined }
@@ -188,17 +205,24 @@ export async function decide(env: Bindings, actor: Actor, input: Input) {
     return { id: row.id, status: 'rejected' }
   }
   const payload = parseJson<Row>(row.payload_json, {})
-  const simulationSeq = payload.simulation === true ? (await one(env,'SELECT COALESCE(MAX(seq),0) AS seq FROM nc_audit'))!.seq : null
-  if ((row.kind === 'price_change' || (row.kind === 'amendment' && payload.kind === 'price_override')) && row.created_by_kind === 'member') {
+  const simulationSeq = payload.simulation === true || payload.setup === true ? (await one(env,'SELECT COALESCE(MAX(seq),0) AS seq FROM nc_audit'))!.seq : null
+  if ((payload.setup === true || row.kind === 'price_change' || (row.kind === 'amendment' && payload.kind === 'price_override')) && row.created_by_kind === 'member') {
     insist(row.prepared_by_id, 'price_proposal_needs_preparation', 409)
     insist(row.prepared_by_id !== actor.id, 'second_approver_required', 409)
   }
   let basis: unknown
   try { basis = await currentBasis(env, row.kind, payload) } catch { basis = null }
   insist(canonical(basis) === canonical(parseJson(row.basis_json, {})), 'proposal_stale', 409)
+  if(payload.setup===true)insist(!(parseJson<Row>(row.impact_json,{}).unresolvedAmbiguities??[]).length,'setup_ambiguities_unresolved',409)
   const audit = { actor: by, action: 'proposal.approve', subject: row.id, detail: { kind: row.kind, note } }
-  const basisGuards = await basisGuardStatements(env, row.kind, parseJson<Row>(row.basis_json, {}))
+  const basisGuards = payload.setup===true ? [] : await basisGuardStatements(env, row.kind, parseJson<Row>(row.basis_json, {}))
   if(simulationSeq!==null) basisGuards.push(guard(env,'proposal_stale','(SELECT COALESCE(MAX(seq),0) FROM nc_audit)=?',simulationSeq))
+
+  if(payload.setup===true){
+    const applied=setupStatements(env,actor,payload,row)
+    await commit(env,[...basisGuards,...applied.statements,...close(applied.result)],[audit,applied.audit])
+    return {id:row.id,status:'approved',...applied.result}
+  }
 
   if (row.kind === 'amendment') {
     const amendment = newId()
