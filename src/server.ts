@@ -1,3 +1,5 @@
+import { deliverPendingCorrectionMail } from './nectar/credit-correction-mail'
+import { deliverPendingDraftCorrectionMail } from './nectar/draft-correction-mail'
 import { sendScheduledReports } from './nectar/report-mail'
 import { withDemo } from './modules/demo/index.mjs'
 import { seedDemo } from './demo'
@@ -31,6 +33,8 @@ export default withDemo({
     await sendCertificateReminders(env, controller.scheduledTime)
     await deliverPendingAlerts(runtimeBindings(env))
     await sendScheduledReports(runtimeBindings(env),controller.scheduledTime)
+    await deliverPendingCorrectionMail(runtimeBindings(env))
+    await deliverPendingDraftCorrectionMail(runtimeBindings(env))
   },
   async fetch(request, env, execution) {
     const asset = await staticAssetResponse(request, env)

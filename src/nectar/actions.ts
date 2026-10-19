@@ -1,3 +1,4 @@
+import { prepareInvoiceCredit } from './credit-correction'
 import { setReportSchedule } from './report-schedules'
 import { resolveSetup } from './setup-resolution'
 // Every state change in Nectar, by name. The same handler serves the HTML form
@@ -40,6 +41,7 @@ import { prepareMetric,previewMetric,activateMetric } from './meter-definitions'
 type Handler = (env: Bindings, actor: Actor, input: Input, request: Request) => Promise<unknown>
 
 export const actions: Record<string, Handler> = {
+  'proposal.credit.prepare':prepareInvoiceCredit,
   'report.schedule':setReportSchedule,
   'setup.resolve':resolveSetup,
   'meter.prepare':prepareMetric,

@@ -1,3 +1,7 @@
+import { amendmentPlan, correctionPlan } from './draft-correction-plan'
+import { planInvoiceCredit, invoiceCreditStatements } from './credit-correction'
+import { deliverCorrectionMail } from './credit-correction-mail'
+import { draftCorrectionPlan, draftCorrectionMailStatements, deliverDraftCorrectionMail } from './draft-correction-mail'
 import { setupPlan } from './setup-plan'
 import { setupStatements } from './setup-apply'
 import { alertStatements } from './notifications'
@@ -12,95 +16,17 @@ import type { Bindings } from '../auth.server'
 import { actorLabel, requireCapability, requireMember, type Actor } from './actor'
 import { requireBusiness, type Business } from './business'
 import { all, canonical, commit, guard, insist, newId, now, one, parseJson, stmt, type Row } from './core'
-import { canonicalDecimal, micros } from './decimal'
-import { addDays, isDate, localDate, periodContaining, periodStartingIn, zonedStart } from './dates'
-import { ratingInputs } from './inputs'
+import { addDays } from './dates'
 import { requirePrice } from './catalog'
 import { Input } from './input'
-import { rate, type AmendmentIn, type RatingInput } from './rating'
 import { basisKey, reminderBasis, reminderDraft } from './collections'
 import { ingestStatements, screen, type RawEvent } from './usage'
-import { notIssuedGuard, startsInIssuedPeriod } from './subscriptions'
+import { notIssuedGuard } from './subscriptions'
 import { prepareRun } from './billruns'
 import { priceChangePlan } from './price-migrations'
 
 const KINDS = ['amendment', 'price_change', 'usage_correction', 'collection'] as const
 type Kind = typeof KINDS[number]
-
-const total = (input: RatingInput) => { const r = rate(input); return { subtotalCents: r.subtotalCents, totalCents: r.totalCents, lines: r.lines.map(line => ({ description: line.description, amountCents: line.amountCents })) } }
-
-async function amendmentPlan(env: Bindings, business: Business, payload: Row) {
-  const sub = await one(env, 'SELECT * FROM nc_subscriptions WHERE id = ?', String(payload.subscription ?? ''))
-  insist(sub, 'subscription_not_found', 404)
-  const kind = String(payload.kind ?? '')
-  insist(['discount_percent', 'fixed_credit', 'price_override'].includes(kind), 'invalid_amendment_kind')
-  const value = canonicalDecimal(String(payload.value ?? ''), 'amendment_value')
-  if (kind === 'discount_percent') insist(micros(value) > 0n && micros(value) <= 100_000_000n, 'invalid_amendment_value')
-  insist(micros(value) > 0n, 'invalid_amendment_value')
-  insist(isDate(payload.effective_from), 'effective_from_required')
-  insist(!payload.effective_to || (isDate(payload.effective_to) && payload.effective_to > payload.effective_from), 'invalid_effective_to')
-  const priceId = kind === 'price_override' ? String(payload.price ?? '') : null
-  if (priceId) insist((await requirePrice(env, priceId)).pricing_model === 'simple', 'override_price_model')
-  if (priceId) insist(await one(env, 'SELECT 1 FROM nc_items WHERE subscription_id = ? AND price_id = ?', sub.id, priceId), 'override_price_not_on_subscription')
-  insist(!await startsInIssuedPeriod(env, sub.id, payload.effective_from), 'period_already_invoiced', 409)
-  const amendment: AmendmentIn = { id: 'proposed', kind: kind as AmendmentIn['kind'], value, priceId, from: payload.effective_from, to: payload.effective_to || null, note: String(payload.note ?? '').slice(0, 200) }
-  const impact = []
-  const first = periodContaining(sub.anchor_day, amendment.from)
-  for (const period of [first, periodContaining(sub.anchor_day, first.end)]) {
-    const inputs = await ratingInputs(env, business, sub.id, period)
-    impact.push({ period, before: total(inputs), after: total({ ...inputs, amendments: [...inputs.amendments, amendment] }) })
-  }
-  return { normalized: { ...payload, subscription: sub.id, kind, value, price: priceId, effective_to: payload.effective_to || null }, impact, basis: { subscription: [sub.id, sub.revision] } }
-}
-
-/**
- * A usage correction voids recorded events and adds new ones. Additions pass the
- * same checks as any usage import, and every one must be accepted. The effect is
- * each affected subscription's period rated before and after the correction:
- * the draft run's period, or the period of the latest corrected event.
- */
-async function correctionPlan(env: Bindings, business: Business, payload: Row) {
-  const voids = Array.isArray(payload.void) ? payload.void : [], adds: RawEvent[] = Array.isArray(payload.add) ? payload.add : []
-  insist(voids.length + adds.length > 0 && voids.length + adds.length <= 500, 'correction_required')
-  const basis: Record<string, unknown> = {}, rows: Row[] = [], touched: { customerId: string; meterId: string; occurredAt: number }[] = []
-  for (const entry of voids) {
-    const event = await one(env, 'SELECT event_id, customer_id, meter_id, quantity, occurred_at, occurred_text, status, invoice_id FROM nc_usage_events WHERE event_id = ?', String(entry?.event_id ?? ''))
-    insist(event, 'event_not_found', 404, { event: entry?.event_id })
-    insist(event.status === 'active' && !event.invoice_id, 'already_billed', 409, { event: event.event_id })
-    insist(String(entry.reason ?? '').trim(), 'void_reason_required')
-    basis[`event:${event.event_id}`] = [event.status, event.invoice_id]
-    rows.push({ action: 'void', event: event.event_id, quantity: event.quantity, occurredAt: event.occurred_text, reason: String(entry.reason).slice(0, 300) })
-    touched.push({ customerId: event.customer_id, meterId: event.meter_id, occurredAt: event.occurred_at })
-  }
-  const screened = adds.length ? await screen(env, adds) : null
-  if (screened) {
-    insist(screened.counts.accepted === adds.length, 'correction_rows_rejected', 400, screened.report)
-    for (const event of screened.accepted) {
-      basis[`add:${event.eventId}`] = null
-      rows.push({ action: 'add', event: event.eventId, quantity: event.quantity, occurredAt: event.occurredText, reason: '' })
-      touched.push(event as typeof touched[number])
-    }
-  }
-  const run = payload.run ? await one(env, "SELECT id, period FROM nc_bill_runs WHERE id = ? AND status = 'draft'", String(payload.run)) : null
-  if (payload.run) insist(run, 'bill_run_not_found', 404)
-  const voided = new Set(rows.filter(row => row.action === 'void').map(row => row.event))
-  const invoices: Row[] = []
-  for (const sub of await all(env, `SELECT DISTINCT s.id, s.anchor_day, s.customer_id, c.name AS customer_name FROM nc_subscriptions s JOIN nc_customers c ON c.id = s.customer_id JOIN nc_items i ON i.subscription_id = s.id JOIN nc_prices p ON p.id = i.price_id
-    WHERE p.meter_id IS NOT NULL ORDER BY c.name, s.id`)) {
-    const mine = touched.filter(event => event.customerId === sub.customer_id)
-    if (!mine.length) continue
-    const latest = localDate(Math.max(...mine.map(event => event.occurredAt)), business.timezone)
-    const period = run ? periodStartingIn(sub.anchor_day, run.period) : periodContaining(sub.anchor_day, latest)
-    const inputs = await ratingInputs(env, business, sub.id, period)
-    const meters = new Set(Object.values(inputs.prices).flatMap(price => price.meterId ? [price.meterId] : []))
-    if (!mine.some(event => meters.has(event.meterId))) continue
-    const end = zonedStart(period.end, business.timezone)
-    const added = (screened?.accepted ?? []).filter(event => event.customerId === sub.customer_id && meters.has(event.meterId) && event.occurredAt < end)
-      .map(event => ({ eventId: event.eventId, meterId: event.meterId, quantity: event.quantity, occurredAt: event.occurredAt }))
-    invoices.push({ subscription: sub.id, customer: sub.customer_name, period, before: total(inputs), after: total({ ...inputs, events: [...inputs.events.filter(event => !voided.has(event.eventId)), ...added] }) })
-  }
-  return { normalized: { void: voids.map((entry: Row) => ({ event_id: String(entry.event_id), reason: String(entry.reason).slice(0, 300) })), add: adds, run: run?.id ?? null, period: run?.period ?? null }, impact: { rows, invoices }, basis }
-}
 
 async function collectionPlan(env: Bindings, payload: Row) {
   const basis = await reminderBasis(env, String(payload.customer ?? ''))
@@ -116,10 +42,11 @@ async function collectionPlan(env: Bindings, payload: Row) {
 
 async function plan(env: Bindings, kind: Kind, payload: Row, saved = false):Promise<{normalized:Row;impact:any;basis:Row}> {
   const business = await requireBusiness(env)
+  if (kind === 'amendment' && payload.invoice_credit === true) return await planInvoiceCredit(env,business,payload,saved)
   if (kind === 'amendment' && payload.setup === true) return await setupPlan(env,business,payload,saved)
-  if (kind === 'amendment') return await amendmentPlan(env, business, payload)
+  if (kind === 'amendment') return await draftCorrectionPlan(env,kind,await amendmentPlan(env,business,payload))
   if (kind === 'price_change') return await priceChangePlan(env, business, payload, saved)
-  if (kind === 'usage_correction') return await correctionPlan(env, business, payload)
+  if (kind === 'usage_correction') return await draftCorrectionPlan(env,kind,await correctionPlan(env,business,payload))
   return await collectionPlan(env, payload)
 }
 
@@ -137,7 +64,7 @@ export async function propose(env: Bindings, actor: Actor, input: Input) {
   insist(payload && typeof payload === 'object' && !Array.isArray(payload), 'invalid_payload')
   const evidence = (input.has('evidence') ? input.json('evidence') : {}) as Row
   insist(evidence && typeof evidence === 'object' && !Array.isArray(evidence), 'invalid_evidence')
-  if (kind === 'amendment' && payload.setup !== true) {
+  if (kind === 'amendment' && payload.setup !== true && payload.invoice_credit !== true) {
     const clauses = Array.isArray(evidence.clauses) ? evidence.clauses.filter((c: Row) => typeof c?.quote === 'string' && c.quote.trim()) : []
     insist(clauses.length, 'quoted_clause_required')
   }
@@ -168,7 +95,7 @@ export async function propose(env: Bindings, actor: Actor, input: Input) {
 
 export async function proposals(env: Bindings, actor: Actor) {
   requireCapability(actor, 'read')
-  return await all(env, 'SELECT id, kind, title, status, created_by, created_by_kind, created_at, decided_by, decided_at FROM nc_proposals ORDER BY status = \'pending\' DESC, created_at DESC LIMIT 200')
+  return await all(env, 'SELECT id, kind, json_extract(payload_json, \'$.invoice_credit\') AS invoice_credit,title, status, created_by, created_by_kind, created_at, decided_by, decided_at FROM nc_proposals ORDER BY status = \'pending\' DESC, created_at DESC LIMIT 200')
 }
 
 export async function proposalDetail(env: Bindings, actor: Actor, id: string): Promise<Row> {
@@ -182,8 +109,13 @@ export async function proposalDetail(env: Bindings, actor: Actor, id: string): P
   }
   const changesPrice = payload.setup === true || row.kind === 'price_change' || (row.kind === 'amendment' && payload.kind === 'price_override')
   const needsPreparation = changesPrice && row.created_by_kind === 'member' && !row.prepared_by_id
-  const needsOtherApprover = changesPrice && row.created_by_kind === 'member' && row.prepared_by_id === actor.id
-  return { ...row, needsPreparation, needsOtherApprover, payload, evidence: parseJson(row.evidence_json, {}), impact: parseJson(row.impact_json, {}), basis: parseJson(row.basis_json, {}), result: parseJson(row.result_json, null), stale, payload_json: undefined, evidence_json: undefined, impact_json: undefined, basis_json: undefined, result_json: undefined }
+  let needsOtherApprover = changesPrice && row.created_by_kind === 'member' && row.prepared_by_id === actor.id
+  const correctionMail=await one(env,'SELECT * FROM nc_credit_correction_mail WHERE proposal_id=?',id)
+  const binding=await one(env,'SELECT b.request_id,r.prepared_by FROM nc_credit_correction_requests b JOIN nc_credit_requests r ON r.id=b.request_id WHERE b.proposal_id=?',id)
+  const customerMessages=await all(env,'SELECT * FROM nc_draft_correction_mail WHERE proposal_id=? ORDER BY customer_id',id)
+  const needsCreditPreparation=payload.invoice_credit===true && parseJson<Row>(row.impact_json,{}).credit?.needsSecondApprover && !binding
+  needsOtherApprover=needsOtherApprover || payload.invoice_credit===true && parseJson<Row>(row.impact_json,{}).credit?.needsSecondApprover && binding?.prepared_by===actor.id
+  return { ...row, needsCreditPreparation,correctionMail,creditRequest:binding?.request_id??null,customerMessages,needsPreparation, needsOtherApprover, payload, evidence: parseJson(row.evidence_json, {}), impact: parseJson(row.impact_json, {}), basis: parseJson(row.basis_json, {}), result: parseJson(row.result_json, null), stale, payload_json: undefined, evidence_json: undefined, impact_json: undefined, basis_json: undefined, result_json: undefined }
 }
 
 /** A person approves or rejects. Approval re-reads the basis and applies the typed change through the normal records. */
@@ -205,7 +137,7 @@ export async function decide(env: Bindings, actor: Actor, input: Input) {
     return { id: row.id, status: 'rejected' }
   }
   const payload = parseJson<Row>(row.payload_json, {})
-  const simulationSeq = payload.simulation === true || payload.setup === true ? (await one(env,'SELECT COALESCE(MAX(seq),0) AS seq FROM nc_audit'))!.seq : null
+  const simulationSeq = payload.simulation === true || payload.setup === true || payload.invoice_credit === true || row.kind === 'usage_correction' || row.kind === 'amendment' ? (await one(env,'SELECT COALESCE(MAX(seq),0) AS seq FROM nc_audit'))!.seq : null
   if ((payload.setup === true || row.kind === 'price_change' || (row.kind === 'amendment' && payload.kind === 'price_override')) && row.created_by_kind === 'member') {
     insist(row.prepared_by_id, 'price_proposal_needs_preparation', 409)
     insist(row.prepared_by_id !== actor.id, 'second_approver_required', 409)
@@ -215,9 +147,15 @@ export async function decide(env: Bindings, actor: Actor, input: Input) {
   insist(canonical(basis) === canonical(parseJson(row.basis_json, {})), 'proposal_stale', 409)
   if(payload.setup===true)insist(!(parseJson<Row>(row.impact_json,{}).unresolvedAmbiguities??[]).length,'setup_ambiguities_unresolved',409)
   const audit = { actor: by, action: 'proposal.approve', subject: row.id, detail: { kind: row.kind, note } }
-  const basisGuards = payload.setup===true ? [] : await basisGuardStatements(env, row.kind, parseJson<Row>(row.basis_json, {}))
+  const basisGuards = payload.setup===true || payload.invoice_credit===true ? [] : await basisGuardStatements(env, row.kind, parseJson<Row>(row.basis_json, {}))
   if(simulationSeq!==null) basisGuards.push(guard(env,'proposal_stale','(SELECT COALESCE(MAX(seq),0) FROM nc_audit)=?',simulationSeq))
 
+  if(payload.invoice_credit===true){
+    const applied=await invoiceCreditStatements(env,actor,row,payload)
+    await commit(env,[...basisGuards,...applied.statements,...close(applied.result)],[audit,...applied.audits])
+    await deliverCorrectionMail(env,row.id)
+    return {...applied.result,invoice:applied.result.id,id:row.id,status:'approved'}
+  }
   if(payload.setup===true){
     const applied=setupStatements(env,actor,payload,row)
     await commit(env,[...basisGuards,...applied.statements,...close(applied.result)],[audit,applied.audit])
@@ -226,10 +164,11 @@ export async function decide(env: Bindings, actor: Actor, input: Input) {
 
   if (row.kind === 'amendment') {
     const amendment = newId()
-    await commit(env, [...basisGuards, notIssuedGuard(env, payload.subscription, payload.effective_from), ...close({ amendment }),
+    await commit(env, [...basisGuards, ...draftCorrectionMailStatements(env,row,payload),notIssuedGuard(env, payload.subscription, payload.effective_from), ...close({ amendment }),
       stmt(env, "INSERT INTO nc_amendments (id, subscription_id, kind, value, price_id, effective_from, effective_to, note, clause, status, origin, proposal_id, created_by, created_at, decided_by, decided_at, prepared_by_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'approved', 'proposal', ?, ?, ?, ?, ?, ?)",
         amendment, payload.subscription, payload.kind, payload.value, payload.price, payload.effective_from, payload.effective_to, String(payload.note ?? ''), JSON.stringify(parseJson<Row>(row.evidence_json, {}).clauses ?? []), row.id, row.created_by, row.created_at, by, at, row.prepared_by_id),
       stmt(env, 'UPDATE nc_subscriptions SET revision = ?, updated_at = ? WHERE id = ?', newId(), at, payload.subscription)], audit)
+    await deliverDraftCorrectionMail(env,row.id)
     return { id: row.id, status: 'approved', amendment }
   }
   if (row.kind === 'price_change') {
@@ -265,11 +204,12 @@ export async function decide(env: Bindings, actor: Actor, input: Input) {
     const write = adds.length ? ingestStatements(env, actor, await screen(env, adds), { kind: 'correction' }) : null
     const statements = [...basisGuards, ...(payload.void as Row[]).map(entry => stmt(env, "UPDATE nc_usage_events SET status = 'voided', void_reason = ? WHERE event_id = ? AND status = 'active' AND invoice_id IS NULL", `${entry.reason} (proposal ${row.id})`, entry.event_id)), ...(write?.statements ?? [])]
     const result = { voided: (payload.void as Row[]).length, added: adds.length, batch: write?.batch ?? null }
-    await commit(env, [...statements, ...close(result)], write ? [audit, write.audit] : audit)
+    await commit(env, [...statements,...draftCorrectionMailStatements(env,row,payload), ...close(result)], write ? [audit, write.audit] : audit)
     let rerun = null
     if (payload.run && await one(env, "SELECT 1 FROM nc_bill_runs WHERE id = ? AND status = 'draft'", payload.run)) {
       rerun = await prepareRun(env, actor, Input.of({ period: payload.period }))
     }
+    await deliverDraftCorrectionMail(env,row.id)
     return { id: row.id, status: 'approved', ...result, rerun: rerun?.id ?? null }
   }
   // collection: the person approves the exact recipient and wording.

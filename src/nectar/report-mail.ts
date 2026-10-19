@@ -1,7 +1,7 @@
 import type { Bindings } from '../auth.server'
 import { operatorMail } from '../mail.server.mjs'
 import { business } from './business'
-import { all, commit, guard, newId, now, one, stmt } from './core'
+import { NectarError, all, commit, guard, newId, now, one, stmt } from './core'
 import { addMonths, localDate } from './dates'
 import { report, reportInvoice, type Report } from './reports'
 import { reportsCsv } from './report-csv'
@@ -21,9 +21,12 @@ export async function sendScheduledReports(env: Bindings, instant=Date.now()) {
     WHERE m.status='active' AND m.role IN ('owner','finance','accountant') AND s.enabled=1 AND s.day<=?`,Number(day.slice(8)))
   for(const member of rows){
     const id=newId()
-    const claimed=await env.DB.prepare(`INSERT OR IGNORE INTO nc_report_deliveries(id,member_id,period,status,generated_at)
-      VALUES (?,?,?,'preparing',?) RETURNING id`).bind(id,member.id,period,now()).first()
-    if(!claimed)continue
+    if(await one(env,'SELECT 1 FROM nc_report_deliveries WHERE member_id=? AND period=?',member.id,period))continue
+    try{
+      await commit(env,[guard(env,'stale','NOT EXISTS(SELECT 1 FROM nc_report_deliveries WHERE member_id=? AND period=?)',member.id,period),
+        stmt(env,"INSERT INTO nc_report_deliveries(id,member_id,period,status,generated_at) VALUES (?,?,?,'preparing',?)",id,member.id,period,now())],
+        {actor:'system:reports',action:'report.reserve',subject:id,detail:{period,member:member.id,scheduleRevision:member.revision}})
+    }catch(error){if(error instanceof NectarError&&error.code==='stale')continue;throw error}
     let status='failed',provider:string|null=null
     try {
       const actor:Actor={id:member.id,email:member.email,name:member.name,role:member.role as Role,kind:'member',sessionId:null,
@@ -42,7 +45,7 @@ export async function sendScheduledReports(env: Bindings, instant=Date.now()) {
       const csv=reportsCsv(reports)
       await commit(env,[guard(env,'report_source_changed','(SELECT COALESCE(MAX(seq),0) FROM nc_audit)=?',seq),
         stmt(env,"UPDATE nc_report_deliveries SET reports_json=?,sources_json=?,csv=?,status='sending' WHERE id=? AND status='preparing'",JSON.stringify(reports),JSON.stringify(sourceEvidence),csv,id)],
-        {actor:'system:reports',action:'report.snapshot',subject:id,detail:{period}})
+        [{actor:'system:reports',action:'report.snapshot',subject:id,detail:{period}},{actor:'system:reports',action:'report.mail.claim',subject:id,detail:{period,member:member.id,scheduleRevision:member.revision}}])
       const eligible=await one(env,`SELECT m.id FROM nc_members m JOIN nc_report_schedules s ON s.member_id=m.id
         WHERE m.id=? AND m.email=? AND m.status='active' AND m.role IN ('owner','finance','accountant') AND s.enabled=1 AND s.revision=?`,member.id,member.email,member.revision)
       status='suppressed'
