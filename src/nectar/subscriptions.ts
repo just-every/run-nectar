@@ -94,8 +94,8 @@ export async function createSubscription(env: Bindings, actor: Actor, input: Inp
     ...(meters.length ? [guard(env, 'meter_already_billed', `NOT EXISTS(${CLASH(meters.length)})`, customer.id, id, start, start, ...meters)] : []),
     stmt(env, "INSERT INTO nc_subscriptions (id, customer_id, external_id, anchor_day, start_date, trial_end, billing_mode, origin, revision, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'live', 'native', ?, ?, ?, ?)", id, customer.id, externalId, anchor, start, trialEnd, newId(), by, at, at),
     ...items.map(item => stmt(env, "INSERT INTO nc_items (id, subscription_id, price_id, quantity, effective_from, origin, created_at) VALUES (?, ?, ?, ?, ?, 'native', ?)", item.id, id, item.price.id, item.quantity, start, at)),
-    ...(exception ? [stmt(env, "INSERT INTO nc_amendments (id, subscription_id, kind, value, price_id, effective_from, effective_to, note, clause, status, origin, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'proposed', 'native', ?, ?)",
-      newId(), id, exception.kind, exception.value, exception.priceId, exception.from, exception.to, exception.note, exception.clause, by, at)] : []),
+    ...(exception ? [stmt(env, "INSERT INTO nc_amendments (id, subscription_id, kind, value, price_id, effective_from, effective_to, note, clause, status, origin, created_by, created_at, prepared_by_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'proposed', 'native', ?, ?, ?)",
+      newId(), id, exception.kind, exception.value, exception.priceId, exception.from, exception.to, exception.note, exception.clause, by, at, actor.id)] : []),
   ]
   await commit(env, statements, { actor: by, action: 'subscription.create', subject: id, detail: { customer: customer.external_id, start, anchor, trialEnd, items: items.map(item => ({ price: item.price.id, quantity: item.quantity })), exception: exception?.kind ?? null } })
   return { id }
@@ -110,8 +110,8 @@ export async function proposeAmendment(env: Bindings, actor: Actor, input: Input
   if (amendment.priceId) insist(await one(env, 'SELECT 1 FROM nc_items WHERE subscription_id = ? AND price_id = ?', sub.id, amendment.priceId), 'override_price_not_on_subscription')
   insist(!await startsInIssuedPeriod(env, sub.id, amendment.from), 'period_already_invoiced', 409)
   const id = newId()
-  await commit(env, [stmt(env, "INSERT INTO nc_amendments (id, subscription_id, kind, value, price_id, effective_from, effective_to, note, clause, status, origin, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'proposed', 'native', ?, ?)",
-    id, sub.id, amendment.kind, amendment.value, amendment.priceId, amendment.from, amendment.to, amendment.note, amendment.clause, actorLabel(actor), now())],
+  await commit(env, [stmt(env, "INSERT INTO nc_amendments (id, subscription_id, kind, value, price_id, effective_from, effective_to, note, clause, status, origin, created_by, created_at, prepared_by_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'proposed', 'native', ?, ?, ?)",
+    id, sub.id, amendment.kind, amendment.value, amendment.priceId, amendment.from, amendment.to, amendment.note, amendment.clause, actorLabel(actor), now(), actor.id)],
   { actor: actorLabel(actor), action: 'amendment.propose', subject: id, detail: { subscription: sub.id, ...amendment } })
   return { id: sub.id, amendment: id }
 }
@@ -130,6 +130,10 @@ export async function decideAmendment(env: Bindings, actor: Actor, input: Input)
   insist(amendment.status === 'proposed', 'already_decided', 409)
   const decision = input.text('decision', { max: 10 })
   insist(decision === 'approved' || decision === 'rejected', 'invalid_decision')
+  if (decision === 'approved' && amendment.kind === 'price_override') {
+    insist(amendment.prepared_by_id, 'price_override_needs_preparation', 409)
+    insist(amendment.prepared_by_id !== actor.id, 'second_approver_required', 409)
+  }
   if (decision === 'approved' && amendment.price_id) insist((await requirePrice(env, amendment.price_id)).pricing_model === 'simple', 'override_price_model')
   if (decision === 'approved') insist(!await startsInIssuedPeriod(env, amendment.subscription_id, amendment.effective_from), 'period_already_invoiced', 409)
   await commit(env, [guard(env, 'stale', "EXISTS(SELECT 1 FROM nc_amendments WHERE id = ? AND status = 'proposed')", amendment.id), ...(decision === 'approved' ? [notIssuedGuard(env, amendment.subscription_id, amendment.effective_from)] : []), ...amendmentStatements(env, actor, amendment, decision)],
@@ -170,8 +174,8 @@ export async function prepareChange(env: Bindings, actor: Actor, input: Input) {
     nextPeriod: { period: next, lines: recurringLines(nextAfter.lines), cents: recurringLines(nextAfter.lines).reduce((sum, line) => sum + line.amountCents, 0) },
   }
   const id = newId()
-  await commit(env, [stmt(env, "INSERT INTO nc_changes (id, subscription_id, item_id, new_price_id, new_quantity, effective_date, subscription_revision, preview_json, status, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?)",
-    id, sub.id, item.id, price.id, quantity, date, sub.revision, JSON.stringify(preview), actorLabel(actor), now())],
+  await commit(env, [stmt(env, "INSERT INTO nc_changes (id, subscription_id, item_id, new_price_id, new_quantity, effective_date, subscription_revision, preview_json, status, created_by, created_at, prepared_by_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?)",
+    id, sub.id, item.id, price.id, quantity, date, sub.revision, JSON.stringify(preview), actorLabel(actor), now(), actor.id)],
   { actor: actorLabel(actor), action: 'change.prepare', subject: id, detail: { subscription: sub.id, item: item.id, price: price.id, quantity, date } })
   return { id: sub.id, change: id, preview }
 }
@@ -191,6 +195,10 @@ export async function decideChange(env: Bindings, actor: Actor, input: Input) {
   }
   insist(sub.revision === change.subscription_revision, 'stale', 409)
   const item = await one(env, 'SELECT * FROM nc_items WHERE id = ?', change.item_id)
+  if (item!.price_id !== change.new_price_id) {
+    insist(change.prepared_by_id, 'price_switch_needs_preparation', 409)
+    insist(change.prepared_by_id !== actor.id, 'second_approver_required', 409)
+  }
   const at = now()
   await commit(env, [
     guard(env, 'stale', 'EXISTS(SELECT 1 FROM nc_subscriptions WHERE id = ? AND revision = ?)', sub.id, change.subscription_revision),
