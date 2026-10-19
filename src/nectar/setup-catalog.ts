@@ -1,3 +1,4 @@
+import { serviceEndSql } from './renewal-sql'
 import type { Bindings } from '../auth.server'
 import { all, insist, newId, one, parseJson, type Row } from './core'
 import { canonicalDecimal, micros } from './decimal'
@@ -96,7 +97,7 @@ export async function setupOwnership(env: Bindings, plan: Row, meters: Row[], ba
     }
     if (!price.meterId || plan.customer.create) continue
     const meter = meters.find(m => m.id === price.meterId)!, source = meter.source_meter_id ?? meter.id
-    const clashes = await all(env, `SELECT s.id,s.revision,i.id AS item_id,i.effective_from,i.effective_to FROM nc_items i JOIN nc_prices p ON p.id=i.price_id LEFT JOIN nc_meters m ON m.id=p.meter_id JOIN nc_subscriptions s ON s.id=i.subscription_id WHERE s.customer_id=? AND s.id<>? AND COALESCE(m.source_meter_id,p.meter_id)=? AND MAX(s.start_date,i.effective_from,?)<MIN(COALESCE(s.end_date,'9999-12-31'),COALESCE(i.effective_to,'9999-12-31'),?)`, plan.customer.id, plan.subscription.id, source, item.from, item.to ?? plan.subscription.endDate ?? '9999-12-31')
+    const clashes = await all(env, `SELECT s.id,s.revision,i.id AS item_id,i.effective_from,i.effective_to FROM nc_items i JOIN nc_prices p ON p.id=i.price_id LEFT JOIN nc_meters m ON m.id=p.meter_id JOIN nc_subscriptions s ON s.id=i.subscription_id WHERE s.customer_id=? AND s.id<>? AND COALESCE(m.source_meter_id,p.meter_id)=? AND MAX(s.start_date,i.effective_from,?)<MIN(${serviceEndSql()},COALESCE(i.effective_to,'9999-12-31'),?)`, plan.customer.id, plan.subscription.id, source, item.from, item.to ?? (plan.renewal?.auto_renew?null:plan.subscription.endDate) ?? '9999-12-31')
     insist(!clashes.length, 'meter_already_billed', 409)
     basis.ownership.push({ source, from: item.from, to: item.to, clashes })
   }

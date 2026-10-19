@@ -63,6 +63,16 @@ function constantOrder(suffix, evergreen = false) {
   }
 }
 
+function renewalOrder(suffix, autoRenew = true, evergreen = true) {
+  const payload = constantOrder(suffix, true)
+  const term = `Service starts 2030-01-01 with an annual term of 12 months through 2031-01-01; ${autoRenew ? 'auto-renews for successive 12-month terms until canceled' : 'ends without automatic renewal'}. Send notice 30 days before renewal. Apply a 5 percent compounded price uplift at each renewal. Billing remains monthly in arrears.`
+  payload.source.text = payload.source.text.replaceAll('2020-01-01', '2030-01-01').replace(payload.subscription.quote.replaceAll('2020-01-01', '2030-01-01'), term)
+  payload.source.original.base64 = Buffer.from(payload.source.text).toString('base64')
+  payload.subscription = { external_id: payload.subscription.external_id, start_date: '2030-01-01', anchor_day: 1, ...(evergreen ? { evergreen: true } : { months: 12 }), renewal: { months: 12, auto_renew: autoRenew, notice_days: 30, uplift_percent: '5', quote: term }, quote: term }
+  payload.items[0].from = '2030-01-01'
+  return payload
+}
+
 // AGENT-006: one public-HTTP journey, with no domain/database writes outside the API.
 export async function contractSetup(h, owner) {
   await h.api('access.give', owner, { email: 'agent006-finance@example.test', name: 'Setup Finance', role: 'finance' })
@@ -213,6 +223,54 @@ export async function contractSetup(h, owner) {
   assert.equal(evergreenPlan.items[0].to, null, 'AGENT-006 an evergreen preview cannot silently impose an end date on the service')
   await decide(finance, evergreen.id, 'rejected')
   assert.deepEqual(await snapshot(), beforeTermPreviews, 'AGENT-006 finite and evergreen previews and rejection leave all billing records unchanged')
+
+  const renewalInput = renewalOrder('RENEWAL5')
+  const renewalBefore = await snapshot()
+  const unquotedRenewal = structuredClone(renewalInput)
+  unquotedRenewal.subscription.renewal.quote = 'Invented renewal settings.'
+  await propose(agent, unquotedRenewal, 400)
+  const badNotice = structuredClone(renewalInput)
+  badNotice.subscription.renewal.notice_days = 14
+  await propose(agent, badNotice, 400)
+  const missingRenewal = structuredClone(renewalInput)
+  delete missingRenewal.subscription.renewal
+  const unsupportedRenewal = await propose(agent, missingRenewal)
+  assert.ok(unsupportedRenewal.impact.unresolvedAmbiguities.length, 'SUB-004/AGENT-006 quoted annual auto-renewal still needs explicit executable settings')
+  await decide(finance, unsupportedRenewal.id, 'rejected')
+  const renewal = await propose(agent, renewalInput)
+  assert.deepEqual(renewal.impact.unresolvedAmbiguities, [], 'SUB-004/AGENT-006 valid quoted annual renewal terms are supported')
+  assert.deepEqual(renewal.impact.periods.map(row => row.calculation.totalCents), [...Array(12).fill(10000), ...Array(12).fill(10500), ...Array(12).fill(11025)], 'SUB-004/AGENT-006 monthly arrears preview compounds the quoted 5 percent only at annual term boundaries')
+  assert.equal(renewal.impact.totals.totalCents, 378300)
+  assert.deepEqual(renewal.impact.annualTotals.map(row => row.totalCents), [120000, 126000, 132300])
+  assert.equal(renewal.impact.previewHorizon.finite, false)
+  const renewalSaved = await api(`proposals/${renewal.id}`), renewalPlan = renewalSaved.payload.plan
+  assert.equal(renewalPlan.subscription.endDate, '2031-01-01', 'SUB-004/AGENT-006 evergreen auto-renewal stores the finite initial term end')
+  assert.equal(renewalPlan.items[0].to, null, 'SUB-004/AGENT-006 service items continue across automatic renewals')
+  assert.deepEqual(renewal.impact.periods[12].inputs.renewals.map(row => [row.effectiveDate, row.upliftPercent]), [['2031-01-01', '5.00'], ['2032-01-01', '5.00']])
+  assert.ok(renewal.impact.assumptions.some(row => row.kind === 'renewal' && row.recorded === false), 'SUB-004/AGENT-006 future renewals remain labelled hypothetical')
+  assert.deepEqual(await snapshot(), renewalBefore, 'SUB-004/AGENT-006 preparing renewal setup writes no billing records')
+  const renewalApproval = await decide(finance, renewal.id)
+  const installedRenewal = await api(`subscriptions/${renewalApproval.subscription}`)
+  const installedTerm = installedRenewal.renewal.terms.find(row => row.id === renewalPlan.renewal.id)
+  assert.ok(installedTerm, 'SUB-004/AGENT-006 the same setup approval atomically installs the renewal term')
+  assert.deepEqual([installedTerm.start_date, installedTerm.end_date, installedTerm.months, installedTerm.auto_renew, installedTerm.notice_days, installedTerm.uplift_percent, installedTerm.status], ['2030-01-01', '2031-01-01', 12, 1, 30, '5.00', 'active'])
+  assert.deepEqual([installedTerm.prepared_by_id, installedTerm.prepared_by, installedTerm.decided_by, installedTerm.approval_mode, installedTerm.quote], [renewalSaved.prepared_by_id, renewalSaved.created_by, 'agent006-finance@example.test', 'two-person', renewalInput.subscription.renewal.quote], 'SUB-004/AGENT-006 renewal retains original preparer, separate approver and source quote')
+  assert.equal(installedRenewal.end_date, renewalPlan.subscription.endDate)
+  assert.deepEqual(installedRenewal.renewal.events, [], 'SUB-004/AGENT-006 setup approval never records hypothetical future renewal events')
+  const installedUpcoming = await api(`subscriptions/${renewalApproval.subscription}/upcoming?period=2030-01`)
+  assert.deepEqual(installedUpcoming.calculation.lines.map(line => [line.kind, line.priceId, line.unitAmount, line.amountCents]), renewal.impact.periods[0].calculation.lines.map(line => [line.kind, line.priceId, line.unitAmount, line.amountCents]), 'SUB-004/AGENT-006 installed ordinary monthly billing matches the reviewed initial-term preview')
+  for (const [suffix, autoRenew] of [['FINITEAUTO', true], ['FINITENONRENEW', false]]) {
+    const finiteRenewal = await propose(agent, renewalOrder(suffix, autoRenew, false))
+    assert.deepEqual(finiteRenewal.impact.unresolvedAmbiguities, [])
+    assert.equal(finiteRenewal.impact.periods.length, autoRenew ? 36 : 12, 'SUB-004/AGENT-006 a finite initial term previews successive automatic terms, or stops at its own end when renewal is off')
+    await decide(finance, finiteRenewal.id, 'rejected')
+  }
+  const advanceRenewal = renewalOrder('ADVANCERENEW')
+  advanceRenewal.source.text += 'Billing must be annual billing in advance.\n'
+  const advance = await propose(agent, advanceRenewal)
+  assert.ok(advance.impact.unresolvedAmbiguities.length, 'SUB-004/AGENT-006 renewal support preserves genuine nonmonthly and advance billing blockers')
+  await decide(finance, advance.id, 'approved', 409)
+  await decide(finance, advance.id, 'rejected')
 
   const ambiguous = executedOrder('AMBIGUOUS')
   ambiguous.ambiguities = [{ issue: 'The buyer needs to confirm the intended service account.' }]

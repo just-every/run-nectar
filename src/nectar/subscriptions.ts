@@ -1,3 +1,5 @@
+import { serviceEndSql } from './renewal-sql'
+import { termRecords } from './renewal-terms'
 // Flows 4 and 8: subscriptions with an explicit cycle anchor, optional trial
 // and contract exceptions that bill only once approved; and scheduled plan or
 // quantity changes, prepared with their proration preview and applied only
@@ -34,13 +36,13 @@ export async function subscriptionDetail(env: Bindings, actor: Actor, id: string
     all(env, "SELECT id, number, status, period_start, period_end, total_cents FROM nc_invoices WHERE subscription_id = ? AND status <> 'discarded' ORDER BY period_start DESC", id),
   ])
   const history = await lifecycleHistory(env, id)
-  return { ...sub, contracts:await contractsFor(env,id),burnDown:await contractBurnDown(env,id), lifecyclePolicy: await lifecyclePolicy(env), lifecycle: history, intervals: lifecycleIntervals(history),...await metadataFor(env,'subscription',id), items, amendments, changes: changes.map(change => ({ ...change, preview: parseJson(change.preview_json, {}), preview_json: undefined })), invoices:await withMetadata(env,'invoice',invoices) }
+  return { ...sub, renewal:await termRecords(env,actor,id), contracts:await contractsFor(env,id),burnDown:await contractBurnDown(env,id), lifecyclePolicy: await lifecyclePolicy(env), lifecycle: history, intervals: lifecycleIntervals(history),...await metadataFor(env,'subscription',id), items, amendments, changes: changes.map(change => ({ ...change, preview: parseJson(change.preview_json, {}), preview_json: undefined })), invoices:await withMetadata(env,'invoice',invoices) }
 }
 
 // A subscription holds its meters while it is live on or after `from`: no end
 // date yet, or one after it. Checked before the write and again inside it.
 const CLASH = (count: number) => `SELECT 1 FROM nc_items i JOIN nc_prices p ON p.id = i.price_id LEFT JOIN nc_meters m ON m.id=p.meter_id JOIN nc_subscriptions s ON s.id = i.subscription_id
-    WHERE s.customer_id = ? AND s.id <> ? AND (s.end_date IS NULL OR s.end_date > ?) AND (i.effective_to IS NULL OR i.effective_to > ?) AND COALESCE(m.source_meter_id,p.meter_id) IN (${Array(count).fill('?').join(',')})`
+    WHERE s.customer_id = ? AND s.id <> ? AND (${serviceEndSql()}>?) AND (i.effective_to IS NULL OR i.effective_to > ?) AND COALESCE(m.source_meter_id,p.meter_id) IN (${Array(count).fill('?').join(',')})`
 
 async function meterClash(env: Bindings, customerId: string, meterIds: string[], from: string, exceptSubscription = '') {
   if (!meterIds.length) return false

@@ -1,3 +1,4 @@
+import { RENEWAL_RATING_VERSION } from './renewal-rating'
 // Gathers the recorded inputs that rate one subscription for one period, and
 // fingerprints them. An approval names this fingerprint: if any input changes
 // (a usage event, an amendment, a price, the tax declaration), the approval no
@@ -50,11 +51,13 @@ export async function ratingInputs(env: Bindings, business: Business, subscripti
   const billableEvents = activeSegments(period.start,period.end,intervals).length ? events : events.filter(e=>blockedAt(localDate(e.occurredAt,business.timezone),intervals).length > 0)
   const creditGovernance = intervals.length ? await creditPolicy(env) : null
   const charges = (await pendingCharges(env, sub.id, period.end)).filter(charge => activeSegments(period.start,period.end,intervals).length > 0 && !intervals.some(i => i.from <= charge.date && (i.to ?? '9999') > charge.date && (i.to ?? '9999') >= period.end))
+  const renewals=(await all(env,"SELECT id,effective_date,uplift_percent FROM nc_renewal_events WHERE subscription_id=? AND kind='renew' ORDER BY effective_date,id",sub.id)).map(r=>({id:r.id,effectiveDate:r.effective_date,upliftPercent:r.uplift_percent}))
   return {
+    ...(renewals.length?{renewals}:{}),
     ...(hasContracts ? {contracts} : {}),
     ...(charges.length ? { charges } : {}),
     ...(intervals.length ? { lifecycle: intervals, creditGovernance: {thresholdCents:creditGovernance!.two_person_above_cents, revision:creditGovernance!.revision} } : {}),
-    version: metricSources.length ? METRIC_RATING_VERSION : hasContracts ? CONTRACT_RATING_VERSION : intervals.length ? LIFECYCLE_RATING_VERSION : charges.length ? CHARGE_RATING_VERSION : Object.values(prices).some(price => price.pricing) ? PRICE_MODEL_RATING_VERSION : RATING_VERSION,
+    version: renewals.length ? RENEWAL_RATING_VERSION : metricSources.length ? METRIC_RATING_VERSION : hasContracts ? CONTRACT_RATING_VERSION : intervals.length ? LIFECYCLE_RATING_VERSION : charges.length ? CHARGE_RATING_VERSION : Object.values(prices).some(price => price.pricing) ? PRICE_MODEL_RATING_VERSION : RATING_VERSION,
     timezone: business.timezone,
     tax: { mode: business.tax_mode, rate: business.tax_rate, jurisdiction: business.tax_jurisdiction, exempt: certificate?.exempt ?? !!sub.tax_exempt, exemptRef: certificate?.exemptRef ?? sub.tax_exempt_ref, ...(certificate ? { certificate: certificate.certificate, exception: certificate.exception } : {}) },
     subscription: { id: sub.id, anchorDay: sub.anchor_day, startDate: sub.start_date, trialEnd: sub.trial_end, endDate: sub.end_date, billFrom: sub.cutover_start },

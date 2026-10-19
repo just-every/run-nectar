@@ -1,3 +1,4 @@
+import { renewalSection } from './renewals'
 // Customers, one customer (contacts, subscriptions, balance, entitlements,
 // previous-biller history) and one subscription (items, contract exceptions,
 // scheduled changes with their proration preview).
@@ -85,6 +86,7 @@ export async function subscriptionPage(env: Bindings, actor: Actor, id: string, 
     ${await upcomingSection(env,actor,s,url)}
     ${addonSection(s, prices, actor)}
     ${lifecycleSection(s, actor)}
+    ${renewalSection(s,actor)}
     ${contractSection(s,actor,await all(env,"SELECT p.*,pr.name AS product_name FROM nc_prices p JOIN nc_products pr ON pr.id=p.product_id WHERE p.status='active' ORDER BY pr.name,p.version"))}
     <section class="card" aria-labelledby="exceptions"><h2 id="exceptions">Contract exceptions</h2>
       ${table(['Exception', 'From', 'Until', 'Status', ''], s.amendments.map((a: any) => [h`${a.kind === 'discount_percent' ? `${a.value}% discount` : a.kind === 'fixed_credit' ? `$${a.value} one-time credit` : `Contract price $${a.value}`}${a.note ? ` — ${a.note}` : ''}${a.clause ? details({ Clause: a.clause }, 'Clause') : ''}`, formatDate(a.effective_from), formatDate(a.effective_to), tag(a.status === 'proposed' ? 'Proposed' : a.status === 'approved' ? 'Approved' : 'Rejected'),

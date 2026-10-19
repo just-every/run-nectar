@@ -10,6 +10,7 @@ import { metricEvents } from './meter-definitions'
 import { METRIC_RATING_VERSION } from './metric-rating'
 import { rate, type EventIn, type PriceIn, type RatingInput } from './rating'
 import { fields, quoted, rows } from './setup-source'
+import { RENEWAL_RATING_VERSION } from './renewal-rating'
 
 /** A full monthly projection carries its own prior calculated invoice evidence. */
 export async function setupPreview(env: Bindings, business: Business, plan: Row, payload: Row, basis: Row, quotes: Row[], priorContracts: ContractBasis, ambiguities: Row[]) {
@@ -55,7 +56,14 @@ export async function setupPreview(env: Bindings, business: Business, plan: Row,
   }
   const items = plan.items.map((i: Row) => ({ id: i.id, priceId: i.priceId, quantity: i.quantity, from: i.from, to: i.to }))
   const amendments = plan.amendments.map((a: Row) => ({ id: a.id, kind: a.kind, value: a.value, priceId: a.priceId, from: a.from, to: a.to, note: a.note }))
-  const version = Object.values(prices).some(p => p.metric) ? METRIC_RATING_VERSION : CONTRACT_RATING_VERSION
+  const renewals: NonNullable<RatingInput['renewals']> = []
+  if (plan.renewal?.auto_renew) {
+    for (let cycle = 1, date = plan.renewal.end_date; date < plan.subscription.previewEnd; date = addMonths(plan.renewal.start_date, ++cycle * plan.renewal.months)) {
+      renewals.push({ id: `setup-renewal-${plan.renewal.id}-${cycle}`, effectiveDate: date, upliftPercent: plan.renewal.uplift_percent })
+    }
+    assumptions.push({ kind: 'renewal', label: 'Future automatic renewals and quoted uplifts are hypothetical; approval creates the initial term, not future renewal events.', events: renewals, recorded: false })
+  }
+  const version = plan.renewal ? RENEWAL_RATING_VERSION : Object.values(prices).some(p => p.metric) ? METRIC_RATING_VERSION : CONTRACT_RATING_VERSION
   const additionalContracts: ContractBasis = { commitments: plan.contract.terms.commitments.map((w: Row) => ({ from: w.from, to: w.to, taxable: w.taxable, contract: plan.contract.id, minimumCents: cents(w.minimum) })), included: plan.contract.terms.included.map((w: Row) => ({ ...w, contract: plan.contract.id })), invoices: [] }
   const periods: Row[] = [], consumed = new Map<string, string>(), charged = new Set<string>()
   const projected: ContractBasis['invoices'] = []
@@ -63,15 +71,15 @@ export async function setupPreview(env: Bindings, business: Business, plan: Row,
   basis.ratings = []
   for (let index = 0; index < plan.months; index++) {
     const period = { start: addMonths(plan.subscription.previewStart, index), end: addMonths(plan.subscription.previewStart, index + 1) }
-    if (plan.subscription.endDate && period.start >= plan.subscription.endDate) break
+    if (!plan.subscription.evergreen && plan.subscription.endDate && period.start >= plan.subscription.endDate) break
     let input: RatingInput
     if (!plan.subscription.create) input = await ratingInputs(env, business, plan.subscription.id, period, items)
     else {
       const certificate = plan.customer.create ? null : await certificateBasis(env, plan.customer.id, business.tax_jurisdiction, period)
-      input = { version, timezone: business.timezone, tax: { mode: business.tax_mode, rate: business.tax_rate, jurisdiction: business.tax_jurisdiction, exempt: certificate?.exempt ?? plan.customer.taxExempt, exemptRef: certificate?.exemptRef ?? plan.customer.taxExemptRef, ...(certificate ? { certificate: certificate.certificate, exception: certificate.exception } : {}) }, subscription: { id: plan.subscription.id, anchorDay: plan.subscription.anchorDay, startDate: plan.subscription.startDate, trialEnd: plan.subscription.trialEnd, endDate: plan.subscription.endDate, billFrom: null }, period, items, prices, amendments: [], events: recorded.filter(e => e.occurredAt < zonedStart(period.end, business.timezone)), contracts: priorContracts }
+      input = { version, timezone: business.timezone, tax: { mode: business.tax_mode, rate: business.tax_rate, jurisdiction: business.tax_jurisdiction, exempt: certificate?.exempt ?? plan.customer.taxExempt, exemptRef: certificate?.exemptRef ?? plan.customer.taxExemptRef, ...(certificate ? { certificate: certificate.certificate, exception: certificate.exception } : {}) }, subscription: { id: plan.subscription.id, anchorDay: plan.subscription.anchorDay, startDate: plan.subscription.startDate, trialEnd: plan.subscription.trialEnd, endDate: plan.subscription.evergreen ? null : plan.subscription.endDate, billFrom: null }, period, items, prices, amendments: [], events: recorded.filter(e => e.occurredAt < zonedStart(period.end, business.timezone)), contracts: priorContracts }
     }
     const metricSources = new Set(Object.values({ ...input.prices, ...prices }).flatMap(p => p.metric ? [p.metric.sourceId] : []))
-    input = { ...input, version, prices: { ...input.prices, ...prices }, items, amendments: [...input.amendments, ...amendments], events: [...[...input.events, ...recorded.filter(e => !input.events.some(v => v.eventId === e.eventId) && e.occurredAt < zonedStart(period.end, business.timezone))].filter(e => !consumed.has(e.eventId) || !!e.invoiceId || metricSources.has(e.meterId)).map(e => consumed.has(e.eventId) && metricSources.has(e.meterId) ? { ...e, invoiceId: consumed.get(e.eventId)! } : e), ...scenarioEvents.filter(e => e.occurredAt < zonedStart(period.end, business.timezone) && !consumed.has(e.eventId))], charges: (input.charges ?? []).filter(c => !charged.has(c.id)), contracts: { commitments: [...(input.contracts?.commitments ?? []), ...additionalContracts.commitments], included: [...(input.contracts?.included ?? []), ...additionalContracts.included], invoices: [...(input.contracts?.invoices ?? []), ...projected] } }
+    input = { ...input, version, ...(plan.renewal ? { renewals } : {}), prices: { ...input.prices, ...prices }, items, amendments: [...input.amendments, ...amendments], events: [...[...input.events, ...recorded.filter(e => !input.events.some(v => v.eventId === e.eventId) && e.occurredAt < zonedStart(period.end, business.timezone))].filter(e => !consumed.has(e.eventId) || !!e.invoiceId || metricSources.has(e.meterId)).map(e => consumed.has(e.eventId) && metricSources.has(e.meterId) ? { ...e, invoiceId: consumed.get(e.eventId)! } : e), ...scenarioEvents.filter(e => e.occurredAt < zonedStart(period.end, business.timezone) && !consumed.has(e.eventId))], charges: (input.charges ?? []).filter(c => !charged.has(c.id)), contracts: { commitments: [...(input.contracts?.commitments ?? []), ...additionalContracts.commitments], included: [...(input.contracts?.included ?? []), ...additionalContracts.included], invoices: [...(input.contracts?.invoices ?? []), ...projected] } }
     const calculation = rate(input), digest = await fingerprint(input)
     periods.push({ period, inputs: input, calculation, fingerprint: digest })
     basis.ratings.push(digest)

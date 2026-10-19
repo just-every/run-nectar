@@ -63,14 +63,17 @@ export async function priceChangePlan(env: Bindings, business: Business, payload
   for (const id of ids) {
     const sub = await one(env, 'SELECT s.*, c.name AS customer_name FROM nc_subscriptions s JOIN nc_customers c ON c.id = s.customer_id WHERE s.id = ?', id)
     insist(sub, 'subscription_not_found', 404)
+    const renewalTerm=await one(env,"SELECT * FROM nc_renewal_terms WHERE subscription_id=? AND status='active'",id)
     let date: string
     if (savedDates !== undefined) date = savedDates[id]
     else {
       const period = periodContaining(sub.anchor_day, reference)
-      date = timing === 'renewal' && period.start !== reference ? period.end : reference
+      date = timing === 'renewal' && renewalTerm ? renewalTerm.end_date : timing === 'renewal' && period.start !== reference ? period.end : reference
+      if(renewalTerm&&timing==='renewal')insist(reference<=renewalTerm.end_date&&renewalTerm.auto_renew&&!renewalTerm.cancelled_at,'term_not_renewing',409)
     }
     resolvedDates[id] = date
-    insist(!sub.end_date || sub.end_date > date, 'subscription_ended', 409)
+    insist(!renewalTerm||date>=renewalTerm.end_date,'signed_term_grandfathered',409)
+    insist(!sub.end_date || sub.end_date > date || renewalTerm?.auto_renew&& !renewalTerm.cancelled_at&&date===renewalTerm.end_date, 'subscription_ended', 409)
     const candidates = await all(env, 'SELECT i.*, p.kind AS source_kind, p.meter_id AS source_meter_id FROM nc_items i JOIN nc_prices p ON p.id=i.price_id WHERE i.subscription_id=? AND p.product_id=? AND i.effective_from<=? AND (i.effective_to IS NULL OR i.effective_to>?) ORDER BY i.effective_from,i.id',sub.id,product.id,date,date)
     insist(candidates.length,'subscription_not_on_product',409,{subscription:id})
     const eligible = targetId ? candidates.filter(item=>item.source_kind===virtual.kind && (item.source_meter_id ?? null)===virtual.meterId) : candidates.slice(-1)
@@ -84,6 +87,7 @@ export async function priceChangePlan(env: Bindings, business: Business, payload
     const periods = [], fingerprints = []
     for (const p of [period, next]) {
       const inputs = await ratingInputs(env, business, sub.id, p)
+      if(renewalTerm&&date===renewalTerm.end_date){inputs.subscription.endDate=null;inputs.renewals=[...(inputs.renewals??[]),{id:`term-${renewalTerm.id}`,effectiveDate:date,upliftPercent:renewalTerm.uplift_percent}];inputs.version='nectar-rating-8'}
       fingerprints.push(await fingerprint(inputs))
       const moved = new Set(sourceItems.map(item=>item.id))
       const items = [...inputs.items.filter(row=>!moved.has(row.id) || row.from!==date).map(row=>moved.has(row.id) ? {...row,to:date} : row),

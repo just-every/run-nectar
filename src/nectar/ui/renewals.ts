@@ -1,0 +1,14 @@
+import type { Actor } from '../actor'
+import { can } from '../actor'
+import type { Row } from '../core'
+import { check, field, form, h, hidden, table } from './html'
+export function renewalSection(s:Row,actor:Actor) {
+  const data=s.renewal,back=`/app/subscriptions/${s.id}`,approve=actor.kind==='member'&&can(actor,'approve')
+  return h`<section class="card" id="renewals"><h2>Term and renewal</h2><p>Contract terms are separate from monthly billing. Annual automatic renewals require 15–45 days’ notice. Provider acceptance does not confirm mailbox delivery.</p>
+  ${table(['Term','Next boundary','Renewal','Uplift','Notice','Status'],data.terms.map((t:Row)=>[`${t.months} months`,t.end_date,t.auto_renew?'Automatic':'Ends',`${t.uplift_percent}%`,`${t.notice_days} days before`,t.cancelled_at?'Customer cancelled renewal':t.status]),{empty:'No renewal term configured.'})}
+  ${approve?data.terms.filter((t:Row)=>t.status==='pending').map((t:Row)=>h`<article><p>Prepared by ${t.prepared_by}. Approval changes the term end; billing stays monthly.</p>${form('term.decide',back,h`${hidden('term',t.id)}${hidden('decision','approved')}${actor.id===t.prepared_by_id?check('Confirm as sole owner only when no other approver exists','confirm_single'):''}`,'Approve term')}${form('term.decide',back,h`${hidden('term',t.id)}${hidden('decision','rejected')}`,'Reject',{secondary:true})}</article>`):''}
+  ${approve?data.terms.filter((t:Row)=>t.status==='active'&&!t.cancelled_at).map((t:Row)=>h`<form method="post" action="/app/renewal-link"><input type="hidden" name="term" value="${t.id}"><button type="submit">Create cancellation link</button><p>Replaces the previous link. This link permits only cancellation of this renewal; share it with this customer only.</p></form>`):''}
+  ${approve?form('term.prepare',back,h`${hidden('subscription',s.id)}${hidden('revision',s.revision)}${field('Term starts (billing anchor day)','term_start',{type:'date',value:s.start_date})}${field('Term length (months)','months',{type:'number',value:12})}${check('Renew automatically','auto_renew',{checked:true})}${field('Notice days before renewal','notice_days',{type:'number',value:30})}${field('Uplift at each renewal (%)','uplift_percent',{value:'0'})}${field('Agreed terms or source quote','quote',{required:false})}`,'Prepare term',{layout:'columns',secondary:true}):''}
+  ${table(['Renewal','Scheduled notice','Recipient','Provider outcome'],data.notices.map((n:Row)=>[n.renewal_date,n.due_date,n.recipient,n.status]),{empty:'No renewal notice attempted.'})}
+  ${table(['Effective','Until','Change','Uplift'],data.events.map((e:Row)=>[e.effective_date,e.end_date,e.kind,`${e.uplift_percent}%`]),{empty:'No term transitions yet.'})}</section>`
+}

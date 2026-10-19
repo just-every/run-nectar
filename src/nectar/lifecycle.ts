@@ -1,7 +1,7 @@
 // SUB-003 public lifecycle commands. Dates are business-local, [from, until).
 import type { Bindings } from '../auth.server'
 import { actorLabel, requireMember, type Actor } from './actor'
-import { commit, guard, insist, newId, now, stmt } from './core'
+import { commit, guard, insist, newId, now, one, stmt } from './core'
 import { requireDate } from './dates'
 import type { Input } from './input'
 import { lifecycleHistory, lifecycleIntervals } from './lifecycle-records'
@@ -16,7 +16,8 @@ export async function pauseSubscription(env: Bindings, actor: Actor, input: Inpu
   const until = requireDate(input.text('resume_date', { max: 10 }), 'resume_date')
   const access = input.text('access', { max: 10 })
   insist(access === 'retain' || access === 'suspend', 'invalid_access')
-  insist(from >= sub.start_date && until > from && (!sub.end_date || until <= sub.end_date), 'invalid_pause_dates')
+  const term=await one(env,"SELECT 1 FROM nc_renewal_terms WHERE subscription_id=? AND status='active' AND auto_renew=1 AND cancelled_at IS NULL",sub.id)
+  insist(from >= sub.start_date && until > from && (!sub.end_date || until <= sub.end_date || term), 'invalid_pause_dates')
   const reason = input.text('reason', { max: 500 })
   const intervals = lifecycleIntervals(await lifecycleHistory(env, sub.id))
   insist(!intervals.some(i => i.from < until && (i.to ?? '9999-12-31') > from), 'lifecycle_overlap', 409)

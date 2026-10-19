@@ -1,3 +1,5 @@
+import { runRenewals } from './nectar/renewal-jobs'
+import { renewalPublic } from './nectar/renewal-public'
 import { deliverPendingCorrectionMail } from './nectar/credit-correction-mail'
 import { deliverPendingDraftCorrectionMail } from './nectar/draft-correction-mail'
 import { sendScheduledReports } from './nectar/report-mail'
@@ -30,6 +32,7 @@ function noTransform(response: Response): Response {
 
 export default withDemo({
   async scheduled(controller, env) {
+    await runRenewals(runtimeBindings(env),controller.scheduledTime)
     await sendCertificateReminders(env, controller.scheduledTime)
     await deliverPendingAlerts(runtimeBindings(env))
     await sendScheduledReports(runtimeBindings(env),controller.scheduledTime)
@@ -41,6 +44,8 @@ export default withDemo({
     if (asset) return asset
     const auth = await authResponse(request, env)
     if (auth) return auth
+    const renewal=await renewalPublic(request,runtimeBindings(env))
+    if(renewal)return renewal
     const nectar = await nectarResponse(request, env)
     if (nectar) return nectar
     // The installed variant: the Lobby at / and the public claim state it reads.

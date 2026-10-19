@@ -1,3 +1,4 @@
+import { renewalOperands, RENEWAL_RATING_VERSION, type RenewalRate } from './renewal-rating'
 import { metricUsage, METRIC_RATING_VERSION, type MetricPrice } from './metric-rating'
 import { commitmentLines, CONTRACT_RATING_VERSION, type ContractBasis } from './commitment-rating'
 // Flow 7: deterministic rating. A pure function from one subscription's
@@ -30,6 +31,7 @@ export interface AmendmentIn { id: string; kind: 'discount_percent' | 'fixed_cre
 export interface EventIn { eventId: string; meterId: string; quantity: string; occurredAt: number;properties?:Record<string,import('./metric-plan').PropertyValue>;invoiceId?:string|null }
 export interface RatingInput {
   version: string
+  renewals?: RenewalRate[]
   timezone: string
   tax: { mode: 'undeclared' | 'no_tax' | 'flat_rate'; rate: string; jurisdiction: string; exempt: boolean; exemptRef: string; certificate?: unknown; exception?: Exception | null }
   subscription: { id: string; anchorDay: number; startDate: string; trialEnd: string | null; endDate: string | null; billFrom: string | null }
@@ -67,8 +69,9 @@ const unitFor = (input: RatingInput, price: PriceIn, from: string, to: string) =
 }
 
 export function rate(input: RatingInput, presentCancellationCredits = true): Rating {
-  insist(input.version === METRIC_RATING_VERSION || input.version === CONTRACT_RATING_VERSION || input.version === RATING_VERSION || input.version === METRIC_RATING_VERSION || input.version === CONTRACT_RATING_VERSION || input.version === PRICE_MODEL_RATING_VERSION || input.version === CHARGE_RATING_VERSION || input.version === LIFECYCLE_RATING_VERSION, 'unsupported_rating_version')
-  insist(!Object.values(input.prices).some(price => price.pricing) || input.version === METRIC_RATING_VERSION || input.version === CONTRACT_RATING_VERSION || input.version === PRICE_MODEL_RATING_VERSION || input.version === CHARGE_RATING_VERSION || input.version === LIFECYCLE_RATING_VERSION, 'unsupported_rating_version')
+  if(input.renewals?.length){const expanded=renewalOperands(input),result=rate(expanded.input,presentCancellationCredits);return {...result,lines:result.lines.map(expanded.restore)}}
+  insist(input.version === RENEWAL_RATING_VERSION || input.version === METRIC_RATING_VERSION || input.version === CONTRACT_RATING_VERSION || input.version === RATING_VERSION || input.version === PRICE_MODEL_RATING_VERSION || input.version === CHARGE_RATING_VERSION || input.version === LIFECYCLE_RATING_VERSION, 'unsupported_rating_version')
+  insist(!Object.values(input.prices).some(price => price.pricing) || input.version === RENEWAL_RATING_VERSION || input.version === METRIC_RATING_VERSION || input.version === CONTRACT_RATING_VERSION || input.version === PRICE_MODEL_RATING_VERSION || input.version === CHARGE_RATING_VERSION || input.version === LIFECYCLE_RATING_VERSION, 'unsupported_rating_version')
   const { period, subscription: sub } = input
   const periodDays = BigInt(daysBetween(period.start, period.end))
   const lines: Line[] = [], exceptions: Exception[] = [], consumed: string[] = []

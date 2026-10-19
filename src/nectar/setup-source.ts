@@ -36,7 +36,7 @@ export async function setupSource(payload: Row) {
   const original=await input.file('original',{optional:true,maxBytes:256000})
   return { ...(original?{original:{filename:original.filename,type:original.declaredType,base64:row.original.base64,sha256:await sha256Hex(original.bytes),byteLength:original.bytes.length}}:{}),name, text: row.text, execution_reference: input.text('execution_reference', { max: 1000 }), sha256: await sha256Hex(row.text) }
 }
-export function setupAmbiguities(payload: Row, source: Row, paymentTerms: number) {
+export function setupAmbiguities(payload: Row, source: Row, paymentTerms: number, supportedRenewal = false) {
   const manual = rows(payload.ambiguities, 'ambiguities').map(a => {
     fields(a, ['issue', 'resolution'])
     return { issue: Input.of(a).text('issue', { max: 2000 }), resolution: Input.of(a).text('resolution', { max: 2000, optional: true }) }
@@ -50,7 +50,7 @@ export function setupAmbiguities(payload: Row, source: Row, paymentTerms: number
     [/\b(multi[- ]entity|multiple entities|subsidiar(?:y|ies)|affiliate billing|bill[- ]to entit(?:y|ies))\b/i, 'Multiple billing entities require an explicit supported resolution.'],
   ]
   for (const [pattern, issue] of patterns) if (pattern.test(source.text)) ambiguities.push({ issue })
-  if (/\bauto[- ]renew(?:al|ing|s)?\b/i.test(source.text) && /\b(annual|yearly|(?:twelve|12)[- ]month)\s+(term|contract|renewal)\b/i.test(source.text)) ambiguities.push({ issue: 'Annual auto-renewing contract terms need an explicit supported resolution; a finite initial term does not establish the renewal end date.' })
+  if (!supportedRenewal && /\bauto[- ]renew(?:al|ing|s)?\b/i.test(source.text) && /\b(annual|yearly|(?:twelve|12)[- ]month)\s+(term|contract|renewal)\b/i.test(source.text)) ambiguities.push({ issue: 'Annual auto-renewing contract terms need an explicit supported resolution; a finite initial term does not establish the renewal end date.' })
   if (/\b(due|payable) (on|upon) receipt\b/i.test(source.text) && paymentTerms !== 0) ambiguities.push({ issue: 'Order requires payment on receipt, different from business default terms.' })
   for (const match of source.text.matchAll(/\bnet\s+(\d{1,3})\b/gi)) if (Number(match[1]) !== paymentTerms) ambiguities.push({ issue: `Order payment terms ${match[0]} differ from business default Net ${paymentTerms}.` })
   return ambiguities
