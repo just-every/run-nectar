@@ -259,6 +259,8 @@ with a cited test and the rest is listed in CONTRACT.md's Status table;
 
 ## Evidence
 
+`GOV-002` remains **PARTIAL**. `tests/nectar/credit-policy.mjs` proves its credit slice through the HTTP doors: a $1,000 threshold, $900 direct credit, $1,500 prepared credit requiring a different person, owner/direct bypass refusal, duplicate approval refusal, stale balance/policy refusal, unchanged issued evidence and agent/accountant authorization. Wider refund, write-off, price-change and policy-change rules remain.
+
 `TAX-002` is proven by `tests/nectar/certificates.mjs` (called by `flows.mjs`): private operator upload and named review, Texas exemption versus New York taxation, scheduled-job clock expiry, one renewal notice per state/certificate stage, blocking missing/expired custody, renewal and unchanged issued calculation evidence. The original `NEC-02` reference-only mode remains available until a customer has state exemption claims.
 
 Worked figures from the tests: Northwind's July invoice bills $499.00 + 5 seats × $30.00, a 10% contract discount of −$49.90 and −$15.00 (rounded per line), and 3,346,778.5 events × $0.0004 = $1,338.7114 → $1,338.71, subtotal $1,922.81, tax 8.25% = $158.632 → $158.63, total $2,081.44; Pinecrest's trial ends 29 July, so 17 of 31 days of $499.00 bill $273.65 with no tax for its exemption.

@@ -9,6 +9,7 @@ import { requireBusiness, taxReady, type Business } from './business'
 import { all, commit, fingerprint as hashInputs, guard, insist, newId, now, one, parseJson, stmt, type Row } from './core'
 import { addDays, isMonth, periodStartingIn, requireDate, today } from './dates'
 import { rated } from './inputs'
+import { creditPolicy, creditRequests } from './credit-policy'
 import { reconciliationFor } from './reconciliation'
 import { RATING_VERSION, type Exception, type Rating } from './rating'
 import type { Input } from './input'
@@ -131,7 +132,7 @@ export async function invoiceDetail(env: Bindings, actor: Actor, id: string): Pr
   const allocations = await all(env, 'SELECT a.*, p.reference, p.received_on, p.method FROM nc_allocations a JOIN nc_payments p ON p.id = a.payment_id WHERE a.invoice_id = ? ORDER BY a.allocated_at', id)
   const credited = credits.reduce((sum, row) => sum + row.amount_cents, 0), paid = allocations.reduce((sum, row) => sum + row.amount_cents, 0)
   return {
-    ...invoice, calculation: parseJson(invoice.calculation_json, {}), comparison: parseJson(invoice.comparison_json, {}), exceptions: parseJson(invoice.exceptions_json, []),
+    ...invoice, creditPolicy: await creditPolicy(env), creditRequests: await creditRequests(env, actor, id), calculation: parseJson(invoice.calculation_json, {}), comparison: parseJson(invoice.comparison_json, {}), exceptions: parseJson(invoice.exceptions_json, []),
     calculation_json: undefined, comparison_json: undefined, exceptions_json: undefined,
     lines: lines.map(line => ({ ...line, evidence: parseJson(line.evidence_json, {}), evidence_json: undefined })),
     credits, allocations, creditedCents: credited, paidCents: paid, balanceCents: invoice.status === 'issued' ? invoice.total_cents - credited - paid : null,

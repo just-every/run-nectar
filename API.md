@@ -46,7 +46,10 @@ step by step; `CUSTOMER` may be the internal id or the external id), `imports`,
 | `billrun.prepare` | owner, finance | `period` (`YYYY-MM`) |
 | `invoice.approve` | a person with approval | `invoice` or `run`, `acknowledge` when exceptions are listed |
 | `invoice.finalise` | a person with approval | `invoice` or `run`, optional `issue_date` |
-| `credit.issue` | a person with approval | `invoice`, `amount`, `reason` |
+| `credit.issue` | a person with approval | `invoice`, `amount`, `reason`; above the owner threshold, use a prepared request and a different approver |
+| `credit.policy` | owner | `two_person_above` (decimal dollars; empty disables the threshold) |
+| `credit.prepare` | a person with approval | `invoice`, `amount`, `reason`; returns `request` against the current balance and policy |
+| `credit.approve` | a person with approval | `request`; above the threshold, the approver must differ from its preparer |
 | `payment.record`, `payment.allocate` | owner, finance | `customer`, `amount`, `received_on`, `method`, `reference`, `evidence` / `payment`, `invoice`, `amount` |
 | `reminder.prepare`, `reminder.approve`, `reminder.discard`, `task.create`, `task.complete` | owner, finance (approve and complete: a person) | `customer` / `notice`, `recipient`, `subject`, `body` / `task`, `outcome` |
 | `proposal.create` | owner, finance, `prepare` credential | `kind`, `title`, `payload`, `evidence` (below) |
@@ -118,3 +121,7 @@ version; existing simple-price inputs and issued invoices retain their rules.
 `customers/ID` includes state exemption claims, certificate metadata and reminder history. Documents download privately from `/app/certificates/ID`. The operator collects and an approver validates the document, identity, state and dates; Nectar records this attestation, not an automated legal certification. Once any state is claimed for a customer, only a validated certificate covering the entire service period exempts that state; other states are taxable. A missing or expired claimed document blocks invoice approval. Certificate evidence is fingerprinted with the calculation, so a changed basis invalidates approval and issued evidence never changes. The original reference-only exemption remains the `NEC-02` mode for customers without state claims.
 
 After the owner enables certificate mail, the daily 14:00 UTC cron checks dates in the billing timezone, requests missing/expired documents and sends one reminder within 30 days of expiry. It uses configured Base mail. Status distinguishes provider acceptance, local suppression and failure/uncertainty; acceptance is not mailbox delivery. Sending/uncertain records stay visible for investigation rather than risking duplicate notices.
+
+## Credit approval slice (`GOV-002`, partial)
+
+The owner sets the credit threshold on an issued invoice. A direct `credit.issue` above it refuses even for the owner. `credit.prepare` saves the amount, reason, preparer, balance and policy revision; `credit.approve` requires another person above the threshold, rechecks the exact balance and policy, and atomically issues one numbered credit and closes the request. A duplicate, changed balance or changed policy refuses; prepare a new request. Credits at or below the threshold still need one authorized person. Refunds, write-offs, price changes and policy changes are not covered by this credit policy yet.

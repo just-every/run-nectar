@@ -6,9 +6,10 @@ import type { Bindings } from '../auth.server'
 import { actorLabel, requireCapability, requireMember, type Actor } from './actor'
 import { requireBusiness } from './business'
 import { all, commit, guard, insist, newId, now, one, stmt, type Row } from './core'
-import { cents } from './decimal'
+import { authorizeCredit, prepareCreditRequest } from './credit-policy'
+import { cents, plainMoney } from './decimal'
 import { addDays, daysBetween, requireDate, today } from './dates'
-import type { Input } from './input'
+import { Input } from './input'
 
 export const BALANCE_SQL = `(i.total_cents - COALESCE((SELECT SUM(amount_cents) FROM nc_credit_notes WHERE invoice_id = i.id), 0) - COALESCE((SELECT SUM(amount_cents) FROM nc_allocations WHERE invoice_id = i.id), 0))`
 const balanceOf = (id: string) => [`(SELECT ${BALANCE_SQL} FROM nc_invoices i WHERE i.id = ?)`, id] as const
@@ -29,17 +30,33 @@ export async function issueCreditNote(env: Bindings, actor: Actor, input: Input)
   insist(amount > 0, 'invalid_amount')
   insist(amount <= invoice.balance_cents, 'exceeds_balance', 409)
   const reason = input.text('reason', { max: 500 })
+  const authorization = await authorizeCredit(env, actor, input, invoice, amount, reason)
   const sequence = business.next_credit_number
   const number = `${business.invoice_prefix}-CN-${String(sequence).padStart(6, '0')}`
   const id = newId()
   const [balanceSql, balanceParam] = balanceOf(invoice.id)
   await commit(env, [
+    ...authorization.guards,
     guard(env, 'stale', 'EXISTS(SELECT 1 FROM nc_business WHERE singleton = 1 AND next_credit_number = ?)', sequence),
     guard(env, 'exceeds_balance', `${balanceSql} >= ?`, balanceParam, amount),
     stmt(env, 'UPDATE nc_business SET next_credit_number = next_credit_number + 1 WHERE singleton = 1'),
     stmt(env, 'INSERT INTO nc_credit_notes (id, number, invoice_id, customer_id, amount_cents, reason, proposal_id, issued_by, issued_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', id, number, invoice.id, invoice.customer_id, amount, reason, input.text('proposal', { max: 100, optional: true }) || null, actorLabel(actor), now()),
-  ], { actor: actorLabel(actor), action: 'credit.issue', subject: id, detail: { number, invoice: invoice.number, amount, reason } })
+    ...(authorization.request ? [stmt(env, "UPDATE nc_credit_requests SET status='issued',approved_by=?,approved_at=?,credit_id=? WHERE id=?", actorLabel(actor), now(), id, authorization.request.id)] : []),
+  ], { actor: actorLabel(actor), action: 'credit.issue', subject: id, detail: { number, invoice: invoice.number, amount, reason, request: authorization.request?.id ?? null, preparedBy: authorization.request?.prepared_name ?? actorLabel(actor) } })
   return { id: invoice.id, credit: id, number }
+}
+
+export async function prepareCredit(env: Bindings, actor: Actor, input: Input) {
+  requireMember(actor, 'approve')
+  const invoice = await issuedInvoice(env, input.text('invoice', { max: 100 }))
+  return await prepareCreditRequest(env, actor, input, invoice)
+}
+
+export async function approveCredit(env: Bindings, actor: Actor, input: Input) {
+  requireMember(actor, 'approve')
+  const request = await one(env, 'SELECT * FROM nc_credit_requests WHERE id=?', input.text('request', { max: 100 }))
+  insist(request, 'credit_request_not_found', 404)
+  return await issueCreditNote(env, actor, Input.of({ invoice: request.invoice_id, amount: plainMoney(request.amount_cents), reason: request.reason, request: request.id }))
 }
 
 export async function recordPayment(env: Bindings, actor: Actor, input: Input) {

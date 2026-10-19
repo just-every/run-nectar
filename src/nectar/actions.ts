@@ -14,9 +14,10 @@ import { configureCertificatePolicy, remindCertificates } from './certificate-re
 import type { Input } from './input'
 import { adopt, applyImport, importAction, previewImport } from './movein/stripe'
 import { decide, propose } from './proposals'
-import { allocate, issueCreditNote, recordPayment } from './receivables'
+import { allocate, approveCredit, issueCreditNote, prepareCredit, recordPayment } from './receivables'
 import { createSubscription, decideAmendment, decideChange, endSubscription, prepareChange, proposeAmendment } from './subscriptions'
 import { acknowledgeControl, recordControl } from './reconciliation'
+import { configureCreditPolicy } from './credit-policy'
 import { submitUsage } from './usage'
 
 type Handler = (env: Bindings, actor: Actor, input: Input, request: Request) => Promise<unknown>
@@ -54,6 +55,9 @@ export const actions: Record<string, Handler> = {
   'billrun.prepare': prepareRun,
   'invoice.approve': approve,
   'invoice.finalise': finalise,
+  'credit.policy': configureCreditPolicy,
+  'credit.prepare': prepareCredit,
+  'credit.approve': approveCredit,
   'credit.issue': issueCreditNote,
   'payment.record': recordPayment,
   'payment.allocate': allocate,

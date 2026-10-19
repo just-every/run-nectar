@@ -9,6 +9,7 @@ import { readFile } from 'node:fs/promises'
 import { API_DOORS, PAGE_DOORS } from '../../src/nectar/doors.ts'
 import { file, harness } from './harness.mjs'
 import { reconciliationFlow } from './reconciliation.mjs'
+import { creditPolicy } from './credit-policy.mjs'
 import { exemptionCertificates } from './certificates.mjs'
 import { pricingModels } from './pricing-models.mjs'
 
@@ -330,7 +331,7 @@ try {
     await h.api('access.give', cookie.owner, { email: 'x@example.test', name: 'Nope', role: 'owner' }, 400)
     cookie.finance = await h.signIn('fran@example.test', { requested: true })
     cookie.accountant = await h.signIn('acct@example.test', { requested: true })
-    const ownerOnly = ['certificate.policy', 'business.configure', 'tax.declare', 'tax.review', 'access.give', 'access.end', 'credential.issue', 'credential.revoke', 'subscription.adopt']
+    const ownerOnly = ['credit.policy', 'certificate.policy', 'business.configure', 'tax.declare', 'tax.review', 'access.give', 'access.end', 'credential.issue', 'credential.revoke', 'subscription.adopt']
     assert.ok(ACTIONS.length > 30)
     for (const name of ACTIONS) {
       await h.api(name, cookie.accountant, {}, 403)
@@ -447,6 +448,8 @@ try {
   await check('CAT-002 graduated, volume, package and stair-step seats and usage', () => pricingModels(h, cookie.owner))
 
   await exemptionCertificates(h, cookie.owner)
+
+  await creditPolicy(h, cookie.owner)
 
   // Every main screen renders for the owner without an error.
   for (const path of ['/app', '/app/more', '/app/settings', '/app/customers', `/app/customers/${ids.northwind}`, `/app/subscriptions/${ids.s1}`, '/app/catalog', '/app/usage', '/app/billing', `/app/billing/${ids.augustRun}`, `/app/invoices/${ids.julyNorthwind}`, '/app/receivables', '/app/proposals', '/app/import', '/app/exports', '/app/access', '/app/audit']) await h.page(path, cookie.owner)
