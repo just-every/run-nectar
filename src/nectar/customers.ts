@@ -6,6 +6,7 @@ import { all, commit, guard, insist, newId, now, one, stmt } from './core'
 import { withMetadata } from './metadata'
 import { metadataFilter,metadataPredicate } from './metadata-query'
 import type { Input } from './input'
+import { languageInput } from './locale'
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const EXTERNAL_ID = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,79}$/
@@ -14,7 +15,7 @@ export async function customers(env: Bindings, actor: Actor,url?:URL) {
   requireCapability(actor, 'read')
   const filter=metadataPredicate('customer','c.id',url?metadataFilter(url):null)
   const search=url?.searchParams.get('search')??''
-  const rows=await all(env, `SELECT c.id, c.external_id, c.name, c.billing_email, c.status, c.origin, c.tax_exempt,
+  const rows=await all(env, `SELECT c.id, c.external_id, c.name, c.billing_email, c.language, c.status, c.origin, c.tax_exempt,
     (SELECT COUNT(*) FROM nc_subscriptions s WHERE s.customer_id = c.id) AS subscriptions
     FROM nc_customers c WHERE ${filter.sql} ORDER BY c.name COLLATE NOCASE`,...filter.params)
   const projected=await withMetadata(env,'customer',rows)
@@ -48,11 +49,12 @@ export async function createCustomer(env: Bindings, actor: Actor, input: Input) 
   const exempt = input.flag('tax_exempt')
   const exemptRef = input.text('tax_exempt_ref', { max: 120, optional: true })
   insist(!exempt || exemptRef, 'exemption_reference_required')
+  const language = languageInput(input.text('language', { max: 35, optional: true }))
   insist(!await one(env, 'SELECT 1 FROM nc_customers WHERE external_id = ?', externalId), 'external_id_in_use', 409)
   const id = newId()
-  await commit(env, [stmt(env, "INSERT INTO nc_customers (id, external_id, name, billing_email, address, tax_exempt, tax_exempt_ref, origin, revision, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'native', ?, ?, ?)",
-    id, externalId, name, email, address, exempt ? 1 : 0, exempt ? exemptRef : '', newId(), now(), now())],
-  { actor: actorLabel(actor), action: 'customer.create', subject: id, detail: { externalId, name } })
+  await commit(env, [stmt(env, "INSERT INTO nc_customers (id, external_id, name, billing_email, address, tax_exempt, tax_exempt_ref, language, origin, revision, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'native', ?, ?, ?)",
+    id, externalId, name, email, address, exempt ? 1 : 0, exempt ? exemptRef : '', language, newId(), now(), now())],
+  { actor: actorLabel(actor), action: 'customer.create', subject: id, detail: { externalId, name, language } })
   return { id, external_id: externalId }
 }
 
@@ -67,10 +69,12 @@ export async function updateCustomer(env: Bindings, actor: Actor, input: Input) 
   const exempt = input.flag('tax_exempt')
   const exemptRef = input.text('tax_exempt_ref', { max: 120, optional: true })
   insist(!exempt || exemptRef, 'exemption_reference_required')
+  // Omitted on an update keeps the customer's current language.
+  const language = languageInput(input.text('language', { max: 35, optional: true }) || customer.language)
   await commit(env, [
     guard(env, 'stale', 'EXISTS(SELECT 1 FROM nc_customers WHERE id = ? AND revision = ?)', customer.id, customer.revision),
-    stmt(env, "UPDATE nc_customers SET name = ?, billing_email = ?, address = ?, tax_exempt = ?, tax_exempt_ref = ?, revision = ?, updated_at = ? WHERE id = ?", name, email, address, exempt ? 1 : 0, exempt ? exemptRef : '', newId(), now(), customer.id),
-  ], { actor: actorLabel(actor), action: 'customer.update', subject: customer.id, detail: { name, email, exempt } })
+    stmt(env, "UPDATE nc_customers SET name = ?, billing_email = ?, address = ?, tax_exempt = ?, tax_exempt_ref = ?, language = ?, revision = ?, updated_at = ? WHERE id = ?", name, email, address, exempt ? 1 : 0, exempt ? exemptRef : '', language, newId(), now(), customer.id),
+  ], { actor: actorLabel(actor), action: 'customer.update', subject: customer.id, detail: { name, email, exempt, language } })
   return { id: customer.id }
 }
 

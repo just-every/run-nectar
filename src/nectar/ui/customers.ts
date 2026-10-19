@@ -7,6 +7,7 @@ import { metadataLink } from './metadata'
 import { can, type Actor } from '../actor'
 import { all } from '../core'
 import { customers } from '../customers'
+import { languages } from '../locale'
 import { addDays, formatDate, formatPeriod } from '../dates'
 import { lifecycleSection } from './lifecycle'
 import { subscriptionDetail } from '../subscriptions'
@@ -20,6 +21,9 @@ import { certificateSection } from './certificates'
 import { contractSection } from './contracts'
 import { priceRate } from './pricing'
 
+// PORT-006: the language this customer's mail and pages use; options are the complete translation files.
+const languageSelect = (selected: string) => select('Customer language', 'language', languages(), selected, { hint: 'Renewal, return-offer, reminder, certificate and correction messages Nectar writes. Text you write yourself is sent as written.' })
+const languageName = (tag: string) => languages().find(l => l.value === tag)?.label ?? `${tag} (translation file removed; English is used)`
 const subscriptionState = (s: Record<string, any>, today: string) => s.billing_mode === 'shadow' ? 'Shadow' : s.end_date && s.end_date <= today ? 'Ended' : s.intervals?.some((i: any)=>i.from<=today && (!i.to || i.to>today)) ? 'Paused' : s.trial_end && s.trial_end > today ? 'Trial' : 'Active'
 
 export async function customersPage(env: Bindings, actor: Actor, url: URL) {
@@ -27,7 +31,7 @@ export async function customersPage(env: Bindings, actor: Actor, url: URL) {
   const create = can(actor, 'records') ? h`<section class="card" aria-labelledby="new"><h2 id="new">Add a customer</h2>${form('customer.create', '/app/customers/{id}', h`
     ${field('Customer ID', 'external_id', { hint: 'The id your CRM or previous biller uses; usage files refer to customers by it.' })}${field('Name', 'name')}
     ${field('Billing email', 'billing_email', { type: 'email' })}${field('Billing address', 'address', { required: false })}
-    ${check('Tax exempt', 'tax_exempt')}${field('Exemption certificate reference', 'tax_exempt_ref', { required: false })}`, 'Add customer', { layout: 'columns' })}</section>` : ''
+    ${check('Tax exempt', 'tax_exempt')}${field('Exemption certificate reference', 'tax_exempt_ref', { required: false })}${languageSelect('en')}`, 'Add customer', { layout: 'columns' })}</section>` : ''
   return page('Customers', actor, h`<h1>Customers</h1><section class="card"><form method="get" action="/app/customers" class="row-form">${field('Search customers or metadata','search',{value:url.searchParams.get('search')??'',required:false})}<button type="submit">Search</button></form></section>
     <section class="card">${table(['Customer', 'Customer ID', 'Billing email', 'Subscriptions$', 'Source'], rows.map(r => [h`<a href="/app/customers/${r.id}">${r.name}</a>`, r.external_id, r.billing_email || '—', r.subscriptions, r.origin === 'import' ? 'Moved in' : 'Nectar']), { empty: 'No customers yet. Add one below, or move in from Stripe under More.', lead: true })}</section>${create}`, { current: '/app/customers', url })
 }
@@ -51,7 +55,7 @@ export async function customerPage(env: Bindings, actor: Actor, id: string, url:
     <section class="card summary"><dl class="figures">
       <div><dt>Customer ID</dt><dd>${c.external_id}</dd></div><div class="wide"><dt>Billing email</dt><dd>${addresses(c.billing_email || '—')}</dd></div>
       <div><dt>Owed now</dt><dd>${cents(ledger.balanceCents)}</dd></div><div><dt>Unallocated payments</dt><dd>${cents(ledger.unallocatedCents)}</dd></div>
-      <div><dt>Tax</dt><dd>${c.tax_exempt ? `Exempt (${c.tax_exempt_ref})` : 'Taxable'}</dd></div></dl>
+      <div><dt>Tax</dt><dd>${c.tax_exempt ? `Exempt (${c.tax_exempt_ref})` : 'Taxable'}</dd></div><div><dt>Customer language</dt><dd>${languageName(c.language)}</dd></div></dl>
       ${details({ 'Internal id': c.id, Source: c.origin, 'Provider reference': c.provider_ref ?? '—', Revision: c.revision })}</section>
     <section class="card" aria-labelledby="subs"><h2 id="subs">Subscriptions</h2>${table(['Subscription', 'Started', 'Billing day$', 'Status'], c.subscriptions.map((s: any) => [h`<a href="/app/subscriptions/${s.id}">${s.external_id || `Subscription from ${formatDate(s.start_date)}`}</a>`, formatDate(s.start_date), s.anchor_day, tag(subscriptionState(s, today))]), { empty: 'No subscriptions yet.' })}</section>
     ${newSubscription}
@@ -65,7 +69,7 @@ export async function customerPage(env: Bindings, actor: Actor, id: string, url:
     <section class="card" aria-labelledby="contacts"><h2 id="contacts">Billing contacts</h2>${table(['Name', 'Email', 'Role'], c.contacts.map((x: any) => [x.name, x.email, x.role]), { empty: 'No extra contacts.' })}
       ${can(actor, 'records') ? form('contact.add', `/app/customers/${c.id}`, h`${hidden('customer', c.id)}${field('Name', 'name')}${field('Email', 'email', { type: 'email' })}${field('Role', 'role', { value: 'billing', required: false })}`, 'Add contact', { layout: 'columns', secondary: true }) : ''}</section>
     ${c.incumbentInvoices.length ? h`<section class="card" aria-labelledby="hist"><h2 id="hist">History from Stripe</h2><p class="hint">Read-only invoices from the previous biller, kept for comparison.</p>${table(['Invoice', 'Period', 'Status', 'Total$', 'Remaining$'], c.incumbentInvoices.map((i: any) => [i.number || i.provider_ref, formatPeriod(i.period_start, i.period_end), i.status, cents(i.total_cents), cents(i.remaining_cents)]))}</section>` : ''}
-    ${can(actor, 'records') ? h`<section class="card" aria-labelledby="edit"><h2 id="edit">Edit details</h2>${form('customer.update', `/app/customers/${c.id}`, h`${hidden('customer', c.id)}${hidden('revision', c.revision)}${field('Name', 'name', { value: c.name })}${field('Billing email', 'billing_email', { type: 'email', value: c.billing_email })}${field('Billing address', 'address', { value: c.address, required: false })}${check('Tax exempt', 'tax_exempt', { checked: !!c.tax_exempt })}${field('Exemption certificate reference', 'tax_exempt_ref', { value: c.tax_exempt_ref, required: false })}`, 'Save details', { layout: 'columns', secondary: true })}</section>` : ''}`, { current: '/app/customers', url })
+    ${can(actor, 'records') ? h`<section class="card" aria-labelledby="edit"><h2 id="edit">Edit details</h2>${form('customer.update', `/app/customers/${c.id}`, h`${hidden('customer', c.id)}${hidden('revision', c.revision)}${field('Name', 'name', { value: c.name })}${field('Billing email', 'billing_email', { type: 'email', value: c.billing_email })}${field('Billing address', 'address', { value: c.address, required: false })}${check('Tax exempt', 'tax_exempt', { checked: !!c.tax_exempt })}${field('Exemption certificate reference', 'tax_exempt_ref', { value: c.tax_exempt_ref, required: false })}${languageSelect(c.language)}`, 'Save details', { layout: 'columns', secondary: true })}</section>` : ''}`, { current: '/app/customers', url })
 }
 
 const previewTable = (lines: any[]): Html => table(['Charge', 'From', 'To', 'Amount$'], lines.map(line => [line.description, formatDate(line.periodStart), formatDate(line.periodEnd ? addDays(line.periodEnd, -1) : null), cents(line.amountCents)]), { empty: 'No fixed or seat charges.' })

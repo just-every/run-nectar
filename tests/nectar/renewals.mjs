@@ -39,7 +39,7 @@ export async function renewalsFlow(h,owner,{onState=async()=>{}}={}) {
   const mailFor=s=>notices.find(m=>[m.to].flat().some(v=>v.includes(`${s.code}@renewals.example`)))
   for(const s of [renew,cancel,rejected,uncertain]) {
     const text=mailFor(s).text
-    assert.match(text,/2027-01-01/,'SUB-004 notice names renewal date')
+    assert.match(text,/January 1, 2027/,'SUB-004 notice names renewal date (PORT-006 English long date)')
     assert.match(text,/105\.00/,'SUB-004 notice names new price after5% uplift')
     assert.match(text,/http:\/\/127\.0\.0\.1:\d+\/renewal\/[a-f0-9]{64}/,'SUB-004 notice includes cancellation link')
     const record=(await s.detail()).renewal.notices[0]

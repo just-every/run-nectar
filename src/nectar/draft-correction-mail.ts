@@ -3,7 +3,8 @@ import type { Bindings } from '../auth.server'
 import { operatorMail } from '../mail.server.mjs'
 import { NectarError, all, canonical, commit, fingerprint, guard, insist, now, one, parseJson, stmt, type Row } from './core'
 import { isDate, parseInstant } from './dates'
-import { canonicalDecimal, money } from './decimal'
+import { canonicalDecimal } from './decimal'
+import { customerText, type CustomerText } from './locale'
 import { esc } from './ui/html'
 
 export type DraftCorrectionKind = 'amendment' | 'usage_correction'
@@ -57,23 +58,23 @@ async function usageSources(env: Bindings, payload: Row, rows: Row[]): Promise<U
   return sources
 }
 
-function amendmentTerms(payload: Row) {
+function amendmentTerms(payload: Row, L: CustomerText) {
   insist(['discount_percent', 'fixed_credit', 'price_override'].includes(payload.kind)
     && typeof payload.value === 'string' && isDate(payload.effective_from)
     && (payload.effective_to === null || payload.effective_to === undefined || isDate(payload.effective_to) && payload.effective_to > payload.effective_from), 'invalid_correction_terms')
   const value = canonicalDecimal(payload.value)
-  const term = payload.kind === 'discount_percent' ? `Recurring discount: ${value}%`
-    : payload.kind === 'fixed_credit' ? `One-time contract credit: USD ${value}` : `Unit price override: USD ${value} for price ${payload.price}`
-  return `${term}; effective ${payload.effective_from}${payload.effective_to ? ` through ${payload.effective_to} (end exclusive)` : ', with no recorded end date'}.`
+  const term = payload.kind === 'discount_percent' ? L.t('correction.term.discount', { percent: L.percent(value) })
+    : payload.kind === 'fixed_credit' ? L.t('correction.term.credit', { amount: L.amount(value) }) : L.t('correction.term.override', { amount: L.amount(value), price: payload.price })
+  return payload.effective_to ? L.t('correction.term.window', { term, from: L.day(payload.effective_from), to: L.day(payload.effective_to) }) : L.t('correction.term.open', { term, from: L.day(payload.effective_from) })
 }
 
-function periodExplanation(row: PeriodImpact) {
-  const total = (label: string, value: EngineTotal) => `${label}: subtotal ${money(value.subtotalCents)}, tax ${money(value.taxCents)}, total ${money(value.totalCents)} (USD).`
-  const lineText = (label: string, value: EngineTotal) => `${label} rated lines:\n${value.lines.map(line => `- ${line.description}: ${money(line.amountCents)}`).join('\n') || '- No charges.'}`
-  return [`Subscription ${row.subscription}; service period ${row.period.start} to ${row.period.end} (end exclusive).`,
-    total('Before', row.before), total('After', row.after),
-    `Change: subtotal ${money(row.after.subtotalCents - row.before.subtotalCents)}, tax ${money(row.after.taxCents - row.before.taxCents)}, total ${money(row.after.totalCents - row.before.totalCents)} (USD).`,
-    lineText('Before', row.before), lineText('After', row.after)].join('\n')
+function periodExplanation(row: PeriodImpact, L: CustomerText) {
+  const figures = (label: string, subtotal: number, tax: number, total: number) => L.t(label, { subtotal: L.money(subtotal), tax: L.money(tax), total: L.money(total) })
+  const lineText = (label: string, value: EngineTotal) => `${L.t(label)}\n${value.lines.map(line => `- ${line.description}: ${L.money(line.amountCents)}`).join('\n') || `- ${L.t('correction.no_charges')}`}`
+  return [L.t('correction.period', { subscription: row.subscription, from: L.day(row.period.start), to: L.day(row.period.end) }),
+    figures('correction.before', row.before.subtotalCents, row.before.taxCents, row.before.totalCents), figures('correction.after', row.after.subtotalCents, row.after.taxCents, row.after.totalCents),
+    figures('correction.change', row.after.subtotalCents - row.before.subtotalCents, row.after.taxCents - row.before.taxCents, row.after.totalCents - row.before.totalCents),
+    lineText('correction.before_lines', row.before), lineText('correction.after_lines', row.after)].join('\n')
 }
 
 /** Rebuild from the engine result, discarding any supplied message drafts. */
@@ -88,12 +89,12 @@ export async function draftCorrectionPlan(env: Bindings, kind: DraftCorrectionKi
     ? (Array.isArray(prepared.impact) ? prepared.impact.map(row => ({ ...row, subscription: normalized.subscription })) : [])
     : prepared.impact?.invoices
   insist(Array.isArray(impacts) && impacts.length > 0, 'correction_affected_periods_required')
-  const terms = kind === 'amendment' ? amendmentTerms(normalized) : null
+  if (kind === 'amendment') amendmentTerms(normalized, customerText(null))
   const groups = new Map<string, CustomerImpact>()
   for (const impact of impacts) {
     validatePeriod(impact)
     insist(identifier(impact.subscription), 'invalid_correction_subscription')
-    const sub = await one(env, `SELECT s.id,s.customer_id,s.revision,c.name,c.billing_email,c.address,c.revision AS customer_revision
+    const sub = await one(env, `SELECT s.id,s.customer_id,s.revision,c.name,c.billing_email,c.address,c.language,c.revision AS customer_revision
       FROM nc_subscriptions s JOIN nc_customers c ON c.id=s.customer_id WHERE s.id=?`, impact.subscription)
     insist(sub, 'subscription_not_found', 404)
     insist(email(sub.billing_email), 'customer_billing_email_required', 409)
@@ -112,7 +113,8 @@ export async function draftCorrectionPlan(env: Bindings, kind: DraftCorrectionKi
   for (const [customer, group] of [...groups].sort(([a], [b]) => a.localeCompare(b))) {
     group.rows.sort((a, b) => a.period.start.localeCompare(b.period.start) || a.subscription.localeCompare(b.subscription))
     const ownSources = sources.filter(source => source.customer === customer)
-    const explanation = group.rows.map(periodExplanation).join('\n\n')
+    const L = customerText(group.customer.language)
+    const explanation = group.rows.map(row => periodExplanation(row, L)).join('\n\n')
     const citations: DraftCorrectionCitation[] = group.rows.flatMap(row => {
       const source = `/app/subscriptions/${encodeURIComponent(row.subscription)}?preview_period=${row.period.start.slice(0, 7)}#upcoming`
       return [{ source, quote: `Before: subtotal ${row.before.subtotalCents} cents, tax ${row.before.taxCents} cents, total ${row.before.totalCents} cents.`, fingerprint: row.before.fingerprint },
@@ -120,11 +122,11 @@ export async function draftCorrectionPlan(env: Bindings, kind: DraftCorrectionKi
     })
     if (ownSources.length) citations.push(...ownSources.map(source => ({ source: '/app/usage',
       quote: `${source.action} usage ${source.id}; quantity ${source.quantity}; occurred ${new Date(source.occurredAt).toISOString()}.` })))
-    const body = [`Hello ${group.customer.name},`, 'This billing correction changes the draft calculations shown below.',
-      terms ?? `Usage correction sources: ${ownSources.map(source => `${source.action} ${source.id} (${source.quantity})`).join('; ')}.`,
-      `Next affected invoice service period: ${group.rows[0].period.start} to ${group.rows[0].period.end} (end exclusive).`, explanation,
-      'These are exact invoice-engine calculations from the recorded inputs. Preparing this explanation does not issue an invoice; invoice approval and issue remain separate.'].join('\n\n')
-    noticeDrafts.push({ customer, recipient: group.customer.billing_email, subject: 'Billing correction and draft invoice explanation', body, citations })
+    const body = [L.t('correction.hello', { name: group.customer.name }), L.t('correction.intro'),
+      kind === 'amendment' ? amendmentTerms(normalized, L) : L.t('correction.sources', { sources: ownSources.map(source => `${L.t(`correction.action.${source.action}`)} ${source.id} (${source.quantity})`).join('; ') }),
+      L.t('correction.next', { from: L.day(group.rows[0].period.start), to: L.day(group.rows[0].period.end) }), explanation,
+      L.t('correction.engine')].join('\n\n')
+    noticeDrafts.push({ customer, recipient: group.customer.billing_email, subject: L.t('correction.subject'), body, citations })
   }
   const correctionState = await fingerprint({ kind, normalized, impact: prepared.impact, originalBasis, sources,
     recipients: [...groups].sort(([a], [b]) => a.localeCompare(b)).map(([customer, group]) => ({ customer, subscriptions: group.subscriptions })), noticeDrafts })

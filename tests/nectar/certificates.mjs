@@ -62,7 +62,7 @@ export async function exemptionCertificates(h, owner) {
   await applyPolicy(h, owner, 'certificate.policy', { enabled: true })
   await tick('2026-07-10'); await tick('2026-07-10')
   assert.equal(notices().length, count + 1)
-  assert.match(notices().at(-1).text, /TX.*expiring.*2026-07-31/)
+  assert.match(notices().at(-1).text, /TX.*expiring.*July 31, 2026/)
   await tick('2026-08-01'); await tick('2026-08-01')
   assert.equal(notices().length, count + 2)
   assert.match(notices().at(-1).text, /TX.*expired/)

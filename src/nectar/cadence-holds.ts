@@ -12,7 +12,7 @@ export async function collectibleInvoice(env: Bindings, invoiceId: string, insta
   collectibleCents: number; paused: boolean; hold: string | null; basis: string
 }> {
   const business=await requireBusiness(env)
-  const invoice=await one(env,`SELECT i.*,${BALANCE_SQL} AS balance_cents,c.name AS customer_name,c.billing_email
+  const invoice=await one(env,`SELECT i.*,${BALANCE_SQL} AS balance_cents,c.name AS customer_name,c.billing_email,c.language
     FROM nc_invoices i JOIN nc_customers c ON c.id=i.customer_id WHERE i.id=? AND i.status='issued'`,invoiceId)
   insist(invoice,'invoice_not_found',404)
   const disputes=await all(env,'SELECT * FROM nc_cadence_disputes WHERE invoice_id=? AND resolved_at IS NULL ORDER BY id',invoiceId)

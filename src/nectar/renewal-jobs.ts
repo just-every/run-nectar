@@ -1,4 +1,5 @@
 import { prepareSaveOffer } from './retention-offers'
+import { customerText } from './locale'
 import type { Bindings } from '../auth.server'
 import { operatorMail } from '../mail.server.mjs'
 import { business } from './business'
@@ -9,7 +10,6 @@ import { rate } from './rating'
 import { newCancellationLink } from './renewal-terms'
 import { RENEWAL_RATING_VERSION } from './renewal-rating'
 import { esc } from './ui/html'
-import { plainMoney } from './decimal'
 
 export async function renewalPreview(env:Bindings,term:Row) {
   const b=(await business(env))!,period={start:term.end_date,end:addMonths(term.end_date,1)},input=await ratingInputs(env,b,term.subscription_id,period)
@@ -23,17 +23,17 @@ async function notice(env:Bindings,term:Row,day:string) {
   if(sub?.end_date!==term.end_date||!term.auto_renew||term.cancelled_at||day<addDays(term.end_date,-term.notice_days)||day>=term.end_date)return
   if(await one(env,'SELECT 1 FROM nc_renewal_notices WHERE term_id=? AND cycle=?',term.id,term.cycle))return
   await prepareSaveOffer(env,term)
-  const id=newId(),snapshot=await renewalPreview(env,term),link=await newCancellationLink(env,term),customer=await one(env,'SELECT c.billing_email FROM nc_customers c JOIN nc_subscriptions s ON s.customer_id=c.id WHERE s.id=?',term.subscription_id)
+  const id=newId(),snapshot=await renewalPreview(env,term),link=await newCancellationLink(env,term),customer=await one(env,'SELECT c.billing_email,c.language FROM nc_customers c JOIN nc_subscriptions s ON s.customer_id=c.id WHERE s.id=?',term.subscription_id)
   try{await commit(env,[guard(env,'stale',"EXISTS(SELECT 1 FROM nc_renewal_terms WHERE id=? AND revision=? AND status='active' AND cancelled_at IS NULL) AND NOT EXISTS(SELECT 1 FROM nc_renewal_notices WHERE term_id=? AND cycle=?)",term.id,term.revision,term.id,term.cycle),stmt(env,"INSERT INTO nc_renewal_notices(id,term_id,cycle,due_date,renewal_date,recipient,snapshot_json,status,created_at) VALUES(?,?,?,?,?,?,?,'unconfirmed',?)",id,term.id,term.cycle,addDays(term.end_date,-term.notice_days),term.end_date,customer!.billing_email,JSON.stringify(snapshot),now()),stmt(env,'UPDATE nc_renewal_terms SET token_hash=? WHERE id=?',link.hash,term.id)],{actor:'system:renewals',action:'renewal.notice.reserve',subject:id,detail:{term:term.id,cycle:term.cycle,scheduledDate:addDays(term.end_date,-term.notice_days),actualDate:day}})}catch(e){if(e instanceof NectarError&&e.status===409)return;throw e}
   let status='not_configured',provider:string|null=null
   const mail=operatorMail(env)
   const eligible=await one(env,"SELECT 1 FROM nc_renewal_terms WHERE id=? AND revision=? AND token_hash=? AND status='active' AND auto_renew=1 AND cancelled_at IS NULL",term.id,term.revision,link.hash)
   if(!eligible)status='suppressed'
   if(eligible&&mail&&env.MAIL_FROM&&customer!.billing_email){
-    const prices=snapshot.lines.filter(l=>l.priceId).map(l=>`${l.description}: USD ${plainMoney(l.amountCents)}`).join('\n')
-    const text=`Your subscription renews on ${term.end_date} through ${snapshot.nextTermEnd}. Renewal uplift: ${term.uplift_percent}%.\nNext monthly charges (recorded usage only):\n${prices}\nSubtotal USD ${plainMoney(snapshot.subtotalCents)}, tax USD ${plainMoney(snapshot.taxCents)}, total USD ${plainMoney(snapshot.totalCents)}.\nCancel renewal online with one confirmation, no sign-in or call: ${link.url}`
+    const L=customerText(customer!.language),prices=snapshot.lines.filter(l=>l.priceId).map(l=>`${l.description}: ${L.money(l.amountCents)}`).join('\n')
+    const text=[L.t('renewal.notice.renews',{date:L.day(term.end_date),end:L.day(snapshot.nextTermEnd),percent:L.percent(term.uplift_percent)}),L.t('renewal.notice.charges'),prices,L.t('renewal.notice.totals',{subtotal:L.money(snapshot.subtotalCents),tax:L.money(snapshot.taxCents),total:L.money(snapshot.totalCents)}),L.t('renewal.notice.cancel',{link:link.url})].join('\n')
     status='unconfirmed'
-    try{const result=await mail.send({deliveryId:`renewal-${id}`,from:env.MAIL_FROM,to:[customer!.billing_email],subject:`Subscription renewal on ${term.end_date}`,text,html:`<p>${esc(text).replaceAll('\n','<br>')}</p>`,headers:{'Auto-Submitted':'auto-generated'}});status=result.status==='development'?'not_configured':result.status;provider=result.providerMessageId??null}catch{status='unconfirmed'}
+    try{const result=await mail.send({deliveryId:`renewal-${id}`,from:env.MAIL_FROM,to:[customer!.billing_email],subject:L.t('renewal.notice.subject',{date:L.day(term.end_date)}),text,html:`<p>${esc(text).replaceAll('\n','<br>')}</p>`,headers:{'Auto-Submitted':'auto-generated'}});status=result.status==='development'?'not_configured':result.status;provider=result.providerMessageId??null}catch{status='unconfirmed'}
   }
   await commit(env,[stmt(env,'UPDATE nc_renewal_notices SET status=?,provider_ref=? WHERE id=?',status,provider,id)],{actor:'system:renewals',action:'renewal.notice.outcome',subject:id,detail:{status,provider}})
 }

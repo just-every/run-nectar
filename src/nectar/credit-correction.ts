@@ -45,7 +45,7 @@ async function invoiceCreditPlan(env: Bindings, _business: Business, payload: Ro
   const amount = cents(text(payload.amount, 'amount', 20))
   insist(amount > 0 && amount <= invoice.balance_cents, 'exceeds_balance', 409)
   const [customer, lines, policy] = await Promise.all([
-    one(env, 'SELECT id,billing_email FROM nc_customers WHERE id=?', invoice.customer_id),
+    one(env, 'SELECT id,billing_email,language FROM nc_customers WHERE id=?', invoice.customer_id),
     all(env, 'SELECT * FROM nc_invoice_lines WHERE invoice_id=? ORDER BY seq,id', invoice.id),
     creditPolicy(env),
   ])
@@ -75,7 +75,9 @@ async function invoiceCreditPlan(env: Bindings, _business: Business, payload: Ro
     revenue: 'This proposal does not compute a revenue recognition schedule or revenue recognition amounts.',
     mrr: 'This proposal does not change subscription terms or compute normalized MRR.',
     portal: 'No customer portal visibility or delivery is asserted by this proposal.',
-    mail: { recipient, subject, body, explanation, citations, outcome: 'Queued only after human approval; provider acceptance does not confirm mailbox delivery.' },
+    mail: { recipient, subject, body, explanation, citations, outcome: 'Queued only after human approval; provider acceptance does not confirm mailbox delivery.',
+      // PORT-006: the author writes in the customer's language; Nectar never translates this text.
+      language: customer.language, translation: 'Sent exactly as written; Nectar does not translate it.' },
   }
   const basis = { invoiceCredit: await fingerprint({
     invoice: { id: invoice.id, status: invoice.status, customer: invoice.customer_id, calculation: invoice.calculation_json,

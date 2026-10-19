@@ -1,5 +1,6 @@
 // Daily expiry/remediation notices through the installation's configured mail.
 import type { Bindings } from '../auth.server'
+import { customerText } from './locale'
 import { operatorMail } from '../mail.server.mjs'
 import { actorLabel, requireMember, requireOwner, type Actor } from './actor'
 import { preparePolicyChange } from './policy-changes'
@@ -14,7 +15,7 @@ export async function sendCertificateReminders(env: Bindings, instant = Date.now
   const b = await business(env)
   if (!b) return { sent: 0 }
   const day = localDate(instant, b.timezone)
-  const rows = await all(env, `SELECT cl.customer_id,cl.state,c.name,c.billing_email,
+  const rows = await all(env, `SELECT cl.customer_id,cl.state,c.name,c.billing_email,c.language,
     ce.id AS certificate_id,ce.expires_on FROM nc_exemption_claims cl JOIN nc_customers c ON c.id=cl.customer_id
     LEFT JOIN nc_certificates ce ON ce.id=(SELECT id FROM nc_certificates WHERE customer_id=cl.customer_id AND state=cl.state AND status='validated' AND valid_from<=? ORDER BY expires_on DESC,id LIMIT 1)
     WHERE c.status='active'`, day)
@@ -34,10 +35,11 @@ export async function sendCertificateReminders(env: Bindings, instant = Date.now
       await env.DB.prepare("UPDATE nc_certificate_reminders SET status='failed' WHERE delivery_id=?").bind(delivery).run()
       continue
     }
-    const body = `${row.name}: your ${row.state} exemption certificate is ${kind}${row.expires_on ? ` (expires ${row.expires_on})` : ''}. Please send a current certificate to ${b.billing_email || env.MAIL_FROM}. Billing cannot use an exemption without validated coverage for the service period.`
+    const L = customerText(row.language)
+    const body = L.t(row.expires_on ? 'certificate.body.dated' : 'certificate.body', { name: row.name, state: row.state, status: L.t(`certificate.${kind}`), date: row.expires_on ? L.day(row.expires_on) : '', address: b.billing_email || env.MAIL_FROM })
     let status = 'uncertain', provider = null
     try {
-      const result = await mail.send({ deliveryId: delivery, from: env.MAIL_FROM, to: [row.billing_email], subject: `${row.state} exemption certificate ${kind}`, text: body, html: `<p>${esc(body)}</p>`, headers: { 'Auto-Submitted': 'auto-generated' } })
+      const result = await mail.send({ deliveryId: delivery, from: env.MAIL_FROM, to: [row.billing_email], subject: L.t('certificate.subject', { state: row.state, status: L.t(`certificate.${kind}`) }), text: body, html: `<p>${esc(body)}</p>`, headers: { 'Auto-Submitted': 'auto-generated' } })
       status = result.status === 'accepted' ? 'accepted' : result.status === 'development' ? 'suppressed' : result.status
       provider = result.providerMessageId ?? null
     } catch { status = 'uncertain' }

@@ -83,12 +83,13 @@ export async function draftCorrectionsFlow(h, owner) {
       assert.ok(draft.subject.length && draft.body.length)
       assert.ok(!JSON.stringify(draft).includes('attacker@example.test') && !draft.body.includes('Caller-selected body'), 'caller-supplied drafts cannot replace the generated explanation')
       for (const row of impacts) {
-        assert.ok(draft.body.includes(row.period.start) && draft.body.includes(row.period.end))
+        const longDate = day => new Date(`${day}T00:00:00Z`).toLocaleDateString('en-US', { dateStyle: 'long', timeZone: 'UTC' })
+        assert.ok(draft.body.includes(longDate(row.period.start)) && draft.body.includes(longDate(row.period.end)), 'PORT-006 English notices name service days as long dates')
         assert.ok(draft.body.includes(fixture.subscription), 'the message identifies the actual subscription')
         for (const side of [row.before, row.after]) {
           assert.ok(side.fingerprint)
           assert.ok(draft.citations.some(citation => citation.fingerprint === side.fingerprint && citation.source.includes(fixture.subscription)))
-          for (const amount of totals(side)) assert.ok(draft.body.includes((amount / 100).toFixed(2)), 'the explanation carries the independently verified subtotal, tax and total')
+          for (const amount of totals(side)) assert.ok(draft.body.includes(`${amount < 0 ? '-' : ''}USD ${(Math.abs(amount) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`), 'the explanation carries the independently verified subtotal, tax and total')
         }
       }
       return draft

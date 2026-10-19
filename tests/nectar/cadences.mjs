@@ -4,7 +4,9 @@ import { applyPolicy } from './policy-helper.mjs'
 const issueDate = '2026-09-01'
 const dueDate = '2026-10-01'
 const rule = { segment: 'transfer-net30', minimum_cents: 1000, subject: '{business}: {invoice}, {balance}, stage {stage}', body: 'Please arrange the recorded transfer for {invoice}: {balance} (stage {stage}).' }
-const usd = cents => `USD ${(cents / 100).toFixed(2)}`
+// PORT-006: Nectar's own facts follow the customer's language (English here).
+const usd = cents => `USD ${(cents / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+const dueText = 'October 1, 2026'
 const frozen = row => ({ delivery: row.id, recipient: row.recipient, subject: row.subject, body: row.body })
 const content = mail => `${mail.text ?? ''} ${mail.html ?? ''}`
 
@@ -71,7 +73,7 @@ export async function cadencesFlow(h, owner) {
     assert.equal(row.recipient, invoice.email)
     assert.equal(row.subject, `${business.legal_name}: ${invoice.number}, ${usd(collectible)}, stage ${stage}`)
     const excluded = disputes.map(d => `Dispute ${d.id}, line ${d.line}: ${usd(d.amount)} excluded.`)
-    assert.equal(row.body, `Please arrange the recorded transfer for ${invoice.number}: ${usd(collectible)} (stage ${stage}).\n\nInvoice ${invoice.number}; due ${dueDate}.\nAmount requested: ${usd(collectible)}.${excluded.length ? `\n${excluded.join('\n')}` : ''}`)
+    assert.equal(row.body, `Please arrange the recorded transfer for ${invoice.number}: ${usd(collectible)} (stage ${stage}).\n\nInvoice ${invoice.number}; due ${dueText}.\nAmount requested: ${usd(collectible)}.${excluded.length ? `\n${excluded.join('\n')}` : ''}`)
     const sent = mails(invoice).filter(mail => mail.subject === row.subject)
     assert.equal(sent.length, 1)
     assert.deepEqual([sent[0].to].flat(), [invoice.email])

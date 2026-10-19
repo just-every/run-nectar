@@ -104,6 +104,7 @@ export async function creditCorrectionFlow(h, owner) {
     assert.deepEqual([saved.impact.credit.amountCents, saved.impact.credit.balanceBeforeCents, saved.impact.credit.balanceAfterCents], [5000, 11000, 6000])
     assert.deepEqual([saved.impact.invoice.subtotalCents, saved.impact.invoice.taxCents, saved.impact.invoice.totalCents], [10000, 1000, 11000])
     assert.deepEqual(saved.impact.mail, { ...saved.impact.mail, recipient: seats.email, subject: input.subject, body: input.body, explanation: input.explanation, citations: input.citations })
+    assert.equal(saved.impact.mail.language, 'en', 'PORT-006 the invoice-credit author sees the customer’s language; the text is sent as written')
     assert.equal(saved.payload.recipient, seats.email)
     assert.deepEqual(saved.payload.citations, input.citations)
     for (const who of [agent, accountant]) {

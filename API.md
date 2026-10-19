@@ -29,7 +29,7 @@ step by step; `CUSTOMER` may be the internal id or the external id), `imports`,
 | --- | --- | --- |
 | `business.configure` | owner | `legal_name`, `timezone`, `invoice_prefix`, `payment_terms_days`, optional `address`, `billing_email`, `revision` when editing |
 | `tax.declare`, `tax.review` | owner | `tax_jurisdiction` (state), `tax_mode` (`no_tax`, `flat_rate`), `tax_rate`, `tax_note`; review takes `revision` |
-| `customer.create`, `customer.update`, `contact.add` | owner, finance | `external_id`, `name`, `billing_email`, `address`, `tax_exempt`, `tax_exempt_ref`; update adds `customer`, `revision` |
+| `customer.create`, `customer.update`, `contact.add` | owner, finance | `external_id`, `name`, `billing_email`, `address`, `tax_exempt`, `tax_exempt_ref`, optional `language` (PORT-006: a complete translation file's tag, `en` or `es-US` today; default `en`, omitted on update keeps it; anything else is `unsupported_language`); update adds `customer`, `revision` |
 | `exemption.claim` | owner, finance | `customer`, `state`; records a claim while its document is missing |
 | `certificate.collect` | owner, finance | `customer`, `state`, `reference`, `valid_from`, `expires_on` (inclusive), `file` (PDF/PNG/JPEG, max 500 KB) |
 | `certificate.review` | a person with approval | `certificate`, `decision` (`validated`, `rejected`), `review_note`; a decision is permanent |
