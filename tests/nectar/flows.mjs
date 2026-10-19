@@ -10,6 +10,7 @@ import { API_DOORS, PAGE_DOORS } from '../../src/nectar/doors.ts'
 import { file, harness } from './harness.mjs'
 import { reconciliationFlow } from './reconciliation.mjs'
 import { oneTimeBilling } from './one-time.mjs'
+import { priceApprovals } from './price-approvals.mjs'
 import { creditPolicy } from './credit-policy.mjs'
 import { exemptionCertificates } from './certificates.mjs'
 import { pricingModels } from './pricing-models.mjs'
@@ -451,6 +452,8 @@ try {
   await exemptionCertificates(h, cookie.owner)
 
   await creditPolicy(h, cookie.owner)
+
+  await priceApprovals(h, cookie.owner)
 
   await oneTimeBilling(h, cookie.owner)
 

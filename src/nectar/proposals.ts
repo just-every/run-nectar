@@ -173,8 +173,8 @@ export async function propose(env: Bindings, actor: Actor, input: Input) {
   if (kind === 'usage_correction') insist(Array.isArray(evidence.sources) && evidence.sources.length, 'source_reference_required')
   const prepared = await plan(env, kind, payload)
   const id = newId()
-  await commit(env, [stmt(env, "INSERT INTO nc_proposals (id, kind, title, payload_json, evidence_json, impact_json, basis_json, status, created_by, created_by_kind, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)",
-    id, kind, title, JSON.stringify(prepared.normalized), JSON.stringify(evidence), JSON.stringify(prepared.impact), JSON.stringify(prepared.basis), actorLabel(actor), actor.kind, now())],
+  await commit(env, [stmt(env, "INSERT INTO nc_proposals (id, kind, title, payload_json, evidence_json, impact_json, basis_json, status, created_by, created_by_kind, created_at, prepared_by_id) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?)",
+    id, kind, title, JSON.stringify(prepared.normalized), JSON.stringify(evidence), JSON.stringify(prepared.impact), JSON.stringify(prepared.basis), actorLabel(actor), actor.kind, now(), actor.id)],
   { actor: actorLabel(actor), action: 'proposal.create', subject: id, detail: { kind, title } })
   return { id, kind, impact: prepared.impact }
 }
@@ -193,7 +193,9 @@ export async function proposalDetail(env: Bindings, actor: Actor, id: string): P
   if (row.status === 'pending') {
     try { stale = canonical(await currentBasis(env, row.kind, payload)) !== canonical(parseJson(row.basis_json, {})) } catch { stale = true }
   }
-  return { ...row, payload, evidence: parseJson(row.evidence_json, {}), impact: parseJson(row.impact_json, {}), basis: parseJson(row.basis_json, {}), result: parseJson(row.result_json, null), stale, payload_json: undefined, evidence_json: undefined, impact_json: undefined, basis_json: undefined, result_json: undefined }
+  const needsPreparation = row.kind === 'price_change' && row.created_by_kind === 'member' && !row.prepared_by_id
+  const needsOtherApprover = row.kind === 'price_change' && row.created_by_kind === 'member' && row.prepared_by_id === actor.id
+  return { ...row, needsPreparation, needsOtherApprover, payload, evidence: parseJson(row.evidence_json, {}), impact: parseJson(row.impact_json, {}), basis: parseJson(row.basis_json, {}), result: parseJson(row.result_json, null), stale, payload_json: undefined, evidence_json: undefined, impact_json: undefined, basis_json: undefined, result_json: undefined }
 }
 
 /** A person approves or rejects. Approval re-reads the basis and applies the typed change through the normal records. */
@@ -213,6 +215,10 @@ export async function decide(env: Bindings, actor: Actor, input: Input) {
   if (decision === 'rejected') {
     await commit(env, close(null), { actor: by, action: 'proposal.reject', subject: row.id, detail: { note } })
     return { id: row.id, status: 'rejected' }
+  }
+  if (row.kind === 'price_change' && row.created_by_kind === 'member') {
+    insist(row.prepared_by_id, 'price_proposal_needs_preparation', 409)
+    insist(row.prepared_by_id !== actor.id, 'second_approver_required', 409)
   }
   const payload = parseJson<Row>(row.payload_json, {})
   let basis: unknown

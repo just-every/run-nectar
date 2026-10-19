@@ -512,7 +512,7 @@ Every capability claim on the owner-approved homepage (`src/site/homepage/`, des
 
 Judged from the code and tests at commit `0b59539c38405c7cc627a27666242516d33448ad` (19 October 2026).
 
-Round updates: `USE-007`, `CAT-002`, `TAX-002` and `CAT-006` are proven by their named public-door journeys in `tests/nectar/`. `GOV-002` has a proven credit-approval slice and remains partial for its wider domains.
+Round updates: `USE-007`, `CAT-002`, `TAX-002` and `CAT-006` are proven by their named public-door journeys in `tests/nectar/`. `GOV-002` has proven credit-approval and price-migration-proposal slices and remains partial for its wider domains.
 
 | Clauses | Done | Partial | Missing | Total |
 | --- | ---: | ---: | ---: | ---: |
@@ -628,7 +628,7 @@ Round updates: `USE-007`, `CAT-002`, `TAX-002` and `CAT-006` are proven by their
 | `MOVE-010` | Usage reaches exactly one biller through the shadow run and adoption | target | partial | `src/nectar/usage.ts`; `src/nectar/movein/stripe.ts`; `tests/nectar/flows.mjs` | Usage posted to Nectar rates shadow subscriptions by the Stripe customer id and reconciles with Stripe's invoices, and adoption bills only from the cutover period; no relay to Stripe meter events or other billers, no Stripe-format meter-event endpoint, no per-period source recorded on events, no late-event routing and no check against `meter_event_summaries`. |
 | `MOVE-011` | Invoice numbering continues from the previous biller | target | partial | `src/nectar/business.ts`; `src/nectar/billruns.ts`; `tests/nectar/flows.mjs` | The owner sets the invoice prefix and invoices number sequentially from 1; no continuation from the previous biller's last number or format, no per-customer sequences, no refusal of numbers moved-in invoices carry and no register with a gap report. |
 | `GOV-001` | Billing roles | target | partial | `src/nectar/actor.ts`; `tests/nectar/flows.mjs` | Owner, finance and accountant roles are enforced in every handler; no collections, sales, support or developer roles, credit limits or custom roles. |
-| `GOV-002` | Approval policies and separation of duties | target | partial | `src/nectar/credit-policy.ts`; `src/nectar/receivables.ts`; `tests/nectar/credit-policy.mjs` — GOV-002 credit approval journey | Owner-set credit thresholds and two-person credit approval ship; refunds, write-offs, price and policy changes still need the wider rules. |
+| `GOV-002` | Approval policies and separation of duties | target | partial | `src/nectar/credit-policy.ts`; `src/nectar/proposals.ts`; `tests/nectar/credit-policy.mjs`; `tests/nectar/price-approvals.mjs` — GOV-002 public-door journeys | Owner-set credit thresholds and two-person credit approval ship. Member-prepared price-migration proposals require a different approver using the saved member id; older proposals without that identity require re-preparation. Refunds, write-offs, other price doors and policy changes still need the wider rules. |
 | `GOV-003` | Single sign-on and provisioning | target | missing |  | Base operator sign-in only; no SAML, OIDC or SCIM. |
 | `GOV-004` | Durable audit trail | target | done | `src/nectar/core.ts`; `src/nectar/views.ts`; `tests/nectar/flows.mjs`; `tests/nectar/journey.mjs` |  |
 | `GOV-005` | Personal-data erasure with financial retention | target | missing |  | No erasure or retention-based removal. |

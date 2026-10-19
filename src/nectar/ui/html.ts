@@ -104,6 +104,8 @@ const ERRORS: Record<string, string> = {
   blocking_exception: 'this draft has an exception that must be fixed before approval.',
   exceptions_not_acknowledged: 'tick that you reviewed the exceptions listed for this draft.',
   shadow_invoice: 'this is a shadow draft for comparison with the previous biller; it cannot be approved until the subscription is adopted.',
+  second_approver_required: 'another approver must approve this action; the person who prepared it cannot approve it.',
+  price_proposal_needs_preparation: 'this older price proposal has no saved preparer identity. Reject it and prepare a new proposal.',
   proposal_stale: 'the records changed after this proposal was prepared. Ask for a new proposal.',
   correction_rows_rejected: 'some added usage rows would be rejected. Fix them and propose the correction again.',
   reviewed_fingerprint_changed: 'the files changed since they were reviewed. Preview them again.',
