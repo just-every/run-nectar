@@ -10,6 +10,8 @@ import { all, commit, guard, insist, newId, now, one, parseJson, stmt, type Row 
 import { canonicalDecimal, micros } from './decimal'
 import { isDate, periodContaining, requireDate } from './dates'
 import { rated } from './inputs'
+import { lifecycleHistory, lifecycleIntervals } from './lifecycle-records'
+import { lifecyclePolicy } from './lifecycle-policy'
 import { metadataFor,withMetadata } from './metadata'
 import type { Input } from './input'
 import type { ItemIn, Line } from './rating'
@@ -29,7 +31,8 @@ export async function subscriptionDetail(env: Bindings, actor: Actor, id: string
     all(env, 'SELECT * FROM nc_changes WHERE subscription_id = ? ORDER BY created_at DESC', id),
     all(env, "SELECT id, number, status, period_start, period_end, total_cents FROM nc_invoices WHERE subscription_id = ? AND status <> 'discarded' ORDER BY period_start DESC", id),
   ])
-  return { ...sub,...await metadataFor(env,'subscription',id), items, amendments, changes: changes.map(change => ({ ...change, preview: parseJson(change.preview_json, {}), preview_json: undefined })), invoices:await withMetadata(env,'invoice',invoices) }
+  const history = await lifecycleHistory(env, id)
+  return { ...sub, lifecyclePolicy: await lifecyclePolicy(env), lifecycle: history, intervals: lifecycleIntervals(history),...await metadataFor(env,'subscription',id), items, amendments, changes: changes.map(change => ({ ...change, preview: parseJson(change.preview_json, {}), preview_json: undefined })), invoices:await withMetadata(env,'invoice',invoices) }
 }
 
 // A subscription holds its meters while it is live on or after `from`: no end
@@ -212,17 +215,12 @@ export async function decideChange(env: Bindings, actor: Actor, input: Input) {
   return { id: sub.id, status: 'approved' }
 }
 
-/** Ends a subscription at a date; periods after it bill nothing, the final period is prorated. */
+/** Existing end-date door retains its date field and now records lifecycle custody. */
 export async function endSubscription(env: Bindings, actor: Actor, input: Input) {
   requireMember(actor, 'approve')
-  const sub = await requireSubscription(env, input.text('subscription', { max: 100 }))
-  insist(!sub.end_date, 'already_ended', 409)
-  const date = requireDate(input.text('end_date', { max: 10 }), 'end_date')
-  insist(date > sub.start_date, 'invalid_end_date')
-  insist(!await one(env, "SELECT 1 FROM nc_invoices WHERE subscription_id = ? AND status = 'issued' AND period_end > ?", sub.id, date), 'period_already_invoiced', 409)
-  await commit(env, [
-    guard(env, 'stale', 'EXISTS(SELECT 1 FROM nc_subscriptions WHERE id = ? AND revision = ?)', sub.id, sub.revision),
-    stmt(env, 'UPDATE nc_subscriptions SET end_date = ?, revision = ?, updated_at = ? WHERE id = ?', date, newId(), now(), sub.id),
-  ], { actor: actorLabel(actor), action: 'subscription.end', subject: sub.id, detail: { endDate: date } })
-  return { id: sub.id }
+  const { cancelSubscription } = await import('./lifecycle-cancel')
+  const { Input: LifecycleInput } = await import('./input')
+  const sub = await requireSubscription(env, input.text('subscription', {max:100}))
+  return await cancelSubscription(env, actor, LifecycleInput.of({subscription:sub.id, revision:sub.revision,
+    mode:'immediate', effective_date:input.text('end_date',{max:10}), reason:input.text('reason',{max:500,optional:true}) || 'Scheduled end requested by operator'}))
 }

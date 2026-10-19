@@ -7,6 +7,7 @@ import { can, type Actor } from '../actor'
 import { all } from '../core'
 import { customers } from '../customers'
 import { addDays, formatDate, formatPeriod } from '../dates'
+import { lifecycleSection } from './lifecycle'
 import { subscriptionDetail } from '../subscriptions'
 import { customerView } from '../views'
 import { addresses, area, cents, check, details, field, form, h, hidden, page, select, table, tag, type Html } from './html'
@@ -17,7 +18,7 @@ import { notesSection } from './notes'
 import { certificateSection } from './certificates'
 import { priceRate } from './pricing'
 
-const subscriptionState = (s: Record<string, any>, today: string) => s.billing_mode === 'shadow' ? 'Shadow' : s.end_date && s.end_date <= today ? 'Ended' : s.trial_end && s.trial_end > today ? 'Trial' : 'Active'
+const subscriptionState = (s: Record<string, any>, today: string) => s.billing_mode === 'shadow' ? 'Shadow' : s.end_date && s.end_date <= today ? 'Ended' : s.intervals?.some((i: any)=>i.from<=today && (!i.to || i.to>today)) ? 'Paused' : s.trial_end && s.trial_end > today ? 'Trial' : 'Active'
 
 export async function customersPage(env: Bindings, actor: Actor, url: URL) {
   const rows = await customers(env, actor,url)
@@ -82,6 +83,7 @@ export async function subscriptionPage(env: Bindings, actor: Actor, id: string, 
     <section class="card" aria-labelledby="items"><h2 id="items">Plan</h2>${table(['Price', 'Quantity$', 'From', 'Until'], s.items.map((i: any) => [`${i.product_name}${i.nickname ? ` — ${i.nickname}` : ''} v${i.version} (${priceRate(i)})`, i.quantity, formatDate(i.effective_from), formatDate(i.effective_to)]))}</section>
     ${await upcomingSection(env,actor,s,url)}
     ${addonSection(s, prices, actor)}
+    ${lifecycleSection(s, actor)}
     <section class="card" aria-labelledby="exceptions"><h2 id="exceptions">Contract exceptions</h2>
       ${table(['Exception', 'From', 'Until', 'Status', ''], s.amendments.map((a: any) => [h`${a.kind === 'discount_percent' ? `${a.value}% discount` : a.kind === 'fixed_credit' ? `$${a.value} one-time credit` : `Contract price $${a.value}`}${a.note ? ` — ${a.note}` : ''}${a.clause ? details({ Clause: a.clause }, 'Clause') : ''}`, formatDate(a.effective_from), formatDate(a.effective_to), tag(a.status === 'proposed' ? 'Proposed' : a.status === 'approved' ? 'Approved' : 'Rejected'),
         a.status === 'proposed' && approver ? h`<div class="actions">${a.kind === 'price_override' && (!a.prepared_by_id || a.prepared_by_id === actor.id) ? h`<p class="hint">${!a.prepared_by_id ? 'This older contract price has no saved preparer identity. Reject it and propose it again.' : 'Another approver must approve this contract price. You prepared it.'}</p>` : form('amendment.decide', `/app/subscriptions/${s.id}`, h`${hidden('amendment', a.id)}${hidden('decision', 'approved')}`, 'Approve')}${form('amendment.decide', `/app/subscriptions/${s.id}`, h`${hidden('amendment', a.id)}${hidden('decision', 'rejected')}`, 'Reject', { secondary: true })}</div>` : '']), { empty: 'No contract exceptions.' })}

@@ -1,3 +1,4 @@
+import { cancellationApproval } from './lifecycle-approval'
 import { metadataFor,withMetadata } from './metadata'
 import { alertStatements } from './notifications'
 import { deliverAlerts } from './notification-mail'
@@ -57,7 +58,7 @@ export async function draftFor(env: Bindings, business: Business, sub: Row, peri
   const exceptions = [...rating.exceptions]
   const previous = await one(env, "SELECT number, period_start, total_cents, subtotal_cents FROM nc_invoices WHERE subscription_id = ? AND status = 'issued' AND period_start < ? ORDER BY period_start DESC LIMIT 1", sub.id, period.start)
   const incumbent = await incumbentComparison(env, sub, period, rating)
-  const metered = rating.lines.some(line => line.kind === 'usage' || line.kind === 'trial_usage')
+  const metered = rating.lines.some(line => line.kind === 'usage' || line.kind === 'trial_usage' || line.kind === 'paused_usage')
   const hasMeteredItem = Object.values((input as any).prices as Record<string, Row>).some(price => price.kind === 'unit') && (input as any).items.some((item: Row) => (input as any).prices[item.priceId]?.kind === 'unit' && item.from < period.end && (item.to ?? '9999') > period.start)
   if (hasMeteredItem && !metered) exceptions.push({ code: 'missing_usage', message: 'This subscription has a metered price but no usage was recorded for the period. Check the usage feed before approving.' })
   if (!sub.billing_email) exceptions.push({ code: 'no_billing_email', message: 'The customer has no billing email.' })
@@ -155,6 +156,7 @@ async function currentFingerprint(env: Bindings, business: Business, invoice: Ro
 }
 
 async function approveOne(env: Bindings, actor: Actor, business: Business, invoice: Row, acknowledged: boolean) {
+  await cancellationApproval(env,actor,invoice)
   insist(invoice.status === 'draft', invoice.status === 'shadow' ? 'shadow_invoice' : 'not_a_draft', 409)
   const exceptions = parseJson<Exception[]>(invoice.exceptions_json, [])
   insist(!exceptions.some(e => BLOCKING.has(e.code)), 'blocking_exception', 409, exceptions.filter(e => BLOCKING.has(e.code)))
@@ -204,6 +206,7 @@ export async function finalise(env: Bindings, actor: Actor, input: Input) {
   insist(issueDate <= day && targets.every(invoice => issueDate >= (invoice.invoice_kind === 'manual' ? invoice.period_start : invoice.period_end)), 'invalid_issue_date')
   const issued: string[] = [], refused: Row[] = []
   for (const invoice of targets) {
+    await cancellationApproval(env,actor,invoice)
     if (await currentFingerprint(env, business, invoice) !== invoice.approved_fingerprint) { refused.push({ invoice: invoice.id, reason: 'source_changed' }); continue }
     const calculation = parseJson<Row>(invoice.calculation_json, {})
     const consumed: string[] = calculation.consumedEvents ?? []

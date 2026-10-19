@@ -26,6 +26,9 @@ import { attachAddon } from './addons'
 import { addNote } from './notes'
 import { writeMetadata } from './metadata'
 import { setNotificationPreferences } from './notifications'
+import { cancelSubscription, reactivateSubscription } from './lifecycle-cancel'
+import { configureLifecyclePolicy } from './lifecycle-policy'
+import { pauseSubscription, resumeSubscription } from './lifecycle'
 import { submitUsage } from './usage'
 
 type Handler = (env: Bindings, actor: Actor, input: Input, request: Request) => Promise<unknown>
@@ -60,6 +63,11 @@ export const actions: Record<string, Handler> = {
   'subscription.addon': attachAddon,
   'subscription.create': createSubscription,
   'subscription.end': endSubscription,
+  'lifecycle.policy': configureLifecyclePolicy,
+  'subscription.cancel': cancelSubscription,
+  'subscription.reactivate': reactivateSubscription,
+  'subscription.pause': pauseSubscription,
+  'subscription.resume': resumeSubscription,
   'amendment.propose': proposeAmendment,
   'amendment.decide': decideAmendment,
   'change.prepare': prepareChange,

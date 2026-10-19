@@ -16,6 +16,7 @@ import { importJobs, shadowSubscriptions } from './movein/stripe'
 import { policyChanges, policySettings } from './policy-changes'
 import { proposalDetail, proposals } from './proposals'
 import { customerLedger, payments } from './receivables'
+import { lifecycleHistory, lifecycleIntervals } from './lifecycle-records'
 import { subscriptionDetail } from './subscriptions'
 import { batches, inspect } from './usage'
 import { report, reportInvoice } from './reports'
@@ -46,7 +47,7 @@ export async function customerView(env: Bindings, actor: Actor, id: string): Pro
     entitlements(env, actor, id),
     all(env, 'SELECT provider_ref, number, status, period_start, period_end, total_cents, paid_cents, remaining_cents FROM nc_incumbent_invoices WHERE customer_id = ? ORDER BY period_start DESC', id),
   ])
-  return { ...customer,...await metadataFor(env,'customer',id), notes: await customerNotes(env, id), contacts, subscriptions:await withMetadata(env,'subscription',subscriptions), ledger, entitlements: features, incumbentInvoices: incumbent, charges: await all(env, 'SELECT * FROM nc_charges WHERE customer_id=? ORDER BY effective_date,id', id), certificatePolicy: await one(env, 'SELECT enabled,revision FROM nc_certificate_policy WHERE singleton=1'), certificates: await certificates(env, actor, id), exemptionClaims: await all(env, 'SELECT state FROM nc_exemption_claims WHERE customer_id=? ORDER BY state', id), certificateReminders: await all(env, 'SELECT state,kind,status,created_at FROM nc_certificate_reminders WHERE customer_id=? ORDER BY created_at DESC', id) }
+  return { ...customer,...await metadataFor(env,'customer',id), notes: await customerNotes(env, id), contacts, subscriptions:await withMetadata(env,'subscription',await Promise.all(subscriptions.map(async s=>({...s,intervals:lifecycleIntervals(await lifecycleHistory(env,s.id))})))), ledger, entitlements: features, incumbentInvoices: incumbent, charges: await all(env, 'SELECT * FROM nc_charges WHERE customer_id=? ORDER BY effective_date,id', id), certificatePolicy: await one(env, 'SELECT enabled,revision FROM nc_certificate_policy WHERE singleton=1'), certificates: await certificates(env, actor, id), exemptionClaims: await all(env, 'SELECT state FROM nc_exemption_claims WHERE customer_id=? ORDER BY state', id), certificateReminders: await all(env, 'SELECT state,kind,status,created_at FROM nc_certificate_reminders WHERE customer_id=? ORDER BY created_at DESC', id) }
 }
 
 export const views: Record<string, View> = {

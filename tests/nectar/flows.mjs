@@ -2,6 +2,7 @@ import { catalogueApprovals, catalogueSingleApproval } from './catalogue-approva
 import { publishPrice } from './price-helper.mjs'
 import { policyApprovals } from './policy-approvals.mjs'
 import { notificationsFlow } from './notifications.mjs'
+import { lifecycleFlow } from './lifecycle.mjs'
 import { metadataFlow } from './metadata.mjs'
 import { applyPolicy } from './policy-helper.mjs'
 import { queuedEntrypoint } from '@runeditrun/rer/queued-entry'
@@ -343,13 +344,15 @@ try {
     await h.api('customers', agent, undefined, 401)
   })
 
+  await lifecycleFlow(h, cookie.owner)
+
   await check('NEC-15 roles are enforced in every handler', async () => {
     await h.api('access.give', cookie.owner, { email: 'fran@example.test', name: 'Fran Finance', role: 'finance' })
     await h.api('access.give', cookie.owner, { email: 'acct@example.test', name: 'Avery Accountant', role: 'accountant' })
     await h.api('access.give', cookie.owner, { email: 'x@example.test', name: 'Nope', role: 'owner' }, 400)
     cookie.finance = await h.signIn('fran@example.test', { requested: true })
     cookie.accountant = await h.signIn('acct@example.test', { requested: true })
-    const ownerOnly = ['credit.policy', 'certificate.policy', 'business.configure', 'tax.declare', 'tax.review', 'access.give', 'access.end', 'credential.issue', 'credential.revoke', 'subscription.adopt']
+    const ownerOnly = ['lifecycle.policy', 'credit.policy', 'certificate.policy', 'business.configure', 'tax.declare', 'tax.review', 'access.give', 'access.end', 'credential.issue', 'credential.revoke', 'subscription.adopt']
     assert.ok(ACTIONS.length > 30)
     for (const name of ACTIONS) {
       if (name === 'notification.preferences') await h.api(name,cookie.accountant,{ mentions:true,payment_mismatch:false,billrun_exceptions:false,proposals:false })

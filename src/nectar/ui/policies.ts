@@ -4,10 +4,11 @@ import type { Row } from '../core'
 import { policyChanges } from '../policy-changes'
 import { cents, check, form, h, hidden, table, tag, who } from './html'
 
-const labels: Record<string, string> = { credit: 'Credit approval threshold', certificate: 'Certificate reminder mail', tax: 'Declared tax policy' }
+const labels: Record<string, string> = { credit: 'Credit approval threshold', certificate: 'Certificate reminder mail', tax: 'Declared tax policy', lifecycle: 'Cancellation and reactivation policy' }
 const value = (row: Row) => row.kind === 'credit'
   ? row.payload.twoPersonAboveCents === null ? 'No second-person credit threshold' : h`Second person above ${cents(row.payload.twoPersonAboveCents)}`
   : row.kind === 'certificate' ? row.payload.enabled ? 'Enabled' : 'Disabled'
+  : row.kind === 'lifecycle' ? `${row.payload.creditUnused ? 'Credit unused recurring service' : 'No unused-service credit'}; reactivate within ${row.payload.reactivationDays} days`
   : `${row.payload.jurisdiction}: ${row.payload.mode === 'no_tax' ? 'No sales tax' : `${row.payload.rate}% flat rate`}. ${row.payload.note}`
 
 export async function policySection(env: Bindings, actor: Actor) {

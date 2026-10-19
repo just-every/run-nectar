@@ -10,6 +10,9 @@
 // - usage that occurred in an earlier period and was not yet billed is billed
 //   as late usage at the price in effect when it occurred;
 // - tax is the declared flat rate on the taxable total, rounded once.
+import { cancellationLines } from './lifecycle-rating'
+import { activeSegments, blockedAt, type LifecycleInterval } from './lifecycle-math'
+import { LIFECYCLE_RATING_VERSION } from './lifecycle-records'
 import { addDays, daysBetween, formatDate, localDate, periodContaining } from './dates'
 import { decimalText, lineCents, micros, percentOf, quantityText } from './decimal'
 import { insist } from './core'
@@ -33,6 +36,8 @@ export interface RatingInput {
   prices: Record<string, PriceIn>
   amendments: AmendmentIn[]
   charges?: ChargeIn[]
+  creditGovernance?: {thresholdCents: number | null; revision: number}
+  lifecycle?: LifecycleInterval[]
   events: EventIn[]
 }
 
@@ -58,9 +63,9 @@ const unitFor = (input: RatingInput, price: PriceIn, from: string, to: string) =
   return { unit: override ? override.value : price.unitAmount, override }
 }
 
-export function rate(input: RatingInput): Rating {
-  insist(input.version === RATING_VERSION || input.version === PRICE_MODEL_RATING_VERSION || input.version === CHARGE_RATING_VERSION, 'unsupported_rating_version')
-  insist(!Object.values(input.prices).some(price => price.pricing) || input.version === PRICE_MODEL_RATING_VERSION || input.version === CHARGE_RATING_VERSION, 'unsupported_rating_version')
+export function rate(input: RatingInput, presentCancellationCredits = true): Rating {
+  insist(input.version === RATING_VERSION || input.version === PRICE_MODEL_RATING_VERSION || input.version === CHARGE_RATING_VERSION || input.version === LIFECYCLE_RATING_VERSION, 'unsupported_rating_version')
+  insist(!Object.values(input.prices).some(price => price.pricing) || input.version === PRICE_MODEL_RATING_VERSION || input.version === CHARGE_RATING_VERSION || input.version === LIFECYCLE_RATING_VERSION, 'unsupported_rating_version')
   const { period, subscription: sub } = input
   const periodDays = BigInt(daysBetween(period.start, period.end))
   const lines: Line[] = [], exceptions: Exception[] = [], consumed: string[] = []
@@ -78,7 +83,7 @@ export function rate(input: RatingInput): Rating {
     if (!price || price.kind === 'unit') continue
     const from = max(item.from, billFrom), to = min(item.to ?? FAR, activeTo)
     if (from >= to) continue
-    for (const [start, end] of split(from, to, boundaries)) {
+    for (const [activeStart, activeEnd] of activeSegments(from, to, input.lifecycle ?? [])) for (const [start, end] of split(activeStart, activeEnd, boundaries)) {
       const days = BigInt(daysBetween(start, end))
       const { unit, override } = unitFor(input, price, start, end)
       const quantity = BigInt(item.quantity) * 1_000_000n
@@ -108,45 +113,54 @@ export function rate(input: RatingInput): Rating {
   }
 
   // One-time contract credits, in the period where they start.
-  for (const amendment of input.amendments.filter(a => a.kind === 'fixed_credit' && a.from >= period.start && a.from < period.end)) {
+  const creditDate = (date: string) => {
+    let effective = date
+    for (const interval of [...(input.lifecycle ?? [])].sort((a,b) => a.from.localeCompare(b.from)))
+      if (interval.from <= effective && (interval.to ?? FAR) > effective) effective = interval.to ?? FAR
+    return effective
+  }
+  for (const amendment of input.amendments.filter(a => a.kind === 'fixed_credit' && creditDate(a.from) >= period.start && creditDate(a.from) < period.end)) {
     const amount = Number(lineCents(micros(amendment.value), 1_000_000n))
     lines.push({ kind: 'credit', description: `Contract credit${amendment.note ? ` (${amendment.note})` : ''}`, quantity: '1', unitAmount: amendment.value, amountCents: -amount, taxable: true, priceId: null, meterId: null, periodStart: period.start, periodEnd: period.end, evidence: { rule: 'one-time credit in the period it starts', amendment: amendment.id } })
   }
 
   // Usage: group by (original period, price in effect, override), sum exactly, then rate.
-  const groups = new Map<string, { late: boolean; start: string; end: string; price: PriceIn; unit: string; override: string | null; trial: boolean; events: EventIn[] }>()
+  const groups = new Map<string, { late: boolean; start: string; end: string; price: PriceIn; unit: string; override: string | null; trial: boolean; paused: boolean; events: EventIn[] }>()
   const unrated: EventIn[] = []
   for (const event of [...input.events].sort((a, b) => a.occurredAt - b.occurredAt || a.eventId.localeCompare(b.eventId))) {
     const date = localDate(event.occurredAt, input.timezone)
     const item = input.items.find(candidate => input.prices[candidate.priceId]?.meterId === event.meterId && candidate.from <= date && (candidate.to ?? FAR) > date)
-    const startOk = date >= max(sub.startDate, sub.billFrom ?? sub.startDate) && date < (sub.endDate ?? FAR)
+    const inactive = blockedAt(date, input.lifecycle ?? []).length > 0
+    const startOk = date >= max(sub.startDate, sub.billFrom ?? sub.startDate) && (date < (sub.endDate ?? FAR) || inactive)
     if (!item || !startOk || date >= period.end) { if (date < period.end) unrated.push(event); continue }
     const price = input.prices[item.priceId]
     const late = date < period.start
     const window = late ? periodContaining(sub.anchorDay, date) : period
     const trial = !!sub.trialEnd && date < sub.trialEnd
     const { unit, override } = unitFor(input, price, date, addDays(date, 1))
-    const key = [window.start, price.id, unit, trial].join('|')
-    const group = groups.get(key) ?? { late, start: window.start, end: window.end, price, unit, override: override?.id ?? null, trial, events: [] }
+    const paused = inactive
+    const key = [window.start, price.id, unit, trial, paused].join('|')
+    const group = groups.get(key) ?? { late, start: window.start, end: window.end, price, unit, override: override?.id ?? null, trial, paused, events: [] }
     group.events.push(event)
     groups.set(key, group)
   }
   for (const group of [...groups.values()].sort((a, b) => a.start.localeCompare(b.start) || a.price.id.localeCompare(b.price.id))) {
     const total = group.events.reduce((sum, event) => sum + micros(event.quantity, 'quantity'), 0n)
     const modeled = group.price.pricing ? rateQuantityPrice(group.price.pricing, total) : null
-    const amount = group.trial ? 0n : modeled ? BigInt(modeled.amountCents) : lineCents(micros(group.unit), total)
+    const amount = group.trial || group.paused ? 0n : modeled ? BigInt(modeled.amountCents) : lineCents(micros(group.unit), total)
     consumed.push(...group.events.map(event => event.eventId))
     lines.push({
-      kind: group.trial ? 'trial_usage' : group.late ? 'late_usage' : 'usage',
-      description: `${group.late ? `Late usage from the period starting ${formatDate(group.start)}: ` : ''}${group.price.label} — ${quantityText(decimalText(total))} ${group.price.unitLabel}${group.trial ? ' during trial (not charged)' : ''}`,
+      kind: group.paused ? 'paused_usage' : group.trial ? 'trial_usage' : group.late ? 'late_usage' : 'usage',
+      description: `${group.late ? `Late usage from the period starting ${formatDate(group.start)}: ` : ''}${group.price.label} — ${quantityText(decimalText(total))} ${group.price.unitLabel}${group.paused ? ' while inactive (not charged)' : group.trial ? ' during trial (not charged)' : ''}`,
       quantity: decimalText(total), unitAmount: modeled ? '' : group.unit, amountCents: Number(amount), taxable: group.price.taxable, priceId: group.price.id, meterId: group.price.meterId, periodStart: group.start, periodEnd: group.end,
-      evidence: { ...(modeled ? modeled.evidence : { rule: 'sum of event quantities × unit, rounded half away from zero once' }), ...(group.trial ? { rule: 'usage during a trial is recorded and not charged', unchargedAmountCents: modeled?.amountCents } : {}), events: group.events.length, eventIds: group.events.map(event => event.eventId), first: new Date(group.events[0].occurredAt).toISOString(), last: new Date(group.events[group.events.length - 1].occurredAt).toISOString(), override: group.override, late: group.late },
+      evidence: { ...(modeled ? modeled.evidence : { rule: 'sum of event quantities × unit, rounded half away from zero once' }), ...(group.paused ? { rule: 'usage while paused or canceled is recorded and not charged' } : {}), ...(group.trial ? { rule: 'usage during a trial is recorded and not charged', unchargedAmountCents: modeled?.amountCents } : {}), events: group.events.length, eventIds: group.events.map(event => event.eventId), first: new Date(group.events[0].occurredAt).toISOString(), last: new Date(group.events[group.events.length - 1].occurredAt).toISOString(), override: group.override, late: group.late },
     })
   }
   if (unrated.length) exceptions.push({ code: 'unrated_usage', message: `${unrated.length} usage event(s) for this customer have no metered price in effect when they occurred; they are not billed.`, detail: unrated.map(event => event.eventId) })
   if (trialDays > 0) lines.push({ kind: 'trial', description: `Trial: ${trialDays} day(s) not charged`, quantity: String(trialDays), unitAmount: '', amountCents: 0, taxable: false, priceId: null, meterId: null, periodStart: activeFrom, periodEnd: min(sub.trialEnd!, activeTo), evidence: { rule: 'fixed and seat charges start when the trial ends', trialEnd: sub.trialEnd } })
 
   if (input.charges) lines.push(...chargeLines(input.charges))
-  const totals = invoiceTotals(input.tax, lines)
-  return { ...totals, lines, exceptions: [...exceptions, ...totals.exceptions], consumedEvents: consumed }
+  const finalLines = presentCancellationCredits ? cancellationLines(input, lines, input => rate(input, false)) : lines
+  const totals = invoiceTotals(input.tax, finalLines)
+  return { ...totals, lines: finalLines, exceptions: [...exceptions, ...totals.exceptions], consumedEvents: consumed }
 }

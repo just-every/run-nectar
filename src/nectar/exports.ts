@@ -10,6 +10,8 @@ import { metadataFor,withMetadata } from './metadata'
 import { metadataFilter,metadataPredicate } from './metadata-query'
 import { customerNotes } from './note-records'
 import { plainMoney } from './decimal'
+import { lifecycleHistory, lifecycleIntervals } from './lifecycle-records'
+import { blockedAt } from './lifecycle-math'
 import { isDate, today } from './dates'
 
 const cell = (value: unknown) => {
@@ -44,9 +46,9 @@ export async function subscriptionsCsv(env: Bindings, actor: Actor,url?:URL) {
   const filter=metadataPredicate('subscription','s.id',url?metadataFilter(url):null)
   const rows = await all(env, `SELECT s.id, s.external_id, c.external_id AS customer, s.anchor_day, s.start_date, s.trial_end, s.end_date, s.billing_mode, s.cutover_start, s.provider_ref, pr.code AS product, p.version, p.kind, p.unit_amount, i.quantity, i.effective_from, i.effective_to
     FROM nc_subscriptions s JOIN nc_customers c ON c.id = s.customer_id JOIN nc_items i ON i.subscription_id = s.id JOIN nc_prices p ON p.id = i.price_id JOIN nc_products pr ON pr.id = p.product_id WHERE ${filter.sql} ORDER BY c.external_id, s.id, i.effective_from`,...filter.params)
-  const meta=await withMetadata(env,'subscription',rows)
-  return file(csv(['subscription_id', 'subscription_external_id', 'customer_external_id', 'anchor_day', 'start_date', 'trial_end', 'end_date', 'billing_mode', 'cutover_start', 'provider_ref', 'product', 'price_version', 'price_kind', 'unit_amount', 'quantity', 'item_from', 'item_to','metadata_json'],
-    meta.map(r => [r.id, r.external_id, r.customer, r.anchor_day, r.start_date, r.trial_end, r.end_date, r.billing_mode, r.cutover_start, r.provider_ref, r.product, r.version, r.kind, r.unit_amount, r.quantity, r.effective_from, r.effective_to,JSON.stringify(r.metadata)])), 'nectar-subscriptions.csv', 'text/csv; charset=utf-8')
+  const meta: Row[]=await Promise.all((await withMetadata(env,'subscription',rows)).map(async r=>({...r,lifecycle:await lifecycleHistory(env,r.id)})))
+  return file(csv(['subscription_id', 'subscription_external_id', 'customer_external_id', 'anchor_day', 'start_date', 'trial_end', 'end_date', 'billing_mode', 'cutover_start', 'provider_ref', 'product', 'price_version', 'price_kind', 'unit_amount', 'quantity', 'item_from', 'item_to','metadata_json','lifecycle_json'],
+    meta.map(r => [r.id, r.external_id, r.customer, r.anchor_day, r.start_date, r.trial_end, r.end_date, r.billing_mode, r.cutover_start, r.provider_ref, r.product, r.version, r.kind, r.unit_amount, r.quantity, r.effective_from, r.effective_to,JSON.stringify(r.metadata),JSON.stringify(r.lifecycle)])), 'nectar-subscriptions.csv', 'text/csv; charset=utf-8')
 }
 
 /** One bill run with every invoice, line, calculation input, approval and issue event. */
@@ -85,6 +87,7 @@ export async function explainEntitlement(env: Bindings, actor: Actor, customerId
     let granted = false
     if (sub.start_date > day) steps.push(`Subscription starts ${sub.start_date}, after ${day}.`)
     else if (sub.end_date && sub.end_date <= day) steps.push(`Subscription ended ${sub.end_date}.`)
+    else if (blockedAt(day, lifecycleIntervals(await lifecycleHistory(env, sub.id))).some(i => i.access === 'suspend')) steps.push('Subscription access is suspended by its recorded lifecycle policy.')
     else {
       steps.push(sub.trial_end && sub.trial_end > day ? `Subscription is in its trial until ${sub.trial_end}; trials carry the plan's features.` : 'Subscription is active.')
       const items = await all(env, `SELECT i.quantity, p.version, pr.id AS product_id, pr.name AS product_name, f.feature FROM nc_items i JOIN nc_prices p ON p.id = i.price_id JOIN nc_products pr ON pr.id = p.product_id

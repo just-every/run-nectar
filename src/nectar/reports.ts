@@ -33,12 +33,12 @@ export interface ReportInvoice extends ReportEntry {
   } | null
 }
 
-const RECURRING = new Set(['flat', 'seat', 'usage', 'discount'])
+const RECURRING = new Set(['flat', 'seat', 'usage', 'discount', 'cancellation_credit'])
 const BUCKETS = new Set(['current', '1-30', '31-60', '61-90', '90+', 'overdue'])
 const DEFINITIONS: Record<ReportMetric, { title: string; definition: string }> = {
   mrr: {
     title: 'Billed monthly recurring revenue',
-    definition: 'Billed monthly recurring revenue for subscription periods starting in the selected month: issued flat, seat, metered usage and recurring discount lines, including actual proration. Excludes late usage, one-time charges, fixed credits, credit notes and tax. This definition covers the current monthly catalogue; it is not a normalized subscription run rate.',
+    definition: 'Billed monthly recurring revenue for subscription periods starting in the selected month: issued flat, seat, metered usage, recurring discount and cancellation-credit lines, including actual proration. Excludes late usage, one-time charges, fixed credits, credit notes and tax. This definition covers the current monthly catalogue; it is not a normalized subscription run rate.',
   },
   billings: {
     title: 'Billings',
@@ -92,7 +92,7 @@ export async function report(env: Bindings, actor: Actor, metric: string, url: U
       ${mrr ? 'SUM(l.amount_cents)' : 'COALESCE(SUM(l.amount_cents), 0) + i.tax_cents'} AS amount_cents
       FROM nc_invoices i JOIN nc_customers c ON c.id = i.customer_id
       ${mrr ? 'JOIN' : 'LEFT JOIN'} nc_invoice_lines l ON l.invoice_id = i.id
-      ${mrr ? "AND l.kind IN ('flat', 'seat', 'usage', 'discount')" : ''}
+      ${mrr ? "AND l.kind IN ('flat', 'seat', 'usage', 'discount', 'cancellation_credit')" : ''}
       WHERE i.status = 'issued' AND substr(i.${mrr ? 'period_start' : 'issue_date'}, 1, 7) = ?
       ${mrr ? "AND i.invoice_kind = 'recurring' AND i.subscription_id IS NOT NULL" : ''}
       ${selected.customer ? 'AND i.customer_id = ?' : ''}

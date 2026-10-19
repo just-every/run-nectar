@@ -5,8 +5,11 @@
 import type { Bindings } from '../auth.server'
 import type { Business } from './business'
 import { all, fingerprint, insist, one, type Row } from './core'
+import { creditPolicy } from './credit-policy'
 import { certificateBasis } from './certificates'
-import { zonedStart } from './dates'
+import { localDate, zonedStart } from './dates'
+import { activeSegments, blockedAt } from './lifecycle-math'
+import { lifecycleHistory, lifecycleIntervals, LIFECYCLE_RATING_VERSION } from './lifecycle-records'
 import { RATING_VERSION, rate, type ItemIn, type PriceIn, type RatingInput } from './rating'
 import { CHARGE_RATING_VERSION } from './charge-lines'
 import { pendingCharges } from './one-time-charges'
@@ -32,14 +35,18 @@ export async function ratingInputs(env: Bindings, business: Business, subscripti
   const events = meters.length ? (await all(env, `SELECT event_id, meter_id, quantity, occurred_at FROM nc_usage_events WHERE customer_id = ? AND status = 'active' AND invoice_id IS NULL AND occurred_at < ? AND meter_id IN (${meters.map(() => '?').join(',')}) ORDER BY occurred_at, event_id`,
     sub.customer_id, zonedStart(period.end, business.timezone), ...meters)).map(row => ({ eventId: row.event_id, meterId: row.meter_id, quantity: row.quantity, occurredAt: row.occurred_at })) : []
   const certificate = await certificateBasis(env, sub.customer_id, business.tax_jurisdiction, period)
-  const charges = await pendingCharges(env, sub.id, period.end)
+  const intervals = lifecycleIntervals(await lifecycleHistory(env, sub.id))
+  const billableEvents = activeSegments(period.start,period.end,intervals).length ? events : events.filter(e=>blockedAt(localDate(e.occurredAt,business.timezone),intervals).length > 0)
+  const creditGovernance = intervals.length ? await creditPolicy(env) : null
+  const charges = (await pendingCharges(env, sub.id, period.end)).filter(charge => activeSegments(period.start,period.end,intervals).length > 0 && !intervals.some(i => i.from <= charge.date && (i.to ?? '9999') > charge.date && (i.to ?? '9999') >= period.end))
   return {
     ...(charges.length ? { charges } : {}),
-    version: charges.length ? CHARGE_RATING_VERSION : Object.values(prices).some(price => price.pricing) ? PRICE_MODEL_RATING_VERSION : RATING_VERSION,
+    ...(intervals.length ? { lifecycle: intervals, creditGovernance: {thresholdCents:creditGovernance!.two_person_above_cents, revision:creditGovernance!.revision} } : {}),
+    version: intervals.length ? LIFECYCLE_RATING_VERSION : charges.length ? CHARGE_RATING_VERSION : Object.values(prices).some(price => price.pricing) ? PRICE_MODEL_RATING_VERSION : RATING_VERSION,
     timezone: business.timezone,
     tax: { mode: business.tax_mode, rate: business.tax_rate, jurisdiction: business.tax_jurisdiction, exempt: certificate?.exempt ?? !!sub.tax_exempt, exemptRef: certificate?.exemptRef ?? sub.tax_exempt_ref, ...(certificate ? { certificate: certificate.certificate, exception: certificate.exception } : {}) },
     subscription: { id: sub.id, anchorDay: sub.anchor_day, startDate: sub.start_date, trialEnd: sub.trial_end, endDate: sub.end_date, billFrom: sub.cutover_start },
-    period, items, prices, amendments, events,
+    period, items, prices, amendments, events: billableEvents,
   }
 }
 
