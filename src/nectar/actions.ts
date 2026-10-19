@@ -23,6 +23,7 @@ import { configureCreditPolicy } from './credit-policy'
 import { addCharge } from './one-time-charges'
 import { prepareManualInvoice } from './manual-invoices'
 import { attachAddon } from './addons'
+import { addNote } from './notes'
 import { submitUsage } from './usage'
 
 type Handler = (env: Bindings, actor: Actor, input: Input, request: Request) => Promise<unknown>
@@ -40,6 +41,7 @@ export const actions: Record<string, Handler> = {
   'certificate.review': validateCertificate,
   'certificate.policy': configureCertificatePolicy,
   'certificate.remind': remindCertificates,
+  'note.add': addNote,
   'customer.create': createCustomer,
   'customer.update': updateCustomer,
   'contact.add': addContact,

@@ -6,7 +6,7 @@ import { certificateFile } from '../certificates'
 import { issueKey } from '../access'
 import type { Actor } from '../actor'
 import { exportReminder } from '../collections'
-import { billRunJson, invoicesCsv, subscriptionsCsv, usageCsv } from '../exports'
+import { billRunJson, customersCsv, invoicesCsv, subscriptionsCsv, usageCsv } from '../exports'
 import type { Input } from '../input'
 import { billingPage, invoicePage, runPage } from './billing'
 import { customerPage, customersPage, subscriptionPage } from './customers'
@@ -38,6 +38,7 @@ export const pages: Record<string, Page> = {
   proposal: (env, actor, _r, url, id) => proposalPage(env, actor, id, url),
   import: (env, actor, _r, url) => importPage(env, actor, url),
   exports: (env, actor, _r, url) => exportsPage(env, actor, url),
+  customersFile: (env, actor) => customersCsv(env, actor),
   invoicesFile: (env, actor) => invoicesCsv(env, actor),
   usageFile: (env, actor) => usageCsv(env, actor),
   subscriptionsFile: (env, actor) => subscriptionsCsv(env, actor),

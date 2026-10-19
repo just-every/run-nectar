@@ -1,6 +1,7 @@
 // Billing: bill runs, the bill-run review
 // and one invoice with its lines, calculation evidence, credits and payments.
 import { creditApprovals } from './credit-approvals'
+import { notesSection } from './notes'
 import type { Bindings } from '../../auth.server'
 import { can, type Actor } from '../actor'
 import { invoiceDetail, runDetail, runs } from '../billruns'
@@ -91,5 +92,6 @@ export async function invoicePage(env: Bindings, actor: Actor, id: string, url: 
       ${approver && i.balanceCents > 0 ? form('credit.issue', `/app/invoices/${i.id}`, h`${hidden('invoice', i.id)}${field('Credit amount ($)', 'amount')}${field('Reason', 'reason')}`, 'Issue credit note', { layout: 'columns', secondary: true }) : ''}
       ${pays.length && i.balanceCents > 0 ? form('payment.allocate', `/app/invoices/${i.id}`, h`${hidden('invoice', i.id)}${select('Payment', 'payment', pays.map((p: any) => ({ value: p.id, label: `${p.reference} — ${money(p.unallocated_cents)} unallocated` })), pays[0].id)}${field('Amount ($)', 'amount')}`, 'Allocate payment', { layout: 'columns', secondary: true }) : ''}</section>` : ''}
     ${i.status === 'issued' ? creditApprovals(i, actor) : ''}
+    ${await notesSection(env,actor,i.customer_id,'invoice',i.id,`/app/invoices/${i.id}#notes`)}
     ${details({ Invoice: i.id, 'Rating rules': i.calc_version, 'Source fingerprint': i.source_fingerprint, 'Approved fingerprint': i.approved_fingerprint ?? '—', 'Approved by': personName(actor, i.approved_by), 'Issued by': personName(actor, i.issued_by), 'Usage events billed': (i.calculation.consumedEvents ?? []).length }, 'Calculation details')}`, { current: '/app/billing', url })
 }

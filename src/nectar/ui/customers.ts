@@ -11,6 +11,7 @@ import { customerView } from '../views'
 import { addresses, area, cents, check, details, field, form, h, hidden, page, select, table, tag, type Html } from './html'
 import { personName } from './shell'
 import { addonSection, chargeSection } from './charges'
+import { notesSection } from './notes'
 import { certificateSection } from './certificates'
 import { priceRate } from './pricing'
 
@@ -49,6 +50,7 @@ export async function customerPage(env: Bindings, actor: Actor, id: string, url:
       ${details({ 'Internal id': c.id, Source: c.origin, 'Provider reference': c.provider_ref ?? '—', Revision: c.revision })}</section>
     <section class="card" aria-labelledby="subs"><h2 id="subs">Subscriptions</h2>${table(['Subscription', 'Started', 'Billing day$', 'Status'], c.subscriptions.map((s: any) => [h`<a href="/app/subscriptions/${s.id}">${s.external_id || `Subscription from ${formatDate(s.start_date)}`}</a>`, formatDate(s.start_date), s.anchor_day, tag(subscriptionState(s, today))]), { empty: 'No subscriptions yet.' })}</section>
     ${newSubscription}
+    ${await notesSection(env,actor,c.id,'customer',c.id,`/app/customers/${c.id}#notes`)}
     ${certificateSection(c, actor)}
     ${chargeSection(c, named, actor, today)}
     <section class="card" aria-labelledby="money"><h2 id="money">Invoices and payments</h2>

@@ -6,6 +6,7 @@ import type { Bindings } from '../auth.server'
 import { requireCapability, type Actor } from './actor'
 import { requireBusiness } from './business'
 import { all, insist, one, parseJson, type Row } from './core'
+import { customerNotes } from './note-records'
 import { plainMoney } from './decimal'
 import { isDate, today } from './dates'
 
@@ -99,4 +100,12 @@ export async function entitlements(env: Bindings, actor: Actor, customerId: stri
   requireCapability(actor, 'read')
   const features = await all(env, 'SELECT DISTINCT f.feature FROM nc_features f JOIN nc_prices p ON p.product_id = f.product_id JOIN nc_items i ON i.price_id = p.id JOIN nc_subscriptions s ON s.id = i.subscription_id WHERE s.customer_id = ? ORDER BY f.feature', customerId)
   return await Promise.all(features.map(row => explainEntitlement(env, actor, customerId, row.feature)))
+}
+
+/** Customer custody export, including every note and mention delivery outcome. */
+export async function customersCsv(env: Bindings, actor: Actor) {
+  requireCapability(actor, 'export')
+  const customers = await all(env, 'SELECT id,external_id,name,billing_email,address FROM nc_customers ORDER BY external_id')
+  const rows = await Promise.all(customers.map(async c => [c.id,c.external_id,c.name,c.billing_email,c.address,JSON.stringify(await customerNotes(env,c.id))]))
+  return file(csv(['customer_id','external_id','name','billing_email','address','notes_json'], rows), 'nectar-customers.csv', 'text/csv; charset=utf-8')
 }
