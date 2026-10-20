@@ -189,5 +189,11 @@
   "portal.adjustments.heading": "Ajustes de facturación aprobados",
   "portal.adjustments.approved": "Aprobado por la empresa. El mensaje siguiente conserva el texto de esa decisión; no confirma la entrega en la bandeja de entrada.",
   "portal.adjustments.empty": "No hay ajustes de facturación aprobados.",
-  "portal.answer.proposedbalance": "Cambio de saldo propuesto"
+  "portal.answer.proposedbalance": "Cambio de saldo propuesto",
+  "portal.answer.linechanges": "Cambios en los cargos",
+  "portal.answer.event": "Evento de origen {id}: cantidad",
+  "portal.answer.creditnote": "Nota de crédito {number}",
+  "portal.answer.payment": "Pago asignado {number}",
+  "portal.answer.discount": "Descuento guardado (%)",
+  "portal.answer.fixedcredit": "Crédito contractual guardado (USD)"
 }

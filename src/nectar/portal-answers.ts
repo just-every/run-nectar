@@ -25,7 +25,13 @@ export async function portalAnswer(env: Bindings, session: CustomerSession, inpu
   const L = customerText(session.language)
   const figures = answer.figures.map(figure => {
     const key = fixedLabels[figure.label]
-    const label = key ? L.t(`portal.answer.figure.${key}`)
+    const label = figure.label.startsWith('Source event ') ? L.t('portal.answer.event',{id:figure.label.slice('Source event '.length)})
+      : figure.label.startsWith('Credit note ') ? L.t('portal.answer.creditnote',{number:figure.label.slice('Credit note '.length)})
+      : figure.label.startsWith('Allocated payment ') ? L.t('portal.answer.payment',{number:figure.label.slice('Allocated payment '.length)})
+      : figure.label==='Saved discount_percent' ? L.t('portal.answer.discount')
+      : figure.label==='Saved fixed_credit' ? L.t('portal.answer.fixedcredit')
+      : figure.label==='Saved price_override' ? L.t('portal.answer.figure.price')
+      : key ? L.t(`portal.answer.figure.${key}`)
       : /^(Source event |Event property |Credit note |Allocated payment |Prior invoice |Saved )/.test(figure.label) ? L.t('portal.answer.record') : figure.label
     return { ...figure, label, source: portalLink(figure.source) }
   })
@@ -51,8 +57,8 @@ export async function portalAnswersPage(env: Bindings, session: CustomerSession,
     <label>${L.t('portal.answer.question')}<input name="question" value="${question}" required maxlength="1000"></label>
     <label>${L.t('portal.answer.topic')}<select name="topic"><option value="">${L.t('portal.answer.interpret')}</option>${ANSWER_TOPICS.map(topic=>h`<option value="${topic}" ${input.text('topic',{optional:true})===topic?'selected':''}>${L.t(`portal.answer.topic.${topic}`)}</option>`)}</select></label>
     <button>${L.t('portal.answer.ask')}</button></form>
-    ${result?h`<section class="card"><h2>${result.summary}</h2><p>${L.t('portal.answer.saved')}</p><dl>${result.figures.map(figure=>h`<dt>${figure.label}</dt><dd>${figure.unit==='cents'?L.money(Number(figure.value)):figure.unit==='date'?L.day(String(figure.value)):figure.value} <a href="${link(figure.source)}">${L.t('portal.answer.evidence')}</a></dd>`)}</dl>
-      ${result.comparison?h`<p>${L.t('portal.answer.change')}: ${L.money(result.comparison.totalDeltaCents)}</p>`:''}
+    ${result?h`<section class="card"><h2>${result.summary}</h2><p>${L.t('portal.answer.saved')}</p><dl>${result.figures.map(figure=>h`<dt>${figure.label}</dt><dd>${figure.unit==='cents'?L.money(Number(figure.value)):figure.unit==='date'?L.day(String(figure.value)):figure.unit==='percent'?L.percent(figure.value)+'%':['dollars','dollars per unit'].includes(figure.unit)?L.amount(String(figure.value)):figure.value} <a href="${link(figure.source)}">${L.t('portal.answer.evidence')}</a></dd>`)}</dl>
+      ${result.comparison?h`<p>${L.t('portal.answer.change')}: ${L.money(result.comparison.totalDeltaCents)}</p><h3>${L.t('portal.answer.linechanges')}</h3>${result.comparison.lineDeltas.map(line=>h`<p>${line.after[0]?.label||line.before[0]?.label} · ${L.money(line.beforeCents)} → ${L.money(line.afterCents)} (${L.money(line.deltaCents)}) <a href="${link(line.after[0]?.source||line.before[0].source)}">${L.t('portal.answer.evidence')}</a></p>`)}`:''}
       ${result.citations.map(c=>h`<p><a href="${link(c.href)}">${c.label}</a></p>`)}
       <h3>${L.t('portal.answer.proposal')}</h3><p>${L.t('portal.answer.pending')}</p><form method="post" action="${link('/portal/answer-proposal')}"><input type="hidden" name="invoice" value="${invoice}"><input type="hidden" name="question" value="${question}"><input type="hidden" name="topic" value="${result.topic}"><label>${L.t('portal.answer.requested')}<input name="credit_amount" required inputmode="decimal"></label><label>${L.t('portal.answer.reason')}<input name="reason" required maxlength="500"></label><button>${L.t('portal.answer.prepare')}</button></form></section>`:''}`
 }

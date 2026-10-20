@@ -30,7 +30,7 @@ export async function portalAnswersFlow(h,owner,onState=async()=>{}) {
     const answer=await read({question});answers.push(answer)
     assert.equal(answer.topic,topic,'PORT-005 honest topic interpretation')
     assert.equal(answer.customerId,customer);assert.equal(answer.invoiceId,invoice)
-    for(const figure of answer.figures){
+    for(const figure of [...answer.figures,...(answer.comparison?.lineDeltas??[]).flatMap(line=>[...line.before,...line.after])]){
       assert.ok(figure.source.startsWith('/portal/evidence/invoices/'),'PORT-005 customer citations never grant operator access')
       const response=await h.raw(`${figure.source}?session=${session.token}`)
       assert.equal(response.status,200,'PORT-005 customer source is reachable')

@@ -139,6 +139,8 @@ async function nextInvoiceCorrections(h, owner, foreignSession, issuedOriginal,o
         'PORT-005 frozen before/after engine figures resolve through their own permitted customer citation')
     }
     await onState({kind,session,subscription,period,state:'approved'})
+    const upcomingPage=await h.raw(`/portal/upcoming?session=${session.token}&subscription=${subscription}&period=${period}`)
+    assert.equal(upcomingPage.status,200,'PORT-005 native customer upcoming page resolves its own subscriptions')
     const after=await read()
     assert.deepEqual(totals(after.calculation),expected,'PORT-005 approved correction immediately reaches the customer next-invoice engine')
     assert.deepEqual(totals(after.calculation),totals((await api(`subscriptions/${subscription}/upcoming?period=${period}`)).calculation))

@@ -189,5 +189,11 @@
   "portal.adjustments.heading": "Ajustements de facturation approuvés",
   "portal.adjustments.approved": "Approuvé par l’entreprise. Le message ci-dessous conserve le texte de cette décision ; il ne confirme pas la réception du courriel.",
   "portal.adjustments.empty": "Aucun ajustement de facturation approuvé.",
-  "portal.answer.proposedbalance": "Variation de solde proposée"
+  "portal.answer.proposedbalance": "Variation de solde proposée",
+  "portal.answer.linechanges": "Variations des frais",
+  "portal.answer.event": "Événement source {id} : quantité",
+  "portal.answer.creditnote": "Avoir {number}",
+  "portal.answer.payment": "Paiement affecté {number}",
+  "portal.answer.discount": "Remise conservée (%)",
+  "portal.answer.fixedcredit": "Crédit contractuel conservé (USD)"
 }

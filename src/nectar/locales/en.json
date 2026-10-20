@@ -189,5 +189,11 @@
   "portal.adjustments.heading": "Approved billing adjustments",
   "portal.adjustments.approved": "Approved by the business. The message below is the wording retained with that decision; it does not confirm inbox delivery.",
   "portal.adjustments.empty": "No approved billing adjustments.",
-  "portal.answer.proposedbalance": "Proposed balance change"
+  "portal.answer.proposedbalance": "Proposed balance change",
+  "portal.answer.linechanges": "Charge changes",
+  "portal.answer.event": "Source event {id}: quantity",
+  "portal.answer.creditnote": "Credit note {number}",
+  "portal.answer.payment": "Allocated payment {number}",
+  "portal.answer.discount": "Saved discount (%)",
+  "portal.answer.fixedcredit": "Saved contract credit (USD)"
 }
