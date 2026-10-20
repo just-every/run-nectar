@@ -101,7 +101,7 @@ export async function harness({ assets = false, localTime, hostname = '127.0.0.1
   }
 
   async function advanceClock(instant){assert.ok(Number.isFinite(Date.parse(instant)));vars.NECTAR_LOCAL_TIME=instant;await mf.setOptions(convertV4MiniflareOptions({...options,bindings:{...vars}}));await mf.ready}
-  return { origin, vars, raw, api, submit, page, signIn, close, mails, mailResponses,advanceClock }
+  return { origin, vars, raw, api, submit, page, signIn, close, mails, mailResponses,advanceClock, dispatch: request => mf.dispatchFetch(request) }
 }
 
 export const file = (filename, content, type = 'application/octet-stream') => ({ filename, base64: Buffer.from(content).toString('base64'), type })

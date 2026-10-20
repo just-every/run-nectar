@@ -114,5 +114,9 @@
   "portal.payment": "Pago registrado",
   "portal.empty": "No hay facturas emitidas.",
   "portal.unavailable": "Sesión de facturación no disponible",
-  "portal.unavailable.body": "Solicite a la empresa una nueva sesión de facturación."
+  "portal.unavailable.body": "Solicite a la empresa una nueva sesión de facturación.",
+  "portal.privacy.heading": "Solicitud de privacidad",
+  "portal.privacy.pending": "Solicitud registrada. Confirma con el enlace del correo de facturación.",
+  "portal.privacy.mail": "Resultado del mensaje de verificación: {status}.",
+  "portal.privacy.request": "Solicitar eliminación de datos personales"
 }

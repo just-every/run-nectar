@@ -355,6 +355,8 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "request": "text"
   },
   "portal.configure": {
+    "brand_color": "text",
+    "brand_name": "text",
     "hosts": "list",
     "parents": "list"
   },

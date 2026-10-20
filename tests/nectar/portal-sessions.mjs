@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict'
 import { createHmac } from 'node:crypto'
 import { totp } from './mfa.mjs'
+import { portalCorrections } from './portal-corrections.mjs'
 
 export async function seedPortalRecords(h, owner) {
   const customers = []
@@ -39,6 +40,7 @@ export async function portalSessionsFlow(h, owner) {
   await h.api('portal.session.issue', owner, { customer: customers[0], origin: h.origin, audience: 'hosted' }, 403)
   for (const hosts of [['https://billing.example.com/path'], ['https://*.example.com'], ['http://untrusted.example.com'], ['https://owner:password@billing.example.com']]) await h.api('portal.configure', owner, { hosts, parents: [] }, 400)
   await configure()
+  await h.api('portal.configure', owner, { hosts:[h.origin],parents:[],brand_color:'red;display:none' },400)
   await h.api('portal.session.issue', owner, { customer: customers[0], origin: 'https://unapproved.example.com', audience: 'hosted' }, 403)
   await h.api('portal.session.issue', owner, { customer: customers[0], origin: h.origin, audience: 'embedded', parent: 'https://evil.example.com' }, 403)
   const session = await issue()
@@ -118,15 +120,36 @@ export async function portalSessionsFlow(h, owner) {
   // Inherited GOV-005: approval withdraws all runtime capabilities, while an
   // unrelated customer's session and financial records remain usable.
   const erased = await issue(customers[2]), erasedAgain = await issue(customers[2])
-  const erasure = await h.api('erasure.request', owner, { customer: customers[2] })
+  const privacyPath=`/portal/privacy?session=${erased.token}`
+  const beforeRequests=await h.api('erasures',owner),beforeMail=h.mails.length
+  assert.equal((await h.raw(privacyPath)).status,200,'PORT-005 own-customer privacy request page')
+  assert.deepEqual(await h.api('erasures',owner),beforeRequests,'PORT-005 viewing privacy records no request')
+  assert.equal((await h.raw(privacyPath,{form:new URLSearchParams({confirm:'yes'}),headers:{origin:'https://evil.example.com'}})).status,403,'PORT-005 cross-origin privacy post refused')
+  assert.equal((await h.raw(privacyPath,{form:new URLSearchParams({confirm:'yes',customer:customers[1]})})).status,400,'PORT-005 submitted customer selector refused')
+  assert.equal((await h.raw(privacyPath,{form:new URLSearchParams({confirm:'yes',claimed_email:'other@example.test'})})).status,400,'PORT-005 customer cannot substitute verification recipient')
+  assert.equal(h.mails.length,beforeMail,'PORT-005 refused requests send nothing')
+  const requested=await h.raw(privacyPath,{form:new URLSearchParams({confirm:'yes'})})
+  assert.equal(requested.status,303)
+  const erasure=(await h.api('erasures',owner)).find(row=>!beforeRequests.some(before=>before.id===row.id))
+  assert.equal(erasure.customer_id,customers[2],'PORT-005 request identity comes only from the signed session')
+  await h.api('erasure.approve',owner,{request:erasure.id,confirm:true},409)
+  assert.equal((await open(erased)).status,200,'PORT-005 requesting does not erase records')
+  const ownStatus=await (await h.raw(privacyPath)).text()
+  assert.match(ownStatus,/Request recorded/)
+  assert.doesNotMatch(ownStatus,/token_hash|recipient|provider_ref|requested_by|@example|Northwind|Pinecrest/,'PORT-005 customer status omits private custody and foreign records')
+  for(const action of ['approve','verify','purge']) assert.equal((await h.raw(`/portal/erasure.${action}?session=${erased.token}`,{form:new URLSearchParams({request:erasure.id})})).status,405,'PORT-005 customer receives no owner erasure authority')
   const mail = h.mails.findLast(mail => String(mail.text).includes('/erase/'))
+  assert.deepEqual(mail.to,['port005-empty@example.test'],'PORT-005 confirmation goes only to the billing address on file')
   const erasurePath = new URL(mail.text.match(/https?:\/\/[^\s]+\/erase\/[a-f0-9]+/)[0]).pathname
   assert.equal((await h.raw(erasurePath, { form: new URLSearchParams({ confirm: 'yes' }) })).status, 200)
+  assert.equal((await h.raw(erasurePath, { form: new URLSearchParams({ confirm: 'yes' }) })).status, 404,'PORT-005 verification is single-use')
+  assert.equal((await open(erased)).status,200,'PORT-005 verification alone does not erase')
   const receipt = await h.api('erasure.approve', owner, { request: erasure.id, confirm: true })
   assert.equal(receipt.receipt.changed.find(row => row.kind === 'nc_portal_sessions').records, 3)
   for (const dead of [empty,erased,erasedAgain]) assert.equal((await open(dead)).status, 401, 'PORT-005 erased customer session withdrawn')
   assert.equal((await open(rotate)).status, 200, 'PORT-005 unrelated session survives erasure')
   await h.api('portal.session.issue', owner, { customer: customers[2], origin: h.origin, audience: 'hosted' }, 404)
+  await portalCorrections(h,owner,rotate,invoice.id)
   const expiry = await issue()
   await h.advanceClock(new Date(expiry.expiresAt - 1).toISOString())
   assert.equal((await open(expiry)).status, 200)

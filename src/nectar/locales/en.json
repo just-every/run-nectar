@@ -114,5 +114,9 @@
   "portal.payment": "Payment recorded",
   "portal.empty": "No issued invoices.",
   "portal.unavailable": "Billing session unavailable",
-  "portal.unavailable.body": "Ask the business for a new billing session."
+  "portal.unavailable.body": "Ask the business for a new billing session.",
+  "portal.privacy.heading": "Privacy request",
+  "portal.privacy.pending": "Request recorded. Confirm using the billing email link.",
+  "portal.privacy.mail": "Verification message outcome: {status}.",
+  "portal.privacy.request": "Request personal-data erasure"
 }

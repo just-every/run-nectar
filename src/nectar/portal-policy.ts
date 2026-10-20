@@ -18,9 +18,12 @@ export async function configurePortal(env: Bindings, actor: Actor, input: Input)
   await requireFreshFactor(env, actor)
   const hosts = [...new Set(input.list('hosts').map(value => approvedOrigin(env, value)))], parents = [...new Set(input.list('parents').map(value => approvedOrigin(env, value)))]
   insist(hosts.length <= 20 && parents.length <= 20, 'too_many_portal_origins')
+  const brandName = input.text('brand_name', { optional: true, max: 120 })
+  const brandColor = input.text('brand_color', { optional: true, max: 7 }) || '#245c46'
+  insist(/^#[0-9a-f]{6}$/i.test(brandColor), 'invalid_portal_brand_color')
   const revision = newId()
-  await commit(env, [stmt(env, 'INSERT INTO nc_portal_policy(singleton,hosts_json,parents_json,revision) VALUES(1,?,?,?) ON CONFLICT(singleton) DO UPDATE SET hosts_json=excluded.hosts_json,parents_json=excluded.parents_json,revision=excluded.revision', JSON.stringify(hosts), JSON.stringify(parents), revision)], { actor: actorLabel(actor), action: 'portal.configure', subject: revision, detail: { hosts, parents } })
-  return { hosts, parents, revision }
+  await commit(env, [stmt(env, 'INSERT INTO nc_portal_policy(singleton,hosts_json,parents_json,revision,brand_name,brand_color) VALUES(1,?,?,?,?,?) ON CONFLICT(singleton) DO UPDATE SET hosts_json=excluded.hosts_json,parents_json=excluded.parents_json,revision=excluded.revision,brand_name=excluded.brand_name,brand_color=excluded.brand_color', JSON.stringify(hosts), JSON.stringify(parents), revision, brandName, brandColor)], { actor: actorLabel(actor), action: 'portal.configure', subject: revision, detail: { hosts, parents, brandName, brandColor } })
+  return { hosts, parents, revision, brandName, brandColor }
 }
 
 export async function issuePortalSession(env: Bindings, actor: Actor, input: Input) {

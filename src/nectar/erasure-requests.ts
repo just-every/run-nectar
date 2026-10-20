@@ -16,18 +16,23 @@ export async function erasureRequests(env: Bindings, actor: Actor) {
 }
 export async function requestErasure(env: Bindings, actor: Actor, input: Input) {
   requireMember(actor, 'records')
-  const customer = await requireCustomer(env, input.text('customer'))
-  insist(!customer.erased_at, 'customer_already_erased', 409)
-  insist(customer.billing_email, 'billing_email_required')
   const claimed=input.text('claimed_email',{max:200,optional:true}).toLowerCase()
   insist(!claimed||/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(claimed),'invalid_claimed_email')
+  return await recordErasureRequest(env, input.text('customer'), actorLabel(actor), claimed)
+}
+
+/** Internal operation; callers establish operator authority or a scoped customer session. */
+export async function recordErasureRequest(env: Bindings, customerId: string, requestedBy: string, claimed = '') {
+  const customer = await requireCustomer(env, customerId)
+  insist(!customer.erased_at, 'customer_already_erased', 409)
+  insist(customer.billing_email, 'billing_email_required')
   const id = newId(), at = clockInstant(env), expires = at + 7 * 86400000
   const token = Array.from(crypto.getRandomValues(new Uint8Array(32)), b => b.toString(16).padStart(2, '0')).join('')
   const hash = await sha256Hex(token)
   await commit(env, [
     guard(env, 'stale', 'EXISTS(SELECT 1 FROM nc_customers WHERE id=? AND revision=? AND erased_at IS NULL)', customer.id, customer.revision),
-    stmt(env, `INSERT INTO nc_erasure_requests(id,customer_id,customer_revision,recipient,token_hash,expires_at,requested_by,requested_at,claimed_email) VALUES(?,?,?,?,?,?,?,?,?)`, id, customer.id, customer.revision, customer.billing_email, hash, expires, actorLabel(actor), at,claimed),
-  ], { actor: actorLabel(actor), action: 'erasure.request', subject: id, detail: { customer: customer.id, expires } })
+    stmt(env, `INSERT INTO nc_erasure_requests(id,customer_id,customer_revision,recipient,token_hash,expires_at,requested_by,requested_at,claimed_email) VALUES(?,?,?,?,?,?,?,?,?)`, id, customer.id, customer.revision, customer.billing_email, hash, expires, requestedBy, at,claimed),
+  ], { actor: requestedBy, action: 'erasure.request', subject: id, detail: { customer: customer.id, expires } })
   const mail = operatorMail(env), L = customerText(customer.language)
   let status = 'not_configured', provider: string | null = null
   if (mail && env.MAIL_FROM) {
@@ -40,7 +45,7 @@ export async function requestErasure(env: Bindings, actor: Actor, input: Input) 
       provider = result.providerMessageId ?? null
     } catch { status = 'uncertain' }
   }
-  await commit(env, [stmt(env, 'UPDATE nc_erasure_requests SET mail_status=?,provider_ref=? WHERE id=?', status, provider, id)], { actor: actorLabel(actor), action: 'erasure.mail', subject: id, detail: { status } })
+  await commit(env, [stmt(env, 'UPDATE nc_erasure_requests SET mail_status=?,provider_ref=? WHERE id=?', status, provider, id)], { actor: requestedBy, action: 'erasure.mail', subject: id, detail: { status } })
   return { id, status: 'pending', mail_status: status, expires_at: expires }
 }
 export async function verifyErasureOtherwise(env: Bindings, actor: Actor, input: Input) {
