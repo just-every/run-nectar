@@ -427,7 +427,7 @@ lines, not gaps in the target.
 
 ## Homepage claims
 
-Every capability claim on the owner-approved homepage (`src/site/homepage/`, desk page-s1, 18 October 2026), in the order of its claims table, with the clauses that promise it (claims truth table `evidence/br-nectar/desk-built/CLAIMS.md`). A claim's status comes from its clauses in the Status table below: `done` when every clause is done, `missing` when every one is missing, otherwise `partial`. A claim marked — needs no clause (the license, the start line and the hosted demo). 76 claims: 11 done, 33 partial, 32 missing.
+Every capability claim on the owner-approved homepage (`src/site/homepage/`, desk page-s1, 18 October 2026), in the order of its claims table, with the clauses that promise it (claims truth table `evidence/br-nectar/desk-built/CLAIMS.md`). A claim's status comes from its clauses in the Status table below: `done` when every clause is done, `missing` when every one is missing, otherwise `partial`. A claim marked — needs no clause (the license, the start line and the hosted demo). 76 claims: 12 done, 33 partial, 31 missing.
 
 | # | Section | Claim | Clause(s) | Status |
 | --- | --- | --- | --- | --- |
@@ -489,7 +489,7 @@ Every capability claim on the owner-approved homepage (`src/site/homepage/`, des
 | 56 | Month-end | Stripe payouts · 6 · amounts + fees | `PAY-004` | missing |
 | 57 | Month-end | QuickBooks Online · 212 invoices · 209 payments · 0 errors | `BOOK-001` | missing |
 | 58 | Month-end | Sales tax · 14 states · report ready to file | `TAX-003` | missing |
-| 59 | Month-end | Deferred revenue $96,000 → $88,000 | `REV-001` | missing |
+| 59 | Month-end | Deferred revenue $96,000 → $88,000 | `REV-001` | done |
 | 60 | Month-end | "1 break found … missing in QuickBooks → synced" | `AGENT-008`, `BOOK-001` | missing |
 | 61 | Month-end | MRR $171,500 → $178,230 with expansion and churn | `RPT-001` | partial |
 | 62 | Month-end | Open · 3 invoices · Net 60 · due Mon Nov 30 | `NEC-12`, `INV-004` | partial |
@@ -517,8 +517,8 @@ Round updates: `SUB-005` is done under ct’s 19 October 16:25Z ruling, with opt
 | Clauses | Done | Partial | Missing | Total |
 | --- | ---: | ---: | ---: | ---: |
 | Published | 16 | 0 | 0 | 16 |
-| Target and push further | 26 | 26 | 56 | 108 |
-| All | 42 | 26 | 56 | 124 |
+| Target and push further | 27 | 26 | 55 | 108 |
+| All | 43 | 26 | 55 | 124 |
 
 | Clause | Title | Kind | Status | Evidence | Gap |
 | --- | --- | --- | --- | --- | --- |
@@ -605,7 +605,7 @@ Round updates: `SUB-005` is done under ct’s 19 October 16:25Z ruling, with opt
 | `TAX-004` | Economic-nexus monitoring | target | missing |  | No per-state sales tracking or nexus warnings. |
 | `BOOK-001` | QuickBooks Online, Xero and Pantry sync | target | missing |  | No QuickBooks Online, Xero or Pantry sync; CSV exports only. |
 | `BOOK-002` | NetSuite and Sage Intacct sync | target | missing |  | No NetSuite or Sage Intacct sync. |
-| `REV-001` | ASC 606 revenue schedules | target | missing |  | No revenue schedules. |
+| `REV-001` | ASC 606 revenue schedules | target | done | `src/nectar/revenue-allocation.ts`; `src/nectar/revenue-records.ts`; `src/nectar/revenue-reports.ts`; `src/nectar/revenue-usage.ts`; `src/nectar/ui/revenue.ts`; `tests/nectar/revenue.mjs`; `tests/nectar/revenue-policy.mjs`; `tests/nectar/credit-correction.mjs`; `tests/nectar/draft-corrections.mjs` | Every current line kind and correction has immutable schedules, exact month deltas, journal/roll-forward/source/CSV parity; CAT-001/CAT-004/REV-002 inherit annual advance, prepaid and close/ledger duties under ct’s approved current boundary. |
 | `REV-002` | Revenue close and journal export | target | missing |  | No period close or journal export. |
 | `RPT-001` | SaaS metrics | target | partial | `src/nectar/reports.ts`; `tests/nectar/reports.mjs` | A billed monthly recurring revenue snapshot drills to issued lines. Normalized MRR/ARR, movements, historical move-in metrics, churn, retention, cohorts and segmentation remain absent. |
 | `RPT-002` | Financial reports | target | done | `src/nectar/reports.ts`; `src/nectar/financial-reports.ts`; `src/nectar/report-mail.ts`; `tests/nectar/financial-reports.mjs` | Current-record reports, matching scoped CSVs, exact source/aging evidence and self-opted monthly frozen delivery proven; future settlement/refund, net tax, balance and imported-history duties retained by INV-005/PAY-004/INV-006/CAT-004/MOVE-007. |
