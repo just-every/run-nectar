@@ -36,7 +36,8 @@ async function stop() { if (!server) return; const child = server; server = null
 const issue = (customer, audience = 'hosted') => h.api('portal.session.issue', cookie, { customer, origin, audience, ...(audience === 'embedded' ? { parent: origin } : {}) })
 const shot = async (page, name) => { await page.waitForLoadState('load'); assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, `PORT-005 ${name} fits`); await page.screenshot({ path: join(evidence, `${page.viewportSize().width}-${name}.jpg`), fullPage: true, type: 'jpeg', quality: 82 }) }
 try {
-  const answers = join(scratch,'answers.json')
+  await mkdir('exports', { recursive: true })
+  const answers = 'exports/portal-answers.json'
   await writeFile(answers, JSON.stringify({ OWNER_EMAIL: 'owner@example.test' }), { mode: 0o600 })
   await command(root, ['setup','--answers',answers,'--non-interactive','--port',String(port)])
   const key = (await readFile('.dev.vars','utf8')).match(/^PORTAL_KEY=(.+)$/m)?.[1]
