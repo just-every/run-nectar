@@ -24,7 +24,7 @@ export async function billingPage(env: Bindings, actor: Actor, url: URL) {
   const now = today(b.timezone).slice(0, 7)
   const [y, m] = now.split('-').map(Number)
   const lastMonth = `${m === 1 ? y - 1 : y}-${String(m === 1 ? 12 : m - 1).padStart(2, '0')}`
-  return page('Billing', actor, h`<h1>Billing</h1><p><a href="/app/reports/mrr">MRR report</a> · <a href="/app/reports/billings">Billings report</a> · <a href="/app/reports/ar">AR report</a></p>
+  return page('Billing', actor, h`<h1>Billing</h1><p><a href="/app/revenue">Revenue schedules</a> · <a href="/app/reports/mrr">MRR report</a> · <a href="/app/reports/billings">Billings report</a> · <a href="/app/reports/ar">AR report</a></p>
     ${can(actor, 'records') ? h`<section class="card" aria-labelledby="prepare"><h2 id="prepare">Prepare a bill run</h2><p class="hint">Drafts one invoice for every subscription period that started in the month and has ended. Nothing is issued until a person approves and finalizes it; preparing again replaces the draft.</p>
       ${form('billrun.prepare', '/app/billing/{id}', field('Month', 'period', { type: 'month', value: lastMonth }), 'Prepare draft', { layout: 'row-form' })}</section>` : ''}
     <section class="card" aria-labelledby="runs"><h2 id="runs">Bill runs</h2>${table(['Month', 'Status', 'Invoices$', 'Total$', 'Prepared'], list.map((r: any) => [h`<a href="/app/billing/${r.id}">${r.kind === 'manual' ? 'Standalone · ' : ''}${monthName(r.period)}</a>`, tag(statusLabel(r.status)), h`<a href="/app/billing/${r.id}#drafts">${r.summary.invoices ?? 0}</a>`, h`<a href="/app/billing/${r.id}#drafts">${cents(r.summary.totals?.total ?? 0)}</a>`, formatDate(new Date(r.created_at).toISOString().slice(0, 10))]), { empty: 'No bill runs yet. Prepare the first one above once a subscription period has ended.', lead: true })}</section>`, { current: '/app/billing', url })
@@ -73,7 +73,7 @@ export async function invoicePage(env: Bindings, actor: Actor, id: string, url: 
   const incumbent = i.comparison.incumbent
   return page(title, actor, h`<p class="crumbs"><a href="/app/billing/${i.bill_run_id}">Bill run</a> · <a href="/app/customers/${i.customer_id}">${i.customer_name}</a></p>
     <div class="title-row"><h1>${title}</h1>${tag(statusLabel(i.status, i.status === 'draft' ? i.exceptions.length : 0))}</div><p>${metadataLink('invoice',i.id)}</p>
-    ${i.status === 'issued' ? h`<p><a href="/app/answers?customer=${i.customer_id}&invoice=${i.id}">Ask about this invoice</a></p>` : ''}
+    ${i.status === 'issued' ? h`<p><a href="/app/answers?customer=${i.customer_id}&invoice=${i.id}">Ask about this invoice</a> · <a href="/app/revenue/${i.id}">Revenue schedule</a></p>` : ''}
     ${i.retainedFinancial ? h`<section class="card"><h2>Retained invoice legal label</h2><p>${i.retainedFinancial.legal_name}</p><p>Required financial custody until ${i.retainedFinancial.retain_until}.</p></section>` : ''}
     <section class="card summary"><dl class="figures"><div><dt>Customer</dt><dd>${i.customer_name}<span class="sub">${i.external_id}</span></dd></div><div><dt>Period</dt><dd>${formatPeriod(i.period_start, i.period_end)}</dd></div>
       ${i.issue_date ? h`<div><dt>Issued</dt><dd>${formatDate(i.issue_date)}</dd></div><div><dt>Due</dt><dd>${formatDate(i.due_date)}</dd></div>` : ''}

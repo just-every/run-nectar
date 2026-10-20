@@ -93,5 +93,10 @@
   "erasure.confirm.body": "Confirm that you requested personal-data erasure. The owner must approve it before records change. Minimal financial documents remain for seven years.",
   "erasure.confirm.button": "Confirm my request",
   "erasure.unavailable": "This confirmation link is no longer available",
-  "erasure.verified": "Request verified. The owner can now review it."
+  "erasure.verified": "Request verified. The owner can now review it.",
+  "correction.revenue.heading": "Revenue schedule effect",
+  "correction.revenue.policy": "Recognition policy: {policy}.",
+  "correction.revenue.credit": "The credit records {amount} of contra-revenue in the month beginning {from}; original line schedules and tax stay unchanged.",
+  "correction.revenue.period": "Month beginning {from}: before {before}, after {after}, change {change}.",
+  "correction.revenue.schedule": "Line {line} recognizes {amount} in the month beginning {from} under {policy}."
 }

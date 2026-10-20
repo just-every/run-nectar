@@ -30,6 +30,8 @@ import { pricingModels } from './pricing-models.mjs'
 
 const ACTIONS = [...(await readFile(new URL('../../src/nectar/actions.ts', import.meta.url), 'utf8')).matchAll(/^  '([\w.]+)':/gm)].map(match => match[1])
 await runIsolated('erasure','erasureFlow')
+await runIsolated('revenue','revenueFlow')
+await runIsolated('revenue-policy','revenuePolicyFlow')
 await runIsolated('cadences','cadencesFlow')
 await runIsolated('customer-language','customerLanguageFlow')
 await (await import('./customer-language.mjs')).translationFiles()

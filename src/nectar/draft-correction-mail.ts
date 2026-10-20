@@ -6,30 +6,36 @@ import { isDate, parseInstant } from './dates'
 import { canonicalDecimal } from './decimal'
 import { customerText, type CustomerText } from './locale'
 import { esc } from './ui/html'
+import { REVENUE_POLICY_VERSION } from './revenue-allocation'
+import { revenuePreview, revenuePeriodDeltas, type RevenuePreview, type RevenuePeriodDelta } from './draft-correction-plan'
 
 export type DraftCorrectionKind = 'amendment' | 'usage_correction'
-export interface DraftCorrectionCitation { source: string; quote: string; fingerprint?: string }
+export interface DraftCorrectionCitation { source: string; quote: string; fingerprint?: string; policyVersion?: string; recordPath?: string }
 export interface DraftCorrectionNotice {
   customer: string; recipient: string; subject: string; body: string; citations: DraftCorrectionCitation[]
 }
 interface Prepared { normalized: Row; impact: any; basis: Row }
-interface EngineTotal { subtotalCents: number; taxCents: number; totalCents: number; fingerprint: string; lines: { description: string; amountCents: number }[] }
-interface PeriodImpact { subscription: string; customer?: string; period: { start: string; end: string }; before: EngineTotal; after: EngineTotal }
+interface EngineTotal { subtotalCents: number; taxCents: number; totalCents: number; fingerprint: string; lines: { description: string; amountCents: number }[]; revenue: RevenuePreview }
+interface PeriodImpact { subscription: string; customer?: string; period: { start: string; end: string }; before: EngineTotal; after: EngineTotal; revenueDeltas: RevenuePeriodDelta[] }
 interface UsageSource { id: string; customer: string; meter: string; action: string; quantity: string; occurredAt: number }
 interface CustomerImpact { customer: Row; rows: PeriodImpact[]; subscriptions: Row[] }
 
 const email = (value: unknown): value is string => typeof value === 'string' && value.length <= 200 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
 const identifier = (value: unknown): value is string => typeof value === 'string' && /^[\w-]{1,100}$/.test(value)
-function engineTotal(value: EngineTotal) {
+async function engineTotal(value: EngineTotal) {
   insist(value && ['subtotalCents', 'taxCents', 'totalCents'].every(key => Number.isSafeInteger((value as unknown as Row)[key]))
     && value.subtotalCents + value.taxCents === value.totalCents
     && /^[a-f0-9]{64}$/.test(value.fingerprint) && Array.isArray(value.lines)
     && value.lines.every(line => line && typeof line.description === 'string' && Number.isSafeInteger(line.amountCents))
     && value.lines.reduce((sum, line) => sum + line.amountCents, 0) === value.subtotalCents, 'correction_calculation_required', 409)
+  insist(value.revenue && Array.isArray(value.revenue.schedules) && Array.isArray(value.revenue.periods)
+    && canonical(value.revenue) === canonical(await revenuePreview(value.revenue.schedules))
+    && value.revenue.periods.reduce((sum, entry) => sum + BigInt(entry.amountCents), 0n) === BigInt(value.subtotalCents), 'correction_revenue_calculation_required', 409)
 }
-function validatePeriod(row: PeriodImpact) {
+async function validatePeriod(row: PeriodImpact) {
   insist(row && row.period && isDate(row.period.start) && isDate(row.period.end) && row.period.start < row.period.end, 'invalid_correction_period')
-  engineTotal(row.before); engineTotal(row.after)
+  await Promise.all([engineTotal(row.before), engineTotal(row.after)])
+  insist(canonical(row.revenueDeltas) === canonical(revenuePeriodDeltas(row.before.revenue, row.after.revenue)), 'correction_revenue_delta_mismatch', 409)
 }
 
 async function usageSources(env: Bindings, payload: Row, rows: Row[]): Promise<UsageSource[]> {
@@ -74,7 +80,9 @@ function periodExplanation(row: PeriodImpact, L: CustomerText) {
   return [L.t('correction.period', { subscription: row.subscription, from: L.day(row.period.start), to: L.day(row.period.end) }),
     figures('correction.before', row.before.subtotalCents, row.before.taxCents, row.before.totalCents), figures('correction.after', row.after.subtotalCents, row.after.taxCents, row.after.totalCents),
     figures('correction.change', row.after.subtotalCents - row.before.subtotalCents, row.after.taxCents - row.before.taxCents, row.after.totalCents - row.before.totalCents),
-    lineText('correction.before_lines', row.before), lineText('correction.after_lines', row.after)].join('\n')
+    lineText('correction.before_lines', row.before), lineText('correction.after_lines', row.after),
+    L.t('correction.revenue.heading'), L.t('correction.revenue.policy', { policy: REVENUE_POLICY_VERSION }),
+    ...row.revenueDeltas.map(entry => L.t('correction.revenue.period', { from: L.day(`${entry.period}-01`), before: L.money(entry.beforeCents), after: L.money(entry.afterCents), change: L.money(entry.deltaCents) }))].join('\n')
 }
 
 /** Rebuild from the engine result, discarding any supplied message drafts. */
@@ -92,7 +100,7 @@ export async function draftCorrectionPlan(env: Bindings, kind: DraftCorrectionKi
   if (kind === 'amendment') amendmentTerms(normalized, customerText(null))
   const groups = new Map<string, CustomerImpact>()
   for (const impact of impacts) {
-    validatePeriod(impact)
+    await validatePeriod(impact)
     insist(identifier(impact.subscription), 'invalid_correction_subscription')
     const sub = await one(env, `SELECT s.id,s.customer_id,s.revision,c.name,c.billing_email,c.address,c.language,c.revision AS customer_revision
       FROM nc_subscriptions s JOIN nc_customers c ON c.id=s.customer_id WHERE s.id=?`, impact.subscription)
@@ -117,8 +125,17 @@ export async function draftCorrectionPlan(env: Bindings, kind: DraftCorrectionKi
     const explanation = group.rows.map(row => periodExplanation(row, L)).join('\n\n')
     const citations: DraftCorrectionCitation[] = group.rows.flatMap(row => {
       const source = `/app/subscriptions/${encodeURIComponent(row.subscription)}?preview_period=${row.period.start.slice(0, 7)}#upcoming`
+      const revenueCitations: DraftCorrectionCitation[] = []
+      for (const side of ['before', 'after'] as const) {
+        const preview = row[side].revenue
+        revenueCitations.push({ source, quote: L.t('correction.revenue.policy', { policy: preview.policyVersion }), fingerprint: preview.fingerprint,
+          policyVersion: preview.policyVersion, recordPath: `/${side}/revenue/policyVersion` })
+        preview.schedules.forEach((schedule, index) => schedule.entries.forEach((entry, entryIndex) => revenueCitations.push({ source,
+          quote: L.t('correction.revenue.schedule', { line: schedule.lineId, amount: L.money(entry.amountCents), from: L.day(`${entry.period}-01`), policy: preview.policyVersion }),
+          fingerprint: preview.fingerprint, policyVersion: preview.policyVersion, recordPath: `/${side}/revenue/schedules/${index}/entries/${entryIndex}` })))
+      }
       return [{ source, quote: `Before: subtotal ${row.before.subtotalCents} cents, tax ${row.before.taxCents} cents, total ${row.before.totalCents} cents.`, fingerprint: row.before.fingerprint },
-        { source, quote: `After: subtotal ${row.after.subtotalCents} cents, tax ${row.after.taxCents} cents, total ${row.after.totalCents} cents.`, fingerprint: row.after.fingerprint }]
+        { source, quote: `After: subtotal ${row.after.subtotalCents} cents, tax ${row.after.taxCents} cents, total ${row.after.totalCents} cents.`, fingerprint: row.after.fingerprint }, ...revenueCitations]
     })
     if (ownSources.length) citations.push(...ownSources.map(source => ({ source: '/app/usage',
       quote: `${source.action} usage ${source.id}; quantity ${source.quantity}; occurred ${new Date(source.occurredAt).toISOString()}.` })))

@@ -93,5 +93,10 @@
   "erasure.confirm.body": "Confirme que solicitó la eliminación de datos personales. El propietario debe aprobarla antes de que cambien los registros. Los documentos financieros mínimos se conservan durante siete años.",
   "erasure.confirm.button": "Confirmar mi solicitud",
   "erasure.unavailable": "Este enlace de confirmación ya no está disponible",
-  "erasure.verified": "Solicitud verificada. El propietario ya puede revisarla."
+  "erasure.verified": "Solicitud verificada. El propietario ya puede revisarla.",
+  "correction.revenue.heading": "Efecto en el calendario de ingresos",
+  "correction.revenue.policy": "Política de reconocimiento: {policy}.",
+  "correction.revenue.credit": "La nota de crédito registra {amount} como reducción de ingresos en el mes que comienza el {from}; los calendarios originales y los impuestos no cambian.",
+  "correction.revenue.period": "Mes que comienza el {from}: antes {before}, después {after}, cambio {change}.",
+  "correction.revenue.schedule": "La línea {line} reconoce {amount} en el mes que comienza el {from} según {policy}."
 }

@@ -9,8 +9,50 @@ import { requirePrice } from './catalog'
 import { rate, type AmendmentIn, type RatingInput } from './rating'
 import { screen, type RawEvent } from './usage'
 import { startsInIssuedPeriod } from './subscriptions'
+import { recognitionForRating, REVENUE_POLICY_VERSION, type RevenueSchedule } from './revenue-allocation'
 
-const total = async (input: RatingInput) => { const r=rate(input); return { fingerprint:await fingerprint(input),subtotalCents:r.subtotalCents,taxCents:r.taxCents,totalCents:r.totalCents,lines:r.lines.map(line=>({description:line.description,amountCents:line.amountCents})) } }
+export interface RevenuePreview {
+  policyVersion: string
+  schedules: RevenueSchedule[]
+  periods: { period: string; amountCents: number }[]
+  fingerprint: string
+}
+export interface RevenuePeriodDelta { period: string; beforeCents: number; afterCents: number; deltaCents: number }
+
+/** These are the same source schedules later persisted on invoice issue; a
+ * draft correction never changes an issued schedule or books a preview. */
+export async function revenuePreview(schedules: RevenueSchedule[]): Promise<RevenuePreview> {
+  const totals = new Map<string, bigint>()
+  for (const schedule of schedules) {
+    insist(schedule.entries.reduce((sum, entry) => sum + BigInt(entry.amountCents), 0n) === BigInt(schedule.amountCents), 'correction_revenue_does_not_reconcile', 409)
+    for (const entry of schedule.entries) totals.set(entry.period, (totals.get(entry.period) ?? 0n) + BigInt(entry.amountCents))
+  }
+  const periods = [...totals].sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([period, value]) => {
+    const amountCents = Number(value)
+    insist(Number.isSafeInteger(amountCents), 'correction_revenue_amount_out_of_range', 409)
+    return { period, amountCents }
+  })
+  const basis = { policyVersion: REVENUE_POLICY_VERSION, schedules, periods }
+  return { ...basis, fingerprint: await fingerprint(basis) }
+}
+
+export function revenuePeriodDeltas(before: RevenuePreview, after: RevenuePreview): RevenuePeriodDelta[] {
+  insist(before.policyVersion === REVENUE_POLICY_VERSION && after.policyVersion === REVENUE_POLICY_VERSION, 'correction_revenue_policy_changed', 409)
+  const months = [...new Set([...before.periods, ...after.periods].map(row => row.period))].sort()
+  return months.map(period => {
+    const beforeCents = before.periods.find(row => row.period === period)?.amountCents ?? 0
+    const afterCents = after.periods.find(row => row.period === period)?.amountCents ?? 0
+    const deltaCents = afterCents - beforeCents
+    insist([beforeCents, afterCents, deltaCents].every(Number.isSafeInteger), 'correction_revenue_amount_out_of_range', 409)
+    return { period, beforeCents, afterCents, deltaCents }
+  })
+}
+
+const total = async (input: RatingInput) => {
+  const r = rate(input), revenue = await revenuePreview(recognitionForRating(input, r))
+  return { fingerprint: await fingerprint(input), subtotalCents: r.subtotalCents, taxCents: r.taxCents, totalCents: r.totalCents,
+    lines: r.lines.map(line => ({ description: line.description, amountCents: line.amountCents })), revenue }
+}
 
 export async function amendmentPlan(env: Bindings, business: Business, payload: Row) {
   const sub = await one(env, 'SELECT * FROM nc_subscriptions WHERE id = ?', String(payload.subscription ?? ''))
@@ -31,9 +73,10 @@ export async function amendmentPlan(env: Bindings, business: Business, payload: 
   const first = periodContaining(sub.anchor_day, amendment.from)
   for (const period of [first, periodContaining(sub.anchor_day, first.end)]) {
     const inputs = await ratingInputs(env, business, sub.id, period)
-    impact.push({ period, before: await total(inputs), after: await total({ ...inputs, amendments: [...inputs.amendments, amendment] }) })
+    const [before, after] = await Promise.all([total(inputs), total({ ...inputs, amendments: [...inputs.amendments, amendment] })])
+    impact.push({ period, before, after, revenueDeltas: revenuePeriodDeltas(before.revenue, after.revenue) })
   }
-  return { normalized: { ...payload, subscription: sub.id, kind, value, price: priceId, effective_to: payload.effective_to || null }, impact, basis: { subscription: [sub.id, sub.revision] } }
+  return { normalized: { ...payload, subscription: sub.id, kind, value, price: priceId, effective_to: payload.effective_to || null }, impact, basis: { subscription: [sub.id, sub.revision], revenuePolicy: REVENUE_POLICY_VERSION } }
 }
 
 /**
@@ -80,8 +123,9 @@ export async function correctionPlan(env: Bindings, business: Business, payload:
     const end = zonedStart(period.end, business.timezone)
     const added = (screened?.accepted ?? []).filter(event => event.customerId === sub.customer_id && meters.has(event.meterId) && event.occurredAt < end)
       .map(event => ({ eventId: event.eventId, meterId: event.meterId, quantity: event.quantity, occurredAt: event.occurredAt, ...(event.properties?{properties:event.properties}:{}) }))
-    invoices.push({ subscription: sub.id, customer: sub.customer_name, period, before: await total(inputs), after: await total({ ...inputs, events: [...inputs.events.filter(event => !voided.has(event.eventId)), ...added] }) })
+    const [before, after] = await Promise.all([total(inputs), total({ ...inputs, events: [...inputs.events.filter(event => !voided.has(event.eventId)), ...added] })])
+    invoices.push({ subscription: sub.id, customer: sub.customer_name, period, before, after, revenueDeltas: revenuePeriodDeltas(before.revenue, after.revenue) })
   }
-  return { normalized: { void: voids.map((entry: Row) => ({ event_id: String(entry.event_id), reason: String(entry.reason).slice(0, 300) })), add: adds, run: run?.id ?? null, period: run?.period ?? null }, impact: { rows, invoices }, basis }
+  return { normalized: { void: voids.map((entry: Row) => ({ event_id: String(entry.event_id), reason: String(entry.reason).slice(0, 300) })), add: adds, run: run?.id ?? null, period: run?.period ?? null }, impact: { rows, invoices }, basis: { ...basis, revenuePolicy: REVENUE_POLICY_VERSION } }
 }
 

@@ -1,4 +1,5 @@
 import { erasureRequests } from './erasure-requests'
+import { revenueReport,revenueSource } from './revenue-reports'
 import { cadenceReport } from './cadence-actions'
 import { retentionReport } from './retention-offers'
 import { reportSchedule,reportDelivery } from './report-schedules'
@@ -58,6 +59,8 @@ export async function customerView(env: Bindings, actor: Actor, id: string): Pro
 
 export const views: Record<string, View> = {
   erasures:(env,actor)=>erasureRequests(env,actor),
+  revenue:(env,actor,_r,_id,url)=>revenueReport(env,actor,url),
+  revenueSource:(env,actor,_r,id,url)=>revenueSource(env,actor,id,url),
   cadences:(env,actor)=>cadenceReport(env,actor),
   retention:(env,actor)=>retentionReport(env,actor),
   reportSchedule:(env,actor)=>reportSchedule(env,actor),

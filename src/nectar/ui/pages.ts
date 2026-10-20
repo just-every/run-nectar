@@ -1,5 +1,7 @@
 import { erasurePage } from './erasure'
 import { erasureEvidence } from '../erasure-requests'
+import { revenuePage,revenueSourcePage } from './revenue'
+import { revenueCsv } from '../revenue-reports'
 import { cadencesPage } from './cadences'
 import { billingAnswersPage } from './billing-answers'
 import { retentionPage } from './retention'
@@ -34,6 +36,9 @@ type Page = (env: Bindings, actor: Actor, request: Request, url: URL, id: string
 export const pages: Record<string, Page> = {
   erasures:(env,actor,_r,url)=>erasurePage(env,actor,url),
   erasureEvidence:(env,actor,_r,_u,id)=>erasureEvidence(env,actor,id),
+  revenue:(env,actor,_r,url)=>revenuePage(env,actor,url),
+  revenueSource:(env,actor,_r,url,id)=>revenueSourcePage(env,actor,id,url),
+  revenueCsv:(env,actor,_r,url)=>revenueCsv(env,actor,url),
   cadences:(env,actor,_r,url)=>cadencesPage(env,actor,url),
   billingAnswers:(env,actor,_r,url)=>billingAnswersPage(env,actor,url),
   retention:(env,actor,_r,url)=>retentionPage(env,actor,url),

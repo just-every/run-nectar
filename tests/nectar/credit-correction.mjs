@@ -44,6 +44,7 @@ export async function creditCorrectionFlow(h, owner) {
       await api('invoice.approve', { invoice: draft.id, acknowledge: true })
       await api('invoice.finalise', { invoice: draft.id, issue_date: '2026-05-01' })
       fixture.issued = await read(draft.id)
+      fixture.revenue = await api(`revenue/${draft.id}`)
       fixture.id = draft.id
       fixture.line = fixture.issued.lines.find(line => line.price_id === fixture.price)
       assert.equal(fixture.line.quantity, '10')
@@ -68,12 +69,50 @@ export async function creditCorrectionFlow(h, owner) {
     const billingMails = () => h.mails.filter(mail => fixtures.some(fixture => mailTo(mail, fixture.email)) || mailTo(mail, 'new-billing@correction.example'))
     const unchanged = async (fixture, credits, balance) => {
       const current = await read(fixture.id)
+      assert.deepEqual((await api(`revenue/${fixture.id}`)).schedules, fixture.revenue.schedules, 'REV-001 issued credit decisions preserve every original recognition schedule and source basis')
       assert.deepEqual(frozen(current), frozen(fixture.issued), 'credit decisions retain issued source line identities, calculation, subtotal, tax and total')
       assert.deepEqual(current.credits.map(row => [row.amount_cents, row.reason]), credits)
       assert.equal(current.balanceCents, balance)
       assert.equal(current.creditedCents, credits.reduce((sum, row) => sum + row[0], 0))
       assert.deepEqual(await api(`subscriptions/${fixture.subscription}`), fixture.subscriptionBefore, 'invoice correction does not rewrite future subscription terms')
       return current
+    }
+
+    const checkRevenue = async (saved, fixture) => {
+      const revenue = saved.impact.revenue, source = await api(`revenue/${fixture.id}`)
+      const amount = saved.impact.credit.amountCents
+      assert.deepEqual(revenue.before.schedules.slice(0, source.schedules.length).sort((a, b) => a.lineId.localeCompare(b.lineId)), [...source.schedules].sort((a, b) => a.lineId.localeCompare(b.lineId)), 'REV-001 credit preview uses the immutable issued line schedules')
+      assert.deepEqual(revenue.before.schedules.slice(source.schedules.length).map(row => [row.lineId, row.amountCents, row.entries.map(entry => [entry.period, entry.amountCents])]),
+        source.credits.map(row => [`credit:${row.id}`, row.amountCents, [[row.period, row.amountCents]]]), 'REV-001 credit preview includes every actual earlier signed credit in its issue month')
+      assert.deepEqual(revenue.after.schedules.slice(0, -1), revenue.before.schedules, 'REV-001 a credit adds a contra schedule without reallocating original revenue')
+      const adjustment = revenue.after.schedules.at(-1)
+      assert.deepEqual([adjustment.kind, adjustment.amountCents, adjustment.serviceStart, adjustment.entries.map(row => [row.period, row.amountCents])],
+        ['credit_note', -amount, `${revenue.issueMonth}-01`, [[revenue.issueMonth, -amount]]], 'REV-001 exact proposed credit recognition is negative in its issue month')
+      const periods = new Map()
+      for (const row of [...source.schedules.flatMap(schedule => schedule.entries), ...source.credits]) periods.set(row.period, (periods.get(row.period) ?? 0) + row.amountCents)
+      const expected = [...new Set([...periods.keys(), revenue.issueMonth])].sort().map(period => {
+        const beforeCents = periods.get(period) ?? 0, deltaCents = period === revenue.issueMonth ? -amount : 0
+        return { period, beforeCents, afterCents: beforeCents + deltaCents, deltaCents }
+      })
+      assert.deepEqual(revenue.periods, expected, 'REV-001 exact before/after revenue and signed period deltas exclude tax')
+      for (const side of ['before', 'after']) assert.deepEqual(revenue[side].periods,
+        expected.filter(row => side === 'after' || periods.has(row.period)).map(row => ({ period: row.period, amountCents: row[`${side}Cents`] })), 'REV-001 schedule totals match the reviewed period table')
+      for (const [index, schedule] of revenue.before.schedules.slice(0, source.schedules.length).entries()) for (const [entryIndex] of schedule.entries.entries()) {
+        assert.ok(revenue.citations.some(citation => citation.line_id === schedule.lineId && citation.source === `/app/invoices/${fixture.id}/lines/${schedule.lineId}#calculation`
+          && citation.recordPath === `/revenue/before/schedules/${index}/entries/${entryIndex}` && citation.fingerprint === revenue.before.fingerprint && citation.policyVersion === revenue.policyVersion), 'REV-001 each issued schedule entry cites its actual line and frozen preview')
+      }
+      assert.deepEqual(saved.impact.mail.citations, [...saved.payload.citations, ...revenue.citations], 'REV-001 the reviewed customer explanation includes the revenue source citations')
+      assert.equal(saved.impact.mail.body, `${saved.payload.body}\n\n${saved.payload.revenueNotice.explanation}`)
+      return revenue
+    }
+    const checkBooked = async (saved, fixture, credit) => {
+      const revenue = saved.impact.revenue, source = await api(`revenue/${fixture.id}`)
+      const booked = source.credits.find(row => row.id === credit.id)
+      assert.deepEqual([booked.period, booked.amountCents], [revenue.issueMonth, revenue.adjustment.amountCents], 'REV-001 approved credit and actual recognition month match the frozen preview')
+      assert.equal(booked.basis.invoiceId, fixture.id)
+      const report = await api(`revenue?period=${revenue.issueMonth}&customer=${fixture.customer}`)
+      assert.deepEqual(report.contributions.filter(row => row.creditId === credit.id).map(row => [row.kind, row.period, row.amountCents]).sort(),
+        [['credit-billing', revenue.issueMonth, -credit.amount_cents], ['credit-recognition', revenue.issueMonth, -credit.amount_cents]], 'REV-001 the issued credit is booked once as signed billings and recognition')
     }
 
     const input = await payload(seats), beforeProposals = await api('proposals'), beforeMail = billingMails().length
@@ -103,7 +142,8 @@ export async function creditCorrectionFlow(h, owner) {
     assert.deepEqual((await h.api(`proposals/${prepared.id}`, agent)).impact, saved.impact, 'a prepare-scoped agent can read its exact preview')
     assert.deepEqual([saved.impact.credit.amountCents, saved.impact.credit.balanceBeforeCents, saved.impact.credit.balanceAfterCents], [5000, 11000, 6000])
     assert.deepEqual([saved.impact.invoice.subtotalCents, saved.impact.invoice.taxCents, saved.impact.invoice.totalCents], [10000, 1000, 11000])
-    assert.deepEqual(saved.impact.mail, { ...saved.impact.mail, recipient: seats.email, subject: input.subject, body: input.body, explanation: input.explanation, citations: input.citations })
+    await checkRevenue(saved, seats)
+    assert.deepEqual([saved.impact.mail.recipient, saved.impact.mail.subject], [seats.email, input.subject])
     assert.equal(saved.impact.mail.language, 'en', 'PORT-006 the invoice-credit author sees the customer’s language; the text is sent as written')
     assert.equal(saved.payload.recipient, seats.email)
     assert.deepEqual(saved.payload.citations, input.citations)
@@ -127,10 +167,12 @@ export async function creditCorrectionFlow(h, owner) {
     assert.ok(approved.correctionMail.provider_ref)
     assert.equal(approved.correctionMail.credit_id, corrected.credits[0].id)
     assert.equal(approved.correctionMail.recipient, seats.email)
-    assert.equal(approved.correctionMail.body, input.body)
+    assert.equal(approved.correctionMail.body, saved.impact.mail.body)
+    assert.deepEqual(JSON.parse(approved.correctionMail.citations_json), saved.impact.mail.citations)
+    await checkBooked(saved, seats, corrected.credits[0])
     assert.equal(billingMails().length, beforeMail + 1, 'one approval submits one correction email to the billing address')
     assert.equal(billingMails().at(-1).subject, input.subject)
-    assert.equal(billingMails().at(-1).text, input.body)
+    assert.equal(billingMails().at(-1).text, saved.impact.mail.body)
     await decide(prepared.id, owner, 409)
     await formDecision(prepared.id, owner, {}, 'already_decided')
     assert.equal(billingMails().length, beforeMail + 1)
@@ -160,7 +202,9 @@ export async function creditCorrectionFlow(h, owner) {
 
     const highInput = await payload(governed, '1500.00', 'Reviewed large invoice correction')
     const high = await propose(highInput)
-    assert.equal((await detail(high.id)).impact.credit.needsSecondApprover, true)
+    const highSaved = await detail(high.id)
+    await checkRevenue(highSaved, governed)
+    assert.equal(highSaved.impact.credit.needsSecondApprover, true)
     await decide(high.id, owner, 409)
     await formDecision(high.id, owner, {}, 'second_approver_required')
     const binding = await h.api('proposal.credit.prepare', finance, { proposal: high.id })
@@ -187,6 +231,7 @@ export async function creditCorrectionFlow(h, owner) {
     assert.equal((await detail(high.id)).correctionMail, null)
     await formDecision(high.id, owner)
     let highDetail = await unchanged(governed, [[150000, highInput.reason]], 950000)
+    await checkBooked(highSaved, governed, highDetail.credits[0])
     const issuedRequest = highDetail.creditRequests.find(row => row.id === binding.request)
     assert.equal(issuedRequest.status, 'issued')
     assert.equal(issuedRequest.approved_by, ownerPerson.email)
@@ -197,20 +242,26 @@ export async function creditCorrectionFlow(h, owner) {
     await decide(high.id, owner, 409)
     const lowInput = await payload(governed, '900.00', 'Below threshold human correction')
     const low = await propose(lowInput, finance)
-    assert.equal((await detail(low.id)).impact.credit.needsSecondApprover, false)
+    const lowSaved = await detail(low.id)
+    await checkRevenue(lowSaved, governed)
+    assert.equal(lowSaved.impact.credit.needsSecondApprover, false)
     await decide(low.id, finance, 200, { recipient: 'attacker@example.test', amount: '1500.00', body: 'Altered' })
     highDetail = await unchanged(governed, [[150000, highInput.reason], [90000, lowInput.reason]], 860000)
     assert.equal(highDetail.credits[1].issued_by, financePerson.email)
-    assert.equal((await detail(low.id)).correctionMail.body, lowInput.body)
+    assert.equal((await detail(low.id)).correctionMail.body, lowSaved.impact.mail.body)
+    await checkBooked(lowSaved, governed, highDetail.credits[1])
 
     const failed = []
     for (const [status, outcome] of [[400, 'failed'], [500, 'uncertain']]) {
       const mailInput = await payload(seats, '5.00', `Provider ${outcome} correction`)
       const proposal = await propose(mailInput), start = billingMails().length
+      const mailSaved = await detail(proposal.id)
+      await checkRevenue(mailSaved, seats)
       h.mailResponses.push({ status, body: { name: 'provider_error' } })
       await decide(proposal.id)
       seatCredits.push([500, mailInput.reason])
       await unchanged(seats, seatCredits, 11000 - seatCredits.reduce((sum, row) => sum + row[0], 0))
+      await checkBooked(mailSaved, seats, (await read(seats.id)).credits.find(row => row.proposal_id === proposal.id))
       const custody = (await detail(proposal.id)).correctionMail
       assert.equal(custody.status, outcome)
       assert.equal(custody.provider_ref, null, 'provider refusal or uncertainty cannot become an acceptance receipt')

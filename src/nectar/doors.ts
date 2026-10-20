@@ -4,6 +4,7 @@
 // Patterns are relative to /api/nectar/ (API) or absolute (pages).
 export const API_DOORS: [string, string][] = [
   ['^erasures$','erasures'],
+  ['^revenue$', 'revenue'], ['^revenue/([\\w-]+)$','revenueSource'],
   ['^cadences$', 'cadences'],
   ['^retention$','retention'],
   ['^report-schedule$', 'reportSchedule'], ['^report-deliveries/([\\w-]+)$','reportDelivery'],
@@ -23,6 +24,7 @@ export const API_DOORS: [string, string][] = [
 export const PAGE_DOORS: [string, string][] = [
   ['^/app/erasures$','erasures'],
   ['^/app/erasures/([\\w-]+)/evidence$','erasureEvidence'],
+  ['^/app/revenue$','revenue'], ['^/app/revenue/([\\w-]+)$','revenueSource'], ['^/app/exports/revenue\\.csv$','revenueCsv'],
   ['^/app/cadences$', 'cadences'],
   ['^/app/answers$', 'billingAnswers'],
   ['^/app/retention$','retention'],

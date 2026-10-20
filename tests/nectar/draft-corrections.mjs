@@ -33,7 +33,7 @@ export async function draftCorrectionsFlow(h, owner) {
       prices.push((await api('price.create', { product, kind, unit_amount, taxable: true, ...(kind === 'unit' ? { meter } : {}) })).id)
     }
     const fixtures = []
-    for (const suffix of ['TERMS', 'USAGE']) {
+    for (const suffix of ['TERMS', 'USAGE', 'FIXED', 'OVERRIDE']) {
       const external = `AGENT002-DRAFT-${suffix}`, email = `ap@draft-${suffix.toLowerCase()}.example`
       const customer = (await api('customer.create', { external_id: external, name: `Cedar Draft ${suffix}`, billing_email: email })).id
       const subscription = (await api('subscription.create', { customer, start_date: '2026-03-01', anchor_day: 1, price: prices })).id
@@ -51,6 +51,7 @@ export async function draftCorrectionsFlow(h, owner) {
       await api('invoice.approve', { invoice: invoice.id, acknowledge: true })
       await api('invoice.finalise', { invoice: invoice.id, issue_date: '2026-04-01' })
       fixture.original = await api(`invoices/${invoice.id}`)
+      fixture.originalRevenue = await api(`revenue/${invoice.id}`)
       assert.deepEqual([fixture.original.subtotal_cents, fixture.original.tax_cents, fixture.original.total_cents], [11000, 1100, 12100])
       const april = await upcoming(fixture)
       assert.equal(april.state, 'preview')
@@ -72,7 +73,49 @@ export async function draftCorrectionsFlow(h, owner) {
         Promise.all(fixtures.map(fixture => api(`subscriptions/${fixture.subscription}`))),
         Promise.all(fixtures.map(async fixture => (await upcoming(fixture)).calculation)), api('usage/batches'),
       ])
-      return { subscriptions, previews, batches }
+      return { subscriptions, previews, batches, revenue: await Promise.all(fixtures.map(fixture => api(`revenue/${fixture.original.id}`))) }
+    }
+    const checkRevenue = (row, fixture, draft) => {
+      const month = row.period.start.slice(0, 7)
+      const periodTotals = side => month === '2026-04' ? [{ period: month, amountCents: row[side].subtotalCents }]
+        : [{ period: '2026-04', amountCents: 1000 }, { period: month, amountCents: row[side].subtotalCents - 1000 }]
+      const beforePeriods = periodTotals('before'), afterPeriods = periodTotals('after')
+      const expectedDeltas = beforePeriods.map((entry, index) => ({ period: entry.period, beforeCents: entry.amountCents, afterCents: afterPeriods[index].amountCents, deltaCents: afterPeriods[index].amountCents - entry.amountCents }))
+      assert.deepEqual(row.revenueDeltas, expectedDeltas, 'REV-001 correction preview gives exact signed monthly recognition changes, excluding tax')
+      for (const side of ['before', 'after']) {
+        const preview = row[side].revenue
+        assert.deepEqual(preview.periods, periodTotals(side), 'REV-001 before/after consideration follows service months and original consumption, including late usage')
+        assert.equal(preview.schedules.length, row[side].lines.length)
+        for (const [index, schedule] of preview.schedules.entries()) {
+          assert.equal(schedule.amountCents, row[side].lines[index].amountCents, 'REV-001 each recognition schedule retains the actual signed rated line amount')
+          assert.deepEqual(schedule.entries.map(entry => [entry.period, entry.amountCents]), [[['usage', 'late_usage', 'metric_usage'].includes(schedule.kind) ? '2026-04' : month, schedule.amountCents]], 'REV-001 exact line recognition follows the reviewed service or consumption month')
+          const source = `/app/subscriptions/${fixture.subscription}?preview_period=${month}#upcoming`
+          for (const [entryIndex] of schedule.entries.entries()) assert.ok(draft.citations.some(citation => citation.source === source
+            && citation.recordPath === `/${side}/revenue/schedules/${index}/entries/${entryIndex}` && citation.fingerprint === preview.fingerprint
+            && citation.policyVersion === preview.policyVersion && citation.quote.includes(schedule.lineId)), 'REV-001 every before/after schedule entry cites the source subscription, line and frozen revenue calculation')
+        }
+        assert.ok(draft.citations.some(citation => citation.recordPath === `/${side}/revenue/policyVersion` && citation.fingerprint === preview.fingerprint && citation.policyVersion === preview.policyVersion), 'REV-001 explanation cites the recognition policy used for each side')
+      }
+    }
+    const issueReviewed = async (fixture, saved, impact) => {
+      const run = await api('billrun.prepare', { period: impact.period.start.slice(0, 7) })
+      const draft = (await api(`runs/${run.id}`)).invoices.find(row => row.customer_id === fixture.customer)
+      await api(`revenue/${draft.id}`, undefined, 404)
+      await api('invoice.approve', { invoice: draft.id, acknowledge: true })
+      await api(`revenue/${draft.id}`, undefined, 404)
+      await api('invoice.finalise', { invoice: draft.id, issue_date: impact.period.end })
+      const invoice = await api(`invoices/${draft.id}`), source = await api(`revenue/${draft.id}`)
+      const approved = await detail(saved.id)
+      // Preview-local identities become the real issued line and amendment IDs;
+      // all amounts, policies, source evidence and allocation bases must agree.
+      const expected = impact.after.revenue.schedules.map((schedule, index) => JSON.parse(JSON.stringify(schedule, (key, value) => {
+        if (key === 'lineId') return invoice.lines[index].id
+        if ((key === 'amendment' || key === 'override') && value === 'proposed') return approved.result.amendment
+        return value
+      })))
+      assert.deepEqual([...source.schedules].sort((a, b) => a.lineId.localeCompare(b.lineId)), expected.sort((a, b) => a.lineId.localeCompare(b.lineId)), 'REV-001 the next ordinarily approved and issued invoice persists every reviewed schedule and source basis')
+      assert.deepEqual([source.invoice.subtotalCents, source.invoice.taxCents, source.invoice.totalCents], totals(impact.after))
+      if (fixture.original) assert.deepEqual((await api(`revenue/${fixture.original.id}`)).schedules, fixture.originalRevenue.schedules, 'REV-001 issuing corrected consideration never rewrites the previous invoice recognition')
     }
     const checkDraft = (proposal, fixture, impacts) => {
       assert.deepEqual(proposal.customerMessages, [], 'preparation creates no customer delivery record')
@@ -83,6 +126,7 @@ export async function draftCorrectionsFlow(h, owner) {
       assert.ok(draft.subject.length && draft.body.length)
       assert.ok(!JSON.stringify(draft).includes('attacker@example.test') && !draft.body.includes('Caller-selected body'), 'caller-supplied drafts cannot replace the generated explanation')
       for (const row of impacts) {
+        checkRevenue(row, fixture, draft)
         const longDate = day => new Date(`${day}T00:00:00Z`).toLocaleDateString('en-US', { dateStyle: 'long', timeZone: 'UTC' })
         assert.ok(draft.body.includes(longDate(row.period.start)) && draft.body.includes(longDate(row.period.end)), 'PORT-006 English notices name service days as long dates')
         assert.ok(draft.body.includes(fixture.subscription), 'the message identifies the actual subscription')
@@ -156,6 +200,27 @@ export async function draftCorrectionsFlow(h, owner) {
       assert.equal(current.invoiceId, null)
       assert.deepEqual(totals(current.calculation), totals(row.after))
     }
+    const otherAmendments = []
+    for (const [fixture, kind, value, firstSubtotal, laterSubtotal] of [
+      [fixtures[2], 'fixed_credit', '5', 10500, 11000], [fixtures[3], 'price_override', '80', 9000, 9000],
+    ]) {
+      const proposal = await propose({ kind: 'amendment', title: `Reviewed ${kind}`, payload: { subscription: fixture.subscription, kind, value,
+        ...(kind === 'price_override' ? { price: prices[0] } : {}), effective_from: '2026-04-01', note: `Reviewed ${kind}`, noticeDrafts: hostile },
+        evidence: { clauses: [{ quote: kind === 'fixed_credit' ? 'Apply one five dollar service credit in April.' : 'From April the platform fee is eighty dollars per month.' }] } })
+      const saved = await detail(proposal.id)
+      for (const [index, row] of saved.impact.entries()) {
+        assert.deepEqual(totals(row.before), [11000, 1100, 12100])
+        const subtotal = index === 0 ? firstSubtotal : laterSubtotal
+        assert.deepEqual(totals(row.after), [subtotal, subtotal / 10, subtotal * 11 / 10], 'REV-001 fixed credit is one-time; contract price applies each reviewed month')
+      }
+      checkDraft(saved, fixture, saved.impact)
+      const before = await snapshot(), start = mails().length
+      for (const who of [agent, accountant]) await decide(proposal.id, who, 403)
+      assert.deepEqual(await snapshot(), before, 'REV-001 amendment recognition cannot bypass human approval')
+      await decide(proposal.id)
+      await checkSent(proposal.id, saved, fixture, start)
+      otherAmendments.push({ fixture, saved })
+    }
     const april = await api('billrun.prepare', { period: '2026-04' })
     const usageProposal = await propose(correction('draft-usage-approved', { run: april.id })), usageSaved = await detail(usageProposal.id)
     const usageImpact = usageSaved.impact.invoices.find(row => row.subscription === usage.subscription)
@@ -228,7 +293,8 @@ export async function draftCorrectionsFlow(h, owner) {
 
     // A source not named in the correction still invalidates its complete rating basis.
     const futureAmendment = () => ({ ...amendment({ value: '5', effective_from: '2026-06-01' }), evidence: { clauses: [{ quote: 'From 1 June 2026 apply a further five percent recurring discount.' }] } })
-    const futureUsage = id => correction(id, { void: [{ event_id: 'draft-usage-approved', reason: 'Review a further proposed correction' }], add: [event(usage, id, '250')] })
+    await submit([event(usage, 'draft-usage-future-review', '1000', '06')])
+    const futureUsage = id => correction(id, { void: [{ event_id: 'draft-usage-future-review', reason: 'Review a further proposed correction' }], add: [event(usage, id, '250', '06')] })
     const stalePair = async suffix => Promise.all([
       propose(futureAmendment()), propose(futureUsage(`draft-not-applied-${suffix}`)),
     ])
@@ -246,7 +312,7 @@ export async function draftCorrectionsFlow(h, owner) {
       assert.equal(mails().length, start)
     }
     const staleUsage = await stalePair('source')
-    await submit([event(terms, 'draft-terms-new-unreferenced', '7', '06'), event(usage, 'draft-usage-new-unreferenced', '13')])
+    await submit([event(terms, 'draft-terms-new-unreferenced', '7', '06'), event(usage, 'draft-usage-new-unreferenced', '13', '06')])
     await refusePair(staleUsage)
     const staleTax = await stalePair('tax')
     await tax('12')
@@ -262,7 +328,12 @@ export async function draftCorrectionsFlow(h, owner) {
     for (const fixture of fixtures) {
       const customer = await api(`customers/${fixture.customer}`)
       await api('customer.update', { ...customer, customer: fixture.customer, billing_email: fixture.email })
+      assert.deepEqual(await api(`revenue/${fixture.original.id}`), fixture.originalRevenue, 'REV-001 every correction and stale refusal preserves issued recognition and original source evidence')
       assert.deepEqual(await api(`invoices/${fixture.original.id}`), fixture.original, 'corrections and later policy or recipient changes retain the complete previously issued invoice')
+    }
+    for (const [fixture, saved, impact] of [[terms, termSaved, termSaved.impact[0]], [usage, usageSaved, usageImpact],
+      [metricFixture, metricSaved, metricImpact], ...otherAmendments.map(({ fixture, saved }) => [fixture, saved, saved.impact[0]])]) {
+      await issueReviewed(fixture, saved, impact)
     }
     const mailCount = mails().length
     const scheduled = await h.raw(`/cdn-cgi/local/scheduled?time=${Date.parse('2026-07-10T14:00:00Z')}&cron=${encodeURIComponent('0 14 * * *')}`)

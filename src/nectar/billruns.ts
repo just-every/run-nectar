@@ -1,3 +1,4 @@
+import { revenueIssueStatements } from './revenue-records'
 import { clockInstant } from './clock'
 import { cancellationApproval } from './lifecycle-approval'
 import { metadataFor,withMetadata } from './metadata'
@@ -224,6 +225,7 @@ export async function finalise(env: Bindings, actor: Actor, input: Input) {
       stmt(env, 'UPDATE nc_business SET next_invoice_number = next_invoice_number + 1 WHERE singleton = 1'),
       ...chunk(consumed, 90).map(ids => stmt(env, `UPDATE nc_usage_events SET invoice_id = ? WHERE event_id IN (${ids.map(() => '?').join(',')})`, invoice.id, ...ids)),
       stmt(env, "UPDATE nc_invoices SET legal_name=(SELECT name FROM nc_customers WHERE id=nc_invoices.customer_id), status = 'issued', number = ?, issue_date = ?, due_date = ?, issued_by = ?, issued_at = ? WHERE id = ?", number, issueDate, due, actorLabel(actor), now(), invoice.id),
+      ...await revenueIssueStatements(env,{...invoice,issue_date:issueDate}),
     ], { actor: actorLabel(actor), action: 'invoice.issue', subject: invoice.id, detail: { number, total: invoice.total_cents, fingerprint: invoice.approved_fingerprint, events: consumed.length, charges } })
     issued.push(number)
     business = await requireBusiness(env)
