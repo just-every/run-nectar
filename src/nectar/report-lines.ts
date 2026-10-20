@@ -4,6 +4,7 @@ import type { Bindings } from '../auth.server'
 import { requireCapability, type Actor } from './actor'
 import { all, insist, one, parseJson, type Row } from './core'
 import { decimalText, micros } from './decimal'
+import type { CustomerSession } from './portal-session'
 import type { EventIn } from './rating'
 
 export interface ReportLine {
@@ -15,6 +16,15 @@ export interface ReportLine {
 /** A line belongs to this issued invoice, and every event must exist in both saved evidence sets. */
 export async function reportLine(env: Bindings, actor: Actor, invoiceId: string, lineId: string): Promise<ReportLine> {
   requireCapability(actor, 'read')
+  return await savedReportLine(env, invoiceId, lineId)
+}
+
+export async function customerReportLine(env: Bindings, session: CustomerSession, invoiceId: string, lineId: string): Promise<ReportLine> {
+  insist(await one(env, "SELECT id FROM nc_invoices WHERE id=? AND customer_id=? AND status='issued'", invoiceId, session.customer), 'invoice_not_found', 404)
+  return await savedReportLine(env, invoiceId, lineId)
+}
+
+async function savedReportLine(env: Bindings, invoiceId: string, lineId: string): Promise<ReportLine> {
   const invoice = await one(env, "SELECT id, number, customer_id, subscription_id, calculation_json, calc_version, source_fingerprint FROM nc_invoices WHERE id = ? AND status = 'issued'", invoiceId)
   insist(invoice, 'invoice_not_found', 404)
   const [line, metered] = await Promise.all([

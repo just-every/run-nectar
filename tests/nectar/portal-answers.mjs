@@ -1,0 +1,68 @@
+// PORT-005 / AGENT-007: signed customers use the same ten-topic evaluator,
+// but every cited operand resolves through a customer-scoped public door.
+import assert from 'node:assert/strict'
+import { seedAnswerRecords } from './billing-answers.mjs'
+
+const pointer=(record,path)=>path.split('/').slice(1).reduce((value,key)=>value?.[key.replaceAll('~1','/').replaceAll('~0','~')],record)
+export async function portalAnswersFlow(h,owner,onState=async()=>{}) {
+  const fixture=await seedAnswerRecords(h,owner),{customer,otherCustomer,invoice,otherInvoice,previous}=fixture
+  await h.api('portal.configure',owner,{hosts:[h.origin],parents:[h.origin]})
+  const issue=async customer=>h.api('portal.session.issue',owner,{customer,origin:h.origin,audience:'hosted'})
+  const session=await issue(customer),foreign=await issue(otherCustomer)
+  const read=async (fields,token=session.token,status=200)=>{
+    const response=await h.raw(`/portal/answer?${new URLSearchParams({session:token,invoice,question:'What is the total?',...fields})}`)
+    assert.equal(response.status,status,'PORT-005 customer answer status')
+    return response.status===200?await response.json():await response.text()
+  }
+  const current=await h.api(`invoices/${invoice}`,owner),prior=await h.api(`invoices/${previous}`,owner)
+  assert.deepEqual([prior.total_cents,current.total_cents,current.balanceCents],[14080,40370,37370],'PORT-005 independent invoice and commitment arithmetic')
+  const before={audit:await h.api('audit',owner),proposals:await h.api('proposals',owner),invoice:current,mail:h.mails.length}
+  const questions=[
+    ['What is the total on this invoice?','total'],['Why is this invoice higher than the previous invoice?','comparison'],
+    ['How many seats were billed?','seats'],['What usage was billed?','usage'],['Which events are behind the usage charge?','events'],
+    ['How was sales tax calculated?','tax'],['Which discounts and contract credits affected this bill?','adjustments'],
+    ['Why did the minimum commitment need a true-up?','commitment'],['What do we owe after payments and credit notes?','balance'],
+    ['What saved billing terms were used?','terms'],
+  ]
+  const answers=[]
+  for(const [question,topic] of questions){
+    const answer=await read({question});answers.push(answer)
+    assert.equal(answer.topic,topic,'PORT-005 honest topic interpretation')
+    assert.equal(answer.customerId,customer);assert.equal(answer.invoiceId,invoice)
+    for(const figure of answer.figures){
+      assert.ok(figure.source.startsWith('/portal/evidence/invoices/'),'PORT-005 customer citations never grant operator access')
+      const response=await h.raw(`${figure.source}?session=${session.token}`)
+      assert.equal(response.status,200,'PORT-005 customer source is reachable')
+      const source=await response.json()
+      assert.deepEqual(pointer(source,figure.recordPath),figure.value,'PORT-005 exact typed figure resolves to its saved customer source')
+      assert.doesNotMatch(JSON.stringify(source),/CEDAR-CHK-20|Bank receipt|ap@cedar|created_by|basis_json|metadata|creditPolicy|billing_email|note|clause/,'PORT-005 sources exclude operator custody')
+    }
+    for(const citation of answer.citations)assert.equal((await h.raw(`${citation.href}?session=${session.token}`)).status,200,'PORT-005 own invoice citation reachable')
+    assert.doesNotMatch(JSON.stringify(answer),/\/app\/|\/api\/nectar\//,'PORT-005 no operator citation URL')
+    await onState({session,invoice,question,topic,answer})
+  }
+  assert.deepEqual(answers[0].figures.map(f=>f.value),[36700,3670,40370])
+  assert.equal(answers[1].comparison.totalDeltaCents,26290)
+  assert.equal(answers[1].comparison.lineDeltas.reduce((n,line)=>n+line.deltaCents,0),23900)
+  assert.ok(answers[4].figures.some(f=>f.value==='200'),'PORT-005 original event quantity is cited')
+  assert.ok(answers[8].figures.some(f=>f.value===37370),'PORT-005 actual credit/payment balance')
+  assert.equal((await read({invoice:otherInvoice},foreign.token)).customerId,otherCustomer,'PORT-005 distinct customer receives own independent answer')
+  for(const fields of [{invoice:otherInvoice},{topic:'comparison',comparison_invoice:otherInvoice},{question:'What is the total for Maple Research?'},{customer:otherCustomer},{credit_amount:'10'},{topic:'bank'},{question:'What is the upcoming invoice?'},{question:'What is the refund?',topic:'total'}])await read(fields,session.token,[otherInvoice].includes(fields.invoice)||fields.comparison_invoice||fields.question?.includes('Maple')?404:400)
+  const ownLine=current.lines[0].id,otherLine=(await h.api(`invoices/${otherInvoice}`,owner)).lines[0].id
+  for(const path of [`/portal/evidence/invoices/${otherInvoice}`,`/portal/evidence/invoices/${otherInvoice}/lines/${otherLine}`,`/portal/evidence/invoices/${invoice}/lines/${otherLine}`])assert.equal((await h.raw(`${path}?session=${session.token}`)).status,404,'PORT-005 foreign evidence denied')
+  const ownSource=await (await h.raw(`/portal/evidence/invoices/${invoice}?session=${session.token}`)).json()
+  assert.equal(ownSource.lines[0].id,ownLine)
+  for(const path of ['/portal/answers','/portal/answer',`/portal/evidence/invoices/${invoice}`])assert.equal((await h.raw(path,{cookie:owner})).status,401,'PORT-005 operator session cannot read customer answers')
+  assert.deepEqual(await h.api('audit',owner),before.audit,'PORT-005 answers and citations are write-free')
+  assert.deepEqual(await h.api('proposals',owner),before.proposals,'PORT-005 no implicit credit proposal')
+  assert.deepEqual(await h.api(`invoices/${invoice}`,owner),before.invoice)
+  assert.equal(h.mails.length,before.mail,'PORT-005 reading never sends')
+  await h.api('customer.update',owner,{customer,revision:(await h.api(`customers/${customer}`,owner)).revision,external_id:'CEDAR-ANS',name:'Cedar Analytics',billing_email:'ap@cedar.example',language:'es-US'})
+  const spanish=await read({topic:'total'})
+  assert.deepEqual(spanish.figures.map(f=>f.value),answers[0].figures.map(f=>f.value),'PORT-005 Spanish exact figures')
+  assert.match(spanish.summary,/Total original/)
+  await onState({session,invoice,question:'total',topic:'spanish',answer:spanish})
+  await h.api('portal.session.revoke',owner,{session:session.id})
+  await read({},session.token,401)
+  console.log('PORT-005 ten customer answer topics, exact safe citations, isolation, language and write-free reads passed')
+}

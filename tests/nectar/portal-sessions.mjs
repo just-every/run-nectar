@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict'
 import { createHmac } from 'node:crypto'
 import { totp } from './mfa.mjs'
+import { portalPrivacyRetention } from './portal-privacy-retention.mjs'
 import { portalCorrections } from './portal-corrections.mjs'
 
 export async function seedPortalRecords(h, owner) {
@@ -155,6 +156,7 @@ export async function portalSessionsFlow(h, owner) {
   assert.equal((await open(expiry)).status, 200)
   await h.advanceClock(new Date(expiry.expiresAt).toISOString())
   assert.equal((await open(expiry)).status, 401, 'PORT-005 expired at the exact deadline')
+  await portalPrivacyRetention(h,owner)
   await h.api('mfa.policy', owner, { scope: 'all' })
   const factor = await h.api('mfa.totp.start', owner, {})
   await h.api('mfa.totp.confirm', owner, { factor: factor.factor, code: totp(factor.secret, expiry.expiresAt) })

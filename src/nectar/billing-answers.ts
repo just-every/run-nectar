@@ -7,7 +7,7 @@ import { planInvoiceCredit } from './credit-correction'
 import { cents, plainMoney } from './decimal'
 import type { Input } from './input'
 import { answerComparison, answerInvoice, answerUsageLines, checkAnswerSubject, commitmentCitations, compareLines, figure, lineFigures, pointer,
-  type AnswerCitation, type AnswerFigure, type AnswerInvoice } from './billing-answer-sources'
+  requireAnswerRead, type AnswerReader, type AnswerCitation, type AnswerFigure, type AnswerInvoice } from './billing-answer-sources'
 
 export const ANSWER_TOPICS = ['total', 'comparison', 'seats', 'usage', 'events', 'tax', 'adjustments', 'commitment', 'balance', 'terms'] as const
 export type AnswerTopic = typeof ANSWER_TOPICS[number]
@@ -64,7 +64,7 @@ const labels: Record<AnswerTopic, string> = {
   balance: 'Recorded payments, credits, due date and remaining balance', terms: 'Terms retained in the issued calculation',
 }
 
-async function addTopic(env: Bindings, actor: Actor, record: AnswerInvoice, answer: BillingAnswer, input: Input) {
+async function addTopic(env: Bindings, actor: AnswerReader, record: AnswerInvoice, answer: BillingAnswer, input: Input) {
   const { invoice } = record, lines = invoice.lines as Row[], saved = invoice.calculation?.inputs
   const add = (label: string, value: unknown, unit: string, path: string) => answer.figures.push(figure(record, label, value, unit, path))
   const selectLines = (test: (line: Row) => boolean) => {
@@ -95,7 +95,7 @@ async function addTopic(env: Bindings, actor: Actor, record: AnswerInvoice, answ
     case 'events': {
       const evidence = await answerUsageLines(env, actor, record)
       for (const item of evidence) {
-        const source = `/api/nectar/invoices/${encodeURIComponent(invoice.id)}/lines/${encodeURIComponent(item.line.id)}`
+        const source = `${record.source}/lines/${encodeURIComponent(item.line.id)}`
         answer.citations.push({ href: `${record.href}/lines/${encodeURIComponent(item.line.id)}`, label: item.line.description })
         answer.figures.push({ label: item.line.description, value: item.line.amount_cents, unit: 'cents', source, recordPath: '/line/amount_cents' },
           { label: 'Rated line quantity', value: item.line.quantity, unit: 'units', source, recordPath: '/line/quantity' })
@@ -167,8 +167,8 @@ async function addTopic(env: Bindings, actor: Actor, record: AnswerInvoice, answ
   if (!answer.figures.length) answer.details.push('The selected issued invoice contains no saved records for this topic.')
 }
 
-export async function billingAnswer(env: Bindings, actor: Actor, input: Input): Promise<BillingAnswer> {
-  requireCapability(actor, 'read')
+export async function billingAnswer(env: Bindings, actor: AnswerReader, input: Input): Promise<BillingAnswer> {
+  requireAnswerRead(actor)
   const customer = input.text('customer', { max: 100 }), id = input.text('invoice', { max: 100 })
   const question = input.text('question', { max: 1000 })
   const record = await answerInvoice(env, actor, customer, id)

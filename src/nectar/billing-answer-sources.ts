@@ -4,7 +4,14 @@ import type { Bindings } from '../auth.server'
 import { requireCapability, type Actor } from './actor'
 import { invoiceDetail } from './billruns'
 import { all, insist, one, type Row } from './core'
-import { reportLine, type ReportLine } from './report-lines'
+import { reportLine, customerReportLine, type ReportLine } from './report-lines'
+
+import type { CustomerSession } from './portal-session'
+import { customerAnswerInvoice } from './portal-answer-data'
+
+export type AnswerReader = Actor | CustomerSession
+export const isCustomerReader = (reader: AnswerReader): reader is CustomerSession => 'jti' in reader
+export function requireAnswerRead(reader: AnswerReader) { if (!isCustomerReader(reader)) requireCapability(reader, 'read') }
 
 export interface AnswerFigure {
   label: string
@@ -30,16 +37,20 @@ export async function checkAnswerSubject(env: Bindings, customer: string, questi
   }
 }
 
-export async function answerInvoice(env: Bindings, actor: Actor, customer: string, id: string): Promise<AnswerInvoice> {
-  requireCapability(actor, 'read')
+export async function answerInvoice(env: Bindings, actor: AnswerReader, customer: string, id: string): Promise<AnswerInvoice> {
+  requireAnswerRead(actor)
   // Check the requested relationship before loading any financial detail.
   const scoped = await one(env, "SELECT id FROM nc_invoices WHERE id=? AND customer_id=? AND status='issued'", id, customer)
   insist(scoped, 'invoice_not_found', 404)
+  if (isCustomerReader(actor)) {
+    insist(customer === actor.customer, 'invoice_not_found', 404)
+    return await customerAnswerInvoice(env, actor, id)
+  }
   const invoice = await invoiceDetail(env, actor, id)
   return { invoice, source: `/api/nectar/invoices/${encodeURIComponent(id)}`, href: `/app/invoices/${encodeURIComponent(id)}` }
 }
 
-export async function answerComparison(env: Bindings, actor: Actor, current: AnswerInvoice, requested?: string): Promise<AnswerInvoice> {
+export async function answerComparison(env: Bindings, actor: AnswerReader, current: AnswerInvoice, requested?: string): Promise<AnswerInvoice> {
   const invoice = current.invoice
   insist(invoice.subscription_id, 'comparison_subscription_required', 409)
   const prior = requested || (await one(env, `SELECT id FROM nc_invoices
@@ -52,9 +63,9 @@ export async function answerComparison(env: Bindings, actor: Actor, current: Ans
   return result
 }
 
-export async function answerUsageLines(env: Bindings, actor: Actor, current: AnswerInvoice): Promise<ReportLine[]> {
+export async function answerUsageLines(env: Bindings, actor: AnswerReader, current: AnswerInvoice): Promise<ReportLine[]> {
   const lines = (current.invoice.lines as Row[]).filter(line => line.meter_id)
-  return await Promise.all(lines.map(line => reportLine(env, actor, current.invoice.id, line.id)))
+  return await Promise.all(lines.map(line => isCustomerReader(actor) ? customerReportLine(env, actor, current.invoice.id, line.id) : reportLine(env, actor, current.invoice.id, line.id)))
 }
 
 export function figure(record: AnswerInvoice, label: string, value: unknown, unit: string, recordPath: string): AnswerFigure {

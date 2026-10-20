@@ -6,6 +6,9 @@ import { customerText } from './locale'
 import { h } from './ui/html'
 import { portalHeaders, portalPage, portalStyle } from './portal-page'
 import { one } from './core'
+import { Input } from './input'
+import { portalAnswer, portalAnswersPage } from './portal-answers'
+import { customerAnswerInvoice, customerAnswerLine } from './portal-answer-data'
 import { portalPrivacy, portalPrivacyRequest } from './portal-privacy'
 
 export async function portalResponse(request: Request, env: Bindings): Promise<Response | null> {
@@ -28,18 +31,22 @@ export async function portalResponse(request: Request, env: Bindings): Promise<R
       const brand = await one(env, 'SELECT brand_color FROM nc_portal_policy WHERE singleton=1')
       return portalStyle(brand?.brand_color)
     }
+    const evidence = url.pathname.match(/^\/portal\/evidence\/invoices\/([\w-]+)(?:\/lines\/([\w-]+))?$/)
+    if (evidence) return Response.json(evidence[2] ? await customerAnswerLine(env, session, evidence[1], evidence[2]) : (await customerAnswerInvoice(env, session, evidence[1])).invoice, { headers })
+    const input = Input.of(Object.fromEntries([...url.searchParams].filter(([key])=>key!=='session')))
+    if (url.pathname === '/portal/answer') return Response.json(await portalAnswer(env,session,input), { headers })
     const invoice = url.pathname.match(/^\/portal\/invoices\/([\w-]+)$/)?.[1]
-    if (!['/portal','/portal/data','/portal/privacy'].includes(url.pathname) && !invoice) throw new NectarError('not_found', 404)
+    if (!['/portal','/portal/data','/portal/privacy','/portal/answers'].includes(url.pathname) && !invoice) throw new NectarError('not_found', 404)
     const data = await portalData(env, session, invoice), L = customerText(data.customer.language)
     if (url.pathname === '/portal/data') return Response.json(data, { headers: { ...headers, 'content-security-policy': "default-src 'none'; frame-ancestors 'none'" } })
     const token = url.searchParams.get('session')!
     const link = (path: string) => `${path}?session=${encodeURIComponent(token)}`
-    const body = url.pathname === '/portal/privacy' ? await portalPrivacy(env, session, link) : h`<header><h1>${L.t('portal.heading')}</h1><p>${data.customer.name}</p><p>${L.t('portal.readonly')}</p><a href="${link('/portal/privacy')}">${L.t('portal.privacy.heading')}</a></header>
+    const body = url.pathname === '/portal/answers' ? await portalAnswersPage(env,session,input,link) : url.pathname === '/portal/privacy' ? await portalPrivacy(env, session, link) : h`<header><h1>${L.t('portal.heading')}</h1><p>${data.customer.name}</p><p>${L.t('portal.readonly')}</p><a href="${link('/portal/privacy')}">${L.t('portal.privacy.heading')}</a></header>
       ${invoice ? h`<p><a href="${link('/portal')}">${L.t('portal.back')}</a></p>` : ''}
       ${data.invoices.length ? data.invoices.map(row => h`<section class="card"><h2>${invoice ? row.number : h`<a href="${link(`/portal/invoices/${row.id}`)}">${row.number}</a>`}</h2>
         <dl><dt>${L.t('portal.issued')}</dt><dd>${L.day(row.issue_date)}</dd><dt>${L.t('portal.due')}</dt><dd>${L.day(row.due_date)}</dd>
         <dt>${L.t('portal.total')}</dt><dd>${L.money(row.total_cents)}</dd><dt>${L.t('portal.credited')}</dt><dd>${L.money(row.credited_cents)}</dd><dt>${L.t('portal.paid')}</dt><dd>${L.money(row.paid_cents)}</dd><dt>${L.t('portal.owed')}</dt><dd>${L.money(row.balance_cents)}</dd></dl>
-        ${invoice ? h`<h3>${L.t('portal.lines')}</h3>${data.lines?.map(line => h`<p>${line.description} · ${L.money(line.amount_cents)}</p>`)}<p>${L.t('portal.subtotal')}: ${L.money(row.subtotal_cents)} · ${L.t('portal.tax')}: ${L.money(row.tax_cents)}</p>
+        ${invoice ? h`<p><a href="${link('/portal/answers')}&amp;invoice=${row.id}">${L.t('portal.answer.heading')}</a></p><h3>${L.t('portal.lines')}</h3>${data.lines?.map(line => h`<p>${line.description} · ${L.money(line.amount_cents)}</p>`)}<p>${L.t('portal.subtotal')}: ${L.money(row.subtotal_cents)} · ${L.t('portal.tax')}: ${L.money(row.tax_cents)}</p>
           ${data.credits?.map(credit => h`<p>${credit.number} · ${L.money(credit.amount_cents)} · ${credit.reason}</p>`)}${data.payments?.map(payment => h`<p>${L.t('portal.payment')} · ${L.day(payment.received_on)} · ${L.money(payment.amount_cents)}</p>`)}` : ''}</section>`) : h`<p>${L.t('portal.empty')}</p>`}`
     const response = portalPage(L.t('portal.heading'), body, { lang: L.tag, name: data.brand?.brand_name || data.merchant?.legal_name || '', style: link('/portal/theme.css') })
     const resultHeaders = new Headers(response.headers)

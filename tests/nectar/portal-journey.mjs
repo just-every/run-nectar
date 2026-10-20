@@ -11,6 +11,8 @@ import { readArchive } from '@runeditrun/rer/modules/portability'
 import { command, devKey, signIn } from './cli.mjs'
 import { seedPortalRecords } from './portal-sessions.mjs'
 import { applyPolicy } from './policy-helper.mjs'
+import { populateErasureKinds } from './erasure-record-kinds.mjs'
+import { file } from './harness.mjs'
 
 assert.equal(process.env.NECTAR_TEST_CHECKOUT, '1', 'Use a disposable fresh checkout')
 const root = process.cwd(), scratch = await mkdtemp(join(tmpdir(), 'nectar-portal-'))
@@ -19,8 +21,10 @@ await mkdir(evidence, { recursive: true })
 await access(join(root, '.dev.vars')).then(() => { throw new Error('A fresh unconfigured checkout is required') }, error => { if (error.code !== 'ENOENT') throw error })
 const socket = createServer(); await new Promise(resolve => socket.listen(0, '127.0.0.1', resolve)); const port = socket.address().port; await new Promise(resolve => socket.close(resolve))
 const origin = `http://127.0.0.1:${port}`, entry = import.meta.resolve('@runeditrun/rer/internal/global/rer.mjs').replace('file://', '')
-let server, cookie, browser
-const h = { origin, async api(path, who, body, status = 200) {
+let server, cookie, browser, completed = false
+const h = { origin, raw(path, { cookie: who, form, method = form ? 'POST' : 'GET', headers = {} } = {}) {
+  return fetch(origin + path, { method, redirect: 'manual', headers: { ...(who ? { cookie: who } : {}), ...(form ? { origin } : {}), ...headers }, body: form })
+}, async api(path, who, body, status = 200) {
   const response = await fetch(`${origin}/api/nectar/${path}`, { method: body === undefined ? 'GET' : 'POST', redirect: 'manual', headers: { cookie, ...(body === undefined ? {} : { origin, 'content-type': 'application/json' }) }, body: body === undefined ? undefined : JSON.stringify(body) })
   const text = await response.text(); assert.equal(response.status, status, `PORT-005 ${path}: ${text.slice(0,300)}`); return JSON.parse(text)
 } }
@@ -35,6 +39,11 @@ async function start() {
 async function stop() { if (!server) return; const child = server; server = null; if (child.exitCode === null) { child.kill('SIGTERM'); await new Promise(resolve => child.once('exit',resolve)) } }
 const issue = (customer, audience = 'hosted') => h.api('portal.session.issue', cookie, { customer, origin, audience, ...(audience === 'embedded' ? { parent: origin } : {}) })
 const shot = async (page, name) => { await page.waitForLoadState('load'); assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, `PORT-005 ${name} fits`); await page.screenshot({ path: join(evidence, `${page.viewportSize().width}-${name}.jpg`), fullPage: true, type: 'jpeg', quality: 82 }) }
+const archiveItems = async path => {
+  const bytes = await readFile(path), records = []
+  for await (const record of readArchive(new ReadableStream({ start(controller) { controller.enqueue(bytes); controller.close() } }))) records.push(record)
+  return records.filter(record => record.kind === 'part').flatMap(record => record.items).map(({ index, ...item }) => item)
+}
 try {
   await mkdir('exports', { recursive: true })
   const answers = 'exports/portal-answers.json'
@@ -108,4 +117,84 @@ try {
   assert.equal(response.status,200)
   assert.deepEqual((await response.json()).invoices.map(row => [row.total_cents,row.credited_cents,row.paid_cents,row.balance_cents]),[[30000,2500,10000,17500]], 'PORT-005 financial records survive and a new session sees the exact restored figures')
   console.log('PORT-005 desktop/phone customer browser and key/session exclusion plus same-key archive restore passed')
-} finally { if (browser) await browser.close(); await stop(); await rm(scratch,{ recursive:true,force:true }) }
+
+  // Repeat GOV-005 archive custody for a request originating at the customer
+  // portal, including actual imported originals and every current family.
+  const capture = Object.fromEntries(await Promise.all(['manifest','customers','products','prices','subscriptions','invoices','meters'].map(async name => [name, file(`${name}.json`, await readFile(new URL(`../fixtures/stripe/${name}.json`, import.meta.url)), 'application/json')])))
+  const preview = await h.api('import.preview', cookie, capture)
+  await h.api('import.apply', cookie, { ...capture, fingerprint: preview.fingerprint })
+  const customer = (await h.api('customers', cookie)).find(row => row.external_id === 'cus_NcAtlasFreight01')
+  assert.ok(customer, 'PORT-005 archive journey has a real imported customer')
+  const rich = await populateErasureKinds(h, cookie, customer.id)
+  await h.api('contact.add', cookie, { customer: customer.id, name: 'Portal private contact Aurelia', email: 'aurelia@portal-archive.example' })
+  await h.api('note.add', cookie, { kind: 'customer', record: customer.id, body: 'Portal private archive note' })
+  await h.api('metadata.write', cookie, { kind: 'customer', record: customer.id, revision: 0, metadata: { personal: 'Portal private archive metadata' } })
+  const privacySession = await issue(customer.id), privacyPath = `/portal/privacy?session=${encodeURIComponent(privacySession.token)}`
+  const beforeErasure = join(scratch, 'privacy-before.rer'), afterErasure = join(scratch, 'privacy-after.rer'), restored = join(scratch, 'privacy-restored.rer')
+  await stop()
+  await command(root, ['export', '--output', beforeErasure])
+  assert.ok(JSON.stringify(await archiveItems(beforeErasure)).includes('Portal private contact Aurelia'), 'PORT-005 pre-erasure archive really contains the planted contact')
+  await start()
+  browser = await chromium.launch({ headless: true, args: ['--use-mock-keychain','--password-store=basic'] })
+  const privacyPage = await browser.newPage()
+  const beforeRequests = await h.api('erasures', cookie)
+  for (const width of [1440,390]) {
+    await privacyPage.setViewportSize({ width, height: 950 })
+    assert.equal((await privacyPage.goto(origin + privacyPath)).status(), 200)
+    await shot(privacyPage, 'privacy-request')
+  }
+  await privacyPage.getByRole('button', { name: 'Request personal-data erasure' }).click()
+  await privacyPage.getByRole('heading', { name: 'Request recorded. Verification is still required.' }).waitFor()
+  const erasure = (await h.api('erasures', cookie)).find(row => !beforeRequests.some(old => old.id === row.id))
+  assert.equal(erasure.customer_id, customer.id, 'PORT-005 real customer form binds the imported customer')
+  await h.api('erasure.approve', cookie, { request: erasure.id, confirm: true }, 409)
+  const evidenceText = 'PORT-005 independently checked signed customer account records'
+  await h.api('erasure.verify', cookie, { request: erasure.id, reason: 'Billing mailbox unreachable; independently checked signed account records', evidence: file('portal-verification.txt', evidenceText, 'text/plain') })
+  assert.equal(await (await h.raw(`/app/erasures/${erasure.id}/evidence`, { cookie })).text(), evidenceText)
+  const approved = await h.api('erasure.approve', cookie, { request: erasure.id, confirm: true })
+  for (const kind of [...rich.receiptKinds, 'nc_incumbent_invoices', 'nc_portal_sessions']) assert.ok(approved.receipt.changed.some(row => row.kind === kind && row.records > 0), `PORT-005 imported customer receipt enumerates ${kind}`)
+  assert.ok(approved.receipt.importCustody.receiptId)
+  assert.equal(approved.receipt.verification.evidence.status, 'verification file withdrawn after erasure')
+  assert.equal((await h.raw(`/app/erasures/${erasure.id}/evidence`, { cookie })).status, 404)
+  assert.equal((await fetch(privacySession.url)).status, 401, 'PORT-005 erasure withdraws the real customer session')
+  await h.api('portal.session.issue', cookie, { customer: customer.id, origin, audience: 'hosted' }, 404)
+  const retainedBeforeRestore = await h.api(`customers/${customer.id}`, cookie)
+  for (const width of [1440,390]) {
+    await privacyPage.setViewportSize({ width, height: 950 })
+    assert.equal((await privacyPage.goto(privacySession.url)).status(), 401)
+    await shot(privacyPage, 'privacy-erased-session')
+  }
+  await browser.close(); browser = null
+  await stop()
+  await command(root, ['export', '--output', afterErasure])
+  const anonymized = await archiveItems(afterErasure)
+  const personalValues = [customer.billing_email, customer.address, customer.external_id, 'Portal private contact Aurelia', 'aurelia@portal-archive.example', 'Portal private archive note', 'Portal private archive metadata', evidenceText, ...rich.privateValues].filter(Boolean)
+  for (const item of anonymized) {
+    for (const value of personalValues) assert.ok(!JSON.stringify(item).includes(value), `PORT-005 archive ${item.table} withdraws personal text`)
+    if (item.kind === 'row') for (const value of Object.values(item.row)) if (value && typeof value === 'object' && value.blob) {
+      const decoded = Buffer.from(value.blob, 'base64').toString()
+      for (const personal of personalValues) assert.ok(!decoded.includes(personal), `PORT-005 archive ${item.table} withdraws personal blob bytes`)
+    }
+  }
+  assert.ok(anonymized.some(item => item.table === 'ik_d1_erasure_journal'), 'PORT-005 imported erasure has a portable custody journal')
+  assert.ok(!anonymized.some(item => item.table === 'nc_portal_sessions'), 'PORT-005 erased and unrelated runtime sessions stay out of privacy archives')
+  await command(root, ['reset', '--yes'])
+  await command(root, ['import', '--input', beforeErasure, '--journal', afterErasure, '--yes'], { refuse: true })
+  await command(root, ['import', '--input', afterErasure, '--yes'])
+  await command(root, ['export', '--output', restored])
+  assert.deepEqual(await archiveItems(restored), anonymized, 'PORT-005 post-erasure restore preserves exact anonymized records, receipts and retained financial custody')
+  await command(root, ['setup', '--answers', answers, '--non-interactive', '--port', String(port)])
+  await start()
+  assert.equal((await fetch(privacySession.url)).status, 401, 'PORT-005 privacy archive restore never resurrects customer sessions')
+  await h.api('portal.session.issue', cookie, { customer: customer.id, origin, audience: 'hosted' }, 404)
+  const restoredReceipt = (await h.api('erasures', cookie)).find(row => row.id === erasure.id)
+  assert.deepEqual(JSON.parse(restoredReceipt.receipt_json), approved.receipt, 'PORT-005 operator receipt survives the real anonymized restore')
+  assert.deepEqual(await h.api(`customers/${customer.id}`, cookie), retainedBeforeRestore, 'PORT-005 restored customer retains exact anonymous financial records')
+  console.log('PORT-005 populated customer privacy request, full erasure archive, old-archive refusal and anonymous financial restore passed')
+  completed = true
+} finally {
+  if (browser) await browser.close()
+  await stop()
+  if (completed) await rm(scratch, { recursive: true, force: true })
+  else console.error(`PORT-005 failure evidence retained in ${scratch}`)
+}
