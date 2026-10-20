@@ -3429,7 +3429,7 @@
       "executable": false
     },
     "tests/nectar/usage-replay.mjs": {
-      "sha256": "ee66d93886ee4a28b0b2b6e9dff25c9859c17b4b8c88a358c1e6017d19b40faa",
+      "sha256": "0947b838ca1be5735ba0e5adb8e56a57de126b2869c9261816fe1bb371f100ca",
       "executable": false
     },
     "tests/runtime.mjs": {
