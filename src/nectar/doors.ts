@@ -26,6 +26,7 @@ export const API_DOORS: [string, string][] = [
 export const LIST_DOORS = ['erasures', 'noteMembers', 'customers', 'batches', 'runs', 'payments', 'notices', 'tasks', 'policies', 'proposals', 'imports', 'shadow', 'members', 'credentials', 'audit', 'metadataObjects', 'notes']
 
 export const PAGE_DOORS: [string, string][] = [
+  ['^/app/usage/replay$', 'usageReplay'],
   ['^/app/erasures$','erasures'],
   ['^/app/erasures/([\\w-]+)/evidence$','erasureEvidence'],
   ['^/app/revenue$','revenue'], ['^/app/revenue/([\\w-]+)$','revenueSource'], ['^/app/exports/revenue\\.csv$','revenueCsv'],

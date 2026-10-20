@@ -545,6 +545,13 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "expected_quantity": "text",
     "meter": "text"
   },
+  "usage.correction.preview": {
+    "add_event_ids": "list",
+    "from_period": "text",
+    "subscription": "text",
+    "through_period": "text",
+    "void_event_ids": "list"
+  },
   "usage.submit": {
     "events": "json",
     "file": "file"

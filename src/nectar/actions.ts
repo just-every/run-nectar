@@ -1,3 +1,4 @@
+import { previewUsageCorrection } from './usage-replay'
 import { requestErasure, verifyErasureOtherwise } from './erasure-requests'
 import { approveErasure } from './erasure'
 import { purgeErasure } from './erasure-purge'
@@ -128,6 +129,7 @@ export const actions: Record<string, Handler> = {
   'amendment.decide': decideAmendment,
   'change.prepare': prepareChange,
   'change.decide': decideChange,
+  'usage.correction.preview': previewUsageCorrection,
   'usage.submit': submitUsage,
   'usage.control': recordControl,
   'usage.acknowledge': acknowledgeControl,

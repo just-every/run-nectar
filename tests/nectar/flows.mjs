@@ -51,6 +51,7 @@ await runIsolated('price-migrations','priceMigrations')
 await runIsolated('commitments','commitments')
 await runIsolated('metrics','metricsFlow')
 await runIsolated('metric-zones','metricZones')
+await runIsolated('usage-replay','usageReplayFlow')
 const h = await harness()
 const check = async (id, run) => { await run(); console.log(`${id} passed`) }
 const ids = {}, cookie = {}
@@ -376,7 +377,9 @@ try {
     const metricPreview = await h.api('meter.prepare', cookie.owner, { code:'role-preview', name:'Role preview', unit_label:'events', source_meter:ids.meter, definition:{ aggregation:'count' } })
     assert.ok(ACTIONS.length > 30)
     for (const name of ACTIONS) {
-      if (name === 'answer.read') {
+      if (name === 'usage.correction.preview') {
+        await h.api(name,cookie.accountant,{},400)
+      } else if (name === 'answer.read') {
         const answer = await h.api(name,cookie.accountant,{customer:ids.northwind,invoice:ids.julyNorthwind,question:'What is the invoice total?'})
         assert.equal(answer.invoiceId,ids.julyNorthwind,'AGENT-007 accountant reads cited invoice answers')
       } else if (name === 'report.schedule') {
