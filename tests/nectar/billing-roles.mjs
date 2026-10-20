@@ -250,4 +250,5 @@ export async function billingRolesFlow(h, owner) {
   assert.equal((await h.api('policies/current', owner)).supportLimitCents, 75000)
   // "Chosen roles" now defaults to every role that can credit or manage credentials.
   assert.deepEqual((await h.api('mfa.policy', owner, { scope: 'roles' })).roles, ['developer', 'finance', 'owner', 'support'])
+  console.log('GOV-001 preset and custom roles reach exactly their capabilities, support credit limit, next-request revocation, notes, alerts, metadata and answers passed')
 }

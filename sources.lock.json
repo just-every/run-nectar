@@ -69,7 +69,7 @@
       "executable": false
     },
     "API.md": {
-      "sha256": "592e8479951313655176d241fa2d4270325cd6d63bd286564f60418a075cd217",
+      "sha256": "acd82a50e3e0d4a49b747cc79a51a47369518679ec4771e5ffe4237ffb9e2c98",
       "executable": false
     },
     "base-copies.json": {
@@ -2485,7 +2485,7 @@
       "executable": false
     },
     "src/nectar/doors.ts": {
-      "sha256": "058094c0c599e70339c309000984bcbfd271d016217686a79e8a028439615cac",
+      "sha256": "682896ec1921a80c4c4252d7243bb1e0fd4b6840eb7845cce590869cbdd66203",
       "executable": false
     },
     "src/nectar/draft-correction-mail.ts": {
@@ -3281,7 +3281,7 @@
       "executable": false
     },
     "tests/nectar/billing-roles.mjs": {
-      "sha256": "4f8ae0b0afb501f4823916910094693098ad74298085039e160eb3e9acc74f06",
+      "sha256": "0a8bbd91e17115eeb3cdb9faafea4e9d895172db69ac15ddfbbbf99bf3d15d6a",
       "executable": false
     },
     "tests/nectar/cadences.mjs": {
