@@ -3317,7 +3317,7 @@
       "executable": false
     },
     "tests/nectar/harness.mjs": {
-      "sha256": "a0d3e8d34f605b7a16396d795901e3e77ec7e54fed8ff21520e3dd299a0d8386",
+      "sha256": "c2a475749ce95074387efd854a511ab985592f898fd9e9b97280c5012636ac6f",
       "executable": false
     },
     "tests/nectar/invoice-pagination.mjs": {
@@ -3413,7 +3413,7 @@
       "executable": false
     },
     "tests/nectar/portal-embedding.mjs": {
-      "sha256": "f26fa282a09092416022d3ac5595b7c5d9ee855c8a31649d6abb196b422c93ba",
+      "sha256": "e4a99c0ad0fbe7c0950fb3ee0e21cc5dd1f9ff20041e842f0aeec819f94bdc4e",
       "executable": false
     },
     "tests/nectar/portal-journey.mjs": {
