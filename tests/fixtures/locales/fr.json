@@ -86,5 +86,12 @@
   "correction.term.credit": "Crédit contractuel unique : {amount}",
   "correction.term.override": "Prix unitaire modifié : {amount} pour le prix {price}",
   "correction.term.window": "{term} ; en vigueur du {from} au {to} (date de fin exclue).",
-  "correction.term.open": "{term} ; en vigueur à partir du {from}, sans date de fin enregistrée."
+  "correction.term.open": "{term} ; en vigueur à partir du {from}, sans date de fin enregistrée.",
+  "erasure.mail.subject": "Confirmez votre demande d’effacement de données personnelles",
+  "erasure.mail.body": "Une demande d’effacement de données personnelles a été enregistrée. Confirmez uniquement si vous l’avez demandée. Ce lien expire dans sept jours. La confirmation n’efface aucun enregistrement ; le propriétaire doit l’approuver.\n{link}",
+  "erasure.confirm.title": "Confirmez la demande d’effacement",
+  "erasure.confirm.body": "Confirmez que vous avez demandé l’effacement de vos données personnelles. Le propriétaire doit approuver la demande avant toute modification. Les documents financiers minimaux sont conservés pendant sept ans.",
+  "erasure.confirm.button": "Confirmer ma demande",
+  "erasure.unavailable": "Ce lien de confirmation n’est plus disponible",
+  "erasure.verified": "Demande vérifiée. Le propriétaire peut maintenant l’examiner."
 }
