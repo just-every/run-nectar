@@ -27,7 +27,7 @@ export async function usageReplayFlow(h, owner) {
   const issued = []
   for (const period of ['2020-01', '2020-02']) {
     const run = await api('billrun.prepare', { period })
-    const invoice = (await api(`runs/${run.id}`)).invoices.find(i => i.subscription_id === subscription)
+    const invoice = (await api(`runs/${run.id}`)).invoices.find(i => i.customer_id === customer)
     await api('invoice.approve', { invoice: invoice.id, acknowledge: true })
     await api('invoice.finalise', { invoice: invoice.id, issue_date: invoice.period_end })
     issued.push(await api(`invoices/${invoice.id}`))
@@ -63,7 +63,7 @@ export async function usageReplayFlow(h, owner) {
   assert.deepEqual((await api('usage.correction.preview', { ...body, add_event_ids: [late.event_id] })), replay, 'USE-004 unchanged sources give identical fingerprints and complete replay')
   assert.deepEqual(await snapshot(), beforeReplay, 'USE-004 replay does not consume late events or change issued inputs')
   const run = await api('billrun.prepare', { period: '2020-03' })
-  const blocked = (await api(`runs/${run.id}`)).invoices.find(i => i.subscription_id === subscription)
+  const blocked = (await api(`runs/${run.id}`)).invoices.find(i => i.customer_id === customer)
   assert.ok((await api(`invoices/${blocked.id}`)).exceptions.some(e => e.code === 'metric_late_correction'), 'USE-004 unresolved correction keeps the issue block')
   await api('invoice.approve', { invoice: blocked.id, acknowledge: true }, 409)
 
@@ -105,7 +105,7 @@ export async function usageReplayFlow(h, owner) {
   const bulk = Array.from({ length: 10000 }, (_, i) => ({ event_id: `use004-bulk-${i}`, customer: 'USE004-FOREIGN', meter: bulkSource.code, quantity: '1', occurred_at: '2020-07-10T00:00:00Z' }))
   for (let i = 0; i < bulk.length; i += 5000) assert.equal((await api('usage.submit', { events: bulk.slice(i, i + 5000) })).accepted, 5000)
   const bulkRun = await api('billrun.prepare', { period: '2020-07' })
-  const bulkInvoice = (await api(`runs/${bulkRun.id}`)).invoices.find(i => i.subscription_id === bulkSub)
+  const bulkInvoice = (await api(`runs/${bulkRun.id}`)).invoices.find(i => i.customer_id === foreign)
   await api('invoice.approve', { invoice: bulkInvoice.id, acknowledge: true })
   await api('invoice.finalise', { invoice: bulkInvoice.id, issue_date: '2020-08-01' })
   const savedBulk = await api(`invoices/${bulkInvoice.id}`)
