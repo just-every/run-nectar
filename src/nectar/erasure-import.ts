@@ -1,7 +1,7 @@
 import type { Bindings } from '../auth.server'
 import { retireD1ImportCustody, type D1ImportContext, type D1Sql, type D1TargetAdapter, type Json } from '../modules/import-kit/src/d1/index'
 import { requireOwner, type Actor } from './actor'
-import { insist, type Row } from './core'
+import { insist, NectarError, type Row } from './core'
 import { nectarTargets } from './movein/target'
 
 /** Exact leaves, including object keys, cover expanded Stripe customer objects
@@ -72,6 +72,10 @@ export async function eraseImportCopies(env: Bindings, actor: Actor, customer: R
       // Invalid custody must abort, rather than leave an unexamined copy.
       original: bytes => holdsIdentity(JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)), personalValues),
     },
-  }, [selectionGuard, ...nativeStatements], context, checkpoint)
+  }, [selectionGuard, ...nativeStatements], context, checkpoint).catch(error=>{
+    const message=error instanceof Error?error.message:String(error)
+    if(/IMPORT_ATOMIC_GUARD|nectar_guard_/.test(message))throw new NectarError('erasure_source_changed',409)
+    throw error
+  })
   return { ...result, nativeResults: result.nativeResults.slice(1) }
 }

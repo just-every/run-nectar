@@ -2449,7 +2449,7 @@
       "executable": false
     },
     "src/nectar/erasure-import.ts": {
-      "sha256": "1498d4f84c9b4b64c860a48d75a1770d0543ae01268f23120765c727a42e127d",
+      "sha256": "43605e1d0aea7d8cf231d470e1cecd5f1d2d02bfac69074b96e7e16c712bf1c6",
       "executable": false
     },
     "src/nectar/erasure-public.ts": {
@@ -2473,7 +2473,7 @@
       "executable": false
     },
     "src/nectar/erasure.ts": {
-      "sha256": "458b70ca22bda71ee373434e4882487712be9caaab82a12fe92891d09a15e822",
+      "sha256": "baacaf8e34b198c5f108aed252675bfd01b0cd155a9e1be96635c5905c6d6248",
       "executable": false
     },
     "src/nectar/exports.ts": {
@@ -3177,7 +3177,7 @@
       "executable": false
     },
     "tests/nectar/erasure.mjs": {
-      "sha256": "89fb3b8b47b8df8eddb55d82ef84ebbff9a78e273838078b1be44d8975ffdc3f",
+      "sha256": "7045a3d9499c99ff48a6900c34f1f8399a1e29cc64439c2c9d953fa3aa05ec63",
       "executable": false
     },
     "tests/nectar/financial-reports.mjs": {

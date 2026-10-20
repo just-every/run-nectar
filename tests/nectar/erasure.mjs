@@ -155,6 +155,9 @@ export async function erasureFlow(h, owner, onState = async () => {}) {
   const altInvoice=(await h.api('invoice.manual',owner,{customer:alternate,charges:[altCharge],service_date:'2026-02-09'})).id
   await h.api('invoice.approve',owner,{invoice:altInvoice,acknowledge:true})
   await h.api('invoice.finalise',owner,{invoice:altInvoice,issue_date:'2026-02-09'})
+  const creditReason='private-credit-GOV005'
+  const altCredit=await h.api('credit.issue',owner,{invoice:altInvoice,amount:'5',reason:creditReason})
+  const altBefore=await h.api(`invoices/${altInvoice}`,owner)
   const alt = await h.api('erasure.request', owner, { customer: alternate })
   const spanishMail = h.mails.at(-1), spanishPath = linkOf(spanishMail)
   assert.ok(spanishMail.text.includes('eliminación'))
@@ -182,6 +185,11 @@ export async function erasureFlow(h, owner, onState = async () => {}) {
   for (const who of [finance, accountant]) assert.equal((await h.raw(evidencePath, { cookie: who })).status, 403)
   assert.equal((await h.raw(spanishPath, { form: new URLSearchParams({ confirm: 'yes' }) })).status, 404, 'GOV-005 owner verification consumes the former email token')
   const altApproved = await h.api('erasure.approve', owner, { request: alt.id, confirm: true })
+  assert.equal(altApproved.receipt.retained.creditRecords,1,'GOV-005 credit notes retain their minimal financial custody too')
+  assert.ok(altApproved.receipt.changed.some(r=>r.kind==='nc_credit_notes'),'GOV-005 credit personal text is enumerated in the receipt')
+  const altAfter=await h.api(`invoices/${altInvoice}`,owner)
+  assert.ok(!JSON.stringify(altAfter).includes(creditReason),'GOV-005 the credit reason is erased')
+  assert.deepEqual(altAfter.credits.map(r=>[r.id,r.number,r.amount_cents,r.issued_at]),altBefore.credits.map(r=>[r.id,r.number,r.amount_cents,r.issued_at]),'GOV-005 credit identifiers, amounts and dates remain exact')
   assert.equal(altApproved.receipt.verification.method, 'owner-evidence')
   assert.equal(altApproved.receipt.verification.reason, verified.verification_reason)
   assert.equal(altApproved.receipt.verification.evidence.sha256, verified.evidence_sha256)
@@ -205,9 +213,10 @@ export async function erasureFlow(h, owner, onState = async () => {}) {
   assert.deepEqual((await h.api('erasure.purge', owner, {})).removed, [], 'GOV-005 repeated removal is harmless and produces no duplicate removal')
   assert.ok((await h.api('audit',owner)).some(row=>row.action==='erasure.financial.remove'&&row.subject===request.id),'GOV-005 the daily removal is audited against the original approved request')
   await h.api(`invoices/${altInvoice}`,owner)
-  await h.advanceClock('2033-02-09T16:00:00Z')
+  await h.advanceClock(`${altApproved.receipt.retained.until}T16:00:00Z`)
   assert.ok((await h.api('erasure.purge',owner,{})).removed.includes(alt.id),'GOV-005 the owner can manually remove a second due financial group')
   await h.api(`invoices/${altInvoice}`,owner,undefined,404)
+  assert.ok(!(await h.api(`customers/${alternate}`,owner)).ledger.credits.some(r=>r.id===altCredit.credit),'GOV-005 due removal deletes retained credit notes too')
   await onState({ h, owner, customer, request: request.id, path: '/app/erasures', label: 'financial-removal' })
   console.log('GOV-005 verified owner erasure, alternative evidence, roles, personal-data removal and seven-year financial retention passed')
 }
