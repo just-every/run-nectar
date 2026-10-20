@@ -44,6 +44,9 @@ export async function portalResponse(request: Request, env: Bindings): Promise<R
     const response = portalPage(L.t('portal.heading'), body, { lang: L.tag, name: data.brand?.brand_name || data.merchant?.legal_name || '', style: link('/portal/theme.css') })
     const resultHeaders = new Headers(response.headers)
     Object.entries(headers).forEach(([key,value]) => resultHeaders.set(key,value))
+    // Match the ordinary erasure confirmation page: origin-only referrers let
+    // native POST forms supply Origin without ever disclosing the session URL.
+    if (url.pathname === '/portal/privacy') resultHeaders.set('referrer-policy', 'strict-origin')
     resultHeaders.set('content-security-policy', `default-src 'none'; style-src 'self'; font-src 'self'; img-src 'self'; form-action 'self'; frame-ancestors ${session.audience === 'embedded' ? session.parent : "'none'"}; base-uri 'none'`)
     return new Response(request.method === 'HEAD' ? null : response.body, { headers: resultHeaders })
   } catch (error) {

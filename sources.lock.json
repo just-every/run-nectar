@@ -69,7 +69,7 @@
       "executable": false
     },
     "API.md": {
-      "sha256": "500bf25e3f3e3f8f662479a1feb645db98c5c7c68191b244e439130b8d47cede",
+      "sha256": "9821976d905d9d423aca8fc27639613ec083b79452ad17a02ce2285c4b106cda",
       "executable": false
     },
     "base-copies.json": {
@@ -2701,7 +2701,7 @@
       "executable": false
     },
     "src/nectar/portal-http.ts": {
-      "sha256": "824bf70ff44057d6903fc3007c2c254c7cc895e4d3158e0e89ed29375f897c72",
+      "sha256": "04dc08686b8d0ee8a3aa3f90a33f8c472caf40320b36f5f20000b444b7ecbbba",
       "executable": false
     },
     "src/nectar/portal-page.ts": {
