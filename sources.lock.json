@@ -3449,11 +3449,11 @@
       "executable": false
     },
     "tests/nectar/portal-journey.mjs": {
-      "sha256": "3f74c356dd6f72eec0485979553a87585eaf3d0105855af56876e1b92fb1e5fc",
+      "sha256": "21c0d4396fe47e69f1ec89e8ab4f2d5dea30c44d89ee000f35439111061bc0ab",
       "executable": false
     },
     "tests/nectar/portal-privacy-retention.mjs": {
-      "sha256": "4c0cd208c59d3e0f9c6fd0f2559ee5fb10bc9f47d9d1a320dca0f4a5511c58c4",
+      "sha256": "63a2124fae9312e5d5cc2deff5875fa2fc16468038c61eb3fa926231ab68a84b",
       "executable": false
     },
     "tests/nectar/portal-sessions.mjs": {

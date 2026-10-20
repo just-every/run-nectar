@@ -21,9 +21,11 @@ await mkdir(evidence, { recursive: true })
 await access(join(root, '.dev.vars')).then(() => { throw new Error('A fresh unconfigured checkout is required') }, error => { if (error.code !== 'ENOENT') throw error })
 const socket = createServer(); await new Promise(resolve => socket.listen(0, '127.0.0.1', resolve)); const port = socket.address().port; await new Promise(resolve => socket.close(resolve))
 const origin = `http://127.0.0.1:${port}`, entry = import.meta.resolve('@runeditrun/rer/internal/global/rer.mjs').replace('file://', '')
-let server, cookie, browser, completed = false
+let server, cookie, browser, runtimeOrigin, completed = false
 const h = { origin, raw(path, { cookie: who, form, method = form ? 'POST' : 'GET', headers = {} } = {}) {
-  return fetch(origin + path, { method, redirect: 'manual', headers: { ...(who ? { cookie: who } : {}), ...(form ? { origin } : {}), ...headers }, body: form })
+  const scheduled=path.startsWith('/cdn-cgi/local/scheduled')
+  assert.ok(!scheduled||runtimeOrigin,'PORT-005 rer dev exposes its owned runtime transport for provider Cron')
+  return fetch((scheduled?runtimeOrigin:origin) + (scheduled?path.replace('/cdn-cgi/local/scheduled','/cdn-cgi/handler/scheduled'):path), { method, redirect: 'manual', headers: { ...(who ? { cookie: who } : {}), ...(form ? { origin } : {}), ...headers }, body: form })
 }, async api(path, who, body, status = 200) {
   const response = await fetch(`${origin}/api/nectar/${path}`, { method: body === undefined ? 'GET' : 'POST', redirect: 'manual', headers: { cookie, ...(body === undefined ? {} : { origin, 'content-type': 'application/json' }) }, body: body === undefined ? undefined : JSON.stringify(body) })
   const text = await response.text(); assert.equal(response.status, status, `PORT-005 ${path}: ${text.slice(0,300)}`); return JSON.parse(text)
@@ -33,6 +35,7 @@ async function start() {
   let output = ''; for (const stream of [child.stdout,child.stderr]) stream.on('data', bytes => { output += bytes })
   server = child
   for (let attempt = 0; !output.includes('RER_READY'); attempt++) { assert.equal(child.exitCode, null, 'PORT-005 dev remains running: ' + output.replace(/RER_OPEN [^\n]+/g, 'RER_OPEN [redacted]').replace(/(token=|rer-dev=|RER_DEV_KEY=|PORTAL_KEY=)[^&\s"']+/g, '$1[redacted]').slice(-3500)); assert.ok(attempt < 1200, 'PORT-005 dev becomes ready'); await new Promise(resolve => setTimeout(resolve,250)) }
+  runtimeOrigin=output.replace(/\x1b\[[0-9;]*m/g,'').match(/Local:\s+(http:\/\/127\.0\.0\.1:\d+)/)?.[1]
   cookie = await signIn(origin, await devKey(root))
   await fetch(origin + '/setup', { method: 'POST', redirect: 'manual', headers: { cookie, origin, 'content-type': 'application/x-www-form-urlencoded' }, body: 'confirm=yes' })
 }
@@ -92,6 +95,10 @@ try {
   }
   await browser.close(); browser = null
   console.log('PORT-005 desktop/phone browser states passed')
+  const pendingResponse=await h.raw(`/portal/answer-proposal?session=${session.token}`,{form:new URLSearchParams({invoice:invoice.id,question:'What is the total?',credit_amount:'5',reason:'Customer-requested service review'})})
+  assert.equal(pendingResponse.status,303,'PORT-005 customer proposal prepares without issuing a credit')
+  const pendingId=new URL(pendingResponse.headers.get('location'),origin).pathname.split('/').at(-1)
+  assert.equal((await h.api(`proposals/${pendingId}`,cookie)).created_by_kind,'customer')
   await stop()
   const archive = join(scratch,'portal.rer')
   await command(root,['export','--output',archive])
@@ -112,6 +119,9 @@ try {
   await writeFile('.dev.vars', restoredVars.replace(/^PORTAL_KEY=.*$/m, `PORTAL_KEY=${key}`), { mode:0o600 })
   await start()
   assert.equal((await fetch(session.url)).status,401, 'PORT-005 restore under same key does not resurrect session custody')
+  const restoredProposal=await h.api(`proposals/${pendingId}`,cookie)
+  assert.equal(restoredProposal.status,'pending')
+  assert.equal(restoredProposal.created_by_kind,'customer','PORT-005 archives preserve honest customer provenance and pending human approval')
   const fresh = await issue(customers[0])
   const response = await fetch(`${origin}/portal/data?session=${encodeURIComponent(fresh.token)}`)
   assert.equal(response.status,200)

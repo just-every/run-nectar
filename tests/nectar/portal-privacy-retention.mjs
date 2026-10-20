@@ -38,6 +38,10 @@ export async function portalPrivacyRetention(h, owner) {
   await api('invoice.approve', { invoice, acknowledge: true })
   await api('invoice.finalise', { invoice, issue_date: '2026-01-05' })
   const payment = (await api('payment.record', { customer, amount: '120', received_on: '2026-01-20', method: 'bank_transfer', reference: privateValues[4], evidence: privateValues[1] })).payment
+  const proposedSession=await issue(customer)
+  const pendingResponse=await h.raw(`/portal/answer-proposal?session=${proposedSession.token}`,{body:{invoice,question:'What is the total?',credit_amount:'5',reason:'Private portal credit request'}})
+  assert.equal(pendingResponse.status,200)
+  const pendingCustomerProposal=(await pendingResponse.json()).id
   await api('payment.allocate', { payment, invoice, amount: '120' })
   const rich = await populateErasureKinds(h, owner, customer)
   const before = await api(`customers/${customer}`), original = await api(`invoices/${invoice}`)
@@ -91,6 +95,8 @@ export async function portalPrivacyRetention(h, owner) {
     for (const value of [...privateValues, before.name]) assert.ok(!text.includes(value), `PORT-005 ${path} withdraws personal identity`)
   }
   await api(`proposals/${rich.sourceProposal}`, undefined, 410)
+  await api(`proposals/${pendingCustomerProposal}`, undefined, 410)
+  assert.ok(!JSON.stringify(await api('proposals')).includes('Private portal credit request'),'PORT-005 erasure also withdraws customer-authored pending proposal text')
   assert.equal((await h.raw(rich.renewalPath)).status, 404)
   assert.equal((await portal(session)).status, 401)
   assert.equal((await portal(session, '/portal/privacy')).status, 401)
