@@ -489,7 +489,7 @@ Every capability claim on the owner-approved homepage (`src/site/homepage/`, des
 | 56 | Month-end | Stripe payouts · 6 · amounts + fees | `PAY-004` | missing |
 | 57 | Month-end | QuickBooks Online · 212 invoices · 209 payments · 0 errors | `BOOK-001` | missing |
 | 58 | Month-end | Sales tax · 14 states · report ready to file | `TAX-003` | missing |
-| 59 | Month-end | Deferred revenue $96,000 → $88,000 | `REV-001` | done |
+| 59 | Month-end | Deferred revenue $96,000 → $88,000 | `CAT-001`, `CAT-004` | partial |
 | 60 | Month-end | "1 break found … missing in QuickBooks → synced" | `AGENT-008`, `BOOK-001` | missing |
 | 61 | Month-end | MRR $171,500 → $178,230 with expansion and churn | `RPT-001` | partial |
 | 62 | Month-end | Open · 3 invoices · Net 60 · due Mon Nov 30 | `NEC-12`, `INV-004` | partial |
