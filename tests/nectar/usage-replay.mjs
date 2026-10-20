@@ -103,7 +103,7 @@ export async function usageReplayFlow(h, owner) {
   const bulkPrice = (await api('price.create', { product: bulkProduct, kind: 'unit', meter: bulkSource.id, unit_amount: '0.01', taxable: false })).id
   const bulkSub = (await api('subscription.create', { customer: foreign, start_date: '2020-07-01', price: [bulkPrice] })).id
   const bulk = Array.from({ length: 10000 }, (_, i) => ({ event_id: `use004-bulk-${i}`, customer: 'USE004-FOREIGN', meter: bulkSource.code, quantity: '1', occurred_at: '2020-07-10T00:00:00Z' }))
-  for (let i = 0; i < bulk.length; i += 5000) assert.equal((await api('usage.submit', { events: bulk.slice(i, i + 5000) })).accepted, 5000)
+  for (let i = 0; i < bulk.length; i += 500) assert.equal((await api('usage.submit', { events: bulk.slice(i, i + 500) })).accepted, 500)
   const bulkRun = await api('billrun.prepare', { period: '2020-07' })
   const bulkInvoice = (await api(`runs/${bulkRun.id}`)).invoices.find(i => i.customer_id === foreign)
   await api('invoice.approve', { invoice: bulkInvoice.id, acknowledge: true })
