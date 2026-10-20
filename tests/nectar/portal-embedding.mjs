@@ -25,7 +25,7 @@ export async function portalEmbeddingFlow(h, owner) {
         const response = origin === portalOrigin ? await h.dispatch(request) : [appOrigin,appOrigin.replace('app.','other.')].includes(origin) ? await app(request) : new Response(null,{status:404})
         outgoing.writeHead(response.status,Object.fromEntries(response.headers))
         outgoing.end(Buffer.from(await response.arrayBuffer()))
-      } catch { outgoing.writeHead(500);outgoing.end('Local HTTPS transport failed') }
+      } catch(error) { console.error('PORT-005 HTTPS transport:',String(error.message).replace(/session=[^&\s]+/g,'session=[redacted]'));outgoing.writeHead(500);outgoing.end('Local HTTPS transport failed') }
     })
     await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve))
     const port = server.address().port
@@ -44,6 +44,7 @@ export async function portalEmbeddingFlow(h, owner) {
       await h.advanceClock('2026-10-21T09:00:00Z')
       await page.setViewportSize({width,height:844})
       hosted=await issue(customers[0],'hosted');embedded=await issue(customers[0],'embedded');active=embedded
+      assert.equal((await h.dispatch(new Request(hosted.url))).status,200,'PORT-005 branded request dispatch preserves its public origin')
       await page.goto(appOrigin+'/billing')
       const frame=page.frameLocator('iframe')
       await frame.getByRole('heading',{name:'Billing overview',exact:true}).waitFor()

@@ -161,5 +161,5 @@ export async function portalSessionsFlow(h, owner) {
   const fresh = await issue()
   await h.advanceClock(new Date(expiry.expiresAt + 16 * 60 * 1000).toISOString())
   for (const [action, body] of [['portal.configure', { hosts: [h.origin], parents: [] }], ['portal.session.issue', { customer: customers[0], origin: h.origin, audience: 'hosted' }], ['portal.session.revoke', { session: fresh.id }]]) assert.equal((await h.api(action, owner, body, 403)).error, 'mfa_step_up_required', `PORT-005 fresh-factor custody for ${action}`)
-  console.log('PORT-005 round A signed customer/audience/host sessions, own issued figures, owner allowlists, parent CSP, revocation and expiry passed')
+  console.log('PORT-005 signed customer sessions, own figures, credit correction parity, customer privacy custody, allowlists, revocation and expiry passed')
 }
