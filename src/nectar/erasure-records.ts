@@ -1,0 +1,83 @@
+import { redactShared,redactSnapshotCsv } from './erasure-snapshots'
+// Inventory actual rows and fence their exact images before privacy writes.
+// Only opaque relationships, typed financial facts and dates survive on a
+// customer's rows. Free text, arbitrary JSON and file bytes do not.
+import type { Bindings } from '../auth.server'
+import { all, type Row } from './core'
+import type { D1Sql } from '../modules/import-kit/src/d1/index'
+
+const quote = (name: string) => `"${name.replaceAll('"', '""')}"`
+const relation = new Set(['customer_id','subscription_id','invoice_id','payment_id','proposal_id','credit_id','record_id','subject','related_id','term_id','offer_id','contract_id','note_id'])
+const keep = new Set(['number','kind','status','origin','language','currency','method','billing_mode','invoice_kind','calc_version','version','revision','quantity','unit_amount','value','tax_rate','tax_mode','tax_jurisdiction','anchor_day','billing_interval','access','scope','scopes','pricing_model','action','state','approval_mode','mail_status','verified_method','event','created_by_kind','source','proposal_kind'])
+const reserved = new Set(['nc_erased_records','nc_guard','nc_privacy_generation','nc_privacy_context','nc_erasure_requests','nc_erasure_financial','nc_business','nc_members','nc_agent_keys'])
+const keyed = (value: unknown, ids: Set<string>): boolean => typeof value === 'string' ? ids.has(value) : Array.isArray(value) ? value.some(v => keyed(v, ids)) : !!value && typeof value === 'object' && Object.values(value).some(v => keyed(v, ids))
+const json = (text: unknown) => { try { return JSON.parse(String(text)) } catch { return null } }
+const blankJson = (value: string) => Array.isArray(json(value)) ? '[]' : '{}'
+interface Image { table: string; row: Row; key: Row; required: Set<string>; scoped: boolean }
+export interface ErasurePlan { generation:number; personalValues:string[]; statements: D1Sql[]; changes: { kind: string; fields: string[]; records: number }[]; ids: string[] }
+export async function erasurePlan(env: Bindings, customer: Row): Promise<ErasurePlan> {
+  const generation = Number((await all(env,'SELECT value FROM nc_privacy_generation WHERE id=1'))[0].value)
+  const tables = await all(env, `SELECT name FROM sqlite_master WHERE type='table' AND name GLOB 'nc_*' ORDER BY name`)
+  const images: Image[] = [], ids = new Set<string>([customer.id,...(await all(env,'SELECT id FROM nc_erasure_requests WHERE customer_id=?',customer.id)).map(r=>r.id)])
+  for (const { name } of tables) {
+    if (reserved.has(name)) continue
+    const columns = await all(env, `PRAGMA table_info(${quote(name)})`)
+    const keys = columns.filter(c => c.pk).sort((a,b) => a.pk-b.pk).map(c => c.name)
+    for (const row of await all(env, `SELECT * FROM ${quote(name)}`)) images.push({ table: name, row, key: Object.fromEntries(keys.map(k => [k,row[k]])), required: new Set(columns.filter(c=>c.notnull).map(c=>c.name)), scoped: name === 'nc_customers' && row.id === customer.id })
+  }
+  // Discover record relationships to a fixed point, including proposal payloads
+  // which name their customer rather than having a foreign-key column.
+  for (let changed = true; changed;) {
+    changed = false
+    for (const image of images) {
+      if (image.table === 'nc_audit' || image.table === 'nc_bill_runs' || image.table === 'nc_report_deliveries') continue
+      const owns = image.scoped || Object.entries(image.row).some(([k,v]) => relation.has(k) && typeof v === 'string' && ids.has(v)) || (image.table === 'nc_proposals' && keyed(json(image.row.payload_json),ids))
+      if (!owns) continue
+      if (!image.scoped) { image.scoped = true; changed = true }
+      if (image.row.id && !ids.has(image.row.id)) { ids.add(image.row.id); changed = true }
+    }
+  }
+  const memberIds=new Map((await all(env,'SELECT id,email FROM nc_members')).map(r=>[r.email,r.id]))
+  const privateText=images.filter(i=>i.scoped).flatMap(({row,key})=>Object.entries(row).filter(([column,value])=>typeof value==='string' && value.length && !memberIds.has(value) && !/(?:_by|_by_kind)$/.test(column) && column!=='prepared_name' && !(column in key) && !column.endsWith('_json') && column!=='detail' && !(column.endsWith('_id') && !['external_id','event_id'].includes(column)) && !keep.has(column) && !/(?:_at|_on|_date|_from|_to|_start|_end)$/.test(column)).map(([,value])=>value))
+  const personal = [...privateText,customer.name,customer.billing_email,customer.address,customer.external_id,customer.provider_ref,customer.tax_exempt_ref, ...images.filter(i=>i.scoped && i.table==='nc_contacts').flatMap(i=>[i.row.name,i.row.email])].filter(v=>typeof v==='string' && v.length)
+  const statements: D1Sql[] = [], changes = new Map<string,{kind:string;fields:Set<string>;records:number}>()
+  for (const image of images) {
+    const { table,row,key,required } = image
+    const updates: Row = {}
+    const affected = image.scoped || (table==='nc_usage_batches' && images.some(i=>i.scoped && i.table==='nc_usage_events' && i.row.batch_id===row.id)) || (table === 'nc_audit' && ids.has(row.subject))
+    for (const [column,value] of Object.entries(row)) {
+      if (column in key || value === null) continue
+      const shared = !affected && typeof value === 'string' && (column.endsWith('_json') || column === 'detail' || column === 'csv' || column === 'report_json') && (keyed(json(value),ids) || personal.some(v=>value.includes(v)))
+      if (!affected && !shared) continue
+      if (column.endsWith('_json') || column === 'detail') { updates[column] = affected ? blankJson(String(value)) : JSON.stringify(redactShared(json(value),ids,personal)); continue }
+      if (column === 'csv') { updates[column] = affected ? '' : redactSnapshotCsv(String(value),personal); continue }
+      if (!affected || typeof value !== 'string') continue
+      if (column === 'token_hash') { updates[column] = null; continue }
+      if ((column.endsWith('_id') && !['external_id','event_id'].includes(column)) || column === 'id' || column === 'subject' || keep.has(column) || /(?:_at|_on|_date|_from|_to|_start|_end)$/.test(column)) continue
+      if (column === 'external_id' || column === 'event_id' || column === 'reference') updates[column] = `erased-${row.id ?? customer.id}`
+      else if (column === 'name' && table === 'nc_customers') updates[column] = 'Erased customer'
+      else if (column === 'provider_ref' || column === 'provider_schedule_ref') updates[column] = required.has(column) ? `erased-${row.id ?? customer.id}` : null
+      else updates[column] = column==='body' && table==='nc_notes' ? '[erased]' : ''
+    }
+    if (table==='nc_customers' && row.id===customer.id) { updates.status='archived'; updates.erased_at=Date.now(); updates.revision=crypto.randomUUID(); updates.tax_exempt=0 }
+    if (affected) {
+      if (['nc_credit_correction_mail','nc_draft_correction_mail','nc_notifications','nc_note_mentions','nc_renewal_notices'].includes(table)) updates.status='suppressed'
+      if (table==='nc_cadence_deliveries') updates.status='superseded'
+      if (table==='nc_notices') updates.status='discarded'
+      if (table==='nc_tasks') updates.status='done'
+      if (table==='nc_renewal_terms') {updates.auto_renew=0;updates.token_hash=null;updates.status='ended'}
+      if (table==='nc_retention_offers') {updates.token_hash=null;updates.status='expired'}
+    }
+    if (table==='nc_audit' && affected) {updates.detail='{}'; updates.actor=memberIds.has(row.actor)?`member:${memberIds.get(row.actor)}`:/^(system:|customer:(erasure|renewal|winback))/.test(row.actor)?row.actor:'redacted-actor'}
+    const fields=Object.keys(updates).filter(k=>updates[k]!==row[k])
+    if (!fields.length) continue
+    const where=Object.keys(key).map(k=>`${quote(k)} IS ?`).join(' AND ')
+    // SQL json_object compares a typed, complete image, including arbitrary
+    // text/files, so an intervening edit aborts this entire operation.
+    const imageSql=`json_object(${Object.keys(row).flatMap(k=>[`'${k}'`,quote(k)]).join(',')})`
+    statements.push({sql:`INSERT INTO nc_guard(code,ok) SELECT 'stale',CASE WHEN EXISTS(SELECT 1 FROM ${quote(table)} WHERE ${where} AND ${imageSql}=?) THEN 1 ELSE 0 END`,params:[...Object.values(key),JSON.stringify(row)]})
+    statements.push({sql:`UPDATE ${quote(table)} SET ${fields.map(k=>`${quote(k)}=?`).join(',')} WHERE ${where}`,params:[...fields.map(k=>updates[k]),...Object.values(key)]})
+    const entry=changes.get(table)??{kind:table,fields:new Set<string>(),records:0};fields.forEach(f=>entry.fields.add(f));entry.records++;changes.set(table,entry)
+  }
+  return { generation,personalValues:personal, statements, changes:[...changes.values()].map(v=>({...v,fields:[...v.fields].sort()})),ids:[...ids] }
+}

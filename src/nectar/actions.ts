@@ -1,3 +1,6 @@
+import { requestErasure, verifyErasureOtherwise } from './erasure-requests'
+import { approveErasure } from './erasure'
+import { purgeErasure } from './erasure-purge'
 import { prepareCadencePolicyFromDoor, disputeFromDoor } from './cadence-door'
 import { decideCadencePolicy } from './cadence-policy'
 import { enrollCadence, recordPromise, resolveDispute, approveCadenceStage } from './cadence-actions'
@@ -49,6 +52,10 @@ import { prepareMetric,previewMetric,activateMetric } from './meter-definitions'
 type Handler = (env: Bindings, actor: Actor, input: Input, request: Request) => Promise<unknown>
 
 export const actions: Record<string, Handler> = {
+  'erasure.request':requestErasure,
+  'erasure.verify':verifyErasureOtherwise,
+  'erasure.approve':approveErasure,
+  'erasure.purge':purgeErasure,
   'cadence.policy.prepare':prepareCadencePolicyFromDoor,
   'cadence.policy.decide':decideCadencePolicy,
   'cadence.enroll':enrollCadence,

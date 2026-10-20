@@ -21,7 +21,7 @@ import type { Input } from './input'
 import type { ItemIn, Line } from './rating'
 
 export async function requireSubscription(env: Bindings, id: string) {
-  const sub = await one(env, 'SELECT s.*, c.name AS customer_name, c.external_id AS customer_external_id FROM nc_subscriptions s JOIN nc_customers c ON c.id = s.customer_id WHERE s.id = ?', id)
+  const sub = await one(env, 'SELECT s.*, c.name AS customer_name, c.external_id AS customer_external_id, c.erased_at FROM nc_subscriptions s JOIN nc_customers c ON c.id = s.customer_id WHERE s.id = ?', id)
   insist(sub, 'subscription_not_found', 404)
   return sub
 }
@@ -29,6 +29,7 @@ export async function requireSubscription(env: Bindings, id: string) {
 export async function subscriptionDetail(env: Bindings, actor: Actor, id: string): Promise<Row> {
   requireCapability(actor, 'read')
   const sub = await requireSubscription(env, id)
+  insist(!sub.erased_at,'customer_erased',410)
   const [items, amendments, changes, invoices] = await Promise.all([
     all(env, 'SELECT i.*, p.kind, p.unit_amount, p.pricing_model, p.version, p.nickname, pr.name AS product_name, m.code AS meter_code FROM nc_items i JOIN nc_prices p ON p.id = i.price_id JOIN nc_products pr ON pr.id = p.product_id LEFT JOIN nc_meters m ON m.id = p.meter_id WHERE i.subscription_id = ? ORDER BY i.effective_from, i.id', id),
     all(env, 'SELECT * FROM nc_amendments WHERE subscription_id = ? ORDER BY created_at', id),

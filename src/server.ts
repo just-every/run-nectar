@@ -1,3 +1,5 @@
+import { removeExpiredFinancialRecords } from './nectar/erasure-purge'
+import { erasurePublic } from './nectar/erasure-public'
 import { runCadences } from './nectar/cadence-scheduler'
 import { runWinbacks } from './nectar/retention-winback'
 import { retentionPublic } from './nectar/retention-public'
@@ -35,6 +37,7 @@ function noTransform(response: Response): Response {
 
 export default withDemo({
   async scheduled(controller, env) {
+    await removeExpiredFinancialRecords(runtimeBindings(env))
     await runCadences(runtimeBindings(env),controller.scheduledTime)
     await runRenewals(runtimeBindings(env),controller.scheduledTime)
     await runWinbacks(runtimeBindings(env),controller.scheduledTime)
@@ -49,6 +52,8 @@ export default withDemo({
     if (asset) return asset
     const auth = await authResponse(request, env)
     if (auth) return auth
+    const erasure=await erasurePublic(request,runtimeBindings(env))
+    if(erasure)return erasure
     const returned=await retentionPublic(request,runtimeBindings(env))
     if(returned)return returned
     const renewal=await renewalPublic(request,runtimeBindings(env))

@@ -1,3 +1,5 @@
+import { erasurePage } from './erasure'
+import { erasureEvidence } from '../erasure-requests'
 import { cadencesPage } from './cadences'
 import { billingAnswersPage } from './billing-answers'
 import { retentionPage } from './retention'
@@ -30,6 +32,8 @@ import { reportPage, reportInvoicePage, reportLinePage } from './reports'
 type Page = (env: Bindings, actor: Actor, request: Request, url: URL, id: string) => Promise<Response>
 
 export const pages: Record<string, Page> = {
+  erasures:(env,actor,_r,url)=>erasurePage(env,actor,url),
+  erasureEvidence:(env,actor,_r,_u,id)=>erasureEvidence(env,actor,id),
   cadences:(env,actor,_r,url)=>cadencesPage(env,actor,url),
   billingAnswers:(env,actor,_r,url)=>billingAnswersPage(env,actor,url),
   retention:(env,actor,_r,url)=>retentionPage(env,actor,url),

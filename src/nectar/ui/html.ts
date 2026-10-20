@@ -47,6 +47,7 @@ export const NAV: { href: string; label: string; icon: IconName }[] = [
   { href: '/app/billing', label: 'Billing', icon: 'billing' },
 ]
 export const MORE: { href: string; label: string; about: string; icon: IconName; show: (actor: Actor) => boolean }[] = [
+  { href: '/app/erasures', label: 'Privacy erasure', icon: 'customers', about: 'Verify requests, erase personal data and review financial retention receipts.', show: actor => actor.kind === 'member' },
   { href: '/app/cadences', label: 'Collections cadences', icon: 'receivables', about: 'Transfer reminders, promise holds, disputed amounts and owner escalation.', show: actor => can(actor, 'read') },
   { href: '/app/answers', label: 'Billing answers', icon: 'sparkle', about: 'Ask about saved invoice calculations, source events and billing terms.', show: actor => can(actor, 'read') },
   { href: '/app/catalog', label: 'Catalog', icon: 'catalog', about: 'Products, versioned prices, meters and the features each product grants.', show: () => true },

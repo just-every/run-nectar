@@ -5,8 +5,8 @@
 import { runtimeBindings, type Bindings } from '../auth.server'
 import { AuthError, safeReturnTo } from '../modules/operator-auth/index.mjs'
 import { actions } from './actions'
-import { currentActor, type Actor } from './actor'
-import { NectarError } from './core'
+import { currentActor,requireCapability, type Actor } from './actor'
+import { NectarError,one } from './core'
 import { business } from './business'
 import { Input } from './input'
 import { PAGE_DOORS, match } from './doors'
@@ -66,6 +66,8 @@ async function apiResponse(env: Bindings, actor: Actor, request: Request, url: U
     return json(await action(env, actor, await Input.from(request), request))
   }
   const { view, id } = route(path)
+  if (/^(subscriptions\/|proposals\/|invoices\/[^/]+\/lines\/)/.test(path)) requireCapability(actor,'read')
+  if (/^(subscriptions\/|proposals\/|invoices\/[^/]+\/lines\/)/.test(path) && await one(env,'SELECT 1 FROM nc_erased_records WHERE record_id=?',id.split('/')[0])) throw new NectarError('customer_erased',410)
   const result=await view(env, actor, request, id, url)
   return result instanceof Response ? result : json(result)
 }
@@ -100,6 +102,7 @@ async function pageResponse(env: Bindings, actor: Actor, request: Request, url: 
   const found = match(PAGE_DOORS, path)
   await loadShell(env, actor)
   if (!found) throw new NectarError('not_found', 404)
+  if (['subscription','upcoming','proposal','setupSource','certificateFile','reportLine'].includes(found.name) && await one(env,'SELECT 1 FROM nc_erased_records WHERE record_id=?',found.id.split('/')[0])) return page('Personal data erased',actor,h`<h1>Personal data erased</h1><p>This source was withdrawn by an approved erasure. Required financial figures remain on their invoice until the retention date.</p><p><a href="/app/erasures">Erasure requests and receipts</a></p>`,{status:410})
   return await pages[found.name](env, actor, request, url, found.id)
 }
 

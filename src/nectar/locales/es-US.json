@@ -86,5 +86,12 @@
   "correction.term.credit": "Crédito contractual único: {amount}",
   "correction.term.override": "Precio unitario modificado: {amount} para el precio {price}",
   "correction.term.window": "{term}; vigente del {from} al {to} (sin incluir la fecha final).",
-  "correction.term.open": "{term}; vigente desde el {from}, sin fecha de finalización registrada."
+  "correction.term.open": "{term}; vigente desde el {from}, sin fecha de finalización registrada.",
+  "erasure.mail.subject": "Confirme su solicitud de eliminación de datos personales",
+  "erasure.mail.body": "Se registró una solicitud de eliminación de datos personales. Confirme solo si usted la solicitó. Este enlace vence en siete días. La confirmación no elimina registros; el propietario debe aprobarla.\n{link}",
+  "erasure.confirm.title": "Confirme la solicitud de eliminación",
+  "erasure.confirm.body": "Confirme que solicitó la eliminación de datos personales. El propietario debe aprobarla antes de que cambien los registros. Los documentos financieros mínimos se conservan durante siete años.",
+  "erasure.confirm.button": "Confirmar mi solicitud",
+  "erasure.unavailable": "Este enlace de confirmación ya no está disponible",
+  "erasure.verified": "Solicitud verificada. El propietario ya puede revisarla."
 }

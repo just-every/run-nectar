@@ -86,5 +86,12 @@
   "correction.term.credit": "One-time contract credit: {amount}",
   "correction.term.override": "Unit price override: {amount} for price {price}",
   "correction.term.window": "{term}; effective {from} through {to} (end exclusive).",
-  "correction.term.open": "{term}; effective {from}, with no recorded end date."
+  "correction.term.open": "{term}; effective {from}, with no recorded end date.",
+  "erasure.mail.subject": "Confirm your personal-data erasure request",
+  "erasure.mail.body": "Someone recorded a personal-data erasure request. Confirm only if you requested it. This link expires in seven days. Confirmation does not erase records; the owner must approve it.\n{link}",
+  "erasure.confirm.title": "Confirm erasure request",
+  "erasure.confirm.body": "Confirm that you requested personal-data erasure. The owner must approve it before records change. Minimal financial documents remain for seven years.",
+  "erasure.confirm.button": "Confirm my request",
+  "erasure.unavailable": "This confirmation link is no longer available",
+  "erasure.verified": "Request verified. The owner can now review it."
 }

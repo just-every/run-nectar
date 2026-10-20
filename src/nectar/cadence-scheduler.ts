@@ -15,7 +15,7 @@ export async function runCadences(env: Bindings, scheduledTime=clockInstant(env)
   const b=await business(env)
   if(!b||!(await currentCadencePolicy(env)).enabled)return {processed:0}
   const day=today(b.timezone,scheduledTime)
-  const enrolled=await all(env,"SELECT e.invoice_id,i.due_date FROM nc_cadence_enrollments e JOIN nc_invoices i ON i.id=e.invoice_id WHERE i.status='issued' ORDER BY i.due_date,e.invoice_id")
+  const enrolled=await all(env,"SELECT e.invoice_id,i.due_date FROM nc_cadence_enrollments e JOIN nc_invoices i ON i.id=e.invoice_id JOIN nc_customers c ON c.id=i.customer_id WHERE i.status='issued' AND c.erased_at IS NULL ORDER BY i.due_date,e.invoice_id")
   let processed=0
   for(const row of enrolled) {
     const stage=latestCadenceStage(row.due_date,day)

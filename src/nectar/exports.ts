@@ -47,7 +47,7 @@ export async function subscriptionsCsv(env: Bindings, actor: Actor,url?:URL) {
   requireCapability(actor, 'export')
   const filter=metadataPredicate('subscription','s.id',url?metadataFilter(url):null)
   const rows = await all(env, `SELECT s.id, s.external_id, c.external_id AS customer, s.anchor_day, s.start_date, s.trial_end, s.end_date, s.billing_mode, s.cutover_start, s.provider_ref, pr.code AS product, p.version, p.kind, p.unit_amount, i.quantity, i.effective_from, i.effective_to
-    FROM nc_subscriptions s JOIN nc_customers c ON c.id = s.customer_id JOIN nc_items i ON i.subscription_id = s.id JOIN nc_prices p ON p.id = i.price_id JOIN nc_products pr ON pr.id = p.product_id WHERE ${filter.sql} ORDER BY c.external_id, s.id, i.effective_from`,...filter.params)
+    FROM nc_subscriptions s JOIN nc_customers c ON c.id = s.customer_id JOIN nc_items i ON i.subscription_id = s.id JOIN nc_prices p ON p.id = i.price_id JOIN nc_products pr ON pr.id = p.product_id WHERE c.erased_at IS NULL AND ${filter.sql} ORDER BY c.external_id, s.id, i.effective_from`,...filter.params)
   const meta: Row[]=await Promise.all((await withMetadata(env,'subscription',rows)).map(async r=>({...r,renewal:await termRecords(env,actor,r.id),lifecycle:await lifecycleHistory(env,r.id),contracts:await contractsFor(env,r.id),burnDown:await contractBurnDown(env,r.id)})))
   return file(csv(['subscription_id', 'subscription_external_id', 'customer_external_id', 'anchor_day', 'start_date', 'trial_end', 'end_date', 'billing_mode', 'cutover_start', 'provider_ref', 'product', 'price_version', 'price_kind', 'unit_amount', 'quantity', 'item_from', 'item_to','metadata_json','lifecycle_json','contracts_json','commitment_burn_down_json','renewal_json'],
     meta.map(r => [r.id, r.external_id, r.customer, r.anchor_day, r.start_date, r.trial_end, r.end_date, r.billing_mode, r.cutover_start, r.provider_ref, r.product, r.version, r.kind, r.unit_amount, r.quantity, r.effective_from, r.effective_to,JSON.stringify(r.metadata),JSON.stringify(r.lifecycle),JSON.stringify(r.contracts),JSON.stringify(r.burnDown),JSON.stringify(r.renewal)])), 'nectar-subscriptions.csv', 'text/csv; charset=utf-8')
@@ -117,7 +117,7 @@ export async function entitlements(env: Bindings, actor: Actor, customerId: stri
 export async function customersCsv(env: Bindings, actor: Actor,url?:URL) {
   requireCapability(actor, 'export')
   const filter=metadataPredicate('customer','c.id',url?metadataFilter(url):null)
-  const customers = await all(env, `SELECT c.id,c.external_id,c.name,c.billing_email,c.address FROM nc_customers c WHERE ${filter.sql} ORDER BY c.external_id`,...filter.params)
+  const customers = await all(env, `SELECT c.id,c.external_id,c.name,c.billing_email,c.address FROM nc_customers c WHERE c.erased_at IS NULL AND ${filter.sql} ORDER BY c.external_id`,...filter.params)
   const rows = await Promise.all(customers.map(async c => [c.id,c.external_id,c.name,c.billing_email,c.address,JSON.stringify(await customerNotes(env,c.id)),JSON.stringify((await metadataFor(env,'customer',c.id)).metadata)]))
   return file(csv(['customer_id','external_id','name','billing_email','address','notes_json','metadata_json'], rows), 'nectar-customers.csv', 'text/csv; charset=utf-8')
 }

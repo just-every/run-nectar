@@ -1,3 +1,4 @@
+import { erasureRequests } from './erasure-requests'
 import { cadenceReport } from './cadence-actions'
 import { retentionReport } from './retention-offers'
 import { reportSchedule,reportDelivery } from './report-schedules'
@@ -44,6 +45,7 @@ export async function audit(env: Bindings, actor: Actor) {
 export async function customerView(env: Bindings, actor: Actor, id: string): Promise<Row> {
   requireCapability(actor, 'read')
   const customer = await requireCustomer(env, id)
+  if(customer.erased_at) return {...customer,contacts:[],subscriptions:[],ledger:await customerLedger(env,actor,id),entitlements:[],incumbentInvoices:[],charges:[],certificates:[],exemptionClaims:[],certificateReminders:[],notes:[],metadata:{}}
   const [contacts, subscriptions, ledger, features, incumbent] = await Promise.all([
     all(env, 'SELECT * FROM nc_contacts WHERE customer_id = ? ORDER BY created_at', id),
     all(env, "SELECT s.*, (SELECT COUNT(*) FROM nc_items i WHERE i.subscription_id = s.id) AS items FROM nc_subscriptions s WHERE s.customer_id = ? ORDER BY s.created_at", id),
@@ -55,6 +57,7 @@ export async function customerView(env: Bindings, actor: Actor, id: string): Pro
 }
 
 export const views: Record<string, View> = {
+  erasures:(env,actor)=>erasureRequests(env,actor),
   cadences:(env,actor)=>cadenceReport(env,actor),
   retention:(env,actor)=>retentionReport(env,actor),
   reportSchedule:(env,actor)=>reportSchedule(env,actor),

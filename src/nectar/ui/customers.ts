@@ -38,6 +38,7 @@ export async function customersPage(env: Bindings, actor: Actor, url: URL) {
 
 export async function customerPage(env: Bindings, actor: Actor, id: string, url: URL) {
   const c = await customerView(env, actor, id)
+  if(c.erased_at) return page('Erased customer',actor,h`<h1>Erased customer</h1><section class="card"><p>Personal information has been erased. Required financial records remain until their retention date.</p><p><a href="/app/erasures">Erasure requests and receipts</a></p>${table(['Invoice','Total'],c.ledger.invoices.map((i:any)=>[h`<a href="/app/invoices/${i.id}">${i.number}</a>`,cents(i.total_cents)]))}</section>`,{url,current:'/app/customers'})
   const today = new Date().toISOString().slice(0, 10)
   const named = await all(env, "SELECT p.id, pr.name, p.version, p.kind, p.unit_amount, p.pricing_model, p.nickname, m.unit_label FROM nc_prices p JOIN nc_products pr ON pr.id = p.product_id LEFT JOIN nc_meters m ON m.id = p.meter_id WHERE p.status = 'active' ORDER BY pr.name, p.version DESC")
   const label = (p: Record<string, any>) => `${p.name}${p.nickname ? ` — ${p.nickname}` : ''} v${p.version}: ${priceRate(p)} monthly`
