@@ -1,6 +1,6 @@
 // Resolve metadata through the same read capability and stored record ownership.
 import type { Bindings } from '../auth.server'
-import { requireCapability, type Actor } from './actor'
+import { type RecordFamily, requireRead, type Actor } from './actor'
 import { all, guard, insist, one, type Row } from './core'
 
 export const METADATA_KINDS = ['customer', 'subscription', 'price', 'invoice', 'payment', 'credit-note'] as const
@@ -22,9 +22,13 @@ export function metadataKind(value: string): MetadataKind {
   return value as MetadataKind
 }
 
+/** GOV-001: metadata is read and written only on records the actor can read. */
+export const METADATA_FAMILIES: Record<MetadataKind, RecordFamily> = { customer: 'customers', subscription: 'subscriptions', price: 'catalog', invoice: 'invoices', payment: 'payments', 'credit-note': 'invoices' }
+export const requireMetadataRead = (actor: Actor, value: string) => requireRead(actor, METADATA_FAMILIES[metadataKind(value)])
+
 export async function metadataRecord(env: Bindings, actor: Actor, value: string, id: string) {
-  requireCapability(actor, 'read')
   const kind = metadataKind(value), source = RECORDS[kind]
+  requireRead(actor, METADATA_FAMILIES[kind])
   const record = await one(env, `SELECT ${source.select} FROM ${source.table} WHERE id=?`, id)
   insist(record, 'metadata_record_not_found', 404)
   return metadataIdentity(kind,record)

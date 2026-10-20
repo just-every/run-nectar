@@ -4,7 +4,7 @@
 // to send from their own mail. The separate AR-001 cadence door sends through
 // the configured mail adapter; this manual door never marks a message sent.
 import type { Bindings } from '../auth.server'
-import { actorLabel, requireCapability, requireMember, type Actor } from './actor'
+import { requireAny, requireRead, actorLabel, requireCapability, requireMember, type Actor } from './actor'
 import { requireBusiness } from './business'
 import { all, canonical, commit, guard, insist, newId, now, one, parseJson, stmt, type Row } from './core'
 import { money } from './decimal'
@@ -19,7 +19,7 @@ export const BUCKETS = ['current', '1-30', '31-60', '61-90', '90+'] as const
 const bucket = (overdue: number) => overdue <= 0 ? 'current' : overdue <= 30 ? '1-30' : overdue <= 60 ? '31-60' : overdue <= 90 ? '61-90' : '90+'
 
 export async function ageing(env: Bindings, actor: Actor) {
-  requireCapability(actor, 'read')
+  requireRead(actor, 'invoices')
   const business = await requireBusiness(env)
   const day = today(business.timezone)
   const rows = (await openInvoices(env)).map((row): Row => ({ ...row, daysOverdue: Math.max(0, daysBetween(row.due_date, day)), bucket: bucket(daysBetween(row.due_date, day)) }))
@@ -124,12 +124,12 @@ export async function exportReminder(env: Bindings, actor: Actor, id: string) {
 }
 
 export async function notices(env: Bindings, actor: Actor) {
-  requireCapability(actor, 'read')
+  requireAny(actor, ['read', 'receivables'])
   return await all(env, 'SELECT n.*, c.name AS customer_name FROM nc_notices n JOIN nc_customers c ON c.id = n.customer_id ORDER BY n.created_at DESC LIMIT 100')
 }
 
 export async function tasks(env: Bindings, actor: Actor) {
-  requireCapability(actor, 'read')
+  requireAny(actor, ['read', 'receivables'])
   return await all(env, "SELECT t.*, c.name AS customer_name, i.number AS invoice_number FROM nc_tasks t JOIN nc_customers c ON c.id = t.customer_id LEFT JOIN nc_invoices i ON i.id = t.invoice_id ORDER BY t.status DESC, t.due_date LIMIT 200")
 }
 

@@ -2,7 +2,7 @@
 // the simple meters per-unit prices rate. A new price is a new version; a
 // version a subscription uses is never edited, only retired for new use.
 import type { Bindings } from '../auth.server'
-import { actorLabel, requireCapability, type Actor } from './actor'
+import { requireRead, actorLabel, requireCapability, type Actor } from './actor'
 import { all, commit, insist, newId, now, one, stmt } from './core'
 import { metadataFilter,metadataPredicate } from './metadata-query'
 import { withMetadata } from './metadata'
@@ -14,7 +14,7 @@ import { storedQuantityPrice } from './price-model'
 const CODE = /^[a-z0-9][a-z0-9_.-]{0,59}$/
 
 export async function catalog(env: Bindings, actor: Actor,url?:URL) {
-  requireCapability(actor, 'read')
+  requireRead(actor, 'catalog')
   const filter=metadataPredicate('price','p.id',url?metadataFilter(url):null)
   const [products, prices, meters, features] = await Promise.all([
     all(env, 'SELECT * FROM nc_products ORDER BY status, name COLLATE NOCASE'),

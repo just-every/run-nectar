@@ -6,7 +6,7 @@ import { termRecords } from './renewal-terms'
 // when a person approves that preview against the same subscription revision.
 import type { Bindings } from '../auth.server'
 import { requirePrice } from './catalog'
-import { actorLabel, requireCapability, requireMember, type Actor } from './actor'
+import { requireAny, requireRead, actorLabel, requireCapability, requireMember, type Actor } from './actor'
 import { requireBusiness } from './business'
 import { all, commit, guard, insist, newId, now, one, parseJson, stmt, type Row } from './core'
 import { canonicalDecimal, micros } from './decimal'
@@ -27,7 +27,7 @@ export async function requireSubscription(env: Bindings, id: string) {
 }
 
 export async function subscriptionDetail(env: Bindings, actor: Actor, id: string): Promise<Row> {
-  requireCapability(actor, 'read')
+  requireRead(actor, 'subscriptions')
   const sub = await requireSubscription(env, id)
   insist(!sub.erased_at,'customer_erased',410)
   const [items, amendments, changes, invoices] = await Promise.all([
@@ -113,7 +113,7 @@ export async function createSubscription(env: Bindings, actor: Actor, input: Inp
 
 /** Records a contract exception as proposed; it affects no bill until approved. */
 export async function proposeAmendment(env: Bindings, actor: Actor, input: Input) {
-  requireCapability(actor, 'records')
+  requireAny(actor, ['records', 'draft'])
   const sub = await requireSubscription(env, input.text('subscription', { max: 100 }))
   const amendment = readAmendment(input)
   if (amendment.priceId) insist((await requirePrice(env, amendment.priceId)).pricing_model === 'simple', 'override_price_model')
@@ -156,7 +156,7 @@ const recurringLines = (lines: Line[]) => lines.filter(line => line.kind === 'fl
 
 /** Prepares a plan or quantity change and shows exactly what the affected period would bill, before and after. */
 export async function prepareChange(env: Bindings, actor: Actor, input: Input) {
-  requireCapability(actor, 'records')
+  requireAny(actor, ['records', 'draft'])
   const business = await requireBusiness(env)
   const sub = await requireSubscription(env, input.text('subscription', { max: 100 }))
   const item = await one(env, 'SELECT * FROM nc_items WHERE id = ? AND subscription_id = ?', input.text('item', { max: 100 }), sub.id)

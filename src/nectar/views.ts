@@ -7,8 +7,8 @@ import { setupSourceDownload } from './setup-download'
 // Read models served at GET /api/nectar/... Every view checks the actor's
 // capability itself and applies the same rules as the pages that render it.
 import type { Bindings } from '../auth.server'
-import { agentKeys, members } from './access'
-import { requireCapability, type Actor } from './actor'
+import { agentKeys, customRoles, members } from './access'
+import { requireRead, requireCapability, type Actor } from './actor'
 import { runDetail, runs } from './billruns'
 import { businessView } from './business'
 import { certificates } from './certificates'
@@ -42,11 +42,12 @@ type View = (env: Bindings, actor: Actor, request: Request, id: string, url: URL
 
 export async function audit(env: Bindings, actor: Actor) {
   requireCapability(actor, 'export')
+  requireCapability(actor, 'read')
   return await all(env, 'SELECT seq, at, actor, action, subject, detail FROM nc_audit ORDER BY seq DESC LIMIT 500')
 }
 
 export async function customerView(env: Bindings, actor: Actor, id: string): Promise<Row> {
-  requireCapability(actor, 'read')
+  requireRead(actor, 'customers')
   const customer = await requireCustomer(env, id)
   if(customer.erased_at) return {...customer,contacts:[],subscriptions:[],ledger:await customerLedger(env,actor,id),entitlements:[],incumbentInvoices:[],charges:[],certificates:[],exemptionClaims:[],certificateReminders:[],notes:[],metadata:{}}
   const [contacts, subscriptions, ledger, features, incumbent] = await Promise.all([
@@ -74,7 +75,7 @@ export const views: Record<string, View> = {
   metadataObjects: (env,actor,_r,id,url) => metadataObjects(env,actor,id,url),
   notes: (env, actor, _r, id) => { const [kind,record] = id.split('/'); return notes(env,actor,kind,record) },
   noteMembers: (env,actor) => noteMembers(env,actor),
-  me: async (_env, actor) => ({ id: actor.id, kind: actor.kind, name: actor.name, email: actor.email, role: actor.role, capabilities: [...actor.capabilities] }),
+  me: async (_env, actor) => ({ id: actor.id, kind: actor.kind, name: actor.name, email: actor.email, role: actor.role, ...(actor.roleName ? { role_name: actor.roleName } : {}), capabilities: [...actor.capabilities] }),
   business: (env, actor) => businessView(env, actor),
   customers: (env, actor,_r,_id,url) => customers(env, actor,url),
   customer: (env, actor, _request, id) => customerView(env, actor, id),
@@ -99,6 +100,7 @@ export const views: Record<string, View> = {
   imports: (env, actor) => importJobs(env, actor),
   shadow: (env, actor) => shadowSubscriptions(env, actor),
   members: (env, actor) => members(env, actor),
+  roles: (env, actor) => customRoles(env, actor),
   credentials: (env, actor) => agentKeys(env, actor),
   audit: (env, actor) => audit(env, actor),
   mfa: (env, actor) => mfaView(env, actor),

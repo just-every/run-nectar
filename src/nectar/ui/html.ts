@@ -1,6 +1,6 @@
 // Page frame and small form helpers. Every value is escaped; pages need no script.
 import branding from '../../branding.json'
-import { ROLE_NAMES, can, type Actor } from '../actor'
+import { can, canRead, roleName, type Actor } from '../actor'
 import { formatInstant } from '../dates'
 import { money } from '../decimal'
 import { icon, type IconName } from './icons'
@@ -41,23 +41,27 @@ function render(value: unknown): string {
 
 // The sidebar: the five work destinations, then the rest of the product
 // (also listed with what each does on More), then the business settings.
-export const NAV: { href: string; label: string; icon: IconName }[] = [
-  { href: '/app', label: 'Home', icon: 'home' }, { href: '/app/receivables', label: 'Receivables', icon: 'receivables' },
-  { href: '/app/customers', label: 'Customers', icon: 'customers' }, { href: '/app/usage', label: 'Usage', icon: 'usage' },
-  { href: '/app/billing', label: 'Billing', icon: 'billing' },
+// Each destination shows only to a role that can open it (GOV-001).
+export const NAV: { href: string; label: string; icon: IconName; show: (actor: Actor) => boolean }[] = [
+  { href: '/app', label: 'Home', icon: 'home', show: () => true },
+  { href: '/app/receivables', label: 'Receivables', icon: 'receivables', show: actor => canRead(actor, 'invoices') && canRead(actor, 'payments') && canRead(actor, 'customers') },
+  { href: '/app/customers', label: 'Customers', icon: 'customers', show: actor => canRead(actor, 'customers') },
+  { href: '/app/usage', label: 'Usage', icon: 'usage', show: actor => can(actor, 'read') },
+  { href: '/app/billing', label: 'Billing', icon: 'billing', show: actor => can(actor, 'read') },
 ]
 export const MORE: { href: string; label: string; about: string; icon: IconName; show: (actor: Actor) => boolean }[] = [
-  { href: '/app/erasures', label: 'Privacy erasure', icon: 'customers', about: 'Verify requests, erase personal data and review financial retention receipts.', show: actor => actor.kind === 'member' },
-  { href: '/app/cadences', label: 'Collections cadences', icon: 'receivables', about: 'Transfer reminders, promise holds, disputed amounts and owner escalation.', show: actor => can(actor, 'read') },
-  { href: '/app/answers', label: 'Billing answers', icon: 'sparkle', about: 'Ask about saved invoice calculations, source events and billing terms.', show: actor => can(actor, 'read') },
-  { href: '/app/catalog', label: 'Catalog', icon: 'catalog', about: 'Products, versioned prices, meters and the features each product grants.', show: () => true },
-  { href: '/app/proposals', label: 'Proposals', icon: 'proposals', about: 'Work an agent or a colleague prepared for your approval.', show: () => true },
+  { href: '/app/erasures', label: 'Privacy erasure', icon: 'customers', about: 'Verify requests, erase personal data and review financial retention receipts.', show: actor => actor.kind === 'member' && can(actor, 'read') },
+  { href: '/app/cadences', label: 'Collections cadences', icon: 'receivables', about: 'Transfer reminders, promise holds, disputed amounts and owner escalation.', show: actor => can(actor, 'read') || can(actor, 'receivables') },
+  { href: '/app/answers', label: 'Billing answers', icon: 'sparkle', about: 'Ask about saved invoice calculations, source events and billing terms.', show: actor => canRead(actor, 'customers') && canRead(actor, 'invoices') },
+  { href: '/app/catalog', label: 'Catalog', icon: 'catalog', about: 'Products, versioned prices, meters and the features each product grants.', show: actor => canRead(actor, 'catalog') },
+  { href: '/app/reports/billings', label: 'Reports', icon: 'exports', about: 'Billings, collections, receivables, credits, tax and unbilled usage, each figure drilled to its source.', show: actor => !can(actor, 'read') && canRead(actor, 'reports') },
+  { href: '/app/proposals', label: 'Proposals', icon: 'proposals', about: 'Work an agent or a colleague prepared for your approval.', show: actor => can(actor, 'read') },
   { href: '/app/import', label: 'Move in', icon: 'movein', about: 'Bring Stripe Billing records in, compare in shadow, then cut over.', show: actor => can(actor, 'records') },
   { href: '/app/exports', label: 'Exports', icon: 'exports', about: 'Invoices, usage, subscriptions and bill runs to keep or hand to your accountant.', show: actor => can(actor, 'export') },
-  { href: '/app/audit', label: 'Audit trail', icon: 'audit', about: 'Every change, approval and issue, with who made it.', show: actor => can(actor, 'export') },
-  { href: '/app/settings', label: 'Business and tax', icon: 'settings', about: 'Billing identity, timezone, invoice numbering and the declared tax policy.', show: () => true },
+  { href: '/app/audit', label: 'Audit trail', icon: 'audit', about: 'Every change, approval and issue, with who made it.', show: actor => can(actor, 'export') && can(actor, 'read') },
+  { href: '/app/settings', label: 'Business and tax', icon: 'settings', about: 'Billing identity, timezone, invoice numbering and the declared tax policy.', show: actor => can(actor, 'read') },
   { href: '/app/security', label: 'Sign-in security', icon: 'access', about: 'Your authenticator app, passkeys and recovery codes.', show: actor => actor.kind === 'member' },
-  { href: '/app/access', label: 'Access', icon: 'access', about: 'Who can sign in, their roles, and agent credentials.', show: actor => actor.role === 'owner' },
+  { href: '/app/access', label: 'Access', icon: 'access', about: 'Who can sign in, their roles, and agent credentials.', show: actor => actor.kind === 'member' && can(actor, 'credentials') },
 ]
 
 const headers = {
@@ -84,8 +88,8 @@ export function page(title: string, actor: Actor | null, body: Html, { current =
   const notice = url?.searchParams.get('notice'), error = url?.searchParams.get('error')
   const shell = shellOf(actor)
   const link = (item: { href: string; label: string; icon: IconName }, count = 0) => h`<li><a href="${item.href}"${item.href === current ? raw(' aria-current="page"') : ''}>${icon(item.icon)}<span>${item.label}</span>${count ? h`<span class="count-pill" aria-label="${count} waiting">${count}</span>` : ''}</a></li>`
-  const nav = actor && showNav ? h`<nav aria-label="Main"><ul>${NAV.map(item => link(item))}</ul><ul>${MORE.filter(item => item.show(actor)).map(item => link(item, item.href === '/app/proposals' ? shell?.pending ?? 0 : 0))}</ul></nav>` : ''
-  const role = actor?.role ? ROLE_NAMES[actor.role] : ''
+  const nav = actor && showNav ? h`<nav aria-label="Main"><ul>${NAV.filter(item => item.show(actor)).map(item => link(item))}</ul><ul>${MORE.filter(item => item.show(actor)).map(item => link(item, item.href === '/app/proposals' ? shell?.pending ?? 0 : 0))}</ul></nav>` : ''
+  const role = roleName(actor)
   const name = actor && (!actor.name.trim() || actor.name.trim() === role) && actor.email ? actor.email : actor?.name ?? ''
   const who = actor ? h`<div class="side-foot"><p class="who"><span class="avatar" aria-hidden="true">${initials(name)}</span><span class="who-lines"><span class="who-name">${addresses(name)}</span>${role ? h`<span class="role">${role}</span>` : ''}${shell ? h`<span>${shell.legalName}</span>${shell.place ? h`<span>${shell.place}</span>` : ''}` : ''}</span></p>
     ${shell && nav ? h`<p class="synced">${icon('synced')}<span>${shell.lastUsage ? h`Usage imported<br>${ago(shell.lastUsage, shell.timezone)}` : h`No usage imported yet`}</span></p>` : ''}</div>` : ''

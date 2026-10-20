@@ -1,28 +1,38 @@
 // Append-only customer context. All financial records remain untouched.
 import type { Bindings } from '../auth.server'
 import { operatorMail } from '../mail.server.mjs'
-import { actorLabel, requireCapability, requireMember, type Actor } from './actor'
+import { type RecordFamily, requireRead, requireAny, actorLabel, type Actor } from './actor'
 import { all, commit, guard, insist, newId, now, one, stmt } from './core'
 import type { Input } from './input'
 import { customerNotes, noteRecord } from './note-records'
 import { esc } from './ui/html'
 import { memberPreferences } from './notifications'
 
+/** Who may add notes: the owner and finance (records) or a role holding notes (GOV-001). */
+function requireNoteAuthor(actor: Actor) {
+  requireAny(actor, ['records', 'notes'])
+  insist(actor.kind === 'member', 'person_required', 403)
+}
+
+const NOTE_FAMILIES: Record<string, RecordFamily> = { customer: 'customers', invoice: 'invoices', payment: 'payments' }
+const requireNoteRead = (actor: Actor, kind: string) => { insist(kind in NOTE_FAMILIES, 'invalid_note_kind'); requireRead(actor, NOTE_FAMILIES[kind]) }
+
 export async function noteMembers(env: Bindings, actor: Actor) {
-  requireMember(actor, 'records')
+  requireNoteAuthor(actor)
   return await all(env, "SELECT id,name,email FROM nc_members WHERE status='active' ORDER BY name,email")
 }
 
 export async function notes(env: Bindings, actor: Actor, kind: string, record: string) {
-  requireCapability(actor, 'read')
+  requireNoteRead(actor, kind)
   const target = await noteRecord(env, kind, record)
   return (await customerNotes(env, target.customerId)).filter(n => n.kind === kind && n.record_id === record)
 }
 
 export async function addNote(env: Bindings, actor: Actor, input: Input) {
-  requireMember(actor, 'records')
+  requireNoteAuthor(actor)
   input.only(['kind','record','body','mention','returnTo'])
   const kind = input.text('kind', { max: 20 }), record = input.text('record', { max: 100 })
+  requireNoteRead(actor, kind)
   const body = input.text('body', { max: 4000 })
   const target = await noteRecord(env, kind, record)
   const ids = [...new Set(input.list('mention'))]

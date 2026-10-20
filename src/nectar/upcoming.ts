@@ -1,6 +1,6 @@
 // USE-006: a live, write-free view of the exact next calculation.
 import type { Bindings } from '../auth.server'
-import { requireCapability, type Actor } from './actor'
+import { requireRead, type Actor } from './actor'
 import { requireBusiness } from './business'
 import { draftFor, invoiceDetail } from './billruns'
 import { all, insist, now, one, type Row } from './core'
@@ -12,7 +12,7 @@ import type { RatingInput } from './rating'
 import { requireSubscription } from './subscriptions'
 
 export async function upcoming(env: Bindings, actor: Actor, subscriptionId: string, month?: string | null) {
-  requireCapability(actor, 'read')
+  requireRead(actor, 'subscriptions')
   const business = await requireBusiness(env)
   const sub = await requireSubscription(env, subscriptionId)
   insist(month === undefined || month === null || isMonth(month), 'invalid_period')

@@ -19,7 +19,7 @@ export const API_DOORS: [string, string][] = [
   ['^invoices$', 'invoices'], ['^invoices/([\\w-]+)$', 'invoice'], ['^ageing$', 'ageing'], ['^payments$', 'payments'], ['^notices$', 'notices'], ['^tasks$', 'tasks'],
   ['^policies/current$', 'policySettings'], ['^policies$', 'policies'], ['^proposals$', 'proposals'], ['^proposals/([\\w-]+)$', 'proposal'], ['^entitlements/([\\w.:-]+)$', 'entitlement'], ['^imports$', 'imports'], ['^shadow$', 'shadow'],
   ['^reports/([\\w-]+)$', 'report'], ['^reports/([\\w-]+/[\\w-]+)$', 'reportInvoice'], ['^invoices/([\\w-]+/lines/[\\w-]+)$', 'reportLine'],
-  ['^members$', 'members'], ['^credentials$', 'credentials'], ['^audit$', 'audit'], ['^mfa$', 'mfa'],
+  ['^members$', 'members'], ['^roles$', 'roles'], ['^credentials$', 'credentials'], ['^audit$', 'audit'], ['^mfa$', 'mfa'],
 ]
 
 /** API doors whose rows page by cursor (DEV-002, list-cursor.ts); `invoices` keeps its own issuance-journal snapshot. */

@@ -1,11 +1,11 @@
 import type { Bindings } from '../auth.server'
 import { requireCapability, type Actor } from './actor'
 import { all } from './core'
-import { metadataIdentity, metadataKind, metadataTable, withMetadata } from './metadata-records'
+import { metadataIdentity, metadataKind, metadataTable, requireMetadataRead, withMetadata } from './metadata-records'
 import { metadataFilter, metadataPredicate } from './metadata-query'
 
 export async function metadataObjects(env: Bindings, actor: Actor, kind: string, url: URL) {
-  requireCapability(actor,'read')
+  requireMetadataRead(actor,kind)
   const filter=metadataPredicate(kind,'r.id',metadataFilter(url))
   const rows=await all(env,`SELECT r.* FROM ${metadataTable(kind)} r WHERE ${filter.sql} ORDER BY r.id`,...filter.params)
   const projected=await withMetadata(env,kind,rows)

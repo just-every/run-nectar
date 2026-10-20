@@ -1,6 +1,6 @@
 // Operator-validated certificate custody, scoped to a state and service dates.
 import type { Bindings } from '../auth.server'
-import { actorLabel, requireCapability, requireMember, type Actor } from './actor'
+import { requireRead, actorLabel, requireCapability, requireMember, type Actor } from './actor'
 import { US_STATES } from './business'
 import { all, commit, guard, insist, newId, now, one, sha256Hex, stmt } from './core'
 import { requireCustomer } from './customers'
@@ -60,12 +60,12 @@ export async function validateCertificate(env: Bindings, actor: Actor, input: In
 }
 
 export async function certificates(env: Bindings, actor: Actor, customer: string) {
-  requireCapability(actor, 'read')
+  requireRead(actor, 'customers')
   return await all(env, 'SELECT id,state,reference,valid_from,expires_on,filename,sha256,status,collected_by,collected_at,reviewed_by,reviewed_at,review_note FROM nc_certificates WHERE customer_id=? ORDER BY collected_at DESC,id', customer)
 }
 
 export async function certificateFile(env: Bindings, actor: Actor, id: string) {
-  requireCapability(actor, 'read')
+  requireRead(actor, 'customers')
   const record = await one(env, 'SELECT * FROM nc_certificates WHERE id=?', id)
   insist(record, 'certificate_not_found', 404)
   return new Response(Uint8Array.from(atob(record.content_base64), c => c.charCodeAt(0)), { headers: {

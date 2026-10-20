@@ -5,11 +5,11 @@ import { requireCapability, type Actor } from './actor'
 import { billingAnswer } from './billing-answers'
 import { insist } from './core'
 import { Input } from './input'
-import { propose } from './proposals'
+import { proposeDraft } from './proposals'
 
 export async function proposeAnswerCredit(env: Bindings, actor: Actor, input: Input) {
   requireCapability(actor, 'propose')
   const answer = await billingAnswer(env, actor, input)
   insist(answer.proposalDraft, 'credit_request_required')
-  return await propose(env, actor, Input.of(answer.proposalDraft))
+  return await proposeDraft(env, actor, Input.of(answer.proposalDraft))
 }

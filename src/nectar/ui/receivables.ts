@@ -91,7 +91,9 @@ async function decision(env: Bindings, actor: Actor, desk: Desk, drafts: any[], 
 }
 
 export async function receivablesPage(env: Bindings, actor: Actor, url: URL) {
-  const [desk, age, pays, noticeList, todo, people] = await Promise.all([receivablesDesk(env, actor), ageing(env, actor), payments(env, actor), notices(env, actor), tasks(env, actor), customers(env, actor)])
+  // Reminder drafts and follow-up tasks show to the roles that handle them (GOV-001).
+  const handles = can(actor, 'read') || can(actor, 'receivables')
+  const [desk, age, pays, noticeList, todo, people] = await Promise.all([receivablesDesk(env, actor), ageing(env, actor), payments(env, actor), handles ? notices(env, actor) : [], handles ? tasks(env, actor) : [], customers(env, actor)])
   const operator = can(actor, 'receivables')
   const drafts = noticeList.filter((n: any) => n.status === 'draft')
   const pending = (await all(env, "SELECT COUNT(*) AS n FROM nc_proposals WHERE status = 'pending'"))[0]?.n ?? 0

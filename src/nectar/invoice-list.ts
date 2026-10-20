@@ -2,7 +2,7 @@
 // A draft issued between requests has a later journal sequence even if it was
 // created earlier or backdated to the same invoice date.
 import type { Bindings } from '../auth.server'
-import { requireCapability, type Actor } from './actor'
+import { requireRead, type Actor } from './actor'
 import { withMetadata } from './metadata'
 import { all, insist, one } from './core'
 
@@ -20,7 +20,7 @@ function decode(text: string): Cursor {
 }
 
 export async function invoiceList(env: Bindings, actor: Actor, url: URL) {
-  requireCapability(actor, 'read')
+  requireRead(actor, 'invoices')
   const raw = url.searchParams.get('limit') ?? '100'
   insist(/^\d+$/.test(raw), 'invalid_limit')
   const limit = Number(raw)

@@ -15,8 +15,9 @@ import { verifyAssertion, verifyRegistration } from './webauthn'
 
 /** A check older than this (strictly) is asked again before a sensitive action. */
 export const STEP_UP_MS = 15 * 60 * 1000
-/** "Chosen roles" defaults to every role that can credit, issue invoices, change prices, manage access or credentials, or cut over a move-in. */
-export const DEFAULT_ROLES: Role[] = ['owner', 'finance']
+/** "Chosen roles" defaults to every role that can credit, issue invoices, change prices, manage access or credentials, or cut over a move-in.
+ * With GOV-001 that adds Support (bounded credits) and Developer (credentials). */
+export const DEFAULT_ROLES: Role[] = ['developer', 'finance', 'owner', 'support']
 const CHALLENGE_MS = 5 * 60 * 1000
 const LOCK_FAILURES = 5, LOCK_MS = 15 * 60 * 1000
 
@@ -30,7 +31,10 @@ export async function mfaPolicy(env: Bindings): Promise<Policy> {
   return { scope: row?.scope ?? 'off', roles: (row?.roles ?? '').split(' ').filter(Boolean) as Role[] }
 }
 
-const covers = (policy: Policy, role: Role | null) => !!role && (policy.scope === 'all' || (policy.scope === 'roles' && policy.roles.includes(role)))
+// A custom role is covered when Custom is chosen, and also, holding Support's
+// bounded credit authority, whenever Support is chosen (GOV-001).
+const covers = (policy: Policy, actor: Actor) => !!actor.role && (policy.scope === 'all' || (policy.scope === 'roles' && (policy.roles.includes(actor.role)
+  || (actor.role === 'custom' && actor.capabilities.has('credits.limited') && policy.roles.includes('support')))))
 
 type Factor = { id: string; kind: 'totp' | 'passkey'; label: string; status: string; sealed_secret: string | null; last_step: number; credential_id: string | null; public_key: string | null; sign_count: number; created_at: number }
 
@@ -46,7 +50,7 @@ export async function standing(env: Bindings, actor: Actor) {
   const usable: Factor[] = [], unreadable: Factor[] = []
   for (const factor of factors) (factor.kind === 'passkey' || await unseal(env.MFA_KEY, factor.sealed_secret!, binding(factor.id, actor.id)) ? usable : unreadable).push(factor)
   const session = actor.sessionId ? await one<{ verified_at: number }>(env, 'SELECT verified_at FROM nc_mfa_sessions WHERE session_id = ? AND member_id = ?', actor.sessionId, actor.id) : null
-  const required = covers(policy, actor.role)
+  const required = covers(policy, actor)
   const reason = !usable.length && unreadable.length ? (env.MFA_KEY ? 'mfa_key_changed' : 'mfa_key_missing') : null
   const state: 'enroll' | 'verify' | null = !required ? null : !usable.length ? 'enroll' : !session ? 'verify' : null
   return { policy, required, usable, unreadable, verifiedAt: session?.verified_at ?? null, state, reason }

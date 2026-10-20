@@ -10,7 +10,7 @@ import { deliverAlerts } from './notification-mail'
 // lists exceptions. A person approves exact drafts; finalising numbers and
 // issues only approved invoices whose recorded inputs still match.
 import type { Bindings } from '../auth.server'
-import { actorLabel, requireCapability, requireMember, type Actor } from './actor'
+import { requireRead, actorLabel, requireCapability, requireMember, type Actor } from './actor'
 import { requireBusiness, taxReady, type Business } from './business'
 import { all, commit, fingerprint as hashInputs, guard, insist, newId, now, one, parseJson, stmt, type Row } from './core'
 import { addDays, isMonth, periodStartingIn, requireDate, today } from './dates'
@@ -134,7 +134,7 @@ export async function runDetail(env: Bindings, actor: Actor, id: string): Promis
 }
 
 export async function invoiceDetail(env: Bindings, actor: Actor, id: string): Promise<Row> {
-  requireCapability(actor, 'read')
+  requireRead(actor, 'invoices')
   const invoice = await one(env, `SELECT i.*, c.name AS customer_name, c.external_id, c.billing_email, c.address AS customer_address, COALESCE(s.billing_mode,'live') AS billing_mode, i.invoice_kind FROM nc_invoices i JOIN nc_customers c ON c.id = i.customer_id LEFT JOIN nc_subscriptions s ON s.id = i.subscription_id WHERE i.id = ?`, id)
   insist(invoice, 'invoice_not_found', 404)
   const lines = await all(env, 'SELECT * FROM nc_invoice_lines WHERE invoice_id = ? ORDER BY seq', id)

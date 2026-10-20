@@ -4,7 +4,7 @@ import { termRecords } from './renewal-terms'
 // approvals, and an explanation for every entitlement decision. The complete
 // restore package is the installation archive from `rer export`.
 import type { Bindings } from '../auth.server'
-import { requireCapability, type Actor } from './actor'
+import { requireRead, requireCapability, type Actor } from './actor'
 import { requireBusiness } from './business'
 import { all, insist, one, parseJson, type Row } from './core'
 import { metadataFor,withMetadata } from './metadata'
@@ -27,6 +27,7 @@ const file = (body: string, name: string, type: string) => new Response(body, { 
 
 export async function invoicesCsv(env: Bindings, actor: Actor,url?:URL) {
   requireCapability(actor, 'export')
+  requireRead(actor, 'invoices')
   const filter=metadataPredicate('invoice','i.id',url?metadataFilter(url):null)
   const rows = await all(env, `SELECT i.number, i.status, c.external_id, c.name, i.period_start, i.period_end, i.issue_date, i.due_date, i.subtotal_cents, i.tax_cents, i.total_cents,
     COALESCE((SELECT SUM(amount_cents) FROM nc_credit_notes WHERE invoice_id = i.id), 0) AS credited, COALESCE((SELECT SUM(amount_cents) FROM nc_allocations WHERE invoice_id = i.id), 0) AS paid, i.calc_version, i.approved_fingerprint, i.approved_by, i.issued_by, i.id
@@ -38,6 +39,7 @@ export async function invoicesCsv(env: Bindings, actor: Actor,url?:URL) {
 
 export async function usageCsv(env: Bindings, actor: Actor) {
   requireCapability(actor, 'export')
+  requireCapability(actor, 'read')
   const rows = await all(env, `SELECT e.event_id, c.external_id, m.code, e.quantity, e.occurred_text, e.received_at, e.status, e.void_reason,e.properties_json, i.number FROM nc_usage_events e JOIN nc_customers c ON c.id = e.customer_id JOIN nc_meters m ON m.id = e.meter_id LEFT JOIN nc_invoices i ON i.id = e.invoice_id ORDER BY e.occurred_at, e.event_id`)
   return file(csv(['event_id', 'customer_external_id', 'meter', 'quantity', 'occurred_at', 'received_at', 'status', 'void_reason', 'invoice_number','properties_json'],
     rows.map(r => [r.event_id, r.external_id, r.code, r.quantity, r.occurred_text, new Date(r.received_at).toISOString(), r.status, r.void_reason, r.number,r.properties_json])), 'nectar-usage.csv', 'text/csv; charset=utf-8')
@@ -45,6 +47,7 @@ export async function usageCsv(env: Bindings, actor: Actor) {
 
 export async function subscriptionsCsv(env: Bindings, actor: Actor,url?:URL) {
   requireCapability(actor, 'export')
+  requireRead(actor, 'subscriptions')
   const filter=metadataPredicate('subscription','s.id',url?metadataFilter(url):null)
   const rows = await all(env, `SELECT s.id, s.external_id, c.external_id AS customer, s.anchor_day, s.start_date, s.trial_end, s.end_date, s.billing_mode, s.cutover_start, s.provider_ref, pr.code AS product, p.version, p.kind, p.unit_amount, i.quantity, i.effective_from, i.effective_to
     FROM nc_subscriptions s JOIN nc_customers c ON c.id = s.customer_id JOIN nc_items i ON i.subscription_id = s.id JOIN nc_prices p ON p.id = i.price_id JOIN nc_products pr ON pr.id = p.product_id WHERE c.erased_at IS NULL AND ${filter.sql} ORDER BY c.external_id, s.id, i.effective_from`,...filter.params)
@@ -56,6 +59,7 @@ export async function subscriptionsCsv(env: Bindings, actor: Actor,url?:URL) {
 /** One bill run with every invoice, line, calculation input, approval and issue event. */
 export async function billRunJson(env: Bindings, actor: Actor, id: string) {
   requireCapability(actor, 'export')
+  requireCapability(actor, 'read')
   const run = await one(env, 'SELECT * FROM nc_bill_runs WHERE id = ?', id)
   insist(run, 'bill_run_not_found', 404)
   const invoices = await all(env, "SELECT * FROM nc_invoices WHERE bill_run_id = ? AND status <> 'discarded' ORDER BY number, id", id)
@@ -77,7 +81,7 @@ export async function billRunJson(env: Bindings, actor: Actor, id: string) {
 
 /** Why a customer does or does not have a feature on a date: every subscription's path, step by step. */
 export async function explainEntitlement(env: Bindings, actor: Actor, customerId: string, feature: string, date?: string) {
-  requireCapability(actor, 'read')
+  requireRead(actor, 'customers')
   const business = await requireBusiness(env)
   const day = date && isDate(date) ? date : today(business.timezone)
   const customer = await one(env, 'SELECT id, name, external_id, status FROM nc_customers WHERE id = ? OR external_id = ?', customerId, customerId)
@@ -108,7 +112,7 @@ export async function explainEntitlement(env: Bindings, actor: Actor, customerId
 
 /** Every feature the customer holds today, each with its explanation. */
 export async function entitlements(env: Bindings, actor: Actor, customerId: string) {
-  requireCapability(actor, 'read')
+  requireRead(actor, 'customers')
   const features = await all(env, 'SELECT DISTINCT f.feature FROM nc_features f JOIN nc_prices p ON p.product_id = f.product_id JOIN nc_items i ON i.price_id = p.id JOIN nc_subscriptions s ON s.id = i.subscription_id WHERE s.customer_id = ? ORDER BY f.feature', customerId)
   return await Promise.all(features.map(row => explainEntitlement(env, actor, customerId, row.feature)))
 }
@@ -116,6 +120,7 @@ export async function entitlements(env: Bindings, actor: Actor, customerId: stri
 /** Customer custody export, including every note and mention delivery outcome. */
 export async function customersCsv(env: Bindings, actor: Actor,url?:URL) {
   requireCapability(actor, 'export')
+  requireRead(actor, 'customers')
   const filter=metadataPredicate('customer','c.id',url?metadataFilter(url):null)
   const customers = await all(env, `SELECT c.id,c.external_id,c.name,c.billing_email,c.address FROM nc_customers c WHERE c.erased_at IS NULL AND ${filter.sql} ORDER BY c.external_id`,...filter.params)
   const rows = await Promise.all(customers.map(async c => [c.id,c.external_id,c.name,c.billing_email,c.address,JSON.stringify(await customerNotes(env,c.id)),JSON.stringify((await metadataFor(env,'customer',c.id)).metadata)]))

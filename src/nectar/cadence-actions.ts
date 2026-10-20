@@ -1,5 +1,5 @@
 import type { Bindings } from '../auth.server'
-import { actorLabel, requireCapability, requireMember, type Actor } from './actor'
+import { requireAny, actorLabel, requireMember, type Actor } from './actor'
 import { all, commit, guard, insist, newId, now, one, stmt, type Row } from './core'
 import { requireDate } from './dates'
 import type { Input } from './input'
@@ -78,7 +78,8 @@ export async function approveCadenceStage(env: Bindings, actor: Actor, input: In
 }
 
 export async function cadenceReport(env: Bindings, actor: Actor) {
-  requireCapability(actor,'read')
+  // Collections members handle cadences (GOV-001); full readers see them too.
+  requireAny(actor,['read','receivables'])
   const policy=await currentCadencePolicy(env),requests=await cadencePolicyRequests(env,actor)
   const invoices=await all(env,"SELECT i.id,i.number,c.name AS customer_name,e.segment,e.transfer_terms FROM nc_invoices i JOIN nc_customers c ON c.id=i.customer_id LEFT JOIN nc_cadence_enrollments e ON e.invoice_id=i.id WHERE i.status='issued' ORDER BY i.due_date,i.id")
   const enrolled: (Row & { lines: Row[] })[]=[]

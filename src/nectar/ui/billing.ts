@@ -2,9 +2,10 @@
 // and one invoice with its lines, calculation evidence, credits and payments.
 import { metadataLink } from './metadata'
 import { creditApprovals } from './credit-approvals'
+import { supportLimitCents } from '../credit-policy'
 import { notesSection } from './notes'
 import type { Bindings } from '../../auth.server'
-import { can, type Actor } from '../actor'
+import { can, canRead, type Actor } from '../actor'
 import { invoiceDetail, runDetail, runs } from '../billruns'
 import { business } from '../business'
 import { addDays, formatDate, formatPeriod, today } from '../dates'
@@ -68,7 +69,7 @@ const lineTable = (lines: any[], period: { start: string; end: string }, invoice
 export async function invoicePage(env: Bindings, actor: Actor, id: string, url: URL) {
   const i = await invoiceDetail(env, actor, id)
   const approver = actor.kind === 'member' && can(actor, 'approve')
-  const pays = i.status === 'issued' && can(actor, 'receivables') ? (await payments(env, actor, i.customer_id)).filter((p: any) => p.unallocated_cents > 0) : []
+  const pays = i.status === 'issued' && can(actor, 'receivables') && canRead(actor, 'payments') ? (await payments(env, actor, i.customer_id)).filter((p: any) => p.unallocated_cents > 0) : []
   const title = i.number ? `Invoice ${i.number}` : i.status === 'shadow' ? 'Shadow draft' : 'Draft invoice'
   const incumbent = i.comparison.incumbent
   return page(title, actor, h`<p class="crumbs"><a href="/app/billing/${i.bill_run_id}">Bill run</a> · <a href="/app/customers/${i.customer_id}">${i.customer_name}</a></p>
@@ -93,6 +94,7 @@ export async function invoicePage(env: Bindings, actor: Actor, id: string, url: 
       ${table(['Payment', 'Received', 'Allocated$'], i.allocations.map((a: any) => [a.reference, formatDate(a.received_on), cents(a.amount_cents)]), { empty: 'No payments allocated.' })}
       <p>Invoiced ${cents(i.total_cents)} = credited ${cents(i.creditedCents)} + paid ${cents(i.paidCents)} + owed ${cents(i.balanceCents)}.</p>
       ${approver && i.balanceCents > 0 ? form('credit.issue', `/app/invoices/${i.id}`, h`${hidden('invoice', i.id)}${field('Credit amount ($)', 'amount')}${field('Reason', 'reason')}`, 'Issue credit note', { layout: 'columns', secondary: true }) : ''}
+      ${!approver && actor.kind === 'member' && can(actor, 'credits.limited') && i.status === 'issued' && i.balanceCents > 0 ? form('credit.issue', `/app/invoices/${i.id}`, h`${hidden('invoice', i.id)}${field('Credit amount ($)', 'amount', { hint: `Support credits go up to ${money(supportLimitCents(i.creditPolicy))}, the limit the owner set.` })}${field('Reason', 'reason')}`, 'Issue support credit', { layout: 'columns', secondary: true }) : ''}
       ${pays.length && i.balanceCents > 0 ? form('payment.allocate', `/app/invoices/${i.id}`, h`${hidden('invoice', i.id)}${select('Payment', 'payment', pays.map((p: any) => ({ value: p.id, label: `${p.reference} — ${money(p.unallocated_cents)} unallocated` })), pays[0].id)}${field('Amount ($)', 'amount')}`, 'Allocate payment', { layout: 'columns', secondary: true }) : ''}</section>` : ''}
     ${i.status === 'issued' ? creditApprovals(i, actor) : ''}
     ${await notesSection(env,actor,i.customer_id,'invoice',i.id,`/app/invoices/${i.id}#notes`)}

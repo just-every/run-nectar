@@ -1,7 +1,7 @@
 // Flow 2: customers and their billing contacts, each customer keyed by the
 // business's own external id (the id their CRM or previous biller uses).
 import type { Bindings } from '../auth.server'
-import { actorLabel, requireCapability, type Actor } from './actor'
+import { requireRead, actorLabel, requireCapability, type Actor } from './actor'
 import { all, commit, guard, insist, newId, now, one, stmt } from './core'
 import { withMetadata } from './metadata'
 import { metadataFilter,metadataPredicate } from './metadata-query'
@@ -12,7 +12,7 @@ const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const EXTERNAL_ID = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,79}$/
 
 export async function customers(env: Bindings, actor: Actor,url?:URL) {
-  requireCapability(actor, 'read')
+  requireRead(actor, 'customers')
   const filter=metadataPredicate('customer','c.id',url?metadataFilter(url):null)
   const search=url?.searchParams.get('search')??''
   const rows=await all(env, `SELECT c.id, c.external_id, c.name, c.billing_email, c.language, c.status, c.origin, c.tax_exempt,

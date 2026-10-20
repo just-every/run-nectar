@@ -1,7 +1,7 @@
 // Read-only custody for billing answers. Figures always name an exact public
 // record and JSON pointer; calculations retain their individual operands.
 import type { Bindings } from '../auth.server'
-import { requireCapability, type Actor } from './actor'
+import { requireRead, type Actor } from './actor'
 import { invoiceDetail } from './billruns'
 import { all, insist, one, type Row } from './core'
 import { reportLine, customerReportLine, type ReportLine } from './report-lines'
@@ -11,7 +11,8 @@ import { customerAnswerInvoice } from './portal-answer-data'
 
 export type AnswerReader = Actor | CustomerSession
 export const isCustomerReader = (reader: AnswerReader): reader is CustomerSession => 'jti' in reader
-export function requireAnswerRead(reader: AnswerReader) { if (!isCustomerReader(reader)) requireCapability(reader, 'read') }
+/** GOV-001: staff answers cite the customer and its invoices, so a reader needs both families. */
+export function requireAnswerRead(reader: AnswerReader) { if (!isCustomerReader(reader)) { requireRead(reader, 'customers'); requireRead(reader, 'invoices') } }
 
 export interface AnswerFigure {
   label: string

@@ -1,7 +1,7 @@
 // V1 is catalogue setup. A later catalogue version is prepared, then published
 // by another person (or explicitly confirmed by the sole owner).
 import type { Bindings } from '../auth.server'
-import { actorLabel, requireCapability, requireMember, requireOwner, type Actor } from './actor'
+import { requireRead, actorLabel, requireMember, requireOwner, type Actor } from './actor'
 import { all, commit, guard, insist, newId, now, one, parseJson, stmt, type Row } from './core'
 import type { Input } from './input'
 import { priceStatements, readPriceDraft } from './price-drafts'
@@ -23,7 +23,7 @@ export async function createPrice(env: Bindings, actor: Actor, input: Input) {
 }
 
 export async function priceRequests(env: Bindings, actor: Actor): Promise<Row[]> {
-  requireCapability(actor, 'read')
+  requireRead(actor, 'catalog')
   const rows = await all(env, 'SELECT r.*,p.name AS product_name,COALESCE((SELECT MAX(version) FROM nc_prices WHERE product_id=r.product_id),0) AS current_version FROM nc_price_requests r JOIN nc_products p ON p.id=r.product_id ORDER BY prepared_at DESC,r.id DESC LIMIT 200')
   const other = await one(env, OTHER_APPROVERS, actor.id)
   return rows.map(row => ({ ...row, payload: parseJson<Row>(row.payload_json, {}), payload_json: undefined,

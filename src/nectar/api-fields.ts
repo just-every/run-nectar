@@ -8,6 +8,7 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "member": "text"
   },
   "access.give": {
+    "custom_role": "text",
     "email": "text",
     "name": "text",
     "role": "text"
@@ -172,6 +173,7 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "request": "text"
   },
   "credit.policy": {
+    "support_limit": "text",
     "two_person_above": "text"
   },
   "credit.prepare": {
@@ -451,6 +453,15 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "winback_enabled": "flag",
     "winback_months": "integer",
     "winback_percent": "integer"
+  },
+  "role.define": {
+    "capabilities": "list",
+    "name": "text"
+  },
+  "role.update": {
+    "capabilities": "list",
+    "revision": "integer",
+    "role": "text"
   },
   "setup.resolve": {
     "proposal": "text",

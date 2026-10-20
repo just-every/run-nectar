@@ -5,9 +5,12 @@ import { NectarError, all, commit, guard, newId, now, one, stmt } from './core'
 import { addMonths, localDate } from './dates'
 import { report, reportInvoice, type Report } from './reports'
 import { reportsCsv } from './report-csv'
-import { ROLE_CAPABILITIES, type Actor, type Role } from './actor'
+import { memberCapabilities, type Actor, type Role } from './actor'
 import { plainMoney } from './decimal'
 import { esc } from './ui/html'
+
+/** GOV-001: scheduled reports reach only members who can read reports and export. */
+const reportReader=(role:Role,custom:string|null)=>{const held=memberCapabilities(role,custom);return held.has('export')&&(held.has('read')||held.has('read.reports'))}
 
 /** One frozen current-record snapshot of the previous month per opted-in member.
  * Reserving before reading makes overlapping cron invocations and restarts safe.
@@ -16,9 +19,9 @@ export async function sendScheduledReports(env: Bindings, instant=Date.now()) {
   const b=await business(env)
   if(!b)return
   const day=localDate(instant,b.timezone),period=addMonths(`${day.slice(0,7)}-01`,-1).slice(0,7)
-  const rows=await all(env,`SELECT m.id,m.email,m.name,m.role,s.revision FROM nc_members m
-    JOIN nc_report_schedules s ON s.member_id=m.id
-    WHERE m.status='active' AND m.role IN ('owner','finance','accountant') AND s.enabled=1 AND s.day<=?`,Number(day.slice(8)))
+  const rows=(await all(env,`SELECT m.id,m.email,m.name,m.role,r.capabilities AS custom,s.revision FROM nc_members m
+    JOIN nc_report_schedules s ON s.member_id=m.id LEFT JOIN nc_roles r ON r.id=m.custom_role_id
+    WHERE m.status='active' AND s.enabled=1 AND s.day<=?`,Number(day.slice(8)))).filter(member=>reportReader(member.role as Role,member.custom))
   for(const member of rows){
     const id=newId()
     if(await one(env,'SELECT 1 FROM nc_report_deliveries WHERE member_id=? AND period=?',member.id,period))continue
@@ -30,7 +33,7 @@ export async function sendScheduledReports(env: Bindings, instant=Date.now()) {
     let status='failed',provider:string|null=null
     try {
       const actor:Actor={id:member.id,email:member.email,name:member.name,role:member.role as Role,kind:'member',sessionId:null,
-        capabilities:new Set(ROLE_CAPABILITIES[member.role as Role])}
+        capabilities:memberCapabilities(member.role as Role,member.custom)}
       const seq=(await one(env,'SELECT COALESCE(MAX(seq),0) AS seq FROM nc_audit'))!.seq
       const reports:Report[]=[]
       for(const metric of ['billings','collections','ar','credits','tax','unbilled'])reports.push(await report(env,actor,metric,new URL(`https://report.invalid/?period=${period}`)))
@@ -46,8 +49,9 @@ export async function sendScheduledReports(env: Bindings, instant=Date.now()) {
       await commit(env,[guard(env,'report_source_changed','(SELECT COALESCE(MAX(seq),0) FROM nc_audit)=?',seq),
         stmt(env,"UPDATE nc_report_deliveries SET reports_json=?,sources_json=?,csv=?,status='sending' WHERE id=? AND status='preparing'",JSON.stringify(reports),JSON.stringify(sourceEvidence),csv,id)],
         [{actor:'system:reports',action:'report.snapshot',subject:id,detail:{period}},{actor:'system:reports',action:'report.mail.claim',subject:id,detail:{period,member:member.id,scheduleRevision:member.revision}}])
-      const eligible=await one(env,`SELECT m.id FROM nc_members m JOIN nc_report_schedules s ON s.member_id=m.id
-        WHERE m.id=? AND m.email=? AND m.status='active' AND m.role IN ('owner','finance','accountant') AND s.enabled=1 AND s.revision=?`,member.id,member.email,member.revision)
+      const current=await one(env,`SELECT m.id,m.role,r.capabilities AS custom FROM nc_members m JOIN nc_report_schedules s ON s.member_id=m.id LEFT JOIN nc_roles r ON r.id=m.custom_role_id
+        WHERE m.id=? AND m.email=? AND m.status='active' AND s.enabled=1 AND s.revision=?`,member.id,member.email,member.revision)
+      const eligible=current&&reportReader(current.role as Role,current.custom)
       status='suppressed'
       const mail=operatorMail(env)
       if(eligible&&mail&&env.MAIL_FROM){

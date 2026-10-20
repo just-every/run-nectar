@@ -1,5 +1,5 @@
 import type { Bindings } from '../auth.server'
-import { requireCapability, type Actor } from './actor'
+import { requireRead, requireCapability, type Actor } from './actor'
 import { report, type Report } from './reports'
 import { plainMoney } from './decimal'
 
@@ -21,5 +21,6 @@ export function csvResponse(csv: string, name: string) {
 }
 export async function reportCsv(env: Bindings, actor: Actor, metric: string, url: URL) {
   requireCapability(actor,'export')
+  requireRead(actor,'reports')
   return csvResponse(reportsCsv([await report(env,actor,metric,url)]),`nectar-${metric}`)
 }

@@ -1,5 +1,5 @@
 import type { Bindings } from '../auth.server'
-import { actorLabel, requireCapability, requireMember, requireOwner, type Actor } from './actor'
+import { requireAny, actorLabel, requireMember, requireOwner, type Actor } from './actor'
 import { all, commit, guard, insist, newId, now, one, stmt, type Row } from './core'
 import type { Input } from './input'
 
@@ -78,7 +78,7 @@ export async function decideCadencePolicy(env: Bindings, actor: Actor, input: In
 }
 
 export async function cadencePolicyRequests(env: Bindings, actor: Actor): Promise<Row[]> {
-  requireCapability(actor,'read')
+  requireAny(actor,['read','receivables'])
   const rows=await all(env,'SELECT * FROM nc_cadence_policy_requests ORDER BY prepared_at DESC,id DESC')
   const other=await one(env,OTHER,actor.id), policy=await currentCadencePolicy(env)
   return rows.map(row=>({...row,payload:JSON.parse(row.payload_json),stale:row.status==='pending'&&row.base_revision!==policy.revision,

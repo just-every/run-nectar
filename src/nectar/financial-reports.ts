@@ -1,7 +1,7 @@
 // Financial contributions use recorded ledger values or the real invoice engine.
 // Unbilled calculations are live read snapshots, never issued-invoice evidence.
 import type { Bindings } from '../auth.server'
-import { requireCapability, type Actor } from './actor'
+import { requireRead, type Actor } from './actor'
 import { requireBusiness, type Business } from './business'
 import { all, fingerprint, insist, one, parseJson, type Row } from './core'
 import { addMonths, isMonth, localDate, periodStartingIn, today, zonedStart } from './dates'
@@ -156,13 +156,13 @@ async function contributions(env: Bindings, metric: string, url: URL) {
 
 /** Every contribution is sourced from actual ledger rows or exact rated usage lines. */
 export async function financialReport(env: Bindings, actor: Actor, metric: string, url: URL): Promise<FinancialReport> {
-  requireCapability(actor, 'read')
+  requireRead(actor, 'reports')
   return (await contributions(env, metric, url)).report
 }
 
 /** Source membership and its components are read together; filtered-out sources refuse. */
 export async function financialReportSource(env: Bindings, actor: Actor, metric: string, sourceId: string, url: URL): Promise<FinancialReportSource> {
-  requireCapability(actor, 'read')
+  requireRead(actor, 'reports')
   const { report, unbilled, business } = await contributions(env, metric, url)
   const entry = report.entries.find(row => row.invoiceId === sourceId)
   insist(entry, 'report_invoice_not_found', 404)

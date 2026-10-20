@@ -5,7 +5,7 @@
 import { runtimeBindings, type Bindings } from '../auth.server'
 import { AuthError, safeReturnTo } from '../modules/operator-auth/index.mjs'
 import { actions } from './actions'
-import { currentActor,requireCapability, type Actor } from './actor'
+import { canRead,currentActor,requireCapability,requireRead, type Actor } from './actor'
 import { NectarError,insist,one } from './core'
 import { business } from './business'
 import { Input } from './input'
@@ -93,7 +93,10 @@ async function apiResponse(env: Bindings, actor: Actor, request: Request, url: U
   }
   const { name, view, id } = route(path)
   insist(name === 'invoices' || LIST_DOORS.includes(name) || (!url.searchParams.has('limit') && !url.searchParams.has('cursor')), 'not_a_list')
-  if (/^(subscriptions\/|proposals\/|invoices\/[^/]+\/lines\/)/.test(path)) requireCapability(actor,'read')
+  // Check the reader's family before saying anything about an erased record (GOV-001).
+  if (/^proposals\//.test(path)) requireCapability(actor,'read')
+  if (/^subscriptions\//.test(path)) requireRead(actor,'subscriptions')
+  if (/^invoices\/[^/]+\/lines\//.test(path)) insist(canRead(actor,'reports')||canRead(actor,'invoices'),'forbidden',403)
   if (/^(subscriptions\/|proposals\/|invoices\/[^/]+\/lines\/)/.test(path) && await one(env,'SELECT 1 FROM nc_erased_records WHERE record_id=?',id.split('/')[0])) throw new NectarError('customer_erased',410)
   const result=await view(env, actor, request, id, url)
   return result instanceof Response ? result : send(LIST_DOORS.includes(name) ? paged(result, url, path) : result)

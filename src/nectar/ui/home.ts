@@ -1,9 +1,9 @@
 // Home (the first-run checklist and today's work), More, business and tax
 // settings, access and credentials, and the audit trail.
 import type { Bindings } from '../../auth.server'
-import { agentKeys, members } from '../access'
+import { agentKeys, customRoles, members } from '../access'
 import { LATEST_VERSION, VERSIONS } from '../api-versions'
-import { ROLE_LABELS, ROLE_NAMES, SCOPES, can, type Actor } from '../actor'
+import { CUSTOM_CAPABILITIES, ROLE_LABELS, ROLE_NAMES, SCOPES, can, type Actor, type Capability } from '../actor'
 import { US_STATES, business, taxReady } from '../business'
 import { one, parseJson } from '../core'
 import { money } from '../decimal'
@@ -78,19 +78,35 @@ export async function settingsPage(env: Bindings, actor: Actor, url: URL) {
   return page('Business and tax', actor, h`<h1>Business and tax</h1><p><a href="/app/more#notifications">Manage your email notifications</a></p>${tax ? h`<div class="split settings">${identityCard}${tax}</div>` : identityCard}${await policySection(env, actor)}`, { current: '/app/settings', url, showNav: !!b })
 }
 
+const CAPABILITY_LABELS: Partial<Record<Capability, string>> = {
+  'read.customers': 'Read customers', 'read.catalog': 'Read catalog', 'read.subscriptions': 'Read subscriptions', 'read.invoices': 'Read invoices', 'read.payments': 'Read payments',
+  'read.reports': 'Read reports', export: 'Export (downloads of what the role can read)', notes: 'Add notes', receivables: 'Record and allocate payments, reminders and follow-up tasks',
+  draft: 'Prepare plan changes, amendments and order setups for approval', 'credits.limited': 'Credits up to the support limit', propose: 'Propose credits from billing answers for approval',
+}
+const capabilityChoices = () => CUSTOM_CAPABILITIES.map(value => ({ value, label: CAPABILITY_LABELS[value] ?? value }))
+
 export async function accessPage(env: Bindings, actor: Actor, url: URL, issued?: { name: string; key: string }) {
-  const people = await members(env, actor)
+  // A developer manages credentials here; people, roles and sign-in rules stay with the owner (GOV-001).
+  const owner = actor.role === 'owner'
   const keys = await agentKeys(env, actor)
   const zone = (await business(env))!.timezone
-  const policy = await mfaPolicy(env), factors = await memberFactors(env)
   const scopes = [{ value: 'off', label: 'Not required' }, { value: 'roles', label: 'Required for the chosen roles' }, { value: 'all', label: 'Required for everyone (installation-wide)' }]
+  const ownerSections = async () => {
+    const people = await members(env, actor), roles = await customRoles(env, actor)
+    const policy = await mfaPolicy(env), factors = await memberFactors(env)
+    const grantable = (['finance', 'accountant', 'collections', 'sales', 'support', 'developer'] as const).map(role => ({ value: role, label: ROLE_LABELS[role] }))
+    return h`<section class="card" aria-labelledby="people"><h2 id="people">People</h2>
+    ${table(['Name', 'Email', 'Role', 'Status', 'Second factor', ''], people.map(m => [m.name, m.email, m.custom_role ?? ROLE_NAMES[m.role], tag(m.status === 'active' ? 'Active' : 'Ended'), factors.get(m.id) ? h`${factors.get(m.id)} enrolled ${form('mfa.reset', '/app/access', hidden('member', m.id), 'Reset factor', { secondary: true })}` : 'None', m.role !== 'owner' && m.status === 'active' ? form('access.end', '/app/access', hidden('member', m.id), 'End access', { secondary: true }) : '']))}
+    <h3>Give someone access</h3>${form('access.give', '/app/access', h`${field('Name', 'name')}${field('Email', 'email', { type: 'email' })}${select('Role', 'role', [...grantable, ...(roles.length ? [{ value: 'custom', label: 'Custom role (choose it below)' }] : [])], 'finance')}${roles.length ? select('Custom role', 'custom_role', roles.map(r => ({ value: r.id, label: r.name })), '', { required: false, blank: '—' }) : ''}`, 'Invite', { layout: 'columns' })}</section>
+    <section class="card" aria-labelledby="roles"><h2 id="roles">Custom roles</h2><p class="hint">A custom role holds only the capabilities ticked here. A change applies to every member in the role from their next request, without signing them out. Custom roles never change settings, access, credentials or approvals.</p>
+    ${roles.map(r => h`<article><h3>${r.name}</h3>${form('role.update', '/app/access#roles', h`${hidden('role', r.id)}${hidden('revision', r.revision)}${checks('Capabilities', 'capabilities', capabilityChoices(), r.capabilities)}`, `Save ${r.name}`, { secondary: true })}</article>`)}
+    <h3>Define a custom role</h3>${form('role.define', '/app/access#roles', h`${field('Role name', 'name', { hint: 'For example: "Billing analyst".' })}${checks('Capabilities', 'capabilities', capabilityChoices(), [])}`, 'Define role', { layout: 'columns' })}</section>
+    <section class="card" aria-labelledby="mfa"><h2 id="mfa">Multi-factor sign-in</h2><p class="hint">A required member enrolls an authenticator app or a passkey and presents it in every session before any page, form, API call or download opens; credits above the support limit, access and credential changes and the move-in cutover ask again after 15 minutes. Resetting a member’s factor signs them out everywhere.</p>
+    ${form('mfa.policy', '/app/access', h`${select('Requirement', 'scope', scopes, policy.scope)}${checks('Roles that must use it', 'roles', (['owner', 'finance', 'accountant', 'collections', 'sales', 'support', 'developer', 'custom'] as const).map(role => ({ value: role, label: ROLE_NAMES[role] })), policy.scope === 'roles' ? policy.roles : DEFAULT_ROLES)}`, 'Save requirement', { layout: 'columns' })}</section>`
+  }
   return page('Access', actor, h`<h1>Access</h1>
     ${issued ? h`<section class="card key" aria-labelledby="new-key"><h2 id="new-key">Credential for ${issued.name}</h2><p>Copy it now; Nectar keeps only its fingerprint and cannot show it again.</p><p><code class="secret">${issued.key}</code></p><p class="hint">Send it as <code>Authorization: Bearer …</code> to <code>/api/nectar/</code>.</p></section>` : ''}
-    <section class="card" aria-labelledby="people"><h2 id="people">People</h2>
-    ${table(['Name', 'Email', 'Role', 'Status', 'Second factor', ''], people.map(m => [m.name, m.email, ROLE_NAMES[m.role], tag(m.status === 'active' ? 'Active' : 'Ended'), factors.get(m.id) ? h`${factors.get(m.id)} enrolled ${form('mfa.reset', '/app/access', hidden('member', m.id), 'Reset factor', { secondary: true })}` : 'None', m.role !== 'owner' && m.status === 'active' ? form('access.end', '/app/access', hidden('member', m.id), 'End access', { secondary: true }) : '']))}
-    <h3>Give someone access</h3>${form('access.give', '/app/access', h`${field('Name', 'name')}${field('Email', 'email', { type: 'email' })}${select('Role', 'role', [{ value: 'finance', label: ROLE_LABELS.finance }, { value: 'accountant', label: ROLE_LABELS.accountant }], 'finance')}`, 'Invite', { layout: 'columns' })}</section>
-    <section class="card" aria-labelledby="mfa"><h2 id="mfa">Multi-factor sign-in</h2><p class="hint">A required member enrolls an authenticator app or a passkey and presents it in every session before any page, form, API call or download opens; credits, access and credential changes and the move-in cutover ask again after 15 minutes. Resetting a member’s factor signs them out everywhere.</p>
-    ${form('mfa.policy', '/app/access', h`${select('Requirement', 'scope', scopes, policy.scope)}${checks('Roles that must use it', 'roles', (['owner', 'finance', 'accountant'] as const).map(role => ({ value: role, label: ROLE_NAMES[role] })), policy.scope === 'roles' ? policy.roles : DEFAULT_ROLES)}`, 'Save requirement', { layout: 'columns' })}</section>
+    ${owner ? await ownerSections() : ''}
     <section class="card" aria-labelledby="agents"><h2 id="agents">Agent credentials</h2><p class="hint">A credential lets your own agent read and prepare proposals, or lets a metering pipeline submit usage. Credentials never approve, finalize or change records directly.</p>
     ${table(['Name', 'Scopes', 'API version', 'Last used', 'Status', ''], keys.map(k => [k.name, k.scopes, k.revoked_at ? k.api_version : form('credential.version', '/app/access', h`${hidden('key', k.id)}${versionSelect(k.api_version)}`, 'Pin version', { secondary: true }), when(k.last_used_at, zone), tag(k.revoked_at ? 'Revoked' : 'Active'), k.revoked_at ? '' : form('credential.revoke', '/app/access', hidden('key', k.id), 'Revoke', { secondary: true })]), { empty: 'No credentials issued.' })}
     <h3>Issue a credential</h3><form method="post" action="/app/access/credential" class="columns">${field('Name', 'name', { hint: 'For example: "Finance agent" or "Metering pipeline".' })}${checks('Scopes', 'scopes', Object.keys(SCOPES).map(scope => ({ value: scope, label: scope === 'prepare' ? 'prepare — read records and propose work for approval' : 'usage — submit usage events' })), ['prepare'])}${versionSelect(LATEST_VERSION, 'Responses use this dated shape unless a request sends a Nectar-Version header.')}<button type="submit">Issue credential</button></form></section>`, { current: '/app/access', url })

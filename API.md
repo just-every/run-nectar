@@ -21,7 +21,10 @@ role or credential scope itself.
 `proposals/ID`, `entitlements/CUSTOMER` (all features held today) and
 `entitlements/CUSTOMER?feature=CODE&date=YYYY-MM-DD` (one decision, explained
 step by step; `CUSTOMER` may be the internal id or the external id), `imports`,
-`shadow`, `members` and `credentials` (owner), `audit`.
+`shadow`, `members` and `roles` (owner), `credentials` (owner or developer), `audit`.
+Each door answers only within the caller's record families (`GOV-001`): a
+collections, sales, support or custom-role member gets 403 `forbidden` on
+records their role does not read.
 
 ## Actions (POST, JSON body)
 
@@ -64,7 +67,10 @@ step by step; `CUSTOMER` may be the internal id or the external id), `imports`,
 | `proposal.decide` | a person with approval | `proposal`, `decision` (`approved`, `rejected`), `note`; collections may set `recipient`, `subject`, `body` |
 | `import.preview`, `import.apply`, `import.job` | owner, finance (a person) | see [IMPORTING.md](IMPORTING.md) |
 | `subscription.adopt` | owner | `subscription`, `cutover_start`, `acknowledge_unreconciled` |
-| `access.give`, `access.end`, `credential.issue`, `credential.revoke` | owner | `email`, `name`, `role` / `member` / `name`, `scopes[]` / `key` |
+| `access.give`, `access.end` | owner | `email`, `name`, `role` (`finance`, `accountant`, `collections`, `sales`, `support`, `developer` or `custom` with `custom_role`) / `member` |
+| `role.define`, `role.update` | owner | `name`, `capabilities[]` / `role`, `revision`, `capabilities[]` — custom roles combine `read.customers`, `read.catalog`, `read.subscriptions`, `read.invoices`, `read.payments`, `read.reports`, `export`, `notes`, `receivables`, `draft`, `credits.limited`, `propose`; a change applies on each member's next request |
+| `credential.issue`, `credential.revoke`, `credential.version` | owner, developer | `name`, `scopes[]` / `key` / `key`, `api_version` |
+| `credit.issue` (support) | support or a custom role with `credits.limited` | `invoice`, `amount`, `reason`; at most the support credit limit set through `credit.policy` `support_limit` (zero until set) |
 
 Amounts are decimal text (`"499.00"`, `"0.0004"`); money is answered in integer
 cents (`total_cents`). Errors answer `{ "error": "code", "detail": … }` with

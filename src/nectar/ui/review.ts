@@ -4,7 +4,7 @@ import { pricingSimulationBody } from './pricing-simulation'
 // Proposals (agent-prepared work awaiting a person), the Stripe move-in kit
 // (preview, apply, undo, shadow comparison and cutover) and exports.
 import type { Bindings } from '../../auth.server'
-import { can, type Actor } from '../actor'
+import { requireCapability, canRead, can, type Actor } from '../actor'
 import { runs } from '../billruns'
 import { business } from '../business'
 import { formatDate, formatPeriod } from '../dates'
@@ -87,10 +87,11 @@ export async function previewPage(env: Bindings, actor: Actor, input: Input, url
 }
 
 export async function exportsPage(env: Bindings, actor: Actor, url: URL) {
-  const list = (await runs(env, actor)).filter((r: any) => r.status === 'finalised' || r.status === 'draft')
+  // GOV-001: exporting covers only what the role can read; bill runs need full read.
+  requireCapability(actor, 'export')
+  const list = can(actor, 'read') ? (await runs(env, actor)).filter((r: any) => r.status === 'finalised' || r.status === 'draft') : []
   return page('Exports', actor, h`<h1>Exports</h1><p><a href="/app/metadata">Browse, filter and export object metadata</a></p>
-    <section class="card"><h2>Records</h2><ul class="downloads"><li><a class="download" href="/app/exports/customers.csv">Customers and notes (CSV)</a> — billing details and append-only notes with mention delivery outcomes.</li><li><a class="download" href="/app/exports/invoices.csv">Issued invoices (CSV)</a> — totals, credits, payments and balance, with each invoice's calculation fingerprint.</li>
-      <li><a class="download" href="/app/exports/usage.csv">Usage events (CSV)</a> — every event, its status and the invoice that billed it.</li><li><a class="download" href="/app/exports/subscriptions.csv">Subscriptions (CSV)</a> — plans, quantities, dates and cutovers.</li></ul></section>
-    <section class="card"><h2>Bill runs</h2>${table(['Month', 'Status', ''], list.map((r: any) => [r.period, tag(r.status === 'finalised' ? 'Finalized' : 'Draft'), h`<a class="download" href="/app/billing/${r.id}.json">Bill run with calculation evidence (JSON)</a>`]), { empty: 'No bill runs yet.' })}</section>
+    <section class="card"><h2>Records</h2><ul class="downloads">${canRead(actor, 'customers') ? h`<li><a class="download" href="/app/exports/customers.csv">Customers and notes (CSV)</a> — billing details and append-only notes with mention delivery outcomes.</li>` : ''}${canRead(actor, 'invoices') ? h`<li><a class="download" href="/app/exports/invoices.csv">Issued invoices (CSV)</a> — totals, credits, payments and balance, with each invoice's calculation fingerprint.</li>` : ''}${can(actor, 'read') ? h`<li><a class="download" href="/app/exports/usage.csv">Usage events (CSV)</a> — every event, its status and the invoice that billed it.</li>` : ''}${canRead(actor, 'subscriptions') ? h`<li><a class="download" href="/app/exports/subscriptions.csv">Subscriptions (CSV)</a> — plans, quantities, dates and cutovers.</li>` : ''}</ul></section>
+    ${can(actor, 'read') ? h`<section class="card"><h2>Bill runs</h2>${table(['Month', 'Status', ''], list.map((r: any) => [r.period, tag(r.status === 'finalised' ? 'Finalized' : 'Draft'), h`<a class="download" href="/app/billing/${r.id}.json">Bill run with calculation evidence (JSON)</a>`]), { empty: 'No bill runs yet.' })}</section>` : ''}
     <section class="card"><h2>Complete restore package</h2><p>The whole installation — every record, approval, calculation and the audit trail — exports as one archive from the computer that runs Nectar:</p><pre class="message">rer export --output nectar.rer</pre><p class="hint">Restore it into a fresh installation with <code>rer import --input nectar.rer --yes</code>. Sign-in accounts are not part of the archive; the owner signs in again.</p></section>`, { current: '/app/exports', url })
 }

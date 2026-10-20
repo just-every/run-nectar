@@ -1,20 +1,67 @@
-// Access: the owner gives finance operators and accountants sign-in access
-// (Base operator-auth invitations), ends it, and issues or revokes scoped
-// application credentials for an agent or metering pipeline.
+// Access: the owner gives members sign-in access (Base operator-auth
+// invitations) in a preset or custom role, defines custom roles from explicit
+// capabilities (GOV-001), ends access, and the owner or a developer issues or
+// revokes scoped application credentials for an agent or metering pipeline.
 import { operatorAuth, type Bindings } from '../auth.server'
-import { ROLES, SCOPES, actorLabel, requireOwner, type Actor, type Role, type Scope } from './actor'
+import { CUSTOM_CAPABILITIES, ROLES, SCOPES, actorLabel, requireCapability, requireOwner, type Actor, type Capability, type Role, type Scope } from './actor'
 import { LATEST_VERSION, checkVersion } from './api-versions'
-import { all, commit, insist, newId, now, one, sha256Hex, stmt } from './core'
+import { all, commit, guard, insist, newId, now, one, sha256Hex, stmt } from './core'
 import type { Input } from './input'
 import { requireFreshFactor } from './mfa'
 
 export async function members(env: Bindings, actor: Actor) {
   requireOwner(actor)
-  return await all<{ id: string; email: string; name: string; role: Role; status: string; created_at: number }>(env, 'SELECT id, email, name, role, status, created_at FROM nc_members ORDER BY status, name')
+  return await all<{ id: string; email: string; name: string; role: Role; custom_role_id: string | null; custom_role: string | null; status: string; created_at: number }>(env,
+    'SELECT m.id, m.email, m.name, m.role, m.custom_role_id, r.name AS custom_role, m.status, m.created_at FROM nc_members m LEFT JOIN nc_roles r ON r.id = m.custom_role_id ORDER BY m.status, m.name')
+}
+
+/** The owner's custom roles with the capabilities each one holds now. */
+export async function customRoles(env: Bindings, actor: Actor) {
+  requireOwner(actor)
+  return (await all<{ id: string; name: string; capabilities: string; revision: number; updated_by: string; updated_at: number }>(env,
+    'SELECT id, name, capabilities, revision, updated_by, updated_at FROM nc_roles ORDER BY lower(name)')).map(role => ({ ...role, capabilities: role.capabilities.split(' ') }))
+}
+
+function chosenCapabilities(input: Input): Capability[] {
+  const chosen = [...new Set(input.list('capabilities'))].sort() as Capability[]
+  insist(chosen.length > 0 && chosen.every(c => CUSTOM_CAPABILITIES.includes(c)), 'invalid_capabilities')
+  return chosen
+}
+
+/** GOV-001: a custom role is a named, explicit capability list. */
+export async function defineRole(env: Bindings, actor: Actor, input: Input) {
+  requireOwner(actor)
+  await requireFreshFactor(env, actor)
+  input.only(['name', 'capabilities', 'returnTo'])
+  const name = input.text('name', { max: 60 }).trim()
+  insist(name.length > 0, 'invalid_name')
+  const capabilities = chosenCapabilities(input)
+  insist(!await one(env, 'SELECT 1 FROM nc_roles WHERE lower(name) = lower(?)', name), 'role_exists', 409)
+  const id = newId(), at = now(), by = actorLabel(actor)
+  await commit(env, [stmt(env, 'INSERT INTO nc_roles (id, name, capabilities, revision, created_by, created_at, updated_by, updated_at) VALUES (?, ?, ?, 1, ?, ?, ?, ?)', id, name, capabilities.join(' '), by, at, by, at)],
+    { actor: by, action: 'role.define', subject: id, detail: { name, capabilities } })
+  return { id, name, capabilities, revision: 1 }
+}
+
+/** Changes apply to every member holding the role from their next request. */
+export async function updateRole(env: Bindings, actor: Actor, input: Input) {
+  requireOwner(actor)
+  await requireFreshFactor(env, actor)
+  input.only(['role', 'revision', 'capabilities', 'returnTo'])
+  const role = await one(env, 'SELECT * FROM nc_roles WHERE id = ?', input.text('role', { max: 100 }))
+  insist(role, 'role_not_found', 404)
+  const revision = input.integer('revision', { min: 1, max: Number.MAX_SAFE_INTEGER - 1 })
+  insist(revision !== null, 'invalid_revision')
+  insist(revision === role.revision, 'stale', 409)
+  const capabilities = chosenCapabilities(input)
+  await commit(env, [guard(env, 'stale', 'EXISTS(SELECT 1 FROM nc_roles WHERE id = ? AND revision = ?)', role.id, revision),
+    stmt(env, 'UPDATE nc_roles SET capabilities = ?, revision = revision + 1, updated_by = ?, updated_at = ? WHERE id = ?', capabilities.join(' '), actorLabel(actor), now(), role.id)],
+  { actor: actorLabel(actor), action: 'role.update', subject: role.id, detail: { name: role.name, from: String(role.capabilities).split(' '), to: capabilities, revision: revision + 1 } })
+  return { id: role.id, name: role.name, capabilities, revision: revision + 1 }
 }
 
 export async function agentKeys(env: Bindings, actor: Actor) {
-  requireOwner(actor)
+  requireCapability(actor, 'credentials')
   return await all(env, 'SELECT id, name, scopes, api_version, created_by, created_at, last_used_at, revoked_at FROM nc_agent_keys ORDER BY created_at DESC')
 }
 
@@ -30,6 +77,9 @@ export async function giveAccess(env: Bindings, actor: Actor, input: Input, requ
   const name = input.text('name', { max: 120 })
   const role = input.text('role', { max: 20 }) as Role
   insist(ROLES.includes(role) && role !== 'owner', 'invalid_role')
+  const custom = role === 'custom' ? await one(env, 'SELECT id, name FROM nc_roles WHERE id = ?', input.text('custom_role', { max: 100 })) : null
+  insist(role !== 'custom' || custom, 'role_not_found', 404)
+  const customId = custom?.id ?? null
   const existing = await one(env, 'SELECT * FROM nc_members WHERE email = ?', email)
   insist(!existing || existing.status === 'ended', 'already_has_access', 409)
   const auth = operatorAuth(env), operator = await operatorByEmail(env, request, email)
@@ -38,10 +88,10 @@ export async function giveAccess(env: Bindings, actor: Actor, input: Input, requ
   else if (operator.status === 'inactive') await auth.setOperatorStatus(request, operator.id, 'active')
   const id = existing?.id ?? newId()
   await commit(env, [existing
-    ? stmt(env, "UPDATE nc_members SET name = ?, role = ?, status = 'active', updated_at = ? WHERE id = ?", name, role, now(), id)
-    : stmt(env, "INSERT INTO nc_members (id, email, name, role, status, created_at, updated_at) VALUES (?, ?, ?, ?, 'active', ?, ?)", id, email, name, role, now(), now())],
-  { actor: actorLabel(actor), action: 'access.give', subject: id, detail: { email, role, invited: !operator } })
-  return { id, email, role }
+    ? stmt(env, "UPDATE nc_members SET name = ?, role = ?, custom_role_id = ?, status = 'active', updated_at = ? WHERE id = ?", name, role, customId, now(), id)
+    : stmt(env, "INSERT INTO nc_members (id, email, name, role, custom_role_id, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'active', ?, ?)", id, email, name, role, customId, now(), now())],
+  { actor: actorLabel(actor), action: 'access.give', subject: id, detail: { email, role, ...(custom ? { customRole: custom.name } : {}), invited: !operator } })
+  return { id, email, role, ...(customId ? { custom_role: customId } : {}) }
 }
 
 export async function endAccess(env: Bindings, actor: Actor, input: Input, request: Request) {
@@ -60,11 +110,17 @@ export async function endAccess(env: Bindings, actor: Actor, input: Input, reque
   return { id: member.id, status: 'ended' }
 }
 
+/** The owner, or a developer (GOV-001); credentials never approve or move money. */
+function requireMemberCredentials(actor: Actor) {
+  requireCapability(actor, 'credentials')
+  insist(actor.kind === 'member', 'person_required', 403)
+}
+
 const base64url = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 
 /** Issues a credential. The key is returned once and only its hash is stored. */
 export async function issueKey(env: Bindings, actor: Actor, input: Input) {
-  requireOwner(actor)
+  requireMemberCredentials(actor)
   await requireFreshFactor(env, actor)
   const name = input.text('name', { max: 80 })
   const scopes = input.list('scopes')
@@ -78,7 +134,7 @@ export async function issueKey(env: Bindings, actor: Actor, input: Input) {
 }
 
 export async function revokeKey(env: Bindings, actor: Actor, input: Input) {
-  requireOwner(actor)
+  requireMemberCredentials(actor)
   await requireFreshFactor(env, actor)
   const id = input.text('key', { max: 100 })
   const row = await one(env, 'SELECT id, revoked_at FROM nc_agent_keys WHERE id = ?', id)
@@ -90,7 +146,7 @@ export async function revokeKey(env: Bindings, actor: Actor, input: Input) {
 
 /** Repins a live credential to another dated API version (DEV-002); its next request uses it. */
 export async function pinKeyVersion(env: Bindings, actor: Actor, input: Input) {
-  requireOwner(actor)
+  requireMemberCredentials(actor)
   await requireFreshFactor(env, actor)
   const id = input.text('key', { max: 100 })
   const version = checkVersion(input.text('api_version', { max: 20 }))

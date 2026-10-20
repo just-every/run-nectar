@@ -20,7 +20,7 @@ import { resolveSetup } from './setup-resolution'
 // Each handler checks the actor's capability itself before touching data.
 import type { Bindings } from '../auth.server'
 import type { Actor } from './actor'
-import { endAccess, giveAccess, issueKey, pinKeyVersion, revokeKey } from './access'
+import { defineRole, endAccess, giveAccess, issueKey, pinKeyVersion, revokeKey, updateRole } from './access'
 import { approve, finalise, prepareRun } from './billruns'
 import { configureBusiness, declareTax, reviewTax } from './business'
 import { createMeter, createPrice, createProduct, grantFeature, retirePrice } from './catalog'
@@ -99,6 +99,8 @@ export const actions: Record<string, Handler> = {
   'mfa.passkey.verify': verifyPasskey,
   'access.give': giveAccess,
   'access.end': endAccess,
+  'role.define': defineRole,
+  'role.update': updateRole,
   'credential.issue': issueKey,
   'credential.revoke': revokeKey,
   'credential.version': pinKeyVersion,

@@ -1,7 +1,7 @@
 // Invoice line evidence comes from the saved calculation, never a rerating or
 // mutable event status. Ledger reads only establish the invoice customer scope.
 import type { Bindings } from '../auth.server'
-import { requireCapability, type Actor } from './actor'
+import { canRead, type Actor } from './actor'
 import { all, insist, one, parseJson, type Row } from './core'
 import { decimalText, micros } from './decimal'
 import type { CustomerSession } from './portal-session'
@@ -15,7 +15,8 @@ export interface ReportLine {
 
 /** A line belongs to this issued invoice, and every event must exist in both saved evidence sets. */
 export async function reportLine(env: Bindings, actor: Actor, invoiceId: string, lineId: string): Promise<ReportLine> {
-  requireCapability(actor, 'read')
+  // A line's evidence belongs to its invoice and to the report figures that drill to it.
+  insist(canRead(actor, 'reports') || canRead(actor, 'invoices'), 'forbidden', 403)
   return await savedReportLine(env, invoiceId, lineId)
 }
 

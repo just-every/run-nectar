@@ -1,7 +1,7 @@
 // Meter previews evaluate only projected customer/source events. Caller SQL is
 // parsed into the same exact engine as a native meter, never executed in D1.
 import type { Bindings } from '../auth.server'
-import { actorLabel, requireCapability, requireMember, type Actor } from './actor'
+import { requireRead, actorLabel, requireCapability, requireMember, type Actor } from './actor'
 import { all, commit, fingerprint, guard, insist, newId, now, one, parseJson, stmt, type Row } from './core'
 import { isMonth, periodStartingIn, today, zonedStart } from './dates'
 import { requireBusiness } from './business'
@@ -40,7 +40,7 @@ export async function metricEvents(env:Bindings,customer:string,source:string,be
   return (await all(env,"SELECT event_id,meter_id,quantity,occurred_at,properties_json,invoice_id FROM nc_usage_events WHERE customer_id=? AND meter_id=? AND status='active' AND occurred_at<? ORDER BY occurred_at,event_id",customer,source,before)).map(e=>({eventId:e.event_id,meterId:e.meter_id,quantity:e.quantity,occurredAt:e.occurred_at,properties:parseJson(e.properties_json,{}),invoiceId:e.invoice_id}))
 }
 export async function metricRequests(env:Bindings,actor:Actor) {
-  requireCapability(actor,'read')
+  requireRead(actor,'catalog')
   return await Promise.all((await all(env,'SELECT * FROM nc_metric_requests ORDER BY prepared_at,id')).map(async r=>({...r,plan:parseJson(r.plan_json,{}),plan_json:undefined,previews:(await all(env,'SELECT * FROM nc_metric_previews WHERE request_id=? ORDER BY prepared_at,id',r.id)).map(p=>({...p,result:parseJson(p.result_json,[]),result_json:undefined}))})))
 }
 export async function prepareMetric(env:Bindings,actor:Actor,input:Input) {

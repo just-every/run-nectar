@@ -1,5 +1,6 @@
 import type { Bindings } from '../../auth.server'
-import { can, requireCapability, type Actor } from '../actor'
+import { can, type Actor } from '../actor'
+import { requireAnswerRead } from '../billing-answer-sources'
 import { ANSWER_TOPICS, billingAnswer } from '../billing-answers'
 import { all, NectarError, type Row } from '../core'
 import { money } from '../decimal'
@@ -27,7 +28,7 @@ const recordedValue = (value: string | number, unit: string) => unit === 'cents'
   : unit === 'dollars per unit' ? `$${value} per unit` : ['seats', 'units', 'raw units'].includes(unit) ? `${value} ${unit}` : String(value)
 
 export async function billingAnswersPage(env: Bindings, actor: Actor, url: URL, input?: Input) {
-  requireCapability(actor, 'read')
+  requireAnswerRead(actor)
   const customers = await all(env, 'SELECT id,name,external_id FROM nc_customers ORDER BY name,id')
   const customer = input?.text('customer', { optional: true }) || url.searchParams.get('customer') || customers[0]?.id || ''
   const invoices = await all(env, "SELECT id,number,period_start FROM nc_invoices WHERE customer_id=? AND status='issued' ORDER BY period_start DESC,issued_at DESC,id", customer)

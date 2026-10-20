@@ -3,7 +3,7 @@ import type { Bindings } from '../../auth.server'
 import { metadataLink } from './metadata'
 import { customers } from '../customers'
 import { dimensionFields,metricSection } from './meters'
-import { can, type Actor } from '../actor'
+import { can, canRead, type Actor } from '../actor'
 import { business } from '../business'
 import { catalog } from '../catalog'
 import { formatPeriod, isMonth, today } from '../dates'
@@ -51,7 +51,7 @@ export async function catalogPage(env: Bindings, actor: Actor, url: URL) {
           ${select('Meter (per unit only)', 'meter', c.meters.map((m: any) => ({ value: m.id, label: `${m.code} (${m.unit_label})` })), '', { required: false, blank: '—' })}${field('Name for this price', 'nickname', { required: false })}${dimensionFields()}${check('Taxable', 'taxable', { checked: true })}`, c.prices.some((x: any) => x.product_id === p.id) ? 'Prepare price version' : 'Add price version', { layout: 'columns', secondary: true })}
           ${quantityPriceForm(p.id, c.meters, !c.prices.some((x: any) => x.product_id === p.id))}${form('feature.grant', '/app/catalog', h`${hidden('product', p.id)}${field('Feature code', 'feature')}${field('Note', 'note', { required: false })}`, 'Grant feature', { layout: 'columns', secondary: true })}</div>` : ''}</article>`) : h`<p class="empty">No products yet.</p>`}
       ${records ? h`<h3>Add a product</h3>${form('product.create', '/app/catalog', h`${field('Code', 'code', { hint: 'Lowercase letters, digits, dots, dashes.' })}${field('Name', 'name')}${field('Description', 'description', { required: false })}`, 'Add product', { layout: 'columns' })}` : ''}</section>
-    ${metricSection(c,await customers(env,actor),actor)}
+    ${metricSection(c,canRead(actor,'customers')?await customers(env,actor):[],actor)}
     ${catalogueApprovals(c.priceRequests, c.meters, actor)}
     <section class="card" aria-labelledby="meters"><h2 id="meters">Meters</h2>${table(['Code', 'Name', 'Unit'], c.meters.map((m: any) => [m.code, m.name, m.unit_label]), { empty: 'No meters yet.' })}
       ${records ? form('meter.create', '/app/catalog', h`${field('Code (the meter name in usage files)', 'code')}${field('Name', 'name')}${field('Unit', 'unit_label', { hint: 'For example: API call, GB, message.' })}`, 'Add meter', { layout: 'columns', secondary: true }) : ''}</section>`, { current: '/app/catalog', url })

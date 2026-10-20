@@ -1,26 +1,35 @@
 // A threshold is checked inside every credit issue, including direct API calls.
 import type { Bindings } from '../auth.server'
-import { actorLabel, requireCapability, requireMember, requireOwner, type Actor } from './actor'
+import { actorLabel, can, requireAny, requireMember, requireOwner, requireRead, type Actor } from './actor'
 import { all, commit, fingerprint, guard, insist, newId, now, one, stmt, type Row } from './core'
 import { cents } from './decimal'
 import { preparePolicyChange } from './policy-changes'
 import type { Input } from './input'
+import { requireFreshFactor } from './mfa'
 
 export async function creditPolicy(env: Bindings) {
-  return await one(env, 'SELECT * FROM nc_credit_policy WHERE singleton=1') ?? { two_person_above_cents: null, revision: 0 }
+  return await one(env, 'SELECT * FROM nc_credit_policy WHERE singleton=1') ?? { two_person_above_cents: null, support_limit_cents: 0, revision: 0 }
 }
+
+/** GOV-001: the most a support credit may be, zero until the owner sets one. */
+export const supportLimitCents = (policy: Row) => Number(policy.support_limit_cents ?? 0)
 
 export async function configureCreditPolicy(env: Bindings, actor: Actor, input: Input) {
   requireOwner(actor)
   const text = input.text('two_person_above', { max: 20, optional: true })
   const limit = text ? cents(text, 'two_person_above') : null
-  return await preparePolicyChange(env, actor, 'credit', { twoPersonAboveCents: limit })
+  const current = await creditPolicy(env)
+  const supportText = input.text('support_limit', { max: 20, optional: true })
+  const support = supportText ? cents(supportText, 'support_limit') : supportText === '' ? 0 : supportLimitCents(current)
+  // GOV-007: changing the support role's credit limit asks for a fresh factor.
+  if (support !== supportLimitCents(current)) await requireFreshFactor(env, actor)
+  return await preparePolicyChange(env, actor, 'credit', { twoPersonAboveCents: limit, supportLimitCents: support })
 }
 
 export const creditBasis = (invoice: Row, policy: Row) => fingerprint({ invoice: invoice.id, balanceCents: invoice.balance_cents, totalCents: invoice.total_cents, policyRevision: policy.revision, threshold: policy.two_person_above_cents })
 
 export async function creditRequests(env: Bindings, actor: Actor, invoice: string) {
-  requireCapability(actor, 'read')
+  requireRead(actor, 'invoices')
   return await all(env, 'SELECT * FROM nc_credit_requests WHERE invoice_id=? ORDER BY prepared_at DESC,id', invoice)
 }
 
@@ -49,6 +58,16 @@ export async function prepareCreditRequest(env: Bindings, actor: Actor, input: I
 /** Returns in-transaction guards and the saved request to close on issue. */
 export async function authorizeCredit(env: Bindings, actor: Actor, input: Input, invoice: Row, amount: number, reason: string, proposalId?: string) {
   const policy = await creditPolicy(env)
+  // GOV-001: a member without approval issues only bounded support credits,
+  // never above the owner-set limit and never through a saved request.
+  const bounded = !can(actor, 'approve')
+  if (bounded) {
+    requireAny(actor, ['credits.limited'])
+    insist(!input.has('request') && !proposalId, 'forbidden', 403)
+    insist(amount <= supportLimitCents(policy), 'exceeds_support_limit', 403)
+  }
+  // GOV-007: credits above the support limit ask for a fresh factor.
+  if (amount > supportLimitCents(policy)) await requireFreshFactor(env, actor)
   const above = policy.two_person_above_cents !== null && amount > policy.two_person_above_cents
   const request = input.has('request') ? await one(env, 'SELECT * FROM nc_credit_requests WHERE id=?', input.text('request', { max: 100 })) : null
   insist(!input.has('request') || request, 'credit_request_not_found', 404)
@@ -63,6 +82,7 @@ export async function authorizeCredit(env: Bindings, actor: Actor, input: Input,
   }
   return { request, guards: [
     guard(env, 'credit_policy_changed', 'COALESCE((SELECT revision FROM nc_credit_policy WHERE singleton=1),0)=?', policy.revision),
+    ...(bounded ? [guard(env, 'forbidden', "EXISTS(SELECT 1 FROM nc_members WHERE id=? AND status='active')", actor.id)] : []),
     ...(request ? [guard(env, 'credit_request_already_issued', "EXISTS(SELECT 1 FROM nc_credit_requests WHERE id=? AND status='pending')", request.id),
       guard(env, 'credit_request_proposal_bound', 'NOT EXISTS(SELECT 1 FROM nc_credit_correction_requests WHERE request_id=? AND proposal_id<>?)', request.id, proposalId ?? ''),
       guard(env, 'credit_request_stale', '(SELECT i.total_cents-COALESCE((SELECT SUM(amount_cents) FROM nc_credit_notes WHERE invoice_id=i.id),0)-COALESCE((SELECT SUM(amount_cents) FROM nc_allocations WHERE invoice_id=i.id),0) FROM nc_invoices i WHERE i.id=?)=?', invoice.id, request.balance_cents)] : []),

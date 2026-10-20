@@ -2,7 +2,7 @@ import { financialReport, financialReportSource, type UnbilledReportEvidence } f
 // Issued-invoice and recorded-receipt reports. Every total has the same source contributions and
 // signed detail components in the API and the operator pages.
 import type { Bindings } from '../auth.server'
-import { requireCapability, type Actor } from './actor'
+import { requireRead, type Actor } from './actor'
 import { invoiceDetail } from './billruns'
 import { requireBusiness } from './business'
 import { all, insist, one, type Row } from './core'
@@ -76,7 +76,7 @@ function inBucket(due: string, day: string, selected: string | null) {
 
 /** Reads contributions without inventing recurring amounts or allocating AR to individual lines. */
 export async function report(env: Bindings, actor: Actor, metric: string, url: URL): Promise<Report> {
-  requireCapability(actor, 'read')
+  requireRead(actor, 'reports')
   if (['credits','tax','unbilled'].includes(metric)) return await financialReport(env,actor,metric,url)
   const selected = filters(metric, url)
   const day = today((await requireBusiness(env)).timezone)
@@ -118,7 +118,7 @@ export async function report(env: Bindings, actor: Actor, metric: string, url: U
 
 /** Original line and settlement components tie exactly to the selected invoice contribution. */
 export async function reportInvoice(env: Bindings, actor: Actor, metric: string, invoiceId: string, url: URL): Promise<ReportInvoice> {
-  requireCapability(actor, 'read')
+  requireRead(actor, 'reports')
   if (['credits','tax','unbilled'].includes(metric)) return await financialReportSource(env,actor,metric,invoiceId,url)
   const view = await report(env, actor, metric, url)
   const entry = view.entries.find(row => row.invoiceId === invoiceId)

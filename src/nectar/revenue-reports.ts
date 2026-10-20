@@ -1,5 +1,5 @@
 import type { Bindings } from '../auth.server'
-import { requireCapability, type Actor } from './actor'
+import { requireRead, requireCapability, type Actor } from './actor'
 import { requireBusiness } from './business'
 import { clockInstant } from './clock'
 import { insist } from './core'
@@ -99,7 +99,7 @@ function position(rows: RevenueContribution[], before: string) {
 }
 
 export async function revenueReport(env: Bindings, actor: Actor, url: URL): Promise<RevenueReport> {
-  requireCapability(actor, 'read')
+  requireRead(actor, 'reports')
   const business = await requireBusiness(env)
   const { from, to, customer } = filters(url, localDate(clockInstant(env), business.timezone).slice(0, 7))
   const rows: RevenueContribution[] = []
@@ -120,7 +120,7 @@ export async function revenueReport(env: Bindings, actor: Actor, url: URL): Prom
 }
 
 export async function revenueSource(env: Bindings, actor: Actor, invoiceId: string, url: URL) {
-  requireCapability(actor, 'read')
+  requireRead(actor, 'reports')
   const record = await revenueInvoice(env, invoiceId)
   const { customer } = filters(url, record.invoice.issue_date.slice(0, 7))
   insist(!customer || customer === record.invoice.customer_id, 'revenue_invoice_not_found', 404)
@@ -135,6 +135,7 @@ const csvCell = (value: unknown) => {
 }
 export async function revenueCsv(env: Bindings, actor: Actor, url: URL) {
   requireCapability(actor, 'export')
+  requireRead(actor, 'reports')
   const report = await revenueReport(env, actor, url)
   const rows: unknown[][] = [['row_kind', 'period', 'invoice', 'customer', 'line_id', 'credit_id', 'policy', 'custody', 'opening', 'net_billings', 'recognized', 'closing', 'accrued_contract_assets', 'deferred_liabilities', 'signed_contribution', 'source_path']]
   for (const month of report.months) rows.push(['rollforward', month.period, '', '', '', '', REVENUE_POLICY_VERSION, '', ...[month.openingCents, month.netBillingsCents, month.recognizedCents, month.closingCents, month.accruedContractAssetCents, month.deferredLiabilityCents].map(plainMoney), '', ''])

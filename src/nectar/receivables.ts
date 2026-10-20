@@ -9,14 +9,13 @@ import { deliverAlerts } from './notification-mail'
 // invoices. For every invoice: total = credited + paid + balance, and no
 // credit or allocation can take a balance below zero (checked in the batch).
 import type { Bindings } from '../auth.server'
-import { actorLabel, requireCapability, requireMember, type Actor } from './actor'
+import { actorLabel, can, requireAny, requireCapability, requireMember, requireRead, type Actor } from './actor'
 import { requireBusiness } from './business'
 import { all, commit, guard, insist, newId, now, one, stmt, type Row } from './core'
 import { authorizeCredit, prepareCreditRequest } from './credit-policy'
 import { cents, plainMoney } from './decimal'
 import { addDays, daysBetween, requireDate, today } from './dates'
 import { Input } from './input'
-import { requireFreshFactor } from './mfa'
 
 export const BALANCE_SQL = `(i.total_cents - COALESCE((SELECT SUM(amount_cents) FROM nc_credit_notes WHERE invoice_id = i.id), 0) - COALESCE((SELECT SUM(amount_cents) FROM nc_allocations WHERE invoice_id = i.id), 0))`
 const balanceOf = (id: string) => [`(SELECT ${BALANCE_SQL} FROM nc_invoices i WHERE i.id = ?)`, id] as const
@@ -30,8 +29,9 @@ export async function issuedInvoice(env: Bindings, id: string) {
 }
 
 export async function creditNoteStatements(env: Bindings, actor: Actor, input: Input, proposalId?: string) {
-  requireMember(actor, 'approve')
-  await requireFreshFactor(env, actor)
+  requireAny(actor, ['approve', 'credits.limited'])
+  insist(actor.kind === 'member', 'person_required', 403)
+  if (!can(actor, 'approve')) requireRead(actor, 'invoices')
   const business = await requireBusiness(env)
   const invoice = await issuedInvoice(env, input.text('invoice', { max: 100 }))
   const amount = cents(input.text('amount', { max: 20 }))
@@ -116,7 +116,7 @@ export async function allocate(env: Bindings, actor: Actor, input: Input) {
 }
 
 export async function payments(env: Bindings, actor: Actor, customerId?: string,url?:URL) {
-  requireCapability(actor, 'read')
+  requireRead(actor, 'payments')
   const filter=metadataPredicate('payment','p.id',url?metadataFilter(url):null)
   return await withMetadata(env,'payment',await all(env, `SELECT p.*, c.name AS customer_name, ${UNALLOCATED_SQL} AS unallocated_cents FROM nc_payments p JOIN nc_customers c ON c.id = p.customer_id WHERE ${filter.sql} ${customerId ? 'AND p.customer_id = ?' : ''} ORDER BY p.received_on DESC, p.recorded_at DESC LIMIT 200`, ...filter.params,...(customerId ? [customerId] : [])))
 }
@@ -128,7 +128,7 @@ export async function openInvoices(env: Bindings, customerId?: string) {
 }
 
 export async function customerLedger(env: Bindings, actor: Actor, customerId: string) {
-  requireCapability(actor, 'read')
+  requireRead(actor, 'customers')
   const invoices = await all(env, `SELECT i.id, i.number, i.issue_date, i.due_date, i.total_cents, ${BALANCE_SQL} AS balance_cents,
     COALESCE((SELECT SUM(amount_cents) FROM nc_credit_notes WHERE invoice_id = i.id), 0) AS credited_cents,
     COALESCE((SELECT SUM(amount_cents) FROM nc_allocations WHERE invoice_id = i.id), 0) AS paid_cents
@@ -148,7 +148,8 @@ export async function customerLedger(env: Bindings, actor: Actor, customerId: st
 /** The receivables desk: every issued invoice still owed, those settled in the last 30 days with how they
  * were paid, the latest invoicing month's counts and what arrived this month. */
 export async function receivablesDesk(env: Bindings, actor: Actor) {
-  requireCapability(actor, 'read')
+  requireRead(actor, 'invoices')
+  requireRead(actor, 'payments')
   const business = await requireBusiness(env)
   const day = today(business.timezone), month = day.slice(0, 7)
   const rows = await all(env, `SELECT i.id, i.number, i.customer_id, c.name AS customer_name, c.address, i.issue_date, i.due_date, i.total_cents, ${BALANCE_SQL} AS balance_cents,

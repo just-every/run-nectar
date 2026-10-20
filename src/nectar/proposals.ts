@@ -56,7 +56,14 @@ async function currentBasis(env: Bindings, kind: Kind, payload: Row) {
   return (await plan(env, kind, payload, true)).basis
 }
 
+/** The proposal door reads across every record family, so it needs full read (GOV-001). */
 export async function propose(env: Bindings, actor: Actor, input: Input) {
+  requireCapability(actor, 'read')
+  return await proposeDraft(env, actor, input)
+}
+
+/** A draft built behind its own read checks, such as a cited answer's credit suggestion. */
+export async function proposeDraft(env: Bindings, actor: Actor, input: Input) {
   requireCapability(actor, 'propose')
   const kind = input.text('kind', { max: 20 }) as Kind
   insist(KINDS.includes(kind), 'invalid_kind')
