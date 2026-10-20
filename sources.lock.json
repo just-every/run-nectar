@@ -2829,7 +2829,7 @@
       "executable": false
     },
     "src/nectar/ui/billing.ts": {
-      "sha256": "f9fb8f9327009b920863c77aa1f6ed406843e2fd6f75d059266230e8cb1f2d6f",
+      "sha256": "4dfccbbc3339e29c72598a7093e9ede0220ea43b7a6a21090b8df83bb0e2c7dd",
       "executable": false
     },
     "src/nectar/ui/cadences.ts": {
@@ -2961,7 +2961,7 @@
       "executable": false
     },
     "src/nectar/ui/usage-replay.ts": {
-      "sha256": "a1c252b71ed6e07b9f98c3af734d54f3b08355bd9f0b196ba3f353a6f5de23a2",
+      "sha256": "1fca8b947062e7dc627b72293eecfafa06cea279969d21d8ead1b704dad421b3",
       "executable": false
     },
     "src/nectar/ui/work.ts": {
@@ -3429,7 +3429,7 @@
       "executable": false
     },
     "tests/nectar/usage-replay.mjs": {
-      "sha256": "b1d009ca6f358eaf50bf26fe519157c875c94579e089f3699fc7ff0394c3e5b8",
+      "sha256": "6b8da5e0adf6f09a53bf403db33d6d39fc6673321aef991046909803eebf2237",
       "executable": false
     },
     "tests/runtime.mjs": {

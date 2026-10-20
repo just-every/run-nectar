@@ -73,7 +73,7 @@ export async function invoicePage(env: Bindings, actor: Actor, id: string, url: 
   const incumbent = i.comparison.incumbent
   return page(title, actor, h`<p class="crumbs"><a href="/app/billing/${i.bill_run_id}">Bill run</a> · <a href="/app/customers/${i.customer_id}">${i.customer_name}</a></p>
     <div class="title-row"><h1>${title}</h1>${tag(statusLabel(i.status, i.status === 'draft' ? i.exceptions.length : 0))}</div><p>${metadataLink('invoice',i.id)}</p>
-    ${i.status === 'issued' ? h`<p><a href="/app/answers?customer=${i.customer_id}&invoice=${i.id}">Ask about this invoice</a> · <a href="/app/usage/replay?subscription=${i.subscription_id}&period=${i.period_start.slice(0,7)}">Preview usage correction</a> · <a href="/app/revenue/${i.id}">Revenue schedule</a></p>` : ''}
+    ${i.status === 'issued' ? h`<p><a href="/app/answers?customer=${i.customer_id}&invoice=${i.id}">Ask about this invoice</a> · ${i.subscription_id ? h`<a href="/app/usage/replay?subscription=${i.subscription_id}&period=${i.period_start.slice(0,7)}">Preview usage correction</a> ·` : ''} <a href="/app/revenue/${i.id}">Revenue schedule</a></p>` : ''}
     ${i.retainedFinancial ? h`<section class="card"><h2>Retained invoice legal label</h2><p>${i.retainedFinancial.legal_name}</p><p>Required financial custody until ${i.retainedFinancial.retain_until}.</p></section>` : ''}
     <section class="card summary"><dl class="figures"><div><dt>Customer</dt><dd>${i.customer_name}<span class="sub">${i.external_id}</span></dd></div><div><dt>Period</dt><dd>${formatPeriod(i.period_start, i.period_end)}</dd></div>
       ${i.issue_date ? h`<div><dt>Issued</dt><dd>${formatDate(i.issue_date)}</dd></div><div><dt>Due</dt><dd>${formatDate(i.due_date)}</dd></div>` : ''}
