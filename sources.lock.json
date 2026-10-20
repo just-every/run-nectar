@@ -3389,7 +3389,7 @@
       "executable": false
     },
     "tests/nectar/portal-sessions.mjs": {
-      "sha256": "24a920f0d102331b0901764270f5e553ca7e3c6250f065d784505f14bbc1048a",
+      "sha256": "036b16def664615748e714786b72722d4993f9397f5453ba843870a875b93c1b",
       "executable": false
     },
     "tests/nectar/price-approvals.mjs": {

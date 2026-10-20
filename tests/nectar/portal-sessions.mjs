@@ -24,7 +24,9 @@ export async function seedPortalRecords(h, owner) {
   const payment = await h.api('payment.record', owner, { customer: customers[0], amount: '100', received_on: '2026-09-03', method: 'bank_transfer', reference: 'PRIVATE-REFERENCE', evidence: 'INTERNAL-BANK-EVIDENCE' })
   await h.api('payment.allocate', owner, { payment: payment.payment, invoice: invoice.id, amount: '100' })
   await h.api('note.add', owner, { kind: 'customer', record: customers[0], body: 'PRIVATE-OPERATOR-NOTE' })
-  return { customers, invoices, invoice }
+  const charge = (await h.api('charge.add', owner, { customer: customers[0], amount: '55', description: 'PRIVATE-DRAFT-CHARGE', taxable: false, effective_date: '2026-09-05' })).charge
+  const draft = (await h.api('invoice.manual', owner, { customer: customers[0], charges: [charge], service_date: '2026-09-05' })).id
+  return { customers, invoices, invoice, draft }
 }
 
 export async function portalSessionsFlow(h, owner) {
@@ -56,6 +58,7 @@ export async function portalSessionsFlow(h, owner) {
   assert.doesNotMatch(html, /Pinecrest|PRIVATE-|INTERNAL-|calculation_json|actor|api\/nectar/)
   const foreign = invoices.find(row => row.customer_id === customers[1])
   assert.equal((await open(session, `/portal/invoices/${foreign.id}`)).status, 404, 'PORT-005 foreign invoice refused')
+  assert.equal((await open(session, `/portal/invoices/${records.draft}`)).status, 404, 'PORT-005 even an own-customer unissued invoice is refused')
   assert.equal((await open(session, '/portal/invoices/unknown')).status, 404)
   assert.equal((await open(session, '/portal/unknown')).status, 404)
   // Customer identity comes only from the signed session, never a query selector.
