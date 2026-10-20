@@ -1,3 +1,4 @@
+import { usageReplayPage } from './usage-replay'
 import { erasurePage } from './erasure'
 import { erasureEvidence } from '../erasure-requests'
 import { revenuePage,revenueSourcePage } from './revenue'
@@ -35,6 +36,7 @@ import { reportPage, reportInvoicePage, reportLinePage } from './reports'
 type Page = (env: Bindings, actor: Actor, request: Request, url: URL, id: string) => Promise<Response>
 
 export const pages: Record<string, Page> = {
+  usageReplay:(env,actor,_r,url)=>usageReplayPage(env,actor,url),
   erasures:(env,actor,_r,url)=>erasurePage(env,actor,url),
   erasureEvidence:(env,actor,_r,_u,id)=>erasureEvidence(env,actor,id),
   revenue:(env,actor,_r,url)=>revenuePage(env,actor,url),
@@ -86,6 +88,7 @@ export const pages: Record<string, Page> = {
 type PostPage = (env: Bindings, actor: Actor, input: Input, url: URL, request: Request) => Promise<Response>
 
 export const postPages: Record<string, PostPage> = {
+  '/app/usage/replay':(env,actor,input,url)=>usageReplayPage(env,actor,url,input),
   ...securityPosts,
   '/app/answers':(env,actor,input,url)=>billingAnswersPage(env,actor,url,input),
   '/app/renewal-link':async(env,actor,input)=>{const result=await issueCancellationLink(env,actor,input);return page('Cancellation link',actor,h`<h1>Cancellation link</h1><section class="card"><p>The previous link is now inactive. Share this private link only with this subscription’s customer. It allows cancellation of the next renewal only.</p><p><a href="${result.cancelUrl}">Open cancellation page</a></p><p><a href="/app/subscriptions/${result.id}#renewals">Back to subscription</a></p></section>`)},
