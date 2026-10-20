@@ -91,10 +91,10 @@ export async function usageReplayFlow(h, owner) {
   await api('usage.correction.preview', { ...body, add_event_ids: ['use004-outside'] }, 409)
   const form = new URLSearchParams({ subscription, from_period: '2020-01', through_period: '2020-02', void_ids: '', add_ids: late.event_id })
   const html = await (await h.raw('/app/usage/replay', { cookie: owner, form })).text()
-  assert.match(html, /Unresolved correction preview/, 'USE-004 HTML form renders the same unresolved evidence')
+  assert.ok(html.includes(replay.periods[0].originalFingerprint) && html.includes(late.event_id), 'USE-004 HTML form renders the same original fingerprint and selected event evidence')
   assert.ok(html.includes('−$39.39'), 'USE-004 HTML form agrees with API signed total')
   assert.equal((await h.raw('/app/usage/replay', { cookie: owner, form, headers: { origin: 'https://foreign.example' } })).status, 403, 'USE-004 cross-site form cannot reach replay')
-  assert.match(await h.page(`/app/invoices/${issued[0].id}`, owner), /Preview usage correction/, 'USE-004 invoice links to historical replay')
+  assert.ok((await h.page(`/app/invoices/${issued[0].id}`, owner)).includes(`/app/usage/replay?subscription=${subscription}`), 'USE-004 invoice links to the correct subscription historical replay')
   await h.page(`/app/usage/replay?subscription=${subscription}&period=2020-01`, accountant)
 
   // The acceptance-sized replay is real, while financial dispositions stay open.
