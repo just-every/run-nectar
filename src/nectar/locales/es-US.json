@@ -98,5 +98,21 @@
   "correction.revenue.policy": "Política de reconocimiento: {policy}.",
   "correction.revenue.credit": "La nota de crédito registra {amount} como reducción de ingresos en el mes que comienza el {from}; los calendarios originales y los impuestos no cambian.",
   "correction.revenue.period": "Mes que comienza el {from}: antes {before}, después {after}, cambio {change}.",
-  "correction.revenue.schedule": "La línea {line} reconoce {amount} en el mes que comienza el {from} según {policy}."
+  "correction.revenue.schedule": "La línea {line} reconoce {amount} en el mes que comienza el {from} según {policy}.",
+  "portal.heading": "Resumen de facturación",
+  "portal.readonly": "Registros de facturación de solo lectura. Contacte a la empresa para cambios de facturación o pagos.",
+  "portal.back": "Todas las facturas",
+  "portal.issued": "Emitida",
+  "portal.due": "Vencimiento",
+  "portal.total": "Total",
+  "portal.credited": "Abonado",
+  "portal.paid": "Pagado",
+  "portal.owed": "Saldo pendiente",
+  "portal.lines": "Cargos",
+  "portal.subtotal": "Subtotal",
+  "portal.tax": "Impuesto",
+  "portal.payment": "Pago registrado",
+  "portal.empty": "No hay facturas emitidas.",
+  "portal.unavailable": "Sesión de facturación no disponible",
+  "portal.unavailable.body": "Solicite a la empresa una nueva sesión de facturación."
 }

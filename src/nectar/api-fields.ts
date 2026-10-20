@@ -354,6 +354,19 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "decision": "text",
     "request": "text"
   },
+  "portal.configure": {
+    "hosts": "list",
+    "parents": "list"
+  },
+  "portal.session.issue": {
+    "audience": "text",
+    "customer": "text",
+    "origin": "text",
+    "parent": "text"
+  },
+  "portal.session.revoke": {
+    "session": "text"
+  },
   "price.create": {
     "dimension_property": "list",
     "dimension_value": "list",

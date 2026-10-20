@@ -1,3 +1,4 @@
+import { portalResponse } from './nectar/portal-http'
 import { removeExpiredFinancialRecords } from './nectar/erasure-purge'
 import { erasurePublic } from './nectar/erasure-public'
 import { runCadences } from './nectar/cadence-scheduler'
@@ -50,6 +51,8 @@ export default withDemo({
   async fetch(request, env, execution) {
     const asset = await staticAssetResponse(request, env)
     if (asset) return asset
+    const portal = await portalResponse(request, runtimeBindings(env))
+    if (portal) return portal
     const auth = await authResponse(request, env)
     if (auth) return auth
     const erasure=await erasurePublic(request,runtimeBindings(env))

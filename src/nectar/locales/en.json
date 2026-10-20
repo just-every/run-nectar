@@ -98,5 +98,21 @@
   "correction.revenue.policy": "Recognition policy: {policy}.",
   "correction.revenue.credit": "The credit records {amount} of contra-revenue in the month beginning {from}; original line schedules and tax stay unchanged.",
   "correction.revenue.period": "Month beginning {from}: before {before}, after {after}, change {change}.",
-  "correction.revenue.schedule": "Line {line} recognizes {amount} in the month beginning {from} under {policy}."
+  "correction.revenue.schedule": "Line {line} recognizes {amount} in the month beginning {from} under {policy}.",
+  "portal.heading": "Billing overview",
+  "portal.readonly": "Read-only billing records. Contact the business for billing changes or payments.",
+  "portal.back": "All invoices",
+  "portal.issued": "Issued",
+  "portal.due": "Due",
+  "portal.total": "Total",
+  "portal.credited": "Credited",
+  "portal.paid": "Paid",
+  "portal.owed": "Balance owed",
+  "portal.lines": "Charges",
+  "portal.subtotal": "Subtotal",
+  "portal.tax": "Tax",
+  "portal.payment": "Payment recorded",
+  "portal.empty": "No issued invoices.",
+  "portal.unavailable": "Billing session unavailable",
+  "portal.unavailable.body": "Ask the business for a new billing session."
 }

@@ -35,6 +35,8 @@ export interface Bindings {
  SESSION_SECRET: string
  /** GOV-007: seals authenticator-app secrets at rest; never the session secret. */
  MFA_KEY?: string
+ /** PORT-005: installation-held customer-session signer; excluded from archives. */
+ PORTAL_KEY?: string
  SETUP_TOKEN?: string
  MAIL_PROVIDER?: 'development' | 'resend' | 'sendgrid' | 'cloudflare'
  MAIL_FROM?: string

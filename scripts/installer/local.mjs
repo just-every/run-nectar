@@ -21,7 +21,7 @@ export const adapter = lifecycle;
 export const { install } = lifecycle;
 export const commandAdapter = createCommandAdapter(lifecycle, {
  dev: developmentTarget, preview: previewTarget, verify: ['pnpm', ['run', 'verify:app']], deploy: ownerDeploy('deploy.json', lifecycle),
- portability: localPortability({ database: 'nectar', policy: { excludeTables: ['rer_dependency_keys','rer_dependency_pending','rer_dependency_codes','nc_guard','nc_privacy_context','nc_privacy_generation','nc_idempotency','nc_mfa_sessions','nc_mfa_challenges'], product: 'billing/nectar', requiredConfiguration: ['OWNER_EMAIL', 'SESSION_SECRET', 'SETUP_TOKEN', 'AUTH_ORIGIN', 'MAIL_PROVIDER', 'MAIL_FROM'] }, transient: ['local runtime caches and logs'] }),
+ portability: localPortability({ database: 'nectar', policy: { excludeTables: ['rer_dependency_keys','rer_dependency_pending','rer_dependency_codes','nc_guard','nc_privacy_context','nc_privacy_generation','nc_idempotency','nc_mfa_sessions','nc_mfa_challenges','nc_portal_sessions'], product: 'billing/nectar', requiredConfiguration: ['OWNER_EMAIL', 'SESSION_SECRET', 'SETUP_TOKEN', 'AUTH_ORIGIN', 'MAIL_PROVIDER', 'MAIL_FROM'] }, transient: ['local runtime caches and logs'] }),
  setup: { manifestFile: 'rer-setup.json' }, browserModule: 'scripts/installer/ui/seed.mjs',
  // The run site (rer build --site, rer deploy --site, RER_SITE): pages from
  // edition identity and Run data, written to an ignored folder; its domain is in deploy-site.json.

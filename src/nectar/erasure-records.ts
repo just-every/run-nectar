@@ -43,6 +43,13 @@ export async function erasurePlan(env: Bindings, customer: Row): Promise<Erasure
   const statements: D1Sql[] = [], changes = new Map<string,{kind:string;fields:Set<string>;records:number}>()
   for (const image of images) {
     const { table,row,key,required } = image
+    // Customer capabilities are runtime custody, not retained financial facts.
+    if (table === 'nc_portal_sessions' && image.scoped) {
+      statements.push({ sql: 'DELETE FROM nc_portal_sessions WHERE id=?', params: [row.id] })
+      const entry = changes.get(table) ?? { kind: table, fields: new Set<string>(), records: 0 }
+      Object.keys(row).forEach(field => entry.fields.add(field)); entry.records++; changes.set(table, entry)
+      continue
+    }
     const updates: Row = {}
     const affected = image.scoped || (table==='nc_usage_batches' && images.some(i=>i.scoped && i.table==='nc_usage_events' && i.row.batch_id===row.id)) || (table === 'nc_audit' && ids.has(row.subject))
     for (const [column,value] of Object.entries(row)) {

@@ -68,6 +68,16 @@
       "group": "owner"
     },
     {
+      "name": "PORTAL_KEY",
+      "label": "Customer-session signing key",
+      "help": "Signs short-lived customer portal sessions. Installation-held and excluded from archives; a restore needs a new key and newly issued customer sessions.",
+      "kind": "secret",
+      "required": true,
+      "ownerVisible": true,
+      "generate": "hex",
+      "group": "owner"
+    },
+    {
       "name": "IDENTITY_PROVIDER",
       "label": "Identity provider",
       "kind": "url",

@@ -1,3 +1,4 @@
+import { configurePortal, issuePortalSession, revokePortalSession } from './portal-policy'
 import { previewUsageCorrection } from './usage-replay'
 import { requestErasure, verifyErasureOtherwise } from './erasure-requests'
 import { approveErasure } from './erasure'
@@ -54,6 +55,9 @@ import { prepareMetric,previewMetric,activateMetric } from './meter-definitions'
 type Handler = (env: Bindings, actor: Actor, input: Input, request: Request) => Promise<unknown>
 
 export const actions: Record<string, Handler> = {
+  'portal.configure': configurePortal,
+  'portal.session.issue': issuePortalSession,
+  'portal.session.revoke': revokePortalSession,
   'erasure.request':requestErasure,
   'erasure.verify':verifyErasureOtherwise,
   'erasure.approve':approveErasure,
