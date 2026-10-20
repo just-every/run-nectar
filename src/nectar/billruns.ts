@@ -219,7 +219,7 @@ export async function finalise(env: Bindings, actor: Actor, input: Input) {
     await commit(env, [
       guard(env, 'stale', 'EXISTS(SELECT 1 FROM nc_business WHERE singleton = 1 AND next_invoice_number = ?)', sequence),
       guard(env, 'stale', "EXISTS(SELECT 1 FROM nc_invoices WHERE id = ? AND status = 'approved' AND approved_fingerprint = ?)", invoice.id, invoice.approved_fingerprint),
-      ...(consumed.length ? [guard(env, 'already_billed', `NOT EXISTS(SELECT 1 FROM nc_usage_events WHERE event_id IN (${consumed.map(() => '?').join(',')}) AND (invoice_id IS NOT NULL OR status <> 'active'))`, ...consumed)] : []),
+      ...chunk(consumed, 90).map(ids => guard(env, 'already_billed', `NOT EXISTS(SELECT 1 FROM nc_usage_events WHERE event_id IN (${ids.map(() => '?').join(',')}) AND (invoice_id IS NOT NULL OR status <> 'active'))`, ...ids)),
       ...charges.map(id => guard(env, 'charges_already_billed_or_missing', 'EXISTS(SELECT 1 FROM nc_charges WHERE id=? AND invoice_id IS NULL)', id)),
       ...charges.map(id => stmt(env, 'UPDATE nc_charges SET invoice_id=? WHERE id=?', invoice.id, id)),
       stmt(env, 'UPDATE nc_business SET next_invoice_number = next_invoice_number + 1 WHERE singleton = 1'),
