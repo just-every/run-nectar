@@ -116,7 +116,12 @@
   "portal.unavailable": "Sesión de facturación no disponible",
   "portal.unavailable.body": "Solicite a la empresa una nueva sesión de facturación.",
   "portal.privacy.heading": "Solicitud de privacidad",
-  "portal.privacy.pending": "Solicitud registrada. Confirma con el enlace del correo de facturación.",
-  "portal.privacy.mail": "Resultado del mensaje de verificación: {status}.",
-  "portal.privacy.request": "Solicitar eliminación de datos personales"
+  "portal.privacy.pending": "Solicitud registrada. Aún se requiere verificación.",
+  "portal.privacy.request": "Solicitar eliminación de datos personales",
+  "portal.privacy.mail.accepted": "El proveedor de correo aceptó el mensaje de confirmación. No se ha confirmado su entrega al buzón.",
+  "portal.privacy.mail.rejected": "El proveedor de correo rechazó el mensaje de confirmación. Contacta a la empresa para verificar tu solicitud.",
+  "portal.privacy.mail.rate_limited": "El proveedor de correo no pudo aceptar el mensaje de confirmación por su límite de envíos. Contacta a la empresa para verificar tu solicitud.",
+  "portal.privacy.mail.uncertain": "Se desconoce el resultado del mensaje de confirmación. Contacta a la empresa para verificar tu solicitud.",
+  "portal.privacy.mail.suppressed": "Esta instalación local no envía correo. Contacta a la empresa para verificar tu solicitud.",
+  "portal.privacy.mail.not_configured": "El correo de confirmación no está configurado. Contacta a la empresa para verificar tu solicitud."
 }

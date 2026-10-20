@@ -116,7 +116,12 @@
   "portal.unavailable": "Billing session unavailable",
   "portal.unavailable.body": "Ask the business for a new billing session.",
   "portal.privacy.heading": "Privacy request",
-  "portal.privacy.pending": "Request recorded. Confirm using the billing email link.",
-  "portal.privacy.mail": "Verification message outcome: {status}.",
-  "portal.privacy.request": "Request personal-data erasure"
+  "portal.privacy.pending": "Request recorded. Verification is still required.",
+  "portal.privacy.request": "Request personal-data erasure",
+  "portal.privacy.mail.accepted": "The email provider accepted the confirmation message. Inbox delivery is not confirmed.",
+  "portal.privacy.mail.rejected": "The email provider rejected the confirmation message. Contact the business to verify your request.",
+  "portal.privacy.mail.rate_limited": "The email provider could not accept the confirmation message because of its sending limit. Contact the business to verify your request.",
+  "portal.privacy.mail.uncertain": "The confirmation message outcome is unknown. Contact the business to verify your request.",
+  "portal.privacy.mail.suppressed": "This local installation does not send email. Contact the business to verify your request.",
+  "portal.privacy.mail.not_configured": "Confirmation email is not configured. Contact the business to verify your request."
 }

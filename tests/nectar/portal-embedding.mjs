@@ -91,7 +91,10 @@ export async function portalEmbeddingFlow(h, owner) {
       await frame.getByRole('link',{name:'Solicitud de privacidad',exact:true}).click()
       const privacyResponse=page.waitForResponse(response=>response.request().method()==='POST'&&new URL(response.url()).pathname==='/portal/privacy')
       await frame.getByRole('button',{name:'Solicitar eliminación de datos personales'}).click()
-      assert.equal((await privacyResponse).status(),303,'PORT-005 embedded privacy form uses the ordinary scoped redirect')
+      const submitted=await privacyResponse
+      assert.equal(submitted.status(),303,'PORT-005 embedded privacy form uses the ordinary scoped redirect')
+      assert.equal(submitted.request().headers().origin,portalOrigin,'PORT-005 native form proves its exact origin')
+      assert.ok(!submitted.request().headers().referer?.includes('session='),'PORT-005 native form never discloses a session in its referrer')
       await frame.getByRole('heading',{name:'Solicitud registrada.',exact:false}).waitFor()
       await shot('sample-app-spanish-privacy-requested')
       await h.advanceClock(new Date(hosted.expiresAt).toISOString())

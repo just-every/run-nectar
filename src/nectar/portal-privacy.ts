@@ -24,6 +24,6 @@ export async function portalPrivacy(env: Bindings, session: CustomerSession, lin
   const requests = await all(env, 'SELECT status,mail_status FROM nc_erasure_requests WHERE customer_id=? ORDER BY requested_at DESC', session.customer)
   return h`<h1>${L.t('portal.privacy.heading')}</h1><p>${L.t('erasure.confirm.body')}</p>
     <p><a href="${link('/portal')}">${L.t('portal.back')}</a></p>
-    ${requests.map(row => h`<section class="card"><h2>${L.t(row.status === 'verified' ? 'erasure.verified' : 'portal.privacy.pending')}</h2><p>${L.t('portal.privacy.mail', { status: row.mail_status })}</p></section>`)}
+    ${requests.map(row => h`<section class="card"><h2>${L.t(row.status === 'verified' ? 'erasure.verified' : 'portal.privacy.pending')}</h2><p>${L.t(`portal.privacy.mail.${row.mail_status}`)}</p></section>`)}
     <form method="post" action="${link('/portal/privacy')}"><button name="confirm" value="yes">${L.t('portal.privacy.request')}</button></form>`
 }
