@@ -427,7 +427,7 @@ lines, not gaps in the target.
 
 ## Homepage claims
 
-Every capability claim on the owner-approved homepage (`src/site/homepage/`, desk page-s1, 18 October 2026), in the order of its claims table, with the clauses that promise it (claims truth table `evidence/br-nectar/desk-built/CLAIMS.md`). A claim's status comes from its clauses in the Status table below: `done` when every clause is done, `missing` when every one is missing, otherwise `partial`. A claim marked — needs no clause (the license, the start line and the hosted demo). 76 claims: 12 done, 34 partial, 30 missing.
+Every capability claim on the owner-approved homepage (`src/site/homepage/`, desk page-s1, 18 October 2026), in the order of its claims table, with the clauses that promise it (claims truth table `evidence/br-nectar/desk-built/CLAIMS.md`). A claim's status comes from its clauses in the Status table below: `done` when every clause is done, `missing` when every one is missing, otherwise `partial`. A claim marked — needs no clause (the license, the start line and the hosted demo). 76 claims: 13 done, 33 partial, 30 missing.
 
 | # | Section | Claim | Clause(s) | Status |
 | --- | --- | --- | --- | --- |
@@ -477,7 +477,7 @@ Every capability claim on the owner-approved homepage (`src/site/homepage/`, des
 | 44 | Portal | "and see the proration first" | `SUB-002`, `PORT-003`, `NEC-08` | partial |
 | 45 | Portal | Pay by ACH · First Citizens •• 2210 in the portal | `PORT-004` | missing |
 | 46 | Portal | "Your app asks Nectar what they can use, and the answer changes in seconds" (entitlements API, 18 ms) | `ENT-001`, `DEV-002` | partial |
-| 47 | Portal | Portal on the business's own domain (billing.fieldnote.io) | `PORT-005` | partial |
+| 47 | Portal | Portal on the business's own domain (billing.fieldnote.io) | `PORT-005` | done |
 | 48 | Revenue assurance | "An agent compares signed terms, usage, access, invoices and payments for every customer" | `AGENT-001` | partial |
 | 49 | Revenue assurance | "opens a case for each mismatch and drafts the fix" | `AGENT-001`, `AGENT-002` | partial |
 | 50 | Revenue assurance | "You approve it" (approved by Dana Brooks) | `AGENT-002`, `GOV-002`, `NEC-14` | done |
