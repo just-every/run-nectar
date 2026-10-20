@@ -114,5 +114,14 @@
   "portal.payment": "Paiement enregistré",
   "portal.empty": "Aucune facture émise.",
   "portal.unavailable": "Session de facturation indisponible",
-  "portal.unavailable.body": "Demandez une nouvelle session de facturation à l’entreprise."
+  "portal.unavailable.body": "Demandez une nouvelle session de facturation à l’entreprise.",
+  "portal.privacy.heading": "Demande de confidentialité",
+  "portal.privacy.pending": "Demande enregistrée. Une vérification est encore nécessaire.",
+  "portal.privacy.request": "Demander l’effacement des données personnelles",
+  "portal.privacy.mail.accepted": "Le fournisseur de messagerie a accepté le message de confirmation. Sa réception dans la boîte de réception n’est pas confirmée.",
+  "portal.privacy.mail.rejected": "Le fournisseur de messagerie a refusé le message de confirmation. Contactez l’entreprise pour vérifier votre demande.",
+  "portal.privacy.mail.rate_limited": "Le fournisseur de messagerie n’a pas pu accepter le message de confirmation en raison de sa limite d’envoi. Contactez l’entreprise pour vérifier votre demande.",
+  "portal.privacy.mail.uncertain": "Le résultat du message de confirmation est inconnu. Contactez l’entreprise pour vérifier votre demande.",
+  "portal.privacy.mail.suppressed": "Cette installation locale n’envoie pas de courriels. Contactez l’entreprise pour vérifier votre demande.",
+  "portal.privacy.mail.not_configured": "Le courriel de confirmation n’est pas configuré. Contactez l’entreprise pour vérifier votre demande."
 }

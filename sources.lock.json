@@ -3201,7 +3201,7 @@
       "executable": false
     },
     "tests/fixtures/locales/fr.json": {
-      "sha256": "fbabb8da07fe459e1e3e52dcc9d7cd176c997400d72620f19501cf457f16a0fc",
+      "sha256": "160fd57c8ed62967d1c0f4e8b320b21e3ecdbe1ae246e2c3b86faf3a2da48d04",
       "executable": false
     },
     "tests/fixtures/stripe/customers.json": {
