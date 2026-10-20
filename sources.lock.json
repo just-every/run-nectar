@@ -57,7 +57,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "ceaf91c8294eb7f76acb59c43e28bbfdc65d0a7601a7eb0fdd74656fec010172",
+      "sha256": "95e85597849568a7a171e6d28838addcb7de76e774b789f8dfb84419d50fb884",
       "executable": false
     },
     "AGENTS.consumer.md": {
@@ -69,7 +69,7 @@
       "executable": false
     },
     "API.md": {
-      "sha256": "08ee0c9597eadd1269b440f172ed7b6dd42dd08aead3458f308730315c8eab57",
+      "sha256": "0c878e239bd9b72db8550a6edbfa578668a1420e8041b2167887d61de385e844",
       "executable": false
     },
     "base-copies.json": {
@@ -77,7 +77,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "7f10632c513e807ba0596336ef1d419b3cbbfc660a65818dbeeb0dbde47ab3d9",
+      "sha256": "3e6aa6a98e483dd884b549602f9b7fa6a0cbb1c2fc0bffb755382bc46874b37b",
       "executable": false
     },
     "DEMO.md": {
@@ -357,7 +357,7 @@
       "executable": false
     },
     "migrations/core/0046_customer_proposals.sql": {
-      "sha256": "eaa68de6c6219f4488b9757f8ae4962239e227972b16a2a1db7aa59b26b9d820",
+      "sha256": "0bf379c72ac4fe4c26a50316412a3aa88c27e647d28651de66e7b9a53c833152",
       "executable": false
     },
     "ONBOARDING.md": {

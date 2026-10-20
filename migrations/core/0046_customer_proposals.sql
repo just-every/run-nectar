@@ -46,3 +46,11 @@ WHEN NOT EXISTS(SELECT 1 FROM nc_privacy_context) AND NOT EXISTS(SELECT 1 FROM r
 ) BEGIN SELECT RAISE(ABORT,'nectar_guard_customer_erased'); END;
 CREATE TRIGGER nc_proposal_content BEFORE UPDATE OF kind,title,payload_json,evidence_json,impact_json,basis_json,created_by,created_by_kind,created_at,prepared_by_id ON nc_proposals  WHEN NOT EXISTS(SELECT 1 FROM nc_privacy_context) BEGIN SELECT RAISE(ABORT, 'nectar_immutable'); END;
 CREATE TRIGGER nc_proposals_decided BEFORE UPDATE ON nc_proposals WHEN (OLD.status <> 'pending') AND NOT EXISTS(SELECT 1 FROM nc_privacy_context) BEGIN SELECT RAISE(ABORT, 'nectar_immutable'); END;
+
+-- Dropping the old parent records deferred violations against its former
+-- b-tree, even though the replacement contains every original key. Validate
+-- the final relationships before clearing that obsolete deferred counter and
+-- returning to immediate checking. No foreign-key enforcement is disabled.
+INSERT INTO nc_guard(code,ok) SELECT 'customer_proposal_migration',CASE WHEN EXISTS(SELECT 1 FROM pragma_foreign_key_check) THEN 0 ELSE 1 END;
+DELETE FROM nc_guard WHERE code='customer_proposal_migration';
+PRAGMA defer_foreign_keys = OFF;
