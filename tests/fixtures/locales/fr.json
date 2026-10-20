@@ -98,5 +98,21 @@
   "correction.revenue.policy": "Politique de reconnaissance : {policy}.",
   "correction.revenue.credit": "L’avoir comptabilise {amount} en diminution des revenus pour le mois commençant le {from} ; les calendriers des lignes et les taxes d’origine restent inchangés.",
   "correction.revenue.period": "Mois commençant le {from} : avant {before}, après {after}, variation {change}.",
-  "correction.revenue.schedule": "La ligne {line} reconnaît {amount} pour le mois commençant le {from} selon {policy}."
+  "correction.revenue.schedule": "La ligne {line} reconnaît {amount} pour le mois commençant le {from} selon {policy}.",
+  "portal.heading": "Résumé de facturation",
+  "portal.readonly": "Documents de facturation en lecture seule. Contactez l’entreprise pour modifier la facturation ou effectuer un paiement.",
+  "portal.back": "Toutes les factures",
+  "portal.issued": "Émise le",
+  "portal.due": "Échéance",
+  "portal.total": "Total",
+  "portal.credited": "Crédité",
+  "portal.paid": "Payé",
+  "portal.owed": "Solde dû",
+  "portal.lines": "Frais",
+  "portal.subtotal": "Sous-total",
+  "portal.tax": "Taxe",
+  "portal.payment": "Paiement enregistré",
+  "portal.empty": "Aucune facture émise.",
+  "portal.unavailable": "Session de facturation indisponible",
+  "portal.unavailable.body": "Demandez une nouvelle session de facturation à l’entreprise."
 }
