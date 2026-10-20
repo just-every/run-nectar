@@ -1,8 +1,8 @@
 // Append-only customer context. All financial records remain untouched.
 import type { Bindings } from '../auth.server'
 import { operatorMail } from '../mail.server.mjs'
-import { type RecordFamily, requireRead, requireAny, actorLabel, type Actor } from './actor'
-import { all, commit, guard, insist, newId, now, one, stmt } from './core'
+import { type Role, type Capability, memberCapabilities, type RecordFamily, requireRead, requireAny, actorLabel, type Actor } from './actor'
+import { all, commit, guard, insist, newId, now, one, stmt, type Row } from './core'
 import type { Input } from './input'
 import { customerNotes, noteRecord } from './note-records'
 import { esc } from './ui/html'
@@ -17,9 +17,16 @@ function requireNoteAuthor(actor: Actor) {
 const NOTE_FAMILIES: Record<string, RecordFamily> = { customer: 'customers', invoice: 'invoices', payment: 'payments' }
 const requireNoteRead = (actor: Actor, kind: string) => { insist(kind in NOTE_FAMILIES, 'invalid_note_kind'); requireRead(actor, NOTE_FAMILIES[kind]) }
 
-export async function noteMembers(env: Bindings, actor: Actor) {
+// GOV-001: a mention is permitted only for an active member who can read the
+// noted record now; the mail carries the note, so a non-reader is never sent one.
+const MEMBER_SQL = "SELECT m.id,m.name,m.email,m.role,r.capabilities AS custom FROM nc_members m LEFT JOIN nc_roles r ON r.id=m.custom_role_id WHERE m.status='active'"
+const readsRecord = (row: Row, kind: string) => { const held = memberCapabilities(row.role as Role, row.custom); return held.has('read') || held.has(`read.${NOTE_FAMILIES[kind]}` as Capability) }
+
+/** Members a note author may mention; with a record kind, only those who can read that kind. */
+export async function noteMembers(env: Bindings, actor: Actor, kind?: string) {
   requireNoteAuthor(actor)
-  return await all(env, "SELECT id,name,email FROM nc_members WHERE status='active' ORDER BY name,email")
+  const rows = await all(env, `${MEMBER_SQL} ORDER BY m.name,m.email`)
+  return rows.filter(row => !kind || readsRecord(row, kind)).map(row => ({ id: row.id, name: row.name, email: row.email }))
 }
 
 export async function notes(env: Bindings, actor: Actor, kind: string, record: string) {
@@ -39,8 +46,9 @@ export async function addNote(env: Bindings, actor: Actor, input: Input) {
   insist(ids.length <= 20, 'too_many_mentions')
   const members = []
   for (const id of ids) {
-    const member = await one(env, "SELECT id,email FROM nc_members WHERE id=? AND status='active'", id)
+    const member = await one(env, `${MEMBER_SQL} AND m.id=?`, id)
     insist(member, 'mention_member_not_found', 400)
+    insist(readsRecord(member, kind), 'mention_member_not_permitted', 400)
     members.push(member)
   }
   const id = newId(), at = now()
@@ -63,10 +71,11 @@ async function deliverMentions(env: Bindings, noteId: string, by: string, href: 
     const claimed = await env.DB.prepare("UPDATE nc_note_mentions SET status='sending',updated_at=? WHERE note_id=? AND member_id=? AND status='pending' RETURNING member_id")
       .bind(now(),noteId,mention.member_id).first()
     if (!claimed) continue
-    const member = await one(env, "SELECT email FROM nc_members WHERE id=? AND status='active' AND email=?",mention.member_id,mention.email)
+    const member = await one(env, `${MEMBER_SQL} AND m.id=? AND m.email=?`,mention.member_id,mention.email)
     const mail = operatorMail(env)
     let status = 'failed', provider: string | null = null
-    if (member && !(await memberPreferences(env,mention.member_id)).mentions) status = 'suppressed'
+    if (member && !readsRecord(member, note.kind)) status = 'suppressed'
+    else if (member && !(await memberPreferences(env,mention.member_id)).mentions) status = 'suppressed'
     else if (member && mail && env.MAIL_FROM) {
       const link = new URL(href, env.AUTH_ORIGIN).href
       const text = `${note.author} mentioned you on ${note.record_label}:\n\n${note.body}\n\n${link}`

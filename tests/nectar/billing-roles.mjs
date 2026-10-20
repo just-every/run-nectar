@@ -162,6 +162,12 @@ export async function billingRolesFlow(h, owner) {
   assert.deepEqual(notes.map(n => n.body), ['Customer says this wire covers August; confirm with the bank.', 'Follow-up: bank confirmed the wire.'])
   assert.ok((await h.api('audit', owner)).some(row => row.action === 'note.add' && row.subject === followUp.note && row.actor === people.support))
   await h.api('note.add', who.sales, { kind: 'payment', record: payment, body: 'Sales cannot read payments', mention: [] }, 403)
+  // A mention is permitted only for a colleague who can read the noted record; nothing is saved or sent otherwise.
+  start = h.mails.length
+  const salesMember = await member(people.sales)
+  assert.equal((await h.api('note.add', who.support, { kind: 'payment', record: payment, body: 'Not for sales', mention: [financeMember.id, salesMember.id] }, 400)).error, 'mention_member_not_permitted')
+  assert.equal(h.mails.length, start)
+  assert.equal((await h.api(`notes/payment/${payment}`, owner)).length, 2)
 
   // A custom "Billing analyst": read customers, read reports and export, exactly.
   const analystRole = await h.api('role.define', owner, { name: 'Billing analyst', capabilities: ['read.customers', 'read.reports', 'export'] })
