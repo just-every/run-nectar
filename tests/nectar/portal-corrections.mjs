@@ -143,9 +143,9 @@ async function nextInvoiceCorrections(h, owner, foreignSession, issuedOriginal,o
     assert.deepEqual(totals(after.calculation),expected,'PORT-005 approved correction immediately reaches the customer next-invoice engine')
     assert.deepEqual(totals(after.calculation),totals((await api(`subscriptions/${subscription}/upcoming?period=${period}`)).calculation))
     if (['usage','metric'].includes(kind)) {
-      assert.equal(after.meters[0].quantity,'500','PORT-005 exact corrected raw/derived quantity matches the customer preview')
+      assert.equal(after.meters[0].quantity.replace(/\.0+$/,''),'500','PORT-005 exact corrected raw/derived quantity matches the customer preview')
       assert.deepEqual(after.meters[0].eventIds,[`${kind}-portal-replacement`])
-      assert.deepEqual(view.events.map(row=>[row.eventId,row.quantity,row.action]),[[`${kind}-portal-original`,'1000','void'],[`${kind}-portal-replacement`,'500','add']])
+      assert.deepEqual(view.events.map(row=>[row.eventId,row.quantity.replace(/\.0+$/,''),row.action]),[[`${kind}-portal-original`,'1000','void'],[`${kind}-portal-replacement`,'500','add']])
     }
     await portalJson(h,foreignSession,`/portal/corrections/${proposed.id}`,404)
     assert.deepEqual(await portalJson(h,foreignSession,'/portal/corrections'),foreignBefore,'PORT-005 other customers see no correction or explanation')

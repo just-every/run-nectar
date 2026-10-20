@@ -102,6 +102,7 @@ export async function portalPrivacyRetention(h, owner) {
 
   // A separate customer-originated request exercises the ordinary owner-only
   // evidence path and subsequent explicit manual removal.
+  await h.advanceClock('2026-02-10T16:00:00Z')
   const alternate = await make('ALTERNATE'), alternateSession = await issue(alternate)
   const altCharge = (await api('charge.add', { customer: alternate, amount: '25', description: 'Retained alternate service', taxable: false, effective_date: '2026-02-09' })).charge
   const altInvoice = (await api('invoice.manual', { customer: alternate, charges: [altCharge], service_date: '2026-02-09' })).id

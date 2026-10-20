@@ -29,7 +29,7 @@ export async function portalUpcoming(env: Bindings, session: CustomerSession, su
   const issued = await one(env, `SELECT id,calculation_json,source_fingerprint,calc_version,subtotal_cents,tax_cents,total_cents
     FROM nc_invoices WHERE subscription_id=? AND customer_id=? AND invoice_kind='recurring'
     AND period_start=? AND status='issued'`, sub.id, session.customer, period.start)
-  let input: RatingInput, lines: Row[], calculation: Row
+  let input: RatingInput, lines: Row[], calculation: { fingerprint: string; version: string; subtotalCents: number; taxCents: number; totalCents: number }
   if (issued) {
     const saved = parseJson<Row>(issued.calculation_json, {})
     input = saved.inputs as RatingInput
