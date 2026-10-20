@@ -142,6 +142,7 @@ export async function portalPrivacyRetention(h, owner) {
 
   await h.advanceClock('2033-01-19T16:00:00Z')
   assert.deepEqual((await api('erasure.purge', {})).removed, [])
+  await h.advanceClock('2033-01-20T16:00:00Z')
   assert.equal((await h.raw(`/cdn-cgi/local/scheduled?time=${Date.parse('2033-01-20T16:00:00Z')}&cron=${encodeURIComponent('0 14 * * *')}`)).status, 200)
   await api(`invoices/${invoice}`, undefined, 404)
   assert.ok(!(await api('payments')).some(row => row.id === payment))

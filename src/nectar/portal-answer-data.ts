@@ -23,7 +23,7 @@ export async function customerAnswerInvoice(env: Bindings, session: CustomerSess
     paidCents: allocations.reduce((sum, payment) => sum + payment.amount_cents, 0),
     lines: lines.map(line => { const evidence = parseJson<Row>(line.evidence_json, {}); return { ...line, evidence_json: undefined,
       evidence: Object.fromEntries(['minimumCents','nominalMinimumCents','earnedCents','previouslySettledCents','priorInvoices'].filter(key => key in evidence).map(key => [key, evidence[key]])) } }),
-    calculation: { tax: calculation.tax, inputs: {
+    calculation: { tax: Object.fromEntries(['mode','jurisdiction','rate','taxableBaseCents'].filter(key=>calculation.tax?.[key]!==undefined).map(key=>[key,calculation.tax[key]])), inputs: {
       prices: Object.fromEntries(Object.entries(inputs.prices ?? {}).map(([key, price]) => { const p = price as Row; return [key, { unitAmount: p.unitAmount, pricing: p.pricing }] })),
       contracts: { commitments: (inputs.contracts?.commitments ?? []).map((window: Row) => ({ minimumCents: window.minimumCents })) },
       amendments: (inputs.amendments ?? []).map((amendment: Row) => ({ id: amendment.id, kind: amendment.kind, value: amendment.value })),

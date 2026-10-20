@@ -2701,7 +2701,7 @@
       "executable": false
     },
     "src/nectar/portal-answer-data.ts": {
-      "sha256": "875210e50924b2f8b3f711027019b7ca2c8e8a2e6681bcd695ecd50fb8901650",
+      "sha256": "c7be3447f0d6ca98680bdd5fb9d45f35b1d027af9142f3c9dec05f70f6b4ddec",
       "executable": false
     },
     "src/nectar/portal-answer-proposals.ts": {
@@ -3453,7 +3453,7 @@
       "executable": false
     },
     "tests/nectar/portal-privacy-retention.mjs": {
-      "sha256": "0a08a0702f3015779751aa1330303b1be4210b4138317d30b7b885257ff79513",
+      "sha256": "4c0cd208c59d3e0f9c6fd0f2559ee5fb10bc9f47d9d1a320dca0f4a5511c58c4",
       "executable": false
     },
     "tests/nectar/portal-sessions.mjs": {
