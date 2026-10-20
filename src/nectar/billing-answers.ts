@@ -1,13 +1,13 @@
 // Parameterized billing explanations, with no provider calls or state changes.
 import type { Bindings } from '../auth.server'
-import { requireCapability, type Actor } from './actor'
 import { requireBusiness } from './business'
 import { insist, type Row } from './core'
 import { planInvoiceCredit } from './credit-correction'
+import { customerText } from './locale'
 import { cents, plainMoney } from './decimal'
 import type { Input } from './input'
 import { answerComparison, answerInvoice, answerUsageLines, checkAnswerSubject, commitmentCitations, compareLines, figure, lineFigures, pointer,
-  requireAnswerRead, type AnswerReader, type AnswerCitation, type AnswerFigure, type AnswerInvoice } from './billing-answer-sources'
+  isCustomerReader, requireAnswerRead, type AnswerReader, type AnswerCitation, type AnswerFigure, type AnswerInvoice } from './billing-answer-sources'
 
 export const ANSWER_TOPICS = ['total', 'comparison', 'seats', 'usage', 'events', 'tax', 'adjustments', 'commitment', 'balance', 'terms'] as const
 export type AnswerTopic = typeof ANSWER_TOPICS[number]
@@ -184,10 +184,11 @@ export async function billingAnswer(env: Bindings, actor: AnswerReader, input: I
     const reason = input.text('reason', { max: 500 })
     const line = (record.invoice.lines as Row[])[0]
     insist(line, 'invoice_credit_line_not_found', 409)
-    const explanation = `A requested credit of $${plainMoney(amount)} would reduce the recorded outstanding balance from $${plainMoney(record.invoice.balanceCents)} to $${plainMoney(record.invoice.balanceCents - amount)}. This is a proposal for human review, not a finding that the billed charge was incorrect. Original invoice tax remains unchanged.`
+    const L = isCustomerReader(actor) ? customerText(actor.language) : null
+    const explanation = L ? L.t('portal.answer.credit.explanation', { amount:L.money(amount),before:L.money(record.invoice.balanceCents),after:L.money(record.invoice.balanceCents-amount) }) : `A requested credit of $${plainMoney(amount)} would reduce the recorded outstanding balance from $${plainMoney(record.invoice.balanceCents)} to $${plainMoney(record.invoice.balanceCents - amount)}. This is a proposal for human review, not a finding that the billed charge was incorrect. Original invoice tax remains unchanged.`
     const payload = { invoice_credit: true, invoice: id, amount: plainMoney(amount), reason, explanation,
-      subject: `Proposed credit for invoice ${record.invoice.number}`, body: explanation,
-      citations: [{ line_id: line.id, source: `${record.href}/lines/${encodeURIComponent(line.id)}`, quote: line.description }] }
+      subject: L ? L.t('portal.answer.credit.subject',{invoice:record.invoice.number}) : `Proposed credit for invoice ${record.invoice.number}`, body: explanation,
+      citations: [{ line_id: line.id, source: `/app/invoices/${encodeURIComponent(id)}/lines/${encodeURIComponent(line.id)}`, quote: line.description }] }
     const plan = await planInvoiceCredit(env, await requireBusiness(env), payload)
     answer.proposalDraft = { kind: 'amendment', title: `Requested credit for invoice ${record.invoice.number}`, payload: plan.normalized }
     answer.details.push('A credit draft is available for separate preparation and human approval. Reading this answer creates no proposal, credit, adjustment or message.')

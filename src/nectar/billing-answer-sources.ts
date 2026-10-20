@@ -65,7 +65,10 @@ export async function answerComparison(env: Bindings, actor: AnswerReader, curre
 
 export async function answerUsageLines(env: Bindings, actor: AnswerReader, current: AnswerInvoice): Promise<ReportLine[]> {
   const lines = (current.invoice.lines as Row[]).filter(line => line.meter_id)
-  return await Promise.all(lines.map(line => isCustomerReader(actor) ? customerReportLine(env, actor, current.invoice.id, line.id) : reportLine(env, actor, current.invoice.id, line.id)))
+  return await Promise.all(lines.map(async line => {
+    const evidence=isCustomerReader(actor) ? await customerReportLine(env, actor, current.invoice.id, line.id) : await reportLine(env, actor, current.invoice.id, line.id)
+    return isCustomerReader(actor) ? {...evidence,events:evidence.events.map(({properties,...event})=>event)} : evidence
+  }))
 }
 
 export function figure(record: AnswerInvoice, label: string, value: unknown, unit: string, recordPath: string): AnswerFigure {

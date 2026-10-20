@@ -35,5 +35,5 @@ export async function customerAnswerInvoice(env: Bindings, session: CustomerSess
 export async function customerAnswerLine(env: Bindings, session: CustomerSession, invoice: string, line: string) {
   const record = await customerReportLine(env, session, invoice, line)
   return { line: { id: record.line.id, description: record.line.description, quantity: record.line.quantity, amount_cents: record.line.amount_cents },
-    events: record.events.map(event => ({ eventId: event.eventId, meterId: event.meterId, quantity: event.quantity, occurredAt: event.occurredAt, properties: event.properties })), quantity: record.quantity }
+    events: record.events.map(event => ({ eventId: event.eventId, meterId: event.meterId, quantity: event.quantity, occurredAt: event.occurredAt })), quantity: record.quantity }
 }

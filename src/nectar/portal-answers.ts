@@ -51,5 +51,6 @@ export async function portalAnswersPage(env: Bindings, session: CustomerSession,
     <button>${L.t('portal.answer.ask')}</button></form>
     ${result?h`<section class="card"><h2>${result.summary}</h2><p>${L.t('portal.answer.saved')}</p><dl>${result.figures.map(figure=>h`<dt>${figure.label}</dt><dd>${figure.unit==='cents'?L.money(Number(figure.value)):figure.unit==='date'?L.day(String(figure.value)):figure.value} <a href="${link(figure.source)}">${L.t('portal.answer.evidence')}</a></dd>`)}</dl>
       ${result.comparison?h`<p>${L.t('portal.answer.change')}: ${L.money(result.comparison.totalDeltaCents)}</p>`:''}
-      ${result.citations.map(c=>h`<p><a href="${link(c.href)}">${c.label}</a></p>`)}</section>`:''}`
+      ${result.citations.map(c=>h`<p><a href="${link(c.href)}">${c.label}</a></p>`)}
+      <h3>${L.t('portal.answer.proposal')}</h3><p>${L.t('portal.answer.pending')}</p><form method="post" action="${link('/portal/answer-proposal')}"><input type="hidden" name="invoice" value="${invoice}"><input type="hidden" name="question" value="${question}"><input type="hidden" name="topic" value="${result.topic}"><label>${L.t('portal.answer.requested')}<input name="credit_amount" required inputmode="decimal"></label><label>${L.t('portal.answer.reason')}<input name="reason" required maxlength="500"></label><button>${L.t('portal.answer.prepare')}</button></form></section>`:''}`
 }

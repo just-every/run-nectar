@@ -7,6 +7,10 @@ import { h } from './ui/html'
 import { portalHeaders, portalPage, portalStyle } from './portal-page'
 import { one } from './core'
 import { Input } from './input'
+import { portalUpcomingPage, portalAdjustmentsPage, portalUsageCsv } from './portal-billing-views'
+import { portalUpcoming, portalUpcomingSubscriptions } from './portal-upcoming'
+import { portalCorrectionsData } from './portal-correction-data'
+import { portalProposeCredit, portalCreditProposal, portalCreditProposalPage } from './portal-answer-proposals'
 import { portalAnswer, portalAnswersPage } from './portal-answers'
 import { customerAnswerInvoice, customerAnswerLine } from './portal-answer-data'
 import { portalPrivacy, portalPrivacyRequest } from './portal-privacy'
@@ -17,12 +21,18 @@ export async function portalResponse(request: Request, env: Bindings): Promise<R
   const headers = portalHeaders
   // Public stylesheet for refusal pages has no customer or merchant data.
   if (url.pathname === '/portal/theme.css' && !url.search) return ['GET','HEAD'].includes(request.method) ? portalStyle() : new Response(null, { status: 405, headers: { ...headers, allow: 'GET, HEAD' } })
-  if (!['GET','HEAD'].includes(request.method) && !(url.pathname === '/portal/privacy' && request.method === 'POST')) {
+  if (!['GET','HEAD'].includes(request.method) && !(['/portal/privacy','/portal/answer-proposal'].includes(url.pathname) && request.method === 'POST')) {
     if (request.body) await request.arrayBuffer()
     return new Response(null, { status: 405, headers: { ...headers, allow: 'GET, HEAD' } })
   }
   try {
     const session = await customerSession(env, request)
+    if (url.pathname === '/portal/answer-proposal' && request.method === 'POST') {
+      if (request.headers.get('origin') !== session.origin) throw new NectarError('forbidden',403)
+      const result=await portalProposeCredit(env,session,await Input.from(request))
+      if (request.headers.get('content-type')?.startsWith('application/json')) return Response.json(result,{headers})
+      return new Response(null,{status:303,headers:{...headers,location:`/portal/proposals/${result.id}?session=${encodeURIComponent(url.searchParams.get('session')!)}`}})
+    }
     if (url.pathname === '/portal/privacy' && request.method === 'POST') {
       const response = await portalPrivacyRequest(request, env, session)
       return new Response(null, { status: response.status, headers: { ...Object.fromEntries(response.headers), ...headers } })
@@ -31,17 +41,23 @@ export async function portalResponse(request: Request, env: Bindings): Promise<R
       const brand = await one(env, 'SELECT brand_color FROM nc_portal_policy WHERE singleton=1')
       return portalStyle(brand?.brand_color)
     }
+    if(url.pathname==='/portal/usage.csv') return new Response(await portalUsageCsv(env,session,url),{headers:{...headers,'content-type':'text/csv; charset=utf-8','content-disposition':'attachment; filename=usage.csv'}})
+    const upcoming=url.pathname.match(/^\/portal\/subscriptions\/([\w-]+)\/upcoming$/)
+    if (upcoming) return Response.json(await portalUpcoming(env,session,upcoming[1],url.searchParams.get('period')),{headers})
+    const correction=url.pathname.match(/^\/portal\/corrections(?:\/([\w-]+))?$/)
+    if(correction) return Response.json(await portalCorrectionsData(env,session,correction[1]),{headers})
     const evidence = url.pathname.match(/^\/portal\/evidence\/invoices\/([\w-]+)(?:\/lines\/([\w-]+))?$/)
     if (evidence) return Response.json(evidence[2] ? await customerAnswerLine(env, session, evidence[1], evidence[2]) : (await customerAnswerInvoice(env, session, evidence[1])).invoice, { headers })
     const input = Input.of(Object.fromEntries([...url.searchParams].filter(([key])=>key!=='session')))
     if (url.pathname === '/portal/answer') return Response.json(await portalAnswer(env,session,input), { headers })
+    const proposal = url.pathname.match(/^\/portal\/proposals\/([\w-]+)$/)?.[1]
     const invoice = url.pathname.match(/^\/portal\/invoices\/([\w-]+)$/)?.[1]
-    if (!['/portal','/portal/data','/portal/privacy','/portal/answers'].includes(url.pathname) && !invoice) throw new NectarError('not_found', 404)
+    if (!['/portal','/portal/data','/portal/privacy','/portal/answers','/portal/upcoming','/portal/adjustments'].includes(url.pathname) && !invoice && !proposal) throw new NectarError('not_found', 404)
     const data = await portalData(env, session, invoice), L = customerText(data.customer.language)
     if (url.pathname === '/portal/data') return Response.json(data, { headers: { ...headers, 'content-security-policy': "default-src 'none'; frame-ancestors 'none'" } })
     const token = url.searchParams.get('session')!
     const link = (path: string) => `${path}?session=${encodeURIComponent(token)}`
-    const body = url.pathname === '/portal/answers' ? await portalAnswersPage(env,session,input,link) : url.pathname === '/portal/privacy' ? await portalPrivacy(env, session, link) : h`<header><h1>${L.t('portal.heading')}</h1><p>${data.customer.name}</p><p>${L.t('portal.readonly')}</p><a href="${link('/portal/privacy')}">${L.t('portal.privacy.heading')}</a></header>
+    const body = url.pathname==='/portal/upcoming' ? await portalUpcomingPage(env,session,url,link) : url.pathname==='/portal/adjustments' ? await portalAdjustmentsPage(env,session,link) : proposal ? portalCreditProposalPage(session,await portalCreditProposal(env,session,proposal),link) : url.pathname === '/portal/answers' ? await portalAnswersPage(env,session,input,link) : url.pathname === '/portal/privacy' ? await portalPrivacy(env, session, link) : h`<header><h1>${L.t('portal.heading')}</h1><p>${data.customer.name}</p><p>${L.t('portal.readonly')}</p><a href="${link('/portal/privacy')}">${L.t('portal.privacy.heading')}</a> · <a href="${link('/portal/upcoming')}">${L.t('portal.upcoming.heading')}</a> · <a href="${link('/portal/adjustments')}">${L.t('portal.adjustments.heading')}</a></header>
       ${invoice ? h`<p><a href="${link('/portal')}">${L.t('portal.back')}</a></p>` : ''}
       ${data.invoices.length ? data.invoices.map(row => h`<section class="card"><h2>${invoice ? row.number : h`<a href="${link(`/portal/invoices/${row.id}`)}">${row.number}</a>`}</h2>
         <dl><dt>${L.t('portal.issued')}</dt><dd>${L.day(row.issue_date)}</dd><dt>${L.t('portal.due')}</dt><dd>${L.day(row.due_date)}</dd>
@@ -53,11 +69,12 @@ export async function portalResponse(request: Request, env: Bindings): Promise<R
     Object.entries(headers).forEach(([key,value]) => resultHeaders.set(key,value))
     // Match the ordinary erasure confirmation page: origin-only referrers let
     // native POST forms supply Origin without ever disclosing the session URL.
-    if (url.pathname === '/portal/privacy') resultHeaders.set('referrer-policy', 'strict-origin')
+    if (['/portal/privacy','/portal/answers','/portal/upcoming','/portal/adjustments'].includes(url.pathname)) resultHeaders.set('referrer-policy', 'strict-origin')
     resultHeaders.set('content-security-policy', `default-src 'none'; style-src 'self'; font-src 'self'; img-src 'self'; form-action 'self'; frame-ancestors ${session.audience === 'embedded' ? session.parent : "'none'"}; base-uri 'none'`)
     return new Response(request.method === 'HEAD' ? null : response.body, { headers: resultHeaders })
   } catch (error) {
     if (!(error instanceof NectarError)) throw error
+    if(url.pathname==='/portal/answer-proposal' && request.headers.get('content-type')?.startsWith('application/json')) return Response.json({error:error.code},{status:error.status,headers})
     const L = customerText(null)
     const response = portalPage(L.t('portal.unavailable'), h`<h1>${L.t('portal.unavailable')}</h1><p>${L.t('portal.unavailable.body')}</p>`, { status: error.status })
     return new Response(request.method === 'HEAD' ? null : response.body, { status: response.status, headers: { ...Object.fromEntries(response.headers), ...headers, 'content-security-policy': "default-src 'none'; style-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'" } })
