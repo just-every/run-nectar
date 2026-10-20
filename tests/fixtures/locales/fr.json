@@ -93,5 +93,10 @@
   "erasure.confirm.body": "Confirmez que vous avez demandé l’effacement de vos données personnelles. Le propriétaire doit approuver la demande avant toute modification. Les documents financiers minimaux sont conservés pendant sept ans.",
   "erasure.confirm.button": "Confirmer ma demande",
   "erasure.unavailable": "Ce lien de confirmation n’est plus disponible",
-  "erasure.verified": "Demande vérifiée. Le propriétaire peut maintenant l’examiner."
+  "erasure.verified": "Demande vérifiée. Le propriétaire peut maintenant l’examiner.",
+  "correction.revenue.heading": "Effet sur le calendrier de reconnaissance des revenus",
+  "correction.revenue.policy": "Politique de reconnaissance : {policy}.",
+  "correction.revenue.credit": "L’avoir comptabilise {amount} en diminution des revenus pour le mois commençant le {from} ; les calendriers des lignes et les taxes d’origine restent inchangés.",
+  "correction.revenue.period": "Mois commençant le {from} : avant {before}, après {after}, variation {change}.",
+  "correction.revenue.schedule": "La ligne {line} reconnaît {amount} pour le mois commençant le {from} selon {policy}."
 }

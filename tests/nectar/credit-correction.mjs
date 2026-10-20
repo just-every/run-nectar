@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { applyPolicy } from './policy-helper.mjs'
 
 // AGENT-002: real issued invoices, human decisions, and the existing mail edge.
-export async function creditCorrectionFlow(h, owner) {
+export async function creditCorrectionFlow(h, owner, onState=async()=>{}) {
   const api = (path, body, status) => h.api(path, owner, body, status)
   const previous = await api('business'), previousPolicy = await api('policies/current')
   await api('access.give', { email: 'correction-finance@example.test', name: 'Casey Correction Finance', role: 'finance' })
@@ -80,6 +80,9 @@ export async function creditCorrectionFlow(h, owner) {
 
     const checkRevenue = async (saved, fixture) => {
       const revenue = saved.impact.revenue, source = await api(`revenue/${fixture.id}`)
+      const html=await h.page(`/app/proposals/${saved.id}`,owner)
+      for(const r of revenue.periods)assert.ok(html.includes(`data-revenue-period="${r.period}" data-before-cents="${r.beforeCents}" data-after-cents="${r.afterCents}" data-delta-cents="${r.deltaCents}"`),'REV-001 the operator sees exact reviewed monthly recognition deltas')
+      assert.ok(!html.includes('[object Object]'),'REV-001 recognition is readable in the operator preview')
       const amount = saved.impact.credit.amountCents
       assert.deepEqual(revenue.before.schedules.slice(0, source.schedules.length).sort((a, b) => a.lineId.localeCompare(b.lineId)), [...source.schedules].sort((a, b) => a.lineId.localeCompare(b.lineId)), 'REV-001 credit preview uses the immutable issued line schedules')
       assert.deepEqual(revenue.before.schedules.slice(source.schedules.length).map(row => [row.lineId, row.amountCents, row.entries.map(entry => [entry.period, entry.amountCents])]),
@@ -107,6 +110,9 @@ export async function creditCorrectionFlow(h, owner) {
     }
     const checkBooked = async (saved, fixture, credit) => {
       const revenue = saved.impact.revenue, source = await api(`revenue/${fixture.id}`)
+      const html=await h.page(`/app/proposals/${saved.id}`,owner)
+      for(const r of revenue.periods)assert.ok(html.includes(`data-revenue-period="${r.period}" data-before-cents="${r.beforeCents}" data-after-cents="${r.afterCents}" data-delta-cents="${r.deltaCents}"`),'REV-001 the operator sees exact reviewed monthly recognition deltas')
+      assert.ok(!html.includes('[object Object]'),'REV-001 recognition is readable in the operator preview')
       const booked = source.credits.find(row => row.id === credit.id)
       assert.deepEqual([booked.period, booked.amountCents], [revenue.issueMonth, revenue.adjustment.amountCents], 'REV-001 approved credit and actual recognition month match the frozen preview')
       assert.equal(booked.basis.invoiceId, fixture.id)
@@ -143,6 +149,7 @@ export async function creditCorrectionFlow(h, owner) {
     assert.deepEqual([saved.impact.credit.amountCents, saved.impact.credit.balanceBeforeCents, saved.impact.credit.balanceAfterCents], [5000, 11000, 6000])
     assert.deepEqual([saved.impact.invoice.subtotalCents, saved.impact.invoice.taxCents, saved.impact.invoice.totalCents], [10000, 1000, 11000])
     await checkRevenue(saved, seats)
+    await onState({label:'credit-prepared',id:prepared.id})
     assert.deepEqual([saved.impact.mail.recipient, saved.impact.mail.subject], [seats.email, input.subject])
     assert.equal(saved.impact.mail.language, 'en', 'PORT-006 the invoice-credit author sees the customer’s language; the text is sent as written')
     assert.equal(saved.payload.recipient, seats.email)
@@ -170,6 +177,7 @@ export async function creditCorrectionFlow(h, owner) {
     assert.equal(approved.correctionMail.body, saved.impact.mail.body)
     assert.deepEqual(JSON.parse(approved.correctionMail.citations_json), saved.impact.mail.citations)
     await checkBooked(saved, seats, corrected.credits[0])
+    await onState({label:'credit-approved',id:prepared.id})
     assert.equal(billingMails().length, beforeMail + 1, 'one approval submits one correction email to the billing address')
     assert.equal(billingMails().at(-1).subject, input.subject)
     assert.equal(billingMails().at(-1).text, saved.impact.mail.body)

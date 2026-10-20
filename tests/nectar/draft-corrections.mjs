@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { applyPolicy } from './policy-helper.mjs'
 
 // Ordinary AGENT-002 corrections retain invoice approval as a separate action.
-export async function draftCorrectionsFlow(h, owner) {
+export async function draftCorrectionsFlow(h, owner, onState=async()=>{}) {
   const api = (path, body, status) => h.api(path, owner, body, status)
   const previous = await api('business')
   await api('access.give', { email: 'draft-finance@example.test', name: 'Draft Correction Finance', role: 'finance' })
@@ -117,7 +117,9 @@ export async function draftCorrectionsFlow(h, owner) {
       assert.deepEqual([source.invoice.subtotalCents, source.invoice.taxCents, source.invoice.totalCents], totals(impact.after))
       if (fixture.original) assert.deepEqual((await api(`revenue/${fixture.original.id}`)).schedules, fixture.originalRevenue.schedules, 'REV-001 issuing corrected consideration never rewrites the previous invoice recognition')
     }
-    const checkDraft = (proposal, fixture, impacts) => {
+    const checkDraft = async (proposal, fixture, impacts) => {
+      const html=await h.page(`/app/proposals/${proposal.id}`,owner)
+      for(const impact of impacts)for(const r of impact.revenueDeltas)assert.ok(html.includes(`data-revenue-period="${r.period}" data-before-cents="${r.beforeCents}" data-after-cents="${r.afterCents}" data-delta-cents="${r.deltaCents}"`),'REV-001 operator proposal renders the exact monthly recognition change')
       assert.deepEqual(proposal.customerMessages, [], 'preparation creates no customer delivery record')
       assert.equal(proposal.payload.noticeDrafts.length, 1, 'one explanation covers all affected periods for this customer')
       const draft = proposal.payload.noticeDrafts[0]
@@ -136,11 +138,13 @@ export async function draftCorrectionsFlow(h, owner) {
           for (const amount of totals(side)) assert.ok(draft.body.includes(`${amount < 0 ? '-' : ''}USD ${(Math.abs(amount) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`), 'the explanation carries the independently verified subtotal, tax and total')
         }
       }
+      await onState({label:`${proposal.kind}-prepared`,id:proposal.id})
       return draft
     }
     const checkSent = async (id, saved, fixture, start) => {
       const approved = await detail(id), draft = saved.payload.noticeDrafts[0]
       assert.equal(approved.status, 'approved')
+      await onState({label:`${approved.kind}-approved`,id})
       assert.deepEqual(approved.payload, saved.payload, 'approval preserves the reviewed interpretation and generated message')
       assert.deepEqual(approved.evidence, saved.evidence)
       assert.deepEqual(approved.impact, saved.impact)
@@ -189,7 +193,7 @@ export async function draftCorrectionsFlow(h, owner) {
       const current = await upcoming(terms, row.period.start.slice(0, 7))
       assert.equal(row.before.fingerprint, current.calculation.fingerprint)
     }
-    checkDraft(termSaved, terms, termSaved.impact)
+    await checkDraft(termSaved, terms, termSaved.impact)
     assert.deepEqual((await h.api(`proposals/${termProposal.id}`, agent)).payload.noticeDrafts, termSaved.payload.noticeDrafts)
     let start = mails().length
     await formDecision(termProposal.id, finance, { recipient: 'attacker@example.test', subject: 'Injected', body: 'Injected', noticeDrafts: JSON.stringify(hostile) })
@@ -213,7 +217,7 @@ export async function draftCorrectionsFlow(h, owner) {
         const subtotal = index === 0 ? firstSubtotal : laterSubtotal
         assert.deepEqual(totals(row.after), [subtotal, subtotal / 10, subtotal * 11 / 10], 'REV-001 fixed credit is one-time; contract price applies each reviewed month')
       }
-      checkDraft(saved, fixture, saved.impact)
+      await checkDraft(saved, fixture, saved.impact)
       const before = await snapshot(), start = mails().length
       for (const who of [agent, accountant]) await decide(proposal.id, who, 403)
       assert.deepEqual(await snapshot(), before, 'REV-001 amendment recognition cannot bypass human approval')
@@ -228,7 +232,7 @@ export async function draftCorrectionsFlow(h, owner) {
     assert.deepEqual(totals(usageImpact.before), [11000, 1100, 12100])
     assert.deepEqual(totals(usageImpact.after), [10500, 1050, 11550])
     assert.equal(usageImpact.before.fingerprint, (await upcoming(usage)).calculation.fingerprint)
-    const usageDraft = checkDraft(usageSaved, usage, [usageImpact])
+    const usageDraft = await checkDraft(usageSaved, usage, [usageImpact])
     for (const id of ['draft-1-april', 'draft-usage-approved']) {
       assert.ok(usageDraft.body.includes(id))
       assert.ok(usageDraft.citations.some(citation => citation.source === '/app/usage' && citation.quote.includes(id)), 'the explanation cites actual corrected source event identities')
@@ -271,7 +275,7 @@ export async function draftCorrectionsFlow(h, owner) {
     assert.ok(metricImpact, 'raw-source corrections find the subscription using its derived meter')
     assert.deepEqual(totals(metricImpact.before), [11000, 1100, 12100])
     assert.deepEqual(totals(metricImpact.after), [10500, 1050, 11550])
-    const metricDraft = checkDraft(metricSaved, metricFixture, [metricImpact])
+    const metricDraft = await checkDraft(metricSaved, metricFixture, [metricImpact])
     assert.ok(metricDraft.citations.some(citation => citation.quote.includes(metricReplacement.event_id)))
     start = mails().length
     await decide(metricProposal.id)
