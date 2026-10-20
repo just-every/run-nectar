@@ -195,5 +195,7 @@
   "portal.answer.creditnote": "Nota de crédito {number}",
   "portal.answer.payment": "Pago asignado {number}",
   "portal.answer.discount": "Descuento guardado (%)",
-  "portal.answer.fixedcredit": "Crédito contractual guardado (USD)"
+  "portal.answer.fixedcredit": "Crédito contractual guardado (USD)",
+  "portal.request.unavailable": "Solicitud de facturación no disponible",
+  "portal.request.unavailable.body": "Revise la factura y la pregunta seleccionadas, o contacte con la empresa."
 }

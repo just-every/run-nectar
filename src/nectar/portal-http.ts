@@ -19,6 +19,7 @@ export async function portalResponse(request: Request, env: Bindings): Promise<R
   const url = new URL(request.url)
   if (url.pathname !== '/portal' && !url.pathname.startsWith('/portal/')) return null
   const headers = portalHeaders
+  let language: string | null = null
   // Public stylesheet for refusal pages has no customer or merchant data.
   if (url.pathname === '/portal/theme.css' && !url.search) return ['GET','HEAD'].includes(request.method) ? portalStyle() : new Response(null, { status: 405, headers: { ...headers, allow: 'GET, HEAD' } })
   if (!['GET','HEAD'].includes(request.method) && !(['/portal/privacy','/portal/answer-proposal'].includes(url.pathname) && request.method === 'POST')) {
@@ -27,6 +28,7 @@ export async function portalResponse(request: Request, env: Bindings): Promise<R
   }
   try {
     const session = await customerSession(env, request)
+    language = session.language
     if (url.pathname === '/portal/answer-proposal' && request.method === 'POST') {
       if (request.headers.get('origin') !== session.origin) throw new NectarError('forbidden',403)
       const result=await portalProposeCredit(env,session,await Input.from(request))
@@ -75,8 +77,10 @@ export async function portalResponse(request: Request, env: Bindings): Promise<R
   } catch (error) {
     if (!(error instanceof NectarError)) throw error
     if(url.pathname==='/portal/answer-proposal' && request.headers.get('content-type')?.startsWith('application/json')) return Response.json({error:error.code},{status:error.status,headers})
-    const L = customerText(null)
-    const response = portalPage(L.t('portal.unavailable'), h`<h1>${L.t('portal.unavailable')}</h1><p>${L.t('portal.unavailable.body')}</p>`, { status: error.status })
+    const known = language !== null && ![401,403].includes(error.status)
+    const L = customerText(known ? language : null)
+    const title = L.t(known ? 'portal.request.unavailable' : 'portal.unavailable')
+    const response = portalPage(title, h`<h1>${title}</h1><p>${L.t(known ? 'portal.request.unavailable.body' : 'portal.unavailable.body')}</p>`, { status: error.status, lang: L.tag })
     return new Response(request.method === 'HEAD' ? null : response.body, { status: response.status, headers: { ...Object.fromEntries(response.headers), ...headers, 'content-security-policy': "default-src 'none'; style-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'" } })
   }
 }

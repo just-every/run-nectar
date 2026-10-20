@@ -32,7 +32,7 @@ export async function checkAnswerSubject(env: Bindings, customer: string, questi
   for (const row of foreign) for (const name of [row.name, row.external_id]) {
     const value = String(name).toLocaleLowerCase('en-US').replace(/\s+/g, ' ')
     const escaped = value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    const reference = new RegExp(`(?:\\b(?:for|does|about|customer|from)\\s+|["“])${escaped}(?=$|[^\\p{L}\\p{N}_])`, 'u')
+    const reference = new RegExp(`(?:\\b(?:for|does|about|customer|from|para|sobre|cliente|de)\\s+|["“])${escaped}(?=$|[^\\p{L}\\p{N}_])`, 'u')
     insist(!reference.test(normalized), 'answer_subject_not_found', 404)
   }
 }

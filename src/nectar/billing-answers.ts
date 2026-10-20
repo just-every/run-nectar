@@ -19,23 +19,23 @@ export interface BillingAnswer {
 }
 
 const patterns: Record<AnswerTopic, RegExp> = {
-  total: /\b(total|subtotal|invoice amount|bill amount|how much|cost|charged overall|charge amount)\b/,
-  comparison: /\b(higher|lower|increase[ds]?|decrease[ds]?|difference|different|compare|comparison|changed?|last month|previous (?:invoice|bill|period)|more than|less than|more expensive|cheaper|(?:went|go|gone) (?:up|down)|rose|dropped)\b/,
-  seats: /\b(seats?|licenses?|licences?|users?|per[- ]seat)\b/,
-  usage: /\b(usage|meter(?:ed|ing)?|consumption|consumed|overage|units?|calls?|requests?)\b/,
-  events: /\b(events?|raw records?|source records?|logs?|event ids?|snapshots?)\b/,
-  tax: /\b(tax(?:es|able|ation)?|sales tax|jurisdiction|exempt(?:ion)?)\b/,
-  adjustments: /\b(discounts?|credits?|adjustments?|coupons?|prorat(?:a|ed|ion)|unused service)\b/,
-  commitment: /\b(commitments?|minimums?|true[- ]?ups?|burn[- ]?down|shortfall|included allowance)\b/,
-  balance: /\b(balance|outstanding|owed?|owing|payments?|pay|paid|receipts?|settle[ds]?|allocations?|due|unpaid)\b/,
-  terms: /\b(terms?|contract|agreement|price|pricing|rate|rules?|period|service dates?|trial|cancel(?:lation|led)?|ramp|uplift)\b/,
+  total: /\b(total|subtotal|invoice amount|bill amount|how much|cost|charged overall|charge amount|importe|cuanto|coste)\b/,
+  comparison: /\b(higher|lower|increase[ds]?|decrease[ds]?|difference|different|compare|comparison|changed?|last month|previous (?:invoice|bill|period)|more than|less than|more expensive|cheaper|(?:went|go|gone) (?:up|down)|rose|dropped|anterior|diferencia|comparar|comparacion|mas alta|mas baja|aumento|disminuyo)\b/,
+  seats: /\b(seats?|licenses?|licences?|users?|per[- ]seat|puestos?|asientos?|licencias?|usuarios?)\b/,
+  usage: /\b(usage|meter(?:ed|ing)?|consumption|consumed|overage|units?|calls?|requests?|uso|consumo|unidades?|llamadas?|solicitudes?)\b/,
+  events: /\b(events?|raw records?|source records?|logs?|event ids?|snapshots?|eventos?|registros?)\b/,
+  tax: /\b(tax(?:es|able|ation)?|sales tax|jurisdiction|exempt(?:ion)?|impuestos?|exencion|tasa fiscal)\b/,
+  adjustments: /\b(discounts?|credits?|adjustments?|coupons?|prorat(?:a|ed|ion)|unused service|descuentos?|creditos?|ajustes?|prorrateo)\b/,
+  commitment: /\b(commitments?|minimums?|true[- ]?ups?|burn[- ]?down|shortfall|included allowance|compromisos?|minimos?|regularizacion)\b/,
+  balance: /\b(balance|outstanding|owed?|owing|payments?|pay|paid|receipts?|settle[ds]?|allocations?|due|unpaid|saldo|pendiente|pagos?|pagado|adeudado)\b/,
+  terms: /\b(terms?|contract|agreement|price|pricing|rate|rules?|period|service dates?|trial|cancel(?:lation|led)?|ramp|uplift|condiciones|contrato|acuerdo|precio|tarifa|periodo|fechas?|servicio)\b/,
 }
 
 function interpret(question: string, chosen: string): AnswerTopic {
-  const normalized = question.toLowerCase().replace(/[’']/g, '').replace(/\s+/g, ' ')
+  const normalized = question.toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu,'').replace(/[’']/g, '').replace(/\s+/g, ' ')
   // These requests ask for another subject or unavailable capabilities. An
   // explicit interpretation never turns them into a successful answer.
-  insist(!/\b(another|other|every|all) customers?\b|\b(refund|bank account|card number|forecast|predict|journal|revenue recognition|upcoming|next (?:invoice|bill|month|period))\b/.test(normalized), 'answer_question_unsupported', 400)
+  insist(!/\b(another|other|every|all) customers?\b|\b(refund|bank account|card number|forecast|predict|journal|revenue recognition|upcoming|next (?:invoice|bill|month|period)|reembolso|cuenta bancaria|numero de tarjeta|proxima (?:factura|mes)|siguiente (?:factura|periodo)|otro cliente|todos los clientes)\b/.test(normalized), 'answer_question_unsupported', 400)
   if (chosen) {
     insist(ANSWER_TOPICS.includes(chosen as AnswerTopic), 'answer_topic_unsupported', 400)
     return chosen as AnswerTopic
@@ -51,7 +51,7 @@ function interpret(question: string, chosen: string): AnswerTopic {
   let candidates = specific.includes('events') ? specific.filter(topic => topic !== 'usage') : specific
   // A balance naturally includes payments and credit notes. Contract credits
   // without settlement words still ask about billed adjustments instead.
-  if (candidates.includes('balance') && /\b(balance|outstanding|owed?|owing|payments?|paid|allocations?)\b/.test(normalized)) candidates = candidates.filter(topic => topic !== 'adjustments')
+  if (candidates.includes('balance') && /\b(balance|outstanding|owed?|owing|payments?|paid|allocations?|saldo|pendiente|pagos?|pagado|adeudado)\b/.test(normalized)) candidates = candidates.filter(topic => topic !== 'adjustments')
   if (candidates.length === 1) return candidates[0]
   if (!candidates.length && found.length === 1) return found[0]
   insist(false, found.length ? 'answer_question_ambiguous' : 'answer_question_unsupported', 400)

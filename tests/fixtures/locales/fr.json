@@ -195,5 +195,7 @@
   "portal.answer.creditnote": "Avoir {number}",
   "portal.answer.payment": "Paiement affecté {number}",
   "portal.answer.discount": "Remise conservée (%)",
-  "portal.answer.fixedcredit": "Crédit contractuel conservé (USD)"
+  "portal.answer.fixedcredit": "Crédit contractuel conservé (USD)",
+  "portal.request.unavailable": "Demande de facturation indisponible",
+  "portal.request.unavailable.body": "Vérifiez la facture et la question sélectionnées, ou contactez l’entreprise."
 }

@@ -83,6 +83,17 @@ export async function portalAnswersFlow(h,owner,onState=async()=>{}) {
   assert.deepEqual(spanish.figures.map(f=>f.value),answers[0].figures.map(f=>f.value),'PORT-005 Spanish exact figures')
   assert.match(spanish.summary,/Total original/)
   await onState({session,invoice,question:'total',topic:'spanish',answer:spanish})
+  const spanishQuestions=['¿Cuál es el total de esta factura?','¿Por qué esta factura es más alta que la anterior?','¿Cuántos puestos se facturaron?','¿Qué uso se ha facturado?','¿Qué eventos justifican el uso?','¿Cómo se calculó el impuesto?','¿Qué descuentos y créditos afectaron esta factura?','¿Por qué hubo una regularización del compromiso mínimo?','¿Cuál es el saldo pendiente después de pagos y créditos?','¿Qué condiciones y fechas de servicio se usaron?']
+  for(const [index,question] of spanishQuestions.entries()){
+    const answer=await read({question})
+    assert.equal(answer.topic,questions[index][1],'PORT-005 Spanish question interprets the same supported billing topic')
+    const english=await h.api('answer.read',owner,{customer,invoice,question:questions[index][0]})
+    assert.deepEqual(answer.figures.map(f=>[f.value,f.unit,f.recordPath]),english.figures.filter(f=>f.unit!=='property').map(f=>[f.value,f.unit,f.recordPath]),'PORT-005 Spanish answer retains the exact English source operands')
+  }
+  await read({question:'¿Cuál es el total de Maple Research?'},session.token,404)
+  const unsupported=await h.raw(`/portal/answer?${new URLSearchParams({session:session.token,invoice,question:'¿Qué reembolso recibiré?'})}`)
+  assert.equal(unsupported.status,400)
+  assert.match(await unsupported.text(),/lang="es-US"/,'PORT-005 an authenticated Spanish refusal retains the customer language')
   const spanishRequest=await(await requestCredit()).json()
   const spanishProposal=await h.api(`proposals/${spanishRequest.id}`,owner)
   assert.match(spanishProposal.payload.body,/Un crédito solicitado/,'PORT-005 requested credit explanation follows the customer language')

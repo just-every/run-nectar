@@ -195,5 +195,7 @@
   "portal.answer.creditnote": "Credit note {number}",
   "portal.answer.payment": "Allocated payment {number}",
   "portal.answer.discount": "Saved discount (%)",
-  "portal.answer.fixedcredit": "Saved contract credit (USD)"
+  "portal.answer.fixedcredit": "Saved contract credit (USD)",
+  "portal.request.unavailable": "Billing request unavailable",
+  "portal.request.unavailable.body": "Check the selected invoice and question, or contact the business."
 }
