@@ -125,7 +125,7 @@
   "portal.privacy.mail.suppressed": "Esta instalación local no envía correo. Contacta a la empresa para verificar tu solicitud.",
   "portal.privacy.mail.not_configured": "El correo de confirmación no está configurado. Contacta a la empresa para verificar tu solicitud.",
   "portal.answer.heading": "Respuestas de facturación",
-  "portal.answer.invoice": "ID de factura",
+  "portal.answer.invoice": "Factura",
   "portal.answer.question": "Pregunta",
   "portal.answer.topic": "Tema",
   "portal.answer.interpret": "Interpretar mi pregunta",
@@ -188,5 +188,6 @@
   "portal.upcoming.empty": "No hay ninguna suscripción activa disponible.",
   "portal.adjustments.heading": "Ajustes de facturación aprobados",
   "portal.adjustments.approved": "Aprobado por la empresa. El mensaje siguiente conserva el texto de esa decisión; no confirma la entrega en la bandeja de entrada.",
-  "portal.adjustments.empty": "No hay ajustes de facturación aprobados."
+  "portal.adjustments.empty": "No hay ajustes de facturación aprobados.",
+  "portal.answer.proposedbalance": "Cambio de saldo propuesto"
 }

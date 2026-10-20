@@ -2601,11 +2601,11 @@
       "executable": false
     },
     "src/nectar/locales/en.json": {
-      "sha256": "cd21dd8a33ee30f47b6bcb39135c56dd764e2396f1ed1efe2d9b063ed3635c17",
+      "sha256": "9a28d5fdc2e96aff808ff30384b331096a93cae30528df85cdaea1be98f6a5c4",
       "executable": false
     },
     "src/nectar/locales/es-US.json": {
-      "sha256": "acb992ab99c10a33858425b6741135c8c8d586d30f1146b94959abfec2df4bfd",
+      "sha256": "3355f3d264662a860076d809639cf78ac335beb4f7e78f75e1b240f46b538588",
       "executable": false
     },
     "src/nectar/manual-invoices.ts": {
@@ -2705,15 +2705,15 @@
       "executable": false
     },
     "src/nectar/portal-answer-proposals.ts": {
-      "sha256": "c7b24be02f845f57f8e842ea13bb6bb66d74e803952dae82ba01911be7a3b009",
+      "sha256": "3ed2953f0772cee16024a3531e6ab1ceed368ef8168ac5c029b5cd29972e47d4",
       "executable": false
     },
     "src/nectar/portal-answers.ts": {
-      "sha256": "705501600e9651adc6a95b0c47fca415021651f8b574c39d574946e656ab77b7",
+      "sha256": "120b9c5ebea68d85849f9b53ef72aaeb852ec122eb40bd4e547036ecc9be8722",
       "executable": false
     },
     "src/nectar/portal-billing-views.ts": {
-      "sha256": "fe0863f881b47dee35d557fde4f7e8a6186d6a07320faa75cbbd02ec488e2feb",
+      "sha256": "6f2a318f6b22aa6efc41f632b5ba974297b126406de5b0971aa5ba365f66d10d",
       "executable": false
     },
     "src/nectar/portal-correction-data.ts": {
@@ -2745,7 +2745,7 @@
       "executable": false
     },
     "src/nectar/portal-upcoming.ts": {
-      "sha256": "8b0c7cffefbefa7328aeb03a513e0f9689fe0ea77c3622d20368d90fbd551247",
+      "sha256": "d5691df03fd03db1531edf022f5713c6e6a0b9f8e45c1da36b31d03a77dc7a7e",
       "executable": false
     },
     "src/nectar/price-drafts.ts": {
@@ -3229,7 +3229,7 @@
       "executable": false
     },
     "tests/fixtures/locales/fr.json": {
-      "sha256": "4b9295802cf4f5e8a23d5030b3b776a3d3cecfd94be22ce46106e3ab0f65ccd2",
+      "sha256": "a2bb57b85b68a2a5dc214e651d7103a9c8726992116041c847b07df2627c92ae",
       "executable": false
     },
     "tests/fixtures/stripe/customers.json": {
@@ -3441,7 +3441,7 @@
       "executable": false
     },
     "tests/nectar/portal-corrections.mjs": {
-      "sha256": "cc2d85435372ea0f903d87dca1ea721a52d663d23a75f7c2eb16b5e719aff926",
+      "sha256": "7ce11fe9971b539d7ac15715a3f3d343b2c70e44b5087ee772f8ddb071d8c402",
       "executable": false
     },
     "tests/nectar/portal-embedding.mjs": {

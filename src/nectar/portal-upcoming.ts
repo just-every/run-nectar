@@ -12,7 +12,7 @@ import type { CustomerSession } from './portal-session'
 import type { RatingInput } from './rating'
 
 export async function portalUpcomingSubscriptions(env: Bindings, session: CustomerSession) {
-  return await all(env, `SELECT s.id,s.start_date,s.end_date,s.anchor_day FROM nc_subscriptions s
+  return await all(env, `SELECT s.id,s.start_date,s.end_date,s.anchor_day,(SELECT p.name FROM nc_subscription_items si JOIN nc_prices price ON price.id=si.price_id JOIN nc_products p ON p.id=price.product_id WHERE si.subscription_id=s.id LIMIT 1) AS label FROM nc_subscriptions s
     JOIN nc_customers c ON c.id=s.customer_id WHERE s.customer_id=? AND c.erased_at IS NULL
     AND s.billing_mode='live' ORDER BY s.start_date,s.id`, session.customer)
 }

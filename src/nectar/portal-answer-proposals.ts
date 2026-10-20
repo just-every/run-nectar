@@ -39,5 +39,5 @@ export async function portalCreditProposal(env: Bindings,session:CustomerSession
 
 export function portalCreditProposalPage(session:CustomerSession,proposal:Awaited<ReturnType<typeof portalCreditProposal>>,link:(path:string)=>string){
   const L=customerText(session.language)
-  return h`<h1>${L.t('portal.answer.proposal')}</h1><p>${L.t(`portal.answer.status.${proposal.status}`)}</p><p>${proposal.reason}</p><p>${proposal.explanation}</p><dl><dt>${L.t('portal.answer.requested')}</dt><dd>${L.money(proposal.amountCents)}</dd><dt>${L.t('portal.answer.figure.owed')}</dt><dd>${L.money(proposal.balanceBeforeCents)} → ${L.money(proposal.balanceAfterCents)}</dd></dl><p><a href="${link(`/portal/invoices/${proposal.invoice}`)}">${L.t('portal.back')}</a></p>`
+  return h`<h1>${L.t('portal.answer.proposal')}</h1><p>${L.t(`portal.answer.status.${proposal.status}`)}</p><p>${proposal.reason}</p><p>${proposal.explanation}</p><dl><dt>${L.t('portal.answer.requested')}</dt><dd>${L.money(proposal.amountCents)}</dd><dt>${L.t('portal.answer.proposedbalance')}</dt><dd>${L.money(proposal.balanceBeforeCents)} → ${L.money(proposal.balanceAfterCents)}</dd></dl><p><a href="${link(`/portal/invoices/${proposal.invoice}`)}">${L.t('portal.back')}</a></p>`
 }

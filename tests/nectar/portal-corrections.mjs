@@ -144,6 +144,11 @@ async function nextInvoiceCorrections(h, owner, foreignSession, issuedOriginal,o
     assert.deepEqual(totals(after.calculation),totals((await api(`subscriptions/${subscription}/upcoming?period=${period}`)).calculation))
     if (['usage','metric'].includes(kind)) {
       assert.equal(after.meters[0].quantity.replace(/\.0+$/,''),'500','PORT-005 exact corrected raw/derived quantity matches the customer preview')
+      const csv=await h.raw(`/portal/usage.csv?session=${session.token}&subscription=${subscription}&period=${period}`)
+      assert.equal(csv.status,200);assert.equal(csv.headers.get('cache-control'),'no-store')
+      const rows=(await csv.text()).trim().split('\r\n').slice(1).map(line=>line.split(',').map(cell=>cell.slice(1,-1)))
+      assert.equal(rows.length,1,'PORT-005 usage CSV has one exact meter-period contribution')
+      assert.equal(rows[0][3].replace(/\.0+$/,''),'500','PORT-005 independently counted corrected quantity equals CSV and screen')
       assert.deepEqual(after.meters[0].eventIds,[`${kind}-portal-replacement`])
       assert.deepEqual(view.events.map(row=>[row.eventId,row.quantity.replace(/\.0+$/,''),row.action]),[[`${kind}-portal-original`,'1000','void'],[`${kind}-portal-replacement`,'500','add']])
     }

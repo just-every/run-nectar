@@ -3,6 +3,7 @@ import type { Bindings } from '../auth.server'
 import type { CustomerSession } from './portal-session'
 import { billingAnswer, ANSWER_TOPICS } from './billing-answers'
 import { Input } from './input'
+import { portalData } from './portal-data'
 import { customerText } from './locale'
 import { h } from './ui/html'
 
@@ -40,12 +41,13 @@ export async function portalAnswer(env: Bindings, session: CustomerSession, inpu
 
 export async function portalAnswersPage(env: Bindings, session: CustomerSession, input: Input, link:(path:string)=>string) {
   const L=customerText(session.language)
-  const invoice=input.text('invoice',{optional:true,max:100})
+  const invoices=(await portalData(env,session)).invoices
+  const invoice=input.text('invoice',{optional:true,max:100})||invoices[0]?.id||''
   const question=input.text('question',{optional:true,max:1000})
   const result=question ? await portalAnswer(env,session,input) : null
   return h`<h1>${L.t('portal.answer.heading')}</h1><p><a href="${link('/portal')}">${L.t('portal.back')}</a></p>
     <form method="get" action="/portal/answers"><input type="hidden" name="session" value="${link('').split('session=')[1]}">
-    <label>${L.t('portal.answer.invoice')}<input name="invoice" value="${invoice}" required></label>
+    <label>${L.t('portal.answer.invoice')}<select name="invoice" required>${invoices.map(row=>h`<option value="${row.id}" ${row.id===invoice?'selected':''}>${row.number} · ${L.day(row.issue_date)}</option>`)}</select></label>
     <label>${L.t('portal.answer.question')}<input name="question" value="${question}" required maxlength="1000"></label>
     <label>${L.t('portal.answer.topic')}<select name="topic"><option value="">${L.t('portal.answer.interpret')}</option>${ANSWER_TOPICS.map(topic=>h`<option value="${topic}" ${input.text('topic',{optional:true})===topic?'selected':''}>${L.t(`portal.answer.topic.${topic}`)}</option>`)}</select></label>
     <button>${L.t('portal.answer.ask')}</button></form>

@@ -125,7 +125,7 @@
   "portal.privacy.mail.suppressed": "This local installation does not send email. Contact the business to verify your request.",
   "portal.privacy.mail.not_configured": "Confirmation email is not configured. Contact the business to verify your request.",
   "portal.answer.heading": "Billing answers",
-  "portal.answer.invoice": "Invoice ID",
+  "portal.answer.invoice": "Invoice",
   "portal.answer.question": "Question",
   "portal.answer.topic": "Topic",
   "portal.answer.interpret": "Interpret my question",
@@ -188,5 +188,6 @@
   "portal.upcoming.empty": "No active subscription is available.",
   "portal.adjustments.heading": "Approved billing adjustments",
   "portal.adjustments.approved": "Approved by the business. The message below is the wording retained with that decision; it does not confirm inbox delivery.",
-  "portal.adjustments.empty": "No approved billing adjustments."
+  "portal.adjustments.empty": "No approved billing adjustments.",
+  "portal.answer.proposedbalance": "Proposed balance change"
 }
