@@ -28,7 +28,7 @@ async function start() {
   const child = spawn(process.execPath, [entry, 'dev', '--foreground', '--port', String(port)], { cwd: root, stdio: ['ignore','pipe','pipe'], env: { ...process.env, WRANGLER_SEND_METRICS: 'false' } })
   let output = ''; for (const stream of [child.stdout,child.stderr]) stream.on('data', bytes => { output += bytes })
   server = child
-  for (let attempt = 0; !output.includes('RER_READY'); attempt++) { assert.equal(child.exitCode, null, 'PORT-005 dev remains running'); assert.ok(attempt < 1200, 'PORT-005 dev becomes ready'); await new Promise(resolve => setTimeout(resolve,250)) }
+  for (let attempt = 0; !output.includes('RER_READY'); attempt++) { assert.equal(child.exitCode, null, 'PORT-005 dev remains running: ' + output.replace(/RER_OPEN [^\n]+/g, 'RER_OPEN [redacted]').replace(/(token=|rer-dev=|RER_DEV_KEY=|PORTAL_KEY=)[^&\s"']+/g, '$1[redacted]').slice(-3500)); assert.ok(attempt < 1200, 'PORT-005 dev becomes ready'); await new Promise(resolve => setTimeout(resolve,250)) }
   cookie = await signIn(origin, await devKey(root))
   await fetch(origin + '/setup', { method: 'POST', redirect: 'manual', headers: { cookie, origin, 'content-type': 'application/x-www-form-urlencoded' }, body: 'confirm=yes' })
 }
@@ -40,9 +40,11 @@ try {
   const answers = 'exports/portal-answers.json'
   await writeFile(answers, JSON.stringify({ OWNER_EMAIL: 'owner@example.test' }), { mode: 0o600 })
   await command(root, ['setup','--answers',answers,'--non-interactive','--port',String(port)])
+  console.log('PORT-005 disposable installation set up')
   const key = (await readFile('.dev.vars','utf8')).match(/^PORTAL_KEY=(.+)$/m)?.[1]
   assert.ok(key && key.length >= 32, 'PORT-005 setup generates the dedicated signer')
   await start()
+  console.log('PORT-005 real dev server ready')
   await h.api('business.configure',cookie,{ legal_name:'Cedar Software Inc',timezone:'America/Los_Angeles',invoice_prefix:'CD',payment_terms_days:30 })
   await applyPolicy(h,cookie,'tax.declare',{ tax_jurisdiction:'CA',tax_mode:'no_tax',tax_note:'Reviewed portal journey' })
   await h.api('tax.review',cookie,{ revision:(await h.api('business',cookie)).revision })
@@ -80,6 +82,7 @@ try {
     await shot(page,'refused')
   }
   await browser.close(); browser = null
+  console.log('PORT-005 desktop/phone browser states passed')
   await stop()
   const archive = join(scratch,'portal.rer')
   await command(root,['export','--output',archive])
@@ -90,6 +93,7 @@ try {
   const items = records.filter(record => record.kind === 'part').flatMap(record => record.items)
   assert.ok(!items.some(item => item.table === 'nc_portal_sessions'), 'PORT-005 live sessions are not portable')
   assert.ok(items.some(item => item.table === 'nc_portal_policy'), 'PORT-005 owner-approved policy remains portable')
+  console.log('PORT-005 archive excludes key and live sessions')
   await command(root,['reset','--yes'])
   await command(root,['import','--input',archive,'--yes'])
   await command(root,['setup','--answers',answers,'--non-interactive','--port',String(port)])
