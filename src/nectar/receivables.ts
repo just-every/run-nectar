@@ -117,6 +117,11 @@ export async function allocate(env: Bindings, actor: Actor, input: Input) {
 
 export async function payments(env: Bindings, actor: Actor, customerId?: string,url?:URL) {
   requireRead(actor, 'payments')
+  return await paymentRows(env, customerId, url)
+}
+
+/** Callers authorize first: the payments door, or a customer record's own ledger (GOV-001). */
+async function paymentRows(env: Bindings, customerId?: string,url?:URL) {
   const filter=metadataPredicate('payment','p.id',url?metadataFilter(url):null)
   return await withMetadata(env,'payment',await all(env, `SELECT p.*, c.name AS customer_name, ${UNALLOCATED_SQL} AS unallocated_cents FROM nc_payments p JOIN nc_customers c ON c.id = p.customer_id WHERE ${filter.sql} ${customerId ? 'AND p.customer_id = ?' : ''} ORDER BY p.received_on DESC, p.recorded_at DESC LIMIT 200`, ...filter.params,...(customerId ? [customerId] : [])))
 }
@@ -133,7 +138,8 @@ export async function customerLedger(env: Bindings, actor: Actor, customerId: st
     COALESCE((SELECT SUM(amount_cents) FROM nc_credit_notes WHERE invoice_id = i.id), 0) AS credited_cents,
     COALESCE((SELECT SUM(amount_cents) FROM nc_allocations WHERE invoice_id = i.id), 0) AS paid_cents
     FROM nc_invoices i WHERE i.customer_id = ? AND i.status = 'issued' ORDER BY i.issue_date, i.number`, customerId)
-  const pays = await payments(env, actor, customerId)
+  // The customer record includes its own payments, so customer readers see them here.
+  const pays = await paymentRows(env, customerId)
   const credits = await all(env, 'SELECT * FROM nc_credit_notes WHERE customer_id = ? ORDER BY issued_at', customerId)
   return {
     invoices:await withMetadata(env,'invoice',invoices), payments: pays, credits:await withMetadata(env,'credit-note',credits),

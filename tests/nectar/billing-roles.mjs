@@ -73,6 +73,25 @@ async function reach(h, who) {
   return found
 }
 
+// Real records, so a page that composes several reads cannot hide behind a placeholder's 404.
+const FAMILIES = { collections: ['customers', 'invoices', 'payments'], sales: ['customers', 'catalog', 'subscriptions'], support: ['customers', 'subscriptions', 'invoices', 'payments'],
+  developer: ['customers', 'catalog', 'subscriptions', 'invoices', 'payments', 'reports'], analyst: ['customers', 'reports'] }
+const recordDoors = ids => [
+  [`/api/nectar/customers/${ids.customer}`, ['customers']], [`/app/customers/${ids.customer}`, ['customers']],
+  [`/api/nectar/subscriptions/${ids.subscription}`, ['subscriptions']], [`/app/subscriptions/${ids.subscription}`, ['subscriptions']], [`/api/nectar/subscriptions/${ids.subscription}/upcoming`, ['subscriptions']],
+  [`/api/nectar/invoices/${ids.invoice}`, ['invoices']], [`/app/invoices/${ids.invoice}`, ['invoices']], ['/api/nectar/payments', ['payments']], [`/api/nectar/notes/payment/${ids.payment}`, ['payments']],
+  [`/api/nectar/metadata/invoice/${ids.invoice}`, ['invoices']], ['/api/nectar/catalog', ['catalog']], ['/app/catalog', ['catalog']],
+  ['/app/reports/billings', ['reports']], ['/app/revenue', ['reports']], ['/app/receivables', ['customers', 'invoices', 'payments']],
+]
+async function assertRecords(h, who, role, ids) {
+  for (const [path, needs] of recordDoors(ids)) {
+    const response = await h.raw(path, { cookie: who })
+    await response.text()
+    assert.ok(response.status < 500 && response.status !== 401, `${path}: ${response.status}`)
+    assert.equal(response.status !== 403, needs.every(family => FAMILIES[role].includes(family)), `GOV-001 ${role} on a real record ${path}: ${response.status}`)
+  }
+}
+
 async function assertReach(h, who, role, expected) {
   const found = await reach(h, who)
   const want = { actions: expected.actions, api: [...new Set([...COMMON.api, ...expected.api])], pages: [...new Set([...COMMON.pages, ...expected.pages])] }
@@ -85,7 +104,8 @@ export async function billingRolesFlow(h, owner) {
   const alder = await customer('GOV001-ALDER', 'Alder Robotics', 'ap@alder.example'), birch = await customer('GOV001-BIRCH', 'Birch Labs', 'ap@birch.example')
   const product = (await h.api('product.create', owner, { code: 'gov001-plan', name: 'Roles plan' })).id
   const price = (await h.api('price.create', owner, { product, kind: 'flat', unit_amount: '2000', taxable: false })).id
-  for (const id of [alder, birch]) await h.api('subscription.create', owner, { customer: id, start_date: '2026-08-01', price: [price] })
+  const subscriptions = {}
+  for (const id of [alder, birch]) subscriptions[id] = (await h.api('subscription.create', owner, { customer: id, start_date: '2026-08-01', price: [price] })).id
   const run = (await h.api('billrun.prepare', owner, { period: '2026-08' })).id
   const drafts = (await h.api(`runs/${run}`, owner)).invoices
   for (const invoice of drafts) {
@@ -101,9 +121,11 @@ export async function billingRolesFlow(h, owner) {
   const who = {}
   for (const [role, email] of Object.entries(people)) who[role] = await h.signIn(email, { requested: true })
   const member = async email => (await h.api('members', owner)).find(m => m.email === email)
+  const records = { customer: alder, subscription: subscriptions[alder], invoice: invoiceOf(alder), payment }
   for (const role of ['collections', 'sales', 'support', 'developer']) {
     assert.equal((await h.api('me', who[role])).role, role)
     await assertReach(h, who[role], role, EXPECTED[role])
+    await assertRecords(h, who[role], role, records)
   }
 
   // Support credits: zero until the owner sets a limit, then $500 passes and $600 is refused.
@@ -150,6 +172,7 @@ export async function billingRolesFlow(h, owner) {
   const me = await h.api('me', who.analyst)
   assert.equal(me.role_name, 'Billing analyst'); assert.deepEqual(me.capabilities.toSorted(), ['export', 'read.customers', 'read.reports'])
   await assertReach(h, who.analyst, 'Billing analyst', EXPECTED.analyst)
+  await assertRecords(h, who.analyst, 'analyst', records)
   assert.match(await (await h.raw('/app/exports/customers.csv', { cookie: who.analyst })).text(), /Alder Robotics/)
   // Removing export applies on the next request, without signing out.
   await h.api('role.update', owner, { role: analystRole.id, revision: 1, capabilities: ['read.customers', 'read.reports'] })

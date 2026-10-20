@@ -1,7 +1,7 @@
 import { prepareSaveOffer } from './retention-offers'
 import { serviceEndSql } from './renewal-sql'
 import type { Bindings } from '../auth.server'
-import { actorLabel, requireCapability, requireMember, requireOwner, type Actor } from './actor'
+import { requireRead, actorLabel, requireCapability, requireMember, requireOwner, type Actor } from './actor'
 import { all, commit, guard, insist, newId, now, one, sha256Hex, stmt, type Row } from './core'
 import { canonicalDecimal, micros } from './decimal'
 import { addMonths, requireDate } from './dates'
@@ -15,7 +15,7 @@ export function renewalSettings(input:Input,start:string) {
   return {start_date:start,end_date:addMonths(start,months),months,auto_renew:auto?1:0,notice_days:days,uplift_percent:uplift}
 }
 export async function termRecords(env:Bindings,actor:Actor,subscription:string) {
-  requireCapability(actor,'read')
+  requireRead(actor,'subscriptions')
   return {terms:await all(env,'SELECT id,start_date,end_date,months,auto_renew,notice_days,uplift_percent,status,prepared_by_id,prepared_by,decided_by,approval_mode,cycle,revision,cancelled_at,quote FROM nc_renewal_terms WHERE subscription_id=? ORDER BY created_at,id',subscription),events:await all(env,'SELECT * FROM nc_renewal_events WHERE subscription_id=? ORDER BY effective_date,id',subscription),notices:await all(env,'SELECT n.* FROM nc_renewal_notices n JOIN nc_renewal_terms t ON t.id=n.term_id WHERE t.subscription_id=? ORDER BY n.created_at,n.id',subscription)}
 }
 export async function prepareTerm(env:Bindings,actor:Actor,input:Input) {
