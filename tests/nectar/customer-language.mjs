@@ -4,7 +4,6 @@ import { cp, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { applyPolicy } from './policy-helper.mjs'
-import { runIsolated } from './isolated.mjs'
 
 // PORT-006: per-customer language over every customer-facing message and page
 // Nectar has today, through the built Worker's public doors and its mail edge.
@@ -171,16 +170,19 @@ export async function translationFiles() {
     const build = () => assert.equal(spawnSync(join(home, 'node_modules/.bin/vite'), ['build'], { cwd: root, encoding: 'utf8' }).status, 0, 'copy builds')
     await writeFile(locale, JSON.stringify(french, null, 2))
     build()
-    process.chdir(root)
-    await runIsolated('customer-language', 'frenchFlow')
-    process.chdir(home)
+    // Each built copy initializes its runtime in its own working directory.
+    const journey = name => {
+      const result=spawnSync(process.execPath,[join(home,'tests/nectar/clause-runner.mjs'),'customer-language',name],{cwd:root,encoding:'utf8',timeout:180000,killSignal:'SIGKILL'})
+      const diagnostic=String(result.error?.message??result.stderr).replace(/\/(renew|return|erase)\/[a-f0-9]{64}/g,'/$1/[redacted]').replace(/(token=|rer-dev=|RER_DEV_KEY=)[^&\s"']+/g,'$1[redacted]')
+      assert.equal(result.status,0,`PORT-006 ${name}: ${diagnostic}`)
+    }
+    journey('frenchFlow')
     const { ['renewal.manage.heading']: _, ...missing } = french
     await writeFile(locale, JSON.stringify(missing, null, 2))
     const failed = check(join(root, 'src/nectar/locales'))
     assert.equal(failed.status, 1, 'PORT-006 a missing string fails the check')
     assert.match(failed.stderr, /fr\.json: missing renewal\.manage\.heading/)
     build()
-    process.chdir(root)
-    await runIsolated('customer-language', 'incompleteFrenchFlow')
-  } finally { process.chdir(home); await rm(root, { recursive: true, force: true }) }
+    journey('incompleteFrenchFlow')
+  } finally { await rm(root, { recursive: true, force: true }) }
 }
