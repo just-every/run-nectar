@@ -82,6 +82,7 @@ const recordDoors = ids => [
   [`/api/nectar/invoices/${ids.invoice}`, ['invoices']], [`/app/invoices/${ids.invoice}`, ['invoices']], ['/api/nectar/payments', ['payments']], [`/api/nectar/notes/payment/${ids.payment}`, ['payments']],
   [`/api/nectar/metadata/invoice/${ids.invoice}`, ['invoices']], ['/api/nectar/catalog', ['catalog']], ['/app/catalog', ['catalog']],
   ['/app/reports/billings', ['reports']], ['/app/revenue', ['reports']], ['/app/receivables', ['customers', 'invoices', 'payments']],
+  [`/api/nectar/reports/billings/${ids.invoice}?period=2026-09`, ['reports']], [`/app/reports/billings/${ids.invoice}?period=2026-09`, ['reports']],
 ]
 async function assertRecords(h, who, role, ids) {
   for (const [path, needs] of recordDoors(ids)) {
@@ -89,6 +90,27 @@ async function assertRecords(h, who, role, ids) {
     await response.text()
     assert.ok(response.status < 500 && response.status !== 401, `${path}: ${response.status}`)
     assert.equal(response.status !== 403, needs.every(family => FAMILIES[role].includes(family)), `GOV-001 ${role} on a real record ${path}: ${response.status}`)
+  }
+}
+
+/** Every link a member is shown opens for them: pages reached from Home never point at a refused door. */
+async function assertLinksOpen(h, who, role) {
+  const seen = new Set(), queue = ['/app']
+  while (queue.length && seen.size < 40) {
+    const path = queue.shift()
+    if (seen.has(path)) continue
+    seen.add(path)
+    const response = await h.raw(path, { cookie: who })
+    const text = await response.text()
+    if (response.status !== 200 || !(response.headers.get('content-type') ?? '').includes('text/html')) continue
+    for (const [, href] of text.matchAll(/href="(\/app[^"#]*)/g)) {
+      const link = href.replaceAll('&amp;', '&')
+      if (link.startsWith('/app/do/') || seen.has(link)) continue
+      const opened = await h.raw(link, { cookie: who })
+      await opened.text()
+      assert.notEqual(opened.status, 403, `GOV-001 ${role} is shown ${link} on ${path} but may not open it`)
+      if (opened.status === 200 && !queue.includes(link)) queue.push(link)
+    }
   }
 }
 
@@ -126,6 +148,7 @@ export async function billingRolesFlow(h, owner) {
     assert.equal((await h.api('me', who[role])).role, role)
     await assertReach(h, who[role], role, EXPECTED[role])
     await assertRecords(h, who[role], role, records)
+    if (role !== 'developer') await assertLinksOpen(h, who[role], role)
   }
 
   // Support credits: zero until the owner sets a limit, then $500 passes and $600 is refused.
@@ -179,6 +202,8 @@ export async function billingRolesFlow(h, owner) {
   assert.equal(me.role_name, 'Billing analyst'); assert.deepEqual(me.capabilities.toSorted(), ['export', 'read.customers', 'read.reports'])
   await assertReach(h, who.analyst, 'Billing analyst', EXPECTED.analyst)
   await assertRecords(h, who.analyst, 'analyst', records)
+  await assertLinksOpen(h, who.analyst, 'Billing analyst')
+  assert.match(await h.page(`/app/reports/billings/${invoiceOf(alder)}?period=2026-09`, who.analyst), /\$2,000\.00/, 'GOV-001 a report reader drills a figure to its source invoice')
   assert.match(await (await h.raw('/app/exports/customers.csv', { cookie: who.analyst })).text(), /Alder Robotics/)
   // Removing export applies on the next request, without signing out.
   await h.api('role.update', owner, { role: analystRole.id, revision: 1, capabilities: ['read.customers', 'read.reports'] })

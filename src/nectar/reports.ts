@@ -3,7 +3,7 @@ import { financialReport, financialReportSource, type UnbilledReportEvidence } f
 // signed detail components in the API and the operator pages.
 import type { Bindings } from '../auth.server'
 import { requireRead, type Actor } from './actor'
-import { invoiceDetail } from './billruns'
+import { invoiceRecord } from './billruns'
 import { requireBusiness } from './business'
 import { all, insist, one, type Row } from './core'
 import { daysBetween, isMonth, today } from './dates'
@@ -143,7 +143,7 @@ export async function reportInvoice(env: Bindings, actor: Actor, metric: string,
         method: payment.method, evidence: payment.evidence, customerId: payment.customer_id, customerName: entry.customerName,
         amountCents: payment.amount_cents, recordedAt: payment.recorded_at, recordedBy: payment.recorded_by } }
   }
-  const invoice = await invoiceDetail(env, actor, invoiceId)
+  const invoice = await invoiceRecord(env, actor, invoiceId)
   const components: ReportComponent[] = (invoice.lines as Row[])
     .filter(line => metric !== 'mrr' || RECURRING.has(line.kind))
     .map(line => ({ kind: line.kind, label: line.description, amountCents: line.amount_cents,

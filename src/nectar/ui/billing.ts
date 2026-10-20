@@ -72,7 +72,7 @@ export async function invoicePage(env: Bindings, actor: Actor, id: string, url: 
   const pays = i.status === 'issued' && can(actor, 'receivables') && canRead(actor, 'payments') ? (await payments(env, actor, i.customer_id)).filter((p: any) => p.unallocated_cents > 0) : []
   const title = i.number ? `Invoice ${i.number}` : i.status === 'shadow' ? 'Shadow draft' : 'Draft invoice'
   const incumbent = i.comparison.incumbent
-  return page(title, actor, h`<p class="crumbs"><a href="/app/billing/${i.bill_run_id}">Bill run</a> · <a href="/app/customers/${i.customer_id}">${i.customer_name}</a></p>
+  return page(title, actor, h`<p class="crumbs">${can(actor, 'read') ? h`<a href="/app/billing/${i.bill_run_id}">Bill run</a> · ` : ''}<a href="/app/customers/${i.customer_id}">${i.customer_name}</a></p>
     <div class="title-row"><h1>${title}</h1>${tag(statusLabel(i.status, i.status === 'draft' ? i.exceptions.length : 0))}</div><p>${metadataLink('invoice',i.id)}</p>
     ${i.status === 'issued' ? h`<p>${[canRead(actor, 'customers') ? h`<a href="/app/answers?customer=${i.customer_id}&invoice=${i.id}">Ask about this invoice</a>` : null,
       i.subscription_id && can(actor, 'read') ? h`<a href="/app/usage/replay?subscription=${i.subscription_id}&period=${i.period_start.slice(0,7)}">Preview usage correction</a>` : null,

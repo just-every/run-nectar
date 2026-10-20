@@ -4,7 +4,7 @@ import { renewalSection } from './renewals'
 // scheduled changes with their proration preview).
 import type { Bindings } from '../../auth.server'
 import { metadataLink } from './metadata'
-import { can, type Actor } from '../actor'
+import { canRead, can, type Actor } from '../actor'
 import { all } from '../core'
 import { customers } from '../customers'
 import { languages } from '../locale'
@@ -58,14 +58,14 @@ export async function customerPage(env: Bindings, actor: Actor, id: string, url:
       <div><dt>Owed now</dt><dd>${cents(ledger.balanceCents)}</dd></div><div><dt>Unallocated payments</dt><dd>${cents(ledger.unallocatedCents)}</dd></div>
       <div><dt>Tax</dt><dd>${c.tax_exempt ? `Exempt (${c.tax_exempt_ref})` : 'Taxable'}</dd></div><div><dt>Customer language</dt><dd>${languageName(c.language)}</dd></div></dl>
       ${details({ 'Internal id': c.id, Source: c.origin, 'Provider reference': c.provider_ref ?? '—', Revision: c.revision })}</section>
-    <section class="card" aria-labelledby="subs"><h2 id="subs">Subscriptions</h2>${table(['Subscription', 'Started', 'Billing day$', 'Status'], c.subscriptions.map((s: any) => [h`<a href="/app/subscriptions/${s.id}">${s.external_id || `Subscription from ${formatDate(s.start_date)}`}</a>`, formatDate(s.start_date), s.anchor_day, tag(subscriptionState(s, today))]), { empty: 'No subscriptions yet.' })}</section>
+    <section class="card" aria-labelledby="subs"><h2 id="subs">Subscriptions</h2>${table(['Subscription', 'Started', 'Billing day$', 'Status'], c.subscriptions.map((s: any) => [canRead(actor, 'subscriptions') ? h`<a href="/app/subscriptions/${s.id}">${s.external_id || `Subscription from ${formatDate(s.start_date)}`}</a>` : (s.external_id || `Subscription from ${formatDate(s.start_date)}`), formatDate(s.start_date), s.anchor_day, tag(subscriptionState(s, today))]), { empty: 'No subscriptions yet.' })}</section>
     ${newSubscription}
     ${await notesSection(env,actor,c.id,'customer',c.id,`/app/customers/${c.id}#notes`)}
     ${certificateSection(c, actor)}
     ${chargeSection(c, named, actor, today)}
     <section class="card" aria-labelledby="money"><h2 id="money">Invoices and payments</h2>
-      ${table(['Invoice', 'Issued', 'Due', 'Total$', 'Credited$', 'Paid$', 'Owed$'], ledger.invoices.map((i: any) => [h`<a href="/app/invoices/${i.id}">${i.number}</a>`, formatDate(i.issue_date), formatDate(i.due_date), cents(i.total_cents), cents(i.credited_cents), cents(i.paid_cents), cents(i.balance_cents)]), { empty: 'No issued invoices yet.' })}
-      ${ledger.payments.length ? table(['Payment', 'Received', 'Amount$', 'Unallocated$'], ledger.payments.map((p: any) => [h`<span id="payment-${p.id}">${p.reference}</span> ${metadataLink('payment',p.id)}`, formatDate(p.received_on), cents(p.amount_cents), cents(p.unallocated_cents)])) : ''}</section>
+      ${table(['Invoice', 'Issued', 'Due', 'Total$', 'Credited$', 'Paid$', 'Owed$'], ledger.invoices.map((i: any) => [canRead(actor, 'invoices') ? h`<a href="/app/invoices/${i.id}">${i.number}</a>` : i.number, formatDate(i.issue_date), formatDate(i.due_date), cents(i.total_cents), cents(i.credited_cents), cents(i.paid_cents), cents(i.balance_cents)]), { empty: 'No issued invoices yet.' })}
+      ${ledger.payments.length ? table(['Payment', 'Received', 'Amount$', 'Unallocated$'], ledger.payments.map((p: any) => [h`<span id="payment-${p.id}">${p.reference}</span> ${canRead(actor, 'payments') ? metadataLink('payment',p.id) : ''}`, formatDate(p.received_on), cents(p.amount_cents), cents(p.unallocated_cents)])) : ''}</section>
     <section class="card" aria-labelledby="ents"><h2 id="ents">Entitlements</h2>${c.entitlements.length ? h`<ul class="explain">${c.entitlements.map((e: any) => h`<li>${tag(e.allowed ? 'Allowed' : 'Denied')} <strong>${e.feature}</strong><ul>${e.paths.flatMap((path: any) => path.steps).map((step: string) => h`<li>${step}</li>`)}</ul></li>`)}</ul>` : h`<p class="empty">No features granted. Products grant features in the Catalog.</p>`}</section>
     <section class="card" aria-labelledby="contacts"><h2 id="contacts">Billing contacts</h2>${table(['Name', 'Email', 'Role'], c.contacts.map((x: any) => [x.name, x.email, x.role]), { empty: 'No extra contacts.' })}
       ${can(actor, 'records') ? form('contact.add', `/app/customers/${c.id}`, h`${hidden('customer', c.id)}${field('Name', 'name')}${field('Email', 'email', { type: 'email' })}${field('Role', 'role', { value: 'billing', required: false })}`, 'Add contact', { layout: 'columns', secondary: true }) : ''}</section>
@@ -108,5 +108,5 @@ export async function subscriptionPage(env: Bindings, actor: Actor, id: string, 
       ${records && open.length && prices.length ? form('change.prepare', `/app/subscriptions/${s.id}`, h`${hidden('subscription', s.id)}${select('Change', 'item', open.map((i: any) => ({ value: i.id, label: `${i.product_name} v${i.version} × ${i.quantity}` })), open[0].id)}
         ${select('New price', 'price', prices.map((p: any) => ({ value: p.id, label: `${p.name}${p.nickname ? ` — ${p.nickname}` : ''} v${p.version}: ${priceRate(p)}` })), open[0].price_id)}${field('Seats', 'quantity', { type: 'number', value: open[0].quantity })}${field('Effective date', 'effective_date', { type: 'date' })}`, 'Preview change', { layout: 'columns' }) : ''}
       ${approver && !s.end_date ? form('subscription.end', `/app/subscriptions/${s.id}`, h`${hidden('subscription', s.id)}${field('End the subscription on', 'end_date', { type: 'date' })}`, 'End subscription', { layout: 'columns', secondary: true }) : ''}</section>
-    <section class="card" aria-labelledby="invoices"><h2 id="invoices">Invoices</h2>${table(['Invoice', 'Period', 'Status', 'Total$'], s.invoices.map((i: any) => [h`<a href="/app/invoices/${i.id}">${i.number ?? 'Draft'}</a>`, formatPeriod(i.period_start, i.period_end), tag(i.status === 'issued' ? 'Issued' : i.status === 'approved' ? 'Approved' : i.status === 'shadow' ? 'Shadow' : 'Draft'), cents(i.total_cents)]), { empty: 'No invoices yet.' })}</section>`, { current: '/app/customers', url })
+    <section class="card" aria-labelledby="invoices"><h2 id="invoices">Invoices</h2>${table(['Invoice', 'Period', 'Status', 'Total$'], s.invoices.map((i: any) => [canRead(actor, 'invoices') ? h`<a href="/app/invoices/${i.id}">${i.number ?? 'Draft'}</a>` : (i.number ?? 'Draft'), formatPeriod(i.period_start, i.period_end), tag(i.status === 'issued' ? 'Issued' : i.status === 'approved' ? 'Approved' : i.status === 'shadow' ? 'Shadow' : 'Draft'), cents(i.total_cents)]), { empty: 'No invoices yet.' })}</section>`, { current: '/app/customers', url })
 }

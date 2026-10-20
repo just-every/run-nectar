@@ -10,7 +10,7 @@ import { deliverAlerts } from './notification-mail'
 // lists exceptions. A person approves exact drafts; finalising numbers and
 // issues only approved invoices whose recorded inputs still match.
 import type { Bindings } from '../auth.server'
-import { requireRead, actorLabel, requireCapability, requireMember, type Actor } from './actor'
+import { canRead, requireRead, actorLabel, requireCapability, requireMember, type Actor } from './actor'
 import { requireBusiness, taxReady, type Business } from './business'
 import { all, commit, fingerprint as hashInputs, guard, insist, newId, now, one, parseJson, stmt, type Row } from './core'
 import { addDays, isMonth, periodStartingIn, requireDate, today } from './dates'
@@ -135,6 +135,12 @@ export async function runDetail(env: Bindings, actor: Actor, id: string): Promis
 
 export async function invoiceDetail(env: Bindings, actor: Actor, id: string): Promise<Row> {
   requireRead(actor, 'invoices')
+  return await invoiceRecord(env, actor, id)
+}
+
+/** An invoice's full record. Callers authorize first: the invoice door, or a
+ * report figure drilling to its source invoice (GOV-001 report readers). */
+export async function invoiceRecord(env: Bindings, actor: Actor, id: string): Promise<Row> {
   const invoice = await one(env, `SELECT i.*, c.name AS customer_name, c.external_id, c.billing_email, c.address AS customer_address, COALESCE(s.billing_mode,'live') AS billing_mode, i.invoice_kind FROM nc_invoices i JOIN nc_customers c ON c.id = i.customer_id LEFT JOIN nc_subscriptions s ON s.id = i.subscription_id WHERE i.id = ?`, id)
   insist(invoice, 'invoice_not_found', 404)
   const lines = await all(env, 'SELECT * FROM nc_invoice_lines WHERE invoice_id = ? ORDER BY seq', id)
@@ -142,7 +148,7 @@ export async function invoiceDetail(env: Bindings, actor: Actor, id: string): Pr
   const allocations = await all(env, 'SELECT a.*, p.reference, p.received_on, p.method FROM nc_allocations a JOIN nc_payments p ON p.id = a.payment_id WHERE a.invoice_id = ? ORDER BY a.allocated_at', id)
   const credited = credits.reduce((sum, row) => sum + row.amount_cents, 0), paid = allocations.reduce((sum, row) => sum + row.amount_cents, 0)
   return {
-    ...invoice,retainedFinancial:await one(env,"SELECT legal_name,document_date,retain_until,tax_json FROM nc_erasure_financial WHERE kind='invoice' AND record_id=?",id),...await metadataFor(env,'invoice',id), creditPolicy: await creditPolicy(env), creditRequests: await creditRequests(env, actor, id), calculation: parseJson(invoice.calculation_json, {}), comparison: parseJson(invoice.comparison_json, {}), exceptions: parseJson(invoice.exceptions_json, []),
+    ...invoice,retainedFinancial:await one(env,"SELECT legal_name,document_date,retain_until,tax_json FROM nc_erasure_financial WHERE kind='invoice' AND record_id=?",id),...await metadataFor(env,'invoice',id), creditPolicy: await creditPolicy(env), creditRequests: canRead(actor, 'invoices') ? await creditRequests(env, actor, id) : [], calculation: parseJson(invoice.calculation_json, {}), comparison: parseJson(invoice.comparison_json, {}), exceptions: parseJson(invoice.exceptions_json, []),
     calculation_json: undefined, comparison_json: undefined, exceptions_json: undefined,
     lines: lines.map(line => ({ ...line, evidence: parseJson(line.evidence_json, {}), evidence_json: undefined })),
     credits:await withMetadata(env,'credit-note',credits), allocations, creditedCents: credited, paidCents: paid, balanceCents: invoice.status === 'issued' ? invoice.total_cents - credited - paid : null,

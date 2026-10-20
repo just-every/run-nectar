@@ -3,7 +3,7 @@
 import type { Bindings } from '../../auth.server'
 import { agentKeys, customRoles, members } from '../access'
 import { LATEST_VERSION, VERSIONS } from '../api-versions'
-import { CUSTOM_CAPABILITIES, ROLE_LABELS, ROLE_NAMES, SCOPES, can, type Actor, type Capability } from '../actor'
+import { canRead, CUSTOM_CAPABILITIES, ROLE_LABELS, ROLE_NAMES, SCOPES, can, type Actor, type Capability } from '../actor'
 import { US_STATES, business, taxReady } from '../business'
 import { one, parseJson } from '../core'
 import { money } from '../decimal'
@@ -13,6 +13,9 @@ import { policySection } from './policies'
 import { personName } from './shell'
 import { notificationSection } from './notifications'
 import { DEFAULT_ROLES, memberFactors, mfaPolicy } from '../mfa'
+
+// GOV-001: a work item or first-run step shows only to a member who can open it.
+const opens = (actor: Actor, href: string) => href === '/app/customers' ? canRead(actor, 'customers') : href === '/app/receivables' ? canRead(actor, 'customers') && canRead(actor, 'invoices') && canRead(actor, 'payments') : href === '/app/catalog' ? canRead(actor, 'catalog') : can(actor, 'read')
 
 const count = async (env: Bindings, sql: string, ...params: unknown[]) => (await one<{ n: number }>(env, sql, ...params))!.n
 
@@ -26,7 +29,7 @@ export async function homePage(env: Bindings, actor: Actor, url: URL) {
     { done: await count(env, 'SELECT COUNT(*) AS n FROM nc_subscriptions') > 0, label: 'Start a subscription', href: '/app/customers' },
     { done: await count(env, "SELECT COUNT(*) AS n FROM nc_invoices WHERE status = 'issued'") > 0, label: 'Prepare, approve and finalize a bill run', href: '/app/billing' },
   ]
-  const remaining = steps.filter(step => !step.done)
+  const remaining = can(actor, 'read') ? steps.filter(step => !step.done) : []
   const pending = await count(env, "SELECT COUNT(*) AS n FROM nc_proposals WHERE status = 'pending'")
   const drafts = await count(env, "SELECT COUNT(*) AS n FROM nc_bill_runs WHERE status = 'draft'")
   const changes = await count(env, "SELECT COUNT(*) AS n FROM nc_changes WHERE status = 'draft'") + await count(env, "SELECT COUNT(*) AS n FROM nc_amendments WHERE status = 'proposed'")
@@ -39,7 +42,7 @@ export async function homePage(env: Bindings, actor: Actor, url: URL) {
     changes && { label: `${changes} contract exception${changes === 1 ? '' : 's'} or scheduled change${changes === 1 ? '' : 's'} awaiting approval`, href: '/app/customers' },
     overdue?.n && { label: `${overdue.n} overdue invoice${overdue.n === 1 ? '' : 's'}, ${money(overdue.total)} outstanding`, href: '/app/receivables' },
     tasksOpen && { label: `${tasksOpen} open follow-up task${tasksOpen === 1 ? '' : 's'}`, href: '/app/receivables' },
-  ].filter(Boolean) as { label: string; href: string }[]
+  ].filter(Boolean).filter(item => opens(actor, (item as { href: string }).href)) as { label: string; href: string }[]
   const checklist = remaining.length ? h`<section class="card checklist" aria-labelledby="first-run"><h2 id="first-run">Finish your first billing cycle</h2><ol>${steps.map(step => h`<li class="${step.done ? 'done' : ''}">${marker(step.done ? 'done' : 'open')}${step.done ? h`<span>${step.label}</span><span class="sr"> (done)</span>` : h`<a href="${step.href}">${step.label}</a>`}</li>`)}</ol></section>` : ''
   const today = h`<section class="card" aria-labelledby="today"><h2 id="today">Your work</h2>${work.length ? h`<ul class="work">${work.map(item => h`<li><a href="${item.href}">${marker('plain')}<span>${item.label}</span></a></li>`)}</ul>` : emptyState('Nothing is waiting for you. New proposals, draft bill runs and overdue invoices appear here.')}</section>`
   return page('Home', actor, h`<h1>${b.legal_name}</h1>${checklist ? h`<div class="split home">${checklist}${today}</div>` : today}`, { current: '/app', url })

@@ -3,7 +3,7 @@
 // panel for a drafted reminder (recipient and wording, approved by a person);
 // then ageing, the other reminders, follow-up tasks and payments received.
 import type { Bindings } from '../../auth.server'
-import { can, type Actor } from '../actor'
+import { canRead, can, type Actor } from '../actor'
 import { BUCKETS, ageing, notices, tasks } from '../collections'
 import { all } from '../core'
 import { customers } from '../customers'
@@ -103,14 +103,16 @@ export async function receivablesPage(env: Bindings, actor: Actor, url: URL) {
   const strip = h`<section class="assurance" aria-label="Nectar assurance"><img src="/brand/mark.svg" alt="" width="34" height="34"><p><b>Nectar assurance:</b> ${desk.open.length + desk.settled.length ? `every balance below equals its invoice less credits and payments` : 'balances appear here once invoices are issued'}${waiting.length ? `; ${waiting.join(', and ')}.` : '. Nothing is waiting for a decision.'}</p>${asks ? h`<a class="ask-pill" href="${drafts.length ? '#decide' : '/app/proposals'}">${asks} ${asks === 1 ? 'change needs' : 'changes need'} your approval</a>` : ''}</section>`
   const subline = desk.issueMonth ? `${plural(desk.issued, `${monthText(desk.issueMonth)} invoice`)}, ${desk.paid} paid, ${desk.issued - desk.paid} open` : 'No invoices issued yet'
   const others = noticeList.filter((n: any) => n.status !== 'discarded' && n.id !== shown)
-  const main = h`<div class="desk-main"><h1>Receivables</h1><p><a href="/app/cadences">Collections cadences and collection holds</a></p><p><a href="/app/reports/ar">Open AR report</a></p><p class="lede">${subline}</p>${strip}
-    <dl class="tiles"><div><dt>Owed</dt><dd><a href="/app/reports/ar">${money(desk.owedCents)}</a></dd></div><div${desk.overdueCents ? raw(' class="hot"') : ''}><dt>Overdue</dt><dd><a href="/app/reports/ar?bucket=overdue">${money(desk.overdueCents)}</a></dd></div><div><dt>Collected in ${monthText(desk.month)}</dt><dd><a href="/app/reports/collections?period=${desk.month}">${money(desk.collectedCents)}</a></dd></div></dl>
+  // GOV-001: report and cadence links show only to members who can open them.
+  const toReport = (href: string, content: unknown) => canRead(actor, 'reports') ? h`<a href="${href}">${content}</a>` : h`${content}`
+  const main = h`<div class="desk-main"><h1>Receivables</h1>${handles ? h`<p><a href="/app/cadences">Collections cadences and collection holds</a></p>` : ''}${canRead(actor, 'reports') ? h`<p><a href="/app/reports/ar">Open AR report</a></p>` : ''}<p class="lede">${subline}</p>${strip}
+    <dl class="tiles"><div><dt>Owed</dt><dd>${toReport('/app/reports/ar', money(desk.owedCents))}</dd></div><div${desk.overdueCents ? raw(' class="hot"') : ''}><dt>Overdue</dt><dd>${toReport('/app/reports/ar?bucket=overdue', money(desk.overdueCents))}</dd></div><div><dt>Collected in ${monthText(desk.month)}</dt><dd>${toReport(`/app/reports/collections?period=${desk.month}`, money(desk.collectedCents))}</dd></div></dl>
     ${ledger(desk, focus, shown ? 'Review the reminder' : operator ? 'Draft a reminder' : 'See what is past due')}
     <section class="ask" aria-label="Agents">${icon('sparkle')}<p>Your own agent can draft reminders and proposals here through a <b>prepare</b> credential. A person approves each one.</p>${actor.role === 'owner' ? h`<a href="/app/access#agents">Agent credentials</a>` : ''}</section></div>`
   const rest = h`<div class="desk-rest"><section class="card" aria-labelledby="ageing"><h2 id="ageing">Ageing on ${formatDate(age.asOf)}</h2>
-      ${table(['Customer', 'Not yet due$', '1–30 days$', '31–60 days$', '61–90 days$', 'Over 90$', 'Owed$', ''], age.customers.map((c: any) => [h`<a href="/app/customers/${c.customer}">${c.name}</a>`, ...BUCKETS.map(b => h`<a href="/app/reports/ar?customer=${c.customer}&bucket=${encodeURIComponent(b)}">${cents(c[b])}</a>`), h`<a href="/app/reports/ar?customer=${c.customer}">${cents(c.total)}</a>`,
+      ${table(['Customer', 'Not yet due$', '1–30 days$', '31–60 days$', '61–90 days$', 'Over 90$', 'Owed$', ''], age.customers.map((c: any) => [h`<a href="/app/customers/${c.customer}">${c.name}</a>`, ...BUCKETS.map(b => toReport(`/app/reports/ar?customer=${c.customer}&bucket=${encodeURIComponent(b)}`, cents(c[b]))), toReport(`/app/reports/ar?customer=${c.customer}`, cents(c.total)),
         operator && c.oldest > 0 ? form('reminder.prepare', '/app/receivables', hidden('customer', c.customer), 'Draft reminder', { secondary: true }) : '']), { empty: 'Nothing is owed.' })}
-      ${age.customers.length ? h`<p class="hint">Total owed <a href="/app/reports/ar">${cents((age.totals as any).total)}</a>, of which <a href="/app/reports/ar?bucket=overdue">${cents((age.totals as any).total - (age.totals as any).current)}</a> is past due.</p>` : ''}</section>
+      ${age.customers.length ? h`<p class="hint">Total owed ${toReport('/app/reports/ar', cents((age.totals as any).total))}, of which ${toReport('/app/reports/ar?bucket=overdue', cents((age.totals as any).total - (age.totals as any).current))} is past due.</p>` : ''}</section>
     <section class="card" aria-labelledby="reminders"><h2 id="reminders">Reminders</h2><p class="hint">Nectar drafts reminders and exports approved ones for you to send from your own mail. It never sends them.</p>
       ${others.length ? others.map((n: any) => h`<article class="notice"><h3>${n.customer_name} — ${cents(n.balance_cents)} ${tag(n.status === 'draft' ? 'Draft' : n.status === 'approved' ? 'Approved' : 'Exported')}</h3>
         ${n.status === 'draft' ? h`<p><a class="go" href="/app/receivables?draft=${n.id}#decide">Review this draft</a></p>`
