@@ -2973,7 +2973,7 @@
       "executable": false
     },
     "src/nectar/ui/notifications.ts": {
-      "sha256": "a2aebe95960e029b21265159641ddaf8144301d103dca520908a3862fef59406",
+      "sha256": "8bb5cbd25ab88f96522466c45a7350d62a07c38cf1344ae8051f07928344c9c9",
       "executable": false
     },
     "src/nectar/ui/pages.ts": {
