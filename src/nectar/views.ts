@@ -35,6 +35,7 @@ import { metadataView,metadataFor,withMetadata } from './metadata'
 import { metadataObjects } from './metadata-lists'
 import { customerNotes } from './note-records'
 import { reportLine } from './report-lines'
+import { openApiDocument } from './openapi'
 
 type View = (env: Bindings, actor: Actor, request: Request, id: string, url: URL) => Promise<unknown>
 
@@ -58,6 +59,7 @@ export async function customerView(env: Bindings, actor: Actor, id: string): Pro
 }
 
 export const views: Record<string, View> = {
+  openapi: async env => openApiDocument(env.AUTH_ORIGIN),
   erasures:(env,actor)=>erasureRequests(env,actor),
   revenue:(env,actor,_r,_id,url)=>revenueReport(env,actor,url),
   revenueSource:(env,actor,_r,id,url)=>revenueSource(env,actor,id,url),
@@ -103,8 +105,8 @@ export const views: Record<string, View> = {
   reportLine: (env, actor, _r, id) => { const [invoice, , line] = id.split('/'); return reportLine(env, actor, invoice, line) },
 }
 
-export function route(path: string): { view: View; id: string } {
+export function route(path: string): { name: string; view: View; id: string } {
   const found = match(API_DOORS, path)
   if (!found) throw new NectarError('not_found', 404)
-  return { view: views[found.name], id: found.id }
+  return { name: found.name, view: views[found.name], id: found.id }
 }

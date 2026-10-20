@@ -39,6 +39,8 @@ export interface Actor {
   /** The operator-auth session behind a member's request; null for a credential. */
   sessionId: string | null
   capabilities: Set<Capability>
+  /** A credential's pinned dated API version (DEV-002); members use the latest unless a request names one. */
+  apiVersion?: string
 }
 
 export const can = (actor: Actor, capability: Capability) => actor.capabilities.has(capability)
@@ -79,9 +81,9 @@ async function ensureOwnerMember(env: Bindings, email: string, name: string) {
 }
 
 async function agentActor(env: Bindings, key: string): Promise<Actor> {
-  const row = await one<{ id: string; name: string; scopes: string; revoked_at: number | null }>(env, 'SELECT id, name, scopes, revoked_at FROM nc_agent_keys WHERE key_hash = ?', await sha256Hex(key))
+  const row = await one<{ id: string; name: string; scopes: string; api_version: string; revoked_at: number | null }>(env, 'SELECT id, name, scopes, api_version, revoked_at FROM nc_agent_keys WHERE key_hash = ?', await sha256Hex(key))
   if (!row || row.revoked_at) throw new NectarError('invalid_credential', 401)
   await env.DB.prepare('UPDATE nc_agent_keys SET last_used_at = ? WHERE id = ?').bind(now(), row.id).run()
   const capabilities = new Set<Capability>(row.scopes.split(' ').flatMap(scope => SCOPES[scope as Scope] ?? []))
-  return { id: row.id, kind: 'agent', name: row.name, email: '', role: null, sessionId: null, capabilities }
+  return { id: row.id, kind: 'agent', name: row.name, email: '', role: null, sessionId: null, capabilities, apiVersion: row.api_version }
 }

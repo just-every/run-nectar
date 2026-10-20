@@ -2,6 +2,7 @@
 // settings, access and credentials, and the audit trail.
 import type { Bindings } from '../../auth.server'
 import { agentKeys, members } from '../access'
+import { LATEST_VERSION, VERSIONS } from '../api-versions'
 import { ROLE_LABELS, ROLE_NAMES, SCOPES, can, type Actor } from '../actor'
 import { US_STATES, business, taxReady } from '../business'
 import { one, parseJson } from '../core'
@@ -86,9 +87,11 @@ export async function accessPage(env: Bindings, actor: Actor, url: URL, issued?:
     ${table(['Name', 'Email', 'Role', 'Status', ''], people.map(m => [m.name, m.email, ROLE_NAMES[m.role], tag(m.status === 'active' ? 'Active' : 'Ended'), m.role !== 'owner' && m.status === 'active' ? form('access.end', '/app/access', hidden('member', m.id), 'End access', { secondary: true }) : '']))}
     <h3>Give someone access</h3>${form('access.give', '/app/access', h`${field('Name', 'name')}${field('Email', 'email', { type: 'email' })}${select('Role', 'role', [{ value: 'finance', label: ROLE_LABELS.finance }, { value: 'accountant', label: ROLE_LABELS.accountant }], 'finance')}`, 'Invite', { layout: 'columns' })}</section>
     <section class="card" aria-labelledby="agents"><h2 id="agents">Agent credentials</h2><p class="hint">A credential lets your own agent read and prepare proposals, or lets a metering pipeline submit usage. Credentials never approve, finalize or change records directly.</p>
-    ${table(['Name', 'Scopes', 'Last used', 'Status', ''], keys.map(k => [k.name, k.scopes, when(k.last_used_at, zone), tag(k.revoked_at ? 'Revoked' : 'Active'), k.revoked_at ? '' : form('credential.revoke', '/app/access', hidden('key', k.id), 'Revoke', { secondary: true })]), { empty: 'No credentials issued.' })}
-    <h3>Issue a credential</h3><form method="post" action="/app/access/credential" class="columns">${field('Name', 'name', { hint: 'For example: "Finance agent" or "Metering pipeline".' })}${checks('Scopes', 'scopes', Object.keys(SCOPES).map(scope => ({ value: scope, label: scope === 'prepare' ? 'prepare — read records and propose work for approval' : 'usage — submit usage events' })), ['prepare'])}<button type="submit">Issue credential</button></form></section>`, { current: '/app/access', url })
+    ${table(['Name', 'Scopes', 'API version', 'Last used', 'Status', ''], keys.map(k => [k.name, k.scopes, k.revoked_at ? k.api_version : form('credential.version', '/app/access', h`${hidden('key', k.id)}${versionSelect(k.api_version)}`, 'Pin version', { secondary: true }), when(k.last_used_at, zone), tag(k.revoked_at ? 'Revoked' : 'Active'), k.revoked_at ? '' : form('credential.revoke', '/app/access', hidden('key', k.id), 'Revoke', { secondary: true })]), { empty: 'No credentials issued.' })}
+    <h3>Issue a credential</h3><form method="post" action="/app/access/credential" class="columns">${field('Name', 'name', { hint: 'For example: "Finance agent" or "Metering pipeline".' })}${checks('Scopes', 'scopes', Object.keys(SCOPES).map(scope => ({ value: scope, label: scope === 'prepare' ? 'prepare — read records and propose work for approval' : 'usage — submit usage events' })), ['prepare'])}${versionSelect(LATEST_VERSION, 'Responses use this dated shape unless a request sends a Nectar-Version header.')}<button type="submit">Issue credential</button></form></section>`, { current: '/app/access', url })
 }
+
+const versionSelect = (selected: string, hint = '') => select('API version', 'api_version', VERSIONS.map(version => ({ value: version, label: version === LATEST_VERSION ? `${version} (latest)` : version })), selected, { hint })
 
 // An audit entry's detail reads as fact rows: one per field, named in words ("legalName" reads "Legal name").
 const words = (key: string) => key.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/_/g, ' ').toLowerCase().replace(/^./, first => first.toUpperCase())

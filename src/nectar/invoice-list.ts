@@ -41,5 +41,5 @@ export async function invoiceList(env: Bindings, actor: Actor, url: URL) {
   const more = rows.length > limit
   const page = rows.slice(0,limit)
   const next: Cursor | null = more ? { v:1,snapshot,after:page[page.length-1].issue_sequence,customer,limit } : null
-  return { data: await withMetadata(env,'invoice',page.map(({issue_sequence: _sequence,...invoice}) => invoice)), nextCursor:next ? btoa(JSON.stringify(next)) : null }
+  return { data: await withMetadata(env,'invoice',page.map(({issue_sequence: _sequence,...invoice}) => invoice)), next_cursor:next ? btoa(JSON.stringify(next)) : null }
 }

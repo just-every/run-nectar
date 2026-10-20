@@ -3,6 +3,7 @@
 // application credentials for an agent or metering pipeline.
 import { operatorAuth, type Bindings } from '../auth.server'
 import { ROLES, SCOPES, actorLabel, requireOwner, type Actor, type Role, type Scope } from './actor'
+import { LATEST_VERSION, checkVersion } from './api-versions'
 import { all, commit, insist, newId, now, one, sha256Hex, stmt } from './core'
 import type { Input } from './input'
 
@@ -13,7 +14,7 @@ export async function members(env: Bindings, actor: Actor) {
 
 export async function agentKeys(env: Bindings, actor: Actor) {
   requireOwner(actor)
-  return await all(env, 'SELECT id, name, scopes, created_by, created_at, last_used_at, revoked_at FROM nc_agent_keys ORDER BY created_at DESC')
+  return await all(env, 'SELECT id, name, scopes, api_version, created_by, created_at, last_used_at, revoked_at FROM nc_agent_keys ORDER BY created_at DESC')
 }
 
 async function operatorByEmail(env: Bindings, request: Request, email: string) {
@@ -64,11 +65,12 @@ export async function issueKey(env: Bindings, actor: Actor, input: Input) {
   const name = input.text('name', { max: 80 })
   const scopes = input.list('scopes')
   insist(scopes.length > 0 && scopes.every(scope => scope in SCOPES), 'invalid_scopes')
+  const version = checkVersion(input.text('api_version', { optional: true, max: 20 }) || LATEST_VERSION)
   const key = `nectar_${base64url(crypto.getRandomValues(new Uint8Array(32)))}`
   const id = newId()
-  await commit(env, [stmt(env, 'INSERT INTO nc_agent_keys (id, name, key_hash, scopes, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?)', id, name, await sha256Hex(key), [...new Set(scopes)].sort().join(' '), actorLabel(actor), now())],
-    { actor: actorLabel(actor), action: 'credential.issue', subject: id, detail: { name, scopes } })
-  return { id, name, scopes: scopes as Scope[], key }
+  await commit(env, [stmt(env, 'INSERT INTO nc_agent_keys (id, name, key_hash, scopes, api_version, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)', id, name, await sha256Hex(key), [...new Set(scopes)].sort().join(' '), version, actorLabel(actor), now())],
+    { actor: actorLabel(actor), action: 'credential.issue', subject: id, detail: { name, scopes, api_version: version } })
+  return { id, name, scopes: scopes as Scope[], api_version: version, key }
 }
 
 export async function revokeKey(env: Bindings, actor: Actor, input: Input) {
@@ -79,4 +81,16 @@ export async function revokeKey(env: Bindings, actor: Actor, input: Input) {
   insist(!row.revoked_at, 'already_revoked', 409)
   await commit(env, [stmt(env, 'UPDATE nc_agent_keys SET revoked_at = ?, revoked_by = ? WHERE id = ? AND revoked_at IS NULL', now(), actorLabel(actor), id)], { actor: actorLabel(actor), action: 'credential.revoke', subject: id })
   return { id, revoked: true }
+}
+
+/** Repins a live credential to another dated API version (DEV-002); its next request uses it. */
+export async function pinKeyVersion(env: Bindings, actor: Actor, input: Input) {
+  requireOwner(actor)
+  const id = input.text('key', { max: 100 })
+  const version = checkVersion(input.text('api_version', { max: 20 }))
+  const row = await one(env, 'SELECT id, api_version, revoked_at FROM nc_agent_keys WHERE id = ?', id)
+  insist(row, 'credential_not_found', 404)
+  insist(!row.revoked_at, 'already_revoked', 409)
+  await commit(env, [stmt(env, 'UPDATE nc_agent_keys SET api_version = ? WHERE id = ? AND revoked_at IS NULL', version, id)], { actor: actorLabel(actor), action: 'credential.version', subject: id, detail: { from: row.api_version, to: version } })
+  return { id, api_version: version }
 }

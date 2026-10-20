@@ -3,6 +3,7 @@
 // each role, so a new door cannot be added without being checked.
 // Patterns are relative to /api/nectar/ (API) or absolute (pages).
 export const API_DOORS: [string, string][] = [
+  ['^openapi$','openapi'],
   ['^erasures$','erasures'],
   ['^revenue$', 'revenue'], ['^revenue/([\\w-]+)$','revenueSource'],
   ['^cadences$', 'cadences'],
@@ -20,6 +21,9 @@ export const API_DOORS: [string, string][] = [
   ['^reports/([\\w-]+)$', 'report'], ['^reports/([\\w-]+/[\\w-]+)$', 'reportInvoice'], ['^invoices/([\\w-]+/lines/[\\w-]+)$', 'reportLine'],
   ['^members$', 'members'], ['^credentials$', 'credentials'], ['^audit$', 'audit'],
 ]
+
+/** API doors whose rows page by cursor (DEV-002, list-cursor.ts); `invoices` keeps its own issuance-journal snapshot. */
+export const LIST_DOORS = ['erasures', 'noteMembers', 'customers', 'batches', 'runs', 'payments', 'notices', 'tasks', 'policies', 'proposals', 'imports', 'shadow', 'members', 'credentials', 'audit', 'metadataObjects', 'notes']
 
 export const PAGE_DOORS: [string, string][] = [
   ['^/app/erasures$','erasures'],

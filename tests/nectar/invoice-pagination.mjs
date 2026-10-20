@@ -26,8 +26,8 @@ export async function invoicePaginationFlow(h, owner) {
   const base = `invoices?customer=${encodeURIComponent(customer)}`
   const first = await h.api(`${base}&limit=100`, owner)
   assert.equal(first.data.length, 100)
-  assert.equal(typeof first.nextCursor, 'string')
-  assert.ok(first.nextCursor.length > 0)
+  assert.equal(typeof first.next_cursor, 'string')
+  assert.ok(first.next_cursor.length > 0)
   assert.ok(first.data.every(row => row.customer_id === customer && row.number))
   assert.ok(!first.data.some(row => row.id === lateDraft), 'drafts are absent from issued listings')
   assert.deepEqual((await h.api(base, owner)).data, first.data, 'default page size uses the same first 100 invoices')
@@ -36,15 +36,15 @@ export async function invoicePaginationFlow(h, owner) {
   assert.ok(unfiltered.data.every(row => row.number), 'unfiltered listings also contain issued invoices')
 
   await issue(lateDraft)
-  const secondPath = `${base}&limit=100&cursor=${encodeURIComponent(first.nextCursor)}`
+  const secondPath = `${base}&limit=100&cursor=${encodeURIComponent(first.next_cursor)}`
   const second = await h.api(secondPath, owner)
   assert.equal(second.data.length, 100)
-  assert.equal(typeof second.nextCursor, 'string')
-  assert.ok(second.nextCursor.length > 0)
+  assert.equal(typeof second.next_cursor, 'string')
+  assert.ok(second.next_cursor.length > 0)
   assert.deepEqual(await h.api(secondPath, owner), second, 'replaying a cursor preserves the snapshot and order')
-  const third = await h.api(`${base}&limit=100&cursor=${encodeURIComponent(second.nextCursor)}`, owner)
+  const third = await h.api(`${base}&limit=100&cursor=${encodeURIComponent(second.next_cursor)}`, owner)
   assert.equal(third.data.length, 50)
-  assert.equal(third.nextCursor, null)
+  assert.equal(third.next_cursor, null)
   const snapshot = [...first.data, ...second.data, ...third.data]
   assert.equal(new Set(snapshot.map(row => row.id)).size, 250, 'no duplicate invoices between pages')
   assert.deepEqual(snapshot.map(row => row.id).sort(), [...invoiceIds].sort(), 'all original invoices appear exactly once, with no later issue')
@@ -56,10 +56,10 @@ export async function invoicePaginationFlow(h, owner) {
   // A fresh traversal includes the later issue, while the saved cursor above
   // remains tied to its original snapshot.
   const fresh = await h.api(`${base}&limit=100`, owner)
-  const freshSecond = await h.api(`${base}&limit=100&cursor=${encodeURIComponent(fresh.nextCursor)}`, owner)
-  const freshThird = await h.api(`${base}&limit=100&cursor=${encodeURIComponent(freshSecond.nextCursor)}`, owner)
+  const freshSecond = await h.api(`${base}&limit=100&cursor=${encodeURIComponent(fresh.next_cursor)}`, owner)
+  const freshThird = await h.api(`${base}&limit=100&cursor=${encodeURIComponent(freshSecond.next_cursor)}`, owner)
   assert.deepEqual([fresh.data.length, freshSecond.data.length, freshThird.data.length], [100, 100, 51])
-  assert.equal(freshThird.nextCursor, null)
+  assert.equal(freshThird.next_cursor, null)
   const current = [...fresh.data, ...freshSecond.data, ...freshThird.data]
   assert.deepEqual(current.map(row => row.id).sort(), [...invoiceIds, lateDraft].sort())
   const issueOrder = [...invoiceIds, lateDraft]
@@ -68,15 +68,15 @@ export async function invoicePaginationFlow(h, owner) {
   const foreign = await h.api(`invoices?customer=${encodeURIComponent(other)}&limit=100`, owner)
   assert.deepEqual(foreign.data.map(row => row.id), [foreignInvoice])
   assert.ok(foreign.data.every(row => row.customer_id === other))
-  assert.equal(foreign.nextCursor, null)
+  assert.equal(foreign.next_cursor, null)
 
   for (const limit of ['0', '101', '-1', '1.5', 'invalid'])
     await h.api(`${base}&limit=${limit}`, owner, undefined, 400)
   await h.api(`${base}&limit=100&cursor=not-a-cursor`, owner, undefined, 400)
-  await h.api(`${base}&limit=100&cursor=${encodeURIComponent(first.nextCursor + 'tampered')}`, owner, undefined, 400)
-  await h.api(`${base}&limit=50&cursor=${encodeURIComponent(first.nextCursor)}`, owner, undefined, 400)
-  await h.api(`invoices?customer=${encodeURIComponent(other)}&limit=100&cursor=${encodeURIComponent(first.nextCursor)}`, owner, undefined, 400)
-  await h.api(`invoices?limit=100&cursor=${encodeURIComponent(first.nextCursor)}`, owner, undefined, 400)
+  await h.api(`${base}&limit=100&cursor=${encodeURIComponent(first.next_cursor + 'tampered')}`, owner, undefined, 400)
+  await h.api(`${base}&limit=50&cursor=${encodeURIComponent(first.next_cursor)}`, owner, undefined, 400)
+  await h.api(`invoices?customer=${encodeURIComponent(other)}&limit=100&cursor=${encodeURIComponent(first.next_cursor)}`, owner, undefined, 400)
+  await h.api(`invoices?limit=100&cursor=${encodeURIComponent(first.next_cursor)}`, owner, undefined, 400)
   await h.api(`${base}&limit=100`, undefined, undefined, 401)
   await h.api(secondPath, undefined, undefined, 401)
   await h.api('access.give', owner, { email: 'pagination-accountant@example.test', name: 'Archive Accountant', role: 'accountant' })

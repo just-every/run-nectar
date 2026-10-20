@@ -17,7 +17,7 @@ import { resolveSetup } from './setup-resolution'
 // Each handler checks the actor's capability itself before touching data.
 import type { Bindings } from '../auth.server'
 import type { Actor } from './actor'
-import { endAccess, giveAccess, issueKey, revokeKey } from './access'
+import { endAccess, giveAccess, issueKey, pinKeyVersion, revokeKey } from './access'
 import { approve, finalise, prepareRun } from './billruns'
 import { configureBusiness, declareTax, reviewTax } from './business'
 import { createMeter, createPrice, createProduct, grantFeature, retirePrice } from './catalog'
@@ -86,6 +86,7 @@ export const actions: Record<string, Handler> = {
   'access.end': endAccess,
   'credential.issue': issueKey,
   'credential.revoke': revokeKey,
+  'credential.version': pinKeyVersion,
   'exemption.claim': claimExemption,
   'certificate.collect': collectCertificate,
   'certificate.review': validateCertificate,

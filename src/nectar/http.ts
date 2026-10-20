@@ -6,16 +6,19 @@ import { runtimeBindings, type Bindings } from '../auth.server'
 import { AuthError, safeReturnTo } from '../modules/operator-auth/index.mjs'
 import { actions } from './actions'
 import { currentActor,requireCapability, type Actor } from './actor'
-import { NectarError,one } from './core'
+import { NectarError,insist,one } from './core'
 import { business } from './business'
 import { Input } from './input'
-import { PAGE_DOORS, match } from './doors'
+import { LIST_DOORS, PAGE_DOORS, match } from './doors'
+import { present, requestVersion } from './api-versions'
+import { idempotent } from './idempotency'
+import { paged } from './list-cursor'
 import { route } from './views'
 import { h, page } from './ui/html'
 import { pages, postPages } from './ui/pages'
 import { loadShell } from './ui/shell'
 
-const json = (body: unknown, status = 200) => Response.json(body, { status, headers: { 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' } })
+const json = (body: unknown, status = 200, headers: Record<string, string> = {}) => Response.json(body, { status, headers: { 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', ...headers } })
 
 export function failure(error: unknown): { code: string; status: number; detail?: unknown } {
   if (error instanceof NectarError) return { code: error.code, status: error.status, detail: error.detail }
@@ -58,18 +61,26 @@ export async function nectarResponse(request: Request, original: Bindings): Prom
   }
 }
 
+// DEV-002: every JSON answer is shaped by the request's dated version, and a
+// write carrying an Idempotency-Key runs at most once per key.
 async function apiResponse(env: Bindings, actor: Actor, request: Request, url: URL) {
   const path = url.pathname.slice('/api/nectar/'.length)
+  const version = requestVersion(actor, request)
+  const send = (body: unknown, extra: Record<string, string> = {}) => json(present(version, body), 200, { 'nectar-version': version, ...extra })
   if (request.method === 'POST') {
     const action = actions[path]
     if (!action) throw new NectarError('not_found', 404)
-    return json(await action(env, actor, await Input.from(request), request))
+    const key = request.headers.get('idempotency-key')
+    if (key === null) return send(await action(env, actor, await Input.from(request), request))
+    const stored = await idempotent(env, actor, request, key, `${path}\n${version}`, async () => await action(env, actor, await Input.from(request), request))
+    return send(stored.body, stored.replayed ? { 'idempotent-replayed': 'true' } : {})
   }
-  const { view, id } = route(path)
+  const { name, view, id } = route(path)
+  insist(name === 'invoices' || LIST_DOORS.includes(name) || (!url.searchParams.has('limit') && !url.searchParams.has('cursor')), 'not_a_list')
   if (/^(subscriptions\/|proposals\/|invoices\/[^/]+\/lines\/)/.test(path)) requireCapability(actor,'read')
   if (/^(subscriptions\/|proposals\/|invoices\/[^/]+\/lines\/)/.test(path) && await one(env,'SELECT 1 FROM nc_erased_records WHERE record_id=?',id.split('/')[0])) throw new NectarError('customer_erased',410)
   const result=await view(env, actor, request, id, url)
-  return result instanceof Response ? result : json(result)
+  return result instanceof Response ? result : send(LIST_DOORS.includes(name) ? paged(result, url, path) : result)
 }
 
 async function pageResponse(env: Bindings, actor: Actor, request: Request, url: URL): Promise<Response> {
