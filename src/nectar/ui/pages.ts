@@ -11,6 +11,7 @@ import { reportSchedulePage,reportDeliveryPage } from './report-schedules'
 import { reportDeliveryCsv } from '../report-schedules'
 import { reportCsv } from '../report-csv'
 import { setupSourceDownload } from '../setup-download'
+import { passkeyScript, securityPage, securityPosts } from './security'
 // Every page door's renderer, by the name in doors.ts, and the two POST pages
 // that render a result instead of redirecting (a move-in preview, and a new
 // credential that is shown once and never put in a URL).
@@ -75,6 +76,8 @@ export const pages: Record<string, Page> = {
   subscriptionsFile: (env, actor,_r,url) => subscriptionsCsv(env, actor,url),
   access: (env, actor, _r, url) => accessPage(env, actor, url),
   audit: (env, actor, _r, url) => auditPage(env, actor, url),
+  security: (env, actor, _r, url) => securityPage(env, actor, url),
+  passkeyScript: () => passkeyScript(),
   report: (env, actor, _r, url, id) => reportPage(env, actor, id, url),
   reportInvoice: (env, actor, _r, url, id) => { const [metric, invoice] = id.split('/'); return reportInvoicePage(env, actor, metric, invoice, url) },
   reportLine: (env, actor, _r, url, id) => { const [invoice, , line] = id.split('/'); return reportLinePage(env, actor, invoice, line, url) },
@@ -83,6 +86,7 @@ export const pages: Record<string, Page> = {
 type PostPage = (env: Bindings, actor: Actor, input: Input, url: URL, request: Request) => Promise<Response>
 
 export const postPages: Record<string, PostPage> = {
+  ...securityPosts,
   '/app/answers':(env,actor,input,url)=>billingAnswersPage(env,actor,url,input),
   '/app/renewal-link':async(env,actor,input)=>{const result=await issueCancellationLink(env,actor,input);return page('Cancellation link',actor,h`<h1>Cancellation link</h1><section class="card"><p>The previous link is now inactive. Share this private link only with this subscription’s customer. It allows cancellation of the next renewal only.</p><p><a href="${result.cancelUrl}">Open cancellation page</a></p><p><a href="/app/subscriptions/${result.id}#renewals">Back to subscription</a></p></section>`)},
   '/app/import/preview': (env, actor, input, url) => previewPage(env, actor, input, url),

@@ -287,6 +287,42 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "period": "text",
     "request": "text"
   },
+  "mfa.passkey.options": {
+    "purpose": "text"
+  },
+  "mfa.passkey.register": {
+    "attestation_object": "text",
+    "challenge_id": "text",
+    "client_data_json": "text",
+    "label": "text"
+  },
+  "mfa.passkey.verify": {
+    "authenticator_data": "text",
+    "challenge_id": "text",
+    "client_data_json": "text",
+    "credential_id": "text",
+    "signature": "text"
+  },
+  "mfa.policy": {
+    "roles": "list",
+    "scope": "text"
+  },
+  "mfa.remove": {
+    "factor": "text"
+  },
+  "mfa.reset": {
+    "member": "text"
+  },
+  "mfa.totp.confirm": {
+    "code": "text",
+    "factor": "text"
+  },
+  "mfa.totp.start": {
+    "label": "text"
+  },
+  "mfa.verify": {
+    "code": "text"
+  },
   "note.add": {
     "body": "text",
     "kind": "text",

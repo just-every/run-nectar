@@ -36,6 +36,7 @@ import { metadataObjects } from './metadata-lists'
 import { customerNotes } from './note-records'
 import { reportLine } from './report-lines'
 import { openApiDocument } from './openapi'
+import { mfaView } from './mfa'
 
 type View = (env: Bindings, actor: Actor, request: Request, id: string, url: URL) => Promise<unknown>
 
@@ -100,6 +101,7 @@ export const views: Record<string, View> = {
   members: (env, actor) => members(env, actor),
   credentials: (env, actor) => agentKeys(env, actor),
   audit: (env, actor) => audit(env, actor),
+  mfa: (env, actor) => mfaView(env, actor),
   report: (env, actor, _r, id, url) => report(env, actor, id, url),
   reportInvoice: (env, actor, _r, id, url) => { const [metric, invoice] = id.split('/'); return reportInvoice(env, actor, metric, invoice, url) },
   reportLine: (env, actor, _r, id) => { const [invoice, , line] = id.split('/'); return reportLine(env, actor, invoice, line) },

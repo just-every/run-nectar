@@ -17,6 +17,7 @@ import { route } from './views'
 import { h, page } from './ui/html'
 import { pages, postPages } from './ui/pages'
 import { loadShell } from './ui/shell'
+import { SELF_SERVICE, mfaHold } from './mfa'
 
 const json = (body: unknown, status = 200, headers: Record<string, string> = {}) => Response.json(body, { status, headers: { 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', ...headers } })
 
@@ -50,6 +51,14 @@ export async function nectarResponse(request: Request, original: Bindings): Prom
   try {
     actor = await currentActor(env, request)
     if (!actor) return await drained(request, api ? json({ error: 'authentication_required' }, 401) : Response.redirect(`${env.AUTH_ORIGIN}/signin?returnTo=${encodeURIComponent(url.pathname)}`, 303))
+    // GOV-007: a member whose role requires a second factor reaches nothing but
+    // their own enrollment and check until a factor is enrolled and presented.
+    const held = await mfaHold(env, actor)
+    if (held && !heldMayUse(request, url, api)) {
+      if (api) return await drained(request, json({ error: held.code, ...(held.reason ? { detail: { reason: held.reason } } : {}) }, 403))
+      const back = request.method === 'POST' ? `error=${held.code}` : `returnTo=${encodeURIComponent(url.pathname)}`
+      return await drained(request, new Response(null, { status: 303, headers: { location: `/app/security?${back}`, 'cache-control': 'no-store' } }))
+    }
     if (api) return await apiResponse(env, actor, request, url)
     return await pageResponse(env, actor, request, url)
   } catch (error) {
@@ -59,6 +68,13 @@ export async function nectarResponse(request: Request, original: Bindings): Prom
     if (status === 404) return page('Not found', actor, h`<h1>Not found</h1><p>There is nothing here you can open.</p><p><a class="button" href="/app">Back to your work</a></p>`, { status: 404 })
     return page('Something went wrong', actor, h`<h1>That did not work</h1><p>${code.replace(/_/g, ' ')}</p><p><a class="button" href="/app">Back to your work</a></p>`, { status })
   }
+}
+
+function heldMayUse(request: Request, url: URL, api: boolean) {
+  const path = url.pathname
+  if (api) return request.method === 'POST' ? SELF_SERVICE.includes(path.slice('/api/nectar/'.length)) : path === '/api/nectar/mfa'
+  if (request.method !== 'POST') return path === '/app/security' || path === '/app/security/passkey.js'
+  return ['/app/security/totp', '/app/security/confirm', '/app/security/verify'].includes(path) || SELF_SERVICE.includes(path.replace(/^\/app\/do\//, ''))
 }
 
 // DEV-002: every JSON answer is shaped by the request's dated version, and a
@@ -106,7 +122,7 @@ async function pageResponse(env: Bindings, actor: Actor, request: Request, url: 
     }
   }
   // The owner sets up the business before anything else.
-  if (!await business(env) && path !== '/app/settings') {
+  if (!await business(env) && path !== '/app/settings' && !path.startsWith('/app/security')) {
     if (actor.role === 'owner') return Response.redirect(`${env.AUTH_ORIGIN}/app/settings`, 303)
     return page('Not ready', actor, h`<div class="first-run"><h1>Nectar is not set up yet</h1><p>The owner needs to enter the business's billing details first.</p></div>`, { showNav: false })
   }

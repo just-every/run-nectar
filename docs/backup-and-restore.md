@@ -34,5 +34,10 @@ rer dev
 a damaged archive and refuses to restore over existing data. Every portable row,
 including each invoice's calculation evidence, comes back unchanged.
 
+Authenticator-app secrets travel only sealed under `MFA_KEY` (in `.dev.vars`
+locally, a Worker secret when deployed). Keep that key with the archive; a
+restore under another key or none puts members back at enrollment with the
+reason shown; passkeys keep working.
+
 To move to another computer, clone Nectar there, copy the archive into its
 `exports/` folder and run the import and setup steps.

@@ -56,6 +56,7 @@ export const MORE: { href: string; label: string; about: string; icon: IconName;
   { href: '/app/exports', label: 'Exports', icon: 'exports', about: 'Invoices, usage, subscriptions and bill runs to keep or hand to your accountant.', show: actor => can(actor, 'export') },
   { href: '/app/audit', label: 'Audit trail', icon: 'audit', about: 'Every change, approval and issue, with who made it.', show: actor => can(actor, 'export') },
   { href: '/app/settings', label: 'Business and tax', icon: 'settings', about: 'Billing identity, timezone, invoice numbering and the declared tax policy.', show: () => true },
+  { href: '/app/security', label: 'Sign-in security', icon: 'access', about: 'Your authenticator app, passkeys and recovery codes.', show: actor => actor.kind === 'member' },
   { href: '/app/access', label: 'Access', icon: 'access', about: 'Who can sign in, their roles, and agent credentials.', show: actor => actor.role === 'owner' },
 ]
 
@@ -79,7 +80,7 @@ const clock = (zone: string) => {
   return h`<span>${day}</span> <span>${new Intl.DateTimeFormat('en-US', { timeZone: zone, hour: 'numeric', minute: '2-digit' }).format(at)}</span>`
 }
 
-export function page(title: string, actor: Actor | null, body: Html, { current = '', url, status = 200, showNav = true, lang = 'en' }: { current?: string; url?: URL; status?: number; showNav?: boolean; lang?: string } = {}): Response {
+export function page(title: string, actor: Actor | null, body: Html, { current = '', url, status = 200, showNav = true, lang = 'en', script = '' }: { current?: string; url?: URL; status?: number; showNav?: boolean; lang?: string; script?: string } = {}): Response {
   const notice = url?.searchParams.get('notice'), error = url?.searchParams.get('error')
   const shell = shellOf(actor)
   const link = (item: { href: string; label: string; icon: IconName }, count = 0) => h`<li><a href="${item.href}"${item.href === current ? raw(' aria-current="page"') : ''}>${icon(item.icon)}<span>${item.label}</span>${count ? h`<span class="count-pill" aria-label="${count} waiting">${count}</span>` : ''}</a></li>`
@@ -90,10 +91,11 @@ export function page(title: string, actor: Actor | null, body: Html, { current =
     ${shell && nav ? h`<p class="synced">${icon('synced')}<span>${shell.lastUsage ? h`Usage imported<br>${ago(shell.lastUsage, shell.timezone)}` : h`No usage imported yet`}</span></p>` : ''}</div>` : ''
   const top = actor && shell && nav ? h`<header class="top"><p class="top-place">${shell.legalName}<span>Billing in ${new Intl.DateTimeFormat('en-US', { timeZone: shell.timezone, timeZoneName: 'longGeneric' }).formatToParts(new Date()).find(part => part.type === 'timeZoneName')?.value ?? shell.timezone}</span></p><p class="top-time">${clock(shell.timezone)}</p>${can(actor, 'records') ? h`<a class="button top-action" href="/app/billing#prepare">Prepare a bill run</a>` : ''}</header>` : ''
   const menu = nav ? h`<label class="menu-button" for="menu">${icon('menu')}<span>Menu</span></label>` : ''
-  const document = h`<!doctype html><html lang="${lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title} · ${branding.name}</title><link rel="icon" href="/favicon.ico" sizes="any"><link rel="icon" href="/brand/favicon-32.svg" type="image/svg+xml"><link rel="preload" href="/fonts/hanken-grotesk/hanken-grotesk-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin="anonymous"><link rel="stylesheet" href="/fonts/fonts.css"><link rel="stylesheet" href="/rer-theme.css"><link rel="stylesheet" href="/nectar.css"></head><body>
+  const document = h`<!doctype html><html lang="${lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title} · ${branding.name}</title><link rel="icon" href="/favicon.ico" sizes="any"><link rel="icon" href="/brand/favicon-32.svg" type="image/svg+xml"><link rel="preload" href="/fonts/hanken-grotesk/hanken-grotesk-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin="anonymous"><link rel="stylesheet" href="/fonts/fonts.css"><link rel="stylesheet" href="/rer-theme.css"><link rel="stylesheet" href="/nectar.css">${script ? h`<script src="${script}" defer></script>` : ''}</head><body>
 <div class="shell${nav ? '' : ' bare'}"><aside class="side"><div class="side-head"><a class="brand" href="/app"><img src="/brand/mark.svg" alt="" width="36" height="36"><span data-rer-name>${branding.name}</span></a>${menu}</div>${nav ? raw('<input type="checkbox" id="menu" class="menu-toggle" aria-label="Show the menu">') : ''}${nav}${who}</aside>
 <div class="column">${top}<main>${notice ? h`<p class="flash" role="status">${icon('paid')}<span>${notice}</span></p>` : ''}${error ? h`<p class="flash error" role="alert">${icon('alert')}<span>That did not work: ${describeError(error)}</span></p>` : ''}${body}</main></div></div></body></html>`
-  return new Response(document.html, { status, headers })
+  // Only a page that names its own same-origin script may run one (GOV-007 passkeys).
+  return new Response(document.html, { status, headers: script ? { ...headers, 'content-security-policy': headers['content-security-policy'].replace("default-src 'none';", "default-src 'none'; script-src 'self'; connect-src 'self';") } : headers })
 }
 
 const ERRORS: Record<string, string> = {
@@ -131,6 +133,13 @@ const ERRORS: Record<string, string> = {
   shadow_not_reconciled: 'no shadow period agrees with the previous biller yet. Reconcile, or confirm that you accept the difference.',
   balances_changed: 'the balances changed since this reminder was drafted. Prepare it again.',
   timezone_fixed_after_first_invoice: 'the billing timezone cannot change once an invoice is issued.',
+  mfa_required: 'confirm it’s you with your second factor on Sign-in security first.',
+  mfa_enrollment_required: 'enroll a second factor on Sign-in security first.',
+  mfa_step_up_required: 'your last check is more than 15 minutes old. Confirm it’s you on Sign-in security, then try again.',
+  mfa_code_invalid: 'that code is not right, or it was already used.',
+  mfa_locked: 'too many wrong codes. Wait 15 minutes and try again.',
+  mfa_key_missing: 'this installation has no MFA key, so authenticator apps cannot be set up. Use a passkey, or ask the owner to set MFA_KEY.',
+  mfa_key_changed: 'this installation’s MFA key cannot open that authenticator secret. Set it up again.',
 }
 export const describeError = (code: string) => ERRORS[code] ?? code.replace(/_/g, ' ') + '.'
 

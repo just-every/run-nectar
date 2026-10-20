@@ -11,6 +11,7 @@ import type { Bindings } from '../../auth.server'
 import { planD1Import, createD1ImportJob, applyD1ImportBatches, resumeD1Import, undoD1Import, canonicalJson, sha256, type D1ImportContext, type SourceBundle, type SourceRecord, type Json, type TargetEffect } from '../../modules/import-kit/src/d1/index'
 import { sourceIdentity } from '../../modules/import-kit/src/provenance/identity'
 import { actorLabel, requireMember, requireOwner, type Actor } from '../actor'
+import { requireFreshFactor } from '../mfa'
 import { requireBusiness } from '../business'
 import { NectarError, all, commit, guard, insist, newId, now, one, parseJson, stmt, type Row } from '../core'
 import { decimalText, micros } from '../decimal'
@@ -359,6 +360,7 @@ export async function shadowSubscriptions(env: Bindings, actor: Actor) {
 /** The owner adopts a shadow subscription: Nectar bills from the cutover period on, never a period Stripe already billed. */
 export async function adopt(env: Bindings, actor: Actor, input: Input) {
   requireOwner(actor)
+  await requireFreshFactor(env, actor)
   const sub = (await shadowSubscriptions(env, actor)).find(row => row.id === input.text('subscription', { max: 100 }))
   insist(sub, 'subscription_not_in_shadow', 404)
   const cutover = input.text('cutover_start', { max: 10 })

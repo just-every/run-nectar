@@ -11,6 +11,7 @@ import { prepareRetentionPolicy,decideRetentionPolicy } from './retention-policy
 import { prepareTerm,decideTerm,issueCancellationLink } from './renewal-terms'
 import { prepareInvoiceCredit } from './credit-correction'
 import { setReportSchedule } from './report-schedules'
+import { confirmTotp, passkeyOptions, registerPasskey, removeFactor, resetFactors, setPolicy, startTotp, verifyFactor, verifyPasskey } from './mfa'
 import { resolveSetup } from './setup-resolution'
 // Every state change in Nectar, by name. The same handler serves the HTML form
 // door (/app/do/NAME) and the JSON door (/api/nectar/NAME) used by agents.
@@ -82,6 +83,15 @@ export const actions: Record<string, Handler> = {
   'business.configure': configureBusiness,
   'tax.declare': declareTax,
   'tax.review': reviewTax,
+  'mfa.policy': setPolicy,
+  'mfa.reset': resetFactors,
+  'mfa.remove': removeFactor,
+  'mfa.totp.start': startTotp,
+  'mfa.totp.confirm': confirmTotp,
+  'mfa.verify': verifyFactor,
+  'mfa.passkey.options': passkeyOptions,
+  'mfa.passkey.register': registerPasskey,
+  'mfa.passkey.verify': verifyPasskey,
   'access.give': giveAccess,
   'access.end': endAccess,
   'credential.issue': issueKey,

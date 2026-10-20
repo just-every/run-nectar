@@ -14,6 +14,24 @@ Open **More → Access → Give someone access** with their name, email and role
 and press **Invite**. They sign in with their email. **End access** ends their
 access and every session they hold.
 
+## Multi-factor sign-in
+
+Under **More → Access → Multi-factor sign-in**, the owner requires a second
+factor for chosen roles (by default Owner and Finance) or for everyone. A
+required member opens **More → Sign-in security**, adds an authenticator app or
+a passkey, and keeps the ten one-time recovery codes shown once. Until they
+have a factor and have confirmed it in their current session, every page,
+form, API call and download sends them back there.
+
+Credits, access and credential changes, changing the requirement and adopting
+a moved-in subscription ask for a fresh code once the last check is more than
+15 minutes old. **Reset factor** on Access removes a member's factors and
+signs them out everywhere. Agent credentials can never do any of these.
+
+Authenticator-app secrets are sealed with the installation's `MFA_KEY`, which
+setup generates. Keep a copy with your archives: a restore without it puts
+members back at enrollment, with the reason shown on Sign-in security.
+
 ## Agent credentials
 
 Under **Agent credentials**, the owner issues a credential with a name and

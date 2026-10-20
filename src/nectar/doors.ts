@@ -19,7 +19,7 @@ export const API_DOORS: [string, string][] = [
   ['^invoices$', 'invoices'], ['^invoices/([\\w-]+)$', 'invoice'], ['^ageing$', 'ageing'], ['^payments$', 'payments'], ['^notices$', 'notices'], ['^tasks$', 'tasks'],
   ['^policies/current$', 'policySettings'], ['^policies$', 'policies'], ['^proposals$', 'proposals'], ['^proposals/([\\w-]+)$', 'proposal'], ['^entitlements/([\\w.:-]+)$', 'entitlement'], ['^imports$', 'imports'], ['^shadow$', 'shadow'],
   ['^reports/([\\w-]+)$', 'report'], ['^reports/([\\w-]+/[\\w-]+)$', 'reportInvoice'], ['^invoices/([\\w-]+/lines/[\\w-]+)$', 'reportLine'],
-  ['^members$', 'members'], ['^credentials$', 'credentials'], ['^audit$', 'audit'],
+  ['^members$', 'members'], ['^credentials$', 'credentials'], ['^audit$', 'audit'], ['^mfa$', 'mfa'],
 ]
 
 /** API doors whose rows page by cursor (DEV-002, list-cursor.ts); `invoices` keeps its own issuance-journal snapshot. */
@@ -43,7 +43,7 @@ export const PAGE_DOORS: [string, string][] = [
   ['^/app/exports$', 'exports'], ['^/app/exports/invoices\\.csv$', 'invoicesFile'], ['^/app/exports/usage\\.csv$', 'usageFile'], ['^/app/exports/subscriptions\\.csv$', 'subscriptionsFile'],
   ['^/app/certificates/([\\w-]+)$', 'certificateFile'],
   ['^/app/reports/([\\w-]+)$', 'report'], ['^/app/reports/([\\w-]+/[\\w-]+)$', 'reportInvoice'], ['^/app/invoices/([\\w-]+/lines/[\\w-]+)$', 'reportLine'],
-  ['^/app/access$', 'access'], ['^/app/audit$', 'audit'],
+  ['^/app/access$', 'access'], ['^/app/audit$', 'audit'], ['^/app/security$', 'security'], ['^/app/security/passkey\\.js$', 'passkeyScript'],
 ]
 
 export function match(doors: [string, string][], path: string): { name: string; id: string } | null {

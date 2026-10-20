@@ -33,6 +33,8 @@ export interface Bindings {
  RER_MANAGEMENT_ORIGIN?: string
  OWNER_EMAIL: string
  SESSION_SECRET: string
+ /** GOV-007: seals authenticator-app secrets at rest; never the session secret. */
+ MFA_KEY?: string
  SETUP_TOKEN?: string
  MAIL_PROVIDER?: 'development' | 'resend' | 'sendgrid' | 'cloudflare'
  MAIL_FROM?: string

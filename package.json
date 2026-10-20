@@ -30,6 +30,7 @@
     "rer": "rer",
     "test:flows": "rer queue test:flows -- sh -c \"node tests/nectar/flows.mjs\"",
     "test:journey": "node tests/nectar/journey.mjs",
+    "test:passkey": "node tests/nectar/mfa-passkey.mjs",
     "test:site": "node --test tests/site/*.test.mjs"
   },
   "dependencies": {

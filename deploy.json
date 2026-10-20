@@ -30,6 +30,10 @@
       "environment": "SETUP_TOKEN"
     },
     {
+      "binding": "MFA_KEY",
+      "environment": "MFA_KEY"
+    },
+    {
       "binding": "MAIL_API_KEY",
       "environment": "MAIL_API_KEY"
     }

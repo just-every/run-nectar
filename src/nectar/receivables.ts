@@ -16,6 +16,7 @@ import { authorizeCredit, prepareCreditRequest } from './credit-policy'
 import { cents, plainMoney } from './decimal'
 import { addDays, daysBetween, requireDate, today } from './dates'
 import { Input } from './input'
+import { requireFreshFactor } from './mfa'
 
 export const BALANCE_SQL = `(i.total_cents - COALESCE((SELECT SUM(amount_cents) FROM nc_credit_notes WHERE invoice_id = i.id), 0) - COALESCE((SELECT SUM(amount_cents) FROM nc_allocations WHERE invoice_id = i.id), 0))`
 const balanceOf = (id: string) => [`(SELECT ${BALANCE_SQL} FROM nc_invoices i WHERE i.id = ?)`, id] as const
@@ -30,6 +31,7 @@ export async function issuedInvoice(env: Bindings, id: string) {
 
 export async function creditNoteStatements(env: Bindings, actor: Actor, input: Input, proposalId?: string) {
   requireMember(actor, 'approve')
+  await requireFreshFactor(env, actor)
   const business = await requireBusiness(env)
   const invoice = await issuedInvoice(env, input.text('invoice', { max: 100 }))
   const amount = cents(input.text('amount', { max: 20 }))

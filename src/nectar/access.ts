@@ -6,6 +6,7 @@ import { ROLES, SCOPES, actorLabel, requireOwner, type Actor, type Role, type Sc
 import { LATEST_VERSION, checkVersion } from './api-versions'
 import { all, commit, insist, newId, now, one, sha256Hex, stmt } from './core'
 import type { Input } from './input'
+import { requireFreshFactor } from './mfa'
 
 export async function members(env: Bindings, actor: Actor) {
   requireOwner(actor)
@@ -23,6 +24,7 @@ async function operatorByEmail(env: Bindings, request: Request, email: string) {
 
 export async function giveAccess(env: Bindings, actor: Actor, input: Input, request: Request) {
   requireOwner(actor)
+  await requireFreshFactor(env, actor)
   const email = input.text('email', { max: 200 }).toLowerCase()
   insist(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email), 'invalid_email')
   const name = input.text('name', { max: 120 })
@@ -44,6 +46,7 @@ export async function giveAccess(env: Bindings, actor: Actor, input: Input, requ
 
 export async function endAccess(env: Bindings, actor: Actor, input: Input, request: Request) {
   requireOwner(actor)
+  await requireFreshFactor(env, actor)
   const member = await one(env, 'SELECT * FROM nc_members WHERE id = ?', input.text('member', { max: 100 }))
   insist(member, 'member_not_found', 404)
   insist(member.role !== 'owner', 'owner_access_fixed', 409)
@@ -62,6 +65,7 @@ const base64url = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes)).rep
 /** Issues a credential. The key is returned once and only its hash is stored. */
 export async function issueKey(env: Bindings, actor: Actor, input: Input) {
   requireOwner(actor)
+  await requireFreshFactor(env, actor)
   const name = input.text('name', { max: 80 })
   const scopes = input.list('scopes')
   insist(scopes.length > 0 && scopes.every(scope => scope in SCOPES), 'invalid_scopes')
@@ -75,6 +79,7 @@ export async function issueKey(env: Bindings, actor: Actor, input: Input) {
 
 export async function revokeKey(env: Bindings, actor: Actor, input: Input) {
   requireOwner(actor)
+  await requireFreshFactor(env, actor)
   const id = input.text('key', { max: 100 })
   const row = await one(env, 'SELECT id, revoked_at FROM nc_agent_keys WHERE id = ?', id)
   insist(row, 'credential_not_found', 404)
@@ -86,6 +91,7 @@ export async function revokeKey(env: Bindings, actor: Actor, input: Input) {
 /** Repins a live credential to another dated API version (DEV-002); its next request uses it. */
 export async function pinKeyVersion(env: Bindings, actor: Actor, input: Input) {
   requireOwner(actor)
+  await requireFreshFactor(env, actor)
   const id = input.text('key', { max: 100 })
   const version = checkVersion(input.text('api_version', { max: 20 }))
   const row = await one(env, 'SELECT id, api_version, revoked_at FROM nc_agent_keys WHERE id = ?', id)

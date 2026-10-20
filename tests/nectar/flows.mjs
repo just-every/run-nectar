@@ -29,6 +29,7 @@ import { exemptionCertificates } from './certificates.mjs'
 import { pricingModels } from './pricing-models.mjs'
 
 const ACTIONS = [...(await readFile(new URL('../../src/nectar/actions.ts', import.meta.url), 'utf8')).matchAll(/^  '([\w.]+)':/gm)].map(match => match[1])
+await runIsolated('mfa','mfaFlow')
 await runIsolated('api-platform','apiPlatformFlow')
 await runIsolated('revenue-erasure','revenueErasureFlow')
 await runIsolated('revenue','revenueFlow')
@@ -371,7 +372,7 @@ try {
     await h.api('access.give', cookie.owner, { email: 'x@example.test', name: 'Nope', role: 'owner' }, 400)
     cookie.finance = await h.signIn('fran@example.test', { requested: true })
     cookie.accountant = await h.signIn('acct@example.test', { requested: true })
-    const ownerOnly = ['cadence.policy.prepare', 'lifecycle.policy', 'credit.policy', 'certificate.policy', 'business.configure', 'tax.declare', 'tax.review', 'access.give', 'access.end', 'credential.issue', 'credential.revoke', 'subscription.adopt']
+    const ownerOnly = ['mfa.policy', 'mfa.reset', 'cadence.policy.prepare', 'lifecycle.policy', 'credit.policy', 'certificate.policy', 'business.configure', 'tax.declare', 'tax.review', 'access.give', 'access.end', 'credential.issue', 'credential.revoke', 'subscription.adopt']
     const metricPreview = await h.api('meter.prepare', cookie.owner, { code:'role-preview', name:'Role preview', unit_label:'events', source_meter:ids.meter, definition:{ aggregation:'count' } })
     assert.ok(ACTIONS.length > 30)
     for (const name of ACTIONS) {
@@ -381,6 +382,9 @@ try {
       } else if (name === 'report.schedule') {
         await h.api(name,cookie.accountant,{enabled:false,day:1})
         assert.equal((await h.api('report-schedule',cookie.accountant)).schedule.enabled,false,'RPT-002 accountant controls their own report schedule')
+      } else if (name.startsWith('mfa.') && !ownerOnly.includes(name)) {
+        const own = await h.raw(`/api/nectar/${name}`, { cookie: cookie.accountant, body: {} })
+        assert.ok([200, 400, 404, 409].includes(own.status), `GOV-007 every role manages its own factor: ${name} ${own.status}`)
       } else if (name === 'notification.preferences') await h.api(name,cookie.accountant,{ mentions:true,payment_mismatch:false,billrun_exceptions:false,proposals:false })
       else if (name === 'meter.preview') {
         const preview = await h.api(name, cookie.accountant, { request:metricPreview.request, customer:ids.northwind, period:'2020-01' })

@@ -58,6 +58,16 @@
       "group": "owner"
     },
     {
+      "name": "MFA_KEY",
+      "label": "Multi-factor sealing key",
+      "help": "Seals members' authenticator-app secrets. Keep a copy with your archives: a restore without it puts members back at enrollment.",
+      "kind": "secret",
+      "required": true,
+      "ownerVisible": true,
+      "generate": "hex",
+      "group": "owner"
+    },
+    {
       "name": "IDENTITY_PROVIDER",
       "label": "Identity provider",
       "kind": "url",

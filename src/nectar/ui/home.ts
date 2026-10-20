@@ -12,6 +12,7 @@ import { MORE, check, checks, details, emptyState, field, form, h, marker, hidde
 import { policySection } from './policies'
 import { personName } from './shell'
 import { notificationSection } from './notifications'
+import { DEFAULT_ROLES, memberFactors, mfaPolicy } from '../mfa'
 
 const count = async (env: Bindings, sql: string, ...params: unknown[]) => (await one<{ n: number }>(env, sql, ...params))!.n
 
@@ -81,11 +82,15 @@ export async function accessPage(env: Bindings, actor: Actor, url: URL, issued?:
   const people = await members(env, actor)
   const keys = await agentKeys(env, actor)
   const zone = (await business(env))!.timezone
+  const policy = await mfaPolicy(env), factors = await memberFactors(env)
+  const scopes = [{ value: 'off', label: 'Not required' }, { value: 'roles', label: 'Required for the chosen roles' }, { value: 'all', label: 'Required for everyone (installation-wide)' }]
   return page('Access', actor, h`<h1>Access</h1>
     ${issued ? h`<section class="card key" aria-labelledby="new-key"><h2 id="new-key">Credential for ${issued.name}</h2><p>Copy it now; Nectar keeps only its fingerprint and cannot show it again.</p><p><code class="secret">${issued.key}</code></p><p class="hint">Send it as <code>Authorization: Bearer …</code> to <code>/api/nectar/</code>.</p></section>` : ''}
     <section class="card" aria-labelledby="people"><h2 id="people">People</h2>
-    ${table(['Name', 'Email', 'Role', 'Status', ''], people.map(m => [m.name, m.email, ROLE_NAMES[m.role], tag(m.status === 'active' ? 'Active' : 'Ended'), m.role !== 'owner' && m.status === 'active' ? form('access.end', '/app/access', hidden('member', m.id), 'End access', { secondary: true }) : '']))}
+    ${table(['Name', 'Email', 'Role', 'Status', 'Second factor', ''], people.map(m => [m.name, m.email, ROLE_NAMES[m.role], tag(m.status === 'active' ? 'Active' : 'Ended'), factors.get(m.id) ? h`${factors.get(m.id)} enrolled ${form('mfa.reset', '/app/access', hidden('member', m.id), 'Reset factor', { secondary: true })}` : 'None', m.role !== 'owner' && m.status === 'active' ? form('access.end', '/app/access', hidden('member', m.id), 'End access', { secondary: true }) : '']))}
     <h3>Give someone access</h3>${form('access.give', '/app/access', h`${field('Name', 'name')}${field('Email', 'email', { type: 'email' })}${select('Role', 'role', [{ value: 'finance', label: ROLE_LABELS.finance }, { value: 'accountant', label: ROLE_LABELS.accountant }], 'finance')}`, 'Invite', { layout: 'columns' })}</section>
+    <section class="card" aria-labelledby="mfa"><h2 id="mfa">Multi-factor sign-in</h2><p class="hint">A required member enrolls an authenticator app or a passkey and presents it in every session before any page, form, API call or download opens; credits, access and credential changes and the move-in cutover ask again after 15 minutes. Resetting a member’s factor signs them out everywhere.</p>
+    ${form('mfa.policy', '/app/access', h`${select('Requirement', 'scope', scopes, policy.scope)}${checks('Roles that must use it', 'roles', (['owner', 'finance', 'accountant'] as const).map(role => ({ value: role, label: ROLE_NAMES[role] })), policy.scope === 'roles' ? policy.roles : DEFAULT_ROLES)}`, 'Save requirement', { layout: 'columns' })}</section>
     <section class="card" aria-labelledby="agents"><h2 id="agents">Agent credentials</h2><p class="hint">A credential lets your own agent read and prepare proposals, or lets a metering pipeline submit usage. Credentials never approve, finalize or change records directly.</p>
     ${table(['Name', 'Scopes', 'API version', 'Last used', 'Status', ''], keys.map(k => [k.name, k.scopes, k.revoked_at ? k.api_version : form('credential.version', '/app/access', h`${hidden('key', k.id)}${versionSelect(k.api_version)}`, 'Pin version', { secondary: true }), when(k.last_used_at, zone), tag(k.revoked_at ? 'Revoked' : 'Active'), k.revoked_at ? '' : form('credential.revoke', '/app/access', hidden('key', k.id), 'Revoke', { secondary: true })]), { empty: 'No credentials issued.' })}
     <h3>Issue a credential</h3><form method="post" action="/app/access/credential" class="columns">${field('Name', 'name', { hint: 'For example: "Finance agent" or "Metering pipeline".' })}${checks('Scopes', 'scopes', Object.keys(SCOPES).map(scope => ({ value: scope, label: scope === 'prepare' ? 'prepare — read records and propose work for approval' : 'usage — submit usage events' })), ['prepare'])}${versionSelect(LATEST_VERSION, 'Responses use this dated shape unless a request sends a Nectar-Version header.')}<button type="submit">Issue credential</button></form></section>`, { current: '/app/access', url })
