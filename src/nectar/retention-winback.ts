@@ -5,6 +5,7 @@ import { all, commit, guard, insist, newId, now, one, parseJson, sha256Hex, stmt
 import { business } from './business'
 import { addDays, localDate } from './dates'
 import { clockInstant } from './clock'
+import { retentionScopeStatements } from './retention-amendments'
 import { retentionDuration } from './retention-interval'
 import { retentionPreview } from './retention-preview'
 import { retentionTerms } from './retention-terms'
@@ -56,7 +57,10 @@ export async function acceptWinback(env:Bindings,offer:Row) {
   let cancel=await one(env,"SELECT c.id FROM nc_subscription_lifecycle c WHERE c.subscription_id=? AND c.kind='cancel' AND NOT EXISTS(SELECT 1 FROM nc_subscription_lifecycle r WHERE r.related_id=c.id) ORDER BY c.seq DESC LIMIT 1",sub.id)
   if(!cancel){cancel={id:newId()};statements.push(stmt(env,"INSERT INTO nc_subscription_lifecycle(id,subscription_id,kind,effective_date,access,reason,author_id,author,created_at,policy_json) VALUES(?,?,'cancel',?,'suspend','Term ended before win-back',?,'system:retention',?,?)",cancel.id,sub.id,sub.end_date,author.decided_by_id,now(),JSON.stringify({creditUnused:false,reactivationDays:terms.months*31})))}
   statements.push(stmt(env,"INSERT INTO nc_subscription_lifecycle(id,subscription_id,kind,effective_date,access,related_id,reason,author_id,author,created_at) VALUES(?,?,'reactivate',?,'retain',?,'Accepted win-back',?,'customer:winback-offer',?)",newId(),sub.id,day,cancel.id,author.decided_by_id,now()),stmt(env,"UPDATE nc_renewal_terms SET status='superseded',token_hash=NULL WHERE subscription_id=? AND status IN ('active','ended')",sub.id),stmt(env,'UPDATE nc_subscriptions SET end_date=NULL,revision=?,updated_at=? WHERE id=?',newId(),now(),sub.id))
-  if(terms.percent>0)statements.push(stmt(env,"INSERT INTO nc_amendments(id,subscription_id,kind,value,price_id,effective_from,effective_to,note,clause,status,origin,created_by,created_at,decided_by,decided_at,prepared_by_id) VALUES(?,?,'discount_percent',?,?,?,?,'Accepted win-back',?,'approved','native','customer:winback-offer',?,?,?,?)",newId(),sub.id,String(terms.percent),duration.priceId,from,to,`Policy ${offer.policy_id}`,now(),`policy:${offer.policy_id}`,author.decided_at,author.prepared_by_id))
+  if(terms.percent>0) {
+    const amendment=newId()
+    statements.push(stmt(env,"INSERT INTO nc_amendments(id,subscription_id,kind,value,price_id,effective_from,effective_to,note,clause,status,origin,created_by,created_at,decided_by,decided_at,prepared_by_id) VALUES(?,?,'discount_percent',?,?,?,?,'Accepted win-back',?,'approved','native','customer:winback-offer',?,?,?,?)",amendment,sub.id,String(terms.percent),null,from,to,`Policy ${offer.policy_id}`,now(),`policy:${offer.policy_id}`,author.decided_at,author.prepared_by_id),...retentionScopeStatements(env,amendment,sub.id,duration.priceId))
+  }
   statements.push(stmt(env,"UPDATE nc_retention_offers SET status='accepted',decided_at=?,token_hash=NULL,terms_json=? WHERE id=?",now(),JSON.stringify({...terms,from,to,preview}),offer.id))
   await commit(env,statements,{actor:'customer:winback-offer',action:'retention.winback.accept',subject:offer.id,detail:{subscription:sub.id,policy:offer.policy_id,from,to,reactivationDate:day}})
   return {from,to,day,percent:terms.percent}

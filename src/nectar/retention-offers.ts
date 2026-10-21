@@ -7,6 +7,7 @@ import { addDays, localDate } from './dates'
 import { clockInstant } from './clock'
 import { retentionPolicy, retentionPolicyHistory } from './retention-policy'
 import { retentionTerms } from './retention-terms'
+import { retentionScopeStatements } from './retention-amendments'
 import { retentionIssuedCondition } from './retention-interval'
 export async function prepareSaveOffer(env:Bindings,term:Row) {
   const policy=await retentionPolicy(env);if(!policy.enabled||!policy.id||!term.auto_renew||term.cancelled_at)return
@@ -31,7 +32,10 @@ export async function acceptSave(env:Bindings,term:Row,offerId:string,reason:str
   const author=(await one(env,'SELECT * FROM nc_retention_policies WHERE id=?',offer.policy_id))!,statements=[
     guard(env,'offer_stale',"(SELECT COALESCE(MAX(seq),0) FROM nc_audit)=? AND (SELECT id FROM nc_retention_policies WHERE status='approved' ORDER BY decided_at DESC,id DESC LIMIT 1)=?",sequence,offer.policy_id),
     guard(env,'offer_stale',"EXISTS(SELECT 1 FROM nc_retention_offers WHERE id=? AND status='offered') AND EXISTS(SELECT 1 FROM nc_subscriptions WHERE id=? AND revision=?) AND EXISTS(SELECT 1 FROM nc_renewal_terms WHERE id=? AND revision=? AND token_hash=? AND cancelled_at IS NULL AND status='active')",offer.id,term.subscription_id,terms.sourceRevision,term.id,term.revision,term.token_hash),guard(env,'period_already_invoiced',issued.sql,...(issued.scoped?[term.subscription_id,terms.priceId,terms.from]:[term.subscription_id,terms.from]))]
-  if(terms.kind==='discount'&&terms.percent>0)statements.push(stmt(env,"INSERT INTO nc_amendments(id,subscription_id,kind,value,price_id,effective_from,effective_to,note,clause,status,origin,created_by,created_at,decided_by,decided_at,prepared_by_id) VALUES(?,?,'discount_percent',?,?,?,?,'Accepted retention save',?,'approved','native','customer:save-offer',?,?,?,?)",newId(),term.subscription_id,String(terms.percent),terms.priceId??null,terms.from,terms.to,`Policy ${offer.policy_id}`,now(),`policy:${offer.policy_id}`,author.decided_at,author.prepared_by_id))
+  if(terms.kind==='discount'&&terms.percent>0) {
+    const amendment=newId()
+    statements.push(stmt(env,"INSERT INTO nc_amendments(id,subscription_id,kind,value,price_id,effective_from,effective_to,note,clause,status,origin,created_by,created_at,decided_by,decided_at,prepared_by_id) VALUES(?,?,'discount_percent',?,?,?,?,'Accepted retention save',?,'approved','native','customer:save-offer',?,?,?,?)",amendment,term.subscription_id,String(terms.percent),null,terms.from,terms.to,`Policy ${offer.policy_id}`,now(),`policy:${offer.policy_id}`,author.decided_at,author.prepared_by_id),...retentionScopeStatements(env,amendment,term.subscription_id,terms.priceId??null))
+  }
   if(terms.kind==='pause') {
     const intervals=lifecycleIntervals(await lifecycleHistory(env,term.subscription_id))
     insist(!intervals.some(i=>i.from<terms.to&&(i.to??'9999')>terms.from),'lifecycle_overlap',409)

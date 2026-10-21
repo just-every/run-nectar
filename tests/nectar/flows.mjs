@@ -68,6 +68,7 @@ await runIsolated('pricing-simulation','pricingSimulation')
 await runIsolated('lifecycle','lifecycleFlow')
 await runIsolated('price-migrations','priceMigrations')
 await runIsolated('commitments','commitments')
+await runIsolated('commitments','intervalCommitmentsFlow')
 await runIsolated('metrics','metricsFlow')
 await runIsolated('metric-zones','metricZones')
 await runIsolated('usage-replay','usageReplayFlow')
@@ -428,8 +429,8 @@ try {
       assert.ok([200, 400, 403, 404].includes(accountant.status), `${path}: ${accountant.status}`)
       if (['members', 'credentials', 'imports','billing-entities'].includes(path)) assert.equal(accountant.status, 403, path)
     }
-    for (const [pattern] of PAGE_DOORS) {
-      const path = pattern.replace(/^\^|\$$/g, '').replace(/\(\[[^)]*\]\+\)/g, 'none').replace(/\\\./g, '.')
+    for (const [pattern,name] of PAGE_DOORS) {
+      const path = name==='importOriginals'?'/app/import/none/originals/'+'0'.repeat(64):pattern.replace(/^\^|\$$/g, '').replace(/\(\[[^)]*\]\+\)/g, 'none').replace(/\\\./g, '.')
       const response = await h.raw(path)
       assert.equal(response.status, 303, path)
       assert.match(response.headers.get('location'), /\/signin/)
