@@ -469,7 +469,7 @@
       "executable": false
     },
     "public/nectar.css": {
-      "sha256": "5fa79630a979d055fdbc8d53204383b8dc1e89dba0ad6036225607c979a2277a",
+      "sha256": "47922ac5fae1c85fa6c2a803f61e04e4cdc4a9a90b34411bc11a88001168901e",
       "executable": false
     },
     "public/rer-theme.css": {
@@ -2901,7 +2901,7 @@
       "executable": false
     },
     "src/nectar/setup-source.ts": {
-      "sha256": "b9cb3d59ef4daa8017c46e3785ec6b055b7528b959576bdcdc6aac75846caa63",
+      "sha256": "d0c15e9a8625259af6b04ef7013b6038c6b56dfaffef4972a1e46716b2ed0c9d",
       "executable": false
     },
     "src/nectar/subscriptions.ts": {
@@ -2965,7 +2965,7 @@
       "executable": false
     },
     "src/nectar/ui/invoice-content.ts": {
-      "sha256": "0c2e9faf46b032b4dbd19f4da29e87c0f0b2964d2d20a833c350cdb78c818c5a",
+      "sha256": "1f9d3a94518112d887a1c2525cbd6c4710806672e239f95011e5106566c5674d",
       "executable": false
     },
     "src/nectar/ui/lifecycle.ts": {
@@ -3353,7 +3353,7 @@
       "executable": false
     },
     "tests/nectar/erasure.mjs": {
-      "sha256": "7045a3d9499c99ff48a6900c34f1f8399a1e29cc64439c2c9d953fa3aa05ec63",
+      "sha256": "4c8ebd7aff22c2281f907d21ea04ef8962e9f9d1748049438940012df26dfa4d",
       "executable": false
     },
     "tests/nectar/financial-reports.mjs": {

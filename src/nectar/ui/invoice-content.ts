@@ -5,7 +5,7 @@ import { area, check, field, h, hidden, select } from './html'
 
 export function invoiceFieldsForm(fields: Record<string, string>) {
   const entries = Object.entries(fields)
-  return h`<fieldset><legend>Printed invoice fields</legend><p class="hint">Use a name and value, such as Vendor ID and V-104. Clear both to remove a field. Up to twenty fields; saving adds two blank rows.</p>
+  return h`<fieldset class="invoice-fields"><legend>Invoice fields</legend><p class="hint">Use a name and value, such as Vendor ID and V-104. Clear both to remove a field. Up to twenty fields; saving adds two blank rows.</p>
     ${[...entries, ...Array.from({ length: Math.min(2, 20 - entries.length) }, () => ['', ''])].map(([name,value],i) => h`<div class="pair">${field(`Field ${i+1} name`, 'invoice_field_name', { value: name, required: false })}${field(`Field ${i+1} value`, 'invoice_field_value', { value, required: false })}</div>`)}</fieldset>`
 }
 export function customerInvoiceForm(customer: Row) {

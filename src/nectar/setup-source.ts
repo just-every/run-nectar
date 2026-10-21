@@ -51,7 +51,7 @@ export function setupAmbiguities(payload: Row, source: Row, paymentTerms: number
   if (/\b(purchase order|PO number|P\.O\.)\b/i.test(source.text) && (!payload.invoice || payload.invoice.poRequired !== true || !payload.invoice.poNumber)) ambiguities.push({ issue: 'Purchase-order custody and invoice requirements need an explicit supported resolution.' })
   for (const [pattern, issue] of patterns) if (pattern.test(source.text)) ambiguities.push({ issue })
   if (!supportedRenewal && /\bauto[- ]renew(?:al|ing|s)?\b/i.test(source.text) && /\b(annual|yearly|(?:twelve|12)[- ]month)\s+(term|contract|renewal)\b/i.test(source.text)) ambiguities.push({ issue: 'Annual auto-renewing contract terms need an explicit supported resolution; a finite initial term does not establish the renewal end date.' })
-  if (/\b(due|payable) (on|upon) receipt\b/i.test(source.text) && paymentTerms !== 0) ambiguities.push({ issue: 'Order requires payment on receipt, different from business default terms.' })
-  for (const match of source.text.matchAll(/\bnet\s+(\d{1,3})\b/gi)) if (Number(match[1]) !== paymentTerms) ambiguities.push({ issue: `Order payment terms ${match[0]} differ from business default Net ${paymentTerms}.` })
+  if (/\b(due|payable) (on|upon) receipt\b/i.test(source.text) && paymentTerms !== 0) ambiguities.push({ issue: 'Order requires payment on receipt, different from the selected invoice terms.' })
+  for (const match of source.text.matchAll(/\bnet\s+(\d{1,3})\b/gi)) if (Number(match[1]) !== paymentTerms) ambiguities.push({ issue: `Order payment terms ${match[0]} differ from selected invoice terms Net ${paymentTerms}.` })
   return ambiguities
 }

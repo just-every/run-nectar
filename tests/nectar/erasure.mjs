@@ -15,6 +15,7 @@ export async function erasureFlow(h, owner, onState = async () => {}) {
   const agent = { bearer: (await h.api('credential.issue', owner, { name: 'Erasure preparation reader', scopes: ['prepare'] })).key }
   const makeCustomer = async (suffix, language = 'en') => (await h.api('customer.create', owner, {
     external_id: `GOV005-${suffix}`, name: `Marigold ${suffix} Legal LLC`, billing_email: `${suffix.toLowerCase()}@gov005.example`, address: `Private address ${suffix}`, language,
+    ...(suffix === 'FORMER' ? { invoice_settings: { poNumber: 'private-po-INV004', memo: 'private-memo-INV004', customFields: { 'Cost center': 'private-costcenter-INV004' } } } : {}),
   })).id
   const customer = await makeCustomer('FORMER')
   const unrelated = await makeCustomer('OTHER')
@@ -35,7 +36,7 @@ export async function erasureFlow(h, owner, onState = async () => {}) {
   await h.api('invoice.approve',owner,{invoice:peerInvoice,acknowledge:true})
   await h.api('invoice.finalise',owner,{invoice:peerInvoice,issue_date:'2026-01-05'})
   const rich=await populateErasureKinds(h,owner,customer)
-  privateValues.push(...rich.privateValues)
+  privateValues.push(...rich.privateValues, 'private-po-INV004', 'private-memo-INV004', 'private-costcenter-INV004')
   const unrelatedBefore=await h.api(`customers/${unrelated}`,owner)
   const frozenBefore=await h.api(`report-deliveries/${rich.report}`,owner)
   const originalInvoice = await h.api(`invoices/${invoice}`, owner)
@@ -87,6 +88,7 @@ export async function erasureFlow(h, owner, onState = async () => {}) {
   const approved=await decisions.find(r=>r.status===200).json()
   await h.api('erasure.approve', owner, { request: request.id, confirm: true }, 409)
   assert.ok(approved.receipt.changed.some(row => row.kind === 'nc_customers' && row.fields.includes('billing_email') && row.records === 1))
+  assert.ok(approved.receipt.changed.some(row => row.kind === 'nc_customers' && row.fields.includes('invoice_settings_json')), 'INV-004 GOV-005 erases PO, memo and customer fields as well as saved invoice inputs')
   for (const kind of ['nc_contacts', 'nc_notes', 'nc_metadata_revisions', 'nc_payments', 'nc_invoice_lines']) assert.ok(approved.receipt.changed.some(row => row.kind === kind && row.records > 0), `GOV-005 receipt enumerates changed ${kind}`)
   for(const kind of rich.receiptKinds) assert.ok(approved.receipt.changed.some(row=>row.kind===kind),`GOV-005 populated ${kind} is on receipt`)
   assert.ok(approved.receipt.importCustody.receiptId,'GOV-005 native and source-custody receipts are bound atomically')
