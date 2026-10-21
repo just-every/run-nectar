@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { applyPolicy } from './policy-helper.mjs'
+import { publishPrice } from './price-helper.mjs'
 
 // ENT-002: real subscriptions, usage, issued invoices and manual allocations,
 // driven only through the built Worker's ordinary HTTP doors.
@@ -166,7 +167,7 @@ async function intervalQuotas(h, owner, meter) {
     const code = `synthetic-nectar-${number}`
     const product = (await api('product.create', { code, name: `Synthetic interval quota ${number}` })).id
     const prices = []
-    for (const [index, interval] of intervals.entries()) prices.push((await api('price.create', {
+    for (const [index, interval] of intervals.entries()) prices.push((await publishPrice(h, owner, {
       product, kind: metered && index === 0 ? 'unit' : 'flat',
       ...(metered && index === 0 ? { meter: meter.id } : {}),
       unit_amount: interval === 'weekly' ? '3' : metered && index === 0 ? '2' : '1',

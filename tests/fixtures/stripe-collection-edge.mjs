@@ -15,7 +15,6 @@ export function stripeCollectionEdge() {
   const response=value=>Response.json(value),list=data=>({object:'list',has_more:false,data})
   const fetch=async request=>{
     const url=new URL(request.url),path=url.pathname.slice(3),body=request.method==='POST'?new URLSearchParams(await request.text()):null
-    console.log('STRIPE FIXTURE',request.method,path)
     calls.push({method:request.method,path,query:url.searchParams,body,key:request.headers.get('Idempotency-Key')})
     assert.ok(request.headers.get('authorization'),'provider authorization is bound')
     if(path==='/account')return response({object:'account',id:'synthetic-nectar-account'})

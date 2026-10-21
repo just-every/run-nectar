@@ -4,7 +4,7 @@ import { collectionCapture,stripeCollectionEdge } from '../fixtures/stripe-colle
 const edge=stripeCollectionEdge()
 export const harnessOptions=()=>({stripeFetch:edge.fetch,stripeSecret:'synthetic-nectar-1'})
 export async function moveCollectionFlow(h,owner,{onState=async()=>{},prepare,execute,finalize}={}) {
-  const api=(path,body,status)=>{console.log('MOVE collection door',path.split('?')[0]);return h.api(path,owner,body,status)}
+  const api=(path,body,status)=>h.api(path,owner,body,status)
   await h.advanceClock('2026-07-01T16:00:00Z')
   const capture=collectionCapture(),files=Object.fromEntries(Object.entries(capture).map(([name,value])=>[name,file(`${name}.json`,JSON.stringify(value),'application/json')]))
   const preview=await api('import.preview',files)

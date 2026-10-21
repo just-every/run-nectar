@@ -16,7 +16,7 @@ export function collectionStripe(env: Bindings) {
     let response: Response
     try {
       response = await fetch(`https://api.stripe.com/v1${path}`, {
-        method: body ? 'POST' : 'GET', redirect: 'error', signal: AbortSignal.timeout(20000),
+        method: body ? 'POST' : 'GET', redirect: 'manual', signal: AbortSignal.timeout(20000),
         headers: { authorization: `Bearer ${secret}`, 'Stripe-Version': COLLECTION_STRIPE_VERSION,
           ...(body ? { 'content-type': 'application/x-www-form-urlencoded' } : {}), ...(key ? { 'Idempotency-Key': key } : {}) },
         ...(body ? { body } : {}),

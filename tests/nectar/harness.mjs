@@ -31,7 +31,7 @@ export async function harness({ assets = false, localTime, hostname = '127.0.0.1
   const chunks = (await readdir('dist/server', { recursive: true })).filter(path => path.endsWith('.js') && path !== 'index.js')
   const mails = [], mailResponses = []
   const outboundService = async request => {
-    if (new URL(request.url).hostname==='api.stripe.com'&&stripeFetch){console.log('STRIPE EDGE',request.method,new URL(request.url).origin,new URL(request.url).pathname);return stripeFetch(request)}
+    if (new URL(request.url).hostname==='api.stripe.com'&&stripeFetch)return stripeFetch(request)
     if (request.url !== 'https://api.resend.com/emails') return new Response('Unexpected outbound request', { status: 599 })
     const message=await request.json();mails.push(message)
     const index=mailResponses.findIndex(response=>!response.to||[message.to].flat().includes(response.to))

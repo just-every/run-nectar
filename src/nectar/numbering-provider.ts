@@ -12,7 +12,7 @@ export function numberingStripe(env: Bindings) {
     let response: Response
     try { response = await fetch(`https://api.stripe.com/v1${path}`, {
       headers: { authorization: `Bearer ${secret}`, 'Stripe-Version': NUMBERING_STRIPE_VERSION },
-      redirect: 'error', signal: AbortSignal.timeout(20000),
+      redirect: 'manual', signal: AbortSignal.timeout(20000),
     }) } catch { throw new NectarError('stripe_numbering_provider_unavailable', 502) }
     if (!response.ok) { await response.body?.cancel(); throw new NectarError('stripe_numbering_provider_refused', 502) }
     let value: unknown
