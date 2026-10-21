@@ -235,6 +235,13 @@ async function mixedIntervalReplay(h, owner, finance) {
       originals.push(await api(`invoices/${invoice.id}`))
     }
   }
+  // Record the actual approved automatic renewal before scheduling the next
+  // one. Issuing historical invoices alone does not advance signed term state.
+  const renewalTick = await h.raw(`/cdn-cgi/local/scheduled?time=${Date.parse('2021-01-01T16:00:00Z')}&cron=${encodeURIComponent('0 14 * * *')}`)
+  assert.equal(renewalTick.status, 200)
+  const renewed = await api(`subscriptions/${subscription}`)
+  assert.equal(renewed.end_date, '2022-01-01')
+  assert.ok(renewed.renewal.events.some(event => event.kind === 'renew' && event.effective_date === '2021-01-01' && event.end_date === '2022-01-01'), 'AGENT-004 the future migration uses the recorded approved renewal boundary')
   // Jan2021 also contains the next annual advance; replay the complete first
   // signed term only, including all twelve independent monthly invoices.
   const firstTerm = originals.filter(invoice => invoice.period_start < '2021-01-01')
@@ -242,6 +249,7 @@ async function mixedIntervalReplay(h, owner, finance) {
   const created = await api('proposal.create', { kind: 'price_change', title: 'Complete mixed service term', payload: { simulation: true, start_month: '2020-01', effective_date: '2022-01-01', source_price: source, target_price: target, subscriptions: [subscription], cost_cents: 500 } })
   const view = await api(`proposals/${created.id}`), history = view.impact[0].historical
   assert.equal(history.periods.length, 13)
+  assert.equal(view.impact[0].effective_date, '2022-01-01')
   assert.deepEqual([history.totals.beforeSubtotalCents, history.totals.afterSubtotalCents, history.totals.deltaSubtotalCents], [112000, 132000, 20000])
   assert.equal(history.periods.filter(period => period.deltaSubtotalCents === 20000).length, 1)
   assert.equal(history.periods.filter(period => period.deltaSubtotalCents === 0).length, 12)
