@@ -76,7 +76,7 @@ try {
   else if(kind==='intervals') {
     await intervalsFlow(h,owner,{onState:async(label,subscription,invoice)=>{
       const detail=await h.api(`subscriptions/${subscription}`,owner),source=await h.api(`invoices/${invoice}`,owner)
-      const suffix=label==='annual-issued'?'annual':`${source.calculation.inputs.billing.terms.unit}-${source.calculation.inputs.billing.terms.count}`
+      const suffix=label==='cadence-issued'?`${source.calculation.inputs.billing.terms.unit}-${source.calculation.inputs.billing.terms.count}`:label.replace('-issued','')
       await both(`intervals-${suffix}-subscription`,`/app/subscriptions/${subscription}?preview_period=${source.issue_date.slice(0,7)}#upcoming`)
       await both(`intervals-${suffix}-invoice`,`/app/invoices/${invoice}`)
       if(label==='annual-issued') {

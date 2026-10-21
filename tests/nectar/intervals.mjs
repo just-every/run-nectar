@@ -95,11 +95,13 @@ export async function intervalsFlow(h, owner, { onState = async () => {} } = {})
   assert.equal(mrrSource.components.reduce((sum,row)=>sum+row.amountCents,0),100000)
   assert.equal(mrr.series.find(row=>row.period==='2026-01').amountCents,100200)
   await onState('annual-issued', subscription, platformInvoices[0].id)
+  await onState('anniversary-issued', subscription, platformInvoices[1].id)
+  await onState('coterm-issued', subscription, issued.find(invoice => invoice.issue_date === '2026-07-01').id)
   await intervalCadencesFlow(h, owner, { price, api, onState })
-  await mixedMonthlyInvoiceFlow(h, owner, { price, api })
+  await mixedMonthlyInvoiceFlow(h, owner, { price, api, onState })
 }
 
-async function mixedMonthlyInvoiceFlow(h, owner, { price, api }) {
+async function mixedMonthlyInvoiceFlow(h, owner, { price, api, onState }) {
   const previous=await api('business')
   await applyPolicy(h,owner,'tax.declare',{tax_jurisdiction:'CA',tax_mode:'flat_rate',tax_rate:'10',tax_note:'Same-due-date invoice composition'})
   await api('tax.review',{revision:(await api('business')).revision})
@@ -131,6 +133,7 @@ async function mixedMonthlyInvoiceFlow(h, owner, { price, api }) {
   await api('invoice.finalise',{invoice:invoice.id,issue_date:'2034-10-01'})
   const issued=await api(`invoices/${invoice.id}`)
   assert.deepEqual(issued.lines,invoice.lines,'Issue retains each exact service line and its source calendar')
+  await onState('mixed-issued', subscription, issued.id)
   const repeat=await api('billrun.prepare',{period:'2034-10'})
   assert.equal((await api(`runs/${repeat.id}`)).invoices.filter(row=>row.customer_id===customer).length,0,'Both service windows are claimed together and cannot issue again')
   await applyPolicy(h,owner,'tax.declare',{tax_jurisdiction:previous.tax_jurisdiction,tax_mode:previous.tax_mode,tax_rate:previous.tax_rate,tax_note:previous.tax_note})

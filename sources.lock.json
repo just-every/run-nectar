@@ -69,7 +69,7 @@
       "executable": false
     },
     "API.md": {
-      "sha256": "be136401bddf97cc0af8e07aec9dd4a10ec5e8ef8744285d36b553ffe9cd76cb",
+      "sha256": "f89cce0d1390938b40c216179f4240744691309cc923be01c4efe6080d4acdfd",
       "executable": false
     },
     "base-copies.json": {
@@ -3565,7 +3565,7 @@
       "executable": false
     },
     "tests/nectar/clause-browser.mjs": {
-      "sha256": "949e34d19f754c6ff2e5246cd4b8c1018314d08e0517997722f9e0ce9d2ff16c",
+      "sha256": "11c55062ec7c735782610ea76bf5b04f2bd11638a10e7ec9ba1c48e000517104",
       "executable": false
     },
     "tests/nectar/clause-runner.mjs": {
@@ -3645,7 +3645,7 @@
       "executable": false
     },
     "tests/nectar/intervals.mjs": {
-      "sha256": "5219091e7ea80608653a19081d3476b67c01e285ff8e5a6b37618eb22c4c17b6",
+      "sha256": "262f5c0a8442cf7e28ae9cb3f90e29c26d6b0cb71a94aec52a6a3a71a4be614f",
       "executable": false
     },
     "tests/nectar/invoice-content.mjs": {
