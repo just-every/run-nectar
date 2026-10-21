@@ -14,6 +14,7 @@ import { payments } from '../receivables'
 import { cents, check, details, field, form, h, marker, hidden, page, select, table, tag, who, type Html } from './html'
 import { personName } from './shell'
 import { linePricing } from './pricing'
+import { parseJson, type Row } from '../core'
 
 const monthName = (period: string) => new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', month: 'long', year: 'numeric' }).format(new Date(`${period}-01T00:00:00Z`))
 const statusLabel = (status: string, exceptions = 0) => status === 'draft' && exceptions ? 'Needs review' : ({ draft: 'Draft', approved: 'Approved', issued: 'Issued', shadow: 'Shadow', discarded: 'Discarded', finalised: 'Finalized' } as Record<string, string>)[status] ?? status
@@ -72,6 +73,7 @@ export async function invoicePage(env: Bindings, actor: Actor, id: string, url: 
   const pays = i.status === 'issued' && can(actor, 'receivables') && canRead(actor, 'payments') ? (await payments(env, actor, i.customer_id)).filter((p: any) => p.unallocated_cents > 0) : []
   const title = i.number ? `Invoice ${i.number}` : i.status === 'shadow' ? 'Shadow draft' : 'Draft invoice'
   const incumbent = i.comparison.incumbent
+  const entity = i.status === 'issued' ? parseJson<Row>(i.billing_route_json, {}) : i.calculation.inputs?.invoiceContent?.billingEntity?.route
   return page(title, actor, h`<p class="crumbs">${can(actor, 'read') ? h`<a href="/app/billing/${i.bill_run_id}">Bill run</a> · ` : ''}<a href="/app/customers/${i.customer_id}">${i.customer_name}</a></p>
     <div class="title-row"><h1>${title}</h1>${tag(statusLabel(i.status, i.status === 'draft' ? i.exceptions.length : 0))}</div><p>${metadataLink('invoice',i.id)}</p>
     ${i.status === 'issued' ? h`<p>${[canRead(actor, 'customers') ? h`<a href="/app/answers?customer=${i.customer_id}&invoice=${i.id}">Ask about this invoice</a>` : null,
@@ -81,6 +83,7 @@ export async function invoicePage(env: Bindings, actor: Actor, id: string, url: 
     <section class="card summary"><dl class="figures"><div><dt>Customer</dt><dd>${i.customer_name}<span class="sub">${i.external_id}</span></dd></div><div><dt>Period</dt><dd>${formatPeriod(i.period_start, i.period_end)}</dd></div>
       ${i.issue_date ? h`<div><dt>Issued</dt><dd>${formatDate(i.issue_date)}</dd></div><div><dt>Due</dt><dd>${formatDate(i.due_date)}</dd></div>` : ''}
       <div><dt>Total</dt><dd class="money">${cents(i.total_cents)}</dd></div>${i.status === 'issued' ? h`<div><dt>Owed</dt><dd class="money">${cents(i.balanceCents)}</dd></div>` : ''}</dl></section>
+    ${entity?.entityId ? h`<section class="card" aria-labelledby="billing-entity"><h2 id="billing-entity">Billing entity</h2>${table(['Field', 'Value'], [['Legal name', entity.legalName], ['Address', entity.address], ['EIN', entity.ein]])}</section>` : ''}
     ${i.exceptions.length ? h`<section class="card exceptions" aria-labelledby="exc"><div class="card-head"><h2 id="exc">Exceptions</h2><span class="count">${i.exceptions.length} item${i.exceptions.length === 1 ? '' : 's'}</span></div><ul>${i.exceptions.map((e: any) => h`<li class="exception">${marker('alert')}<strong>${EXCEPTION_TITLES[e.code] ?? e.code}</strong><span>${e.message}</span></li>`)}</ul></section>` : ''}
     <section class="card" aria-labelledby="lines"><h2 id="lines">Charges</h2>${lineTable(i.lines, { start: i.period_start, end: i.period_end }, i.status === 'issued' ? i.id : null)}
       <dl class="totals"><div><dt>Subtotal</dt><dd>${cents(i.subtotal_cents)}</dd></div><div><dt>Tax${i.calculation.tax?.rate ? ` (${i.calculation.tax.rate}%)` : ''}</dt><dd>${cents(i.tax_cents)}</dd></div><div class="grand"><dt>Total</dt><dd>${cents(i.total_cents)}</dd></div></dl>

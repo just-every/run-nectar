@@ -4,6 +4,7 @@ import type { Bindings } from '../auth.server'
 import type { Business } from './business'
 import { insist, one, parseJson, type Row } from './core'
 import { Input } from './input'
+import { billingRoute, requireBillingEntity } from './billing-entities'
 
 export interface InvoiceSettings {
   paymentTermsDays: number | null
@@ -16,6 +17,7 @@ export interface InvoiceContent extends Omit<InvoiceSettings, 'paymentTermsDays'
   paymentTermsDays: number
   businessFields: Record<string, string>
   customerFields: Record<string, string>
+  billingEntity?: { id: string; revision: string; route: ReturnType<typeof billingRoute> }
 }
 export function invoiceFields(value: unknown): Record<string, string> {
   insist(value && typeof value === 'object' && !Array.isArray(value), 'invalid_invoice_fields')
@@ -46,9 +48,14 @@ export function contentForSettings(business: Business, settings: InvoiceSettings
     businessFields, customerFields: settings.customFields, customFields: { ...businessFields, ...settings.customFields } }
 }
 export async function invoiceContent(env: Bindings, business: Business, customer: string): Promise<InvoiceContent> {
-  const row = await one(env, 'SELECT invoice_settings_json FROM nc_customers WHERE id=? AND erased_at IS NULL', customer)
+  const row = await one(env, 'SELECT invoice_settings_json,billing_entity_id FROM nc_customers WHERE id=? AND erased_at IS NULL', customer)
   insist(row, 'customer_not_found', 404)
-  return contentForSettings(business, invoiceSettings(parseJson(row.invoice_settings_json, {})))
+  const settings = invoiceSettings(parseJson(row.invoice_settings_json, {}))
+  const content = contentForSettings(business, settings)
+  if (!row.billing_entity_id) return content
+  const entity = await requireBillingEntity(env, row.billing_entity_id)
+  return { ...content, paymentTermsDays: settings.paymentTermsDays ?? entity.payment_terms_days,
+    billingEntity: { id: entity.id, revision: entity.revision, route: billingRoute(business, entity) } }
 }
 
 /** The same settings accept structured JSON at the API and ordinary form controls. */

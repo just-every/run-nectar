@@ -254,9 +254,14 @@ export async function finalise(env: Bindings, actor: Actor, input: Input) {
     const allocation = await invoiceNumberAllocation(env, business, customer)
     const { number } = allocation
     const content = calculation.inputs?.invoiceContent
+    const approvedEntity = content?.billingEntity
+    if ((approvedEntity?.id ?? null) !== allocation.entityId || approvedEntity && canonical(approvedEntity.route) !== canonical(parseJson(allocation.routeJson, {}))) {
+      refused.push({ invoice: invoice.id, reason: 'source_changed' }); continue
+    }
     insist(!content?.poRequired || content.poNumber, 'po_required', 409)
     const due = addDays(issueDate, content?.paymentTermsDays ?? business.payment_terms_days)
     await commit(env, [
+      ...(approvedEntity ? [guard(env, 'source_changed', 'EXISTS(SELECT 1 FROM nc_billing_entities WHERE id=? AND revision=?)', approvedEntity.id, approvedEntity.revision)] : []),
       ...allocation.statements,
       guard(env, 'source_changed', 'EXISTS(SELECT 1 FROM nc_customers WHERE id=? AND revision=? AND invoice_settings_json=?)', invoice.customer_id, customer.revision, customer.invoice_settings_json),
       guard(env, 'stale', "EXISTS(SELECT 1 FROM nc_invoices WHERE id = ? AND status = 'approved' AND approved_fingerprint = ?)", invoice.id, invoice.approved_fingerprint),
