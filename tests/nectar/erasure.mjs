@@ -2,6 +2,82 @@ import { populateErasureKinds } from './erasure-record-kinds.mjs'
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { file } from './harness.mjs'
+import { csvRows } from './financial-reports.mjs'
+
+// A real customer graph large enough to exceed the former per-row erasure batch.
+// Run outside push Verify through the ordinary isolated Worker harness.
+export async function erasureScaleFlow(h, owner) {
+  await h.advanceClock('2026-02-01T16:00:00Z')
+  const api = (path, body) => h.api(path, owner, body)
+  const external = 'synthetic-nectar-erasure-scale-1', peerExternal = 'synthetic-nectar-erasure-scale-2'
+  const email = 'scale-private@gov005.example', person = 'Synthetic scale private person'
+  const customer = (await api('customer.create', { external_id: external, name: person, billing_email: email, address: 'Private scale address' })).id
+  const peer = (await api('customer.create', { external_id: peerExternal, name: 'Synthetic scale peer', billing_email: 'scale-peer@gov005.example' })).id
+  const meterCode = 'synthetic-nectar-erasure-scale-events'
+  await api('meter.create', { code: meterCode, name: 'Synthetic scale events', unit_label: 'events' })
+  const base = { meter: meterCode, quantity: '1.25', occurred_at: '2026-01-15T12:00:00-08:00' }
+  await api('usage.submit', { events: [{ ...base, event_id: 'synthetic-nectar-erasure-peer-1', customer: peerExternal, properties: { person: 'Peer personal property' } }] })
+  const batches = []
+  for (let start = 0; start < 10000; start += 5000) {
+    const result = await api('usage.submit', { events: Array.from({ length: 5000 }, (_, offset) => ({
+      ...base, event_id: `synthetic-nectar-erasure-scale-${start + offset}`, customer: external,
+      properties: { person, email, account: external, private: `Private event ${start + offset}` },
+    })) })
+    assert.deepEqual([result.accepted, result.duplicates, result.rejected], [5000, 0, 0])
+    batches.push(result.batch)
+  }
+  const charge = (await api('charge.add', { customer, amount: '120', description: 'Private scale service', taxable: false, effective_date: '2026-01-05' })).charge
+  const invoice = (await api('invoice.manual', { customer, charges: [charge], service_date: '2026-01-05' })).id
+  await api('invoice.approve', { invoice, acknowledge: true })
+  await api('invoice.finalise', { invoice, issue_date: '2026-01-05' })
+  const payment = (await api('payment.record', { customer, amount: '120', received_on: '2026-01-20', method: 'bank_transfer', reference: 'Private scale receipt', evidence: email })).payment
+  await api('payment.allocate', { payment, invoice, amount: '120' })
+  const originalInvoice = await api(`invoices/${invoice}`), originalCustomer = await api(`customers/${customer}`), peerBefore = await api(`customers/${peer}`)
+  const usageRows = async () => {
+    const response = await h.raw('/app/exports/usage.csv', { cookie: owner })
+    assert.equal(response.status, 200)
+    const [header, ...rows] = csvRows(await response.text())
+    return rows.map(row => Object.fromEntries(header.map((key, index) => [key, row[index]])))
+  }
+  const before = await usageRows(), peerUsage = before.filter(row => row.customer_external_id === peerExternal)
+  assert.equal(before.filter(row => row.customer_external_id === external).length, 10000)
+  const mailStart = h.mails.length
+  const request = await api('erasure.request', { customer })
+  const mail = h.mails.slice(mailStart).find(item => [item.to].flat().includes(email))
+  assert.ok(mail, 'scale verification uses the billing mailbox on file')
+  const path = new URL(`${mail.text ?? ''} ${mail.html ?? ''}`.match(/https?:\/\/[^\s"<]+\/erase\/[a-f0-9]{64}/)[0]).pathname
+  assert.equal((await h.raw(path, { form: new URLSearchParams({ confirm: 'yes' }) })).status, 200)
+  assert.deepEqual(await api(`customers/${customer}`), originalCustomer, 'verified scale requests erase nothing before approval')
+  await h.api('erasure.approve', owner, { request: request.id }, 400)
+  const approved = await api('erasure.approve', { request: request.id, confirm: true })
+  const changed = approved.receipt.changed.find(row => row.kind === 'nc_usage_events')
+  assert.equal(changed.records, 10000, 'the receipt accounts for every customer usage row')
+  assert.ok(changed.fields.includes('properties_json') && changed.fields.includes('event_id'))
+  assert.equal(approved.receipt.verification.method, 'billing-email')
+  assert.ok(approved.receipt.importCustody.receiptId)
+  assert.equal(approved.receipt.retained.until, '2033-01-20')
+  const after = await usageRows(), erased = after.filter(row => row.customer_external_id === `erased-${customer}`)
+  assert.equal(erased.length, 10000, 'the public CSV enumerates every anonymized usage row')
+  assert.equal(new Set(erased.map(row => row.event_id)).size, 10000)
+  for (const row of erased) {
+    assert.match(row.event_id, /^erased-/)
+    assert.deepEqual(JSON.parse(row.properties_json), {})
+    assert.equal(row.quantity, '1.25')
+    assert.equal(row.occurred_at, base.occurred_at)
+    assert.ok(!JSON.stringify(row).includes('Private event '))
+  }
+  assert.deepEqual(after.filter(row => row.customer_external_id === peerExternal), peerUsage, 'peer usage remains byte-for-byte unchanged')
+  assert.deepEqual(await api(`customers/${peer}`), peerBefore)
+  const apiBatches = await api('usage/batches')
+  assert.deepEqual(apiBatches.filter(row => batches.includes(row.id)).map(row => row.accepted).sort(), [5000, 5000])
+  for (const projection of [await api(`customers/${customer}`), apiBatches, await api('audit')]) {
+    for (const value of [email, external, person, 'Private event ']) assert.ok(!JSON.stringify(projection).includes(value), 'ordinary API projections retain no scale customer identity')
+  }
+  const retained = await api(`invoices/${invoice}`)
+  for (const key of ['number', 'issue_date', 'subtotal_cents', 'tax_cents', 'total_cents', 'paidCents', 'balanceCents']) assert.equal(retained[key], originalInvoice[key])
+  assert.equal(retained.retainedFinancial.legal_name, person)
+  console.log('GOV-005 10,000-event atomic erasure, exact retention and unchanged peer passed')
+}
 
 // GOV-005: real request, verification, approval and financial-removal doors.
 export async function erasureFlow(h, owner, onState = async () => {}) {
