@@ -144,8 +144,8 @@ export async function revenueCsv(env: Bindings, actor: Actor, url: URL) {
   requireCapability(actor, 'export')
   requireRead(actor, 'reports')
   const report = await revenueReport(env, actor, url)
-  const rows: unknown[][] = [['row_kind', 'period', 'invoice', 'customer', 'line_id', 'credit_id', 'policy', 'custody', 'opening', 'net_billings', 'recognized', 'closing', 'accrued_contract_assets', 'deferred_liabilities', 'signed_contribution', 'source_path']]
-  for (const month of report.months) rows.push(['rollforward', month.period, '', '', '', '', REVENUE_POLICY_VERSION, '', ...[month.openingCents, month.netBillingsCents, month.recognizedCents, month.closingCents, month.accruedContractAssetCents, month.deferredLiabilityCents].map(plainMoney), '', ''])
-  for (const row of report.contributions) rows.push([row.kind, row.period, row.number, row.customerName, row.lineId, row.creditId, row.policy, row.custody, '', '', '', '', '', '', plainMoney(row.amountCents), row.href])
+  const rows: unknown[][] = [['row_kind', 'period', 'invoice', 'customer', 'line_id', 'credit_id', 'policy', 'custody', 'opening', 'net_billings', 'recognized', 'closing', 'accrued_contract_assets', 'deferred_liabilities', 'signed_contribution', 'source_path','source_provider','source_reference']]
+  for (const month of report.months) rows.push(['rollforward', month.period, '', '', '', '', REVENUE_POLICY_VERSION, '', ...[month.openingCents, month.netBillingsCents, month.recognizedCents, month.closingCents, month.accruedContractAssetCents, month.deferredLiabilityCents].map(plainMoney), '', '', '', ''])
+  for (const row of report.contributions) rows.push([row.kind, row.period, row.number, row.customerName, row.lineId, row.creditId, row.policy, row.custody, '', '', '', '', '', '', plainMoney(row.amountCents), row.href,row.source?.provider??'nectar',row.source?.providerRef??row.invoiceId])
   return csvResponse(rows.map(row => row.map(csvCell).join(',')).join('\r\n') + '\r\n', 'nectar-revenue')
 }

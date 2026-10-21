@@ -24,7 +24,7 @@ export async function revenuePage(env: Bindings, actor: Actor, url: URL) {
     </section>
     <section class="card" id="contributions"><h2>Source journal contributions</h2>
       <p>Billing and recognition are separate journal movements. Add billing movements and subtract recognition movements to calculate the change in signed position.</p>
-      ${table(['Month', 'Movement', 'Document', 'Customer', 'Contribution$', 'Schedule custody'], report.contributions.map(row => [row.period, kind(row.kind), h`<a href="${row.href}">${row.number || 'Retained document'}</a>`, h`<a href="/app/customers/${row.customerId}">${row.customerName}</a>`, cents(row.amountCents), custody(row.custody)]), { empty: 'No issued invoice lines or credit notes contribute in these months.' })}
+      ${table(['Month', 'Movement', 'Document', 'Customer', 'Contribution$', 'Schedule custody'], report.contributions.map(row => [row.period, kind(row.kind), h`<a href="${row.href}">${row.source?`${row.source.provider} · `:''}${row.number || 'Retained document'}</a>`, h`<a href="/app/customers/${row.customerId}">${row.customerName}</a>`, cents(row.amountCents), custody(row.custody)]), { empty: 'No issued invoice lines or credit notes contribute in these months.' })}
     </section>`, { url, current: '/app/billing' })
 }
 
