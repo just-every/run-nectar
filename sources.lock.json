@@ -3765,7 +3765,7 @@
       "executable": false
     },
     "tests/nectar/portal-embedding.mjs": {
-      "sha256": "97563fb052e968d9d3880685f0b5c2ba0a249ada17507ddbe9c39286415a0e38",
+      "sha256": "dbdad9242d28a0d11ba7e8740b59caa5260ccb7406ecde5c1758f7dd5b30aaa8",
       "executable": false
     },
     "tests/nectar/portal-journey.mjs": {
