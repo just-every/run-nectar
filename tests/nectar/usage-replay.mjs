@@ -153,6 +153,13 @@ export async function usageDispositionFlow(h,owner,ctx) {
   assert.ok(saved.mail.body.startsWith(negative.plan.message.body),'USE-004 approved wording and exact calculated tax/revenue citations are preserved')
   assert.ok(h.mails.at(-1).text===saved.mail.body,'USE-004 actual network-edge message equals the frozen approved reservation')
   for(const invoice of ctx.issued)assert.deepEqual(issuedEvidence(await read(invoice.id)),issuedEvidence(invoice),'USE-004 all original versions, inputs, tax and issued lines remain immutable')
+  const issueMonth=negative.plan.issueDate.slice(0,7)
+  const taxCredits=await api(`reports/tax?period=${issueMonth}&customer=${ctx.customer}`)
+  assert.equal(taxCredits.totalCents,-358,'USE-004 attributed tax report reverses the exact saved 10% deltas and leaves originals in their original issue months')
+  for(const entry of taxCredits.entries){const detail=await api(entry.href.replace('/app/',''));assert.equal(detail.components.reduce((n,c)=>n+c.amountCents,0),entry.amountCents)}
+  const creditRevenue=await api(`revenue?period=${issueMonth}&customer=${ctx.customer}`)
+  assert.deepEqual([creditRevenue.netBillingsCents,creditRevenue.recognizedCents],[-3581,-3581],'USE-004 tax is excluded from the actual credit contra-revenue journal')
+  await observe('tax-revenue',[`/app/reports/tax?period=${issueMonth}&customer=${ctx.customer}`,`/app/revenue?period=${issueMonth}&customer=${ctx.customer}`,'/app/settings#policy-changes'])
   await decision(negative.id,finance,409)
   await prepare({...ctx.body,add_event_ids:[ctx.late.event_id]},owner,409)
   assert.deepEqual((await api('usage.correction.preview',ctx.body)).delta,{subtotalCents:0,taxCents:0,totalCents:0},'USE-004 cumulative replay starts from the approved effective basis, not the original money again')
@@ -164,6 +171,7 @@ export async function usageDispositionFlow(h,owner,ctx) {
   await applyPolicy(h,owner,'usage.correction.policy',{disposition:'correcting_invoice'})
   const high={...ctx.late,event_id:'synthetic-nectar-late-high',quantity:'40',occurred_at:'2020-01-25T00:00:00Z'}
   await api('usage.submit',{events:[high]})
+  assert.equal((await prepare({...ctx.body,from_period:'2020-02',add_event_ids:[high.event_id]},owner,409)).error,'complete_upstream_replay_required')
   const positive=await prepare({...ctx.body,add_event_ids:[high.event_id]})
   assert.deepEqual(positive.plan.delta,{subtotalCents:9791,taxCents:979,totalCents:10770},'USE-004 maximum/latest/time-weighted second correction bills only the independently calculated cumulative delta')
   const corrected=await decision(positive.id,finance)
@@ -178,6 +186,8 @@ export async function usageDispositionFlow(h,owner,ctx) {
   assert.deepEqual([debit.subtotal_cents,debit.tax_cents,debit.total_cents],[9791,979,10770],'USE-004 correcting invoice issue matches its exact approved preview')
   await api('invoice.finalise',{invoice:debit.id},409)
   const sourceRevenue=await api(`revenue/${debit.id}?from=2020-01&to=2020-02`)
+  assert.deepEqual(sourceRevenue.schedules.flatMap(s=>s.entries).map(e=>[e.period,e.amountCents]),[['2020-01',6291],['2020-02',3500]],'USE-004 actual correcting-invoice recognition matches independently calculated original-service deltas')
+  assert.equal((await api(`reports/tax?period=${issueMonth}&customer=${ctx.customer}`)).totalCents,621,'USE-004 separate debit and credit tax contributions reconcile without changing original tax')
   assert.ok(JSON.stringify(sourceRevenue).includes('historical-usage-replay-delta'),'USE-004 correcting invoice revenue is backed by persisted original-service delta schedules')
   for(const invoice of ctx.issued)assert.deepEqual(issuedEvidence(await read(invoice.id)),issuedEvidence(invoice))
   await observe('metric-approved',[`/app/usage/replay?subscription=${ctx.subscription}&period=2020-01`,`/app/invoices/${debit.id}`,`/app/invoices/${ctx.issued[0].id}`])
@@ -262,6 +272,60 @@ export async function usageDispositionFlow(h,owner,ctx) {
     assert.ok(register.entries.some(e=>e.id===original.credits[0].id&&e.totalCents===10000),'USE-004 numbered note face value is preserved in the unified register')
     outcomes.push({sub,customer,correction:proposal.id,invoice:invoice.id,applications:applied})
   }
+  // Positive next-period corrections use the same saved-basis tax arithmetic
+  // as correcting invoices, rather than billing a fresh aggregate.
+  await applyPolicy(h,owner,'usage.correction.policy',{disposition:'next_invoice'})
+  const next=outcomes[0],lateUnit={event_id:'synthetic-nectar-next-debit',customer:'USE004-FOREIGN',meter:ctx.bulkSource.code,quantity:'1',occurred_at:'2020-07-20T00:00:00Z'}
+  await api('usage.submit',{events:[lateUnit]})
+  assert.ok((await api(`subscriptions/${next.sub}/upcoming?period=2020-11`)).calculation.exceptions.some(e=>e.code==='historical_usage_correction'),'USE-004 a native late event cannot bypass the historical policy')
+  const nextDebit=await prepare({subscription:next.sub,from_period:'2020-07',through_period:'2020-10',void_event_ids:[],add_event_ids:[lateUnit.event_id]})
+  assert.deepEqual(nextDebit.plan.delta,{subtotalCents:1,taxCents:0,totalCents:1})
+  await decision(nextDebit.id,finance)
+  const november=await api(`subscriptions/${next.sub}/upcoming?period=2020-11`)
+  assert.deepEqual([november.calculation.subtotalCents,november.calculation.taxCents,november.calculation.totalCents],[4001,800,4801],'USE-004 historical untaxed one-cent difference is never taxed at the current 20% rate')
+  const nextRun=await api('billrun.prepare',{period:'2020-11'})
+  const nextInvoice=(await api(`runs/${nextRun.id}`)).invoices.find(i=>i.customer_id===next.customer)
+  await api('invoice.approve',{invoice:nextInvoice.id,acknowledge:true})
+  await api('invoice.finalise',{invoice:nextInvoice.id})
+  const nextIssued=await read(nextInvoice.id)
+  assert.deepEqual([nextIssued.subtotal_cents,nextIssued.tax_cents,nextIssued.total_cents],[4001,800,4801])
+  assert.ok(nextIssued.lines.some(l=>l.kind==='usage_correction'&&l.amount_cents===1&&l.evidence.eventIds.includes(lateUnit.event_id)))
+  await observe('next-debit',[`/app/invoices/${nextInvoice.id}`])
+  // A void in an early minimum window must propagate through the later true-up;
+  // selected-period-only replay would incorrectly issue a net credit here.
+  await applyPolicy(h,owner,'usage.correction.policy',{disposition:'correcting_invoice'})
+  const commitmentCustomer=(await api('customer.create',{external_id:'synthetic-nectar-commitment',name:'Commitment customer',billing_email:'synthetic-nectar-commitment@example.test'})).id
+  const commitmentProduct=(await api('product.create',{code:'synthetic-nectar-commitment',name:'Committed usage'})).id
+  const commitmentPrice=(await api('price.create',{product:commitmentProduct,kind:'unit',meter:ctx.bulkSource.id,unit_amount:'1',taxable:true})).id
+  const commitmentSub=(await api('subscription.create',{customer:commitmentCustomer,start_date:'2020-07-01',price:[commitmentPrice]})).id
+  const terms=await api('contract.prepare',{subscription:commitmentSub,revision:(await api(`subscriptions/${commitmentSub}`)).revision,clause:'Two-month minimum $200 before tax',commitments:[{from:'2020-07-01',to:'2020-09-01',minimum:'200',taxable:true}],included:[],ramps:[]})
+  await h.api('contract.decide',finance,{contract:terms.contract,decision:'approved'})
+  const commitmentEvents=['07','08'].map(month=>({event_id:`synthetic-nectar-commitment-${month}`,customer:'synthetic-nectar-commitment',meter:ctx.bulkSource.code,quantity:'100',occurred_at:`2020-${month}-10T00:00:00Z`}))
+  await api('usage.submit',{events:commitmentEvents})
+  const commitmentOriginals=[]
+  for(const month of ['2020-07','2020-08']){const run=await api('billrun.prepare',{period:month});const invoice=(await api(`runs/${run.id}`)).invoices.find(i=>i.customer_id===commitmentCustomer);await api('invoice.approve',{invoice:invoice.id,acknowledge:true});await api('invoice.finalise',{invoice:invoice.id,issue_date:invoice.period_end});commitmentOriginals.push(await read(invoice.id))}
+  const commitment=await prepare({subscription:commitmentSub,from_period:'2020-07',through_period:'2020-08',void_event_ids:[commitmentEvents[0].event_id],add_event_ids:[]})
+  assert.deepEqual(commitment.plan.periods.map(p=>[p.subtotalCents,p.taxCents,p.totalCents]),[[-10000,-2000,-12000],[10000,2000,12000]],'USE-004 a historical void replays the later minimum settlement with original tax')
+  assert.deepEqual(commitment.plan.delta,{subtotalCents:0,taxCents:0,totalCents:0})
+  const commitmentExecution=await decision(commitment.id,finance)
+  assert.ok(commitmentExecution.invoice)
+  await api('invoice.approve',{invoice:commitmentExecution.invoice,acknowledge:true})
+  await api('invoice.finalise',{invoice:commitmentExecution.invoice})
+  for(const original of commitmentOriginals)assert.deepEqual(issuedEvidence(await read(original.id)),issuedEvidence(original))
+  const settled=(await api(`subscriptions/${commitmentSub}`)).burnDown[0]
+  assert.deepEqual([settled.earnedCents,settled.trueUpCents,settled.remainingCents],[10000,10000,0],'USE-004 subsequent commitment consumers use the effective replay chain and do not settle twice')
+  await observe('commitment',[`/app/usage/replay?subscription=${commitmentSub}&period=2020-07`,`/app/invoices/${commitmentExecution.invoice}`])
+  // Existing customer-only doors must reflect the applied liability without
+  // exposing operator explanations, calculation inputs or other customers.
+  await api('portal.configure',{hosts:[h.origin],parents:[]})
+  const portal=await api('portal.session.issue',{customer:next.customer,origin:h.origin,audience:'hosted'})
+  const portalData=await(await h.raw(`/portal/data?session=${encodeURIComponent(portal.token)}`)).json()
+  for(const invoice of portalData.invoices){const operator=await read(invoice.id);assert.equal(invoice.balance_cents,operator.balanceCents);assert.equal(invoice.credited_cents,operator.creditedCents)}
+  const portalPath=`/portal/invoices/${next.applications[0]}?session=${encodeURIComponent(portal.token)}`
+  const portalHtml=await(await h.raw(portalPath)).text()
+  assert.ok(portalHtml.includes('USD 48.00'))
+  assert.doesNotMatch(portalHtml,/Reviewed source correction|calculation_json|api\/nectar/)
+  await observe('portal-credit',[portalPath],{customerOnly:true})
   // Preparation and rejection have no financial/message effect; an intervening
   // source or policy change refuses execution and cannot consume events.
   await applyPolicy(h,owner,'usage.correction.policy',{disposition:'next_invoice'})
@@ -276,6 +340,13 @@ export async function usageDispositionFlow(h,owner,ctx) {
   assert.ok((await api(`subscriptions/${ctx.subscription}/upcoming?period=2020-03`)).calculation.exceptions.some(e=>e.code==='metric_late_correction'),'USE-004 rejection leaves the unresolved late event blocking issue')
   for(let tick=0;tick<2;tick++)assert.equal((await h.raw(`/cdn-cgi/local/scheduled?time=${Date.now()}&cron=${encodeURIComponent('0 14 * * *')}`)).status,200)
   assert.equal(h.mails.length,mailCount,'USE-004 ordinary daily recovery never retries accepted or uncertain correction mail')
+  const erased=outcomes[1],request=await api('erasure.request',{customer:erased.customer})
+  const verification=h.mails.at(-1).text.match(/https?:\/\/[^\s"<]+\/erase\/[a-f0-9]{64}/)[0]
+  assert.equal((await h.raw(new URL(verification).pathname,{form:new URLSearchParams({confirm:'yes'})})).status,200)
+  const erasure=await api('erasure.approve',{request:request.id,confirm:true})
+  for(const kind of ['nc_usage_corrections','nc_usage_voids','nc_usage_replays','nc_usage_correction_mail','nc_usage_credit_applications'])assert.ok(erasure.receipt.changed.some(row=>row.kind===kind),`USE-004 approved erasure withdraws ${kind} personal evidence`)
+  assert.deepEqual(await corrections(erased.sub),[],'USE-004 erased explanations and source event IDs cannot reappear in correction receipts')
+  await api('usage.correction.preview',{subscription:erased.sub,from_period:'2020-07',through_period:'2020-07',void_event_ids:[],add_event_ids:[]},410)
   console.log('USE-004 governed cumulative metric dispositions, all three 10,000-event policies, original tax/revenue, paid liability, once-only applications, messages and refusal journeys passed')
   return {outcomes,debit:debit.id,metricCorrection:negative.id}
 }

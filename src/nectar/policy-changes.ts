@@ -24,8 +24,9 @@ export async function preparePolicyChange(env: Bindings, actor: Actor, kind: Kin
 export async function policySettings(env: Bindings, actor: Actor) {
   requireCapability(actor, 'read')
   const credit = await one(env, 'SELECT two_person_above_cents,support_limit_cents,revision FROM nc_credit_policy WHERE singleton=1')
+  const usage = await one(env,'SELECT disposition,revision FROM nc_usage_policy WHERE singleton=1')
   const certificate = await one(env, 'SELECT enabled,revision FROM nc_certificate_policy WHERE singleton=1')
-  return { creditLimitCents: credit?.two_person_above_cents ?? null, supportLimitCents: credit?.support_limit_cents ?? 0, creditRevision: credit?.revision ?? 0,
+  return { usageDisposition:usage?.disposition??'next_invoice',usagePolicyRevision:usage?.revision??0,creditLimitCents: credit?.two_person_above_cents ?? null, supportLimitCents: credit?.support_limit_cents ?? 0, creditRevision: credit?.revision ?? 0,
     certificateRemindersEnabled: !!certificate?.enabled, certificateRevision: certificate?.revision ?? 0 }
 }
 

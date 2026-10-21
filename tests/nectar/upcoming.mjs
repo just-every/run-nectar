@@ -101,6 +101,7 @@ export async function upcomingFlow(h, owner, onReady = async () => {}) {
   assert.equal(Number(february.meters[0].lateQuantity), 1.75)
   assert.deepEqual(february.meters[0].lateEventIds, ['use006-late-january'])
   assert.equal(february.remainingContractCreditCents, 0)
+  assert.ok(february.calculation.exceptions.some(e=>e.code==='historical_usage_correction'),'USE-004 late native usage remains visible but cannot issue as a fresh aggregate against an issued period')
 
   const current = await h.api(endpoint, owner)
   const localParts = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: previous.timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date()).filter(p => p.type !== 'literal').map(p => [p.type, p.value]))

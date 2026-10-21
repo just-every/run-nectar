@@ -54,9 +54,19 @@ export async function ratingInputs(env: Bindings, business: Business, subscripti
   const creditGovernance = intervals.length ? await creditPolicy(env) : null
   const charges = (await pendingCharges(env, sub.id, period.end)).filter(charge => activeSegments(period.start,period.end,intervals).length > 0 && !intervals.some(i => i.from <= charge.date && (i.to ?? '9999') > charge.date && (i.to ?? '9999') >= period.end))
   const renewals=(await all(env,"SELECT id,effective_date,uplift_percent FROM nc_renewal_events WHERE subscription_id=? AND kind='renew' ORDER BY effective_date,id",sub.id)).map(r=>({id:r.id,effectiveDate:r.effective_date,upliftPercent:r.uplift_percent}))
+  // Every late event touching an issued service window must be resolved
+  // against that saved window. Even sums can have nonlinear prices or a
+  // different historical tax basis; a fresh late aggregate cannot issue.
+  const priorIssued=await all(env,"SELECT id,period_start,period_end,json_extract(calculation_json,'$.inputs.timezone') AS timezone FROM nc_invoices WHERE subscription_id=? AND invoice_kind='recurring' AND status='issued' AND period_start<? ORDER BY period_start",sub.id,period.start)
+  const unresolvedHistoricalUsage=billableEvents.flatMap(event=>{
+    if(event.invoiceId)return []
+    const original=priorIssued.find(i=>event.occurredAt>=zonedStart(i.period_start,i.timezone??business.timezone)&&event.occurredAt<zonedStart(i.period_end,i.timezone??business.timezone))
+    return original?[{eventId:event.eventId,invoice:original.id,from:original.period_start,to:original.period_end}]:[]
+  })
   const adjustments=await usageAdjustments(env,sub.id),credits=await carriedUsageCredits(env,sub.customer_id)
   const pending=(await all(env,"SELECT id FROM nc_usage_corrections WHERE subscription_id=? AND status='pending'",sub.id)).map(row=>row.id)
   return {
+    ...(unresolvedHistoricalUsage.length?{unresolvedHistoricalUsage}:{}),
     ...(adjustments.length?{usageAdjustments:adjustments}:{}),...(credits.length?{usageCredits:credits}:{}),...(pending.length?{usageCorrectionPending:pending}:{}),
     ...(renewals.length?{renewals}:{}),
     ...(hasContracts ? {contracts} : {}),

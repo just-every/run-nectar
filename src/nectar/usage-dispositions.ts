@@ -23,6 +23,7 @@ import type { UsageAdjustment } from './usage-correction-records'
 export const DISPOSITIONS = ['next_invoice','correcting_invoice','credit_note'] as const
 export async function configureUsagePolicy(env: Bindings, actor: Actor, input: Input) {
   requireOwner(actor)
+  await requireFreshFactor(env,actor)
   const disposition = input.text('disposition',{max:30})
   insist(DISPOSITIONS.includes(disposition as typeof DISPOSITIONS[number]),'invalid_usage_disposition')
   return preparePolicyChange(env,actor,'usage',{disposition})
@@ -45,7 +46,7 @@ async function plan(env: Bindings, actor: Actor, payload: Row) {
   ])
   const selected=[...replay.voidEventIds,...replay.addEventIds],dates:number[]=[]
   for(let n=0;n<selected.length;n+=80){const ids=selected.slice(n,n+80);dates.push(...(await all(env,`SELECT occurred_at FROM nc_usage_events WHERE event_id IN (${ids.map(()=>'?').join(',')})`,...ids)).map(row=>row.occurred_at))}
-  const earliest=localDate(Math.min(...dates),b.timezone)
+  const earliest=localDate(Math.min(...dates),replay.periods[0].beforeInput.timezone)
   insist(replay.periods[0].period.start<=(earliest<sub.start_date?sub.start_date:earliest),'complete_upstream_replay_required',409)
   insist(customer && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customer.billing_email),'customer_billing_email_required',409)
   insist(latest && replay.periods.at(-1)!.period.start===latest.period_start,'complete_downstream_replay_required',409)

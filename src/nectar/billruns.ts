@@ -26,7 +26,7 @@ import { reconciliationFor } from './reconciliation'
 import { RATING_VERSION, type Exception, type Rating } from './rating'
 import type { Input } from './input'
 
-const BLOCKING = new Set(['usage_correction_pending','po_required','tax_undeclared', 'exemption_certificate', 'negative_total', 'usage_reconciliation','commitment_prior_periods','metric_late_correction','metric_duplicate_selection','metric_negative_quantity'])
+const BLOCKING = new Set(['historical_usage_correction','usage_correction_pending','po_required','tax_undeclared', 'exemption_certificate', 'negative_total', 'usage_reconciliation','commitment_prior_periods','metric_late_correction','metric_duplicate_selection','metric_negative_quantity'])
 
 interface Draft { sub: Row; period: { start: string; end: string }; rating: Rating; fingerprint: string; input: { version: string }; comparison: Row; exceptions: Exception[] }
 

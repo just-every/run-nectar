@@ -259,8 +259,11 @@ try {
   })
 
   await check('NEC-09 draft bill run comparison and exceptions', async () => {
-    // A late event for July, already invoiced, is billed in August as late usage at July's price.
+    // A late event for issued July is replayed at July's saved price/tax,
+    // then its exact governed delta bills on the August statement.
     await usage(cookie.owner, [['e-009', 'NW-1001', 'events', '2500', '2026-07-25T08:00:00-07:00']])
+    const correction=await h.api('usage.correction.prepare',cookie.owner,{subscription:ids.s1,from_period:'2026-07',through_period:'2026-07',void_event_ids:[],add_event_ids:['e-009'],reason:'Late July source event',explanation:'July source usage arrived after issue. The exact saved-price difference will appear on August.'})
+    await h.api('usage.correction.decide',cookie.owner,{correction:correction.id,decision:'approved'})
     const run = await h.api('billrun.prepare', cookie.owner, { period: '2026-08' })
     ids.augustRun = run.id
     const detail = await h.api(`runs/${run.id}`, cookie.owner)
@@ -269,9 +272,10 @@ try {
     assert.deepEqual(northwind.exceptions.map(e => e.code), ['large_change'])
     assert.equal(northwind.comparison.previous.number, 'RB-000002')
     const invoice = await h.api(`invoices/${northwind.id}`, cookie.owner)
-    const late = invoice.lines.find(line => line.kind === 'late_usage')
+    const late = invoice.lines.find(line => line.kind === 'usage_correction')
     assert.equal(late.amount_cents, 100); assert.equal(late.period_start, '2026-07-01')
-    assert.deepEqual(late.evidence.eventIds, ['e-009'])
+    assert.deepEqual([...late.evidence.eventIds].sort(), ['e-001','e-002','e-003','e-008','e-009'])
+    assert.equal(late.evidence.originalInvoice,ids.julyNorthwind)
     assert.equal(invoice.lines.find(line => line.kind === 'usage').amount_cents, 20)
     const page = await h.page(`/app/billing/${run.id}`, cookie.owner)
     assert.match(page, /Large change/); assert.match(page, /Draft invoices \(2\)/)

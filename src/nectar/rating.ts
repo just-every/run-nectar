@@ -37,6 +37,7 @@ export interface RatingInput {
   usageAdjustments?: import('./usage-correction-records').UsageAdjustment[]
   usageCredits?: import('./usage-correction-records').UsageCredit[]
   usageCorrectionPending?: string[]
+  unresolvedHistoricalUsage?: {eventId:string;invoice:string;from:string;to:string}[]
   usageCorrection?: string
   timezone: string
   tax: { mode: 'undeclared' | 'no_tax' | 'flat_rate'; rate: string; jurisdiction: string; exempt: boolean; exemptRef: string; certificate?: unknown; exception?: Exception | null }
@@ -81,6 +82,7 @@ export function rate(input: RatingInput, presentCancellationCredits = true): Rat
   const { period, subscription: sub } = input
   const periodDays = BigInt(daysBetween(period.start, period.end))
   const lines: Line[] = [], exceptions: Exception[] = [], consumed: string[] = []
+  if(input.unresolvedHistoricalUsage?.length)exceptions.push({code:'historical_usage_correction',message:'Late events touch an issued invoice. Prepare and approve their complete historical replay before issue; the displayed fresh late aggregate is unresolved.',detail:input.unresolvedHistoricalUsage})
   if (input.invoiceContent?.poRequired && !input.invoiceContent.poNumber) exceptions.push({ code: 'po_required', message: 'A purchase order number is required before this invoice can be approved or issued.' })
   const activeFrom = max(max(period.start, sub.startDate), sub.billFrom ?? period.start)
   const activeTo = min(period.end, sub.endDate ?? FAR)
