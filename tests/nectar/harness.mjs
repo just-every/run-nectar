@@ -46,14 +46,20 @@ export async function harness({ assets = false, localTime, hostname = '127.0.0.1
   }
   const mf = new Miniflare(convertV4MiniflareOptions(options))
   const close = () => mf.dispose()
+  let setupPhase='worker-ready'
+  console.log('HARNESS starting built Worker')
   try {
     await mf.ready
+    console.log('HARNESS applying committed migrations')
     // Every committed migration, as `rer setup` leaves a database.
     const db = await mf.getD1Database('DB')
-    for (const name of (await readdir('migrations/core')).filter(name => name.endsWith('.sql')).sort())
+    for (const name of (await readdir('migrations/core')).filter(name => name.endsWith('.sql')).sort()) {
+      setupPhase=`migration:${name}`
       await db.batch(wrangler.unstable_splitSqlQuery(await readFile(`migrations/core/${name}`, 'utf8')).map(query => db.prepare(query)))
+    }
+    setupPhase='health'
     assert.ok((await fetch(`${origin}/health`)).ok, 'the Worker is healthy')
-  } catch (error) { await close(); throw error }
+  } catch (error) { console.error('HARNESS setup failure',setupPhase,error.message);await close(); throw error }
 
   const raw = (path, { cookie, body, form, method, bearer, headers = {} } = {}) => fetch(origin + path, {
     method: method ?? (body !== undefined || form ? 'POST' : 'GET'), redirect: 'manual',
