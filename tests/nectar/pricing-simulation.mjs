@@ -207,5 +207,45 @@ export async function pricingSimulation(h, owner) {
     assert.deepEqual(await h.api(`invoices/${original.id}`, owner), original, 'replay, stale/refused actions and scheduling preserve every issued calculation and source quantity')
   }
   assert.deepEqual((await getProposal(main.id)).impact, saved.impact, 'subsequent billing cannot rewrite the approved customer explanation')
+  await mixedIntervalReplay(h, owner, finance)
   console.log('AGENT-004 six issued months, retained usage replay, independently checked deltas, governed cohort scheduling, immutable prepared notices and exact July billing passed')
+}
+
+async function mixedIntervalReplay(h, owner, finance) {
+  const api = (action, body, status) => h.api(action, owner, body, status)
+  const customer = (await api('customer.create', { external_id: 'synthetic-nectar-replay-mixed', name: 'Mixed annual replay', billing_email: 'mixed@replay.example' })).id
+  const product = (await api('product.create', { code: 'mixed-replay-platform', name: 'Annual platform replay' })).id
+  const monthlyProduct = (await api('product.create', { code: 'mixed-replay-monthly', name: 'Monthly companion' })).id
+  const annual = { product, kind: 'flat', taxable: false, billing_interval: 'annual', billing_timing: 'advance' }
+  const source = (await publishPrice(h, owner, { ...annual, unit_amount: '1000' })).id
+  const target = (await publishPrice(h, owner, { ...annual, unit_amount: '1200' })).id
+  const companion = (await publishPrice(h, owner, { product: monthlyProduct, kind: 'flat', unit_amount: '10', taxable: false })).id
+  const subscription = (await api('subscription.create', { customer, start_date: '2020-01-01', billing_anchor_date: '2020-01-01', price: [source, companion] })).id
+  const term = await api('term.prepare', { subscription, revision: (await api(`subscriptions/${subscription}`)).revision, term_start: '2020-01-01', months: 12, auto_renew: true, notice_days: 30, uplift_percent: '0' })
+  await h.api('term.decide', finance, { term: term.term, decision: 'approved' })
+  const originals = []
+  for (let index = 0; index <= 12; index++) {
+    const month = `${2020 + Math.floor(index / 12)}-${String(index % 12 + 1).padStart(2, '0')}`
+    await api('billrun.prepare', { period: month })
+    const drafts = (await api(`subscriptions/${subscription}`)).invoices.filter(invoice => invoice.status === 'draft')
+    for (const invoice of drafts) {
+      await api('invoice.approve', { invoice: invoice.id, acknowledge: true })
+      await api('invoice.finalise', { invoice: invoice.id, issue_date: `${month}-01` })
+      originals.push(await api(`invoices/${invoice.id}`))
+    }
+  }
+  // Jan2021 also contains the next annual advance; replay the complete first
+  // signed term only, including all twelve independent monthly invoices.
+  const firstTerm = originals.filter(invoice => invoice.period_start < '2021-01-01')
+  assert.equal(firstTerm.length, 13)
+  const created = await api('proposal.create', { kind: 'price_change', title: 'Complete mixed service term', payload: { simulation: true, start_month: '2020-01', effective_date: '2022-01-01', source_price: source, target_price: target, subscriptions: [subscription], cost_cents: 500 } })
+  const view = await api(`proposals/${created.id}`), history = view.impact[0].historical
+  assert.equal(history.periods.length, 13)
+  assert.deepEqual([history.totals.beforeSubtotalCents, history.totals.afterSubtotalCents, history.totals.deltaSubtotalCents], [112000, 132000, 20000])
+  assert.equal(history.periods.filter(period => period.deltaSubtotalCents === 20000).length, 1)
+  assert.equal(history.periods.filter(period => period.deltaSubtotalCents === 0).length, 12)
+  assert.equal(history.estimatedMargins.totalCostCents, 6500)
+  assert.equal(view.impact[0].notice.status, 'prepared')
+  assert.deepEqual(new Set(view.impact[0].notice.invoiceIds), new Set(firstTerm.map(invoice => invoice.id)))
+  for (const invoice of originals) assert.deepEqual(await api(`invoices/${invoice.id}`), invoice, 'Interval replay preserves original saved windows, amounts and evidence')
 }

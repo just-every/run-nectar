@@ -5,9 +5,11 @@ import { harness } from './harness.mjs'
 import { applyPolicy } from './policy-helper.mjs'
 
 export async function runIsolated(file, name) {
+  console.log('JOURNEY',file,name)
   const module=await import(`./${file}.mjs`)
   const h=await harness(typeof module.harnessOptions==='function'?module.harnessOptions():{})
   try {
+    console.log('JOURNEY READY',file)
     assert.equal((await h.raw('/auth/bootstrap',{body:{token:h.vars.SETUP_TOKEN,displayName:'Nectar Owner'}})).status,303)
     const owner=await h.signIn(h.vars.OWNER_EMAIL)
     await h.raw('/setup',{cookie:owner,form:new URLSearchParams({confirm:'yes'})})

@@ -4,11 +4,14 @@ import type { Line, RatingInput, Exception } from './rating'
 import { activeSegments } from './lifecycle-math'
 import { daysBetween } from './dates'
 import { roundHalfAway } from './decimal'
+import type { BillingWindow } from './billing-calendar'
+import { intervalCommitmentSettlement } from './interval-commitments'
 
 export const CONTRACT_RATING_VERSION = 'nectar-rating-6'
 export interface Commitment { contract: string; from: string; to: string; minimumCents: number; taxable: boolean }
 export interface Included { contract: string; price: string; quantity: string; from: string; to: string }
-export interface PriorInvoice { id: string; number: string; from: string; to: string; lines: Line[] }
+export type CommitmentAllocationInput = Pick<RatingInput,'timezone'|'events'|'period'> & Partial<Pick<RatingInput,'version'|'prices'>>
+export interface PriorInvoice { id: string; number: string; from: string; to: string; lines: Line[]; billing?: BillingWindow; allocationInput?: CommitmentAllocationInput }
 export interface ContractBasis { commitments: Commitment[]; included: Included[]; invoices: PriorInvoice[] }
 export const earnedCents = (lines: Pick<Line,'kind'|'amountCents'>[]) => Math.max(0, lines.filter(l=>['flat','seat','usage','late_usage','overage','metric_usage','discount','cancellation_credit'].includes(l.kind)).reduce((n,l)=>n+l.amountCents,0))
 
@@ -24,6 +27,19 @@ export function commitmentLines(input: RatingInput, lines: Line[]): {lines:Line[
   const additions:Line[]=[],exceptions:Exception[]=[]
   for (const w of input.contracts.commitments) {
     const end=input.subscription.endDate && input.subscription.endDate<w.to?input.subscription.endDate:w.to
+    if (input.version === 'nectar-rating-9') {
+      if (end <= w.from) continue
+      const settlement = intervalCommitmentSettlement(input, lines, w, end)
+      if (!settlement) continue
+      exceptions.push(...settlement.exceptions)
+      const minimum = minimumFor(input, w), amount = Math.max(0, minimum - settlement.earnedCents - settlement.previouslySettledCents)
+      if (amount) additions.push({ kind: 'commitment_trueup', description: 'Minimum commitment true-up', quantity: '1', unitAmount: '', amountCents: amount,
+        taxable: w.taxable, priceId: null, meterId: null, periodStart: w.from, periodEnd: end,
+        evidence: { rule: 'active-day signed minimum less eligible saved service consideration and prior true-ups; actual cadence component coverage required',
+          contract: w.contract, minimumCents: minimum, nominalMinimumCents: w.minimumCents, earnedCents: settlement.earnedCents,
+          previouslySettledCents: settlement.previouslySettledCents, priorInvoices: settlement.priorInvoices, components: settlement.components, allocationVersion: 'nectar-commitment-2' } })
+      continue
+    }
     // End-exclusive: a cancellation exactly at a period boundary settles in
     // the preceding period; an early cancellation settles in its final period.
     if (end<=input.period.start || end>input.period.end || end<=w.from) continue

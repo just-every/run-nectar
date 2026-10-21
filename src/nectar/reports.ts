@@ -1,3 +1,4 @@
+import { intervalRecurringEntries } from './interval-reports'
 import { historicalMrrSeries, type HistoricalMrrMonth } from './movein/history-metrics'
 import { historicalContributions, historicalReportSource } from './movein/history-reports'
 import { financialReport, financialReportSource, type UnbilledReportEvidence } from './financial-reports'
@@ -103,9 +104,14 @@ export async function report(env: Bindings, actor: Actor, metric: string, url: U
       ${mrr ? 'JOIN' : 'LEFT JOIN'} nc_invoice_lines l ON l.invoice_id = i.id
       ${mrr ? "AND l.kind IN ('flat', 'seat', 'usage', 'overage', 'metric_usage', 'discount', 'cancellation_credit')" : ''}
       WHERE i.status = 'issued' AND substr(i.${mrr ? 'period_start' : 'issue_date'}, 1, 7) = ?
-      ${mrr ? "AND i.invoice_kind = 'recurring' AND i.subscription_id IS NOT NULL" : ''}
+      ${mrr ? "AND i.invoice_kind = 'recurring' AND i.subscription_id IS NOT NULL AND i.billing_key='legacy-monthly-arrears'" : ''}
       ${selected.customer ? 'AND i.customer_id = ?' : ''}
       GROUP BY i.id ORDER BY c.name, i.number`, month, ...(selected.customer ? [selected.customer] : []))
+  }
+  if(selected.metric==='mrr') {
+    const intervals=await intervalRecurringEntries(env,month,selected.customer),grouped=new Map<string,Row>()
+    for(const row of intervals){const entry=grouped.get(row.invoice_id)??{id:row.invoice_id,number:row.number,customer_id:row.customer_id,customer_name:row.customer_name,amount_cents:0};entry.amount_cents+=row.amount_cents;grouped.set(row.invoice_id,entry)}
+    rows.push(...grouped.values())
   }
   const linkMonth = selected.metric === 'ar' ? day.slice(0, 7) : month
   const query = new URLSearchParams({ period: linkMonth })
@@ -152,7 +158,8 @@ export async function reportInvoice(env: Bindings, actor: Actor, metric: string,
         amountCents: payment.amount_cents, recordedAt: payment.recorded_at, recordedBy: payment.recorded_by } }
   }
   const invoice = await invoiceRecord(env, actor, invoiceId)
-  const components: ReportComponent[] = (invoice.lines as Row[])
+  const intervalLines=metric==='mrr'&&invoice.billing_key!=='legacy-monthly-arrears'?await intervalRecurringEntries(env,view.period.slice(0,7),invoice.customer_id,invoiceId):null
+  const components: ReportComponent[] = (intervalLines?intervalLines.map((row):Row=>({...row,id:row.line_id})):invoice.lines as Row[])
     .filter(line => metric !== 'mrr' || RECURRING.has(line.kind))
     .map(line => ({ kind: line.kind, label: line.description, amountCents: line.amount_cents,
       lineId: line.id, href: `/app/invoices/${encodeURIComponent(invoiceId)}/lines/${encodeURIComponent(line.id)}` }))

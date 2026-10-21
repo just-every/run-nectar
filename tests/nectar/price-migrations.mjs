@@ -120,5 +120,42 @@ export async function priceMigrations(h,owner) {
   await h.api('proposal.create',owner,{kind:'price_change',title:'Retired target',payload:{target_price:retired,effective_date:'2026-09-01',subscriptions:[modeled]}},409)
   await applyPolicy(h,owner,'tax.declare',{tax_jurisdiction:previous.tax_jurisdiction,tax_mode:previous.tax_mode,tax_rate:previous.tax_rate,tax_note:previous.tax_note})
   await h.api('tax.review',owner,{revision:(await h.api('business',owner)).revision})
+  await intervalPriceCohorts(h, owner, finance)
   console.log('CAT-007 renewal/dated cohorts, exact-target models, held cohort, next invoices and governed stale/duplicate refusals passed')
+}
+
+async function intervalPriceCohorts(h, owner, finance) {
+  const cases = [
+    { name: 'annual', interval: 'annual', timing: 'advance', start: '2030-01-01', reference: '2030-06-10', renewal: '2031-01-01', due: '2031-01', old: '1000', next: '1200', cents: 120000 },
+    { name: 'quarter', interval: 'quarterly', timing: 'arrears', start: '2030-01-01', reference: '2030-02-10', renewal: '2030-04-01', due: '2030-07', old: '90', next: '120', cents: 12000 },
+    { name: 'week', interval: 'weekly', timing: 'arrears', start: '2030-01-01', reference: '2030-01-02', renewal: '2030-01-08', due: '2030-01', old: '7', next: '14', cents: 1400 },
+  ]
+  for (const row of cases) {
+    const customer = (await h.api('customer.create', owner, { external_id: `synthetic-nectar-cohort-${row.name}`, name: `Interval ${row.name}`, billing_email: `${row.name}@cohort.example` })).id
+    const product = (await h.api('product.create', owner, { code: `interval-cohort-${row.name}`, name: `Cohort ${row.name}` })).id
+    const fields = { product, kind: 'flat', taxable: false, billing_interval: row.interval, billing_timing: row.timing }
+    const old = (await publishPrice(h, owner, { ...fields, unit_amount: row.old })).id
+    const target = (await publishPrice(h, owner, { ...fields, unit_amount: row.next })).id
+    const subscription = (await h.api('subscription.create', owner, { customer, start_date: row.start, billing_anchor_date: row.start, price: [old] })).id
+    const held = (await h.api('subscription.create', owner, { customer, start_date: row.start, billing_anchor_date: row.start, price: [old] })).id
+    const heldBefore = await h.api(`subscriptions/${held}`, owner)
+    const created = await h.api('proposal.create', owner, { kind: 'price_change', title: `${row.name} anniversary cohort`, payload: { source_price: old, target_price: target, timing: 'renewal', effective_date: row.reference, subscriptions: [subscription] } })
+    const prepared = await h.api(`proposals/${created.id}`, owner), entry = prepared.impact[0]
+    assert.equal(entry.effective_date, row.renewal, 'Renewal follows the saved cadence rather than the next monthly anchor')
+    assert.equal(entry.periods[0].after.totalCents, row.cents)
+    assert.equal(entry.periods[0].afterWindow.period.start, row.renewal)
+    await h.api('proposal.decide', finance, { proposal: created.id, decision: 'approved' })
+    assert.deepEqual(await h.api(`subscriptions/${held}`, owner), heldBefore, 'An excluded interval cohort remains grandfathered')
+    await h.advanceClock(`${row.due}-28T20:00:00Z`)
+    await h.api('billrun.prepare', owner, { period: row.due })
+    const invoice = (await h.api(`subscriptions/${subscription}`, owner)).invoices.find(invoice => invoice.period_start === row.renewal)
+    assert.ok(invoice)
+    assert.equal(invoice.total_cents, entry.periods[0].after.totalCents, 'Ordinary interval billing equals the saved cohort preview')
+    const detail = await h.api(`invoices/${invoice.id}`, owner)
+    assert.deepEqual([detail.period_start, detail.period_end], [entry.periods[0].afterWindow.period.start, entry.periods[0].afterWindow.period.end])
+    if (row.name === 'annual') {
+      const monthly = (await publishPrice(h, owner, { product, kind: 'flat', unit_amount: '100', taxable: false })).id
+      assert.equal((await h.api('proposal.create', owner, { kind: 'price_change', title: 'Refuse cadence conversion', payload: { target_price: monthly, effective_date: '2032-01-01', subscriptions: [held] } }, 409)).error, 'pricing_cadence_change_requires_separate_terms')
+    }
+  }
 }

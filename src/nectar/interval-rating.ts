@@ -22,6 +22,7 @@ export function expandBillingWindow(input: RatingInput): RatingInput {
   const prices = Object.fromEntries(Object.entries(input.prices).filter(([id]) => usedPrices.has(id)))
   const sources = new Set(Object.values(prices).flatMap(price => price.metric ? [price.metric.sourceId] : price.meterId ? [price.meterId] : []))
   const expanded: RatingInput = { ...input, billing: undefined, billingDueDate: window.dueDate, items, prices,
+    commitmentCalendar: { subscription: input.subscription, items: input.items, prices: input.prices },
     events: input.events.filter(event => sources.has(event.meterId)), period: { start: window.nominalStart, end: window.nominalEnd } }
   // Metered usage and historical usage corrections are arrears operands.
   if (window.terms.timing === 'advance') {

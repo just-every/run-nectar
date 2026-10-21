@@ -1,3 +1,4 @@
+import { intervalRecurringSeries } from '../interval-reports'
 // The actual billed recurring series, read once across native and incumbent
 // history. Native monthly semantics stay those of reports.mrr; captured service
 // schedules supply imported months without reconstructing current plan values.
@@ -22,14 +23,15 @@ const monthAt = (index: number) => `${String(Math.floor(index / 12)).padStart(4,
 export async function historicalMrrSeries(env: Bindings, throughMonth: string, customerId: string | null): Promise<HistoricalMrrMonth[]> {
   insist(validMonth(throughMonth), 'invalid_period')
   insist(customerId === null || /^[\w-]{1,100}$/.test(customerId), 'invalid_customer')
-  const [native, historical] = await Promise.all([
+  const [native, historical,intervals] = await Promise.all([
     all(env, `SELECT i.id AS invoice_id,substr(i.period_start,1,7) AS period,l.amount_cents
       FROM nc_invoices i JOIN nc_invoice_lines l ON l.invoice_id=i.id
       WHERE i.status='issued' AND i.invoice_kind='recurring' AND i.subscription_id IS NOT NULL
-        AND l.kind IN ('flat','seat','usage','overage','metric_usage','discount','cancellation_credit')
+        AND i.billing_key='legacy-monthly-arrears' AND l.kind IN ('flat','seat','usage','overage','metric_usage','discount','cancellation_credit')
         AND substr(i.period_start,1,7)<=? AND (? IS NULL OR i.customer_id=?)
       ORDER BY i.period_start,i.id,l.seq`, throughMonth, customerId, customerId),
     historicalRevenueInvoices(env, null, customerId),
+    intervalRecurringSeries(env,throughMonth,customerId),
   ])
   const months = new Map<string, { amount: bigint; sources: Set<string> }>()
   const contribute = (period: unknown, amount: unknown, invoice: unknown) => {
@@ -38,7 +40,7 @@ export async function historicalMrrSeries(env: Bindings, throughMonth: string, c
     const month = months.get(period) ?? { amount: 0n, sources: new Set<string>() }
     month.amount += BigInt(amount); month.sources.add(invoice); months.set(period, month)
   }
-  for (const line of native) contribute(line.period, line.amount_cents, line.invoice_id)
+  for (const line of [...native,...intervals]) contribute(line.period, line.amount_cents, line.invoice_id)
   for (const record of historical) for (const schedule of record.schedules) {
     if (schedule.kind !== 'imported_recurring' && schedule.kind !== 'imported_discount') continue
     for (const entry of schedule.entries) contribute(entry.period, entry.amountCents, record.invoice.id)

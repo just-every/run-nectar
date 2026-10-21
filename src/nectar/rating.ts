@@ -23,7 +23,7 @@ import { insist } from './core'
 import { invoiceTotals } from './invoice-tax'
 import { CHARGE_RATING_VERSION, chargeLines, type ChargeIn } from './charge-lines'
 import { PRICE_MODEL_RATING_VERSION, rateQuantityPrice, type QuantityPrice } from './price-model'
-import { billingAnchor, billingPeriodContaining, INTERVAL_RATING_VERSION, MONTHLY_ARREARS, nonMonthlyArrears, type BillingTerms, type BillingWindow } from './billing-calendar'
+import { billingAnchor, billingPeriodContaining, INTERVAL_RATING_VERSION, MONTHLY_ARREARS, nonMonthlyArrears, type BillingTerms, type BillingWindow, type CalendarBasis } from './billing-calendar'
 import { rateBillingWindow } from './interval-rating'
 import { intervalMetricUsage } from './interval-metrics'
 
@@ -37,6 +37,7 @@ export interface RatingInput {
   version: string
   billing?: BillingWindow
   billingDueDate?: string
+  commitmentCalendar?: CalendarBasis
   invoiceContent?: import('./invoice-content').InvoiceContent
   renewals?: RenewalRate[]
   usageAdjustments?: import('./usage-correction-records').UsageAdjustment[]

@@ -3,10 +3,12 @@
 import type { Bindings } from '../auth.server'
 import type { Business } from './business'
 import { all, fingerprint, insist, one, parseJson, type Row } from './core'
-import { addMonths, isDate, isMonth, periodStartingIn, today, zonedStart } from './dates'
+import { addMonths, isDate, isMonth, zonedStart } from './dates'
 import { money } from './decimal'
 import { pricesById } from './inputs'
 import { metricEvents } from './meter-definitions'
+import { compatiblePricingCadence } from './pricing-calendar'
+import { pricingHistory } from './pricing-history'
 import { METRIC_RATING_VERSION } from './metric-rating'
 import { rate, type EventIn, type Line, type PriceIn, type Rating, type RatingInput } from './rating'
 
@@ -37,6 +39,7 @@ function seatQuantity(target: PriceIn, value: unknown): number {
 export function applyPricingReplacement(input: RatingInput, target: PriceIn, change: PricingReplacement, events: EventIn[] = input.events): RatingInput {
   const sources = input.items.filter(item => item.priceId === change.source_price)
   insist(sources.length, 'source_price_not_on_subscription', 409, { subscription: input.subscription.id })
+  compatiblePricingCadence(input.prices[change.source_price], target)
   const items = input.items.map(item => item.priceId !== change.source_price ? { ...item } : {
     ...item, priceId: target.id,
     quantity: target.kind === 'seat' ? seatQuantity(target, change.quantity ??
@@ -45,7 +48,7 @@ export function applyPricingReplacement(input: RatingInput, target: PriceIn, cha
   const usedPrices = new Set(items.map(item => item.priceId))
   const prices = Object.fromEntries(Object.entries({ ...input.prices, [target.id]: target }).filter(([id]) => usedPrices.has(id)))
   return {
-    ...input, version: METRIC_RATING_VERSION, items, prices, events,
+    ...input, version: input.billing ? input.version : METRIC_RATING_VERSION, items, prices, events,
   }
 }
 
@@ -123,7 +126,7 @@ function checkSelections(input: RatingInput, result: Rating): void {
   }
 }
 
-/** Six actual, issued monthly service periods starting in start_month.
+/** Complete issued contract history, or six actual service intervals for evergreen subscriptions.
  * effective_date schedules the future change; it never clips historical items.
  * Repeating this read recomputes basis for proposal stale comparison.
  */
@@ -149,6 +152,7 @@ export async function pricingReplay(env: Bindings, business: Business, payload: 
   insist(targetRow && prices[targetId], 'price_not_found', 404, { price: targetId })
   insist(targetRow.status === 'active', 'price_retired', 409)
   const target = prices[targetId]
+  compatiblePricingCadence(prices[sourceId], target)
   if (payload.quantity !== undefined) {
     insist(target.kind === 'seat', 'quantity_only_for_seat_target')
     seatQuantity(target, payload.quantity)
@@ -167,20 +171,14 @@ export async function pricingReplay(env: Bindings, business: Business, payload: 
   for (const id of ids) {
     const sub = await one(env, 'SELECT s.*, c.name AS customer_name FROM nc_subscriptions s JOIN nc_customers c ON c.id=s.customer_id WHERE s.id=?', id)
     insist(sub, 'subscription_not_found', 404)
-    const renewalTerm=await one(env,"SELECT months FROM nc_renewal_terms WHERE subscription_id=? AND status IN ('active','ended') ORDER BY created_at DESC LIMIT 1",id)
-    const historyMonths=renewalTerm?.months??6
-    const expected = Array.from({ length: historyMonths }, (_, index) => periodStartingIn(sub.anchor_day, addMonths(`${startMonth}-01`, index).slice(0, 7)))
-    insist(expected[historyMonths-1].end <= today(business.timezone), 'simulation_requires_historical_periods', 409)
-    const invoices = await all(env, "SELECT * FROM nc_invoices WHERE subscription_id=? AND status='issued' AND invoice_kind='recurring' AND period_start>=? AND period_start<? ORDER BY period_start,id",
-      id, expected[0].start, expected[historyMonths-1].end)
-    insist(invoices.length === historyMonths && expected.every((period, index) => invoices[index].period_start === period.start && invoices[index].period_end === period.end),
-      renewalTerm?'complete_issued_term_required':'six_issued_monthly_invoices_required', 409, { subscription: id, periods: expected, invoices: invoices.map(invoice => invoice.id) })
+    const { invoices, from, to } = await pricingHistory(env, business, sub, startMonth, prices[sourceId])
+    const historyPeriods = invoices.length
     const sourceMeter = target.metric?.sourceId ?? target.meterId
     // metricEvents retains the full predecessor history for latest/time-weighted.
     const [lines, raw] = await Promise.all([
       all(env, `SELECT l.* FROM nc_invoice_lines l JOIN nc_invoices i ON i.id=l.invoice_id WHERE i.subscription_id=? AND i.status='issued' AND i.invoice_kind='recurring' AND i.period_start>=? AND i.period_start<? ORDER BY i.period_start,l.seq`,
-        id, expected[0].start, expected[historyMonths-1].end),
-      sourceMeter ? metricEvents(env, sub.customer_id, sourceMeter, zonedStart(expected[historyMonths-1].end, business.timezone)) : Promise.resolve([]),
+        id, from, to),
+      sourceMeter ? metricEvents(env, sub.customer_id, sourceMeter, zonedStart(to, business.timezone)) : Promise.resolve([]),
     ])
     const periods: ReplayPeriod[] = []
     const rerated = new Map<string, Line[]>()
@@ -217,8 +215,8 @@ export async function pricingReplay(env: Bindings, business: Business, payload: 
     }
     const totals = sumTotals(periods.map(periodTotals))
     const citations = periods.map(period => ({ invoice: period.invoice, number: period.invoiceNumber }))
-    const explanation = `${sub.customer_name}: replacing ${prices[sourceId].label} with ${target.label} changes ${historyMonths} issued periods' subtotal from ${money(totals.beforeSubtotalCents)} to ${money(totals.afterSubtotalCents)} (${money(totals.deltaSubtotalCents)}); total including saved tax treatment changes by ${money(totals.deltaTotalCents)}. Source invoices: ${citations.map(cite => `${cite.number} [${cite.invoice}]`).join(', ')}.`
-    const assumedCost = payload.cost_cents === undefined ? undefined : payload.cost_cents * historyMonths
+    const explanation = `${sub.customer_name}: replacing ${prices[sourceId].label} with ${target.label} changes ${historyPeriods} issued periods' subtotal from ${money(totals.beforeSubtotalCents)} to ${money(totals.afterSubtotalCents)} (${money(totals.deltaSubtotalCents)}); total including saved tax treatment changes by ${money(totals.deltaTotalCents)}. Source invoices: ${citations.map(cite => `${cite.number} [${cite.invoice}]`).join(', ')}.`
+    const assumedCost = payload.cost_cents === undefined ? undefined : payload.cost_cents * historyPeriods
     insist(assumedCost === undefined || Number.isSafeInteger(assumedCost), 'simulation_amount_out_of_range')
     customers.push({ subscription: id, subscriptionLabel: sub.external_id || id, customerId: sub.customer_id,
       customer: sub.customer_name, periods, totals, explanation, citations,

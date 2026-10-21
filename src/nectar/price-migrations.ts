@@ -4,20 +4,14 @@ import type { Business } from './business'
 import { all, fingerprint, insist, one, parseJson, type Row } from './core'
 import { canonicalDecimal } from './decimal'
 import { isDate, periodContaining } from './dates'
+import { compatiblePricingCadence, pricingFuture, pricingRenewalDate, pricingTerm } from './pricing-calendar'
 import { pricesById, ratingInputs } from './inputs'
-import { PRICE_MODEL_RATING_VERSION } from './price-model'
-import { rate, RATING_VERSION, type PriceIn, type RatingInput } from './rating'
+import { type PriceIn } from './rating'
 import { startsInIssuedPeriod } from './subscriptions'
-
-const total = (input: RatingInput) => {
-  const result = rate(input)
-  insist(!result.exceptions.some(e=>e.code==='metric_duplicate_selection'),'meter_already_billed',409)
-  return { subtotalCents: result.subtotalCents, totalCents: result.totalCents, lines: result.lines.map(line => ({ description: line.description, amountCents: line.amountCents })) }
-}
 
 /** Existing catalogue versions and legacy new simple prices share one saved migration plan. */
 export async function priceChangePlan(env: Bindings, business: Business, payload: Row, saved = false) {
-  if (payload.simulation === true) return await pricingSimulationPlan(env,business,payload)
+  if (payload.simulation === true) return await pricingSimulationPlan(env,business,payload,saved)
   const selectedTarget = payload.target_price ? await one(env,'SELECT * FROM nc_prices WHERE id=?',String(payload.target_price)) : null
   insist(!payload.target_price || selectedTarget,'price_not_found',404)
   const product = await one(env, "SELECT * FROM nc_products WHERE id = ? AND status = 'active'", String(payload.product ?? selectedTarget?.product_id ?? ''))
@@ -63,17 +57,14 @@ export async function priceChangePlan(env: Bindings, business: Business, payload
   for (const id of ids) {
     const sub = await one(env, 'SELECT s.*, c.name AS customer_name FROM nc_subscriptions s JOIN nc_customers c ON c.id = s.customer_id WHERE s.id = ?', id)
     insist(sub, 'subscription_not_found', 404)
-    const renewalTerm=await one(env,"SELECT * FROM nc_renewal_terms WHERE subscription_id=? AND status='active'",id)
-    let date: string
-    if (savedDates !== undefined) date = savedDates[id]
-    else {
-      const period = periodContaining(sub.anchor_day, reference)
-      date = timing === 'renewal' && renewalTerm ? renewalTerm.end_date : timing === 'renewal' && period.start !== reference ? period.end : reference
-      if(renewalTerm&&timing==='renewal')insist(reference<=renewalTerm.end_date&&renewalTerm.auto_renew&&!renewalTerm.cancelled_at,'term_not_renewing',409)
-    }
+    const renewalTerm = await pricingTerm(env, id)
+    const referenceItems = await all(env, 'SELECT i.price_id FROM nc_items i JOIN nc_prices p ON p.id=i.price_id WHERE i.subscription_id=? AND p.product_id=? AND i.effective_from<=? AND (i.effective_to IS NULL OR i.effective_to>?)', sub.id, product.id, reference, reference)
+    const referencePrices = await pricesById(env, referenceItems.map(item => item.price_id))
+    const selectedSources = referenceItems.filter(item => !payload.source_price || item.price_id === payload.source_price).map(item => referencePrices[item.price_id]).filter(price => price && (!targetId || price.kind === virtual.kind && price.meterId === virtual.meterId))
+    const resolved = pricingRenewalDate(sub, renewalTerm, reference, timing, selectedSources)
+    const date = savedDates === undefined ? resolved : savedDates[id]
+    insist(date === resolved, 'proposal_stale', 409)
     resolvedDates[id] = date
-    insist(!renewalTerm||date>=renewalTerm.end_date,'signed_term_grandfathered',409)
-    insist(!sub.end_date || sub.end_date > date || renewalTerm?.auto_renew&& !renewalTerm.cancelled_at&&date===renewalTerm.end_date, 'subscription_ended', 409)
     const candidates = await all(env, 'SELECT i.*, p.kind AS source_kind, p.meter_id AS source_meter_id FROM nc_items i JOIN nc_prices p ON p.id=i.price_id WHERE i.subscription_id=? AND p.product_id=? AND i.effective_from<=? AND (i.effective_to IS NULL OR i.effective_to>?) ORDER BY i.effective_from,i.id',sub.id,product.id,date,date)
     insist(candidates.length,'subscription_not_on_product',409,{subscription:id})
     const eligible = targetId ? candidates.filter(item=>item.source_kind===virtual.kind && (item.source_meter_id ?? null)===virtual.meterId) : candidates.slice(-1)
@@ -83,18 +74,12 @@ export async function priceChangePlan(env: Bindings, business: Business, payload
     if (virtual.kind==='seat') for(const item of sourceItems) insist(item.quantity >= (virtual.pricing ? 0 : 1) && item.quantity <= (virtual.pricing ? 1_000_000_000 : 1_000_000),'invalid_quantity')
     const item = sourceItems[0]
     insist(!await startsInIssuedPeriod(env, sub.id, date), 'period_already_invoiced', 409, { subscription: id })
-    const period = periodContaining(sub.anchor_day, date), next = periodContaining(sub.anchor_day, period.end)
-    const periods = [], fingerprints = []
-    for (const p of [period, next]) {
-      const inputs = await ratingInputs(env, business, sub.id, p)
-      if(renewalTerm&&date===renewalTerm.end_date){inputs.subscription.endDate=null;inputs.renewals=[...(inputs.renewals??[]),{id:`term-${renewalTerm.id}`,effectiveDate:date,upliftPercent:renewalTerm.uplift_percent}];inputs.version='nectar-rating-8'}
-      fingerprints.push(await fingerprint(inputs))
-      const moved = new Set(sourceItems.map(item=>item.id))
-      const items = [...inputs.items.filter(row=>!moved.has(row.id) || row.from!==date).map(row=>moved.has(row.id) ? {...row,to:date} : row),
-        ...sourceItems.map((item,index)=>({id:`proposed-item-${index}`,priceId:virtual.id,quantity:item.quantity,from:date,to:item.effective_to}))]
-      const after = { ...inputs, items, prices: { ...inputs.prices, [virtual.id]: virtual }, version: virtual.pricing && inputs.version === RATING_VERSION ? PRICE_MODEL_RATING_VERSION : inputs.version }
-      periods.push({ period: p, before: total(inputs), after: total(after) })
-    }
+    const current = await ratingInputs(env, business, sub.id, periodContaining(sub.anchor_day, date))
+    for (const source of sourceItems) compatiblePricingCadence(current.prices[source.price_id], virtual)
+    const movedIds = new Set(sourceItems.map(source => source.id))
+    const moved = [...current.items.filter(row => !movedIds.has(row.id) || row.from !== date).map(row => movedIds.has(row.id) ? { ...row, to: date } : row),
+      ...sourceItems.map((source, index) => ({ id: `proposed-item-${index}`, priceId: virtual.id, quantity: source.quantity, from: date, to: source.effective_to }))]
+    const { periods, fingerprints } = await pricingFuture(env, business, sub, renewalTerm, date, moved, virtual)
     impact.push({ subscription: sub.id, subscriptionLabel: sub.external_id || sub.id, customer: sub.customer_name, item: item.id, sourceItems: sourceItems.map(i=>({id:i.id,quantity:i.quantity})), quantity: sourceItems.reduce((n,i)=>n+i.quantity,0), effective_date: date, periods })
     ;(basis.ratings as Record<string, string[]>)[sub.id] = fingerprints
     basis[sub.id] = sub.revision

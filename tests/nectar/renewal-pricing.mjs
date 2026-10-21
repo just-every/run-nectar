@@ -83,5 +83,33 @@ export async function renewalPricing(h,owner) {
   await h.api('invoice.finalise',owner,{invoice:renewedInvoice.id,issue_date:'2026-02-01'})
   assert.equal((await h.api(`invoices/${renewedInvoice.id}`,owner)).total_cents,12600)
   for(const issued of history)assert.deepEqual(await h.api(`invoices/${issued.id}`,owner),issued,'SUB-004 annual pricing preparation preserves every issued invoice')
+  await annualIntervalRenewal(h, owner, finance)
   console.log('SUB-004 pricing models, metric uplift, full-term replay and annual cohort boundaries passed')
+}
+
+async function annualIntervalRenewal(h, owner, finance) {
+  const product = (await h.api('product.create', owner, { code: 'annual-interval-renewal', name: 'Annual signed service' })).id
+  const definition = { product, kind: 'flat', taxable: false, billing_interval: 'annual', billing_timing: 'advance' }
+  const old = (await publishPrice(h, owner, { ...definition, unit_amount: '1000' })).id
+  const target = (await publishPrice(h, owner, { ...definition, unit_amount: '1200' })).id
+  const customer = (await h.api('customer.create', owner, { external_id: 'synthetic-nectar-annual-renewal', name: 'Annual signed cohort', billing_email: 'annual@renewal.example' })).id
+  const subscription = (await h.api('subscription.create', owner, { customer, start_date: '2035-01-01', billing_anchor_date: '2035-01-01', price: [old] })).id
+  const term = await h.api('term.prepare', owner, { subscription, revision: (await h.api(`subscriptions/${subscription}`, owner)).revision, term_start: '2035-01-01', months: 12, auto_renew: true, notice_days: 30, uplift_percent: '5' })
+  await h.api('term.decide', finance, { term: term.term, decision: 'approved' })
+  const before = await h.api(`subscriptions/${subscription}`, owner)
+  const payload = { source_price: old, target_price: target, subscriptions: [subscription], effective_date: '2035-07-01' }
+  assert.equal((await h.api('proposal.create', owner, { kind: 'price_change', title: 'Preserve signed annual fee', payload }, 409)).error, 'signed_term_grandfathered')
+  const request = await h.api('proposal.create', owner, { kind: 'price_change', title: 'Next annual service term', payload: { ...payload, timing: 'renewal' } })
+  const view = await h.api(`proposals/${request.id}`, owner), entry = view.impact[0]
+  assert.equal(entry.effective_date, '2036-01-01')
+  assert.equal(entry.periods.length, 1, 'A twelve month annual service term is one real annual invoice')
+  assert.deepEqual([entry.periods[0].before.totalCents, entry.periods[0].after.totalCents], [105000, 126000])
+  assert.deepEqual(await h.api(`subscriptions/${subscription}`, owner), before, 'Preparation leaves the current signed annual term intact')
+  await h.api('proposal.decide', finance, { proposal: request.id, decision: 'approved' })
+  await h.advanceClock('2036-01-01T20:00:00Z')
+  await h.raw(`/cdn-cgi/local/scheduled?time=${Date.parse('2036-01-01T20:00:00Z')}&cron=${encodeURIComponent('0 14 * * *')}`)
+  await h.api('billrun.prepare', owner, { period: '2036-01' })
+  const invoice = (await h.api(`subscriptions/${subscription}`, owner)).invoices.find(invoice => invoice.period_start === '2036-01-01')
+  assert.ok(invoice)
+  assert.equal(invoice.total_cents, entry.periods[0].after.totalCents)
 }

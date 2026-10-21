@@ -2513,7 +2513,7 @@
       "executable": false
     },
     "src/nectar/commitment-rating.ts": {
-      "sha256": "5126c01a373141e325ccfced57392fc59ec1494bac7692fc1719333ed7117721",
+      "sha256": "381c66a59e725512339bbb3cf5ceab24defae997bb8e1a4bfcf36ff1ed8f8d88",
       "executable": false
     },
     "src/nectar/contract-terms.ts": {
@@ -2589,7 +2589,7 @@
       "executable": false
     },
     "src/nectar/erasure-records.ts": {
-      "sha256": "476ff4331509ab33192e089dd57d33ddbad2f80ea149961a046b670d687e15f8",
+      "sha256": "9658f932187cdbc57c2ea606493b2cf7361b16e95fa2412aef104276579a5b1f",
       "executable": false
     },
     "src/nectar/erasure-requests.ts": {
@@ -2648,16 +2648,24 @@
       "sha256": "c6a30829d6b0c054b515fe9df8d2c059abab1330865dc521efa26da81acb05b0",
       "executable": false
     },
+    "src/nectar/interval-commitments.ts": {
+      "sha256": "f74dad8f45d3080458a7086326187b18996209057be0c6f6da4071bea6165102",
+      "executable": false
+    },
     "src/nectar/interval-metrics.ts": {
       "sha256": "06fbc971250d8da8be68acd3131ecaf0a557456b66cd26ed8ca4281df23e608a",
       "executable": false
     },
     "src/nectar/interval-rating.ts": {
-      "sha256": "8a985b19d2c7fde7b415e3b88b366a8637ab8465d41f544c4671c26aefd34678",
+      "sha256": "e15c387d3b9cb0b9a50e771b7922592d8e4362b02cb4c1181f718abe00d3f065",
       "executable": false
     },
     "src/nectar/interval-reactivate.ts": {
       "sha256": "07e08db5d331ace3219b8dcad74a9d0296bee087b706829b94c3595daf33f17c",
+      "executable": false
+    },
+    "src/nectar/interval-reports.ts": {
+      "sha256": "39cbeac022b503c983bd139225f48c3a62f05b367c7f6e142f631dafec633ccb",
       "executable": false
     },
     "src/nectar/invoice-content.ts": {
@@ -2797,7 +2805,7 @@
       "executable": false
     },
     "src/nectar/movein/history-metrics.ts": {
-      "sha256": "73cba9e0826484ffa662aea9cb720be1b1ae71a5b196d066cf4807a339d6dbe9",
+      "sha256": "560a0f3eb7f09c63c302280bb86cfa82ca9595eb5817d783504d3fedc57c404f",
       "executable": false
     },
     "src/nectar/movein/history-reports.ts": {
@@ -2817,7 +2825,7 @@
       "executable": false
     },
     "src/nectar/movein/target.ts": {
-      "sha256": "a0825ef046748f3b5cddc44b4164ae28abc4bb2616cc68016f64c0cca90a6645",
+      "sha256": "001f3528691382ebcd5bc40f8a86b4893307c4cdbe106480e254f00368e138bc",
       "executable": false
     },
     "src/nectar/note-records.ts": {
@@ -2913,7 +2921,7 @@
       "executable": false
     },
     "src/nectar/price-migrations.ts": {
-      "sha256": "141de787bb34eae5cfdf4f92c0ce52cb3febf336c8eee158f00fc1b387279fd2",
+      "sha256": "458b98f9ba0604ca4688fc0ca34e71a06d0092345877ea06f45653eb380fa759",
       "executable": false
     },
     "src/nectar/price-model.ts": {
@@ -2925,15 +2933,19 @@
       "executable": false
     },
     "src/nectar/pricing-calendar.ts": {
-      "sha256": "66adefdb4be49169380e595583cc2d6b075c18d1825cdfc27db7e2ad08df45c2",
+      "sha256": "c2547cb14f40f7714d32cfbcf8dbeddf554c8bd430523a25fde795113839bb31",
+      "executable": false
+    },
+    "src/nectar/pricing-history.ts": {
+      "sha256": "1bb229c8912d0ccf0cf218632202b4c4ee2d7e909421bb288862bebdbaf1bd59",
       "executable": false
     },
     "src/nectar/pricing-replay.ts": {
-      "sha256": "d812b78f6e283fdc15e86dd0dc8ac0022115331906f785e94ca4ef228ecc7893",
+      "sha256": "5defb3a54514f41997bb36654ed44944fc21c91b1a335c2125b6ec3065d774fb",
       "executable": false
     },
     "src/nectar/pricing-simulation-plan.ts": {
-      "sha256": "3e16381fb246c4a9b586a84547587d8111b6bd159809fcec6995ddd3c1af806a",
+      "sha256": "1c9a5af75155fb8b7708b0c7db9b861653b70113ce39d75d26ad54d381e0917d",
       "executable": false
     },
     "src/nectar/proposals.ts": {
@@ -2941,7 +2953,7 @@
       "executable": false
     },
     "src/nectar/rating.ts": {
-      "sha256": "a00cb2e59c63f91e25ca283e8c326067828b335657287d0336dbace2602ccf7c",
+      "sha256": "756a0b9eb3ac68426f102596e712567a7992c602de92bb16e746c36fb1bdc39a",
       "executable": false
     },
     "src/nectar/receivables.ts": {
@@ -2989,7 +3001,7 @@
       "executable": false
     },
     "src/nectar/reports.ts": {
-      "sha256": "5b44a9bba623043952fd2ae2a333d93e0cf23fa2b38137e402551aa7ebec274b",
+      "sha256": "78acb3e035d9b7abe3e1bdd3b360eb71d52f0a10ee8899770d49e0c304925c52",
       "executable": false
     },
     "src/nectar/retention-interval.ts": {
@@ -3605,7 +3617,7 @@
       "executable": false
     },
     "tests/nectar/intervals.mjs": {
-      "sha256": "143179bf6f1c4a253403f9d4393046a5701e703884f6a0172b553bcfe0b12d5c",
+      "sha256": "1bcb07815e202439f7c4173a4fb5b611f41ca30e8937de31ba752b5932972220",
       "executable": false
     },
     "tests/nectar/invoice-content.mjs": {
@@ -3617,7 +3629,7 @@
       "executable": false
     },
     "tests/nectar/isolated.mjs": {
-      "sha256": "a02edd47d6189f4c18629394d3c32d849d7e376b07bc88ef414101e97856afde",
+      "sha256": "345943a8612319d674b670a1b07fb6ecb4dcf4141bc09a5d8bfd50d67e039c6a",
       "executable": false
     },
     "tests/nectar/journey.mjs": {
@@ -3677,7 +3689,7 @@
       "executable": false
     },
     "tests/nectar/move-collection.mjs": {
-      "sha256": "58692d79a5b5587e9e0f57a48c3561b2154e82c46afb3e3691f360c898e80d44",
+      "sha256": "bc32df04a04a79d4da65f09521828b32eac1d69b7f0c1feab7fc28003f07c8a5",
       "executable": false
     },
     "tests/nectar/move-history.mjs": {
@@ -3749,7 +3761,7 @@
       "executable": false
     },
     "tests/nectar/price-migrations.mjs": {
-      "sha256": "28ed5f50be481c8e008aaa246deaf23481d49d4090c356548b1022d4df092872",
+      "sha256": "0802d96ed6fb53db9ca961a31bf17ac5e51c0101f570bcfbcca32e6acb8e81cf",
       "executable": false
     },
     "tests/nectar/price-overrides.mjs": {
@@ -3765,7 +3777,7 @@
       "executable": false
     },
     "tests/nectar/pricing-simulation.mjs": {
-      "sha256": "cb2def7c54e461baba8551ef99446b2525808ed3d5c91e1f0a66c91d5bd02d4d",
+      "sha256": "0cef37d05f387c755c738c2eb2d390f1022ce905ef9bf0572b4aec673060a4c0",
       "executable": false
     },
     "tests/nectar/reconciliation.mjs": {
@@ -3773,7 +3785,7 @@
       "executable": false
     },
     "tests/nectar/renewal-pricing.mjs": {
-      "sha256": "7d84acb990c6c83f08718242ba279d9430929eb5602519e8ef42bcb8af16f005",
+      "sha256": "cee1aa38a86650bb52493d07bda67caa29ac6d1d150d5d24858eb549fd4cb1fd",
       "executable": false
     },
     "tests/nectar/renewals.mjs": {

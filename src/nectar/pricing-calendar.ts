@@ -2,12 +2,13 @@
 // migration changes money/packaging, never silently changes the signed cadence.
 import type { Bindings } from '../auth.server'
 import type { Business } from './business'
-import { all, canonical, fingerprint, insist, one, type Row } from './core'
+import { canonical, fingerprint, insist, one, type Row } from './core'
 import { addDays, addMonths, addMonthsClamped, periodContaining } from './dates'
 import { billingAnchor, billingPeriodContaining, dueBillingWindows, intervalBoundary, INTERVAL_RATING_VERSION,
   MONTHLY_ARREARS, nonMonthlyArrears, type BillingWindow } from './billing-calendar'
 import { ratingInputs } from './inputs'
 import { rate, type ItemIn, type PriceIn, type Rating, type RatingInput } from './rating'
+import { PRICE_MODEL_RATING_VERSION } from './price-model'
 import { RENEWAL_RATING_VERSION } from './renewal-rating'
 
 export const intervalPricing = (input: RatingInput) => !!input.billing || !!input.subscription.billingAnchorDate || Object.values(input.prices).some(price => nonMonthlyArrears(price.billing ?? MONTHLY_ARREARS))
@@ -98,7 +99,10 @@ export async function pricingFuture(env: Bindings, business: Business, sub: Row,
       const window = after ? entry.after : entry.before
       if (calendar && !window) return { input: null, rating: zero() }
       const input = upcomingRenewal(await ratingInputs(env, business, sub.id, window?.period ?? entry.period, after ? moved : undefined, window), term, date)
-      if (after) input.prices[target.id] = target
+      if (after) {
+        input.prices[target.id] = target
+        if (target.pricing && input.version === 'nectar-rating-1') input.version = PRICE_MODEL_RATING_VERSION
+      }
       const remaining = remainingInput(input, after ? priorAfter : priorBefore), rating = rate(remaining)
       insist(!rating.exceptions.some(exception => ['metric_duplicate_selection','metric_negative_quantity','metric_late_correction'].includes(exception.code)), 'simulation_blocked', 409, rating.exceptions)
       ;(after ? priorAfter : priorBefore).push({ input: remaining, rating })
