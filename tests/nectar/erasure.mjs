@@ -36,8 +36,7 @@ export async function erasureScaleFlow(h, owner) {
   const usageRows = async () => {
     const response = await h.raw('/app/exports/usage.csv', { cookie: owner })
     assert.equal(response.status, 200)
-    const [header, ...rows] = csvRows(await response.text())
-    return rows.map(row => Object.fromEntries(header.map((key, index) => [key, row[index]])))
+    return csvRows(await response.text())
   }
   const before = await usageRows(), peerUsage = before.filter(row => row.customer_external_id === peerExternal)
   assert.equal(before.filter(row => row.customer_external_id === external).length, 10000)
