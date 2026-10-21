@@ -1,4 +1,5 @@
 import { populateErasureKinds } from './erasure-record-kinds.mjs'
+export { nativeIntervalErasureFlow } from './erasure-record-kinds.mjs'
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { file } from './harness.mjs'
