@@ -45,7 +45,7 @@ export function openApiDocument(origin: string) {
     const query = LIST_DOORS.includes(name) || name === 'invoices'
       ? [{ name: 'limit', in: 'query', required: false, schema: { type: 'integer', minimum: 1, maximum: 100, default: 100 } }, { name: 'cursor', in: 'query', required: false, description: 'The previous page\'s next_cursor; it binds the page size.', schema: { type: 'string' } }]
       : []
-    paths[path] = { get: { operationId: operationId(name, 'get'), parameters: [...params.map(p => ({ name: p, in: 'path', required: true, schema: { type: 'string' } })), ...query, versionHeader], responses } }
+    paths[path] = { get: { operationId: operationId(name, 'get'), parameters: [...params.map(p => ({ name: p, in: 'path', required: true, schema: { type: 'string' } })), ...query, ...(name === 'customer' ? [{ name: 'preview_period', in: 'query', required: false, description: 'YYYY-MM chooses each subscription period starting in that month for the customer upcoming composition; omit or leave empty for current anchor periods.', schema: { type: 'string', pattern: '^$|^[0-9]{4}-(0[1-9]|1[0-2])$' } }] : []), versionHeader], responses } }
   }
   for (const name of Object.keys(actions).sort()) {
     const fields = API_FIELDS[name] ?? {}

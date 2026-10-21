@@ -38,7 +38,7 @@ export async function customersPage(env: Bindings, actor: Actor, url: URL) {
 }
 
 export async function customerPage(env: Bindings, actor: Actor, id: string, url: URL) {
-  const c = await customerView(env, actor, id)
+  const c = await customerView(env, actor, id, url)
   if(c.erased_at) return page('Erased customer',actor,h`<h1>Erased customer</h1><section class="card"><p>Personal information has been erased. Required financial records remain until their retention date.</p><p><a href="/app/erasures">Erasure requests and receipts</a></p>${table(['Invoice','Total'],c.ledger.invoices.map((i:any)=>[h`<a href="/app/invoices/${i.id}">${i.number}</a>`,cents(i.total_cents)]))}</section>`,{url,current:'/app/customers'})
   const today = new Date().toISOString().slice(0, 10)
   const named = await all(env, "SELECT p.id, pr.name, p.version, p.kind, p.unit_amount, p.pricing_model, p.nickname, m.unit_label FROM nc_prices p JOIN nc_products pr ON pr.id = p.product_id LEFT JOIN nc_meters m ON m.id = p.meter_id WHERE p.status = 'active' ORDER BY pr.name, p.version DESC")
@@ -61,6 +61,11 @@ export async function customerPage(env: Bindings, actor: Actor, id: string, url:
       <div><dt>Tax</dt><dd>${c.tax_exempt ? `Exempt (${c.tax_exempt_ref})` : 'Taxable'}</dd></div><div><dt>Customer language</dt><dd>${languageName(c.language)}</dd></div></dl>
       ${details({ 'Internal id': c.id, Source: c.origin, 'Provider reference': c.provider_ref ?? '—', Revision: c.revision })}</section>
     <section class="card" aria-labelledby="subs"><h2 id="subs">Subscriptions</h2>${table(['Subscription', 'Started', 'Billing day$', 'Status'], c.subscriptions.map((s: any) => [canRead(actor, 'subscriptions') ? h`<a href="/app/subscriptions/${s.id}">${s.external_id || `Subscription from ${formatDate(s.start_date)}`}</a>` : (s.external_id || `Subscription from ${formatDate(s.start_date)}`), formatDate(s.start_date), s.anchor_day, tag(subscriptionState(s, today))]), { empty: 'No subscriptions yet.' })}</section>
+    ${c.upcoming ? h`<section class="card" aria-labelledby="customer-upcoming"><h2 id="customer-upcoming">Upcoming invoices</h2>
+      <p class="hint">Each subscription keeps its own billing period. Preview totals use recorded usage and full-period fixed charges; future usage is not forecast. Issued rows keep their saved calculation. Reading this list prepares no invoices.</p>
+      <form method="get" class="row-form">${field('Preview month', 'preview_period', { type: 'month', value: url.searchParams.get('preview_period') ?? '', required: false, hint: 'Leave empty to use each subscription’s current billing period.' })}<button class="secondary" type="submit">Show previews</button></form>
+      ${table(['Subscription', 'Period', 'State', 'Subtotal$', 'Tax$', 'Total$', 'Review'], c.upcoming.map((row: any) => [h`<a href="${row.sourcePath}">${row.externalId || `Subscription from ${formatDate(row.startDate)}`}</a>`, formatPeriod(row.period.start, row.period.end), tag(row.state === 'unavailable' ? 'Unavailable' : row.state === 'issued' ? 'Issued' : row.state === 'shadow' ? 'Shadow' : 'Preview'), row.subtotalCents === null ? '—' : cents(row.subtotalCents), row.taxCents === null ? '—' : cents(row.taxCents), row.totalCents === null ? '—' : cents(row.totalCents), row.reason === 'previous_biller_period' ? 'Previous biller owns this period.' : row.reason === 'subscription_not_in_period' ? 'Outside service dates.' : row.exceptions.map((e: any) => e.message).join(' · ') || 'No calculation exceptions.']), { empty: 'No subscriptions to preview.' })}
+    </section>` : ''}
     ${newSubscription}
     ${await notesSection(env,actor,c.id,'customer',c.id,`/app/customers/${c.id}#notes`)}
     ${certificateSection(c, actor)}

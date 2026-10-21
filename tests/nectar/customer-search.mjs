@@ -69,6 +69,14 @@ export async function customerSearchFlow(h, owner, onReady = async () => {}) {
   const captured = JSON.parse(await readFile(new URL('../fixtures/stripe/invoices.json', import.meta.url))).data[0]
   const moved = (await api('customers')).find(row => row.external_id === captured.customer)
   for (const value of [captured.number, captured.id]) assert.deepEqual((await api(`customers?search=${encodeURIComponent(value)}`)).map(row => row.id), [moved.id], 'CUS-001 retained previous-biller number and reference resolve to the moved customer')
+  const shadow = (await api(`customers/${moved.id}?preview_period=2026-08`)).upcoming
+  assert.ok(shadow.length > 0 && shadow.every(row => row.state === 'shadow'), 'CUS-001 imported subscriptions stay explicitly shadow calculations')
+  const adopted = (await api('shadow')).find(row => row.id === shadow[0].subscription)
+  await api('subscription.adopt', { subscription: adopted.id, cutover_start: adopted.earliestCutover, acknowledge_unreconciled: true })
+  const retained = (await api(`customers/${moved.id}?preview_period=2026-08`)).upcoming.find(row => row.subscription === adopted.id)
+  assert.equal(retained.reason, 'previous_biller_period')
+  assert.equal(retained.totalCents, null, 'CUS-001 a period owned by the previous biller is not quoted as a Nectar charge')
+  assert.match(await h.page(`/app/customers/${moved.id}?preview_period=2026-08`, owner), /Previous biller owns this period/)
   console.log('CUS-001 customer lookup, literal searches, scoped billing evidence, totals and role custody passed')
   return { customer, other, invoice, credit }
 }

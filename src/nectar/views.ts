@@ -1,3 +1,4 @@
+import { customerUpcoming } from './customer-upcoming'
 import { revenueJournal } from './revenue-journal'
 import { numberRegister } from './number-register'
 import { erasureRequests } from './erasure-requests'
@@ -10,7 +11,7 @@ import { setupSourceDownload } from './setup-download'
 // capability itself and applies the same rules as the pages that render it.
 import type { Bindings } from '../auth.server'
 import { agentKeys, customRoles, members } from './access'
-import { requireRead, requireCapability, type Actor } from './actor'
+import { canRead, requireRead, requireCapability, type Actor } from './actor'
 import { runDetail, runs } from './billruns'
 import { businessView } from './business'
 import { certificates } from './certificates'
@@ -48,10 +49,10 @@ export async function audit(env: Bindings, actor: Actor) {
   return await all(env, 'SELECT seq, at, actor, action, subject, detail FROM nc_audit ORDER BY seq DESC LIMIT 500')
 }
 
-export async function customerView(env: Bindings, actor: Actor, id: string): Promise<Row> {
+export async function customerView(env: Bindings, actor: Actor, id: string, url?: URL): Promise<Row> {
   requireRead(actor, 'customers')
   const customer = await requireCustomer(env, id)
-  if(customer.erased_at) return {...customer,contacts:[],subscriptions:[],ledger:await customerLedger(env,actor,id),entitlements:[],incumbentInvoices:[],charges:[],certificates:[],exemptionClaims:[],certificateReminders:[],notes:[],metadata:{}}
+  if(customer.erased_at) return {...customer,contacts:[],subscriptions:[],ledger:await customerLedger(env,actor,id),entitlements:[],incumbentInvoices:[],charges:[],certificates:[],exemptionClaims:[],certificateReminders:[],notes:[],metadata:{},upcoming:null}
   const [contacts, subscriptions, ledger, features, incumbent] = await Promise.all([
     all(env, 'SELECT * FROM nc_contacts WHERE customer_id = ? ORDER BY created_at', id),
     all(env, "SELECT s.*, (SELECT COUNT(*) FROM nc_items i WHERE i.subscription_id = s.id) AS items FROM nc_subscriptions s WHERE s.customer_id = ? ORDER BY s.created_at", id),
@@ -59,7 +60,8 @@ export async function customerView(env: Bindings, actor: Actor, id: string): Pro
     entitlements(env, actor, id),
     all(env, "SELECT provider_ref, number, status, period_start, period_end, total_cents, paid_cents, remaining_cents FROM nc_incumbent_invoices WHERE document_kind='invoice' AND customer_id = ? ORDER BY period_start DESC", id),
   ])
-  return { ...customer,...await metadataFor(env,'customer',id), notes: await customerNotes(env, id), contacts, subscriptions:await withMetadata(env,'subscription',await Promise.all(subscriptions.map(async s=>({...s,intervals:lifecycleIntervals(await lifecycleHistory(env,s.id))})))), ledger, entitlements: features, incumbentInvoices: incumbent, charges: await all(env, 'SELECT * FROM nc_charges WHERE customer_id=? ORDER BY effective_date,id', id), certificatePolicy: await one(env, 'SELECT enabled,revision FROM nc_certificate_policy WHERE singleton=1'), certificates: await certificates(env, actor, id), exemptionClaims: await all(env, 'SELECT state FROM nc_exemption_claims WHERE customer_id=? ORDER BY state', id), certificateReminders: await all(env, 'SELECT state,kind,status,created_at FROM nc_certificate_reminders WHERE customer_id=? ORDER BY created_at DESC', id) }
+  const upcoming = canRead(actor, 'subscriptions') && canRead(actor, 'invoices') ? await customerUpcoming(env, actor, id, url?.searchParams.get('preview_period') || null) : null
+  return { ...customer,upcoming,...await metadataFor(env,'customer',id), notes: await customerNotes(env, id), contacts, subscriptions:await withMetadata(env,'subscription',await Promise.all(subscriptions.map(async s=>({...s,intervals:lifecycleIntervals(await lifecycleHistory(env,s.id))})))), ledger, entitlements: features, incumbentInvoices: incumbent, charges: await all(env, 'SELECT * FROM nc_charges WHERE customer_id=? ORDER BY effective_date,id', id), certificatePolicy: await one(env, 'SELECT enabled,revision FROM nc_certificate_policy WHERE singleton=1'), certificates: await certificates(env, actor, id), exemptionClaims: await all(env, 'SELECT state FROM nc_exemption_claims WHERE customer_id=? ORDER BY state', id), certificateReminders: await all(env, 'SELECT state,kind,status,created_at FROM nc_certificate_reminders WHERE customer_id=? ORDER BY created_at DESC', id) }
 }
 
 export const views: Record<string, View> = {
@@ -82,7 +84,7 @@ export const views: Record<string, View> = {
   me: async (_env, actor) => ({ id: actor.id, kind: actor.kind, name: actor.name, email: actor.email, role: actor.role, ...(actor.roleName ? { role_name: actor.roleName } : {}), capabilities: [...actor.capabilities] }),
   business: (env, actor) => businessView(env, actor),
   customers: (env, actor,_r,_id,url) => customers(env, actor,url),
-  customer: (env, actor, _request, id) => customerView(env, actor, id),
+  customer: (env, actor, _request, id, url) => customerView(env, actor, id, url),
   catalog: (env, actor,_r,_id,url) => catalog(env, actor,url),
   upcoming: (env, actor, _r, id, url) => upcoming(env,actor,id,url.searchParams.get('period')),
   subscription: (env, actor, _request, id) => subscriptionDetail(env, actor, id),

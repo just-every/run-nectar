@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { applyPolicy } from './policy-helper.mjs'
 
 // USE-006: the live preview shares exact billing inputs, then freezes at issue.
-export async function upcomingFlow(h, owner) {
+export async function upcomingFlow(h, owner, onReady = async () => {}) {
   const previous = await h.api('business', owner)
   assert.equal(previous.timezone, 'America/Los_Angeles', 'USE-006 fixture uses the declared Pacific business day')
   await applyPolicy(h, owner, 'tax.declare', { tax_jurisdiction: 'CA', tax_mode: 'flat_rate', tax_rate: '10', tax_note: 'Reviewed upcoming invoice example' })
@@ -27,6 +27,7 @@ export async function upcomingFlow(h, owner) {
   const read = () => h.api(january, owner)
   const submit = (event_id, quantity, occurred_at, target = 'USE006-LIVE') => h.api('usage.submit', owner, { events: [{ event_id, quantity, occurred_at, customer: target, meter: 'use006-events' }] })
   const empty = await read()
+  assert.ok(empty.calculation.exceptions.some(row => row.code === 'missing_usage'), 'USE-006 a missing usage feed remains visible for review')
   assert.equal(empty.subscription, subscription)
   assert.equal(empty.customer, customer)
   assert.equal(empty.state, 'preview')
@@ -145,6 +146,58 @@ export async function upcomingFlow(h, owner) {
   assert.match(html, /182\.60/)
   const usageHtml = await h.page('/app/usage?period=2026-01', owner)
   assert.ok(usageHtml.includes(`/app/subscriptions/${subscription}`) && usageHtml.includes('#upcoming'))
+  // CUS-001 composes these same calculations on the customer record. No
+  // separate pricing model or customer-level estimate is allowed to drift.
+  const extra = (await h.api('subscription.create', owner, { customer, start_date: '2026-01-15', anchor_day: 15, price: [prices[0]] })).id
+  const future = (await h.api('subscription.create', owner, { customer, start_date: '2099-01-01', anchor_day: 1, price: [prices[0]] })).id
+  const customerPath = `customers/${customer}?preview_period=2026-01`
+  const customerRows = () => h.api(customerPath, owner).then(record => record.upcoming)
+  const rows = await customerRows()
+  assert.deepEqual(new Set(rows.map(row => row.subscription)), new Set([subscription, extra, future]), 'CUS-001 every own subscription appears, including one outside the selected period')
+  const frozen = rows.find(row => row.subscription === subscription), fresh = rows.find(row => row.subscription === extra)
+  assert.deepEqual([frozen.state, frozen.invoiceId, frozen.subtotalCents, frozen.taxCents, frozen.totalCents], ['issued', invoiceId, 16600, 1660, 18260])
+  assert.deepEqual([fresh.state, fresh.subtotalCents, fresh.taxCents, fresh.totalCents], ['preview', 10000, 1000, 11000])
+  assert.deepEqual(fresh.period, { start: '2026-01-15', end: '2026-02-15' }, 'CUS-001 each row keeps its own anchor')
+  const unavailable = rows.find(row => row.subscription === future)
+  assert.equal(unavailable.reason, 'subscription_not_in_period')
+  assert.equal(unavailable.totalCents, null, 'CUS-001 no charge is invented outside service dates')
+  assert.ok(!rows.some(row => row.subscription === anchoredSubscription), 'CUS-001 another customer’s subscription never appears')
+  for (const row of [frozen, fresh]) {
+    const direct = await h.api(`subscriptions/${row.subscription}/upcoming?period=2026-01`, owner)
+    assert.equal(row.totalCents, direct.calculation.totalCents)
+    assert.equal(row.sourcePath, `/app/subscriptions/${row.subscription}?preview_period=2026-01#upcoming`)
+  }
+  const februaryCustomer = await h.api(`customers/${customer}?preview_period=2026-02`, owner)
+  const liveBefore = februaryCustomer.upcoming.find(row => row.subscription === subscription)
+  await submit('cus001-live-change', '1', '2026-02-15T12:00:00-08:00')
+  const liveAfter = (await h.api(`customers/${customer}?preview_period=2026-02`, owner)).upcoming.find(row => row.subscription === subscription)
+  assert.equal(liveAfter.totalCents - liveBefore.totalCents, 220, 'CUS-001 refreshing uses new usage with exact tax')
+  assert.deepEqual((await customerRows()).find(row => row.subscription === subscription), frozen, 'CUS-001 later usage never rewrites the issued row')
+  await h.api('usage.control', owner, { customer, meter: 'use006-events', day: '2026-02-15', expected_count: 2, expected_quantity: '2' })
+  assert.ok((await h.api(`customers/${customer}?preview_period=2026-02`, owner)).upcoming.find(row => row.subscription === subscription).exceptions.some(row => row.code === 'usage_reconciliation'), 'CUS-001 a source-control mismatch stays visible for review')
+  assert.deepEqual((await h.api(`customers/${other}?preview_period=2025-12`, owner)).upcoming.map(row => row.reason), ['subscription_not_in_period'])
+  assert.deepEqual((await h.api(`customers/${other}?preview_period=2026-01`, owner)).upcoming.map(row => row.totalCents), [11000])
+  assert.equal((await h.api(`customers/${customer}?preview_period=`, owner)).upcoming.find(row => row.subscription === subscription).period.start, current.period.start, 'CUS-001 an empty month selects the current anchor period')
+  await h.api(`customers/${customer}?preview_period=2026-13`, owner, undefined, 400)
+  for (const [role, visible] of [['support', true], ['collections', false], ['sales', false]]) {
+    const email = `cus001-preview-${role}@example.test`
+    await h.api('access.give', owner, { email, name: `Preview ${role}`, role })
+    const who = await h.signIn(email, { requested: true })
+    const record = await h.api(customerPath, who)
+    assert.deepEqual(record.upcoming, visible ? rows : null, 'CUS-001 composition retains subscription and invoice family checks')
+    const page = await h.page(`/app/${customerPath}`, who)
+    assert.equal(page.includes('id="customer-upcoming"'), visible)
+  }
+  for (const who of [accountant, { bearer: prepareKey.key }]) assert.deepEqual((await h.api(customerPath, who)).upcoming, rows)
+  await h.api(customerPath, undefined, undefined, 401)
+  const beforeRead = { audit: await h.api('audit', owner), runs: await h.api('runs', owner), invoices: await h.api('invoices', owner) }
+  const customerHtml = await h.page(`/app/${customerPath}`, owner)
+  assert.ok(customerHtml.includes('$182.60') && customerHtml.includes('$110.00') && customerHtml.includes('Outside service dates.'), 'CUS-001 the customer screen renders independently calculated totals and unavailable states')
+  assert.ok(customerHtml.includes(frozen.sourcePath.replaceAll('&', '&amp;')) && customerHtml.includes(fresh.sourcePath.replaceAll('&', '&amp;')), 'CUS-001 each figure opens its original calculation')
+  await customerRows()
+  assert.deepEqual({ audit: await h.api('audit', owner), runs: await h.api('runs', owner), invoices: await h.api('invoices', owner) }, beforeRead, 'CUS-001 preview reads prepare, approve and issue nothing')
+  await onReady({ h, owner, customer, other, subscription, extra, future, customerPath, rows })
+  console.log('CUS-001 customer upcoming composition, exact totals, current usage, issued custody, anchors and authority passed')
   await h.api('credential.revoke', owner, { key: prepareKey.id })
   await h.api('credential.revoke', owner, { key: usageKey.id })
   await applyPolicy(h, owner, 'tax.declare', { tax_jurisdiction: previous.tax_jurisdiction, tax_mode: previous.tax_mode, tax_rate: previous.tax_rate, tax_note: previous.tax_note })
