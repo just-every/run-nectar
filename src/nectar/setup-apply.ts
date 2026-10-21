@@ -10,7 +10,10 @@ export function setupStatements(env: Bindings, actor: Actor, payload: Row, propo
   const customer=p.customer,sub=p.subscription
   if(customer.create) statements.push(
     guard(env,'external_id_in_use','NOT EXISTS(SELECT 1 FROM nc_customers WHERE external_id=?)',customer.externalId),
-    stmt(env,"INSERT INTO nc_customers(id,external_id,name,billing_email,address,tax_exempt,tax_exempt_ref,origin,revision,created_at,updated_at) VALUES(?,?,?,?,?,?,?,'native',?,?,?)",customer.id,customer.externalId,customer.name,customer.billingEmail,customer.address,customer.taxExempt?1:0,customer.taxExemptRef,newId(),at,at))
+    stmt(env,"INSERT INTO nc_customers(id,external_id,name,billing_email,address,tax_exempt,tax_exempt_ref,invoice_settings_json,origin,revision,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,'native',?,?,?)",customer.id,customer.externalId,customer.name,customer.billingEmail,customer.address,customer.taxExempt?1:0,customer.taxExemptRef,JSON.stringify(customer.invoiceSettings),newId(),at,at))
+  else if (payload.input.invoice !== undefined) statements.push(
+    guard(env,'proposal_stale','EXISTS(SELECT 1 FROM nc_customers WHERE id=? AND revision=?)',customer.id,JSON.parse(proposal.basis_json).customer.revision),
+    stmt(env,'UPDATE nc_customers SET invoice_settings_json=?,revision=?,updated_at=? WHERE id=?',JSON.stringify(customer.invoiceSettings),newId(),at,customer.id))
   for(const product of p.products.filter((v:Row)=>v.create)) statements.push(
     guard(env,'code_in_use','NOT EXISTS(SELECT 1 FROM nc_products WHERE code=?)',product.code),
     stmt(env,"INSERT INTO nc_products(id,code,name,description,status,origin,revision,created_at) VALUES(?,?,?,'','active','native',?,?)",product.id,product.code,product.name,newId(),at))

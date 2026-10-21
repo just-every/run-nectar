@@ -7,6 +7,7 @@ import { withMetadata } from './metadata'
 import { metadataFilter,metadataPredicate } from './metadata-query'
 import type { Input } from './input'
 import { languageInput } from './locale'
+import { invoiceSettingsInput } from './invoice-content'
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const EXTERNAL_ID = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,79}$/
@@ -51,9 +52,10 @@ export async function createCustomer(env: Bindings, actor: Actor, input: Input) 
   insist(!exempt || exemptRef, 'exemption_reference_required')
   const language = languageInput(input.text('language', { max: 35, optional: true }))
   insist(!await one(env, 'SELECT 1 FROM nc_customers WHERE external_id = ?', externalId), 'external_id_in_use', 409)
+  const settings = invoiceSettingsInput(input)
   const id = newId()
-  await commit(env, [stmt(env, "INSERT INTO nc_customers (id, external_id, name, billing_email, address, tax_exempt, tax_exempt_ref, language, origin, revision, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'native', ?, ?, ?)",
-    id, externalId, name, email, address, exempt ? 1 : 0, exempt ? exemptRef : '', language, newId(), now(), now())],
+  await commit(env, [stmt(env, "INSERT INTO nc_customers (id, external_id, name, billing_email, address, tax_exempt, tax_exempt_ref, language, invoice_settings_json, origin, revision, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'native', ?, ?, ?)",
+    id, externalId, name, email, address, exempt ? 1 : 0, exempt ? exemptRef : '', language, settings, newId(), now(), now())],
   { actor: actorLabel(actor), action: 'customer.create', subject: id, detail: { externalId, name, language } })
   return { id, external_id: externalId }
 }
@@ -71,9 +73,10 @@ export async function updateCustomer(env: Bindings, actor: Actor, input: Input) 
   insist(!exempt || exemptRef, 'exemption_reference_required')
   // Omitted on an update keeps the customer's current language.
   const language = languageInput(input.text('language', { max: 35, optional: true }) || customer.language)
+  const settings = invoiceSettingsInput(input, customer.invoice_settings_json)
   await commit(env, [
     guard(env, 'stale', 'EXISTS(SELECT 1 FROM nc_customers WHERE id = ? AND revision = ?)', customer.id, customer.revision),
-    stmt(env, "UPDATE nc_customers SET name = ?, billing_email = ?, address = ?, tax_exempt = ?, tax_exempt_ref = ?, language = ?, revision = ?, updated_at = ? WHERE id = ?", name, email, address, exempt ? 1 : 0, exempt ? exemptRef : '', language, newId(), now(), customer.id),
+    stmt(env, "UPDATE nc_customers SET name = ?, billing_email = ?, address = ?, tax_exempt = ?, tax_exempt_ref = ?, language = ?, invoice_settings_json = ?, revision = ?, updated_at = ? WHERE id = ?", name, email, address, exempt ? 1 : 0, exempt ? exemptRef : '', language, settings, newId(), now(), customer.id),
   ], { actor: actorLabel(actor), action: 'customer.update', subject: customer.id, detail: { name, email, exempt, language } })
   return { id: customer.id }
 }

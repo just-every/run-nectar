@@ -8,10 +8,11 @@ import { canonicalDecimal, micros } from './decimal'
 import { validTimeZone } from './dates'
 import { preparePolicyChange } from './policy-changes'
 import type { Input } from './input'
+import { invoiceFields, invoiceFieldInput } from './invoice-content'
 
 export interface Business {
   legal_name: string; address: string; billing_email: string; currency: 'USD'; timezone: string; invoice_prefix: string
-  next_invoice_number: number; next_credit_number: number; payment_terms_days: number
+  next_invoice_number: number; next_credit_number: number; payment_terms_days: number; invoice_fields_json: string
   tax_jurisdiction: string; tax_mode: 'undeclared' | 'no_tax' | 'flat_rate'; tax_rate: string; tax_note: string
   tax_reviewed_by: string | null; tax_reviewed_at: number | null; revision: number; updated_at: number
 }
@@ -51,8 +52,9 @@ export async function configureBusiness(env: Bindings, actor: Actor, input: Inpu
   const currency = input.text('currency', { max: 3, optional: true }) || 'USD'
   insist(currency === 'USD', 'unsupported_currency')
   const address = input.text('address', { max: 400, optional: true })
+  const invoiceFieldsJson = input.has('invoice_fields') ? JSON.stringify(invoiceFields(input.json('invoice_fields'))) : input.flag('invoice_fields_edit') ? JSON.stringify(invoiceFieldInput(input)) : current?.invoice_fields_json ?? '{}'
   if (!current) {
-    await commit(env, [stmt(env, 'INSERT INTO nc_business (singleton, legal_name, address, billing_email, timezone, invoice_prefix, payment_terms_days, updated_at) VALUES (1, ?, ?, ?, ?, ?, ?, ?)', legalName, address, email, timezone, prefix, terms, now())],
+    await commit(env, [stmt(env, 'INSERT INTO nc_business (singleton, legal_name, address, billing_email, timezone, invoice_prefix, payment_terms_days, invoice_fields_json, updated_at) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?)', legalName, address, email, timezone, prefix, terms, invoiceFieldsJson, now())],
       { actor: actorLabel(actor), action: 'business.configure', subject: 'business', detail: { legalName, timezone, prefix, terms } })
     return await business(env)
   }
@@ -62,7 +64,7 @@ export async function configureBusiness(env: Bindings, actor: Actor, input: Inpu
   await commit(env, [
     guard(env, 'stale', 'EXISTS(SELECT 1 FROM nc_business WHERE singleton = 1 AND revision = ?)', current.revision),
     guard(env, 'timezone_fixed_after_first_invoice', "? = (SELECT timezone FROM nc_business) OR NOT EXISTS(SELECT 1 FROM nc_invoices WHERE status = 'issued')", timezone),
-    stmt(env, 'UPDATE nc_business SET legal_name = ?, address = ?, billing_email = ?, timezone = ?, invoice_prefix = ?, payment_terms_days = ?, revision = revision + 1, updated_at = ? WHERE singleton = 1', legalName, address, email, timezone, prefix, terms, now()),
+    stmt(env, 'UPDATE nc_business SET legal_name = ?, address = ?, billing_email = ?, timezone = ?, invoice_prefix = ?, payment_terms_days = ?, invoice_fields_json = ?, revision = revision + 1, updated_at = ? WHERE singleton = 1', legalName, address, email, timezone, prefix, terms, invoiceFieldsJson, now()),
   ], { actor: actorLabel(actor), action: 'business.configure', subject: 'business', detail: { legalName, timezone, prefix, terms } })
   return await business(env)
 }

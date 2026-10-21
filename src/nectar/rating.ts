@@ -31,6 +31,7 @@ export interface AmendmentIn { id: string; kind: 'discount_percent' | 'fixed_cre
 export interface EventIn { eventId: string; meterId: string; quantity: string; occurredAt: number;properties?:Record<string,import('./metric-plan').PropertyValue>;invoiceId?:string|null }
 export interface RatingInput {
   version: string
+  invoiceContent?: import('./invoice-content').InvoiceContent
   renewals?: RenewalRate[]
   timezone: string
   tax: { mode: 'undeclared' | 'no_tax' | 'flat_rate'; rate: string; jurisdiction: string; exempt: boolean; exemptRef: string; certificate?: unknown; exception?: Exception | null }
@@ -75,6 +76,7 @@ export function rate(input: RatingInput, presentCancellationCredits = true): Rat
   const { period, subscription: sub } = input
   const periodDays = BigInt(daysBetween(period.start, period.end))
   const lines: Line[] = [], exceptions: Exception[] = [], consumed: string[] = []
+  if (input.invoiceContent?.poRequired && !input.invoiceContent.poNumber) exceptions.push({ code: 'po_required', message: 'A purchase order number is required before this invoice can be approved or issued.' })
   const activeFrom = max(max(period.start, sub.startDate), sub.billFrom ?? period.start)
   const activeTo = min(period.end, sub.endDate ?? FAR)
   const billFrom = sub.trialEnd ? max(activeFrom, sub.trialEnd) : activeFrom

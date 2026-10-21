@@ -1,3 +1,4 @@
+import { invoiceContent } from './invoice-content'
 import { RENEWAL_RATING_VERSION } from './renewal-rating'
 // Gathers the recorded inputs that rate one subscription for one period, and
 // fingerprints them. An approval names this fingerprint: if any input changes
@@ -58,6 +59,7 @@ export async function ratingInputs(env: Bindings, business: Business, subscripti
     ...(charges.length ? { charges } : {}),
     ...(intervals.length ? { lifecycle: intervals, creditGovernance: {thresholdCents:creditGovernance!.two_person_above_cents, revision:creditGovernance!.revision} } : {}),
     version: renewals.length ? RENEWAL_RATING_VERSION : metricSources.length ? METRIC_RATING_VERSION : hasContracts ? CONTRACT_RATING_VERSION : intervals.length ? LIFECYCLE_RATING_VERSION : charges.length ? CHARGE_RATING_VERSION : Object.values(prices).some(price => price.pricing) ? PRICE_MODEL_RATING_VERSION : RATING_VERSION,
+    invoiceContent: await invoiceContent(env, business, sub.customer_id),
     timezone: business.timezone,
     tax: { mode: business.tax_mode, rate: business.tax_rate, jurisdiction: business.tax_jurisdiction, exempt: certificate?.exempt ?? !!sub.tax_exempt, exemptRef: certificate?.exemptRef ?? sub.tax_exempt_ref, ...(certificate ? { certificate: certificate.certificate, exception: certificate.exception } : {}) },
     subscription: { id: sub.id, anchorDay: sub.anchor_day, startDate: sub.start_date, trialEnd: sub.trial_end, endDate: sub.end_date, billFrom: sub.cutover_start },

@@ -9,6 +9,7 @@ import { addDays, requireDate, today } from './dates'
 import type { Input } from './input'
 import { invoiceTotals } from './invoice-tax'
 import { CHARGE_RATING_VERSION, chargeLines } from './charge-lines'
+import { invoiceContent } from './invoice-content'
 import { chargeInput } from './one-time-charges'
 
 export async function manualCalculation(env: Bindings, b: Business, customerId: string, ids: string[], date: string) {
@@ -20,8 +21,9 @@ export async function manualCalculation(env: Bindings, b: Business, customerId: 
   const certificate = await certificateBasis(env, customerId, b.tax_jurisdiction, { start: date, end: addDays(date, 1) })
   const tax = { mode: b.tax_mode, rate: b.tax_rate, jurisdiction: b.tax_jurisdiction, exempt: certificate?.exempt ?? !!customer.tax_exempt, exemptRef: certificate?.exemptRef ?? customer.tax_exempt_ref, ...(certificate ? { certificate: certificate.certificate, exception: certificate.exception } : {}) }
   const charges = rows.map(chargeInput), lines = chargeLines(charges)
-  const input = { version: CHARGE_RATING_VERSION, customer: customerId, date, charges, tax }
+  const input = { version: CHARGE_RATING_VERSION, customer: customerId, date, charges, tax, invoiceContent: await invoiceContent(env, b, customerId) }
   const totals = invoiceTotals(tax, lines)
+  if (input.invoiceContent.poRequired && !input.invoiceContent.poNumber) totals.exceptions.push({ code: 'po_required', message: 'A purchase order number is required before this invoice can be approved or issued.' })
   return { input, rating: { ...totals, lines, consumedEvents: [] }, fingerprint: await fingerprint(input) }
 }
 

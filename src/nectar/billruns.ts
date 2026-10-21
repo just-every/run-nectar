@@ -21,7 +21,7 @@ import { reconciliationFor } from './reconciliation'
 import { RATING_VERSION, type Exception, type Rating } from './rating'
 import type { Input } from './input'
 
-const BLOCKING = new Set(['tax_undeclared', 'exemption_certificate', 'negative_total', 'usage_reconciliation','commitment_prior_periods','metric_late_correction','metric_duplicate_selection','metric_negative_quantity'])
+const BLOCKING = new Set(['po_required','tax_undeclared', 'exemption_certificate', 'negative_total', 'usage_reconciliation','commitment_prior_periods','metric_late_correction','metric_duplicate_selection','metric_negative_quantity'])
 
 interface Draft { sub: Row; period: { start: string; end: string }; rating: Rating; fingerprint: string; input: { version: string }; comparison: Row; exceptions: Exception[] }
 
@@ -164,6 +164,7 @@ async function currentFingerprint(env: Bindings, business: Business, invoice: Ro
 }
 
 async function approveOne(env: Bindings, actor: Actor, business: Business, invoice: Row, acknowledged: boolean) {
+  const customer = await one(env, 'SELECT revision FROM nc_customers WHERE id=?', invoice.customer_id)
   await cancellationApproval(env,actor,invoice)
   insist(invoice.status === 'draft', invoice.status === 'shadow' ? 'shadow_invoice' : 'not_a_draft', 409)
   const exceptions = parseJson<Exception[]>(invoice.exceptions_json, [])
@@ -171,6 +172,7 @@ async function approveOne(env: Bindings, actor: Actor, business: Business, invoi
   insist(!exceptions.length || acknowledged, 'exceptions_not_acknowledged', 409, exceptions)
   insist(await currentFingerprint(env, business, invoice) === invoice.source_fingerprint, 'source_changed', 409)
   return [
+    guard(env, 'source_changed', 'EXISTS(SELECT 1 FROM nc_business WHERE singleton=1 AND revision=?) AND EXISTS(SELECT 1 FROM nc_customers WHERE id=? AND revision=?)', business.revision, invoice.customer_id, customer?.revision ?? ''),
     guard(env, 'stale', "EXISTS(SELECT 1 FROM nc_invoices WHERE id = ? AND status = 'draft' AND source_fingerprint = ?)", invoice.id, invoice.source_fingerprint),
     stmt(env, "UPDATE nc_invoices SET status = 'approved', approved_fingerprint = source_fingerprint, approved_by = ?, approved_at = ? WHERE id = ?", actorLabel(actor), now(), invoice.id),
   ]
@@ -214,6 +216,8 @@ export async function finalise(env: Bindings, actor: Actor, input: Input) {
   insist(issueDate <= day && targets.every(invoice => issueDate >= (invoice.invoice_kind === 'manual' ? invoice.period_start : invoice.period_end)), 'invalid_issue_date')
   const issued: string[] = [], refused: Row[] = []
   for (const invoice of targets) {
+    const customer = await one(env, 'SELECT revision,invoice_settings_json FROM nc_customers WHERE id=?', invoice.customer_id)
+    insist(customer, 'customer_not_found', 404)
     await cancellationApproval(env,actor,invoice)
     if (await currentFingerprint(env, business, invoice) !== invoice.approved_fingerprint) { refused.push({ invoice: invoice.id, reason: 'source_changed' }); continue }
     const calculation = parseJson<Row>(invoice.calculation_json, {})
@@ -221,9 +225,12 @@ export async function finalise(env: Bindings, actor: Actor, input: Input) {
     const charges: string[] = (calculation.inputs?.charges ?? []).map((c: Row) => c.id)
     const sequence = business.next_invoice_number
     const number = `${business.invoice_prefix}-${String(sequence).padStart(6, '0')}`
-    const due = addDays(issueDate, business.payment_terms_days)
+    const content = calculation.inputs?.invoiceContent
+    insist(!content?.poRequired || content.poNumber, 'po_required', 409)
+    const due = addDays(issueDate, content?.paymentTermsDays ?? business.payment_terms_days)
     await commit(env, [
-      guard(env, 'stale', 'EXISTS(SELECT 1 FROM nc_business WHERE singleton = 1 AND next_invoice_number = ?)', sequence),
+      guard(env, 'stale', 'EXISTS(SELECT 1 FROM nc_business WHERE singleton = 1 AND next_invoice_number = ? AND revision=?)', sequence, business.revision),
+      guard(env, 'source_changed', 'EXISTS(SELECT 1 FROM nc_customers WHERE id=? AND revision=? AND invoice_settings_json=?)', invoice.customer_id, customer.revision, customer.invoice_settings_json),
       guard(env, 'stale', "EXISTS(SELECT 1 FROM nc_invoices WHERE id = ? AND status = 'approved' AND approved_fingerprint = ?)", invoice.id, invoice.approved_fingerprint),
       ...chunk(consumed, 90).map(ids => guard(env, 'already_billed', `NOT EXISTS(SELECT 1 FROM nc_usage_events WHERE event_id IN (${ids.map(() => '?').join(',')}) AND (invoice_id IS NOT NULL OR status <> 'active'))`, ...ids)),
       ...charges.map(id => guard(env, 'charges_already_billed_or_missing', 'EXISTS(SELECT 1 FROM nc_charges WHERE id=? AND invoice_id IS NULL)', id)),

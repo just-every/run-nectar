@@ -2,7 +2,7 @@ import type { Bindings } from '../auth.server'
 import type { Business } from './business'
 import { all, fingerprint, insist, parseJson, type Row } from './core'
 import { cents, canonicalDecimal } from './decimal'
-import { addMonths, isMonth, zonedStart } from './dates'
+import { addDays, addMonths, isMonth, zonedStart } from './dates'
 import { certificateBasis } from './certificates'
 import { CONTRACT_RATING_VERSION, type ContractBasis } from './commitment-rating'
 import { pricesById, ratingInputs } from './inputs'
@@ -79,9 +79,9 @@ export async function setupPreview(env: Bindings, business: Business, plan: Row,
       input = { version, timezone: business.timezone, tax: { mode: business.tax_mode, rate: business.tax_rate, jurisdiction: business.tax_jurisdiction, exempt: certificate?.exempt ?? plan.customer.taxExempt, exemptRef: certificate?.exemptRef ?? plan.customer.taxExemptRef, ...(certificate ? { certificate: certificate.certificate, exception: certificate.exception } : {}) }, subscription: { id: plan.subscription.id, anchorDay: plan.subscription.anchorDay, startDate: plan.subscription.startDate, trialEnd: plan.subscription.trialEnd, endDate: plan.subscription.evergreen ? null : plan.subscription.endDate, billFrom: null }, period, items, prices, amendments: [], events: recorded.filter(e => e.occurredAt < zonedStart(period.end, business.timezone)), contracts: priorContracts }
     }
     const metricSources = new Set(Object.values({ ...input.prices, ...prices }).flatMap(p => p.metric ? [p.metric.sourceId] : []))
-    input = { ...input, version, ...(plan.renewal ? { renewals } : {}), prices: { ...input.prices, ...prices }, items, amendments: [...input.amendments, ...amendments], events: [...[...input.events, ...recorded.filter(e => !input.events.some(v => v.eventId === e.eventId) && e.occurredAt < zonedStart(period.end, business.timezone))].filter(e => !consumed.has(e.eventId) || !!e.invoiceId || metricSources.has(e.meterId)).map(e => consumed.has(e.eventId) && metricSources.has(e.meterId) ? { ...e, invoiceId: consumed.get(e.eventId)! } : e), ...scenarioEvents.filter(e => e.occurredAt < zonedStart(period.end, business.timezone) && !consumed.has(e.eventId))], charges: (input.charges ?? []).filter(c => !charged.has(c.id)), contracts: { commitments: [...(input.contracts?.commitments ?? []), ...additionalContracts.commitments], included: [...(input.contracts?.included ?? []), ...additionalContracts.included], invoices: [...(input.contracts?.invoices ?? []), ...projected] } }
+    input = { ...input, invoiceContent: plan.invoiceContent, version, ...(plan.renewal ? { renewals } : {}), prices: { ...input.prices, ...prices }, items, amendments: [...input.amendments, ...amendments], events: [...[...input.events, ...recorded.filter(e => !input.events.some(v => v.eventId === e.eventId) && e.occurredAt < zonedStart(period.end, business.timezone))].filter(e => !consumed.has(e.eventId) || !!e.invoiceId || metricSources.has(e.meterId)).map(e => consumed.has(e.eventId) && metricSources.has(e.meterId) ? { ...e, invoiceId: consumed.get(e.eventId)! } : e), ...scenarioEvents.filter(e => e.occurredAt < zonedStart(period.end, business.timezone) && !consumed.has(e.eventId))], charges: (input.charges ?? []).filter(c => !charged.has(c.id)), contracts: { commitments: [...(input.contracts?.commitments ?? []), ...additionalContracts.commitments], included: [...(input.contracts?.included ?? []), ...additionalContracts.included], invoices: [...(input.contracts?.invoices ?? []), ...projected] } }
     const calculation = rate(input), digest = await fingerprint(input)
-    periods.push({ period, inputs: input, calculation, fingerprint: digest })
+    periods.push({ period, assumedIssueDate: period.end, dueDate: addDays(period.end, plan.invoiceContent.paymentTermsDays), invoiceContent: plan.invoiceContent, inputs: input, calculation, fingerprint: digest })
     basis.ratings.push(digest)
     for (const e of calculation.consumedEvents) consumed.set(e, `setup-preview-${index}`)
     for (const c of input.charges ?? []) charged.add(c.id)
