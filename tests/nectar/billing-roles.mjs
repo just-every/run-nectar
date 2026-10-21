@@ -19,13 +19,13 @@ const PAGE_PROBE = { metadata: '/app/metadata/price/none', report: '/app/reports
 const fill = pattern => pattern.replace(/^\^|\$$/g, '').replace(/\(\[[^)]*\]\+\)/g, 'none').replace(/\\\./g, '.')
 
 const READ_ALL_API = API_DOORS.map(([, name]) => name).filter(name => !['members', 'roles', 'imports', 'audit', 'reportSchedule', 'reportDelivery', 'noteMembers'].includes(name))
-const READ_ALL_PAGES = PAGE_DOORS.map(([, name]) => name).filter(name => !['erasureEvidence', 'revenueCsv', 'reportSchedule', 'reportDelivery', 'reportDeliveryCsv', 'reportCsv', 'metadataCsv', 'runFile', 'import', 'exports', 'customersFile', 'invoicesFile', 'usageFile', 'subscriptionsFile', 'audit', 'noticeFile'].includes(name))
+const READ_ALL_PAGES = PAGE_DOORS.map(([, name]) => name).filter(name => !['numberRegisterCsv', 'erasureEvidence', 'revenueCsv', 'reportSchedule', 'reportDelivery', 'reportDeliveryCsv', 'reportCsv', 'metadataCsv', 'runFile', 'import', 'exports', 'customersFile', 'invoicesFile', 'usageFile', 'subscriptionsFile', 'audit', 'noticeFile'].includes(name))
 const COMMON = { api: ['openapi', 'me', 'notifications', 'mfa'], pages: ['home', 'more', 'security', 'passkeyScript'] }
 const EXPECTED = {
   collections: {
     actions: ['payment.record', 'payment.allocate', 'reminder.prepare', 'reminder.approve', 'reminder.discard', 'task.create', 'task.complete', 'cadence.enroll', 'cadence.promise', 'cadence.dispute', 'cadence.resolve', 'cadence.approve', 'cadence.run', 'note.add', 'answer.read'],
-    api: ['customers', 'customer', 'invoices', 'invoice', 'ageing', 'payments', 'notices', 'tasks', 'notes', 'noteMembers', 'entitlement', 'reportLine', 'cadences', 'metadataObjects'],
-    pages: ['customers', 'customer', 'certificateFile', 'invoice', 'receivables', 'noticeFile', 'cadences', 'billingAnswers', 'reportLine', 'metadataList'],
+    api: ['numberRegister', 'customers', 'customer', 'invoices', 'invoice', 'ageing', 'payments', 'notices', 'tasks', 'notes', 'noteMembers', 'entitlement', 'reportLine', 'cadences', 'metadataObjects'],
+    pages: ['numberRegister', 'customers', 'customer', 'certificateFile', 'invoice', 'receivables', 'noticeFile', 'cadences', 'billingAnswers', 'reportLine', 'metadataList'],
   },
   sales: {
     actions: ['change.prepare', 'amendment.propose', 'contract.prepare'],
@@ -34,8 +34,8 @@ const EXPECTED = {
   },
   support: {
     actions: ['note.add', 'credit.issue', 'answer.read'],
-    api: ['customers', 'customer', 'invoices', 'invoice', 'ageing', 'payments', 'notes', 'noteMembers', 'entitlement', 'subscription', 'upcoming', 'reportLine', 'metadataObjects'],
-    pages: ['customers', 'customer', 'certificateFile', 'subscription', 'invoice', 'receivables', 'billingAnswers', 'reportLine', 'metadataList'],
+    api: ['numberRegister', 'customers', 'customer', 'invoices', 'invoice', 'ageing', 'payments', 'notes', 'noteMembers', 'entitlement', 'subscription', 'upcoming', 'reportLine', 'metadataObjects'],
+    pages: ['numberRegister', 'customers', 'customer', 'certificateFile', 'subscription', 'invoice', 'receivables', 'billingAnswers', 'reportLine', 'metadataList'],
   },
   developer: {
     actions: ['credential.issue', 'credential.revoke', 'credential.version', 'answer.read', 'meter.preview', 'usage.correction.preview'],
@@ -81,6 +81,7 @@ const recordDoors = ids => [
   [`/api/nectar/subscriptions/${ids.subscription}`, ['subscriptions']], [`/app/subscriptions/${ids.subscription}`, ['subscriptions']], [`/api/nectar/subscriptions/${ids.subscription}/upcoming`, ['subscriptions']],
   [`/api/nectar/invoices/${ids.invoice}`, ['invoices']], [`/app/invoices/${ids.invoice}`, ['invoices']], ['/api/nectar/payments', ['payments']], [`/api/nectar/notes/payment/${ids.payment}`, ['payments']],
   [`/api/nectar/metadata/invoice/${ids.invoice}`, ['invoices']], ['/api/nectar/catalog', ['catalog']], ['/app/catalog', ['catalog']],
+  ['/api/nectar/number-register', ['invoices']], ['/app/numbering', ['invoices']],
   ['/app/reports/billings', ['reports']], ['/app/revenue', ['reports']], ['/app/receivables', ['customers', 'invoices', 'payments']],
   [`/api/nectar/reports/billings/${ids.invoice}?period=2026-09`, ['reports']], [`/app/reports/billings/${ids.invoice}?period=2026-09`, ['reports']],
 ]

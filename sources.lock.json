@@ -3333,7 +3333,7 @@
       "executable": false
     },
     "tests/nectar/billing-roles.mjs": {
-      "sha256": "97810672b22fe67d2e8c07e3461e9f20a8dd6b5d25bd650b07c127b93f989c09",
+      "sha256": "4a89583612a2f3beb3590d1b05a5295274a64aaca6910fb31999c8ea0db66be1",
       "executable": false
     },
     "tests/nectar/cadences.mjs": {
