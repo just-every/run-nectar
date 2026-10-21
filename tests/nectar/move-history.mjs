@@ -139,8 +139,12 @@ export async function moveHistoryFlow(h,owner,{onState=async()=>{},keepHistory=f
 export async function moveHistoryErasureFlow(h,owner) {
   const {customer,annual,delivery}=await moveHistoryFlow(h,owner,{keepHistory:true})
   const api=(path,body)=>h.api(path,owner,body)
-  const meter=(await api('meter.create',{code:'synthetic-nectar-history-erasure-usage',name:'Historical private usage',unit_label:'events'})).id
-  for(let start=0;start<10000;start+=5000)await api('usage.submit',{events:Array.from({length:5000},(_,offset)=>({event_id:`synthetic-nectar-history-private-${start+offset}`,customer:'synthetic-nectar-1',meter,quantity:'1',occurred_at:'2026-06-15T00:00:00Z',properties:{person:'Alder Research',email:'billing@alder.example'}}))})
+  const meter='synthetic-nectar-history-erasure-usage'
+  await api('meter.create',{code:meter,name:'Historical private usage',unit_label:'events'})
+  for(let start=0;start<10000;start+=5000){
+    const batch=await api('usage.submit',{events:Array.from({length:5000},(_,offset)=>({event_id:`synthetic-nectar-history-private-${start+offset}`,customer:'synthetic-nectar-1',meter,quantity:'1',occurred_at:'2026-06-15T00:00:00Z',properties:{person:'Alder Research',email:'billing@alder.example'}}))})
+    assert.deepEqual([batch.accepted,batch.duplicates,batch.rejected],[5000,0,0])
+  }
   const beforeRevenue=await api(`revenue?from=2026-07&to=2027-02&customer=${customer}`)
   const beforeBillings=await api(`reports/billings?period=2026-03&customer=${customer}`)
   const beforeCollections=await api(`reports/collections?period=2026-03&customer=${customer}`)
