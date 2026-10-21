@@ -262,11 +262,13 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
   "import.preview": {
     "*": "has"
   },
-  "invoice.correction.refresh": {"invoice":"text"},
   "invoice.approve": {
     "acknowledge": "flag",
     "invoice": "text",
     "run": "text"
+  },
+  "invoice.correction.refresh": {
+    "invoice": "text"
   },
   "invoice.finalise": {
     "invoice": "text",
@@ -609,10 +611,27 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "expected_quantity": "text",
     "meter": "text"
   },
-  "usage.correction.policy": { "disposition": "text" },
-  "usage.correction.prepare": { "void_ids": "text", "add_ids": "text", "subscription": "text", "from_period": "text", "through_period": "text", "void_event_ids": "list", "add_event_ids": "list", "reason": "text", "explanation": "text" },
-  "usage.correction.authorize": { "correction": "text" },
-  "usage.correction.decide": { "correction": "text", "decision": "text" },
+  "usage.correction.authorize": {
+    "correction": "text"
+  },
+  "usage.correction.decide": {
+    "correction": "text",
+    "decision": "text"
+  },
+  "usage.correction.policy": {
+    "disposition": "text"
+  },
+  "usage.correction.prepare": {
+    "add_event_ids": "list",
+    "add_ids": "text",
+    "explanation": "text",
+    "from_period": "text",
+    "reason": "text",
+    "subscription": "text",
+    "through_period": "text",
+    "void_event_ids": "list",
+    "void_ids": "text"
+  },
   "usage.correction.preview": {
     "add_event_ids": "list",
     "from_period": "text",
