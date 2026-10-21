@@ -84,7 +84,7 @@ function chargeDetails(charge: Row, context: HistoryCapture) {
   const customerRef = stripeReference(charge.customer)
   const customerId = customer(customerRef, context)
   const intent = stripeReference(charge.payment_intent)
-  const matching = [...new Map(context.invoices.filter(invoice => stripeReference(invoice.charge) === charge.id || !!intent && stripeReference(invoice.payment_intent) === intent).map(invoice => [invoice.id, invoice])).values()]
+  const matching = [...new Map(context.invoices.filter(invoice => stripeReference(invoice.charge) === charge.id || !!intent && stripeReference(invoice.payment_intent) === intent || !!intent && (invoice.payments?.data??[]).some((payment:Row)=>stripeReference(payment.payment?.payment_intent)===intent)).map(invoice => [invoice.id, invoice])).values()]
   check(matching.length <= 1, 'payment matches multiple invoices; capture an explicit invoice reference')
   const explicit = stripeReference(charge.invoice)
   check(!explicit || !matching.length || matching[0].id === explicit, 'payment invoice references disagree')

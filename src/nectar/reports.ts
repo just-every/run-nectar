@@ -128,7 +128,7 @@ export async function reportInvoice(env: Bindings, actor: Actor, metric: string,
   const view = await report(env, actor, metric, url)
   const entry = view.entries.find(row => row.invoiceId === invoiceId)
   insist(entry, 'report_invoice_not_found', 404)
-  const historical=await historicalReportSource(env,view,invoiceId,url,today((await requireBusiness(env)).timezone))
+  const historical=await historicalReportSource(env,view,invoiceId,url,today((await requireBusiness(env)).timezone),actor.kind==='member'&&actor.role==='owner')
   if(historical)return historical
   if (view.metric === 'collections') {
     const [payment, allocations] = await Promise.all([

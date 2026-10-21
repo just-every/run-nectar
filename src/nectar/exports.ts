@@ -88,6 +88,6 @@ export async function customersCsv(env: Bindings, actor: Actor,url?:URL) {
   requireRead(actor, 'customers')
   const filter=metadataPredicate('customer','c.id',url?metadataFilter(url):null)
   const customers = await all(env, `SELECT c.id,c.external_id,c.name,c.billing_email,c.address FROM nc_customers c WHERE c.erased_at IS NULL AND ${filter.sql} ORDER BY c.external_id`,...filter.params)
-  const rows = await Promise.all(customers.map(async c => [c.id,c.external_id,c.name,c.billing_email,c.address,JSON.stringify(await customerNotes(env,c.id)),JSON.stringify((await metadataFor(env,'customer',c.id)).metadata),JSON.stringify(await customerHistory(env,c.id))]))
+  const rows = await Promise.all(customers.map(async c => [c.id,c.external_id,c.name,c.billing_email,c.address,JSON.stringify(await customerNotes(env,c.id)),JSON.stringify((await metadataFor(env,'customer',c.id)).metadata),JSON.stringify(await customerHistory(env,c.id,actor.kind==='member'&&actor.role==='owner'))]))
   return file(csv(['customer_id','external_id','name','billing_email','address','notes_json','metadata_json','incumbent_history_json'], rows), 'nectar-customers.csv', 'text/csv; charset=utf-8')
 }

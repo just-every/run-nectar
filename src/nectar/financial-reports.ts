@@ -176,7 +176,7 @@ export async function financialReportSource(env: Bindings, actor: Actor, metric:
   const { report, unbilled, business } = await contributions(env, metric, url)
   const entry = report.entries.find(row => row.invoiceId === sourceId)
   insist(entry, 'report_invoice_not_found', 404)
-  const historical=await historicalReportSource(env,report,sourceId,url,today(business.timezone))
+  const historical=await historicalReportSource(env,report,sourceId,url,today(business.timezone),actor.kind==='member'&&actor.role==='owner')
   if(historical)return historical as FinancialReportSource
   const base = { ...entry, metric: report.metric, title: report.title, definition: report.definition, period: report.period }
   if (unbilled) {

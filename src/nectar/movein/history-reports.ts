@@ -6,10 +6,19 @@ import { daysBetween } from '../dates'
 import type { Report, ReportEntry, ReportInvoice, ReportMetric } from '../reports'
 
 export const historicalHref = (customer: string, id: string) => `/app/customers/${customer}#history-${id}`
-export async function customerHistory(env: Bindings, customer: string) {
+export async function customerHistory(env: Bindings, customer: string, includeOriginal = false) {
   const documents = await all(env, 'SELECT * FROM nc_incumbent_invoices WHERE customer_id=? ORDER BY COALESCE(issue_date,period_start),id', customer)
   const records = await all(env, 'SELECT * FROM nc_incumbent_history WHERE customer_id=? ORDER BY occurred_on,id', customer)
-  return { documents: documents.map(row => ({ ...row, lines: parseJson<Row[]>(row.lines_json, []), original: parseJson<Row>(row.source_json, {}) })), records: records.map(row => ({ ...row, original: parseJson<Row>(row.payload_json, {}) })) }
+  return { documents: documents.map(({source_json,lines_json,...row}) => ({ ...row, lines: publicLines(lines_json), ...(includeOriginal?{original:parseJson<Row>(source_json,{})}:{}) })), records: records.map(({payload_json,...row}) => ({ ...row, ...(includeOriginal?{original:parseJson<Row>(payload_json,{})}:row.kind==='subscription-event'?{original:subscriptionSnapshot(parseJson<Row>(payload_json,{}))}:{}) })) }
+}
+function publicLines(text:string) {
+  const lines=parseJson<unknown>(text,[])
+  return Array.isArray(lines)?lines.map(({price_source,...line}:Row)=>line):[]
+}
+function subscriptionSnapshot(event:Row) {
+  const source=event.data?.object??{}
+  const fields=['id','object','status','start_date','trial_start','trial_end','billing_cycle_anchor','canceled_at','ended_at','cancel_at','cancel_at_period_end','pause_collection']
+  return {id:event.id,type:event.type,created:event.created,data:{object:{...Object.fromEntries(fields.filter(field=>source[field]!==undefined).map(field=>[field,source[field]])),items:{data:(source.items?.data??[]).map((item:Row)=>({id:item.id,quantity:item.quantity,price:typeof item.price==='string'?item.price:item.price?.id}))}}}}
 }
 const sourceHref = (metric: string, id: string, month: string, customer: string | null, bucket: string | null) => {
   const query = new URLSearchParams({ period: month }); if (customer) query.set('customer', customer); if (bucket) query.set('bucket', bucket)
@@ -68,13 +77,13 @@ export async function historicalContributions(env: Bindings, metric: ReportMetri
   }
   return result
 }
-export async function historicalReportSource(env: Bindings, report: Report, id: string, url: URL, day: string): Promise<ReportInvoice | null> {
+export async function historicalReportSource(env: Bindings, report: Report, id: string, url: URL, day: string, includeOriginal = false): Promise<ReportInvoice | null> {
   const entry=report.entries.find(row=>row.invoiceId===id)
   if(!entry?.sourceProvider)return null
   const sources=await historicalContributions(env,report.metric,report.period.slice(0,7),url.searchParams.get('customer'),day,url.searchParams.get('bucket'))
   const source=sources.find(row=>row.entry.invoiceId===id);insist(source,'report_invoice_not_found',404)
   const {row}=source
   return {...entry,metric:report.metric,title:report.title,definition:report.definition,period:report.period,totalCents:entry.amountCents,components:source.components,
-    historical:{provider:row.erased_at?'stripe':row.provider,reference:row.erased_at?row.id:row.provider_ref,href:historicalHref(row.customer_id,row.id),original:source.original},
+    historical:{provider:row.erased_at?'stripe':row.provider,reference:row.erased_at?row.id:row.provider_ref,href:historicalHref(row.customer_id,row.id),original:includeOriginal?source.original:{provider:entry.sourceProvider,reference:entry.sourceReference,date:row.issue_date??row.occurred_on,status:row.status,amountCents:row.total_cents??row.amount_cents,taxCents:row.tax_cents??null}},
     invoice:report.metric==='collections'?null:{id:row.id,number:row.number,customerId:row.customer_id,customerName:row.customer_name,subscriptionId:row.subscription_id,issueDate:row.issue_date,dueDate:row.due_date,periodStart:row.period_start,periodEnd:row.period_end,currency:row.currency,status:row.status,totalCents:row.total_cents,taxCents:row.tax_cents}}
 }
