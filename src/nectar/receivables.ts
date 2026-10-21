@@ -77,6 +77,53 @@ export async function approveCredit(env: Bindings, actor: Actor, input: Input) {
   return await issueCreditNote(env, actor, Input.of({ invoice: request.invoice_id, amount: plainMoney(request.amount_cents), reason: request.reason, request: request.id }))
 }
 
+interface PaymentFact {
+  paymentId: string; customerId: string; amountCents: number; receivedOn: string
+  method: string; reference: string; evidence: string
+}
+function paymentFactStatement(env: Bindings, actor: Actor, fact: PaymentFact) {
+  return stmt(env, 'INSERT INTO nc_payments (id, customer_id, amount_cents, received_on, method, reference, evidence, recorded_by, recorded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', fact.paymentId, fact.customerId, fact.amountCents, fact.receivedOn, fact.method, fact.reference, fact.evidence, actorLabel(actor), now())
+}
+function allocationFactStatements(env: Bindings, actor: Actor, paymentId: string, invoice: Row, amount: number, id: string) {
+  const [balanceSql, balanceParam] = balanceOf(invoice.id)
+  return [
+    guard(env, 'exceeds_payment', `(SELECT ${UNALLOCATED_SQL} FROM nc_payments p WHERE p.id = ?) >= ?`, paymentId, amount),
+    guard(env, 'exceeds_balance', `${balanceSql} >= ?`, balanceParam, amount),
+    stmt(env, 'INSERT INTO nc_allocations (id, payment_id, invoice_id, amount_cents, allocated_by, allocated_at) VALUES (?, ?, ?, ?, ?, ?)', id, paymentId, invoice.id, amount, actorLabel(actor), now()),
+  ]
+}
+
+/** The processor collector supplies captured financial facts, then commits these
+ * ordinary payment/allocation statements together with its unique attempt and
+ * source guards. This helper never calls a provider or commits on its own. */
+export async function collectedPaymentStatements(env: Bindings, actor: Actor, fact: {
+  customerId: string; invoiceId: string; amountCents: number; receivedOn: string
+  reference: string; evidence: string; paymentId?: string; allocationId?: string
+}) {
+  requireCapability(actor, 'receivables')
+  insist(Number.isSafeInteger(fact.amountCents) && fact.amountCents > 0, 'invalid_amount')
+  const customer = await one(env, 'SELECT id FROM nc_customers WHERE id=? AND erased_at IS NULL', fact.customerId)
+  insist(customer, 'customer_not_found', 404)
+  const invoice = await issuedInvoice(env, fact.invoiceId)
+  insist(invoice.customer_id === customer.id, 'different_customer', 409)
+  insist(invoice.balance_cents === fact.amountCents, 'collection_balance_changed', 409)
+  const received = requireDate(fact.receivedOn, 'received_on')
+  insist(typeof fact.reference === 'string' && fact.reference.trim().length > 0 && fact.reference.length <= 120, 'invalid_reference')
+  insist(typeof fact.evidence === 'string' && fact.evidence.length <= 1000, 'invalid_evidence')
+  insist(!await one(env, 'SELECT 1 FROM nc_payments WHERE customer_id=? AND reference=?', customer.id, fact.reference), 'payment_reference_exists', 409)
+  const paymentId = fact.paymentId ?? newId(), allocationId = fact.allocationId ?? newId()
+  return { paymentId, allocationId, statements: [
+    guard(env, 'customer_erased', 'EXISTS(SELECT 1 FROM nc_customers WHERE id=? AND erased_at IS NULL)', customer.id),
+    guard(env, 'payment_reference_exists', 'NOT EXISTS(SELECT 1 FROM nc_payments WHERE customer_id=? AND reference=?)', customer.id, fact.reference),
+    guard(env, 'collection_balance_changed', `(SELECT ${BALANCE_SQL} FROM nc_invoices i WHERE i.id=? AND i.status='issued' AND i.customer_id=?)=?`, invoice.id, customer.id, fact.amountCents),
+    paymentFactStatement(env, actor, { paymentId, customerId: customer.id, amountCents: fact.amountCents, receivedOn: received, method: 'card_external', reference: fact.reference, evidence: fact.evidence }),
+    ...allocationFactStatements(env, actor, paymentId, invoice, fact.amountCents, allocationId),
+  ], audits: [
+    { actor: actorLabel(actor), action: 'payment.record', subject: paymentId, detail: { customer: customer.id, amount: fact.amountCents, received, method: 'card_external', reference: fact.reference } },
+    { actor: actorLabel(actor), action: 'payment.allocate', subject: allocationId, detail: { payment: fact.reference, invoice: invoice.number, amount: fact.amountCents } },
+  ] }
+}
+
 export async function recordPayment(env: Bindings, actor: Actor, input: Input) {
   requireCapability(actor, 'receivables')
   const customer = await one(env, 'SELECT id FROM nc_customers WHERE id = ?', input.text('customer', { max: 100 }))
@@ -93,7 +140,7 @@ export async function recordPayment(env: Bindings, actor: Actor, input: Input) {
   const owed = await all(env, `SELECT ${BALANCE_SQL} AS balance_cents FROM nc_invoices i WHERE i.customer_id=? AND i.status='issued'`,customer.id)
   const mismatch = owed.some(i=>i.balance_cents>0) && !owed.some(i=>i.balance_cents===amount)
   const alerts = mismatch ? await alertStatements(env,'payment_mismatch',id,`/app/customers/${customer.id}#payment-${id}`) : []
-  await commit(env, [...alerts,stmt(env, 'INSERT INTO nc_payments (id, customer_id, amount_cents, received_on, method, reference, evidence, recorded_by, recorded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', id, customer.id, amount, received, method, reference, evidence, actorLabel(actor), now())],
+  await commit(env, [...alerts,paymentFactStatement(env, actor, { paymentId: id, customerId: customer.id, amountCents: amount, receivedOn: received, method, reference, evidence })],
     { actor: actorLabel(actor), action: 'payment.record', subject: id, detail: { customer: customer.id, amount, received, method, reference } })
   if (mismatch) await deliverAlerts(env,'payment_mismatch',id,actorLabel(actor))
   return { id: customer.id, payment: id }
@@ -109,13 +156,8 @@ export async function allocate(env: Bindings, actor: Actor, input: Input) {
   insist(amount > 0, 'invalid_amount')
   insist(amount <= payment.unallocated, 'exceeds_payment', 409)
   insist(amount <= invoice.balance_cents, 'exceeds_balance', 409)
-  const [balanceSql, balanceParam] = balanceOf(invoice.id)
   const id = newId()
-  await commit(env, [
-    guard(env, 'exceeds_payment', `(SELECT ${UNALLOCATED_SQL} FROM nc_payments p WHERE p.id = ?) >= ?`, payment.id, amount),
-    guard(env, 'exceeds_balance', `${balanceSql} >= ?`, balanceParam, amount),
-    stmt(env, 'INSERT INTO nc_allocations (id, payment_id, invoice_id, amount_cents, allocated_by, allocated_at) VALUES (?, ?, ?, ?, ?, ?)', id, payment.id, invoice.id, amount, actorLabel(actor), now()),
-  ], { actor: actorLabel(actor), action: 'payment.allocate', subject: id, detail: { payment: payment.reference, invoice: invoice.number, amount } })
+  await commit(env, allocationFactStatements(env, actor, payment.id, invoice, amount, id), { actor: actorLabel(actor), action: 'payment.allocate', subject: id, detail: { payment: payment.reference, invoice: invoice.number, amount } })
   return { id: invoice.id, allocation: id }
 }
 
