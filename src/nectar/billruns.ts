@@ -1,3 +1,4 @@
+import { invoiceNumberAllocation } from './invoice-numbering'
 import { revenueIssueStatements } from './revenue-records'
 import { clockInstant } from './clock'
 import { cancellationApproval } from './lifecycle-approval'
@@ -216,26 +217,25 @@ export async function finalise(env: Bindings, actor: Actor, input: Input) {
   insist(issueDate <= day && targets.every(invoice => issueDate >= (invoice.invoice_kind === 'manual' ? invoice.period_start : invoice.period_end)), 'invalid_issue_date')
   const issued: string[] = [], refused: Row[] = []
   for (const invoice of targets) {
-    const customer = await one(env, 'SELECT revision,invoice_settings_json FROM nc_customers WHERE id=?', invoice.customer_id)
+    const customer = await one(env, 'SELECT * FROM nc_customers WHERE id=?', invoice.customer_id)
     insist(customer, 'customer_not_found', 404)
     await cancellationApproval(env,actor,invoice)
     if (await currentFingerprint(env, business, invoice) !== invoice.approved_fingerprint) { refused.push({ invoice: invoice.id, reason: 'source_changed' }); continue }
     const calculation = parseJson<Row>(invoice.calculation_json, {})
     const consumed: string[] = calculation.consumedEvents ?? []
     const charges: string[] = (calculation.inputs?.charges ?? []).map((c: Row) => c.id)
-    const sequence = business.next_invoice_number
-    const number = `${business.invoice_prefix}-${String(sequence).padStart(6, '0')}`
+    const allocation = invoiceNumberAllocation(env, business, customer)
+    const { number } = allocation
     const content = calculation.inputs?.invoiceContent
     insist(!content?.poRequired || content.poNumber, 'po_required', 409)
     const due = addDays(issueDate, content?.paymentTermsDays ?? business.payment_terms_days)
     await commit(env, [
-      guard(env, 'stale', 'EXISTS(SELECT 1 FROM nc_business WHERE singleton = 1 AND next_invoice_number = ? AND revision=?)', sequence, business.revision),
+      ...allocation.statements,
       guard(env, 'source_changed', 'EXISTS(SELECT 1 FROM nc_customers WHERE id=? AND revision=? AND invoice_settings_json=?)', invoice.customer_id, customer.revision, customer.invoice_settings_json),
       guard(env, 'stale', "EXISTS(SELECT 1 FROM nc_invoices WHERE id = ? AND status = 'approved' AND approved_fingerprint = ?)", invoice.id, invoice.approved_fingerprint),
       ...chunk(consumed, 90).map(ids => guard(env, 'already_billed', `NOT EXISTS(SELECT 1 FROM nc_usage_events WHERE event_id IN (${ids.map(() => '?').join(',')}) AND (invoice_id IS NOT NULL OR status <> 'active'))`, ...ids)),
       ...charges.map(id => guard(env, 'charges_already_billed_or_missing', 'EXISTS(SELECT 1 FROM nc_charges WHERE id=? AND invoice_id IS NULL)', id)),
       ...charges.map(id => stmt(env, 'UPDATE nc_charges SET invoice_id=? WHERE id=?', invoice.id, id)),
-      stmt(env, 'UPDATE nc_business SET next_invoice_number = next_invoice_number + 1 WHERE singleton = 1'),
       ...chunk(consumed, 90).map(ids => stmt(env, `UPDATE nc_usage_events SET invoice_id = ? WHERE event_id IN (${ids.map(() => '?').join(',')})`, invoice.id, ...ids)),
       stmt(env, "UPDATE nc_invoices SET legal_name=(SELECT name FROM nc_customers WHERE id=nc_invoices.customer_id), status = 'issued', number = ?, issue_date = ?, due_date = ?, issued_by = ?, issued_at = ? WHERE id = ?", number, issueDate, due, actorLabel(actor), now(), invoice.id),
       ...await revenueIssueStatements(env,{...invoice,issue_date:issueDate}),

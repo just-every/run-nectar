@@ -64,7 +64,7 @@ export async function settingsPage(env: Bindings, actor: Actor, url: URL) {
       ${field('Billing address', 'address', { value: b?.address ?? '', required: false })}
       ${field('Billing email (shown on invoices)', 'billing_email', { type: 'email', value: b?.billing_email ?? '', required: false })}
       ${select('Billing timezone', 'timezone', ZONES.map(zone => ({ value: zone, label: zone })), b?.timezone ?? 'America/New_York', { hint: 'Billing periods start and end at midnight in this timezone. It cannot change once an invoice is issued.' })}
-      ${field('Invoice number prefix', 'invoice_prefix', { value: b?.invoice_prefix ?? 'INV', hint: 'Letters, digits and dashes; invoices are numbered PREFIX-000001 upward.' })}
+      ${field('Invoice number prefix', 'invoice_prefix', { value: b?.invoice_prefix ?? 'INV', hint: 'Letters, digits and dashes. Manage continuation and digit width in the number register.' })}
       ${field('Payment terms (days)', 'payment_terms_days', { type: 'number', value: b?.payment_terms_days ?? 30 })}
       ${hidden('invoice_fields_edit','yes')}${invoiceFieldsForm(parseJson(b?.invoice_fields_json, {}))}
       ${hidden('currency', 'USD')}<p class="hint">Currency: US dollars.</p>`, b ? 'Save business details' : 'Save and continue', { layout: 'columns' })
@@ -79,7 +79,7 @@ export async function settingsPage(env: Bindings, actor: Actor, url: URL) {
       ${field('Basis for this declaration', 'tax_note', { value: b.tax_note, hint: 'For example: who advised it and when.' })}`, 'Prepare tax policy', { layout: 'columns' })}
       ${b.tax_mode !== 'undeclared' && !taxReady(b) ? form('tax.review', '/app/settings', hidden('revision', b.revision), 'I have reviewed this tax policy') : ''}` : ''}
     ${b.tax_reviewed_at ? details({ 'Reviewed by': personName(actor, b.tax_reviewed_by), 'Reviewed at': when(b.tax_reviewed_at, b.timezone) }) : ''}</section>` : ''
-  const identityCard = h`<section class="card" aria-labelledby="identity"><h2 id="identity">Billing identity</h2>${identity}</section>`
+  const identityCard = h`<section class="card" aria-labelledby="identity"><h2 id="identity">Billing identity</h2><p><a href="/app/numbering">Invoice series and number register</a></p>${identity}</section>`
   return page('Business and tax', actor, h`<h1>Business and tax</h1><p><a href="/app/more#notifications">Manage your email notifications</a></p>${tax ? h`<div class="split settings">${identityCard}${tax}</div>` : identityCard}${await policySection(env, actor)}`, { current: '/app/settings', url, showNav: !!b })
 }
 

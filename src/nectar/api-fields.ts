@@ -277,6 +277,14 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "customer": "text",
     "service_date": "text"
   },
+  "invoice.series": {
+    "customer": "text",
+    "mode": "text",
+    "prefix": "text",
+    "revision": "integer",
+    "source_invoice": "text",
+    "width": "integer"
+  },
   "lifecycle.policy": {
     "credit_unused": "flag",
     "reactivation_days": "integer"

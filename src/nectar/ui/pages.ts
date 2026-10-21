@@ -1,3 +1,5 @@
+import { numberRegisterPage } from './number-register'
+import { numberRegisterExport } from '../number-register'
 import { usageReplayPage } from './usage-replay'
 import { erasurePage } from './erasure'
 import { erasureEvidence } from '../erasure-requests'
@@ -36,6 +38,8 @@ import { reportPage, reportInvoicePage, reportLinePage } from './reports'
 type Page = (env: Bindings, actor: Actor, request: Request, url: URL, id: string) => Promise<Response>
 
 export const pages: Record<string, Page> = {
+  numberRegister:(env,actor,_r,url)=>numberRegisterPage(env,actor,url),
+  numberRegisterCsv:(env,actor)=>numberRegisterExport(env,actor),
   usageReplay:(env,actor,_r,url)=>usageReplayPage(env,actor,url),
   erasures:(env,actor,_r,url)=>erasurePage(env,actor,url),
   erasureEvidence:(env,actor,_r,_u,id)=>erasureEvidence(env,actor,id),

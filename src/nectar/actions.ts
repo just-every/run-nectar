@@ -1,3 +1,4 @@
+import { configureInvoiceSeries } from './invoice-numbering'
 import { configureFeaturePolicy } from './feature-policy'
 import { configurePortal, issuePortalSession, revokePortalSession } from './portal-policy'
 import { previewUsageCorrection } from './usage-replay'
@@ -87,6 +88,7 @@ export const actions: Record<string, Handler> = {
   'contract.prepare':prepareContract,
   'contract.decide':decideContract,
   'business.configure': configureBusiness,
+  'invoice.series': configureInvoiceSeries,
   'tax.declare': declareTax,
   'tax.review': reviewTax,
   'mfa.policy': setPolicy,

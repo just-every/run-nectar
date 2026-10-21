@@ -12,7 +12,7 @@ import { invoiceFields, invoiceFieldInput } from './invoice-content'
 
 export interface Business {
   legal_name: string; address: string; billing_email: string; currency: 'USD'; timezone: string; invoice_prefix: string
-  next_invoice_number: number; next_credit_number: number; payment_terms_days: number; invoice_fields_json: string
+  invoice_number_width: number; next_invoice_number: number; next_credit_number: number; payment_terms_days: number; invoice_fields_json: string
   tax_jurisdiction: string; tax_mode: 'undeclared' | 'no_tax' | 'flat_rate'; tax_rate: string; tax_note: string
   tax_reviewed_by: string | null; tax_reviewed_at: number | null; revision: number; updated_at: number
 }
@@ -44,8 +44,8 @@ export async function configureBusiness(env: Bindings, actor: Actor, input: Inpu
   const legalName = input.text('legal_name', { max: 160 })
   const timezone = input.text('timezone', { max: 60 })
   insist(validTimeZone(timezone), 'invalid_timezone')
-  const prefix = input.text('invoice_prefix', { max: 12 }).toUpperCase()
-  insist(/^[A-Z0-9-]{1,12}$/.test(prefix), 'invalid_invoice_prefix')
+  const prefix = input.text('invoice_prefix', { max: 39 }).toUpperCase()
+  insist(/^[A-Z0-9-]{1,39}$/.test(prefix), 'invalid_invoice_prefix')
   const terms = input.integer('payment_terms_days', { min: 0, max: 120 })!
   const email = input.text('billing_email', { max: 200, optional: true }).toLowerCase()
   insist(!email || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email), 'invalid_billing_email')

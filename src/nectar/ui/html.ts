@@ -56,6 +56,7 @@ export const MORE: { href: string; label: string; about: string; icon: IconName;
   { href: '/app/catalog', label: 'Catalog', icon: 'catalog', about: 'Products, versioned prices, meters and the features each product grants.', show: actor => canRead(actor, 'catalog') },
   { href: '/app/reports/billings', label: 'Reports', icon: 'exports', about: 'Billings, collections, receivables, credits, tax and unbilled usage, each figure drilled to its source.', show: actor => !can(actor, 'read') && canRead(actor, 'reports') },
   { href: '/app/proposals', label: 'Proposals', icon: 'proposals', about: 'Work an agent or a colleague prepared for your approval.', show: actor => can(actor, 'read') },
+  { href: '/app/numbering', label: 'Number register', icon: 'billing', about: 'Captured and issued invoice numbers, credit notes, gaps and invoice series.', show: actor => canRead(actor, 'invoices') },
   { href: '/app/import', label: 'Move in', icon: 'movein', about: 'Bring Stripe Billing records in, compare in shadow, then cut over.', show: actor => can(actor, 'records') },
   { href: '/app/exports', label: 'Exports', icon: 'exports', about: 'Invoices, usage, subscriptions and bill runs to keep or hand to your accountant.', show: actor => can(actor, 'export') },
   { href: '/app/audit', label: 'Audit trail', icon: 'audit', about: 'Every change, approval and issue, with who made it.', show: actor => can(actor, 'export') && can(actor, 'read') },
