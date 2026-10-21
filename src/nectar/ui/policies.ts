@@ -6,7 +6,7 @@ import { cents, check, form, h, hidden, table, tag, who } from './html'
 
 const labels: Record<string, string> = { feature: 'Feature access policy', credit: 'Credit approval threshold', certificate: 'Certificate reminder mail', tax: 'Declared tax policy', lifecycle: 'Cancellation and reactivation policy' }
 const value = (row: Row) => row.kind === 'feature'
-  ? `${row.payload.feature}: ${row.payload.quota ?? 'no'} usage limit; ${row.payload.policy}; unpaid grace ${row.payload.graceDays ?? 'disabled'} days (product ${row.payload.product}, meter ${row.payload.meter ?? 'none'})`
+  ? `${row.payload.productName} / ${row.payload.feature}: ${row.payload.quota === null ? 'no usage limit' : `${row.payload.quota} ${row.payload.meterName}`}; ${row.payload.policy}; unpaid grace ${row.payload.graceDays === null ? 'disabled' : `${row.payload.graceDays} days`}`
   : row.kind === 'credit'
   ? row.payload.twoPersonAboveCents === null ? 'No second-person credit threshold' : h`Second person above ${cents(row.payload.twoPersonAboveCents)}`
   : row.kind === 'certificate' ? row.payload.enabled ? 'Enabled' : 'Disabled'

@@ -14,7 +14,8 @@ import { BALANCE_SQL } from './receivables'
 export async function configureFeaturePolicy(env: Bindings, actor: Actor, input: Input) {
   requireOwner(actor)
   const product = input.text('product', { max: 100 }), feature = input.text('feature', { max: 60 })
-  insist(await one(env, 'SELECT 1 FROM nc_features WHERE product_id=? AND feature=?', product, feature), 'feature_not_found', 404)
+  const grant = await one(env, 'SELECT p.name FROM nc_features f JOIN nc_products p ON p.id=f.product_id WHERE f.product_id=? AND f.feature=?', product, feature)
+  insist(grant, 'feature_not_found', 404)
   const meterRef = input.text('meter', { max: 100, optional: true })
   const meter = meterRef ? await one(env, 'SELECT * FROM nc_meters WHERE id=? OR code=?', meterRef, meterRef) : null
   insist(!meterRef || meter, 'meter_not_found', 404)
@@ -23,7 +24,7 @@ export async function configureFeaturePolicy(env: Bindings, actor: Actor, input:
   const policy = input.text('quota_policy', { max: 20 })
   insist(['soft','hard','overage'].includes(policy), 'invalid_quota_policy')
   const grace = input.integer('grace_days', { min: 0, max: 365, optional: true })
-  return await preparePolicyChange(env, actor, 'feature', { product, feature, meter: meter?.id ?? null, quota, policy, graceDays: grace })
+  return await preparePolicyChange(env, actor, 'feature', { product, productName: grant.name, feature, meter: meter?.id ?? null, meterName: meter?.name ?? null, quota, policy, graceDays: grace })
 }
 
 export async function featureDecision(env: Bindings, sub: Row, product: string, feature: string, day: string, timezone: string) {
