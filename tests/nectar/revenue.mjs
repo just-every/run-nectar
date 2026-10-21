@@ -95,6 +95,41 @@ export async function revenueFlow(h, owner, { onState } = {}) {
     assert.ok(source.schedules.some(schedule => schedule.lineId === row.lineId))
     assert.ok((await h.page(row.href, owner)).includes(`id="line-${row.lineId}"`), 'every journal contribution opens its actual schedule')
   }
+  // REV-002: independent debit/credit expectations across recognition before
+  // billing; selecting April alone must keep March's accrued opening balance.
+  const journal = query => api(`revenue-journal?${query}`)
+  const compact = rows => rows.map(row => [row.period, row.account, row.debitCents, row.creditCents])
+  const originalJournal = await journal(scoped)
+  assert.deepEqual(compact(originalJournal.entries), [
+    ['2026-03', 'accrued-contract-assets', 3490, 0], ['2026-03', 'recognized-revenue', 0, 3490],
+    ['2026-04', 'accrued-contract-assets', 2580, 0], ['2026-04', 'recognized-revenue', 0, 2580],
+    ['2026-05', 'pretax-billings-clearing', 6070, 0], ['2026-05', 'accrued-contract-assets', 0, 6070],
+  ])
+  assert.deepEqual(originalJournal.sources, report.contributions)
+  assert.deepEqual(originalJournal.periods.map(row => [row.debitCents, row.creditCents]), [[3490, 3490], [2580, 2580], [6070, 6070]])
+  const aprilJournal = await journal(`period=2026-04&customer=${customer}`)
+  assert.equal(aprilJournal.periods[0].openingAccruedContractAssetCents, 3490)
+  assert.deepEqual(aprilJournal.entries, originalJournal.entries.filter(row => row.period === '2026-04'))
+  assert.deepEqual((await journal(`period=2026-04&customer=${empty}`)).entries, [])
+  assert.deepEqual((await journal(`period=2026-04&customer=${empty}`)).sources, [])
+  const journalCsv = await h.raw(`/app/exports/revenue-journal.csv?${scoped}`, { cookie: owner })
+  assert.equal(journalCsv.status, 200)
+  assert.match(journalCsv.headers.get('content-disposition'), /nectar-revenue-journal\.csv/)
+  assert.equal(journalCsv.headers.get('cache-control'), 'private, no-store')
+  const exportedJournal = csvRows(await journalCsv.text())
+  assert.deepEqual(exportedJournal.map(row => [row.period, row.account, row.debit, row.credit, row.currency]), [
+    ['2026-03', 'accrued-contract-assets', '34.90', '0.00', 'USD'], ['2026-03', 'recognized-revenue', '0.00', '34.90', 'USD'],
+    ['2026-04', 'accrued-contract-assets', '25.80', '0.00', 'USD'], ['2026-04', 'recognized-revenue', '0.00', '25.80', 'USD'],
+    ['2026-05', 'pretax-billings-clearing', '60.70', '0.00', 'USD'], ['2026-05', 'accrued-contract-assets', '0.00', '60.70', 'USD'],
+  ], 'journal excludes the independently checked $6.07 tax; clearing is pretax')
+  assert.ok(exportedJournal.every(row => /Tax, cash, collections/.test(row.basis) && /not a closed period or a ledger posting/.test(row.basis)))
+  for (const row of exportedJournal) {
+    const link = new URL(row.source_path, h.origin)
+    assert.equal(link.searchParams.get('customer'), customer)
+    assert.equal(link.searchParams.get('period'), row.period)
+    assert.equal(link.hash, '#contributions')
+    assert.equal((await h.raw(link.pathname + link.search, { cookie: owner })).status, 200)
+  }
   const page = await h.page(`/app/revenue?${scoped}`, owner)
   assert.ok(page.includes('/app/exports/revenue.csv'))
   assert.ok(page.includes(`/app/revenue/${issued.id}`))
@@ -144,10 +179,39 @@ export async function revenueFlow(h, owner, { onState } = {}) {
   assert.equal(credit.basis.originalTaxUnchanged, true)
   assert.ok((await h.page(`/app/revenue/${issued.id}`, owner)).includes(`id="credit-${credit.id}"`))
 
+  const creditJournal = await journal(`period=${credit.period}&customer=${customer}`)
+  assert.deepEqual(compact(creditJournal.entries), [
+    [credit.period, 'pretax-billings-clearing', 0, 500], [credit.period, 'recognized-revenue', 500, 0],
+  ], 'a negative credit reverses billings/revenue, never introduces a negative debit or credits original tax')
+  assert.equal(creditJournal.periods[0].debitCents, 500)
+  assert.equal(creditJournal.periods[0].creditCents, 500)
+  assert.deepEqual(creditJournal.sources.map(row => row.creditId), [credit.id, credit.id])
+  // An ordinary manual one-time invoice billed before its service date proves
+  // deferred recognition without claiming annual subscription billing.
+  const advanceCharge = (await api('charge.add', { customer: empty, amount: '10', description: 'August service activation', taxable: true, effective_date: '2026-08-03' })).charge
+  const advanceInvoice = await api('invoice.manual', { customer: empty, charges: [advanceCharge], service_date: '2026-08-03' })
+  await api('invoice.approve', { invoice: advanceInvoice.id, acknowledge: true })
+  await api('invoice.finalise', { invoice: advanceInvoice.id, issue_date: '2026-05-31' })
+  const deferredJournal = await journal(`from=2026-05&to=2026-08&customer=${empty}`)
+  assert.deepEqual(compact(deferredJournal.entries), [
+    ['2026-05', 'pretax-billings-clearing', 1000, 0], ['2026-05', 'deferred-revenue', 0, 1000],
+    ['2026-06', 'pretax-billings-clearing', 700, 0], ['2026-06', 'recognized-revenue', 0, 700],
+    ['2026-08', 'deferred-revenue', 1000, 0], ['2026-08', 'recognized-revenue', 0, 1000],
+  ])
+  assert.deepEqual(deferredJournal.periods.map(row => [row.period, row.debitCents, row.creditCents]), [
+    ['2026-05', 1000, 1000], ['2026-06', 700, 700], ['2026-07', 0, 0], ['2026-08', 1000, 1000],
+  ])
+  const gross = await journal('period=2026-05')
+  assert.ok(gross.periods[0].accruedContractAssetCents > 0 && gross.periods[0].deferredLiabilityCents === 1000, 'opposite customer/invoice positions remain gross assets and liabilities before monthly summarization')
+  assert.equal(gross.periods[0].debitCents, gross.periods[0].creditCents)
+  assert.equal(gross.sources.filter(row => row.invoiceId === advanceInvoice.id).length, 1)
+  assert.deepEqual((await journal(`period=2026-05&customer=${customer}`)).sources.filter(row => row.invoiceId === advanceInvoice.id), [])
+  assert.deepEqual(frozen(await api(`invoices/${issued.id}`)), frozen(issued), 'read-only journal never edits the issued invoice')
+  await onState?.({ name: 'journal', report: '/app/revenue?from=2026-03&to=2026-08', source: `/app/revenue/${advanceInvoice.id}`, invoice: issued.id, customer, journalPath: `/app/exports/revenue-journal.csv?from=2026-03&to=2026-08` })
   await onState?.({ name: 'credit', report: `/app/revenue?period=${credit.period}&customer=${customer}`, source: `/app/revenue/${issued.id}`, invoice: issued.id, customer })
   const reader = { bearer: (await api('credential.issue', { name: 'Revenue reader', scopes: ['prepare'] })).key }
   const usageOnly = { bearer: (await api('credential.issue', { name: 'Revenue usage only', scopes: ['usage'] })).key }
-  for (const path of ['revenue', `revenue/${issued.id}`]) {
+  for (const path of ['revenue', 'revenue-journal', `revenue/${issued.id}`]) {
     await h.api(path, null, undefined, 401)
     await h.api(path, usageOnly, undefined, 403)
     await h.api(path, reader)
@@ -157,6 +221,17 @@ export async function revenueFlow(h, owner, { onState } = {}) {
   const accountant = await h.signIn('rev001-accountant@example.test', { requested: true })
   assert.deepEqual(await h.api(`revenue/${issued.id}`, accountant), afterCredit)
   assert.equal((await h.raw(`/app/exports/revenue.csv?${scoped}`, { cookie: accountant })).status, 200)
+  const accountantJournal = await h.raw('/app/exports/revenue-journal.csv?period=2026-05', { cookie: accountant })
+  assert.equal(accountantJournal.status, 200)
+  await accountantJournal.text()
+  await api('access.give', { email: 'rev002-developer@example.test', name: 'Read-only developer', role: 'developer' })
+  const developer = await h.signIn('rev002-developer@example.test', { requested: true })
+  await h.api('revenue-journal?period=2026-05', developer)
+  assert.equal((await h.raw('/app/exports/revenue-journal.csv', { cookie: developer })).status, 403)
+  const readerCsv = await h.raw('/app/exports/revenue-journal.csv', reader)
+  assert.equal(readerCsv.status, 403)
+  assert.equal((await h.raw('/app/exports/revenue-journal.csv')).status, 303)
+  for (const query of ['period=invalid', 'from=2026-05&to=2026-03', 'period=2026-03&from=2026-03', 'customer=a&customer=b', 'from=2020-01&to=2030-01']) await api(`revenue-journal?${query}`, undefined, 400)
   await api('invoice.finalise', { invoice: issued.id, issue_date: '2026-05-01' }, 409)
   assert.deepEqual(await api(`revenue/${issued.id}`), afterCredit, 'duplicate issue cannot append duplicate recognition')
   assert.equal((await h.raw('/app/revenue')).status, 303)

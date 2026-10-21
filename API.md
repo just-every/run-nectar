@@ -386,3 +386,23 @@ not retained or reported as zero. Ordinary `credit.issue` / governed
 `credit.approve` consumes the configured sequence atomically; rejected approvals
 and number collisions consume nothing. A source used for continuation blocks
 strict import undo. No capture is presented as live provider verification.
+
+
+### Monthly revenue journal (REV-002, partial)
+
+`GET /api/nectar/revenue-journal` accepts the revenue report's `period` or
+`from`/`to` (up to 120 months), and optional `customer` filter. Report readers
+receive exact-cent balanced monthly `entries` (account, debitCents, creditCents,
+sourcePath), `periods` with opening/closing accrued assets and deferred
+liabilities, and original `sources`.
+`GET /app/exports/revenue-journal.csv` requires report-read and export authority;
+the Revenue schedules page links to it with the current filters.
+
+These are read-only USD pretax staging journals: billings clearing, accrued
+contract assets, deferred revenue and recognized revenue. They exclude tax,
+cash, collections and processor settlement; billings clearing is not gross AR.
+Classify each invoice's asset/liability before aggregation, map the staging
+account names to ledger accounts, and review before posting. No close lock or
+external posting occurs. Signed decreases reverse debit/credit; zero rows are
+omitted. CSV source links retain period/customer scope. Later records may
+change open-period exports; closed evidence is not claimed.

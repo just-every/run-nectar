@@ -1,3 +1,4 @@
+import { revenueJournal } from './revenue-journal'
 import { numberRegister } from './number-register'
 import { erasureRequests } from './erasure-requests'
 import { revenueReport,revenueSource } from './revenue-reports'
@@ -65,6 +66,7 @@ export const views: Record<string, View> = {
   numberRegister:(env,actor)=>numberRegister(env,actor),
   openapi: async env => openApiDocument(env.AUTH_ORIGIN),
   erasures:(env,actor)=>erasureRequests(env,actor),
+  revenueJournal:(env,actor,_r,_id,url)=>revenueJournal(env,actor,url),
   revenue:(env,actor,_r,_id,url)=>revenueReport(env,actor,url),
   revenueSource:(env,actor,_r,id,url)=>revenueSource(env,actor,id,url),
   cadences:(env,actor)=>cadenceReport(env,actor),

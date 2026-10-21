@@ -28,6 +28,8 @@ export interface RevenueContribution {
 export interface RevenueMonth {
   period: string
   openingCents: number
+  openingAccruedContractAssetCents: number
+  openingDeferredLiabilityCents: number
   billingsCents: number
   creditsCents: number
   netBillingsCents: number
@@ -111,7 +113,7 @@ export async function revenueReport(env: Bindings, actor: Actor, url: URL): Prom
     const credits = total(rows, row => row.period === period && row.kind === 'credit-billing')
     const recognized = total(rows, row => row.period === period && !isBilling(row))
     insist(BigInt(before.signedCents) + BigInt(billings) + BigInt(credits) - BigInt(recognized) === BigInt(after.signedCents), 'revenue_rollforward_mismatch', 409)
-    months.push({ period, openingCents: before.signedCents, billingsCents: billings, creditsCents: credits, netBillingsCents: billings + credits, recognizedCents: recognized, closingCents: after.signedCents, accruedContractAssetCents: after.accruedContractAssetCents, deferredLiabilityCents: after.deferredLiabilityCents })
+    months.push({ period, openingCents: before.signedCents, openingAccruedContractAssetCents: before.accruedContractAssetCents, openingDeferredLiabilityCents: before.deferredLiabilityCents, billingsCents: billings, creditsCents: credits, netBillingsCents: billings + credits, recognizedCents: recognized, closingCents: after.signedCents, accruedContractAssetCents: after.accruedContractAssetCents, deferredLiabilityCents: after.deferredLiabilityCents })
   }
   const contributions = rows.filter(row => row.period >= from && row.period <= to).sort((a, b) => a.period.localeCompare(b.period) || a.invoiceId.localeCompare(b.invoiceId) || a.kind.localeCompare(b.kind) || (a.lineId ?? a.creditId ?? '').localeCompare(b.lineId ?? b.creditId ?? ''))
   return { policyVersion: REVENUE_POLICY_VERSION, definition: REVENUE_DEFINITION, from, to, customerId: customer, months, contributions,

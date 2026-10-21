@@ -19,7 +19,7 @@ const PAGE_PROBE = { metadata: '/app/metadata/price/none', report: '/app/reports
 const fill = pattern => pattern.replace(/^\^|\$$/g, '').replace(/\(\[[^)]*\]\+\)/g, 'none').replace(/\\\./g, '.')
 
 const READ_ALL_API = API_DOORS.map(([, name]) => name).filter(name => !['members', 'roles', 'imports', 'audit', 'reportSchedule', 'reportDelivery', 'noteMembers'].includes(name))
-const READ_ALL_PAGES = PAGE_DOORS.map(([, name]) => name).filter(name => !['numberRegisterCsv', 'erasureEvidence', 'revenueCsv', 'reportSchedule', 'reportDelivery', 'reportDeliveryCsv', 'reportCsv', 'metadataCsv', 'runFile', 'import', 'exports', 'customersFile', 'invoicesFile', 'usageFile', 'subscriptionsFile', 'audit', 'noticeFile'].includes(name))
+const READ_ALL_PAGES = PAGE_DOORS.map(([, name]) => name).filter(name => !['revenueJournalCsv', 'numberRegisterCsv', 'erasureEvidence', 'revenueCsv', 'reportSchedule', 'reportDelivery', 'reportDeliveryCsv', 'reportCsv', 'metadataCsv', 'runFile', 'import', 'exports', 'customersFile', 'invoicesFile', 'usageFile', 'subscriptionsFile', 'audit', 'noticeFile'].includes(name))
 const COMMON = { api: ['openapi', 'me', 'notifications', 'mfa'], pages: ['home', 'more', 'security', 'passkeyScript'] }
 const EXPECTED = {
   collections: {
@@ -43,8 +43,8 @@ const EXPECTED = {
   },
   analyst: {
     actions: ['report.schedule'],
-    api: ['customers', 'customer', 'entitlement', 'metadataObjects', 'report', 'reportInvoice', 'reportLine', 'revenue', 'revenueSource', 'reportSchedule', 'reportDelivery'],
-    pages: ['customers', 'customer', 'certificateFile', 'metadataList', 'metadataCsv', 'revenue', 'revenueSource', 'revenueCsv', 'reportSchedule', 'reportDelivery', 'reportDeliveryCsv', 'reportCsv', 'report', 'reportInvoice', 'reportLine', 'exports', 'customersFile'],
+    api: ['customers', 'customer', 'entitlement', 'metadataObjects', 'report', 'reportInvoice', 'reportLine', 'revenue', 'revenueJournal', 'revenueSource', 'reportSchedule', 'reportDelivery'],
+    pages: ['customers', 'customer', 'certificateFile', 'metadataList', 'metadataCsv', 'revenue', 'revenueSource', 'revenueCsv', 'revenueJournalCsv', 'reportSchedule', 'reportDelivery', 'reportDeliveryCsv', 'reportCsv', 'report', 'reportInvoice', 'reportLine', 'exports', 'customersFile'],
   },
 }
 

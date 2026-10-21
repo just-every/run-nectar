@@ -1,3 +1,4 @@
+import { revenueJournalCsv } from '../revenue-journal'
 import { numberRegisterPage } from './number-register'
 import { numberRegisterExport } from '../number-register'
 import { usageReplayPage } from './usage-replay'
@@ -45,6 +46,7 @@ export const pages: Record<string, Page> = {
   erasureEvidence:(env,actor,_r,_u,id)=>erasureEvidence(env,actor,id),
   revenue:(env,actor,_r,url)=>revenuePage(env,actor,url),
   revenueSource:(env,actor,_r,url,id)=>revenueSourcePage(env,actor,id,url),
+  revenueJournalCsv:(env,actor,_r,url)=>revenueJournalCsv(env,actor,url),
   revenueCsv:(env,actor,_r,url)=>revenueCsv(env,actor,url),
   cadences:(env,actor,_r,url)=>cadencesPage(env,actor,url),
   billingAnswers:(env,actor,_r,url)=>billingAnswersPage(env,actor,url),

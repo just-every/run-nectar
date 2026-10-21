@@ -12,7 +12,7 @@ export async function revenuePage(env: Bindings, actor: Actor, url: URL) {
   const report = await revenueReport(env, actor, url)
   return page('Revenue schedules', actor, h`<p class="crumbs"><a href="/app/billing">Billing</a> · <a href="/app/reports/billings">Billings report</a></p>
     <h1>Revenue schedules</h1><p class="lede">${report.from === report.to ? report.from : `${report.from} through ${report.to}`}</p>
-    ${can(actor, 'export') ? h`<p><a href="/app/exports/revenue.csv${url.search}">Download revenue CSV</a></p>` : ''}
+    ${can(actor, 'export') ? h`<p><a href="/app/exports/revenue.csv${url.search}">Download revenue CSV</a> · <a href="/app/exports/revenue-journal.csv${url.search}">Download monthly journal CSV</a></p><p class="hint">The journal is a read-only pretax export for ledger mapping. It excludes tax and cash entries; it does not close a period or post to a ledger.</p>` : ''}
     <section class="card"><h2>Report basis</h2><p>${report.definition}</p>
       <form method="get">${report.customerId ? hidden('customer', report.customerId) : ''}<label>From month <input type="month" name="from" value="${report.from}" required></label><label>Through month <input type="month" name="to" value="${report.to}" required></label><button type="submit">Show months</button></form>
       <p>Opening signed position ${cents(report.openingCents)} + net billings ${cents(report.netBillingsCents)} − recognized revenue ${cents(report.recognizedCents)} = closing signed position <strong>${cents(report.closingCents)}</strong>.</p>
