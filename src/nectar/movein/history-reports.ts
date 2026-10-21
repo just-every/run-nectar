@@ -6,12 +6,12 @@ import { daysBetween, isDate } from '../dates'
 import type { Report, ReportEntry, ReportInvoice, ReportMetric } from '../reports'
 
 export const historicalHref = (customer: string, id: string) => `/app/customers/${customer}#history-${id}`
-export async function customerHistory(env: Bindings, customer: string, _includeOriginal = false) {
+export async function customerHistory(env: Bindings, customer: string) {
   const documents = await all(env, 'SELECT * FROM nc_incumbent_invoices WHERE customer_id=? ORDER BY COALESCE(issue_date,period_start),id', customer)
   const records = await all(env, 'SELECT * FROM nc_incumbent_history WHERE customer_id=? ORDER BY occurred_on,id', customer)
   const collected=await all(env,"SELECT p.* FROM nc_imported_collections p WHERE p.customer_id=? AND p.charge_ref IS NOT NULL AND p.collected_on IS NOT NULL",customer)
   const additional=collected.filter(payment=>!records.some(record=>record.kind==='payment'&&record.status==='succeeded'&&(record.id===payment.history_payment_id||record.provider_ref===payment.charge_ref)))
-  return { totals:{invoicedCents:documents.filter(row=>row.document_kind==='invoice'&&['paid','open','uncollectible'].includes(row.status)).reduce((n,row)=>n+row.total_cents,0), creditedCents:documents.filter(row=>row.document_kind==='credit-note'&&row.status==='issued').reduce((n,row)=>n+row.total_cents,0),paymentsCents:records.filter(row=>row.kind==='payment'&&row.status==='succeeded').reduce((n,row)=>n+row.amount_cents,0)+additional.reduce((n,row)=>n+row.amount_cents,0),refundsCents:records.filter(row=>row.kind==='refund'&&row.status==='succeeded').reduce((n,row)=>n+row.amount_cents,0),remainingCents:documents.filter(row=>row.document_kind==='invoice'&&row.status==='open').reduce((n,row)=>n+Math.max(0,row.remaining_cents-collected.filter(payment=>payment.invoice_id===row.id).reduce((sum,payment)=>sum+payment.amount_cents,0)),0)}, documents: documents.map(row => ({ ...historicalFinancialFacts(row), lines: publicLines(row.lines_json) })), records: records.map(row => ({ ...historicalFinancialFacts(row), ...(row.kind==='subscription-event'?{original:subscriptionSnapshot(parseJson<Row>(row.payload_json,{}))}:{}) })) }
+  return { totals:{invoicedCents:documents.filter(row=>row.document_kind==='invoice'&&['paid','open','uncollectible'].includes(row.status)).reduce((n,row)=>n+row.total_cents,0), creditedCents:documents.filter(row=>row.document_kind==='credit-note'&&row.status==='issued').reduce((n,row)=>n+row.total_cents,0),paymentsCents:records.filter(row=>row.kind==='payment'&&row.status==='succeeded').reduce((n,row)=>n+row.amount_cents,0)+additional.reduce((n,row)=>n+row.amount_cents,0),refundsCents:records.filter(row=>row.kind==='refund'&&row.status==='succeeded').reduce((n,row)=>n+row.amount_cents,0),remainingCents:documents.filter(row=>row.document_kind==='invoice'&&row.status==='open').reduce((n,row)=>n+Math.max(0,row.remaining_cents-collected.filter(payment=>payment.invoice_id===row.id).reduce((sum,payment)=>sum+payment.amount_cents,0)),0)}, documents: documents.map(row => ({ ...historicalFinancialFacts(row), lines: publicLines(row.lines_json) })), records: records.map(row => ({ ...historicalFinancialFacts(row), ...(row.kind==='subscription-event'?{timeline:subscriptionSnapshot(parseJson<Row>(row.payload_json,{}))}:{}) })) }
 }
 // CT 21 October: originals are opaque downloads, never inline evidence for
 // any role. Every projection below selects typed facts, never provider prose.
@@ -111,7 +111,7 @@ export async function historicalContributions(env: Bindings, metric: ReportMetri
   }
   return result
 }
-export async function historicalReportSource(env: Bindings, report: Report, id: string, url: URL, day: string, _includeOriginal = false): Promise<ReportInvoice | null> {
+export async function historicalReportSource(env: Bindings, report: Report, id: string, url: URL, day: string): Promise<ReportInvoice | null> {
   const entry=report.entries.find(row=>row.invoiceId===id)
   if(!entry?.sourceProvider)return null
   const sources=await historicalContributions(env,report.metric,report.period.slice(0,7),url.searchParams.get('customer'),day,url.searchParams.get('bucket'))

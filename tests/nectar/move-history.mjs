@@ -40,7 +40,7 @@ export async function moveHistoryFlow(h,owner,{onState=async()=>{},keepHistory=f
   assert.equal(first.incumbentHistory.records.length,24)
   assert.deepEqual(first.incumbentHistory.totals,{invoicedCents:1398000,creditedCents:2200,paymentsCents:1398000,refundsCents:2200,remainingCents:0})
   for(const kind of ['payment','refund','dispute','subscription-event'])assert.ok(first.incumbentHistory.records.some(row=>row.kind===kind),kind)
-  const timeline=first.incumbentHistory.records.find(row=>row.provider_ref==='synthetic-nectar-event-1').original
+  const timeline=first.incumbentHistory.records.find(row=>row.provider_ref==='synthetic-nectar-event-1').timeline
   assert.equal(timeline.id,capture.subscription_events.data[1].id)
   assert.equal(timeline.type,'customer.subscription.updated')
   assert.equal(timeline.data.object.trial_end,capture.subscription_events.data[1].data.object.trial_end)

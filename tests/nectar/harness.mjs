@@ -31,7 +31,7 @@ export async function harness({ assets = false, localTime, hostname = '127.0.0.1
   const chunks = (await readdir('dist/server', { recursive: true })).filter(path => path.endsWith('.js') && path !== 'index.js')
   const mails = [], mailResponses = []
   const outboundService = async request => {
-    if (new URL(request.url).origin==='https://api.stripe.com'&&stripeFetch)return stripeFetch(request)
+    if (new URL(request.url).hostname==='api.stripe.com'&&stripeFetch){console.log('STRIPE EDGE',request.method,new URL(request.url).origin,new URL(request.url).pathname);return stripeFetch(request)}
     if (request.url !== 'https://api.resend.com/emails') return new Response('Unexpected outbound request', { status: 599 })
     const message=await request.json();mails.push(message)
     const index=mailResponses.findIndex(response=>!response.to||[message.to].flat().includes(response.to))
@@ -47,17 +47,12 @@ export async function harness({ assets = false, localTime, hostname = '127.0.0.1
   const mf = new Miniflare(convertV4MiniflareOptions(options))
   const close = () => mf.dispose()
   let setupPhase='worker-ready'
-  console.log('HARNESS starting built Worker')
   try {
     await mf.ready
-    console.log('HARNESS applying committed migrations')
     // Every committed migration, as `rer setup` leaves a database.
-    console.log('HARNESS acquiring D1 binding')
     const db = await mf.getD1Database('DB')
-    console.log('HARNESS D1 binding acquired')
     for (const name of (await readdir('migrations/core')).filter(name => name.endsWith('.sql')).sort()) {
       setupPhase=`migration:${name}`
-      console.log('HARNESS',setupPhase)
       await db.batch(wrangler.unstable_splitSqlQuery(await readFile(`migrations/core/${name}`, 'utf8')).map(query => db.prepare(query)))
     }
     setupPhase='health'
