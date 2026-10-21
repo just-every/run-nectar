@@ -1,3 +1,4 @@
+import { historicalContributions, historicalReportSource } from './movein/history-reports'
 // Financial contributions use recorded ledger values or the real invoice engine.
 // Unbilled calculations are live read snapshots, never issued-invoice evidence.
 import type { Bindings } from '../auth.server'
@@ -156,6 +157,8 @@ async function contributions(env: Bindings, metric: string, url: URL) {
       href: sourceHref(selected.metric, row.id, month, customer), sourceKind: credits||row.attributedCredit ? 'credit_note' : 'invoice',
       ...(credits||row.attributedCredit ? { creditId: row.id } : {}) }))
   }
+  const historical=await historicalContributions(env,selected.metric,month,customer,today(business.timezone))
+  entries.push(...historical.map(source=>source.entry as FinancialReportEntry))
   const report: FinancialReport = { metric: selected.metric, ...DEFINITIONS[selected.metric], period: month,
     totalCents: entries.reduce((sum, entry) => sum + entry.amountCents, 0), entries }
   return { report, unbilled, business }
@@ -173,6 +176,8 @@ export async function financialReportSource(env: Bindings, actor: Actor, metric:
   const { report, unbilled, business } = await contributions(env, metric, url)
   const entry = report.entries.find(row => row.invoiceId === sourceId)
   insist(entry, 'report_invoice_not_found', 404)
+  const historical=await historicalReportSource(env,report,sourceId,url,today(business.timezone))
+  if(historical)return historical as FinancialReportSource
   const base = { ...entry, metric: report.metric, title: report.title, definition: report.definition, period: report.period }
   if (unbilled) {
     const evidence = unbilled.get(sourceId)!.evidence

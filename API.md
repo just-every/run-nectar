@@ -405,6 +405,50 @@ not retained or reported as zero. Ordinary `credit.issue` / governed
 and number collisions consume nothing. A source used for continuation blocks
 strict import undo. No capture is presented as live provider verification.
 
+### Retained Stripe financial history (MOVE-007)
+
+The ordinary `import.preview` / reviewed `import.apply` doors also accept optional
+`payments` (`/v1/charges`), `refunds` (`/v1/refunds`), `disputes` (`/v1/disputes`)
+and `subscription_events` (`/v1/events`, filtered to `customer.subscription.*`)
+JSON files. Each uses the same Stripe list envelope, a matching `manifest.files`
+entry with `count` and `has_more:false`, and the existing multipart or
+`NAME_b64` / `NAME_name` transport. A declared file cannot be omitted. Capture
+all pages before importing; incomplete lists and conflicting duplicate source
+ids are refused. Identical duplicates retain the import kit's collapse behavior.
+
+Each retained payment/refund/dispute keeps its original object, source id,
+customer, source invoice/subscription references, source status, positive integer
+cent amount, lowercase currency and business-local occurrence date. A refund or
+dispute needs its charge in `payments` or a complete expanded charge. Referenced
+invoices must be finalized and belong to that customer; charge, refund and
+dispute amounts/currencies and source relationships must agree. Subscription
+events retain the entire event and its original subscription snapshot, including
+earlier terms; they do not rewrite the currently imported subscription. Preview
+reports rejected records explicitly. `create.history` counts new retained rows.
+These are read-only imported records: no native payment, refund, dispute action,
+customer balance change, mail or processor request is executed by importing them.
+
+Retained invoices and credit notes also keep their original objects and currency.
+Invoice `issue_date` comes only from `status_transitions.finalized_at`; a legacy
+capture without it retains a null issue date and cannot establish dated financial
+contributions. Credit issue dates use the credit's `created` timestamp. Invoice
+due dates are captured when present. Normalized invoice lines retain their source
+line id, original service dates, price/subscription references, expanded price
+evidence, recurring interval/count and explicit tax-exclusive/discount amounts.
+The original shadow-comparison line amounts and separate invoice discount line
+remain intact. Original tax breakdowns remain in source JSON and their exact
+sum is retained when supplied. Missing original tax-exclusive evidence is not
+invented. Capture expanded line prices (or their full objects in `prices`) for
+historical recurring interpretation, even where current billing cannot install
+that price. Annual historical invoices remain available; unsupported annual
+prices/subscriptions are explicitly rejected as active billing mappings rather
+than converted into monthly billing.
+
+The same reviewed fingerprint, retained original file bytes, journal, repeated
+apply and strict untouched-batch undo cover these new source kinds. Altered
+history or source evidence blocks strict undo. Existing pre-history imports keep
+their legacy journal snapshot shape until a new capture supplies source evidence.
+
 
 ### Monthly revenue journal (REV-002, partial)
 

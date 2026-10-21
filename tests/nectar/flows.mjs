@@ -34,6 +34,7 @@ if (!process.argv.includes('--core-only')) {
 await runIsolated('customer-search','customerSearchFlow')
 await runIsolated('upcoming','upcomingFlow')
 await runIsolated('numbering','numberingFlow')
+await runIsolated('move-history','moveHistoryFlow')
 await runIsolated('entitlement-quotas','entitlementQuotasFlow')
 await runIsolated('portal-sessions','portalSessionsFlow')
 await runIsolated('portal-answers','portalAnswersFlow')

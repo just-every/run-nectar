@@ -9,10 +9,10 @@ const cell = (value: unknown) => {
   return /[",\n\r]/.test(safe) ? `"${safe.replaceAll('"', '""')}"` : safe
 }
 export function reportsCsv(reports: Report[]) {
-  const rows: unknown[][] = [['report','period','definition','source','customer','amount','source_path']]
+  const rows: unknown[][] = [['report','period','definition','source','customer','amount','source_path','source_provider','source_reference']]
   for (const r of reports) {
-    rows.push([r.metric,r.period,r.definition,'TOTAL','',plainMoney(r.totalCents),''])
-    for (const e of r.entries) rows.push([r.metric,r.period,r.definition,e.number,e.customerName,plainMoney(e.amountCents),e.href])
+    rows.push([r.metric,r.period,r.definition,'TOTAL','',plainMoney(r.totalCents),'','',''])
+    for (const e of r.entries) rows.push([r.metric,r.period,r.definition,e.number,e.customerName,plainMoney(e.amountCents),e.href,e.sourceProvider??'nectar',e.sourceReference??e.invoiceId])
   }
   return rows.map(row => row.map(cell).join(',')).join('\r\n') + '\r\n'
 }

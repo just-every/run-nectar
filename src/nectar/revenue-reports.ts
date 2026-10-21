@@ -9,7 +9,7 @@ import { REVENUE_POLICY_VERSION } from './revenue-allocation'
 import { revenueInvoice, revenueInvoices, type RevenueInvoiceRecord } from './revenue-records'
 import { csvResponse } from './report-csv'
 
-export const REVENUE_DEFINITION = 'Revenue excludes tax. Service fees, signed discounts and fixed service credits follow business-local service days; usage follows recorded consumption; one-time fees follow their service date; unused commitments follow settlement or expiry. Actual credit notes are invoice-level contra-revenue in their issue month without changing original tax or line schedules. Signed position equals cumulative net billings minus cumulative recognition: a negative balance is an accrued contract asset; a positive balance is deferred revenue. Opposite invoice positions are shown separately before netting. Historical schedules are read-only policy-v1 projections from saved originals when no issue-time snapshot exists. Annual advance billing, prepaid-credit liabilities, closing revenue periods and posting to an external ledger are not available.'
+export const REVENUE_DEFINITION = 'Revenue excludes tax. Service fees, signed discounts and fixed service credits follow business-local service days; usage follows recorded consumption; one-time fees follow their service date; unused commitments follow settlement or expiry. Actual credit notes are invoice-level contra-revenue in their issue month without changing original tax or line schedules. Signed position equals cumulative net billings minus cumulative recognition: a negative balance is an accrued contract asset; a positive balance is deferred revenue. Opposite invoice positions are shown separately before netting. Native historical schedules are read-only policy-v1 projections from saved originals when no issue-time snapshot exists. Retained Stripe schedules use captured tax-exclusive service consideration: recurring month/year fees allocate equally over anchored service months, with calendar-day splits for partial months; other lines follow saved service days. Imported annual advance invoices therefore carry their original deferred revenue across cutover. Native annual advance issuance, prepaid-credit liabilities, closing revenue periods and posting to an external ledger remain unavailable.'
 
 export interface RevenueContribution {
   period: string
@@ -24,6 +24,7 @@ export interface RevenueContribution {
   policy: string
   custody: string
   href: string
+  source?: RevenueInvoiceRecord['source']
 }
 export interface RevenueMonth {
   period: string
@@ -40,6 +41,7 @@ export interface RevenueMonth {
 }
 export interface RevenueReport {
   policyVersion: string
+  historicalPolicyVersion?: string
   definition: string
   from: string
   to: string
@@ -72,10 +74,10 @@ function filters(url: URL, current: string) {
 
 function sourceContributions(record: RevenueInvoiceRecord): RevenueContribution[] {
   const { invoice, schedules, credits, custody } = record
-  const common = { invoiceId: invoice.id, number: invoice.number, customerId: invoice.customer_id, customerName: invoice.customer_name, custody }
+  const common = { invoiceId: invoice.id, number: invoice.number, customerId: invoice.customer_id, customerName: invoice.customer_name, custody, ...(record.source ? { source: record.source } : {}) }
   const rows: RevenueContribution[] = []
   for (const schedule of schedules) {
-    const source = { ...common, lineId: schedule.lineId, creditId: null, policy: schedule.policy, href: `/app/revenue/${invoice.id}#line-${schedule.lineId}` }
+    const source = { ...common, lineId: schedule.lineId, creditId: null, policy: schedule.policy, href: `/app/revenue/${encodeURIComponent(invoice.id)}#line-${encodeURIComponent(schedule.lineId)}` }
     rows.push({ ...source, period: invoice.issue_date.slice(0, 7), kind: 'billing', amountCents: schedule.amountCents })
     rows.push(...schedule.entries.map(entry => ({ ...source, period: entry.period, kind: 'recognition' as const, amountCents: entry.amountCents })))
   }
@@ -105,7 +107,8 @@ export async function revenueReport(env: Bindings, actor: Actor, url: URL): Prom
   const business = await requireBusiness(env)
   const { from, to, customer } = filters(url, localDate(clockInstant(env), business.timezone).slice(0, 7))
   const rows: RevenueContribution[] = []
-  for (const record of await revenueInvoices(env, customer)) rows.push(...sourceContributions(record))
+  const records = await revenueInvoices(env, customer)
+  for (const record of records) rows.push(...sourceContributions(record))
   const months: RevenueMonth[] = []
   for (let index = monthIndex(from); index <= monthIndex(to); index++) {
     const period = monthAt(index), before = position(rows, period), after = position(rows, monthAt(index + 1))
@@ -116,7 +119,8 @@ export async function revenueReport(env: Bindings, actor: Actor, url: URL): Prom
     months.push({ period, openingCents: before.signedCents, openingAccruedContractAssetCents: before.accruedContractAssetCents, openingDeferredLiabilityCents: before.deferredLiabilityCents, billingsCents: billings, creditsCents: credits, netBillingsCents: billings + credits, recognizedCents: recognized, closingCents: after.signedCents, accruedContractAssetCents: after.accruedContractAssetCents, deferredLiabilityCents: after.deferredLiabilityCents })
   }
   const contributions = rows.filter(row => row.period >= from && row.period <= to).sort((a, b) => a.period.localeCompare(b.period) || a.invoiceId.localeCompare(b.invoiceId) || a.kind.localeCompare(b.kind) || (a.lineId ?? a.creditId ?? '').localeCompare(b.lineId ?? b.creditId ?? ''))
-  return { policyVersion: REVENUE_POLICY_VERSION, definition: REVENUE_DEFINITION, from, to, customerId: customer, months, contributions,
+  const historicalPolicyVersion = records.find(record => record.source)?.source?.policyVersion
+  return { policyVersion: REVENUE_POLICY_VERSION, ...(historicalPolicyVersion ? { historicalPolicyVersion } : {}), definition: REVENUE_DEFINITION, from, to, customerId: customer, months, contributions,
     openingCents: months[0].openingCents, netBillingsCents: total(contributions, isBilling), recognizedCents: total(contributions, row => !isBilling(row)),
     closingCents: months.at(-1)!.closingCents, accruedContractAssetCents: months.at(-1)!.accruedContractAssetCents, deferredLiabilityCents: months.at(-1)!.deferredLiabilityCents }
 }
@@ -126,7 +130,8 @@ export async function revenueSource(env: Bindings, actor: Actor, invoiceId: stri
   const record = await revenueInvoice(env, invoiceId)
   const { customer } = filters(url, record.invoice.issue_date.slice(0, 7))
   insist(!customer || customer === record.invoice.customer_id, 'revenue_invoice_not_found', 404)
-  return { policyVersion: REVENUE_POLICY_VERSION, definition: REVENUE_DEFINITION, custody: record.custody,
+  return { policyVersion: record.source?.policyVersion ?? REVENUE_POLICY_VERSION, definition: REVENUE_DEFINITION, custody: record.custody,
+    ...(record.source ? { source: record.source } : {}),
     invoice: { id: record.invoice.id, number: record.invoice.number, customerId: record.invoice.customer_id, customerName: record.invoice.customer_name, issueDate: record.invoice.issue_date, subtotalCents: record.invoice.subtotal_cents, taxCents: record.invoice.tax_cents, totalCents: record.invoice.total_cents, sourceFingerprint: record.invoice.source_fingerprint },
     schedules: record.schedules, credits: record.credits, contributions: sourceContributions(record) }
 }

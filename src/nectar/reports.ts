@@ -1,3 +1,4 @@
+import { historicalContributions, historicalReportSource } from './movein/history-reports'
 import { financialReport, financialReportSource, type UnbilledReportEvidence } from './financial-reports'
 // Issued-invoice and recorded-receipt reports. Every total has the same source contributions and
 // signed detail components in the API and the operator pages.
@@ -14,6 +15,7 @@ export interface ReportEntry {
   // invoiceId is the report source id; collections use the payment id here
   // for the shared detail route and identify it explicitly with sourceKind.
   sourcePath?: string
+  sourceProvider?: string; sourceReference?: string
   invoiceId: string; number: string; customerId: string; customerName: string; amountCents: number; href: string
   sourceKind?: 'invoice' | 'payment' | 'credit_note' | 'subscription_period'; paymentId?: string
 }
@@ -26,6 +28,7 @@ export interface ReportPayment {
   customerId: string; customerName: string; amountCents: number; recordedAt: number; recordedBy: string
 }
 export interface ReportInvoice extends ReportEntry {
+  historical?: {provider:string;reference:string;href:string;original:Row}
   unbilled?: UnbilledReportEvidence
   credit?: {id:string;number:string;invoiceId:string;amountCents:number;reason:string;issuedAt:number;issuedOn:string;issuedBy:string}
   metric: ReportMetric; title: string; definition: string; period: string; totalCents: number; components: ReportComponent[]
@@ -42,11 +45,11 @@ const BUCKETS = new Set(['current', '1-30', '31-60', '61-90', '90+', 'overdue'])
 const DEFINITIONS: Record<Exclude<ReportMetric,'credits'|'tax'|'unbilled'|'credit-balances'>, { title: string; definition: string }> = {
   mrr: {
     title: 'Billed monthly recurring revenue',
-    definition: 'Billed monthly recurring revenue for subscription periods starting in the selected month: issued flat, seat, metered usage, recurring discount and cancellation-credit lines, including actual proration. Excludes late usage, one-time charges, fixed credits, credit notes and tax. This definition covers the current monthly catalogue; it is not a normalized subscription run rate.',
+    definition: 'Billed monthly recurring revenue for subscription periods starting in the selected month: issued flat, seat, metered usage, recurring discount and cancellation-credit lines, including actual proration. Excludes late usage, one-time charges, fixed credits, credit notes and tax. Native invoices use the current monthly catalogue; retained Stripe recurring lines contribute over their original service months, including annual fees allocated across twelve months. It is not a normalized current subscription run rate.',
   },
   billings: {
     title: 'Billings',
-    definition: 'All original lines and tax on invoices issued in the selected calendar month. Later credit notes and payments do not change billings.',
+    definition: 'All original lines and tax on invoices issued in the selected calendar month. Later credit notes and payments do not change billings. Retained Stripe invoices use their original finalized date and source-labelled amounts.',
   },
   ar: {
     title: 'Accounts receivable',
@@ -54,7 +57,7 @@ const DEFINITIONS: Record<Exclude<ReportMetric,'credits'|'tax'|'unbilled'|'credi
   },
   collections: {
     title: 'Collections',
-    definition: 'Recorded external payments received in the selected month up to today in the business billing timezone, by their received-on date. Includes allocated and unallocated receipts. Allocations show which invoices a receipt pays; Nectar does not collect or send money.',
+    definition: 'Recorded external payments received in the selected month up to today in the business billing timezone, by their received-on date. Includes allocated and unallocated receipts. Allocations show which invoices a receipt pays; Nectar does not collect or send money. Retained successful Stripe charges contribute their original gross received amount; refunds remain separate read-only source records.',
   },
 }
 
@@ -112,6 +115,8 @@ export async function report(env: Bindings, actor: Actor, metric: string, url: U
     amountCents: row.amount_cents, href: `/app/reports/${selected.metric}/${encodeURIComponent(row.id)}?${query}`,
     ...(selected.metric === 'collections' ? { sourceKind: 'payment' as const, paymentId: row.id } : {}),
   }))
+  const historical=await historicalContributions(env,selected.metric,month,selected.customer,day,selected.bucket)
+  entries.push(...historical.map(source=>source.entry))
   return { metric: selected.metric, ...DEFINITIONS[selected.metric as keyof typeof DEFINITIONS], period: selected.metric === 'ar' ? day : month,
     totalCents: entries.reduce((sum, entry) => sum + entry.amountCents, 0), entries }
 }
@@ -123,6 +128,8 @@ export async function reportInvoice(env: Bindings, actor: Actor, metric: string,
   const view = await report(env, actor, metric, url)
   const entry = view.entries.find(row => row.invoiceId === invoiceId)
   insist(entry, 'report_invoice_not_found', 404)
+  const historical=await historicalReportSource(env,view,invoiceId,url,today((await requireBusiness(env)).timezone))
+  if(historical)return historical
   if (view.metric === 'collections') {
     const [payment, allocations] = await Promise.all([
       one(env, 'SELECT * FROM nc_payments WHERE id = ? AND customer_id = ?', invoiceId, entry.customerId),

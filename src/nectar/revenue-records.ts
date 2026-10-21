@@ -5,12 +5,14 @@ import { requireBusiness } from './business'
 import { all, guard, insist, parseJson, stmt, type Row } from './core'
 import { isDate, localDate } from './dates'
 import { REVENUE_POLICY_VERSION, recognitionForSavedInvoice, type RevenueSchedule } from './revenue-allocation'
+import { historicalRevenueInvoices } from './movein/history-revenue'
 
 export interface RevenueInvoiceRecord {
   invoice: Row
   schedules: RevenueSchedule[]
   credits: { id: string; number: string; period: string; amountCents: number; basis: Row }[]
-  custody: 'issue-snapshot' | 'derived-saved-originals'
+  custody: 'issue-snapshot' | 'derived-saved-originals' | 'derived-imported-originals'
+  source?: { kind: 'imported'; provider: string; providerRef: string; href: string; policyVersion: string }
 }
 
 export async function revenueIssueStatements(env: Bindings, invoice: Row): Promise<D1PreparedStatement[]> {
@@ -89,10 +91,12 @@ async function loadRevenueInvoices(env: Bindings, invoice: string | null, custom
 }
 
 export async function revenueInvoice(env: Bindings, id: string): Promise<RevenueInvoiceRecord> {
-  const rows = await loadRevenueInvoices(env, id, null)
+  const rows = [...await loadRevenueInvoices(env, id, null), ...await historicalRevenueInvoices(env, id, null)]
   insist(rows.length === 1, 'revenue_invoice_not_found', 404)
   return rows[0]
 }
 export async function revenueInvoices(env: Bindings, customer: string | null = null): Promise<RevenueInvoiceRecord[]> {
-  return await loadRevenueInvoices(env, null, customer)
+  const rows = [...await loadRevenueInvoices(env, null, customer), ...await historicalRevenueInvoices(env, null, customer)]
+  insist(new Set(rows.map(row => row.invoice.id)).size === rows.length, 'history_revenue_duplicate_invoice', 409)
+  return rows
 }

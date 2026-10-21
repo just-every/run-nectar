@@ -159,25 +159,57 @@ const subscription: Kind = {
   count: "(SELECT COUNT(*) FROM nc_subscriptions WHERE origin = 'import')",
 }
 
+// Old journal snapshots predate these columns. Their default empty source must
+// retain the old value shape so strict undo still recognizes untouched imports.
+const documentSource = (row: Value) => row.source_json === '{}' ? {} : {
+  sourceJson: row.source_json, issueDate: row.issue_date, dueDate: row.due_date, currency: row.currency,
+}
+const documentSourceFields = (value: Value): [string, unknown][] => [
+  ['source_json', value.sourceJson ?? '{}'], ['issue_date', value.issueDate ?? null], ['due_date', value.dueDate ?? null], ['currency', value.currency ?? null],
+]
 const historicalDocument = (documentKind: 'invoice' | 'credit-note'): Kind => ({
   async read(db, id) {
     const row = await db.prepare('SELECT * FROM nc_incumbent_invoices WHERE id = ? AND document_kind = ?').bind(id, documentKind).first<any>()
-    return row ? { revision: row.revision, value: withDependents({ provider: row.provider, providerRef: row.provider_ref, customerId: row.customer_id, subscriptionId: row.subscription_id, number: row.number, status: row.status, periodStart: row.period_start, periodEnd: row.period_end, totalCents: row.total_cents, taxCents: row.tax_cents, paidCents: row.paid_cents, remainingCents: row.remaining_cents, lines: row.lines_json }, await dependents(db, `((SELECT COUNT(*) FROM nc_audit WHERE action='invoice.series' AND json_extract(detail,'$.sourceInvoice')=?1))`, id)) } : undefined
+    return row ? { revision: row.revision, value: withDependents({ provider: row.provider, providerRef: row.provider_ref, customerId: row.customer_id, subscriptionId: row.subscription_id, number: row.number, status: row.status, periodStart: row.period_start, periodEnd: row.period_end, totalCents: row.total_cents, taxCents: row.tax_cents, paidCents: row.paid_cents, remainingCents: row.remaining_cents, lines: row.lines_json, ...documentSource(row) }, await dependents(db, `((SELECT COUNT(*) FROM nc_audit WHERE action='invoice.series' AND json_extract(detail,'$.sourceInvoice')=?1))`, id)) } : undefined
   },
   matches(value, id, revision) {
-    const main = eq([['document_kind', documentKind], ['provider', value.provider], ['provider_ref', value.providerRef], ['customer_id', value.customerId], ['subscription_id', value.subscriptionId], ['number', value.number], ['status', value.status], ['period_start', value.periodStart], ['period_end', value.periodEnd], ['total_cents', value.totalCents], ['tax_cents', value.taxCents], ['paid_cents', value.paidCents], ['remaining_cents', value.remainingCents], ['lines_json', value.lines], ['revision', revision]])
+    const main = eq([['document_kind', documentKind], ['provider', value.provider], ['provider_ref', value.providerRef], ['customer_id', value.customerId], ['subscription_id', value.subscriptionId], ['number', value.number], ['status', value.status], ['period_start', value.periodStart], ['period_end', value.periodEnd], ['total_cents', value.totalCents], ['tax_cents', value.taxCents], ['paid_cents', value.paidCents], ['remaining_cents', value.remainingCents], ['lines_json', value.lines], ['revision', revision], ...documentSourceFields(value)])
     const free = noDependents(`((SELECT COUNT(*) FROM nc_audit WHERE action='invoice.series' AND json_extract(detail,'$.sourceInvoice')=?1))`, id)
     return sql(`EXISTS(SELECT 1 FROM nc_incumbent_invoices WHERE id = ? AND ${main.text}) AND ${free.text}`, id, ...main.params, ...free.params)
   },
   absent: id => sql('NOT EXISTS(SELECT 1 FROM nc_incumbent_invoices WHERE id = ?)', id),
-  write: (value, id, revision) => [sql('INSERT INTO nc_incumbent_invoices (id, provider, provider_ref, customer_id, subscription_id, number, status, period_start, period_end, total_cents, tax_cents, paid_cents, remaining_cents, lines_json, revision, document_kind) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-    id, value.provider, value.providerRef, value.customerId, value.subscriptionId, value.number, value.status, value.periodStart, value.periodEnd, value.totalCents, value.taxCents, value.paidCents, value.remainingCents, value.lines, revision, documentKind)],
+  write: (value, id, revision) => [sql('INSERT INTO nc_incumbent_invoices (id, provider, provider_ref, customer_id, subscription_id, number, status, period_start, period_end, total_cents, tax_cents, paid_cents, remaining_cents, lines_json, revision, document_kind, source_json, issue_date, due_date, currency) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    id, value.provider, value.providerRef, value.customerId, value.subscriptionId, value.number, value.status, value.periodStart, value.periodEnd, value.totalCents, value.taxCents, value.paidCents, value.remainingCents, value.lines, revision, documentKind, value.sourceJson ?? '{}', value.issueDate ?? null, value.dueDate ?? null, value.currency ?? null)],
   remove: id => [sql('DELETE FROM nc_incumbent_invoices WHERE id = ?', id)],
   ids: async db => (await db.prepare('SELECT id FROM nc_incumbent_invoices WHERE document_kind = ? ORDER BY id').bind(documentKind).all<{ id: string }>()).results.map(row => row.id),
   count: `(SELECT COUNT(*) FROM nc_incumbent_invoices WHERE document_kind='${documentKind}')`,
 })
 
-export const KINDS: Record<string, Kind> = { meter, product, price, customer, subscription, invoice: historicalDocument('invoice'), credit_note: historicalDocument('credit-note') }
+const historyFields = (value: Value): [string, unknown][] => [
+  ['provider', value.provider], ['provider_ref', value.providerRef], ['kind', value.kind], ['customer_id', value.customerId], ['occurred_on', value.occurredOn],
+  ['amount_cents', value.amountCents], ['currency', value.currency], ['status', value.status], ['invoice_ref', value.invoiceRef], ['subscription_ref', value.subscriptionRef], ['payload_json', value.payloadJson],
+]
+const history: Kind = {
+  async read(db, id) {
+    const row = await db.prepare('SELECT * FROM nc_incumbent_history WHERE id=?').bind(id).first<any>()
+    return row ? { revision: row.revision, value: { provider: row.provider, providerRef: row.provider_ref, kind: row.kind, customerId: row.customer_id,
+      occurredOn: row.occurred_on, amountCents: row.amount_cents, currency: row.currency, status: row.status, invoiceRef: row.invoice_ref, subscriptionRef: row.subscription_ref, payloadJson: row.payload_json } } : undefined
+  },
+  matches(value, id, revision) {
+    const fields = eq([...historyFields(value), ['revision', revision]])
+    return sql(`EXISTS(SELECT 1 FROM nc_incumbent_history WHERE id=? AND ${fields.text})`, id, ...fields.params)
+  },
+  absent: id => sql('NOT EXISTS(SELECT 1 FROM nc_incumbent_history WHERE id=?)', id),
+  write(value, id, revision) {
+    const fields = historyFields(value)
+    return [sql(`INSERT INTO nc_incumbent_history(id,${fields.map(([column]) => column).join(',')},revision) VALUES (?,${fields.map(() => '?').join(',')},?)`, id, ...fields.map(([, item]) => item), revision)]
+  },
+  remove: id => [sql('DELETE FROM nc_incumbent_history WHERE id=?', id)],
+  ids: async db => (await db.prepare('SELECT id FROM nc_incumbent_history ORDER BY id').all<{ id: string }>()).results.map(row => row.id),
+  count: '(SELECT COUNT(*) FROM nc_incumbent_history)',
+}
+
+export const KINDS: Record<string, Kind> = { meter, product, price, customer, subscription, invoice: historicalDocument('invoice'), credit_note: historicalDocument('credit-note'), history }
 const kindOf = (name: string) => { const kind = KINDS[name]; if (!kind) throw new Error(`TARGET_KIND_UNKNOWN: ${name}`); return kind }
 
 export const nectarTargets: D1TargetAdapter = {

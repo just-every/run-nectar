@@ -4,7 +4,7 @@ import { can, type Actor } from '../actor'
 import { revenueReport, revenueSource } from '../revenue-reports'
 import { cents, details, h, hidden, page, table } from './html'
 
-const custody = (value: string) => value === 'issue-snapshot' ? 'Saved at issue' : 'Derived from saved originals; no records changed'
+const custody = (value: string) => value === 'issue-snapshot' ? 'Saved at issue' : value === 'derived-imported-originals' ? 'Read-only imported source' : 'Derived from saved originals; no records changed'
 const movements: Record<string, string> = { billing: 'Original line billed', recognition: 'Line revenue recognized', 'credit-billing': 'Credit note issued', 'credit-recognition': 'Contra-revenue recognized' }
 const kind = (value: string) => movements[value] ?? value
 
@@ -30,13 +30,13 @@ export async function revenuePage(env: Bindings, actor: Actor, url: URL) {
 
 export async function revenueSourcePage(env: Bindings, actor: Actor, invoice: string, url: URL) {
   const source = await revenueSource(env, actor, invoice, url)
-  return page('Revenue source', actor, h`<p class="crumbs"><a href="/app/revenue${url.search}">Revenue schedules</a> · <a href="/app/invoices/${source.invoice.id}">Invoice ${source.invoice.number || 'Retained document'}</a></p>
+  return page('Revenue source', actor, h`<p class="crumbs"><a href="/app/revenue${url.search}">Revenue schedules</a> · <a href="${source.source?.href??`/app/invoices/${source.invoice.id}`}">${source.source?`${source.source.provider} invoice`:'Invoice'} ${source.invoice.number || 'Retained document'}</a></p>
     <h1>Revenue source</h1><p class="lede">${source.invoice.customerName} · ${source.invoice.number || 'Retained document'}</p>
     <section class="card"><h2>Issued consideration</h2><p>Issued ${source.invoice.issueDate}. Revenue consideration ${cents(source.invoice.subtotalCents)}; original tax ${cents(source.invoice.taxCents)}; original invoice total ${cents(source.invoice.totalCents)}.</p>
       <p>${custody(source.custody)}. Credit notes remain separate from original schedules and original tax.</p>
     </section>
     ${source.schedules.map(schedule => h`<section class="card" id="line-${schedule.lineId}"><h2>${schedule.kind.replaceAll('_', ' ')} schedule</h2>
-      <p><a href="/app/invoices/${source.invoice.id}/lines/${schedule.lineId}">Original line evidence</a> · ${schedule.serviceStart} through ${schedule.serviceEnd} (end exclusive) · ${cents(schedule.amountCents)}.</p>
+      <p><a href="${source.source?.href??`/app/invoices/${source.invoice.id}/lines/${schedule.lineId}`}">Original line evidence</a> · ${schedule.serviceStart} through ${schedule.serviceEnd} (end exclusive) · ${cents(schedule.amountCents)}.</p>
       <p>Recognition policy: ${schedule.policy.replaceAll('-', ' ')}.</p>
       ${table(['Recognition month', 'Signed revenue$'], schedule.entries.map(entry => [entry.period, cents(entry.amountCents)]))}
       ${details({ line: schedule.lineId, policyVersion: source.policyVersion, sourceFingerprint: source.invoice.sourceFingerprint, basis: schedule.basis, entries: schedule.entries }, 'Schedule basis and exact allocation')}
