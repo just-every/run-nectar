@@ -2,7 +2,7 @@
 // invoice separately. Future usage is unknown, never a forecast of zero usage.
 import type { Bindings } from '../auth.server'
 import type { Business } from './business'
-import { insist, one, type Row } from './core'
+import { all, insist, one, parseJson, type Row } from './core'
 import { addDays, addMonths, addMonthsClamped } from './dates'
 import { dueBillingWindows, INTERVAL_RATING_VERSION } from './billing-calendar'
 import { ratingInputs } from './inputs'
@@ -23,8 +23,30 @@ export function nextRenewalEnd(sub: Row, term: Row) {
   const signedAnchor = `${originMonth.slice(0, 8)}${day}`
   return addMonthsClamped(signedAnchor, (Number(term.cycle ?? 0) + 2) * term.months)
 }
-export const renewalItems = (items: ItemIn[], sub: Row, term: Row, end: string) => items.map(item =>
-  sub.billing_anchor_date && item.to === term.end_date ? { ...item, to: end } : item)
+/** Closing an item at a renewal boundary can mean a scheduled replacement.
+ * Preserve that explicit decision; only co-termed continuing service extends. */
+export async function renewalReplacementIds(env: Bindings, subscription: string, date: string) {
+  const [changes, proposals, saves] = await Promise.all([
+    all(env, "SELECT item_id FROM nc_changes WHERE subscription_id=? AND status='approved' AND effective_date=?", subscription, date),
+    all(env, "SELECT kind,payload_json,impact_json FROM nc_proposals WHERE status='approved' AND (kind='price_change' OR json_extract(payload_json,'$.setup')=1)"),
+    all(env, "SELECT terms_json FROM nc_retention_offers WHERE subscription_id=? AND kind='save' AND status='accepted' AND json_extract(terms_json,'$.kind')='downgrade' AND json_extract(terms_json,'$.from')=?", subscription, date),
+  ])
+  const replaced = new Set<string>(changes.map(change => change.item_id))
+  for (const proposal of proposals) {
+    const payload = parseJson<Row>(proposal.payload_json, {})
+    if (proposal.kind === 'price_change') {
+      for (const entry of parseJson<Row[]>(proposal.impact_json, [])) if (entry.subscription === subscription && (entry.effective_date ?? payload.effective_date) === date) {
+        for (const source of entry.sourceItems ?? [{ id: entry.item }]) if (source.id) replaced.add(source.id)
+      }
+    } else if (payload.setup === true && payload.plan?.subscription?.id === subscription) {
+      for (const closed of payload.plan.itemUpdates ?? []) if (closed.to === date && payload.plan.items.some((item: Row) => item.setupKey === closed.id && item.from === date)) replaced.add(closed.id)
+    }
+  }
+  for (const save of saves) for (const item of parseJson<Row>(save.terms_json, {}).selectedItems ?? []) replaced.add(item.id)
+  return replaced
+}
+export const renewalItems = (items: ItemIn[], sub: Row, term: Row, end: string, replaced = new Set<string>()) => items.map(item =>
+  sub.billing_anchor_date && item.to === term.end_date && !replaced.has(item.id) ? { ...item, to: end } : item)
 
 function prospectiveInput(input: RatingInput, term: Row, end: string): RatingInput {
   return { ...input, version: INTERVAL_RATING_VERSION,
@@ -36,7 +58,8 @@ export async function nativeRenewalPreview(env: Bindings, business: Business, su
   if (!enabled) return null
   const end = nextRenewalEnd(sub, term)
   const basis = await ratingInputs(env, business, sub.id, { start: term.end_date, end })
-  const items = renewalItems(basis.items, sub, term, end)
+  const replaced = await renewalReplacementIds(env, sub.id, term.end_date)
+  const items = renewalItems(basis.items, sub, term, end, replaced)
   const calendar = prospectiveInput({ ...basis, items }, term, end)
   const windows = dueBillingWindows(calendar, term.end_date, addDays(end, 1))
     .filter(window => window.period.end > term.end_date && window.period.start < end)

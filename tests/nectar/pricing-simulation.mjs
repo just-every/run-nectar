@@ -276,7 +276,7 @@ async function evergreenIntervalReplay(h, owner) {
       await api('billrun.prepare', { period: month })
       for (const invoice of (await api(`subscriptions/${subscription}`)).invoices.filter(invoice => invoice.status === 'draft')) {
         await api('invoice.approve', { invoice: invoice.id, acknowledge: true })
-        await api('invoice.finalise', { invoice: invoice.id, issue_date: `${month}-28` })
+        await api('invoice.finalise', { invoice: invoice.id, issue_date: (await api(`invoices/${invoice.id}`)).calculation.inputs.billing.dueDate })
       }
     }
     const created = await api('proposal.create', { kind: 'price_change', title: `Replay six saved ${name} intervals`, payload: { simulation: true, start_month: '2010-01', effective_date: '2025-01-01', source_price: source, target_price: target, subscriptions: [subscription] } })

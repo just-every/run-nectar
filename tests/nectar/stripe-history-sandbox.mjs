@@ -96,8 +96,10 @@ async function generate() {
   step('create-owned-open-cutover-receivable')
   const draft = await stripe.request('POST', '/v1/invoices', { customer: customer.id, collection_method: 'send_invoice', days_until_due: 30,
     auto_advance: false, pending_invoice_items_behavior: 'exclude', 'automatic_tax[enabled]': false, 'metadata[nectar_run]': stripe.run })
+  step('create-owned-open-line')
   await stripe.request('POST', '/v1/invoiceitems', { customer: customer.id, invoice: draft.id, amount: 2500, currency: 'usd',
     description: 'Owned sandbox cutover service', 'period[start]': monthTime(17), 'period[end]': monthTime(18), 'metadata[nectar_run]': stripe.run })
+  step('finalize-owned-open-receivable')
   const opened = await stripe.request('POST', `/v1/invoices/${draft.id}/finalize`, { auto_advance: false })
   check(opened.status === 'open' && opened.auto_advance === false && opened.total === 2500 && opened.amount_remaining === 2500 && opened.amount_paid === 0, 'stripe_cutover_invoice_not_open')
   receipt.sourceIds.openInvoice = opened.id
@@ -320,7 +322,7 @@ try {
   receipt.status = 'passed'
 } catch (error) {
   receipt.status = 'failed'; receipt.failure = { phase, ...safeError(error) }; process.exitCode = 1
-  console.error(`Stripe history: failed phase=${phase} code=${receipt.failure.code} status=${receipt.failure.status ?? 'none'}`)
+  console.error(`Stripe history: failed phase=${phase} code=${receipt.failure.code} status=${receipt.failure.status ?? 'none'} param=${receipt.failure.param??'none'}`)
 } finally {
   if (h) { try { await h.close() } catch (error) { receipt.status = 'failed'; receipt.runtimeCleanup = safeError(error); process.exitCode = 1 } }
   if (stripe && ownedClock) {

@@ -3,12 +3,13 @@ import { randomUUID } from 'node:crypto'
 import { setTimeout as delay } from 'node:timers/promises'
 
 export class SandboxFailure extends Error {
-  constructor(code, status = null) { super(code); this.code = code; this.status = status }
+  constructor(code, status = null, param = null) { super(code); this.code = code; this.status = status; this.param=param }
 }
 export const check = (condition, code) => { if (!condition) throw new SandboxFailure(code) }
 export const safeError = error => ({
   code: typeof error?.code === 'string' && /^[A-Za-z0-9_]{1,80}$/.test(error.code) ? error.code : 'sandbox_failure',
   status: Number.isInteger(error?.status) ? error.status : null,
+  param: typeof error?.param==='string' && /^[A-Za-z0-9_\[\].]{1,100}$/.test(error.param) ? error.param : null,
 })
 export const reference = value => typeof value === 'string' ? value : value?.id ?? null
 export const monthTime = index => Date.UTC(2025, index, 1) / 1000
@@ -35,7 +36,7 @@ export function stripeSandbox(secret) {
     } catch { throw new SandboxFailure('stripe_transport_failed') }
     let value
     try { value = await response.json() } catch { throw new SandboxFailure('stripe_invalid_json', response.status) }
-    if (!response.ok) throw new SandboxFailure(safeError({ code: value?.error?.code ?? value?.error?.type }).code, response.status)
+    if (!response.ok) throw new SandboxFailure(safeError({ code: value?.error?.code ?? value?.error?.type }).code, response.status, value?.error?.param)
     check(value?.livemode !== true, 'stripe_live_object_refused')
     return value
   }

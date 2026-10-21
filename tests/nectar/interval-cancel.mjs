@@ -81,7 +81,7 @@ export async function intervalCancellationFlow(h, owner) {
       assert.equal(restarted.contract_end_date, '2028-01-01', 'Restart inside the signed term preserves its actual end')
       const preview = await h.api(`subscriptions/${row.subscription}/upcoming?period=2026-07`, owner)
       assert.equal(preview.calculation.totalCents, 566334, 'Reinstated service receives an ordinary 174/365-day advance invoice')
-      const stub = await issue(row.customer, '2026-07', '2026-07-11')
+      const stub = await issue(row.customer, '2026-07', '2026-07-20')
       assert.equal(stub.total_cents, preview.calculation.totalCents)
       assert.equal(stub.balanceCents, 0, 'The paid-service credit applies once to the new ordinary invoice')
       assert.equal(stub.carriedApplications.reduce((n, application) => n + application.amount_cents, 0), 566334)
