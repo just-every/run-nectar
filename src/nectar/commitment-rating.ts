@@ -10,7 +10,7 @@ export interface Commitment { contract: string; from: string; to: string; minimu
 export interface Included { contract: string; price: string; quantity: string; from: string; to: string }
 export interface PriorInvoice { id: string; number: string; from: string; to: string; lines: Line[] }
 export interface ContractBasis { commitments: Commitment[]; included: Included[]; invoices: PriorInvoice[] }
-export const earnedCents = (lines: Line[]) => Math.max(0, lines.filter(l=>['flat','seat','usage','late_usage','overage','metric_usage','discount','cancellation_credit'].includes(l.kind)).reduce((n,l)=>n+l.amountCents,0))
+export const earnedCents = (lines: Pick<Line,'kind'|'amountCents'>[]) => Math.max(0, lines.filter(l=>['flat','seat','usage','late_usage','overage','metric_usage','discount','cancellation_credit'].includes(l.kind)).reduce((n,l)=>n+l.amountCents,0))
 
 export function minimumFor(input: Pick<RatingInput,'subscription'|'lifecycle'>, window: Commitment) {
   const from=[window.from,input.subscription.startDate,input.subscription.trialEnd??window.from,input.subscription.billFrom??window.from].sort().at(-1)!

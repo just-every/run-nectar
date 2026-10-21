@@ -100,10 +100,10 @@ export async function commitments(h, owner) {
     await api('invoice.finalise', { invoice: invoice.id, issue_date: invoice.period_end })
     return api(`invoices/${invoice.id}`)
   }
-  const earnedKinds = new Set(['flat', 'seat', 'usage', 'late_usage', 'overage', 'discount', 'cancellation_credit'])
+  const earnedKinds = new Set(['flat', 'seat', 'usage', 'late_usage', 'overage', 'discount', 'cancellation_credit', 'usage_correction'])
   const earned = invoice => invoice.lines.filter(row => earnedKinds.has(row.kind)).reduce((sum, row) => sum + row.amount_cents, 0)
   const trueUp = invoice => invoice.lines.filter(row => row.kind === 'commitment_trueup').reduce((sum, row) => sum + row.amount_cents, 0)
-  const invoices = []
+  const invoices = [],historicalDeltas=new Map()
   for (let year = 2020; year <= 2022; year++) for (let month = 1; month <= 12; month++) {
     const period = `${year}-${String(month).padStart(2, '0')}`
     const invoice = await issue(await draftFor(period))
@@ -124,12 +124,26 @@ export async function commitments(h, owner) {
     const seatLine = invoice.lines.find(row => row.kind === 'seat')
     assert.equal(seatLine.price_id, seats[year - 2020], `CAT-003 ${period} uses its scheduled immutable seat price`)
     assert.equal(Number(seatLine.quantity), year - 2019, `CAT-003 ${period} uses its scheduled seat quantity`)
-    const late = invoice.lines.filter(row => row.price_id === usage && row.evidence.late)
+    const late = invoice.lines.filter(row => row.kind === 'usage_correction')
     assert.equal(late.length, year === 2020 && month === 2 ? 1 : 0, `CAT-003 ${period} bills late usage exactly once`)
-    if (late.length) assert.deepEqual([Number(late[0].evidence.rawQuantity), Number(late[0].evidence.includedQuantity), Number(late[0].evidence.billableQuantity), late[0].amount_cents], [10, 0, 10, 2000], 'CAT-003 late January usage cannot reuse its already exhausted monthly allowance')
+    if (late.length) assert.deepEqual([late[0].amount_cents,late[0].evidence.taxDeltaCents,late[0].evidence.originalInvoice,late[0].evidence.eventIds.includes('cat003-late-january'),late[0].period_start,late[0].period_end],[2000,200,invoices[0].id,true,'2020-01-01','2020-02-01'],'CAT-003 the approved late line retains exact original-period money, tax, event and invoice custody')
     if (year === 2020 && month === 1) {
       await api('usage.submit', { events: [{ event_id: 'cat003-late-january', customer: 'CAT003-THREE-YEAR', meter: 'cat003-calls', quantity: '10', occurred_at: '2020-01-16T12:00:00Z' }] })
       assert.deepEqual((await api(`invoices/${invoice.id}`)).calculation, invoice.calculation, 'CAT-003 late usage preserves the original issued calculation')
+      const blocked=await draftFor('2020-02')
+      assert.ok(blocked.exceptions.some(e=>e.code==='historical_usage_correction'),'CAT-003 a late commitment event first requires its saved-basis historical disposition')
+      await api('invoice.approve',{invoice:blocked.id,acknowledge:true},409)
+      const payload={subscription,from_period:'2020-01',through_period:'2020-01',void_event_ids:[],add_event_ids:['cat003-late-january']}
+      const replay=await api('usage.correction.preview',payload)
+      assert.deepEqual(replay.delta,{subtotalCents:2000,taxCents:200,totalCents:2200},'CAT-003 saved January prices and tax independently retain the exact $20 overage and $2 tax')
+      const before=replay.periods[0].before.lines.filter(l=>l.priceId===usage),after=replay.periods[0].after.lines.filter(l=>l.priceId===usage)
+      const sum=(rows,key)=>rows.reduce((n,l)=>n+Number(key==='amountCents'?l.amountCents:l.evidence[key]??0),0)
+      assert.deepEqual(['rawQuantity','includedQuantity','billableQuantity','amountCents'].map(key=>sum(after,key)-sum(before,key)),[10,0,10,2000],'CAT-003 late January usage cannot reuse its already exhausted monthly allowance')
+      const correction=await api('usage.correction.prepare',{...payload,reason:'Recorded January usage after issue',explanation:'The original January usage period gains ten calls above its exhausted allowance. Its saved price and tax apply; the issued invoice stays unchanged.'})
+      await h.api('usage.correction.decide',finance,{correction:correction.id,decision:'approved'})
+      historicalDeltas.set(invoice.id,{amountCents:2000,correction:correction.id})
+      assert.deepEqual((await api(`invoices/${invoice.id}`)).calculation,invoice.calculation,'CAT-003 financial correction preserves the original issued calculation')
+
     }
   }
   const frozen = invoices[11].calculation
@@ -143,7 +157,10 @@ export async function commitments(h, owner) {
     const trueUpCents = issued.reduce((sum, invoice) => sum + trueUp(invoice), 0)
     assert.deepEqual([window.to, window.minimumCents, window.earnedCents, window.trueUpCents, window.billedCents, window.remainingCents], [`${year + 1}-01-01`, 5000000, earnedCents, trueUpCents, earnedCents + trueUpCents, 0], `CAT-003 ${year} burn-down ties to issued eligible earnings and shortfall, before tax`)
     assert.equal(window.invoices.length, 12, `CAT-003 ${year} burn-down links every monthly issued invoice once`)
-    for (const invoice of issued) assert.deepEqual(window.invoices.find(row => row.id === invoice.id), { id: invoice.id, number: invoice.number, earnedCents: earned(invoice), trueUpCents: trueUp(invoice) }, `CAT-003 ${invoice.number} burn-down drilldown reconciles to the issued lines`)
+    for (const invoice of issued) {
+      const delta=historicalDeltas.get(invoice.id),originalEarned=earned(invoice)-invoice.lines.filter(l=>l.kind==='usage_correction').reduce((n,l)=>n+l.amount_cents,0)
+      assert.deepEqual(window.invoices.find(row=>row.id===invoice.id),{id:invoice.id,number:invoice.number,earnedCents:originalEarned+(delta?.amountCents??0),trueUpCents:trueUp(invoice),...(delta?{originalEarnedCents:originalEarned,originalTrueUpCents:trueUp(invoice),replayEarnedCents:2000,replayTrueUpCents:0,corrections:[delta.correction]}:{})},`CAT-003 ${invoice.number} burn-down drilldown reconciles separately to unchanged issued lines and approved original-period correction sources`)
+    }
   }
   assert.deepEqual((await api(`invoices/${invoices[11].id}`)).calculation, frozen, 'CAT-003 later ramps and true-ups preserve year-one issued calculation evidence')
   const operatorHtml = await h.page(`/app/subscriptions/${subscription}`, accountant)

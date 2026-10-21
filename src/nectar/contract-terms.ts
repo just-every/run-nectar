@@ -23,8 +23,18 @@ export async function contractBasis(env:Bindings,id:string):Promise<ContractBasi
 
 export async function contractBurnDown(env:Bindings,id:string) {
   const basis=await contractBasis(env,id),sub=await requireSubscription(env,id),lifecycle=lifecycleIntervals(await lifecycleHistory(env,id))
+  const originals=await all(env,`SELECT l.invoice_id,l.kind,l.amount_cents,l.period_start,json_extract(l.evidence_json,'$.contract') AS contract
+    FROM nc_invoice_lines l JOIN nc_invoices i ON i.id=l.invoice_id WHERE i.subscription_id=? AND i.status='issued' AND i.invoice_kind='recurring'`,id)
+  const replays=await all(env,`SELECT r.invoice_id,r.correction_id FROM nc_usage_replays r JOIN nc_invoices i ON i.id=r.invoice_id WHERE i.subscription_id=? ORDER BY r.id`,id)
   return basis.commitments.map(w=>{
-    const invoices=basis.invoices.filter(i=>i.from>=w.from&&i.to<=w.to).map(i=>({id:i.id,number:i.number,earnedCents:earnedCents(i.lines),trueUpCents:i.lines.filter(l=>l.kind==='commitment_trueup'&&l.evidence.contract===w.contract&&l.periodStart===w.from).reduce((n,l)=>n+l.amountCents,0)}))
+    const invoices=basis.invoices.filter(i=>i.from>=w.from&&i.to<=w.to).map(i=>{
+      const earned=earnedCents(i.lines),trueup=i.lines.filter(l=>l.kind==='commitment_trueup'&&l.evidence.contract===w.contract&&l.periodStart===w.from).reduce((n,l)=>n+l.amountCents,0)
+      const corrections=replays.filter(r=>r.invoice_id===i.id).map(r=>r.correction_id as string)
+      const lines=originals.filter(l=>l.invoice_id===i.id)
+      const originalEarned=earnedCents(lines.map(l=>({kind:l.kind,amountCents:l.amount_cents})))
+      const originalTrueup=lines.filter(l=>l.kind==='commitment_trueup'&&l.contract===w.contract&&l.period_start===w.from).reduce((n,l)=>n+l.amount_cents,0)
+      return {id:i.id,number:i.number,earnedCents:earned,trueUpCents:trueup,...(corrections.length?{originalEarnedCents:originalEarned,originalTrueUpCents:originalTrueup,replayEarnedCents:earned-originalEarned,replayTrueUpCents:trueup-originalTrueup,corrections}:{})}
+    })
     const minimum=minimumFor({subscription:{id:sub.id,anchorDay:sub.anchor_day,startDate:sub.start_date,trialEnd:sub.trial_end,endDate:sub.end_date,billFrom:sub.cutover_start},lifecycle},w)
     const earned=invoices.reduce((n,i)=>n+i.earnedCents,0),trueup=invoices.reduce((n,i)=>n+i.trueUpCents,0)
     return {contract:w.contract,from:w.from,to:w.to,minimumCents:minimum,nominalMinimumCents:w.minimumCents,earnedCents:earned,trueUpCents:trueup,billedCents:earned+trueup,remainingCents:Math.max(0,minimum-earned-trueup),invoices}

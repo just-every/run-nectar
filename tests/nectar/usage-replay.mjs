@@ -354,7 +354,8 @@ export async function usageDispositionFlow(h,owner,ctx) {
   for(const original of commitmentOriginals)assert.deepEqual(issuedEvidence(await read(original.id)),issuedEvidence(original))
   const settled=(await api(`subscriptions/${commitmentSub}`)).burnDown[0]
   assert.deepEqual([settled.earnedCents,settled.trueUpCents,settled.remainingCents],[10000,10000,0],'USE-004 subsequent commitment consumers use the effective replay chain and do not settle twice')
-  await observe('commitment',[`/app/usage/replay?subscription=${commitmentSub}&period=2020-07`,`/app/invoices/${commitmentExecution.invoice}`])
+  assert.deepEqual(settled.invoices.map(i=>[i.originalEarnedCents,i.replayEarnedCents,i.earnedCents,i.originalTrueUpCents,i.replayTrueUpCents,i.trueUpCents,i.corrections]),[[10000,-10000,0,0,0,0,[commitment.id]],[10000,0,10000,0,10000,10000,[commitment.id]]],'USE-004 commitment sources expose unchanged issued amounts, signed replay differences and every approving correction separately')
+  await observe('commitment',[`/app/usage/replay?subscription=${commitmentSub}&period=2020-07`,`/app/invoices/${commitmentExecution.invoice}`,`/app/subscriptions/${commitmentSub}#contracts`])
   const longCustomer=(await api('customer.create',{external_id:'synthetic-nectar-long',name:'Long retained history',billing_email:'synthetic-nectar-long@example.test'})).id
   const longSub=(await api('subscription.create',{customer:longCustomer,start_date:'2015-01-01',price:[ctx.bulkPrice]})).id
   const longEvent={event_id:'synthetic-nectar-long-event',customer:'synthetic-nectar-long',meter:ctx.bulkSource.code,quantity:'100',occurred_at:'2015-01-10T00:00:00Z'}
