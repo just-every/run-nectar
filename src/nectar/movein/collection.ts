@@ -157,9 +157,11 @@ export async function finalizeImportedCollection(env: Bindings, actor: Actor, in
   input.only(['request','confirm','returnTo'])
   insist(input.flag('confirm'), 'imported_collection_confirmation_required')
   const request = await storedCollection(env, input.text('request', { max: 100 }))
+  const { basis } = await currentCollectionBasis(env, actor, request)
+  if (request.status === 'collected') return collectionView(request)
   insist(request.status === 'uncertain' && request.error_code !== 'stripe_mirror_claimed' && request.charge_ref
     && request.payment_intent_ref && request.payment_ref && request.collected_on, 'imported_collection_not_finalizable', 409)
-  const { basis } = await currentCollectionBasis(env, actor, request), stripe = collectionStripe(env)
+  const stripe = collectionStripe(env)
   const intent = await readCollectionIntent(stripe, basis, request).catch(collectionProviderRefusal)
   const evidence = await stripeCollectedEvidence(stripe, intent, basis, request, (await requireBusiness(env)).timezone).catch(collectionProviderRefusal)
   return collectionView(await finishMirror(env, actor, request, stripe, basis, evidence, true))
