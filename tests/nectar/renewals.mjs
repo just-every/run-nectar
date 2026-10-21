@@ -137,6 +137,15 @@ async function nativeCalendarRenewals(h, owner, finance) {
   await h.api('term.decide', finance, { term: term.term, decision: 'approved' })
   // A recorded old-term event must not appear as invented next-term usage.
   await api('usage.submit', { events: [{ event_id: 'synthetic-nectar-renewal-old-usage', customer: external, meter: 'renewal-calendar-calls', quantity: '5', occurred_at: '2030-11-15T12:00:00Z' }] })
+  // Settle recorded old-term usage through its own due invoice. The renewal
+  // notice describes next-term charges, and never hides outstanding old service.
+  await h.advanceClock('2030-12-01T20:00:00Z')
+  await api('billrun.prepare', { period: '2030-12' })
+  const oldDraft = (await api(`subscriptions/${subscription}`)).invoices.find(invoice => invoice.status === 'draft' && invoice.total_cents === 1000)
+  assert.ok(oldDraft)
+  await api('invoice.approve', { invoice: oldDraft.id, acknowledge: true })
+  await api('invoice.finalise', { invoice: oldDraft.id, issue_date: '2030-12-01' })
+  const oldIssued = await api(`invoices/${oldDraft.id}`)
   const beforeMail = h.mails.length
   await clock('2030-12-02')
   detail = await api(`subscriptions/${subscription}`)
@@ -159,7 +168,7 @@ async function nativeCalendarRenewals(h, owner, finance) {
   assert.equal(detail.items.find(item => item.id === attached.item).effective_to, '2032-01-01', 'A co-termed addon extends into the approved renewal')
   assert.equal(detail.items.find(item => item.id === firstItem.id).effective_to, '2030-07-01', 'An earlier approved ramp is never reopened')
   await api('billrun.prepare', { period: '2031-01' })
-  const draft = (await api(`subscriptions/${subscription}`)).invoices.find(invoice => invoice.period_start === '2031-01-01' && invoice.total_cents === 220500)
+  const draft = (await api(`subscriptions/${subscription}`)).invoices.find(invoice => invoice.status === 'draft' && invoice.total_cents === 220500)
   assert.ok(draft)
   const actual = await api(`invoices/${draft.id}`)
   const financial = lines => lines.map(line => [line.priceId, line.kind, line.quantity, line.amountCents, line.periodStart, line.periodEnd])
@@ -170,6 +179,7 @@ async function nativeCalendarRenewals(h, owner, finance) {
   await clock('2031-01-01')
   assert.equal((await api(`subscriptions/${subscription}`)).renewal.events.length, 1)
   assert.deepEqual(await api(`invoices/${draft.id}`), original)
+  assert.deepEqual(await api(`invoices/${oldDraft.id}`), oldIssued, 'Renewal composition preserves the issued old-term usage evidence')
 
   const monthly = await price('month-end', { kind: 'flat', unit_amount: '31', billing_interval: 'monthly', billing_timing: 'arrears' })
   const monthCustomer = (await api('customer.create', { external_id: 'synthetic-nectar-renewal-month-end', name: 'Month end renewal', billing_email: 'month-end@renewals.example' })).id

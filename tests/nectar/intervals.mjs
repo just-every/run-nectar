@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { applyPolicy } from './policy-helper.mjs'
 
 const month = index => `${2026 + Math.floor(index / 12)}-${String(index % 12 + 1).padStart(2, '0')}`
 const lines = invoice => invoice.lines.map(line => ({ kind: line.kind, price: line.price_id, cents: line.amount_cents, from: line.period_start, to: line.period_end, evidence: line.evidence }))
@@ -77,7 +78,9 @@ export async function intervalsFlow(h, owner, { onState = async () => {} } = {})
   const first = await api(`invoices/${platformInvoices[0].id}`)
   assert.deepEqual({ calculation: first.calculation, lines: lines(first) }, firstOriginal, 'Later addons and billing never rewrite issued evidence')
   const final = await api(`subscriptions/${subscription}`)
-  assert.equal(final.invoices.filter(invoice => invoice.status === 'issued').length, 27, 'Two mixed annual invoices, one addon stub and 24 usage documents')
+  assert.equal(platformInvoices.length,2,'Two annual platform charges retain their original service windows')
+  assert.equal(usageInvoices.length,24,'All 24 independently supplied usage months are charged once')
+  assert.equal(final.invoices.filter(invoice => invoice.status === 'issued').length, 25, 'Same-day annual fees and the addon stub share the corresponding monthly usage invoice')
   const revenue = await api(`revenue?from=2026-01&to=2028-01&customer=${customer}`)
   assert.equal(revenue.months.at(-1).deferredLiabilityCents, 0)
   assert.equal(revenue.netBillingsCents, issued.reduce((sum, invoice) => sum + invoice.subtotal_cents, 0))
@@ -93,6 +96,45 @@ export async function intervalsFlow(h, owner, { onState = async () => {} } = {})
   assert.equal(mrr.series.find(row=>row.period==='2026-01').amountCents,100200)
   await onState('annual-issued', subscription, platformInvoices[0].id)
   await intervalCadencesFlow(h, owner, { price, api, onState })
+  await mixedMonthlyInvoiceFlow(h, owner, { price, api })
+}
+
+async function mixedMonthlyInvoiceFlow(h, owner, { price, api }) {
+  const previous=await api('business')
+  await applyPolicy(h,owner,'tax.declare',{tax_jurisdiction:'CA',tax_mode:'flat_rate',tax_rate:'10',tax_note:'Same-due-date invoice composition'})
+  await api('tax.review',{revision:(await api('business')).revision})
+  const customer=(await api('customer.create',{external_id:'synthetic-nectar-calendar-mixed',name:'Seat and usage calendar',billing_email:'seats@calendar.example'})).id
+  const meter=(await api('meter.create',{code:'calendar-monthly-mixed',name:'Monthly mixed calls',unit_label:'calls'})).id
+  const seats=await price('monthly-advance-seats',{kind:'seat',unit_amount:'10.05',taxable:true,billing_interval:'monthly',billing_timing:'advance'})
+  const usage=await price('monthly-arrears-calls',{kind:'unit',unit_amount:'0.05',meter,taxable:true,billing_interval:'monthly',billing_timing:'arrears'})
+  await h.advanceClock('2034-09-01T20:00:00Z')
+  const subscription=(await api('subscription.create',{customer,start_date:'2034-09-01',term_months:12,price:[seats,usage],quantity:['1','']})).id
+  const initialRun=await api('billrun.prepare',{period:'2034-09'})
+  const first=(await api(`runs/${initialRun.id}`)).invoices.filter(row=>row.customer_id===customer)
+  assert.equal(first.length,1)
+  await api('invoice.approve',{invoice:first[0].id,acknowledge:true})
+  await api('invoice.finalise',{invoice:first[0].id,issue_date:'2034-09-01'})
+  await api('usage.submit',{events:[{event_id:'synthetic-nectar-calendar-mixed-usage',customer:'synthetic-nectar-calendar-mixed',meter:'calendar-monthly-mixed',quantity:'1',occurred_at:'2034-09-15T12:00:00Z'}]})
+  await h.advanceClock('2034-10-01T20:00:00Z')
+  const run=await api('billrun.prepare',{period:'2034-10'})
+  const drafts=(await api(`runs/${run.id}`)).invoices.filter(row=>row.customer_id===customer)
+  assert.equal(drafts.length,1,'October advance seats and September arrears usage form one invoice due October 1')
+  const invoice=await api(`invoices/${drafts[0].id}`)
+  const seat=invoice.lines.find(line=>line.price_id===seats),calls=invoice.lines.find(line=>line.price_id===usage)
+  assert.deepEqual([seat.period_start,seat.period_end,seat.amount_cents],['2034-10-01','2034-11-01',1005])
+  assert.deepEqual([calls.period_start,calls.period_end,calls.amount_cents],['2034-09-01','2034-10-01',5])
+  assert.equal(seat.evidence.calendar.terms.timing,'advance')
+  assert.equal(calls.evidence.calendar.terms.timing,'arrears')
+  assert.equal(invoice.calculation.inputs.billing.serviceWindows.length,2,'Saved source retains both original service calendars')
+  assert.deepEqual([invoice.subtotal_cents,invoice.tax_cents,invoice.total_cents],[1010,101,1111],'Tax rounds once on the complete invoice, rather than once for each service window')
+  await api('invoice.approve',{invoice:invoice.id,acknowledge:true})
+  await api('invoice.finalise',{invoice:invoice.id,issue_date:'2034-10-01'})
+  const issued=await api(`invoices/${invoice.id}`)
+  assert.deepEqual(issued.lines,invoice.lines,'Issue retains each exact service line and its source calendar')
+  const repeat=await api('billrun.prepare',{period:'2034-10'})
+  assert.equal((await api(`runs/${repeat.id}`)).invoices.filter(row=>row.customer_id===customer).length,0,'Both service windows are claimed together and cannot issue again')
+  await applyPolicy(h,owner,'tax.declare',{tax_jurisdiction:previous.tax_jurisdiction,tax_mode:previous.tax_mode,tax_rate:previous.tax_rate,tax_note:previous.tax_note})
+  await api('tax.review',{revision:(await api('business')).revision})
 }
 
 async function intervalCadencesFlow(h, owner, { price, api, onState }) {

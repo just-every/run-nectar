@@ -1,3 +1,5 @@
+import { composeBillingWindows,billingServiceWindows } from './billing-composition'
+import { upcomingMeterPeriod } from './upcoming-meter-periods'
 // Customer-scoped projections of the ordinary rating engine. Saved inputs,
 // exceptions, reconciliation notes and operator read models never leave here.
 import type { Bindings } from '../auth.server'
@@ -32,7 +34,7 @@ export async function portalUpcoming(env: Bindings, session: CustomerSession, su
     return { ...invoice, billingMonth: invoice.period.start.slice(0, 7), invoices: [invoice] }
   }
   const selected = month ?? today(business.timezone, clockInstant(env)).slice(0, 7)
-  const from = `${selected}-01`, windows = dueBillingWindows(calendar.basis, from, addMonths(from, 1))
+  const from = `${selected}-01`, windows = composeBillingWindows(dueBillingWindows(calendar.basis, from, addMonths(from, 1)))
   insist(windows.length, 'billing_window_not_due', 409)
   const invoices = await Promise.all(windows.map(window => scopedUpcoming(env, session, sub, business, selected, window)))
   return { ...invoices[0], billingMonth: selected, invoices }
@@ -66,32 +68,33 @@ async function scopedUpcoming(env: Bindings, session: CustomerSession, sub: Row,
     calculation = { fingerprint: draft.fingerprint, version: input.version,
       subtotalCents: draft.rating.subtotalCents, taxCents: draft.rating.taxCents, totalCents: draft.rating.totalCents }
   }
-  const from = zonedStart(period.start, business.timezone), to = zonedStart(period.end, business.timezone)
   const meters: Row[] = []
   // Saved inputs retain every subscription price. Usage belongs only to the
   // components selected for this invoice, including when reading issued data.
   const selectedPrices = input.billing ? new Set(input.items.filter(item => input.billing!.components.some(component => component.itemId === item.id)).map(item => item.priceId)) : null
   const usagePrices = Object.values(input.prices).filter(price => !selectedPrices || selectedPrices.has(price.id))
   for (const id of [...new Set(usagePrices.flatMap(price => price.meterId ? [price.meterId] : []))]) {
+    const service=upcomingMeterPeriod(input,id);if(!service)continue
+    const from=zonedStart(service.start,business.timezone),to=zonedStart(service.end,business.timezone)
     const meter = await one(env, 'SELECT id,code,name,unit_label FROM nc_meters WHERE id=?', id)
     const metrics = usagePrices.filter(price => price.meterId === id && price.metric)
     if (metrics.length) {
       for (const price of metrics) {
         const own = lines.filter(line => line.priceId === price.id && line.kind === 'metric_usage')
-        const current = own.filter(line => line.periodStart === period.start), late = own.filter(line => line.periodStart < period.start)
+        const current = own.filter(line => line.periodStart === service.start), late = own.filter(line => line.periodStart < service.start)
         const quantity = (values: Row[]) => displayQuantity(values.reduce<Rational>((sum, line) => {
           const exact = line.evidence.rawExactQuantity
           return addRational(sum, rational(BigInt(exact.numerator), BigInt(exact.denominator)))
         }, rational(0n)))
         const eventIds = [...new Set(current.flatMap(line => line.evidence.eventIds as string[]))]
-        meters.push({ ...meter, quantity: quantity(current), events: eventIds.length, eventIds,
+        meters.push({ ...meter, periodStart:service.start,periodEnd:service.end, quantity: quantity(current), events: eventIds.length, eventIds,
           lateQuantity: quantity(late), lateEventIds: [...new Set(late.flatMap(line => line.evidence.eventIds as string[]))] })
       }
     } else {
       const current = input.events.filter(event => event.meterId === id && event.occurredAt >= from && event.occurredAt < to)
       const late = input.events.filter(event => event.meterId === id && event.occurredAt < from)
       const quantity = (events: typeof current) => decimalText(events.reduce((sum, event) => sum + micros(event.quantity, 'quantity'), 0n))
-      meters.push({ ...meter, quantity: quantity(current), events: current.length, eventIds: current.map(event => event.eventId),
+      meters.push({ ...meter, periodStart:service.start,periodEnd:service.end, quantity: quantity(current), events: current.length, eventIds: current.map(event => event.eventId),
         lateQuantity: quantity(late), lateEventIds: late.map(event => event.eventId) })
     }
   }
@@ -101,7 +104,8 @@ async function scopedUpcoming(env: Bindings, session: CustomerSession, sub: Row,
       WHERE i.subscription_id=a.subscription_id AND i.status='issued' AND l.kind='credit' AND json_extract(l.evidence_json,'$.amendment')=a.id)
     ORDER BY a.effective_from,a.id`, sub.id)
   return { subscription: sub.id, period, timezone: business.timezone, state: issued ? 'issued' : 'preview', invoiceId: issued?.id ?? null,
-    billingDueDate: window?.dueDate ?? period.end, billingTerms: window?.terms ?? null,
+    billingDueDate: window?.dueDate ?? period.end, billingTerms: window?.mixed ? null : window?.terms ?? null,
+    servicePeriods: window ? billingServiceWindows(window).map(part=>({period:part.period,terms:part.terms})) : [{period,terms:null}],
     meters, credits: credits.map(credit => ({ id: credit.id, amountCents: cents(credit.value), effective_from: credit.effective_from,
       effective_to: credit.effective_to, appliesThisPeriod: credit.effective_from >= period.start && credit.effective_from < period.end })),
     remainingContractCreditCents: credits.reduce((sum, credit) => sum + cents(credit.value), 0),

@@ -8,6 +8,7 @@ import { addRational, compareRational, divideRational, multiplyRational, rationa
 import { aggregateMetric } from './metric-aggregate'
 import type { Commitment, CommitmentAllocationInput, PriorInvoice } from './commitment-rating'
 import type { Exception, Line, RatingInput } from './rating'
+import { billingServiceWindows } from './billing-composition'
 
 const eligible = new Set(['flat','seat','usage','late_usage','overage','metric_usage','discount','cancellation_credit'])
 const usage = new Set(['usage','late_usage','overage','metric_usage'])
@@ -92,7 +93,7 @@ export function intervalLineContribution(line: Line, from: string, to: string, i
 }
 
 function savedComponent(invoice: PriorInvoice, window: BillingWindow, key: string) {
-  if (invoice.billing) return invoice.billing.key === window.key && invoice.billing.components.some(component => component.key === key)
+  if (invoice.billing) return billingServiceWindows(invoice.billing).some(part => part.key === window.key && part.components.some(component => component.key === key))
   if (invoice.lines.some(line => { const calendar = line.evidence.calendar as { windowKey?: string; componentKeys?: string[] } | undefined; return calendar?.windowKey === window.key && calendar.componentKeys?.includes(key) })) return true
   // Legacy monthly issued periods predate component identities. Their original
   // once-per-period boundary is authoritative only for that same monthly door.
@@ -125,7 +126,7 @@ export function intervalCommitmentSettlement(input: RatingInput, lines: Line[], 
   if (!closing || closing.dueDate !== input.billingDueDate || closing.nominalStart !== input.period.start || closing.nominalEnd !== input.period.end) return null
   const selected = new Set(input.items.map(item => item.id))
   if (!closing.components.every(component => selected.has(component.itemId))) return null
-  const prior = input.contracts!.invoices, current = new Set(closing.components.map(component => component.key))
+  const prior = input.contracts!.invoices, current = new Set(windows.filter(candidate => candidate.dueDate === input.billingDueDate).flatMap(candidate => candidate.components.filter(component => selected.has(component.itemId)).map(component => component.key)))
   const missing = windows.flatMap(candidate => candidate.components.filter(component => !current.has(component.key) && !prior.some(invoice => savedComponent(invoice, candidate, component.key))).map(component => ({ key: component.key, dueDate: candidate.dueDate, from: component.from, to: component.to })))
   const boundaries = input.contracts!.commitments.flatMap(window => [window.from, window.to]).concat(input.subscription.endDate ? [input.subscription.endDate] : [])
   const contributions = prior.map(invoice => ({ id: invoice.id, number: invoice.number,

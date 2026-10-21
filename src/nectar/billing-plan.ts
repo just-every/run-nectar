@@ -4,6 +4,7 @@ import { all, insist, one, parseJson, type Row } from './core'
 import { addDays, addMonths } from './dates'
 import { dueBillingWindows, nonMonthlyArrears, storedBillingTerms, type BillingWindow, type CalendarBasis } from './billing-calendar'
 import { unissuedBillingWindows } from './billing-components'
+import { billingServiceWindows, composeBillingWindows, selectBillingComponents } from './billing-composition'
 
 export async function subscriptionCalendar(env:Bindings,sub:Row) {
   const items=await all(env,`SELECT i.id,i.price_id,i.effective_from,i.effective_to,p.kind,b.interval_unit,b.interval_count,b.billing_timing
@@ -29,8 +30,12 @@ export async function currentBillingWindow(env:Bindings,invoice:Row):Promise<Bil
   const sub=await one(env,'SELECT * FROM nc_subscriptions WHERE id=?',invoice.subscription_id)
   insist(sub,'subscription_not_found',404)
   const {basis}=await subscriptionCalendar(env,sub)
-  const match=dueBillingWindows(basis,saved.dueDate,addDays(saved.dueDate,1)).find(window=>window.key===saved.key)
-  insist(match&&saved.components.every(component=>match.components.some(current=>current.key===component.key&&current.from===component.from&&current.to===component.to)),'billing_window_changed',409)
-  const components=match.components.filter(component=>saved.components.some(prior=>prior.key===component.key))
-  return {...match,components,period:{start:components.map(c=>c.from).sort()[0],end:components.map(c=>c.to).sort().at(-1)!}}
+  const windows=dueBillingWindows(basis,saved.dueDate,addDays(saved.dueDate,1))
+  const originals=billingServiceWindows(saved)
+  const matching=originals.map(original=>windows.find(window=>window.key===original.key))
+  insist(matching.every((match,index)=>match&&originals[index].components.every(component=>match.components.some(current=>current.key===component.key&&current.from===component.from&&current.to===component.to))),'billing_window_changed',409)
+  const selected=new Set(saved.components.map(component=>component.key))
+  const current=composeBillingWindows(matching.flatMap(window=>{const chosen=selectBillingComponents(window!,selected);return chosen?[chosen]:[]}))[0]
+  insist(current&&current.key===saved.key,'billing_window_changed',409)
+  return current
 }

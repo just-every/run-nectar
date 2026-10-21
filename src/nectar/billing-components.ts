@@ -1,6 +1,7 @@
 import type { Bindings } from '../auth.server'
 import { all, guard, stmt } from './core'
 import type { BillingTerms, BillingWindow } from './billing-calendar'
+import { composeBillingWindows, selectBillingComponents } from './billing-composition'
 
 /** Called by the ordinary immutable price publisher in its existing batch. */
 export function billingTermsStatements(env: Bindings, priceId: string, terms: BillingTerms) {
@@ -9,10 +10,10 @@ export function billingTermsStatements(env: Bindings, priceId: string, terms: Bi
 
 export async function unissuedBillingWindows(env: Bindings, subscriptionId: string, windows: BillingWindow[]) {
   const claimed = new Set((await all(env, 'SELECT component_key FROM nc_billing_components WHERE subscription_id=?', subscriptionId)).map(row => row.component_key))
-  return windows.flatMap(window => {
-    const components = window.components.filter(component => !claimed.has(component.key))
-    return components.length ? [{ ...window, components, period: { start: components.map(c => c.from).sort()[0], end: components.map(c => c.to).sort().at(-1)! } }] : []
-  })
+  return composeBillingWindows(windows.flatMap(window => {
+    const selected = selectBillingComponents(window, new Set(window.components.filter(component => !claimed.has(component.key)).map(component => component.key)))
+    return selected ? [selected] : []
+  }))
 }
 
 /** Append AFTER the invoice status changes to issued in the same atomic batch.

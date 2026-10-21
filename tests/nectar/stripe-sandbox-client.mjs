@@ -68,7 +68,7 @@ export function stripeSandbox(secret) {
     observe({ method, path: url.pathname, fields, idempotencyKey: incoming.headers.get('Idempotency-Key') })
     counts[method]++
     try {
-      return await fetch(incoming.url, { method, headers: Object.fromEntries(incoming.headers), ...(body ? { body } : {}),
+      return await fetch(incoming.url, { method, headers: Object.fromEntries(['authorization','Stripe-Version','content-type','Idempotency-Key'].flatMap(name=>{const value=incoming.headers.get(name);return value?[[name,value]]:[]})), ...(body ? { body } : {}),
         redirect: 'error', signal: AbortSignal.timeout(20000) })
     } catch { throw new SandboxFailure('stripe_worker_transport_failed') }
   }

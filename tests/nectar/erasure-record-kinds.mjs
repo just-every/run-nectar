@@ -113,17 +113,19 @@ export async function nativeIntervalErasureFlow(h, owner) {
   const entityBefore = (await api('billing-entities')).entities.find(row => row.id === entity)
   const platform = (await api('product.create', { code: 'synthetic-nectar-interval-privacy-platform', name: 'Synthetic annual privacy platform' })).id
   const annual = (await api('price.create', { product: platform, kind: 'flat', unit_amount: '1200', taxable: false, billing_interval: 'annual', billing_timing: 'advance' })).id
-  const meter = (await api('meter.create', { code: 'synthetic-nectar-interval-privacy-usage', name: 'Synthetic interval privacy calls', unit_label: 'calls' })).id
+  const meterCode = 'synthetic-nectar-interval-privacy-usage'
+  const meter = (await api('meter.create', { code: meterCode, name: 'Synthetic interval privacy calls', unit_label: 'calls' })).id
   const usageProduct = (await api('product.create', { code: 'synthetic-nectar-interval-privacy-usage', name: 'Synthetic monthly privacy usage' })).id
   const usage = (await api('price.create', { product: usageProduct, kind: 'unit', meter, unit_amount: '2', taxable: false })).id
   const subscription = (await api('subscription.create', { customer, start_date: '2025-01-01', billing_anchor_date: '2025-01-01', price: [annual, usage] })).id
   const detail = () => api(`subscriptions/${subscription}`)
   assert.equal((await detail()).billing_anchor_date, '2025-01-01')
   assert.equal((await detail()).items.length, 2)
-  assert.equal((await api('usage.submit', { events: [
-    { event_id: `${marker}-november`, customer: marker, meter, quantity: '7', occurred_at: '2025-11-15T12:00:00Z', properties: { person: marker } },
-    { event_id: `${marker}-december`, customer: marker, meter, quantity: '10', occurred_at: '2025-12-15T12:00:00Z', properties: { person: marker } },
-  ] })).accepted, 2)
+  const submitted = await api('usage.submit', { events: [
+    { event_id: `${marker}-november`, customer: marker, meter: meterCode, quantity: '7', occurred_at: '2025-11-15T12:00:00Z', properties: { person: marker } },
+    { event_id: `${marker}-december`, customer: marker, meter: meterCode, quantity: '10', occurred_at: '2025-12-15T12:00:00Z', properties: { person: marker } },
+  ] })
+  assert.deepEqual([submitted.accepted, submitted.rejected], [2, 0], 'Native privacy usage names the public meter code and accepts both source events')
   const issueDue = async month => {
     const run = await api('billrun.prepare', { period: month }), issued = []
     for (const draft of (await api(`runs/${run.id}`)).invoices.filter(row => row.customer_id === customer)) {
@@ -150,11 +152,13 @@ export async function nativeIntervalErasureFlow(h, owner) {
   assert.equal((await h.raw(savePath, { form: new URLSearchParams({ confirm: 'save', offer: offer.id, reason: marker }) })).status, 200)
   const january = await issueDue('2026-01'), annualInvoice = january.find(invoice => invoice.lines.some(line => line.price_id === annual))
   assert.ok(annualInvoice)
-  assert.equal(annualInvoice.total_cents, 60000)
+  assert.deepEqual(january.map(invoice => invoice.total_cents), [62000], 'One due-date invoice combines discounted annual advance and completed monthly usage')
+  assert.deepEqual(annualInvoice.lines.filter(line => line.price_id === annual).map(line => [line.amount_cents, line.period_start, line.period_end]), [[120000, '2026-01-01', '2027-01-01']])
+  assert.deepEqual(annualInvoice.lines.filter(line => line.kind === 'discount').map(line => line.amount_cents), [-60000], 'Accepted annual retention saves exactly $600')
   assert.equal(annualInvoice.due_date, '2026-02-15', 'The assigned entity supplies actual issued payment terms')
   assert.equal(annualInvoice.billing_entity_id, entity)
   assert.ok(annualInvoice.calculation.inputs.amendments.some(amendment => amendment.priceId === annual && amendment.value === '50'), 'Accepted retention is scoped to the annual price')
-  assert.deepEqual(january.filter(invoice => invoice.id !== annualInvoice.id).map(invoice => invoice.total_cents), [2000], 'The annual discount leaves monthly usage fully priced')
+  assert.deepEqual(annualInvoice.lines.filter(line => line.price_id === usage).map(line => [line.amount_cents, line.period_start, line.period_end]), [[2000, '2025-12-01', '2026-01-01']], 'The annual discount leaves completed monthly usage fully priced on its original service dates')
   const invoices = [...firstUsage, ...january]
   for (const invoice of invoices) {
     const payment = (await api('payment.record', { customer, amount: (invoice.total_cents / 100).toFixed(2), received_on: '2026-01-02', method: 'bank_transfer', reference: `${marker}-${invoice.id}`, evidence: marker })).payment

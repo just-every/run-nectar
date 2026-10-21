@@ -1,3 +1,5 @@
+import { composeBillingWindows } from './billing-composition'
+import { upcomingMeterPeriod } from './upcoming-meter-periods'
 import { subscriptionCalendar } from './billing-plan'
 import { dueBillingWindows,type BillingWindow } from './billing-calendar'
 import { addMonths } from './dates'
@@ -44,16 +46,17 @@ async function upcomingOne(env: Bindings, actor: Actor, subscriptionId: string, 
     state=sub.billing_mode==='shadow' ? 'shadow' : 'preview'
   }
   const input=calculation.inputs as RatingInput
-  const from=zonedStart(period.start,business.timezone),to=zonedStart(period.end,business.timezone)
   const meterIds=[...new Set(Object.values(input.prices).flatMap(p=>p.meterId ? [p.meterId] : []))]
   const meters: Row[]=[]
   for(const id of meterIds){
+    const service=upcomingMeterPeriod(input,id);if(!service)continue
+    const from=zonedStart(service.start,business.timezone),to=zonedStart(service.end,business.timezone)
     const meter=await one(env,'SELECT id,code,name,unit_label FROM nc_meters WHERE id=?',id)
     const metrics=Object.values(input.prices).filter(p=>p.meterId===id&&p.metric)
-    if(metrics.length){for(const p of metrics){const own=(calculation.lines as Row[]).filter(l=>l.priceId===p.id&&l.kind==='metric_usage'),current=own.filter(l=>l.periodStart===period.start),late=own.filter(l=>l.periodStart<period.start);const quantity=(rows:Row[])=>displayQuantity(rows.reduce<Rational>((n,l)=>{const exact=l.evidence.rawExactQuantity;return addRational(n,rational(BigInt(exact.numerator),BigInt(exact.denominator)))},rational(0n)));const eventIds=[...new Set(current.flatMap(l=>l.evidence.eventIds as string[]))];meters.push({...meter,dimensions:p.metric!.dimensions,quantity:quantity(current),events:eventIds.length,eventIds,lateQuantity:quantity(late),lateEventIds:[...new Set(late.flatMap(l=>l.evidence.eventIds as string[]))]})}continue}
+    if(metrics.length){for(const p of metrics){const own=(calculation.lines as Row[]).filter(l=>l.priceId===p.id&&l.kind==='metric_usage'),current=own.filter(l=>l.periodStart===service.start),late=own.filter(l=>l.periodStart<service.start);const quantity=(rows:Row[])=>displayQuantity(rows.reduce<Rational>((n,l)=>{const exact=l.evidence.rawExactQuantity;return addRational(n,rational(BigInt(exact.numerator),BigInt(exact.denominator)))},rational(0n)));const eventIds=[...new Set(current.flatMap(l=>l.evidence.eventIds as string[]))];meters.push({...meter,periodStart:service.start,periodEnd:service.end,dimensions:p.metric!.dimensions,quantity:quantity(current),events:eventIds.length,eventIds,lateQuantity:quantity(late),lateEventIds:[...new Set(late.flatMap(l=>l.evidence.eventIds as string[]))]})}continue}
     const events=input.events.filter(e=>e.meterId===id && e.occurredAt>=from && e.occurredAt<to)
     const late=input.events.filter(e=>e.meterId===id && e.occurredAt<from)
-    meters.push({...meter,quantity:decimalText(events.reduce((sum,e)=>sum+micros(e.quantity,'quantity'),0n)),events:events.length,
+    meters.push({...meter,periodStart:service.start,periodEnd:service.end,quantity:decimalText(events.reduce((sum,e)=>sum+micros(e.quantity,'quantity'),0n)),events:events.length,
       eventIds:events.map(e=>e.eventId),lateQuantity:decimalText(late.reduce((sum,e)=>sum+micros(e.quantity,'quantity'),0n)),lateEventIds:late.map(e=>e.eventId)})
   }
   const credits=await all<Row & {id:string;value:string;note:string;effective_from:string;effective_to:string|null}>(env, `SELECT a.id,a.value,a.effective_from,a.effective_to,a.note FROM nc_amendments a
@@ -69,15 +72,14 @@ async function upcomingOne(env: Bindings, actor: Actor, subscriptionId: string, 
     remainingContractCreditCents:credits.reduce((sum,c)=>sum+cents(c.value),0),calculation}
 }
 
-/** Every component due in the selected month is visible; mixed intervals never
- * collapse into a fictitious single monthly invoice. */
+/** Every component due in the selected month is visible; each invoice retains its actual service windows. */
 export async function upcoming(env:Bindings,actor:Actor,subscriptionId:string,month?:string|null) {
   requireRead(actor,'subscriptions')
   insist(month===undefined||month===null||isMonth(month),'invalid_period')
   const sub=await requireSubscription(env,subscriptionId),calendar=await subscriptionCalendar(env,sub)
   if(!calendar.enabled)return upcomingOne(env,actor,subscriptionId,month)
   const business=await requireBusiness(env),selected=month??today(business.timezone,clockInstant(env)).slice(0,7),from=`${selected}-01`
-  const windows=dueBillingWindows(calendar.basis,from,addMonths(from,1))
+  const windows=composeBillingWindows(dueBillingWindows(calendar.basis,from,addMonths(from,1)))
   insist(windows.length,'billing_window_not_due',409)
   const invoices=await Promise.all(windows.map(window=>upcomingOne(env,actor,subscriptionId,selected,window)))
   return {...invoices[0],invoices}

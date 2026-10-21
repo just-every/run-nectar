@@ -34,7 +34,7 @@ export async function upcomingSection(env: Bindings, actor: Actor, sub: Row, url
     <h3>Period usage</h3>${table(['Meter','Quantity$','Events$','Earlier usage$'],view.meters.map(m=>[h`<span>${m.code}</span>${m.dimensions?h`<p>${Object.entries(m.dimensions).map(([k,v])=>`${k}: ${v}`).join(', ')}</p>`:''}`,`${quantityText(m.quantity)} ${m.unit_label}`,m.events,quantityText(m.lateQuantity)]),{empty:'No metered prices on this subscription.'})}
     <h3>Approved contract credits remaining: ${cents(view.remainingContractCreditCents)}</h3>
     ${table(['Credit','Effective from','Amount$','This period'],view.credits.map(c=>[c.note || 'Approved contract credit',c.effective_from,cents(c.amountCents),c.appliesThisPeriod ? 'Applies' : 'Scheduled for another period']),{empty:'No approved unused one-time contract credits. Prepaid credit balances are not yet available.'})}
-    <h3>Calculation: ${cents(calc.totalCents)}</h3>${table(['Charge','Quantity$','Amount$'],calc.lines.map((l:any)=>[l.description,l.quantity,cents(l.amountCents)]))}
+    <h3>Calculation: ${cents(calc.totalCents)}</h3>${table(['Charge','Service from','Service until','Quantity$','Amount$'],calc.lines.map((l:any)=>[l.description,l.periodStart,l.periodEnd,l.quantity,cents(l.amountCents)]))}
     <p>Subtotal ${cents(calc.subtotalCents)} · Tax ${cents(calc.taxCents)} · Total ${cents(calc.totalCents)}</p>
     ${calc.exceptions.length ? h`<h3>Review before issue</h3><ul>${calc.exceptions.map((e:any)=>h`<li>${e.message}</li>`)}</ul>` : ''}
     ${view.invoiceId ? h`<p><a href="/app/invoices/${view.invoiceId}">Open issued invoice</a></p>` : ''}

@@ -4,6 +4,7 @@ import type { Bindings } from '../auth.server'
 import type { Business } from './business'
 import { all, insist, one, parseJson, type Row } from './core'
 import { addDays, addMonths, addMonthsClamped } from './dates'
+import { composeBillingWindows } from './billing-composition'
 import { dueBillingWindows, INTERVAL_RATING_VERSION } from './billing-calendar'
 import { ratingInputs } from './inputs'
 import { rate, type ItemIn, type Rating, type RatingInput } from './rating'
@@ -61,8 +62,8 @@ export async function nativeRenewalPreview(env: Bindings, business: Business, su
   const replaced = await renewalReplacementIds(env, sub.id, term.end_date)
   const items = renewalItems(basis.items, sub, term, end, replaced)
   const calendar = prospectiveInput({ ...basis, items }, term, end)
-  const windows = dueBillingWindows(calendar, term.end_date, addDays(end, 1))
-    .filter(window => window.period.end > term.end_date && window.period.start < end)
+  const windows = composeBillingWindows(dueBillingWindows(calendar, term.end_date, addDays(end, 1))
+    .filter(window => window.period.end > term.end_date && window.period.start < end))
   const invoices: { dueDate: string; period: RatingInput['period']; subtotalCents: number; taxCents: number; totalCents: number; lines: Rating['lines']; inputs: RatingInput; usage: { status: string; meters: string[] } }[] = []
   const consumedCharges = new Set<string>(), consumedCredits = new Set<string>()
   const prior: { id: string; number: string; from: string; to: string; lines: Rating['lines'] }[] = []

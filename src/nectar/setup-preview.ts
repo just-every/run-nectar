@@ -93,12 +93,13 @@ export async function setupPreview(env: Bindings, business: Business, plan: Row,
     basis.ratings.push(digest)
     for (const line of calculation.lines) if (line.kind === 'credit' && typeof line.evidence.amendment === 'string') credited.add(line.evidence.amendment)
     for (const e of calculation.consumedEvents) consumed.set(e, `setup-preview-${index}`)
-    if (!billing || billing.terms.timing === 'arrears') for (const c of input.charges ?? []) charged.add(c.id)
+    for (const line of calculation.lines) if (typeof line.evidence.charge === 'string') charged.add(line.evidence.charge)
     projected.push({ id: `setup-preview-${index}`, number: 'Projected invoice', from: period.start, to: period.end, lines: calculation.lines })
     for (const key of ['subtotalCents', 'taxCents', 'totalCents'] as const) totals[key] += calculation[key]
-    const yearIndex = Math.floor(((Number(period.start.slice(0, 4)) - Number(plan.subscription.previewStart.slice(0, 4))) * 12 + Number(period.start.slice(5, 7)) - Number(plan.subscription.previewStart.slice(5, 7))) / 12)
-    if (!annualTotals[yearIndex]) annualTotals[yearIndex] = { year: yearIndex + 1, from: period.start, to: period.end, subtotalCents: 0, taxCents: 0, totalCents: 0 }
-    if (period.end > annualTotals[yearIndex].to) annualTotals[yearIndex].to = period.end
+    const annualDate = billing?.dueDate ?? period.start, annualEnd = billing ? addDays(billing.dueDate, 1) : period.end
+    const yearIndex = Math.floor(((Number(annualDate.slice(0, 4)) - Number(plan.subscription.previewStart.slice(0, 4))) * 12 + Number(annualDate.slice(5, 7)) - Number(plan.subscription.previewStart.slice(5, 7))) / 12)
+    if (!annualTotals[yearIndex]) annualTotals[yearIndex] = { year: yearIndex + 1, from: annualDate, to: annualEnd, ...(billing ? { basis: 'invoice_due_date' } : {}), subtotalCents: 0, taxCents: 0, totalCents: 0 }
+    if (annualEnd > annualTotals[yearIndex].to) annualTotals[yearIndex].to = annualEnd
     for (const key of ['subtotalCents', 'taxCents', 'totalCents'] as const) annualTotals[yearIndex][key] += calculation[key]
     for (const exception of calculation.exceptions) if (!ambiguities.some(a => a.code === exception.code && a.period === period.start)) ambiguities.push({ issue: exception.message, code: exception.code, period: period.start, detail: exception.detail })
   }

@@ -103,6 +103,33 @@ export async function intervalCancellationFlow(h, owner, { onState = async () =>
     }
   }
 
+  // One due-date invoice carries last December's earned usage and the next
+  // year's advance platform fee. Cancellation corrects only future service.
+  const mixedCustomer = (await h.api('customer.create', owner, { external_id: 'synthetic-nectar-73', name: 'Synthetic mixed service', billing_email: 'synthetic-nectar-73@example.test' })).id
+  const meter = (await h.api('meter.create', owner, { code: 'synthetic-nectar-74', name: 'Synthetic mixed usage', unit_label: 'calls' })).id
+  const usageProduct = (await h.api('product.create', owner, { code: 'synthetic-nectar-75', name: 'Synthetic arrears usage' })).id
+  const usagePrice = (await h.api('price.create', owner, { product: usageProduct, kind: 'unit', meter, unit_amount: '2', taxable: true })).id
+  const mixedSub = (await h.api('subscription.create', owner, { customer: mixedCustomer, start_date: '2025-01-01', term_months: 24, price: [price, usagePrice] })).id
+  await h.api('usage.submit', owner, { events: [{ event_id: 'synthetic-nectar-76', customer: 'synthetic-nectar-73', meter: 'synthetic-nectar-74', quantity: '25', occurred_at: '2025-12-15T12:00:00Z' }] })
+  const mixedOriginal = await issue(mixedCustomer)
+  assert.equal(mixedOriginal.calculation.inputs.billing.serviceWindows.length, 2, 'The ordinary issued invoice composes the two service windows due on January 1')
+  const oldUsage = mixedOriginal.lines.filter(line => line.meter_id === meter)
+  assert.equal(oldUsage.reduce((sum, line) => sum + line.amount_cents, 0), 5000)
+  assert.ok(oldUsage.every(line => line.period_start === '2025-12-01' && line.period_end === '2026-01-01'))
+  assert.equal(mixedOriginal.total_cents, 1325500)
+  const mixedPending = await h.api('subscription.cancel', owner, { subscription: mixedSub, revision: (await detail(mixedSub)).revision, mode: 'immediate', effective_date: '2026-07-01', reason: 'Synthetic mixed service ended' })
+  assert.equal(mixedPending.status, 'pending')
+  assert.deepEqual(mixedPending.credits.map(credit => [credit.subtotalCents, credit.taxCents, credit.amountCents]), [[604932, 60493, 665425]], 'The exact credit excludes all $50 of earned arrears usage and its original tax')
+  assert.ok(mixedPending.credits[0].original.every(line => line.meterId === null && line.evidence.calendar.terms.timing === 'advance'))
+  assert.ok(mixedPending.credits[0].earned.every(line => line.meterId === null && line.evidence.calendar.terms.timing === 'advance'))
+  assert.deepEqual(mixedPending.credits[0].calendar.components.map(component => component.itemId).sort(), (await detail(mixedSub)).items.filter(item => item.price_id === price).map(item => item.id).sort(), 'Reactivation custody names only the credited advance items')
+  await decide(mixedPending.cancellation, owner, 'approved', 409)
+  await decide(mixedPending.cancellation)
+  const mixedCorrected = await h.api(`invoices/${mixedOriginal.id}`, owner)
+  assert.deepEqual(mixedCorrected.calculation, mixedOriginal.calculation)
+  assert.deepEqual(mixedCorrected.lines, mixedOriginal.lines)
+  assert.equal(mixedCorrected.balanceCents, 660075, 'The remaining balance includes earned annual service, unchanged prior usage and their exact original tax')
+
   const rejected = await make(70), rejectedOriginal = await issue(rejected.customer)
   const rejectedPlan = await cancel(rejected.subscription)
   await decide(rejectedPlan.cancellation, owner, 'rejected')

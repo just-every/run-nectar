@@ -1,3 +1,4 @@
+import { composeBillingWindows } from './billing-composition'
 import { insist, type Row } from './core'
 import { addDays, addMonthsClamped, periodContaining } from './dates'
 import { dueBillingWindows, nonMonthlyArrears, type BillingWindow, type BillingTerms, type CalendarBasis } from './billing-calendar'
@@ -11,15 +12,15 @@ export function setupCalendar(plan: Row, prices: CalendarBasis['prices']): Calen
 export function setupBillingWindows(plan: Row, prices: CalendarBasis['prices']): BillingWindow[] | null {
   if (!plan.subscription.billingAnchorDate && !Object.values(prices).some(p => p.billing && nonMonthlyArrears(p.billing))) return null
   const basis = setupCalendar(plan, prices), start = plan.subscription.previewStart
-  if (!plan.subscription.evergreen) return dueBillingWindows(basis, start, addDays(plan.subscription.previewEnd, 1))
+  if (!plan.subscription.evergreen) return composeBillingWindows(dueBillingWindows(basis, start, addDays(plan.subscription.previewEnd, 1)).filter(window => window.period.end > start && window.period.start < plan.subscription.previewEnd))
   // Find the complete first 36 invoice windows, even for multi-year intervals.
   // No fabricated monthly windows fill the gaps between actual billing dates.
-  let through = addMonthsClamped(start, 36), windows = dueBillingWindows(basis, start, addDays(through, 1))
+  let through = addMonthsClamped(start, 36), windows = composeBillingWindows(dueBillingWindows(basis, start, addDays(through, 1)))
   while (windows.length < 36 && plan.items.some((item: Row) => !item.to || item.to > through)) {
     const next = addMonthsClamped(through, 36)
     insist(next > through, 'billing_calendar_out_of_range')
     through = next
-    windows = dueBillingWindows(basis, start, addDays(through, 1))
+    windows = composeBillingWindows(dueBillingWindows(basis, start, addDays(through, 1)))
   }
   const selected = windows.slice(0, 36)
   plan.subscription.previewEnd = selected.reduce((end, window) => window.period.end > end ? window.period.end : end, start)

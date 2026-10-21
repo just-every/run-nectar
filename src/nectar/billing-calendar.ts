@@ -13,6 +13,10 @@ export interface BillingWindow {
   period: { start: string; end: string }
   nominalStart: string; nominalEnd: string
   components: BillingComponent[]
+  // Only composed invoice envelopes have these fields. Each original service
+  // window remains authoritative for its own terms and pricing denominator.
+  mixed?: true
+  serviceWindows?: BillingWindow[]
 }
 export interface CalendarBasis {
   subscription: { anchorDay: number; startDate: string; trialEnd: string | null; endDate: string | null; billFrom: string | null; billingAnchorDate?: string | null; contractEndDate?: string | null }

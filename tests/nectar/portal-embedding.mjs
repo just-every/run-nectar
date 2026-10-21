@@ -37,15 +37,16 @@ async function portalIntervalProjection(h, owner, session, origin, fixture) {
   const preview=await response.json()
   assert.equal(preview.billingMonth,'2026-10')
   assert.deepEqual((await (await open(endpoint)).json()).invoices,preview.invoices,'Default customer month uses the business clock')
-  assert.equal(preview.invoices.length,2,'Every actual due window is available to the customer')
-  assert.deepEqual(preview.invoices.map(row=>row.calculation.totalCents).sort((a,b)=>a-b),[600,1200000])
+  assert.equal(preview.invoices.length,1,'One customer invoice composes every service window due on the same day')
+  assert.deepEqual(preview.invoices.map(row=>row.calculation.totalCents).sort((a,b)=>a-b),[1200600])
   const operator=await h.api(`subscriptions/${fixture.subscription}/upcoming?period=2026-10`,owner)
   for(const row of preview.invoices){
     const source=operator.invoices.find(invoice=>invoice.period.start===row.period.start&&invoice.period.end===row.period.end)
     assert.ok(source)
     assert.equal(row.calculation.fingerprint,source.calculation.fingerprint)
     assert.equal(row.calculation.totalCents,source.calculation.totalCents)
-    assert.deepEqual(row.billingTerms,source.billingWindow.terms)
+    assert.equal(row.billingTerms,null)
+    assert.deepEqual(row.servicePeriods.map(part=>[part.period.start,part.period.end,part.terms.timing]).sort(),[['2026-09-01','2026-10-01','arrears'],['2026-10-01','2027-10-01','advance']])
     assert.equal(row.billingDueDate,'2026-10-01')
     assert.equal(row.calculation.inputs,undefined,'Customer reads never return saved raw inputs')
     assert.equal(row.calculation.exceptions,undefined,'Operator exceptions remain private')
@@ -59,7 +60,7 @@ async function portalIntervalProjection(h, owner, session, origin, fixture) {
   assert.deepEqual(usageRows.map(row=>({meter:row.meter,from:row.period_start,to:row.period_end,quantity:Number(row.quantity),earlier:Number(row.earlier_quantity)})),[
     {meter:'portal-calendar-calls',from:'2026-09-01',to:'2026-10-01',quantity:3,earlier:0},
   ],'Usage CSV exports only the actual metered service window, with no invented annual fee usage row')
-  assert.equal(preview.invoices.find(row=>row.billingTerms.timing==='advance').meters.length,0,'An annual flat fee has no usage projection')
+  assert.equal(preview.invoices[0].meters.length,1,'Only the metered service has a usage projection')
   for(const path of [`/portal/subscriptions/${fixture.foreign}/upcoming?period=invalid`,`/portal/upcoming?subscription=${fixture.foreign}&period=2026-10`,`/portal/usage.csv?subscription=${fixture.foreign}&period=2026-10`])
     assert.equal((await open(path)).status,404,'Foreign subscriptions are refused before calendar or period reads')
   assert.deepEqual(await state(),before,'Customer calendar and CSV reads create no billing or audit records')
