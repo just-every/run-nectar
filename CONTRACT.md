@@ -429,21 +429,21 @@ lines, not gaps in the target.
 
 ## Homepage claims
 
-Every capability claim on the owner-approved homepage (`src/site/homepage/`, desk page-s1, 18 October 2026), in the order of its claims table, with the clauses that promise it (claims truth table `evidence/br-nectar/desk-built/CLAIMS.md`). A claim's status comes from its clauses in the Status table below: `done` when every clause is done, `missing` when every one is missing, otherwise `partial`. A claim marked — needs no clause (the license, the start line and the hosted demo). 76 claims: 20 done, 33 partial, 23 missing.
+Every capability claim on the owner-approved homepage (`src/site/homepage/`, desk page-s1, 18 October 2026), in the order of its claims table, with the clauses that promise it (claims truth table `evidence/br-nectar/desk-built/CLAIMS.md`). A claim's status comes from its clauses in the Status table below: `done` when every clause is done, `missing` when every one is missing, otherwise `partial`. A claim marked — needs no clause (the license, the start line and the hosted demo). 76 claims: 15 done, 33 partial, 28 missing.
 
 | # | Section | Claim | Clause(s) | Status |
 | --- | --- | --- | --- | --- |
-| 1 | Hero | "Nectar prices every plan and meter" | `NEC-03`, `NEC-07`, `CAT-002` | done |
+| 1 | Hero | "Nectar prices every plan and meter" | `NEC-03`, `NEC-07`, `CAT-002` | partial |
 | 2 | Hero | "sends exact invoices" | `NEC-07`, `NEC-10`, `INV-001`, `INV-002` | partial |
 | 3 | Hero | "collects by card and ACH through your processor" | `PAY-001`, `PAY-003` | missing |
 | 4 | Hero | "recovers failed payments" | `DUN-001`, `DUN-002` | missing |
-| 5 | Hero | "ties out the month" | `AGENT-008`, `REV-002` | partial |
+| 5 | Hero | "ties out the month" | `AGENT-008`, `REV-002` | missing |
 | 6 | Hero | "100% free, open source alternative to Stripe Billing, Chargebee and Recurly" | — | done |
 | 7 | Hero cards | October bill run · 212 invoices · issued 6:00 am · 100% | `INV-001`, `NEC-09` | partial |
 | 8 | Hero cards | Lakeview Freight · 48 seats · 1.2M API calls · $6,840.00 · Paid by card | `NEC-07`, `PAY-003` | partial |
 | 9 | Hero cards | Mesa Solar · Card declined → Retried Mon Oct 5 · paid | `DUN-001` | missing |
 | 10 | Hero cards | Pinecrest Dental · $2,150.00 ACH · Settled Wed Oct 7 | `PAY-003`, `PAY-004` | missing |
-| 11 | Hero cards | API calls · 1.2M this month · 60% (quota) | `ENT-002`, `USE-006` | done |
+| 11 | Hero cards | API calls · 1.2M this month · 60% (quota) | `ENT-002`, `USE-006` | partial |
 | 12 | Hero cards | QuickBooks Online · 209 payments synced · 0 errors | `BOOK-001` | missing |
 | 13 | Billing day | "Nectar prepares the run the evening before" | `INV-001`, `NEC-09` | partial |
 | 14 | Billing day | "Clean invoices issue on their own; anything unusual waits for you" | `INV-001`, `NEC-09` | partial |
@@ -453,14 +453,14 @@ Every capability claim on the owner-approved homepage (`src/site/homepage/`, des
 | 18 | Billing day | Plans and seats, usage, sales tax on 87 invoices, total | `NEC-07`, `TAX-001` | partial |
 | 19 | Billing day | Card 131 · ACH 37 · Invoice terms 44 | `PAY-003`, `INV-004` | partial |
 | 20 | Billing day | "September: 206 invoices" comparison | `NEC-09` | done |
-| 21 | One invoice | "Seats, tiers and usage are rated exactly, to the cent" | `NEC-07`, `CAT-002` | done |
+| 21 | One invoice | "Seats, tiers and usage are rated exactly, to the cent" | `NEC-07`, `CAT-002` | partial |
 | 22 | One invoice | "every invoice keeps the inputs that made it" (rule, inputs fingerprint) | `NEC-07`, `NEC-10` | done |
 | 23 | One invoice | Events billed once · duplicates ignored | `NEC-05`, `USE-001` | partial |
-| 24 | One invoice | Graduated API tiers (first 1,000,000 at $2.00 per 1,000, next at $1.40) | `CAT-002` | done |
+| 24 | One invoice | Graduated API tiers (first 1,000,000 at $2.00 per 1,000, next at $1.40) | `CAT-002` | missing |
 | 25 | One invoice | Seats billed Oct 1–31 in advance beside September usage | `CAT-001` | done |
 | 26 | One invoice | Sales tax (Avalara) | `TAX-001` | partial |
 | 27 | One invoice | Paid by card · Visa •• 8817 · 6:02 am | `PAY-003` | missing |
-| 28 | One invoice | Quota card "API calls · September · 1.2M of 2M" | `ENT-002` | done |
+| 28 | One invoice | Quota card "API calls · September · 1.2M of 2M" | `ENT-002` | missing |
 | 29 | Recovery | "retries each failed payment when it is most likely to clear" (retry table, attempt 2 of 8) | `DUN-001` | missing |
 | 30 | Recovery | "emails a one-click update link" | `DUN-002`, `DUN-003`, `PORT-004` | missing |
 | 31 | Recovery | "never retries a stolen card" | `DUN-001`, `PAY-005` | missing |
@@ -487,7 +487,7 @@ Every capability claim on the owner-approved homepage (`src/site/homepage/`, des
 | 52 | Revenue assurance | Seat ramp $95 → $120 and the catch-up | `CAT-003` | done |
 | 53 | Revenue assurance | Customer email drafted and sent with the fix | `AGENT-002` | done |
 | 54 | Month-end | "The close agent ties invoices, payments, payouts, tax, the ledger and revenue together" | `AGENT-008` | missing |
-| 55 | Month-end | "and hands your accountant one packet" · Locked | `AGENT-008`, `REV-002` | partial |
+| 55 | Month-end | "and hands your accountant one packet" · Locked | `AGENT-008`, `REV-002` | missing |
 | 56 | Month-end | Stripe payouts · 6 · amounts + fees | `PAY-004` | missing |
 | 57 | Month-end | QuickBooks Online · 212 invoices · 209 payments · 0 errors | `BOOK-001` | missing |
 | 58 | Month-end | Sales tax · 14 states · report ready to file | `TAX-003` | missing |
@@ -506,7 +506,7 @@ Every capability claim on the owner-approved homepage (`src/site/homepage/`, des
 | 71 | Moving in | Terminal: `npx -y @runeditrun/rer dev just-every/run-nectar` starts Nectar | — | done |
 | 72 | Moving in | "Also moves in from Chargebee, Recurly, Maxio, Orb and Metronome" | `MOVE-001`, `MOVE-002`, `MOVE-003`, `MOVE-004` | missing |
 | 73 | Closing | "100% free and open source. MIT licensed." | — | done |
-| 74 | Closing | October close · Locked | `REV-002` | partial |
+| 74 | Closing | October close · Locked | `REV-002` | missing |
 | 75 | Closing | December bill run · scheduled · 6:00 am | `INV-001` | partial |
 | 76 | Hero | "Try the demo" opens the hosted demo | — | done |
 
