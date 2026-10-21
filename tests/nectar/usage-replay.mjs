@@ -326,6 +326,7 @@ export async function usageDispositionFlow(h,owner,ctx) {
   const nextIssued=await read(nextInvoice.id)
   assert.deepEqual([nextIssued.subtotal_cents,nextIssued.tax_cents,nextIssued.total_cents],[4001,800,4801])
   assert.ok(nextIssued.lines.some(l=>l.kind==='usage_correction'&&l.amount_cents===1&&l.evidence.eventIds.includes(lateUnit.event_id)))
+  assert.ok((await corrections(next.sub)).find(c=>c.id===nextDebit.id).documents.some(d=>d.id===nextInvoice.id&&d.kind==='next_invoice'),'USE-004 receipt identifies the actual next recurring invoice rather than claiming a separate correcting invoice')
   await observe('next-debit',[`/app/invoices/${nextInvoice.id}`])
   // A void in an early minimum window must propagate through the later true-up;
   // selected-period-only replay would incorrectly issue a net credit here.
