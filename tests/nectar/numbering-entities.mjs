@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { file } from './harness.mjs'
 
-export async function numberingEntitiesFlow(h, owner) {
+export async function numberingEntitiesFlow(h, owner, { onState = async () => {} } = {}) {
   const api = (path, body, status) => h.api(path, owner, body, status)
   const revision = async () => (await api('business')).revision
   const mutate = async (path, body, status) => api(path, { revision: await revision(), ...body }, status)
@@ -30,6 +30,7 @@ export async function numberingEntitiesFlow(h, owner) {
   await mutate('customer.entity', { customer: harbor, entity: entityB.id, confirm: true })
   const state = () => api('billing-entities')
   assert.equal((await state()).entities.length, 2)
+  await onState({ label: 'entities', customers: [atlas, harbor], entities: [entityA.id, entityB.id] })
   const registerBefore = await api('number-register')
   const source = registerBefore.entries.find(row => row.number === 'ACME-0042')
   const harborSource = registerBefore.entries.find(row => row.number === 'HARBOR-0009')
@@ -48,6 +49,7 @@ export async function numberingEntitiesFlow(h, owner) {
   assert.equal((await state()).sources.length, 1, 'missing held connection cannot synthesize a live capture')
   await mutate('invoice.series', { entity: entityB.id, mode: 'continue', source_capture: captured.id }, 404)
   assert.equal((await mutate('invoice.series', { entity: entityA.id, mode: 'continue', source_capture: captured.id })).nextNumber, 'ACME-0043')
+  await onState({ label: 'configured', customers: [atlas, harbor], entities: [entityA.id, entityB.id], source: source.id, capture: captured.id, settings: sourceBody })
   const draft = async (customer, description) => {
     const charge = await api('charge.add', { customer, amount: '100', description, effective_date: '2026-09-10' })
     return api('invoice.manual', { customer, charges: [charge.charge], service_date: '2026-09-10' })
@@ -92,6 +94,7 @@ export async function numberingEntitiesFlow(h, owner) {
   assert.equal(onlyA.gaps.filter(row => row.prefix === 'ACME-').length, 0)
   assert.ok(all.entries.some(row => row.entityId === entityB.id && row.number === 'SUBCO-0001'))
   assert.ok(all.series.some(row => row.entityId === entityA.id && row.prefix === 'ACME-'))
+  await onState({ label: 'issued', customers: [atlas, harbor], entities: [entityA.id, entityB.id], invoices: [firstA.id, firstB.id, secondA.id, next.id], source: source.id, capture: captured.id })
   const csv = await h.page(`/app/exports/number-register.csv?entity=${entityA.id}`, owner)
   assert.ok(csv.includes(entityA.id) && csv.includes('ACME-0045') && !csv.includes('SUBCO-0001'))
   await api('access.give', { email: 'synthetic-nectar-entity-accountant@example.test', name: 'Entity accountant', role: 'accountant' })

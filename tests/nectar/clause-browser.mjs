@@ -1,15 +1,18 @@
 // Focused real-browser use of a clause's own public pages and native forms.
 import assert from 'node:assert/strict'
 import { chromium } from '@playwright/test'
-import { mkdir } from 'node:fs/promises'
+import { mkdir, writeFile } from 'node:fs/promises'
 import { harness } from './harness.mjs'
 import { applyPolicy } from './policy-helper.mjs'
 import { erasureFlow } from './erasure.mjs'
 import { moveCollectionFlow,harnessOptions as collectionOptions } from './move-collection.mjs'
 import { moveHistoryFlow } from './move-history.mjs'
+import { intervalsFlow } from './intervals.mjs'
+import { numberingEntitiesFlow } from './numbering-entities.mjs'
 const kind=process.argv[2],directory=process.env.NECTAR_EVIDENCE_DIR??`.evidence/${kind}`
-assert.ok(['erasure','history','collection'].includes(kind))
+assert.ok(['erasure','history','collection','numbering','intervals'].includes(kind))
 await mkdir(directory,{recursive:true})
+const captures=[]
 const h=await harness({assets:true,...(kind==='collection'?collectionOptions():{})});let browser
 try {
   await h.raw('/auth/bootstrap',{body:{token:h.vars.SETUP_TOKEN,displayName:'Nectar Owner'}})
@@ -27,9 +30,68 @@ try {
     assert.ok(await page.locator('main h1').count(),label)
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`${label} fits at ${page.viewportSize().width}`)
     await page.screenshot({path:`${directory}/${page.viewportSize().width}-${label}.png`,fullPage:true})
+    captures.push({label,width:page.viewportSize().width,path:new URL(page.url()).pathname+new URL(page.url()).search,file:`${page.viewportSize().width}-${label}.png`})
     console.log(`BROWSER ${page.viewportSize().width} ${label}`)
   }
-  if(kind==='erasure')await erasureFlow(h,owner,async state=>{
+  const both = async (label,path,prepare) => {
+    for(const width of [1440,390]) {
+      await page.setViewportSize({width,height:950})
+      if(path)await page.goto(h.origin+path)
+      if(prepare)await prepare()
+      await shot(label)
+    }
+  }
+  const form = action => page.locator(`form[action="/app/do/${action}"]`)
+  const submit = async locator => {
+    await Promise.all([page.waitForNavigation({waitUntil:'load'}),locator.getByRole('button').first().click()])
+    const url=new URL(page.url())
+    assert.equal(url.searchParams.get('error'),null,`Native form submission ${url.pathname}: ${url.searchParams.get('error')}`)
+  }
+  if(kind==='numbering')await numberingEntitiesFlow(h,owner,{onState:async state=>{
+    await both(`numbering-${state.label}`,'/app/numbering')
+    if(state.label==='entities')await both('numbering-entity-identity','/app/numbering',async()=>{
+      await page.locator('details').filter({has:form('entity.update').filter({has:page.locator(`input[name="entity"][value="${state.entities[0]}"]`)})}).locator('summary').first().click()
+    })
+    if(state.label==='configured')await both('numbering-source-capture','/app/numbering',async()=>{
+      const capture=form('invoice.series.capture')
+      await capture.locator('xpath=ancestor::details[1]/summary').click()
+      await capture.locator('select[name="entity"]').selectOption(state.entities[0])
+      await capture.locator('select[name="source_invoice"]').selectOption(state.source)
+      await capture.locator('textarea[name="capture"]').fill(JSON.stringify(state.settings.capture,null,2))
+      await capture.locator('input[name="confirm"]').check()
+    })
+    if(state.label==='issued') {
+      for(const [index,invoice]of state.invoices.slice(0,2).entries())await both(`numbering-issued-entity-${index+1}`,`/app/invoices/${invoice}`)
+      await page.goto(h.origin+'/app/numbering')
+      const filter=page.locator('form[method="get"][action="/app/numbering"]')
+      await filter.locator('select[name="entity"]').selectOption(state.entities[0])
+      await submit(filter)
+      assert.equal(new URL(page.url()).searchParams.get('entity'),state.entities[0])
+      await both('numbering-filtered-register',new URL(page.url()).pathname+new URL(page.url()).search)
+      await both('numbering-customer',`/app/customers/${state.customers[0]}`)
+    }
+  }})
+  else if(kind==='intervals') {
+    await intervalsFlow(h,owner,{onState:async(label,subscription,invoice)=>{
+      const detail=await h.api(`subscriptions/${subscription}`,owner),source=await h.api(`invoices/${invoice}`,owner)
+      const suffix=label==='annual-issued'?'annual':`${source.calculation.inputs.billing.terms.unit}-${source.calculation.inputs.billing.terms.count}`
+      await both(`intervals-${suffix}-subscription`,`/app/subscriptions/${subscription}?preview_period=${source.issue_date.slice(0,7)}#upcoming`)
+      await both(`intervals-${suffix}-invoice`,`/app/invoices/${invoice}`)
+      if(label==='annual-issued') {
+        await both('intervals-catalog','/app/catalog')
+        await both('intervals-customer',`/app/customers/${detail.customer_id}?preview_period=2027-01`)
+        await both('intervals-run',`/app/billing/${source.bill_run_id}`)
+        await both('intervals-billing','/app/billing')
+        await both('intervals-revenue',`/app/revenue?from=2026-01&to=2028-01&customer=${detail.customer_id}`)
+        await both('intervals-revenue-source',`/app/revenue/${invoice}?from=2026-01&to=2028-01&customer=${detail.customer_id}`)
+        await both('intervals-mrr',`/app/reports/mrr?period=2026-01&customer=${detail.customer_id}`)
+        await both('intervals-mrr-source',`/app/reports/mrr/${invoice}?period=2026-01&customer=${detail.customer_id}`)
+        await both('intervals-retention','/app/retention')
+      }
+    }})
+    await nativeIntervalForms({h,owner,page,both,form,submit})
+  }
+  else if(kind==='erasure')await erasureFlow(h,owner,async state=>{
     for(const width of [1440,390]) {
       await page.setViewportSize({width,height:950})
       await shot(state.label,state.path)
@@ -73,4 +135,112 @@ try {
       }
     }
   }})
+  await writeFile(`${directory}/screens.json`,JSON.stringify({kind,captures},null,2))
 } finally {await browser?.close();await h.close()}
+
+async function nativeIntervalForms({h,owner,page,both,form,submit}) {
+  await h.advanceClock('2034-01-01T20:00:00Z')
+  await page.goto(h.origin+'/app/catalog')
+  let fields=form('meter.create')
+  await fields.locator('[name="code"]').fill('browser-calendar-calls')
+  await fields.locator('[name="name"]').fill('Browser calendar calls')
+  await fields.locator('[name="unit_label"]').fill('calls')
+  await submit(fields)
+  const meter=(await h.api('catalog',owner)).meters.find(row=>row.code==='browser-calendar-calls')
+  assert.ok(meter)
+  const prices=[]
+  for(const row of [
+    {code:'browser-calendar-annual',name:'Annual research platform',kind:'flat',amount:'1200',interval:'annual',timing:'advance'},
+    {code:'browser-calendar-usage',name:'Monthly research usage',kind:'unit',amount:'2',interval:'month',timing:'arrears'},
+  ]) {
+    fields=form('product.create')
+    await fields.locator('[name="code"]').fill(row.code)
+    await fields.locator('[name="name"]').fill(row.name)
+    await submit(fields)
+    const product=(await h.api('catalog',owner)).products.find(product=>product.code===row.code)
+    assert.ok(product)
+    fields=form('price.create').filter({has:page.locator(`input[name="product"][value="${product.id}"]`)}).filter({has:page.locator('input[name="unit_amount"]')})
+    await fields.locator('[name="kind"]').selectOption(row.kind)
+    await fields.locator('[name="unit_amount"]').fill(row.amount)
+    await fields.locator('[name="billing_interval"]').selectOption(row.interval)
+    await fields.locator('[name="interval_count"]').fill('1')
+    await fields.locator('[name="billing_timing"]').selectOption(row.timing)
+    if(row.kind==='unit')await fields.locator('[name="meter"]').selectOption(meter.id)
+    await fields.locator('[name="taxable"]').uncheck()
+    await both(`forms-${row.code}-price`)
+    await submit(fields)
+    const price=(await h.api('catalog',owner)).prices.find(price=>price.product_id===product.id)
+    assert.ok(price,'Submitting the native catalog form creates a real immutable price')
+    assert.deepEqual([price.billing.unit,price.billing.count,price.billing.timing],row.kind==='flat'?['month',12,'advance']:['month',1,'arrears'])
+    prices.push(price.id)
+  }
+  await both('forms-interval-catalog','/app/catalog')
+  await page.goto(h.origin+'/app/customers')
+  fields=form('customer.create')
+  await fields.locator('[name="external_id"]').fill('synthetic-nectar-browser-calendar')
+  await fields.locator('[name="name"]').fill('Calendar Field Research')
+  await fields.locator('[name="billing_email"]').fill('field@browser-calendar.example')
+  await both('forms-interval-new-customer')
+  await submit(fields)
+  const customer=(await h.api('customers',owner)).find(row=>row.external_id==='synthetic-nectar-browser-calendar')
+  assert.ok(customer)
+  fields=form('subscription.create')
+  await fields.locator('[name="start_date"]').fill('2034-01-01')
+  await fields.locator('[name="term_months"]').selectOption('12')
+  await fields.locator('[name="billing_anchor_date"]').fill('2034-01-01')
+  await fields.locator('select[name="price"]').nth(0).selectOption(prices[0])
+  await fields.locator('select[name="price"]').nth(1).selectOption(prices[1])
+  await both('forms-interval-new-subscription')
+  await submit(fields)
+  const subscription=new URL(page.url()).pathname.split('/').at(-1)
+  const detail=await h.api(`subscriptions/${subscription}`,owner)
+  assert.equal(detail.contract_end_date,'2035-01-01')
+  assert.deepEqual(detail.items.map(item=>item.price_id).sort(),[...prices].sort())
+  await both('forms-interval-upcoming',`/app/subscriptions/${subscription}?preview_period=2034-01#upcoming`)
+  await both('forms-interval-customer',`/app/customers/${customer.id}?preview_period=2034-01`)
+  const issue = async (month,expected) => {
+    await page.goto(h.origin+'/app/billing')
+    const prepare=form('billrun.prepare')
+    await prepare.locator('[name="period"]').fill(month)
+    await both(`forms-interval-${month}-prepare`)
+    await submit(prepare)
+    const run=new URL(page.url()).pathname.split('/').at(-1)
+    const invoice=(await h.api(`runs/${run}`,owner)).invoices.find(invoice=>invoice.customer_id===customer.id)
+    assert.ok(invoice)
+    assert.equal(invoice.total_cents,expected)
+    await both(`forms-interval-${month}-run`,`/app/billing/${run}`)
+    await page.goto(h.origin+`/app/invoices/${invoice.id}`)
+    await both(`forms-interval-${month}-draft`)
+    const approve=form('invoice.approve')
+    if(await approve.locator('[name="acknowledge"]').count())await approve.locator('[name="acknowledge"]').check()
+    await submit(approve)
+    assert.equal((await h.api(`invoices/${invoice.id}`,owner)).status,'approved')
+    await both(`forms-interval-${month}-approved`)
+    const finalize=form('invoice.finalise')
+    await finalize.locator('[name="issue_date"]').fill(`${month}-01`)
+    await submit(finalize)
+    const issued=await h.api(`invoices/${invoice.id}`,owner)
+    assert.equal(issued.status,'issued')
+    assert.equal(issued.total_cents,expected)
+    await both(`forms-interval-${month}-issued`)
+    return issued
+  }
+  const annual=await issue('2034-01',120000)
+  await h.api('usage.submit',owner,{events:[{event_id:'synthetic-nectar-browser-calendar-usage',customer:'synthetic-nectar-browser-calendar',meter:'browser-calendar-calls',quantity:'3',occurred_at:'2034-01-15T12:00:00Z'}]})
+  await h.advanceClock('2034-02-01T20:00:00Z')
+  const usage=await issue('2034-02',600)
+  assert.deepEqual([usage.period_start,usage.period_end],['2034-01-01','2034-02-01'])
+  const source=await h.api(`revenue/${annual.id}`,owner)
+  assert.deepEqual(source.schedules[0].entries.map(entry=>entry.amountCents),Array(12).fill(10000))
+  await both('forms-interval-final-customer',`/app/customers/${customer.id}?preview_period=2034-02`)
+  await both('forms-interval-revenue',`/app/revenue?from=2034-01&to=2034-12&customer=${customer.id}`)
+  await both('forms-interval-revenue-source',`/app/revenue/${annual.id}?from=2034-01&to=2034-12&customer=${customer.id}`)
+  await both('forms-interval-mrr',`/app/reports/mrr?period=2034-01&customer=${customer.id}`)
+  await both('forms-interval-billings',`/app/reports/billings?period=2034-01&customer=${customer.id}`)
+  await both('forms-interval-billings-source',`/app/reports/billings/${annual.id}?period=2034-01&customer=${customer.id}`)
+  await both('forms-interval-retention-cadence','/app/retention',async()=>{
+    await form('retention.policy.prepare').locator('[name="save_price_id"]').selectOption(prices[0])
+    await form('retention.policy.prepare').locator('[name="pause_price_id"]').selectOption(prices[0])
+    await form('retention.policy.prepare').locator('[name="winback_price_id"]').selectOption(prices[0])
+  })
+}
