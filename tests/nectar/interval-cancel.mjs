@@ -3,7 +3,7 @@ import { applyPolicy } from './policy-helper.mjs'
 
 // CAT-001 inherited SUB-003: real issued advance service, governed credits,
 // source tax, paid liability and restart billing through ordinary public doors.
-export async function intervalCancellationFlow(h, owner) {
+export async function intervalCancellationFlow(h, owner, { onState = async () => {}, prepareCancellation, decideCancellation } = {}) {
   await h.advanceClock('2026-07-20T18:00:00Z')
   await applyPolicy(h, owner, 'tax.declare', { tax_jurisdiction: 'CA', tax_mode: 'flat_rate', tax_rate: '10', tax_note: 'Synthetic annual-service cancellation' })
   await h.api('tax.review', owner, { revision: (await h.api('business', owner)).revision })
@@ -14,8 +14,13 @@ export async function intervalCancellationFlow(h, owner) {
   const product = (await h.api('product.create', owner, { code: 'synthetic-nectar-62', name: 'Synthetic annual service' })).id
   const price = (await h.api('price.create', owner, { product, kind: 'flat', unit_amount: '12000', taxable: true, billing_interval: 'annual', billing_timing: 'advance' })).id
   const detail = subscription => h.api(`subscriptions/${subscription}`, owner)
-  const cancel = async (subscription, changes = {}, status = 200) => h.api('subscription.cancel', owner, { subscription, revision: (await detail(subscription)).revision, mode: 'immediate', effective_date: '2026-07-01', reason: 'Synthetic service ended', ...changes }, status)
-  const decide = (cancellation, actor = finance, decision = 'approved', status = 200) => h.api('subscription.cancel.decide', actor, { cancellation, decision }, status)
+  const cancel = async (subscription, changes = {}, status = 200) => {
+    const payload = { subscription, revision: (await detail(subscription)).revision, mode: 'immediate', effective_date: '2026-07-01', reason: 'Synthetic service ended', ...changes }
+    return prepareCancellation && status === 200 ? prepareCancellation(payload) : h.api('subscription.cancel', owner, payload, status)
+  }
+  const decide = (cancellation, actor = finance, decision = 'approved', status = 200) => decideCancellation && status === 200
+    ? decideCancellation({ cancellation, decision }, actor) : h.api('subscription.cancel.decide', actor, { cancellation, decision }, status)
+  const emit = (label, row, invoice, request, extra = {}) => onState({ label, ...row, invoice, request, owner, finance, ...extra })
   const issue = async (customer, month = '2026-01', issueDate = '2026-01-01') => {
     const run = (await h.api('billrun.prepare', owner, { period: month })).id
     const invoice = (await h.api(`runs/${run}`, owner)).invoices.find(invoice => invoice.customer_id === customer)
@@ -44,6 +49,7 @@ export async function intervalCancellationFlow(h, owner) {
       const payment = await h.api('payment.record', owner, { customer: row.customer, amount: (paid / 100).toFixed(2), received_on: '2026-01-02', method: 'bank_transfer', reference: `synthetic-nectar-${67 + index}` })
       await h.api('payment.allocate', owner, { invoice: original.id, payment: payment.payment, amount: (paid / 100).toFixed(2) })
     }
+    await emit('issued', row, original.id, null, { paid, index })
     const before = await detail(row.subscription), prepared = await cancel(row.subscription)
     assert.equal(prepared.status, 'pending')
     assert.equal((await detail(row.subscription)).revision, before.revision)
@@ -58,6 +64,7 @@ export async function intervalCancellationFlow(h, owner) {
     const pendingInvoice = await h.api(`invoices/${original.id}`, owner)
     const request = pendingInvoice.creditRequests.find(request => request.status === 'pending')
     assert.ok(request)
+    await emit('pending-credit', row, original.id, prepared.cancellation, { creditRequest: request.id, paid, index })
     await h.api('credit.approve', finance, { request: request.id }, 409)
     const approved = await decide(prepared.cancellation)
     assert.equal(approved.status, 'approved')
@@ -73,6 +80,7 @@ export async function intervalCancellationFlow(h, owner) {
     assert.deepEqual((await detail(row.subscription)).lifecycle.map(event => event.kind), ['cancel'])
     const ledger = (await h.api(`customers/${row.customer}`, owner)).ledger
     assert.equal(ledger.carriedUsageCredits.reduce((n, credit) => n + credit.availableCents, 0), Math.max(0, 598883 - (1188000 - paid)))
+    await emit('approved', row, original.id, prepared.cancellation, { paid, index })
     if (index === 2) {
       await h.api('subscription.reactivate', owner, { subscription: row.subscription, revision: (await detail(row.subscription)).revision, effective_date: '2026-07-11', reason: 'Synthetic service restarted' })
       const restarted = await detail(row.subscription)
@@ -81,6 +89,7 @@ export async function intervalCancellationFlow(h, owner) {
       assert.equal(restarted.contract_end_date, '2028-01-01', 'Restart inside the signed term preserves its actual end')
       const preview = await h.api(`subscriptions/${row.subscription}/upcoming?period=2026-07`, owner)
       assert.equal(preview.calculation.totalCents, 566334, 'Reinstated service receives an ordinary 174/365-day advance invoice')
+      await emit('reactivated', row, original.id, prepared.cancellation, { paid, index })
       const stub = await issue(row.customer, '2026-07', '2026-07-20')
       assert.equal(stub.total_cents, preview.calculation.totalCents)
       assert.equal(stub.balanceCents, 0, 'The paid-service credit applies once to the new ordinary invoice')
@@ -90,6 +99,7 @@ export async function intervalCancellationFlow(h, owner) {
       const run = (await h.api('billrun.prepare', owner, { period: '2026-07' })).id
       assert.ok(!(await h.api(`runs/${run}`, owner)).invoices.some(invoice => invoice.customer_id === row.customer), 'Re-preparation cannot bill a reinstated component or apply its credit twice')
       assert.deepEqual((await h.api(`invoices/${original.id}`, owner)).calculation, original.calculation)
+      await emit('restart-issued', row, original.id, prepared.cancellation, { restartInvoice: stub.id, paid, index })
     }
   }
 
@@ -98,10 +108,12 @@ export async function intervalCancellationFlow(h, owner) {
   await decide(rejectedPlan.cancellation, owner, 'rejected')
   assert.equal((await detail(rejected.subscription)).lifecycle.length, 0)
   assert.equal((await h.api(`invoices/${rejectedOriginal.id}`, owner)).credits.length, 0)
+  await emit('rejected', rejected, rejectedOriginal.id, rejectedPlan.cancellation)
   const stale = await cancel(rejected.subscription)
   const payment = await h.api('payment.record', owner, { customer: rejected.customer, amount: '1', received_on: '2026-07-01', method: 'bank_transfer', reference: 'synthetic-nectar-71' })
   await h.api('payment.allocate', owner, { invoice: rejectedOriginal.id, payment: payment.payment, amount: '1' })
   await decide(stale.cancellation, finance, 'approved', 409)
+  await emit('stale', rejected, rejectedOriginal.id, stale.cancellation)
   assert.equal((await detail(rejected.subscription)).lifecycle.length, 0)
   await decide(stale.cancellation, owner, 'rejected')
   await applyPolicy(h, owner, 'credit.policy', { two_person_above: '10000' })

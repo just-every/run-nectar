@@ -8,9 +8,10 @@ import { erasureFlow } from './erasure.mjs'
 import { moveCollectionFlow,harnessOptions as collectionOptions } from './move-collection.mjs'
 import { moveHistoryFlow } from './move-history.mjs'
 import { intervalsFlow } from './intervals.mjs'
+import { intervalCancellationFlow } from './interval-cancel.mjs'
 import { numberingEntitiesFlow } from './numbering-entities.mjs'
 const kind=process.argv[2],directory=process.env.NECTAR_EVIDENCE_DIR??`.evidence/${kind}`
-assert.ok(['erasure','history','collection','numbering','intervals'].includes(kind))
+assert.ok(['erasure','history','collection','numbering','intervals','cancellation'].includes(kind))
 await mkdir(directory,{recursive:true})
 const captures=[]
 const h=await harness({assets:true,...(kind==='collection'?collectionOptions():{})});let browser
@@ -47,7 +48,8 @@ try {
     const url=new URL(page.url())
     assert.equal(url.searchParams.get('error'),null,`Native form submission ${url.pathname}: ${url.searchParams.get('error')}`)
   }
-  if(kind==='numbering')await numberingEntitiesFlow(h,owner,{onState:async state=>{
+  if(kind==='cancellation')await cancellationBrowser({h,owner,context,page,both,form,submit})
+  else if(kind==='numbering')await numberingEntitiesFlow(h,owner,{onState:async state=>{
     await both(`numbering-${state.label}`,'/app/numbering')
     if(state.label==='entities')await both('numbering-entity-identity','/app/numbering',async()=>{
       await page.locator('details').filter({has:form('entity.update').filter({has:page.locator(`input[name="entity"][value="${state.entities[0]}"]`)})}).locator('summary').first().click()
@@ -242,5 +244,83 @@ async function nativeIntervalForms({h,owner,page,both,form,submit}) {
     await form('retention.policy.prepare').locator('[name="save_price_id"]').selectOption(prices[0])
     await form('retention.policy.prepare').locator('[name="pause_price_id"]').selectOption(prices[0])
     await form('retention.policy.prepare').locator('[name="winback_price_id"]').selectOption(prices[0])
+  })
+}
+
+
+async function cancellationBrowser({h,owner,context,page,both,form,submit}) {
+  const subscriptions = new Map(), preparedModes = new Set(), decidedKinds = new Set()
+  const asActor = async actor => context.addCookies(actor.split('; ').map(value=>{
+    const index=value.indexOf('=')
+    return {name:value.slice(0,index),value:value.slice(index+1),url:h.origin}
+  }))
+  await intervalCancellationFlow(h,owner,{
+    prepareCancellation:async payload=>{
+      await asActor(owner)
+      const before=await h.api(`subscriptions/${payload.subscription}`,owner)
+      const previous=new Set(before.cancellations.map(row=>row.id))
+      await page.goto(h.origin+`/app/subscriptions/${payload.subscription}`)
+      const cancel=form('subscription.cancel')
+      await cancel.locator('[name="mode"]').selectOption(payload.mode)
+      await cancel.locator('[name="effective_date"]').fill(payload.effective_date)
+      await cancel.locator('[name="reason"]').fill(payload.reason)
+      if(!preparedModes.has(payload.mode)) {
+        await both(`cancellation-native-${payload.mode}-prepare`)
+        preparedModes.add(payload.mode)
+      }
+      await submit(cancel)
+      const after=await h.api(`subscriptions/${payload.subscription}`,owner)
+      const request=after.cancellations.find(row=>!previous.has(row.id))
+      if(!request)return {id:after.id,endDate:after.end_date}
+      subscriptions.set(request.id,payload.subscription)
+      return {id:after.id,cancellation:request.id,status:request.status,endDate:request.effective_date,
+        credits:request.plan.plan.credits,amountCents:request.plan.plan.amountCents}
+    },
+    decideCancellation:async(payload,actor)=>{
+      const subscription=subscriptions.get(payload.cancellation)
+      assert.ok(subscription)
+      await asActor(actor)
+      try {
+        await page.goto(h.origin+`/app/subscriptions/${subscription}`)
+        const decision=form('subscription.cancel.decide').filter({has:page.locator(`input[name="cancellation"][value="${payload.cancellation}"]`)}).filter({has:page.locator(`input[name="decision"][value="${payload.decision}"]`)})
+        assert.equal(await decision.count(),1)
+        if(!decidedKinds.has(payload.decision)) {
+          await both(`cancellation-native-${payload.decision}-review`)
+          decidedKinds.add(payload.decision)
+        }
+        await submit(decision)
+        const after=await h.api(`subscriptions/${subscription}`,actor),request=after.cancellations.find(row=>row.id===payload.cancellation)
+        assert.equal(request.status,payload.decision)
+        return {id:subscription,cancellation:request.id,status:request.status,endDate:after.end_date}
+      } finally {await asActor(owner)}
+    },
+    onState:async state=>{
+      await asActor(state.owner)
+      const subject=state.index===undefined?'control':state.paid===0?'unpaid':state.paid===1188000?'paid':'part-paid'
+      const label=`cancellation-${subject}-${state.label}`
+      await both(`${label}-subscription`,`/app/subscriptions/${state.subscription}?preview_period=2026-07#lifecycle`)
+      await both(`${label}-original-invoice`,`/app/invoices/${state.invoice}`)
+      if(state.label==='pending-credit'&&state.index===2) {
+        await asActor(state.finance)
+        await both(`${label}-finance-credit-plan`,`/app/subscriptions/${state.subscription}#lifecycle`)
+        await asActor(state.owner)
+      }
+      if(['approved','reactivated','restart-issued'].includes(state.label)&&state.index===2)await both(`${label}-customer-credit`,`/app/customers/${state.customer}?preview_period=2026-07`)
+      if(state.label==='reactivated')await both(`${label}-upcoming`,`/app/subscriptions/${state.subscription}?preview_period=2026-07#upcoming`)
+      if(state.label==='stale') {
+        await asActor(state.finance)
+        await page.goto(h.origin+`/app/subscriptions/${state.subscription}`)
+        const decision=form('subscription.cancel.decide').filter({has:page.locator(`input[name="cancellation"][value="${state.request}"]`)}).filter({has:page.locator('input[name="decision"][value="approved"]')})
+        await Promise.all([page.waitForNavigation({waitUntil:'load'}),decision.getByRole('button').click()])
+        const refused=new URL(page.url())
+        assert.equal(refused.searchParams.get('error'),'cancellation_stale')
+        await both(`${label}-refused`,refused.pathname+refused.search)
+        await asActor(state.owner)
+      }
+      if(state.restartInvoice) {
+        await both(`${label}-restart-invoice`,`/app/invoices/${state.restartInvoice}`)
+        await both(`${label}-revenue-source`,`/app/revenue/${state.invoice}?from=2026-01&to=2026-12&customer=${state.customer}`)
+      }
+    },
   })
 }
