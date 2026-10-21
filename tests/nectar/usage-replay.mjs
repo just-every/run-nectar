@@ -208,6 +208,12 @@ export async function usageDispositionFlow(h,owner,ctx) {
   assert.ok(receiptHtml.includes(`/app/invoices/${debit.id}#recv`),'USE-004 approved receipt links to the current refreshed correcting invoice through the ordinary review door')
   await observe('metric-approved',[`/app/usage/replay?subscription=${ctx.subscription}&period=2020-01`,`/app/invoices/${debit.id}`,`/app/invoices/${ctx.issued[0].id}`])
 
+  const withdrawAdded=await prepare({...ctx.body,void_event_ids:[high.event_id],add_event_ids:[]})
+  assert.deepEqual(withdrawAdded.plan.delta,{subtotalCents:-9791,taxCents:-979,totalCents:-10770},'USE-004 withdrawing a previously approved addition reverses only its effective billed delta')
+  assert.ok(withdrawAdded.plan.periods.every(p=>p.eventIds.includes(high.event_id)),'USE-004 cumulative source citations retain an approved addition even when the next correction voids it')
+  await api('usage.correction.decide',{correction:withdrawAdded.id,decision:'rejected'})
+  assert.deepEqual(issuedEvidence(await read(debit.id)),issuedEvidence(debit),'USE-004 rejecting the cumulative withdrawal changes no issued correcting invoice')
+
   // The full 10,000-event acceptance is executed under each approved business
   // policy. Next-period negatives are numbered credits applied on the August
   // statement; negative correcting balances never become negative invoices.

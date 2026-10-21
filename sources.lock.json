@@ -77,7 +77,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "af00c307678efa577edad2b0b87a95b393abc75a07871f990a448144149b4743",
+      "sha256": "c75af77b063455c22b965798ea53e5d3684ff06c62a363f146ac7367896425b4",
       "executable": false
     },
     "DEMO.md": {
@@ -3137,7 +3137,7 @@
       "executable": false
     },
     "src/nectar/usage-replay.ts": {
-      "sha256": "2f23d8d8a10d4085a362efec926fe1abdd253c5b529ed5cd48b0b1d26fdd4fe6",
+      "sha256": "2134d4f479243d66da5ae2f553519b55036f14b6264302daab1d50f4961a1e44",
       "executable": false
     },
     "src/nectar/usage.ts": {
@@ -3637,7 +3637,7 @@
       "executable": false
     },
     "tests/nectar/usage-replay.mjs": {
-      "sha256": "0243a6d133b2e0c6dc892d8b9cd291709fd5e948c3448d7f4fd1780dbfe35187",
+      "sha256": "071034f54fa8cebdfcdf43434ce02cae8a2a2d18b9e4df16bbc494226c9f7bb6",
       "executable": false
     },
     "tests/runtime.mjs": {
