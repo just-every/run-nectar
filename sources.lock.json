@@ -77,7 +77,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "d1a97959cf08533f175ba5a3083de31467b0b2217df6ca269e46ddf2bbc15292",
+      "sha256": "127079a5ae3c4ca638a6b6da2c88929f5ccdec8cacfcb5a38caf4df80001caa4",
       "executable": false
     },
     "DEMO.md": {
@@ -3557,7 +3557,7 @@
       "executable": false
     },
     "tests/nectar/clause-browser.mjs": {
-      "sha256": "9f433f8b32acdcc4059d14b195ace497a1a9d75cc81053900df5daf9f05a9977",
+      "sha256": "949e34d19f754c6ff2e5246cd4b8c1018314d08e0517997722f9e0ce9d2ff16c",
       "executable": false
     },
     "tests/nectar/clause-runner.mjs": {
@@ -3633,7 +3633,7 @@
       "executable": false
     },
     "tests/nectar/interval-cancel.mjs": {
-      "sha256": "f95e61dc490a40adf0e75366eaa858908da7747204061259278a52004df8ef93",
+      "sha256": "67b89c54ea17d7ac96ada75066374249c8d2a932391a989c3254f8b0b77e8169",
       "executable": false
     },
     "tests/nectar/intervals.mjs": {
@@ -3833,7 +3833,7 @@
       "executable": false
     },
     "tests/nectar/stripe-history-sandbox.mjs": {
-      "sha256": "d0f2bd7f1f2084daf444e11afeb66df06835ee8a2468a9163e3db70045176b64",
+      "sha256": "3fd79b7907df472cf7c3181047e3836bb3dd378d5d962acacda01b2c52016937",
       "executable": false
     },
     "tests/nectar/stripe-sandbox-client.mjs": {
