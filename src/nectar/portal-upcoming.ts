@@ -68,9 +68,13 @@ async function scopedUpcoming(env: Bindings, session: CustomerSession, sub: Row,
   }
   const from = zonedStart(period.start, business.timezone), to = zonedStart(period.end, business.timezone)
   const meters: Row[] = []
-  for (const id of [...new Set(Object.values(input.prices).flatMap(price => price.meterId ? [price.meterId] : []))]) {
+  // Saved inputs retain every subscription price. Usage belongs only to the
+  // components selected for this invoice, including when reading issued data.
+  const selectedPrices = input.billing ? new Set(input.items.filter(item => input.billing!.components.some(component => component.itemId === item.id)).map(item => item.priceId)) : null
+  const usagePrices = Object.values(input.prices).filter(price => !selectedPrices || selectedPrices.has(price.id))
+  for (const id of [...new Set(usagePrices.flatMap(price => price.meterId ? [price.meterId] : []))]) {
     const meter = await one(env, 'SELECT id,code,name,unit_label FROM nc_meters WHERE id=?', id)
-    const metrics = Object.values(input.prices).filter(price => price.meterId === id && price.metric)
+    const metrics = usagePrices.filter(price => price.meterId === id && price.metric)
     if (metrics.length) {
       for (const price of metrics) {
         const own = lines.filter(line => line.priceId === price.id && line.kind === 'metric_usage')

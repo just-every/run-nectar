@@ -9,6 +9,7 @@ import { join } from 'node:path'
 import { chromium } from '@playwright/test'
 import { portalApp } from '../../examples/portal/app.mjs'
 import { seedPortalRecords } from './portal-sessions.mjs'
+import { csvRows } from './financial-reports.mjs'
 
 async function seedPortalIntervals(h, owner, customers) {
   const api=(path,body)=>h.api(path,owner,body)
@@ -54,7 +55,11 @@ async function portalIntervalProjection(h, owner, session, origin, fixture) {
   assert.doesNotMatch(JSON.stringify(preview),/PRIVATE-|INTERNAL-|synthetic-portal-calendar-2/)
   const csv=await open(`/portal/usage.csv?subscription=${fixture.subscription}&period=2026-10`)
   assert.equal(csv.status,200)
-  assert.match(await csv.text(),/"portal-calendar-calls","2026-09-01","2026-10-01","3","0"/,'Usage CSV retains the actual service month, rather than the selected due month')
+  const usageRows=csvRows(await csv.text())
+  assert.deepEqual(usageRows.map(row=>({meter:row.meter,from:row.period_start,to:row.period_end,quantity:Number(row.quantity),earlier:Number(row.earlier_quantity)})),[
+    {meter:'portal-calendar-calls',from:'2026-09-01',to:'2026-10-01',quantity:3,earlier:0},
+  ],'Usage CSV exports only the actual metered service window, with no invented annual fee usage row')
+  assert.equal(preview.invoices.find(row=>row.billingTerms.timing==='advance').meters.length,0,'An annual flat fee has no usage projection')
   for(const path of [`/portal/subscriptions/${fixture.foreign}/upcoming?period=invalid`,`/portal/upcoming?subscription=${fixture.foreign}&period=2026-10`,`/portal/usage.csv?subscription=${fixture.foreign}&period=2026-10`])
     assert.equal((await open(path)).status,404,'Foreign subscriptions are refused before calendar or period reads')
   assert.deepEqual(await state(),before,'Customer calendar and CSV reads create no billing or audit records')
