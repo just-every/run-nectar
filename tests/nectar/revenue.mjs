@@ -186,28 +186,28 @@ export async function revenueFlow(h, owner, { onState } = {}) {
   assert.equal(creditJournal.periods[0].debitCents, 500)
   assert.equal(creditJournal.periods[0].creditCents, 500)
   assert.deepEqual(creditJournal.sources.map(row => row.creditId), [credit.id, credit.id])
-  // An ordinary manual one-time invoice billed before its service date proves
-  // deferred recognition without claiming annual subscription billing.
-  const advanceCharge = (await api('charge.add', { customer: empty, amount: '10', description: 'August service activation', taxable: true, effective_date: '2026-08-03' })).charge
-  const advanceInvoice = await api('invoice.manual', { customer: empty, charges: [advanceCharge], service_date: '2026-08-03' })
-  await api('invoice.approve', { invoice: advanceInvoice.id, acknowledge: true })
-  await api('invoice.finalise', { invoice: advanceInvoice.id, issue_date: '2026-05-31' })
-  const deferredJournal = await journal(`from=2026-05&to=2026-08&customer=${empty}`)
-  assert.deepEqual(compact(deferredJournal.entries), [
-    ['2026-05', 'pretax-billings-clearing', 1000, 0], ['2026-05', 'deferred-revenue', 0, 1000],
+  // Current manual doors refuse advance issue. Do not fabricate an annual
+  // advance to exercise a future CAT-001 capability.
+  const augustCharge = (await api('charge.add', { customer: empty, amount: '10', description: 'August service activation', taxable: true, effective_date: '2026-08-03' })).charge
+  const augustInvoice = await api('invoice.manual', { customer: empty, charges: [augustCharge], service_date: '2026-08-03' })
+  await api('invoice.approve', { invoice: augustInvoice.id, acknowledge: true })
+  assert.equal((await api('invoice.finalise', { invoice: augustInvoice.id, issue_date: '2026-05-31' }, 400)).error, 'invalid_issue_date')
+  assert.deepEqual((await journal(`period=2026-08&customer=${empty}`)).entries, [], 'refused advance issue contributes no journal')
+  await api('invoice.finalise', { invoice: augustInvoice.id, issue_date: '2026-08-03' })
+  const manualJournal = await journal(`from=2026-05&to=2026-08&customer=${empty}`)
+  assert.deepEqual(compact(manualJournal.entries), [
     ['2026-06', 'pretax-billings-clearing', 700, 0], ['2026-06', 'recognized-revenue', 0, 700],
-    ['2026-08', 'deferred-revenue', 1000, 0], ['2026-08', 'recognized-revenue', 0, 1000],
+    ['2026-08', 'pretax-billings-clearing', 1000, 0], ['2026-08', 'recognized-revenue', 0, 1000],
   ])
-  assert.deepEqual(deferredJournal.periods.map(row => [row.period, row.debitCents, row.creditCents]), [
-    ['2026-05', 1000, 1000], ['2026-06', 700, 700], ['2026-07', 0, 0], ['2026-08', 1000, 1000],
+  assert.deepEqual(manualJournal.periods.map(row => [row.period, row.debitCents, row.creditCents, row.deferredLiabilityCents]), [
+    ['2026-05', 0, 0, 0], ['2026-06', 700, 700, 0], ['2026-07', 0, 0, 0], ['2026-08', 1000, 1000, 0],
   ])
-  const gross = await journal('period=2026-05')
-  assert.ok(gross.periods[0].accruedContractAssetCents > 0 && gross.periods[0].deferredLiabilityCents === 1000, 'opposite customer/invoice positions remain gross assets and liabilities before monthly summarization')
-  assert.equal(gross.periods[0].debitCents, gross.periods[0].creditCents)
-  assert.equal(gross.sources.filter(row => row.invoiceId === advanceInvoice.id).length, 1)
-  assert.deepEqual((await journal(`period=2026-05&customer=${customer}`)).sources.filter(row => row.invoiceId === advanceInvoice.id), [])
+  const companyJournal = await journal('period=2026-08')
+  assert.equal(companyJournal.periods[0].debitCents, companyJournal.periods[0].creditCents)
+  assert.equal(companyJournal.sources.filter(row => row.invoiceId === augustInvoice.id).length, 2)
+  assert.deepEqual((await journal(`period=2026-08&customer=${customer}`)).sources.filter(row => row.invoiceId === augustInvoice.id), [])
   assert.deepEqual(frozen(await api(`invoices/${issued.id}`)), frozen(issued), 'read-only journal never edits the issued invoice')
-  await onState?.({ name: 'journal', report: '/app/revenue?from=2026-03&to=2026-08', source: `/app/revenue/${advanceInvoice.id}`, invoice: issued.id, customer, journalPath: `/app/exports/revenue-journal.csv?from=2026-03&to=2026-08` })
+  await onState?.({ name: 'journal', report: '/app/revenue?from=2026-03&to=2026-08', source: `/app/revenue/${augustInvoice.id}`, invoice: issued.id, customer, journalPath: `/app/exports/revenue-journal.csv?from=2026-03&to=2026-08` })
   await onState?.({ name: 'credit', report: `/app/revenue?period=${credit.period}&customer=${customer}`, source: `/app/revenue/${issued.id}`, invoice: issued.id, customer })
   const reader = { bearer: (await api('credential.issue', { name: 'Revenue reader', scopes: ['prepare'] })).key }
   const usageOnly = { bearer: (await api('credential.issue', { name: 'Revenue usage only', scopes: ['usage'] })).key }
