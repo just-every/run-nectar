@@ -166,7 +166,7 @@ export async function decide(env: Bindings, actor: Actor, input: Input) {
     return {...applied.result,invoice:applied.result.id,id:row.id,status:'approved'}
   }
   if(payload.setup===true){
-    const applied=setupStatements(env,actor,payload,row)
+    const applied=await setupStatements(env,actor,payload,row)
     await commit(env,[...basisGuards,...applied.statements,...close(applied.result)],[audit,applied.audit])
     return {id:row.id,status:'approved',...applied.result}
   }

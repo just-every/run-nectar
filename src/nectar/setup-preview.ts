@@ -24,6 +24,7 @@ export async function setupPreview(env: Bindings, business: Business, plan: Row,
   const billingWindows = setupBillingWindows(plan, prices)
   const horizonLabel = billingWindows ? 'auto-renewal periods beyond 36 invoice periods not previewed' : 'auto-renewal periods beyond 36 months not previewed'
   const assumptions: Row[] = [{ kind: 'usage', label: 'Recorded usage and separately labelled scenarios only; unknown future usage is excluded from calculated amounts, not forecast as zero.' }, { kind: 'execution', label: 'Execution reference is buyer-recorded evidence; no signature or signer authority is verified.' }]
+  if (plan.billingEntity) assumptions.push({ kind: 'billing_entity', label: 'The selected legal entity and processor/ledger references are owner-recorded routing intent. This preview does not verify a processor charge or ledger posting.', entity: plan.billingEntity })
   if (plan.subscription.evergreen) assumptions.push({ kind: 'horizon', label: horizonLabel })
   const scenario = rows(payload.usage_assumptions, 'usage_assumptions', 360)
   const scenarioEvents: EventIn[] = []
@@ -103,5 +104,5 @@ export async function setupPreview(env: Bindings, business: Business, plan: Row,
     for (const key of ['subtotalCents', 'taxCents', 'totalCents'] as const) annualTotals[yearIndex][key] += calculation[key]
     for (const exception of calculation.exceptions) if (!ambiguities.some(a => a.code === exception.code && a.period === period.start)) ambiguities.push({ issue: exception.message, code: exception.code, period: period.start, detail: exception.detail })
   }
-  return { periods, totals, annualTotals: annualTotals.filter(Boolean), previewHorizon: { from: plan.subscription.previewStart, through: plan.subscription.previewEnd, finite: !plan.subscription.evergreen, ...(plan.subscription.evergreen ? { label: horizonLabel } : {}) }, assumptions, unresolvedAmbiguities: ambiguities, resolvedAmbiguities: rows(payload.ambiguities, 'ambiguities').filter(a => typeof a.resolution === 'string' && a.resolution.trim()), quotes }
+  return { periods, totals, ...(plan.billingEntity ? { billingEntity: plan.billingEntity } : {}), annualTotals: annualTotals.filter(Boolean), previewHorizon: { from: plan.subscription.previewStart, through: plan.subscription.previewEnd, finite: !plan.subscription.evergreen, ...(plan.subscription.evergreen ? { label: horizonLabel } : {}) }, assumptions, unresolvedAmbiguities: ambiguities, resolvedAmbiguities: rows(payload.ambiguities, 'ambiguities').filter(a => typeof a.resolution === 'string' && a.resolution.trim()), quotes }
 }

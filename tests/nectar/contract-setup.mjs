@@ -448,3 +448,117 @@ export async function contractIntervalSetup(h, owner) {
   for (const invoice of invoices) assert.deepEqual((await api(`invoices/${invoice.id}`)).calculation, invoice.calculation, 'CAT-001 later intervals preserve all previously issued evidence')
   console.log('CAT-001/AGENT-006 quoted intervals, complete finite terms, day-31 anchors, mixed advance/arrears, co-termination and ordinary issued invoice parity passed')
 }
+
+// SET-001 inheritance: this proves quoted routing intent and ordinary invoice
+// custody. It makes no claim of processor execution or accounting delivery.
+export async function contractEntitySetup(h, owner) {
+  const api = (path, body, status) => h.api(path, owner, body, status)
+  await api('access.give', { email: 'synthetic-nectar-entity-finance@example.test', name: 'Synthetic Entity Finance', role: 'finance' })
+  const finance = await h.signIn('synthetic-nectar-entity-finance@example.test', { requested: true })
+  const agent = { bearer: (await api('credential.issue', { name: 'Synthetic entity setup preparer', scopes: ['prepare'] })).key }
+  const mutate = async (path, body, status) => api(path, { revision: (await api('business')).revision, ...body }, status)
+  const identity = (number, days) => ({ legal_name: `Synthetic entity ${number}`, address: `${number} Synthetic Way, US`, ein: `${number}-7654321`, invoice_prefix: `SE${number}`, invoice_number_width: 4,
+    payment_terms_days: days, processor_account_ref: `synthetic-nectar-${number}-processor`, ledger_company_ref: `synthetic-nectar-${number}-ledger`, tax_registration: `synthetic-nectar-${number}-tax` })
+  const a = identity(21, 45), b = identity(22, 60)
+  const entityA = (await mutate('entity.create', a)).id, entityB = (await mutate('entity.create', b)).id
+  const entityRows = await api('billing-entities')
+  const order = (number, entity, id, existingCustomer) => {
+    const buyer = `Customer synthetic-nectar-${number}, Synthetic order customer ${number}, billing synthetic-nectar-${number}@example.test.`
+    const service = `Service runs from 2016-01-01 until 2016-03-01, billed monthly in arrears on day 1, Net ${entity.payment_terms_days}.`
+    const fee = 'The platform fee is USD 100 per month, non-taxable.'
+    const routing = `Bill-to entity ${entity.legal_name}; processor account ${entity.processor_account_ref}; ledger company ${entity.ledger_company_ref}.`
+    return { setup: true, source: { name: 'synthetic-entity-order.txt', text: [buyer, service, fee, routing, 'Executed by Synthetic Buyer and Synthetic Seller.'].join('\n'), execution_reference: `synthetic-nectar-${number} execution` },
+      customer: existingCustomer ? { id: existingCustomer, quote: buyer } : { external_id: `synthetic-nectar-${number}`, name: `Synthetic order customer ${number}`, billing_email: `synthetic-nectar-${number}@example.test`, quote: buyer },
+      entity: { id, processor_account_ref: entity.processor_account_ref, ledger_company_ref: entity.ledger_company_ref, quote: routing },
+      catalog: [{ key: 'platform', new_product: { code: `synthetic-nectar-${number}`, name: 'Synthetic Entity Platform' }, kind: 'flat', unit_amount: '100', taxable: false, quote: fee }],
+      subscription: { start_date: '2016-01-01', end_date: '2016-03-01', quote: service }, items: [{ key: 'platform', price: 'platform', quote: fee }], ambiguities: [] }
+  }
+  const propose = (payload, status = 200) => h.api('proposal.create', agent, { kind: 'amendment', title: 'Executed entity order', payload }, status)
+  const decide = (proposal, who = owner, decision = 'approved', status = 200) => h.api('proposal.decide', who, { proposal, decision }, status)
+  const snapshot = () => Promise.all([api('customers'), api('catalog'), api('runs'), api('billing-entities')])
+  const initial = await snapshot()
+  const invalid = order(211, a, entityA)
+  invalid.entity.quote = 'An entity route that is absent from the executed source.'
+  await propose(invalid, 400)
+  const invented = order(212, a, entityA)
+  invented.entity.processor_account_ref = 'synthetic-nectar-unknown-processor'
+  await propose(invented, 409)
+  assert.deepEqual(await snapshot(), initial, 'SET-001 unquoted or mismatched routes create no billing records')
+  const incomplete = order(213, a, entityA)
+  delete incomplete.entity
+  const unresolved = await propose(incomplete)
+  assert.ok(unresolved.impact.unresolvedAmbiguities.length)
+  await decide(unresolved.id, owner, 'approved', 409)
+  await decide(unresolved.id, owner, 'rejected')
+  assert.deepEqual(await snapshot(), initial)
+  const rejected = await propose(order(214, a, entityA))
+  await decide(rejected.id, owner, 'rejected')
+  assert.deepEqual(await snapshot(), initial, 'SET-001 rejected entity setup leaves customer assignments and sequence counters unchanged')
+
+  const installed = []
+  for (const [number, entity, id] of [[215, a, entityA], [216, b, entityB]]) {
+    const input = order(number, entity, id), prepared = await propose(input), saved = await api(`proposals/${prepared.id}`)
+    assert.deepEqual(prepared.impact.unresolvedAmbiguities, [])
+    assert.equal(prepared.impact.periods.length, 2)
+    assert.deepEqual(prepared.impact.periods.map(period => period.calculation.totalCents), [10000, 10000])
+    assert.equal(saved.basis.sourceSha256, saved.payload.source.sha256)
+    const quoted = saved.payload.plan.billingEntity
+    assert.equal(quoted.revision, entityRows.entities.find(row => row.id === id).revision)
+    assert.deepEqual(prepared.impact.billingEntity, quoted)
+    for (const period of prepared.impact.periods) {
+      assert.deepEqual(period.inputs.invoiceContent.billingEntity, quoted)
+      assert.equal(period.inputs.invoiceContent.paymentTermsDays, entity.payment_terms_days)
+    }
+    const page = await h.raw(`/app/proposals/${prepared.id}`, { cookie: owner })
+    assert.equal(page.status, 200)
+    const markup = await page.text()
+    assert.ok(markup.includes(entity.processor_account_ref) && markup.includes(entity.ledger_company_ref))
+    assert.match(markup, /Owner-recorded routing intent/)
+    const before = await snapshot()
+    await decide(prepared.id, finance, 'approved', 403)
+    assert.deepEqual(await snapshot(), before, 'SET-001 finance approval cannot bypass owner entity-assignment authority')
+    const approved = await decide(prepared.id)
+    assert.equal(approved.billingEntity.id, id)
+    assert.equal((await api(`customers/${approved.customer}`)).billing_entity_id, id)
+    await decide(prepared.id, owner, 'approved', 409)
+    installed.push({ approved, prepared, saved, input, entity })
+  }
+  for (const month of ['2016-01', '2016-02']) {
+    const run = await api('billrun.prepare', { period: month })
+    const drafts = (await api(`runs/${run.id}`)).invoices
+    for (const value of installed) {
+      const draft = drafts.find(invoice => invoice.customer_id === value.approved.customer), preview = value.prepared.impact.periods.find(period => period.period.start.startsWith(month))
+      assert.ok(draft)
+      await api('invoice.approve', { invoice: draft.id, acknowledge: true })
+      await api('invoice.finalise', { invoice: draft.id, issue_date: preview.assumedIssueDate })
+      const issued = await api(`invoices/${draft.id}`)
+      assert.equal(issued.total_cents, preview.calculation.totalCents)
+      assert.equal(issued.billing_entity_id, value.approved.billingEntity.id)
+      assert.deepEqual(JSON.parse(issued.billing_route_json), value.approved.billingEntity.route, 'SET-001 ordinary issue retains the exact quoted processor/ledger intent')
+      assert.deepEqual(issued.calculation.inputs.invoiceContent, preview.inputs.invoiceContent, 'SET-001 normal invoice terms and entity snapshot equal the full-term preview')
+      assert.equal(issued.number, `${value.entity.invoice_prefix}-${month === '2016-01' ? '0001' : '0002'}`)
+      const due = new Date(`${preview.assumedIssueDate}T00:00:00Z`); due.setUTCDate(due.getUTCDate() + value.entity.payment_terms_days)
+      assert.equal(issued.due_date, due.toISOString().slice(0, 10))
+      ;(value.issued ??= []).push(issued)
+    }
+  }
+
+  const existing = (await api('customer.create', { external_id: 'synthetic-nectar-217', name: 'Synthetic reassigned customer', billing_email: 'synthetic-nectar-217@example.test' })).id
+  await mutate('customer.entity', { customer: existing, entity: entityA, confirm: true })
+  const reassignment = await propose(order(217, b, entityB, existing))
+  assert.equal((await api(`customers/${existing}`)).billing_entity_id, entityA, 'SET-001 preparing a new assignment changes no existing customer')
+  await decide(reassignment.id)
+  assert.equal((await api(`customers/${existing}`)).billing_entity_id, entityB, 'SET-001 the same setup approval applies an eligible existing-customer assignment')
+  await propose(order(218, b, entityB, installed[0].approved.customer), 409)
+
+  const staleInput = order(219, a, entityA), stale = await propose(staleInput)
+  await mutate('entity.update', { ...a, entity: entityA, ledger_company_ref: 'synthetic-nectar-21-new-ledger' })
+  const afterEdit = await snapshot()
+  assert.equal((await api(`proposals/${stale.id}`)).stale, true)
+  await decide(stale.id, owner, 'approved', 409)
+  assert.deepEqual(await snapshot(), afterEdit, 'SET-001 an edited route refuses stale approval without installing customer, catalog or subscription changes')
+  assert.equal((await api(`proposals/${stale.id}`)).payload.source.text, staleInput.source.text)
+  await decide(stale.id, owner, 'rejected')
+  for (const value of installed) for (const invoice of value.issued) assert.deepEqual(await api(`invoices/${invoice.id}`), invoice, 'SET-001 later entity edits preserve issued legal and route evidence')
+  console.log('SET-001/AGENT-006 quoted existing entity and route intent, complete-term invoice parity, owner approval, stale routing refusal and immutable issue custody passed')
+}

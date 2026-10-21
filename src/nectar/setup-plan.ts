@@ -8,6 +8,7 @@ import { renewalSettings } from './renewal-terms'
 import { contractBasis } from './contract-terms'
 import { setupCatalog, setupOwnership } from './setup-catalog'
 import { setupAnchor, setupIntervalAmbiguities } from './setup-intervals'
+import { billingRoute, requireBillingEntity } from './billing-entities'
 import { setupPreview } from './setup-preview'
 import { invoiceSettings, contentForSettings } from './invoice-content'
 import { fields, flag, object, quoted, rows, setupAmbiguities, setupSource } from './setup-source'
@@ -33,7 +34,7 @@ export async function setupPlan(env: Bindings, business: Business, payload: Row,
   insist(input.setup === true, 'invalid_setup')
   const prior = saved ? object(payload.plan, 'saved_setup_plan') : {}
   const source = await setupSource(input), quotes: Row[] = []
-  const basis: Row = { business, customer: null, products: [], prices: [], meters: [], productVersions: [], newProducts: [], ownership: [] }
+  const basis: Row = { sourceSha256: source.sha256, business, customer: null, products: [], prices: [], meters: [], productVersions: [], newProducts: [], ownership: [] }
   const c = object(input.customer, 'customer'); fields(c, ['id', 'external_id', 'name', 'billing_email', 'address', 'tax_exempt', 'tax_exempt_ref', 'quote']); quoted(source, c, 'customer', quotes)
   let customer: Row
   if (c.id) {
@@ -63,7 +64,27 @@ export async function setupPlan(env: Bindings, business: Business, payload: Row,
     for (const key of Object.keys(values)) quotes.push({ field: `invoice.${key}`, quote: invoice.quote })
   }
   customer.invoiceSettings = settings
-  const invoiceContent = contentForSettings(business, settings)
+  customer.billingEntityId = basis.customer.billing_entity_id ?? null
+  customer.entityChanged = false
+  let billingEntity: Row | null = null
+  insist(!customer.billingEntityId || input.entity !== undefined, 'setup_billing_entity_quote_required', 409)
+  if (input.entity !== undefined) {
+    const selection = object(input.entity, 'entity')
+    fields(selection, ['id', 'processor_account_ref', 'ledger_company_ref', 'quote'])
+    quoted(source, selection, 'entity', quotes)
+    const er = Input.of(selection), entity = await requireBillingEntity(env, er.text('id', { max: 100 }))
+    insist(er.text('processor_account_ref', { max: 120 }) === entity.processor_account_ref && er.text('ledger_company_ref', { max: 120 }) === entity.ledger_company_ref, 'setup_entity_route_mismatch', 409)
+    insist([entity.legal_name, entity.processor_account_ref, entity.ledger_company_ref].every(value => selection.quote.includes(value)), 'setup_entity_route_not_quoted')
+    for (const setting of ['id', 'processor_account_ref', 'ledger_company_ref']) quotes.push({ field: `entity.${setting}`, quote: selection.quote })
+    billingEntity = { id: entity.id, revision: entity.revision, route: billingRoute(business, entity) }
+    basis.billingEntity = billingEntity
+    customer.entityChanged = !customer.create && customer.billingEntityId !== entity.id
+    if (customer.entityChanged) {
+      insist(!await one(env, "SELECT 1 FROM nc_invoices WHERE customer_id=? AND status='issued' UNION ALL SELECT 1 FROM nc_credit_notes WHERE customer_id=? LIMIT 1", customer.id, customer.id), 'customer_entity_fixed_after_issue', 409)
+    }
+    customer.billingEntityId = entity.id
+  }
+  const invoiceContent = { ...contentForSettings(business, settings), ...(billingEntity ? { paymentTermsDays: settings.paymentTermsDays ?? billingEntity.route.paymentTermsDays, billingEntity } : {}) }
   const s = object(input.subscription, 'subscription'), sr = Input.of(s)
   quoted(source, s, 'subscription', quotes)
   let subscription: Row, originals: Row[] = [], renewal: Row | null = null
@@ -193,9 +214,9 @@ export async function setupPlan(env: Bindings, business: Business, payload: Row,
   const previousAmendments = subscription.create ? [] : await all(env, "SELECT * FROM nc_amendments WHERE subscription_id=? AND status='approved' ORDER BY effective_from,id", subscription.id)
   basis.amendments = previousAmendments
   for (const [i, a] of amendments.entries()) insist(![...previousAmendments.map(p => ({ kind: p.kind, priceId: p.price_id, from: p.effective_from, to: p.effective_to })), ...amendments.slice(0, i)].some(p => p.kind === a.kind && p.priceId === a.priceId && (a.kind === 'fixed_credit' ? p.from === a.from : a.from < (p.to ?? '9999-12-31') && p.from < (a.to ?? '9999-12-31'))), 'overlapping_setup_exception')
-  const plan: Row = { customer, invoiceContent, ...catalog, subscription, renewal, items, itemUpdates, insertItems: items.filter(i => i.create), amendments, contract: { id: contractId, clause: quotes.map(q => q.quote).join('\n\n'), terms: { commitments, included, ramps: [] } }, months }
+  const plan: Row = { customer, invoiceContent, billingEntity, ...catalog, subscription, renewal, items, itemUpdates, insertItems: items.filter(i => i.create), amendments, contract: { id: contractId, clause: quotes.map(q => q.quote).join('\n\n'), terms: { commitments, included, ramps: [] } }, months }
   await setupOwnership(env, plan, catalog.meters, basis)
-  const ambiguities = setupIntervalAmbiguities(setupAmbiguities(input, source, invoiceContent.paymentTermsDays, !!renewal), plan, source, quotes)
+  const ambiguities = setupIntervalAmbiguities(setupAmbiguities(input, source, invoiceContent.paymentTermsDays, !!renewal, !!billingEntity), plan, source, quotes)
   if (invoiceContent.poRequired && !invoiceContent.poNumber) ambiguities.push({ issue: 'The required purchase order number is unresolved.', code: 'po_required' })
   const preview = await setupPreview(env, business, plan, input, basis, quotes, existingTerms, ambiguities)
   return { normalized: { setup: true, input, source, plan }, impact: preview, basis }

@@ -1,19 +1,35 @@
 // A reviewed setup becomes ordinary billing records in the proposal's one batch.
 import type { Bindings } from '../auth.server'
-import { actorLabel, type Actor } from './actor'
+import { actorLabel, requireOwner, type Actor } from './actor'
 import { guard, newId, now, stmt, type Row } from './core'
+import { requireFreshFactor } from './mfa'
 import { priceStatements } from './price-drafts'
 import { notIssuedGuard } from './subscriptions'
 
-export function setupStatements(env: Bindings, actor: Actor, payload: Row, proposal: Row) {
+export async function setupStatements(env: Bindings, actor: Actor, payload: Row, proposal: Row) {
   const p=payload.plan, at=now(),by=actorLabel(actor),revision=newId(),statements:D1PreparedStatement[]=[]
   const customer=p.customer,sub=p.subscription
+  if(p.billingEntity) {
+    requireOwner(actor); await requireFreshFactor(env,actor)
+    statements.push(guard(env,'proposal_stale','EXISTS(SELECT 1 FROM nc_billing_entities WHERE id=? AND revision=?)',p.billingEntity.id,p.billingEntity.revision))
+    if(!customer.create) {
+      const previous=JSON.parse(proposal.basis_json).customer
+      statements.push(guard(env,'proposal_stale',"EXISTS(SELECT 1 FROM nc_customers WHERE id=? AND revision=? AND billing_entity_id IS ? AND status='active' AND erased_at IS NULL)",customer.id,previous.revision,previous.billing_entity_id??null))
+    }
+  }
   if(customer.create) statements.push(
     guard(env,'external_id_in_use','NOT EXISTS(SELECT 1 FROM nc_customers WHERE external_id=?)',customer.externalId),
-    stmt(env,"INSERT INTO nc_customers(id,external_id,name,billing_email,address,tax_exempt,tax_exempt_ref,invoice_settings_json,origin,revision,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,'native',?,?,?)",customer.id,customer.externalId,customer.name,customer.billingEmail,customer.address,customer.taxExempt?1:0,customer.taxExemptRef,JSON.stringify(customer.invoiceSettings),newId(),at,at))
-  else if (payload.input.invoice !== undefined) statements.push(
-    guard(env,'proposal_stale','EXISTS(SELECT 1 FROM nc_customers WHERE id=? AND revision=?)',customer.id,JSON.parse(proposal.basis_json).customer.revision),
-    stmt(env,'UPDATE nc_customers SET invoice_settings_json=?,revision=?,updated_at=? WHERE id=?',JSON.stringify(customer.invoiceSettings),newId(),at,customer.id))
+    stmt(env,"INSERT INTO nc_customers(id,external_id,name,billing_email,address,tax_exempt,tax_exempt_ref,invoice_settings_json,billing_entity_id,origin,revision,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,'native',?,?,?)",customer.id,customer.externalId,customer.name,customer.billingEmail,customer.address,customer.taxExempt?1:0,customer.taxExemptRef,JSON.stringify(customer.invoiceSettings),customer.billingEntityId??null,newId(),at,at))
+  else if (payload.input.invoice !== undefined || customer.entityChanged) {
+    const previous=JSON.parse(proposal.basis_json).customer
+    statements.push(guard(env,'proposal_stale','EXISTS(SELECT 1 FROM nc_customers WHERE id=? AND revision=? AND erased_at IS NULL AND billing_entity_id IS ?)',customer.id,previous.revision,previous.billing_entity_id??null))
+    if(customer.entityChanged) statements.push(
+      guard(env,'customer_entity_fixed_after_issue',"NOT EXISTS(SELECT 1 FROM nc_invoices WHERE customer_id=? AND status='issued') AND NOT EXISTS(SELECT 1 FROM nc_credit_notes WHERE customer_id=?)",customer.id,customer.id),
+      stmt(env,'DELETE FROM nc_entity_customer_numbers WHERE customer_id=?',customer.id),
+      stmt(env,'UPDATE nc_customers SET billing_entity_id=?,invoice_settings_json=?,invoice_prefix=NULL,invoice_number_width=NULL,next_invoice_number=NULL,credit_prefix=NULL,credit_number_width=NULL,next_credit_number=NULL,revision=?,updated_at=? WHERE id=?',customer.billingEntityId,JSON.stringify(customer.invoiceSettings),newId(),at,customer.id),
+      stmt(env,'UPDATE nc_incumbent_invoices SET billing_entity_id=? WHERE customer_id=?',customer.billingEntityId,customer.id))
+    else statements.push(stmt(env,'UPDATE nc_customers SET invoice_settings_json=?,revision=?,updated_at=? WHERE id=?',JSON.stringify(customer.invoiceSettings),newId(),at,customer.id))
+  }
   for(const product of p.products.filter((v:Row)=>v.create)) statements.push(
     guard(env,'code_in_use','NOT EXISTS(SELECT 1 FROM nc_products WHERE code=?)',product.code),
     stmt(env,"INSERT INTO nc_products(id,code,name,description,status,origin,revision,created_at) VALUES(?,?,?,'','active','native',?,?)",product.id,product.code,product.name,newId(),at))
@@ -31,5 +47,5 @@ export function setupStatements(env: Bindings, actor: Actor, payload: Row, propo
   for(const item of p.items.filter((v:Row)=>v.create))statements.push(stmt(env,"INSERT INTO nc_items(id,subscription_id,price_id,quantity,effective_from,effective_to,change_id,origin,created_at) VALUES(?,?,?,?,?,?,?,'native',?)",item.id,sub.id,item.priceId,item.quantity,item.from,item.to,proposal.id,at))
   for(const a of p.amendments)statements.push(stmt(env,"INSERT INTO nc_amendments(id,subscription_id,kind,value,price_id,effective_from,effective_to,note,clause,status,origin,proposal_id,created_by,created_at,decided_by,decided_at,prepared_by_id) VALUES(?,?,?,?,?,?,?,?,?,'approved','proposal',?,?,?,?,?,?)",a.id,sub.id,a.kind,a.value,a.priceId,a.from,a.to,a.note,a.clause,proposal.id,proposal.created_by,proposal.created_at,by,at,proposal.prepared_by_id))
   statements.push(stmt(env,"INSERT INTO nc_contracts(id,subscription_id,subscription_revision,clause,terms_json,status,prepared_by_id,prepared_by,created_at,decided_by,decided_at) VALUES(?,?,?,?,?,'approved',?,?,?,?,?)",p.contract.id,sub.id,sub.revision??revision,p.contract.clause,JSON.stringify(p.contract.terms),proposal.prepared_by_id,proposal.created_by,proposal.created_at,by,at))
-  return {statements,result:{subscription:sub.id,customer:customer.id,contract:p.contract.id,prices:p.prices.map((v:Row)=>v.id),sourceSha256:payload.source.sha256},audit:{actor:by,action:'setup.apply',subject:sub.id,detail:{proposal:proposal.id,preparedBy:proposal.created_by,sourceSha256:payload.source.sha256,createdCustomer:customer.create,createdSubscription:sub.create}}}
+  return {statements,result:{subscription:sub.id,customer:customer.id,contract:p.contract.id,prices:p.prices.map((v:Row)=>v.id),sourceSha256:payload.source.sha256,...(p.billingEntity?{billingEntity:p.billingEntity}:{})},audit:{actor:by,action:'setup.apply',subject:sub.id,detail:{proposal:proposal.id,preparedBy:proposal.created_by,sourceSha256:payload.source.sha256,createdCustomer:customer.create,createdSubscription:sub.create,...(p.billingEntity?{billingEntity:p.billingEntity,entityChanged:customer.entityChanged}:{})}}}
 }
