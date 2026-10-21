@@ -69,7 +69,7 @@
       "executable": false
     },
     "API.md": {
-      "sha256": "acd82a50e3e0d4a49b747cc79a51a47369518679ec4771e5ffe4237ffb9e2c98",
+      "sha256": "20b18b9e823f1a750e2ca8240cf5def11b0f6da12a988be11fd62dfa7046f97c",
       "executable": false
     },
     "base-copies.json": {
@@ -2929,7 +2929,7 @@
       "executable": false
     },
     "src/nectar/ui/contract-setup.ts": {
-      "sha256": "9ace263ec15fcd4c782d6bb41a124d5203efdfb161894695a25ee111447f0a6a",
+      "sha256": "8370ddd9d9997fb46022b77f08cdd2d62764fa76bd22899f2bd0f844221db747",
       "executable": false
     },
     "src/nectar/ui/contracts.ts": {
@@ -3369,7 +3369,7 @@
       "executable": false
     },
     "tests/nectar/invoice-content.mjs": {
-      "sha256": "c57116194c1987b7f70829cf837057876caefbb7a675c016597bb73561056110",
+      "sha256": "933cdc2a897f4be18c1c565e36d5f202d1f4e0ec55eead3423307455a813b56a",
       "executable": false
     },
     "tests/nectar/invoice-pagination.mjs": {

@@ -98,6 +98,28 @@ curl -X POST "$ORIGIN/api/nectar/proposal.create" \
 
 `usage/inspect` includes daily `controls` with expected and ingested counts and exact quantities, differences, acknowledgement and basis. A mismatch blocks invoice approval even with the generic exception checkbox. Replaying missing usage or acknowledging the exact difference clears it on re-preparation. Changes after invoice approval invalidate issue.
 
+## Invoice terms and fields (`INV-004`, partial)
+
+`business.configure` accepts optional `invoice_fields`, a name/value object for business-wide invoice fields. `customer.create` and `customer.update` accept optional `invoice_settings`; omission preserves the saved settings on update, and an object replaces them. For example:
+
+```json
+{
+  "invoice_settings": {
+    "paymentTermsDays": 45,
+    "poRequired": true,
+    "poNumber": "BUYER-42",
+    "memo": "Please quote our purchase order.",
+    "customFields": { "Cost center": "Research West" }
+  }
+}
+```
+
+Customer terms accept 15, 30, 45 or 60 calendar days after actual issue, or null to inherit the business default. Required PO may be saved empty while unresolved; recurring and standalone approval/issue then refuse it as a blocking `po_required` exception. Each business/customer field map has at most twenty names (1–80 characters) and string values (up to 500); the customer's value wins an identical business field name. PO is at most 120 characters and memo at most 1,000.
+
+The resulting `calculation.inputs.invoiceContent` is included in the draft fingerprint and retained on the issued invoice and bill-run JSON export. New settings invalidate pending approval inputs, so prepare again; issued calculation inputs and due dates never change. Existing issued invoices without these inputs do not gain a reconstructed snapshot. Current rendering is operator review; branding/remit-to, hosted/PDF/email and hidden customer usage detail remain open.
+
+An AGENT-006 setup may include `invoice` with the same settings plus a required exact source `quote`. The reviewer sees each quoted setting, unresolved PO or mismatched source terms prevent approval, and a different human approver installs the settings with the setup in one transaction. Every service-period preview returns `assumedIssueDate` (the service-period end), `dueDate` and `invoiceContent`; issuing then gives those same figures and content. Issuing later moves the due date by the same calendar-day difference.
+
 ## Quantity pricing (`CAT-002`)
 
 `price.create` keeps `kind: "seat"` or `"unit"` and accepts `pricing_model`:

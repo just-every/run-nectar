@@ -28,6 +28,7 @@ export function contractSetupBody(p:Row,actor:Actor) {
 
 function quoteLabel(field:string) {
   const [kind,key]=field.split('.')
+  if (kind === 'invoice') return key === undefined ? 'Invoice requirements' : ({ paymentTermsDays: 'Invoice payment terms', poRequired: 'Required purchase order', poNumber: 'Purchase order number', memo: 'Invoice memo', customFields: 'Invoice custom fields' } as Record<string,string>)[key] ?? 'Invoice requirement'
   const labels:Record<string,string>={customer:'Customer',subscription:'Subscription and service dates',catalog:'Catalog price',items:'Service item',ramps:'Dated item change',commitments:'Minimum commitment',included:'Included usage',exceptions:'Contract exception',usage_assumptions:'Usage scenario'}
   return `${labels[kind]??kind}${key===undefined?'':` ${/^\d+$/.test(key)?Number(key)+1:key}`}`
 }

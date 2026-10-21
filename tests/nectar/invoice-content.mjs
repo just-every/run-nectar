@@ -47,7 +47,7 @@ export async function invoiceContentFlow(h, owner, { onState } = {}) {
     invoice_po_number: 'BUYER-42', invoice_memo: settings.memo,
     invoice_field_name: ['Cost center', ''], invoice_field_value: ['Research West', ''] }, `/app/customers/${first}`)
   assert.equal(saved.searchParams.has('error'), false)
-  await api('invoice.approve', { invoice: blocked.id, acknowledge: true }, 409, 'old draft cannot acquire a new PO without preparation')
+  await api('invoice.approve', { invoice: blocked.id, acknowledge: true }, 409)
   prepared = await prepare('2026-08')
   const invoice = prepared.invoices.find(i => i.customer_id === first)
   const other = prepared.invoices.find(i => i.customer_id === second)
