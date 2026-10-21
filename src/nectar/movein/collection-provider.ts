@@ -68,8 +68,12 @@ export async function stripeCollectionSnapshot(stripe: CollectionStripe, invoice
   insist(facts.id === invoice, 'stripe_invoice_source_changed', 409)
   const customer = await stripe(`/customers/${encodeURIComponent(facts.customer)}`)
   insist(customer.object === 'customer' && customer.id === facts.customer && customer.deleted !== true, 'stripe_customer_evidence_invalid', 409)
-  const paymentMethod = facts.default_payment_method || facts.default_source || stripeReference(customer.invoice_settings?.default_payment_method) || stripeReference(customer.default_source)
-  return { account: account.id as string, invoice: facts, paymentMethod, payments: await stripeInvoicePayments(stripe, invoice) }
+  const paymentMethod = facts.default_payment_method || stripeReference(customer.invoice_settings?.default_payment_method)
+  insist(paymentMethod, 'stripe_collection_saved_card_required', 409)
+  const method = await stripe(`/payment_methods/${encodeURIComponent(paymentMethod)}`)
+  insist(method.object === 'payment_method' && method.id === paymentMethod && method.type === 'card'
+    && stripeReference(method.customer) === facts.customer, 'stripe_collection_saved_card_required', 409)
+  return { account: account.id as string, invoice: facts, paymentMethod, paymentMethodType: 'card', payments: await stripeInvoicePayments(stripe, invoice) }
 }
 export type CollectionSnapshot = Awaited<ReturnType<typeof stripeCollectionSnapshot>>
 

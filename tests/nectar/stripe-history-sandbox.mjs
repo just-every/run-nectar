@@ -255,7 +255,9 @@ async function proveOpenCollection({ api, owner, imported, capture, history, ope
   check(missingConfirmation.status === 400, 'collection_without_confirmation_accepted')
   step('public-explicit-processor-collection-and-out-of-band-mirror')
   const pending = await api('imported.collection.execute', { request: prepared.id, basis_hash: prepared.basis_hash, confirm: true, disable_auto_advance: true })
-  check(pending.status === 'uncertain' && pending.charge_ref && !workerStripeRequests.some(row=>row.path.endsWith('/pay')&&row.method==='POST'),'collection_automatically_mirrored')
+  receipt.assertions.collectionAttempt={status:pending.status,errorCode:pending.error_code,intentRecorded:!!pending.payment_intent_ref,chargeRecorded:!!pending.charge_ref}
+  check(pending.status === 'uncertain' && pending.charge_ref,'collection_charge_not_confirmed')
+  check(!workerStripeRequests.some(row=>row.path.endsWith('/pay')&&row.method==='POST'),'collection_automatically_mirrored')
   check((await capturedInvoice(open.id)).status==='open','original_mirrored_before_confirmation')
   const collected=await api('imported.collection.finalize',{request:pending.id,confirm:true})
   check(collected.status === 'collected' && collected.amount_cents === open.amount_remaining && collected.charge_ref && collected.payment_intent_ref, 'imported_collection_not_proven')

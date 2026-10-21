@@ -28,6 +28,7 @@ export function stripeCollectionEdge() {
     }
     if(path==='/payment_intents'&&body) {
       assert.equal(body.get('amount'),'11000');assert.equal(body.get('currency'),'usd');assert.equal(body.get('customer'),'synthetic-nectar-1')
+      assert.equal(body.get('payment_method_types[0]'),'card');assert.equal(body.has('automatic_payment_methods[enabled]'),false);
       assert.equal(body.get('payment_method'),'synthetic-nectar-method');assert.equal(body.get('confirm'),'true');assert.equal(body.get('off_session'),'true');assert.equal(body.has('receipt_email'),false)
       const metadata=Object.fromEntries([...body].filter(([key])=>key.startsWith('metadata[')).map(([key,value])=>[key.slice(9,-1),value]))
       const id=`synthetic-nectar-intent-${payments.size+1}`,charge=`synthetic-nectar-charge-${payments.size+1}`,created=Date.parse('2026-07-01T16:00:00Z')/1000

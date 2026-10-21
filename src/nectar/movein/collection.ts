@@ -114,7 +114,7 @@ export async function executeImportedCollection(env: Bindings, actor: Actor, inp
     paymentAttempted = true
     const intent = await stripe('/payment_intents', new URLSearchParams({ amount: String(request.amount_cents), currency: request.currency,
       customer: basis.snapshot.invoice.customer, payment_method: basis.snapshot.paymentMethod, confirm: 'true', off_session: 'true', error_on_requires_action: 'true',
-      'automatic_payment_methods[enabled]': 'true', 'automatic_payment_methods[allow_redirects]': 'never',
+      'payment_method_types[0]': basis.snapshot.paymentMethodType,
       'metadata[nectar_collection_key]': basis.intentKey, 'metadata[nectar_collection_request]': request.id,
       'metadata[nectar_original_invoice]': request.invoice_ref }), `nectar-movein-${basis.intentKey}`)
     liveRequest = await saveIntent(env, actor, liveRequest, basis, intent)

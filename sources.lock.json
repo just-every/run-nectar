@@ -2805,7 +2805,7 @@
       "executable": false
     },
     "src/nectar/movein/collection-provider.ts": {
-      "sha256": "9ad9ee05fc43ccfd7da063472eb1bd966e0aba2b683e3a4922b09e10cf83c17c",
+      "sha256": "2375c76321480512001422e486a71e86f6888948b4ab10ead73c0fbc42bddc6d",
       "executable": false
     },
     "src/nectar/movein/collection-state.ts": {
@@ -2813,7 +2813,7 @@
       "executable": false
     },
     "src/nectar/movein/collection.ts": {
-      "sha256": "a41e1fd07037f5c2ebc64d47d40cc83cc7f219ccd4747b6af12abe5a8a83b691",
+      "sha256": "b6f58ad5f4cbcc72f66e449950613850a12fd5462d1a29b2ade79d25b07f15da",
       "executable": false
     },
     "src/nectar/movein/history-metrics.ts": {
@@ -3497,7 +3497,7 @@
       "executable": false
     },
     "tests/fixtures/stripe-collection-edge.mjs": {
-      "sha256": "335ff7def917d4e2558e5fd6c94d4aaffcda4f69fa3f465ffca5a90d50468702",
+      "sha256": "3e64436be39aef02fa84d509b119b4ac65cd4c00d95abf600bac951673c5cc80",
       "executable": false
     },
     "tests/fixtures/stripe-history.mjs": {
@@ -3841,7 +3841,7 @@
       "executable": false
     },
     "tests/nectar/stripe-history-sandbox.mjs": {
-      "sha256": "3fd79b7907df472cf7c3181047e3836bb3dd378d5d962acacda01b2c52016937",
+      "sha256": "15147f5179f1c3711ae8d13a60f347a6d432c9587c195d05f859dfc2ea9c0c2b",
       "executable": false
     },
     "tests/nectar/stripe-sandbox-client.mjs": {
