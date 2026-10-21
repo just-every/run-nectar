@@ -14,7 +14,7 @@ const reserved = new Set(['nc_incumbent_revenue','nc_erased_records','nc_guard',
 const keyed = (value: unknown, ids: Set<string>): boolean => typeof value === 'string' ? ids.has(value) : Array.isArray(value) ? value.some(v => keyed(v, ids)) : !!value && typeof value === 'object' && Object.values(value).some(v => keyed(v, ids))
 const json = (text: unknown) => { try { return JSON.parse(String(text)) } catch { return null } }
 const blankJson = (value: string) => Array.isArray(json(value)) ? '[]' : '{}'
-interface Image { table: string; row: Row; key: Row; required: Set<string>; scoped: boolean }
+interface Image { table: string; row: Row; key: Row; required: Set<string>; foreignKeys: Set<string>; scoped: boolean }
 export interface ErasurePlan { generation:number; personalValues:string[]; statements: D1Sql[]; changes: { kind: string; fields: string[]; records: number }[]; ids: string[] }
 export async function erasurePlan(env: Bindings, customer: Row): Promise<ErasurePlan> {
   const generation = Number((await all(env,'SELECT value FROM nc_privacy_generation WHERE id=1'))[0].value)
@@ -23,8 +23,9 @@ export async function erasurePlan(env: Bindings, customer: Row): Promise<Erasure
   for (const { name } of tables) {
     if (reserved.has(name)) continue
     const columns = await all(env, `PRAGMA table_info(${quote(name)})`)
+    const foreignKeys = new Set<string>((await all(env, `PRAGMA foreign_key_list(${quote(name)})`)).map(key => key.from))
     const keys = columns.filter(c => c.pk).sort((a,b) => a.pk-b.pk).map(c => c.name)
-    for (const row of await all(env, `SELECT * FROM ${quote(name)}`)) images.push({ table: name, row, key: Object.fromEntries(keys.map(k => [k,row[k]])), required: new Set(columns.filter(c=>c.notnull).map(c=>c.name)), scoped: name === 'nc_customers' && row.id === customer.id })
+    for (const row of await all(env, `SELECT * FROM ${quote(name)}`)) images.push({ table: name, row, key: Object.fromEntries(keys.map(k => [k,row[k]])), required: new Set(columns.filter(c=>c.notnull).map(c=>c.name)), foreignKeys, scoped: name === 'nc_customers' && row.id === customer.id })
   }
   // Discover record relationships to a fixed point, including proposal payloads
   // which name their customer rather than having a foreign-key column.
@@ -39,11 +40,11 @@ export async function erasurePlan(env: Bindings, customer: Row): Promise<Erasure
     }
   }
   const memberIds=new Map((await all(env,'SELECT id,email FROM nc_members')).map(r=>[r.email,r.id]))
-  const privateText=images.filter(i=>i.scoped).flatMap(({row,key})=>Object.entries(row).filter(([column,value])=>typeof value==='string' && value.length && !memberIds.has(value) && !/(?:_by|_by_kind)$/.test(column) && column!=='prepared_name' && !(column in key) && !column.endsWith('_json') && column!=='detail' && !(column.endsWith('_id') && !['external_id','event_id'].includes(column)) && !keep.has(column) && !/(?:_at|_on|_date|_from|_to|_start|_end)$/.test(column)).map(([,value])=>value))
+  const privateText=images.filter(i=>i.scoped).flatMap(({row,key,foreignKeys})=>Object.entries(row).filter(([column,value])=>typeof value==='string' && value.length && !memberIds.has(value) && !/(?:_by|_by_kind)$/.test(column) && column!=='prepared_name' && !(column in key) && !foreignKeys.has(column) && !column.endsWith('_json') && column!=='detail' && !(column.endsWith('_id') && !['external_id','event_id'].includes(column)) && !keep.has(column) && !/(?:_at|_on|_date|_from|_to|_start|_end)$/.test(column)).map(([,value])=>value))
   const personal = [...new Set([...privateText,customer.name,customer.billing_email,customer.address,customer.external_id,customer.provider_ref,customer.tax_exempt_ref, ...images.filter(i=>i.scoped && i.table==='nc_contacts').flatMap(i=>[i.row.name,i.row.email])].filter(v=>typeof v==='string' && v.length))]
   const mutations: ErasureMutation[] = [], changes = new Map<string,{kind:string;fields:Set<string>;records:number}>()
   for (const image of images) {
-    const { table,row,key,required } = image
+    const { table,row,key,required,foreignKeys } = image
     // Customer capabilities are runtime custody, not retained financial facts.
     if (table === 'nc_portal_sessions' && image.scoped) {
       mutations.push({ table, row, key, updates: null })
@@ -61,7 +62,7 @@ export async function erasurePlan(env: Bindings, customer: Row): Promise<Erasure
       if (column === 'csv') { updates[column] = affected ? '' : redactSnapshotCsv(String(value),personal); continue }
       if (!affected || typeof value !== 'string') continue
       if (column === 'token_hash') { updates[column] = null; continue }
-      if ((column.endsWith('_id') && !['external_id','event_id'].includes(column)) || column === 'id' || column === 'subject' || keep.has(column) || /(?:_at|_on|_date|_from|_to|_start|_end)$/.test(column)) continue
+      if (foreignKeys.has(column) || (column.endsWith('_id') && !['external_id','event_id'].includes(column)) || column === 'id' || column === 'subject' || keep.has(column) || /(?:_at|_on|_date|_from|_to|_start|_end)$/.test(column)) continue
       if (column === 'external_id' || column === 'event_id' || column === 'reference') updates[column] = `erased-${row.id ?? customer.id}`
       else if (column === 'name' && table === 'nc_customers') updates[column] = 'Erased customer'
       else if (column === 'provider_ref' || column === 'provider_schedule_ref') updates[column] = required.has(column) ? `erased-${row.id ?? customer.id}` : null
