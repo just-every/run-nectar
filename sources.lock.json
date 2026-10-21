@@ -2492,6 +2492,10 @@
       "sha256": "66e72d110e1d3d74b89358e1e41fc5276a489a4e5dec43ae1461b565ccea7c62",
       "executable": false
     },
+    "src/nectar/customer-search.ts": {
+      "sha256": "7e25c166931ec4bc637ab30e05cbdbcc04f774da3165bef63658ffd7e828e582",
+      "executable": false
+    },
     "src/nectar/customers.ts": {
       "sha256": "2a8c23d8162bdc7db5082120674f0ce08c26fddffdeb7b5752215c249db4af6a",
       "executable": false
@@ -3378,6 +3382,10 @@
     },
     "tests/nectar/customer-language.mjs": {
       "sha256": "44c274e38b40168f0f18b114f42eed53067eef0a11954775c85c0ac21970d911",
+      "executable": false
+    },
+    "tests/nectar/customer-search.mjs": {
+      "sha256": "bcee1d66807428d8fe8a6ad125eba7040a8ab5097ab5672f101bf9d990b55458",
       "executable": false
     },
     "tests/nectar/draft-corrections.mjs": {
