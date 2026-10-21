@@ -8,6 +8,7 @@ import { metadataFilter,metadataPredicate } from './metadata-query'
 import type { Input } from './input'
 import { languageInput } from './locale'
 import { invoiceSettingsInput } from './invoice-content'
+import { customerEvidenceMatches } from './customer-search'
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const EXTERNAL_ID = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,79}$/
@@ -15,14 +16,14 @@ const EXTERNAL_ID = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,79}$/
 export async function customers(env: Bindings, actor: Actor,url?:URL) {
   requireRead(actor, 'customers')
   const filter=metadataPredicate('customer','c.id',url?metadataFilter(url):null)
-  const search=url?.searchParams.get('search')??''
+  const search=(url?.searchParams.get('search')??'').trim()
   const rows=await all(env, `SELECT c.id, c.external_id, c.name, c.billing_email, c.language, c.status, c.origin, c.tax_exempt,
     (SELECT COUNT(*) FROM nc_subscriptions s WHERE s.customer_id = c.id) AS subscriptions
     FROM nc_customers c WHERE ${filter.sql} ORDER BY c.name COLLATE NOCASE`,...filter.params)
   const projected=await withMetadata(env,'customer',rows)
   if(!search)return projected
   const matches=await all(env,`SELECT m.kind,m.record_id,m.metadata_json FROM nc_metadata_revisions m WHERE m.revision=(SELECT MAX(x.revision) FROM nc_metadata_revisions x WHERE x.kind=m.kind AND x.record_id=m.record_id)`)
-  const found=new Set<string>()
+  const found=await customerEvidenceMatches(env,search)
   for(const m of matches){
     if(!Object.values(JSON.parse(m.metadata_json)).some(v=>String(v).toLowerCase().includes(search.toLowerCase())))continue
     if(m.kind==='customer')found.add(m.record_id)
