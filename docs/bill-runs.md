@@ -53,3 +53,26 @@ Issued invoices never change. To reduce one, issue a credit note
 
 **Download bill run (JSON)** saves every invoice in the run with its lines,
 calculation inputs, fingerprint, approval and issue events.
+
+## Correct historical usage
+
+From an issued invoice, open **Historical usage replay**. Choose the original
+periods and recorded event IDs to void or add. Preview reproduces saved prices,
+metric versions, predecessor context and original tax; it writes nothing.
+**Prepare governed correction** freezes the complete affected issued chain,
+its exact before/after tax and revenue effects, reason and customer explanation.
+For histories beyond the preview's 36-period exploration limit, use **Prepare
+complete correction**, then review the saved proposal before deciding.
+
+The owner's governed correction policy chooses the next invoice, a separate
+correcting invoice, or a credit note. Positive differences bill next period or
+on a separately reviewed invoice; negative differences always use numbered
+credits. Above-threshold credits need a human financial preparer and a different
+approver. Stale or duplicate approvals are refused; originals stay unchanged.
+Unresolved historical usage and pending corrections block ordinary issue.
+
+Carried credits reduce what is owed after the new invoice total; they do not
+reduce new tax or revenue. A correcting draft whose available credits change
+must be refreshed and reviewed again. Approval reserves the frozen customer
+explanation atomically with the financial adjustment. Message outcomes remain
+visible; provider acceptance is not delivery, and uncertain sends are not retried.

@@ -203,6 +203,9 @@ export async function usageDispositionFlow(h,owner,ctx) {
   assert.equal((await api(`reports/tax?period=${issueMonth}&customer=${ctx.customer}`)).totalCents,621,'USE-004 separate debit and credit tax contributions reconcile without changing original tax')
   assert.ok(JSON.stringify(sourceRevenue).includes('historical-usage-replay-delta'),'USE-004 correcting invoice revenue is backed by persisted original-service delta schedules')
   for(const invoice of ctx.issued)assert.deepEqual(issuedEvidence(await read(invoice.id)),issuedEvidence(invoice))
+  const receiptPage=await h.raw(`/app/usage/replay?subscription=${ctx.subscription}&period=2020-01`,{cookie:owner})
+  const receiptHtml=await receiptPage.text()
+  assert.ok(receiptHtml.includes(`/app/invoices/${debit.id}#recv`),'USE-004 approved receipt links to the current refreshed correcting invoice through the ordinary review door')
   await observe('metric-approved',[`/app/usage/replay?subscription=${ctx.subscription}&period=2020-01`,`/app/invoices/${debit.id}`,`/app/invoices/${ctx.issued[0].id}`])
 
   // The full 10,000-event acceptance is executed under each approved business

@@ -328,9 +328,23 @@ Optional `credit_amount` (exact decimal dollars) and `reason` return a validated
 
 Stages use local dates −3/+1/+7/+15 relative to due date. A missed sequence selects only its latest eligible stage. Payments and credits reduce debt before explicit disputed cents are excluded; zero collectible balance or an inclusive promise prevents chase. Human approvals are invalidated by source/policy/recipient changes. The +15 stage assigns an owner task. Actual provider acceptance is never called delivery; claimed, terminal or uncertain sends are not automatically retried. Existing manual reminders and collection proposals honor the same holds.
 
-### Historical usage correction preview (USE-004, partial)
+### Historical usage corrections (USE-004)
 
 `POST /api/nectar/usage.correction.preview` requires billing read authority. Send `subscription`, `from_period`, `through_period` (inclusive YYYY-MM), `void_event_ids` and `add_event_ids` (distinct string arrays, at most 10,000 each). The range must contain every issued recurring invoice for at most 36 monthly periods. Additions must already exist as unbilled usage for that customer and an original source meter. The response reproduces saved originals, replays the selected events with the original rating versions, prices, tax and predecessor context, and returns per-invoice before/after lines, exact signed deltas, fingerprints and citations. It is always unresolved and covers only the chosen range; downstream periods may need another replay. This action changes no billing records and cannot clear an issue block or authorize a financial disposition. The issued invoice links to the same preview at `/app/usage/replay`.
+
+Financial actions use that same saved-source engine but replay the complete issued chain, including downstream periods beyond the read-only preview's 36-period limit:
+
+- `usage.correction.policy`: owner prepares `disposition` (`next_invoice`, `correcting_invoice`, `credit_note`). Ordinary `policy.decide` applies the exact GOV-002 request.
+- `usage.correction.prepare`: `subscription`, `from_period`, `through_period`, `void_event_ids`, `add_event_ids`, `reason` and authored `explanation`. Forms accept whitespace-separated `void_ids`/`add_ids`. The inclusive range must cover the earliest affected original period through the latest issued period. Returns a pending id, frozen plan and basis; preparation alone changes no financial totals.
+- `usage.correction.authorize`: `correction`. A human with approval authority takes responsibility for an agent-prepared above-threshold credit.
+- `usage.correction.decide`: `correction`, `decision` (`approved` or `rejected`). Approval revalidates the exact sources, customer, policy, balances, tax and wording. Credits above the threshold require different active owner/finance preparation and approval; agents never approve. Duplicate/stale/foreign decisions are refused.
+- `GET /api/nectar/usage/corrections?subscription=ID`: current read authority receives retained source plans, financial effects and honest mail custody. Erased-customer personal receipts are unavailable.
+- `invoice.correction.refresh`: `invoice` replaces only an unissued correcting draft after available carried credit or invoice settings change. It preserves approved deltas and wording, discards the old draft, and returns the fresh id for ordinary approval/issue.
+
+All negative differences create numbered credit notes with exact saved tax attribution. Under `next_invoice`, their full amount carries to later invoices; other policies offset the unpaid original and carry the excess. A fully paid customer's credit remains liability. Later recurring, manual and correcting invoices apply available credits once after total, with a source-citing informational line. Totals/tax/revenue are not reduced again, and backdated application before credit issue is refused. Positive differences become next-invoice lines or a normal separately reviewed correcting draft. Original documents never change; unresolved historical additions or pending corrections block ordinary issue.
+
+Approval atomically records effective replay, credits/queued debits and one frozen customer-message reservation. Native provider acceptance is not delivery; claimed/uncertain sends are not retried. Original-event citations, before/after tax/revenue and the identical explanation appear in the customer's existing scoped `/portal/corrections/ID` projection. Usage CSV retains original status plus effective void/correction custody. `reports/tax` subtracts only exact attributed credit tax; `reports/credit-balances`, its source drill-through/CSV and monthly frozen snapshots show current unspent historical usage credits, excluding general overpayments, prepaid grants and refunds.
+
 
 ## PORT-005 customer sessions
 
