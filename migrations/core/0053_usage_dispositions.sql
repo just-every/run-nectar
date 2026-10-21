@@ -16,7 +16,7 @@ CREATE TABLE nc_usage_replays (
  input_json TEXT NOT NULL, lines_json TEXT NOT NULL,
  UNIQUE(correction_id,invoice_id)
 );
-CREATE TABLE nc_usage_voids (event_id TEXT PRIMARY KEY, correction_id TEXT NOT NULL REFERENCES nc_usage_corrections(id), customer_id TEXT NOT NULL REFERENCES nc_customers(id));
+CREATE TABLE nc_usage_voids (id TEXT PRIMARY KEY, event_id TEXT NOT NULL UNIQUE, correction_id TEXT NOT NULL REFERENCES nc_usage_corrections(id), customer_id TEXT NOT NULL REFERENCES nc_customers(id));
 CREATE TABLE nc_usage_adjustments (
  id TEXT PRIMARY KEY, correction_id TEXT NOT NULL REFERENCES nc_usage_corrections(id),
  customer_id TEXT NOT NULL REFERENCES nc_customers(id), subscription_id TEXT NOT NULL REFERENCES nc_subscriptions(id),
@@ -106,3 +106,50 @@ CREATE TRIGGER nc_privacy_generation_nc_policy_changes_update AFTER UPDATE ON nc
 BEGIN UPDATE nc_privacy_generation SET value=value+1 WHERE id=1; END;
 CREATE TRIGGER nc_privacy_generation_nc_policy_changes_delete AFTER DELETE ON nc_policy_changes
 BEGIN UPDATE nc_privacy_generation SET value=value+1 WHERE id=1; END;
+
+-- Tax-attributed historical notes book pretax revenue, not tax as revenue.
+CREATE TABLE nc_revenue_credits_next (
+  id TEXT PRIMARY KEY,
+  credit_id TEXT NOT NULL UNIQUE REFERENCES nc_credit_notes(id),
+  invoice_id TEXT NOT NULL REFERENCES nc_invoices(id),
+  customer_id TEXT NOT NULL REFERENCES nc_customers(id),
+  recognition_date TEXT NOT NULL,
+  amount_cents INTEGER NOT NULL CHECK(typeof(amount_cents)='integer'),
+  policy_version TEXT NOT NULL,
+  basis_json TEXT NOT NULL CHECK(json_valid(basis_json))
+);
+INSERT INTO nc_revenue_credits_next SELECT * FROM nc_revenue_credits;
+DROP TABLE nc_revenue_credits;
+ALTER TABLE nc_revenue_credits_next RENAME TO nc_revenue_credits;
+CREATE INDEX nc_revenue_credits_invoice ON nc_revenue_credits(invoice_id);
+CREATE INDEX nc_revenue_credits_month ON nc_revenue_credits(recognition_date,customer_id);
+CREATE TRIGGER nc_revenue_credit_source BEFORE INSERT ON nc_revenue_credits
+WHEN NOT EXISTS(SELECT 1 FROM nc_privacy_context) AND NOT EXISTS(SELECT 1 FROM rer_portability_state WHERE id=1 AND applying=1) AND NOT EXISTS(
+  SELECT 1 FROM nc_credit_notes n WHERE n.id=NEW.credit_id AND n.invoice_id=NEW.invoice_id AND n.customer_id=NEW.customer_id AND -COALESCE(n.subtotal_cents,n.amount_cents)=NEW.amount_cents
+) BEGIN SELECT RAISE(ABORT,'nectar_guard_revenue_source_changed'); END;
+CREATE TRIGGER nc_revenue_credit_immutable BEFORE UPDATE ON nc_revenue_credits
+WHEN NOT EXISTS(SELECT 1 FROM nc_privacy_context) BEGIN SELECT RAISE(ABORT,'nectar_immutable'); END;
+CREATE TRIGGER nc_revenue_credit_keep BEFORE DELETE ON nc_revenue_credits
+WHEN NOT EXISTS(SELECT 1 FROM nc_privacy_context) BEGIN SELECT RAISE(ABORT,'nectar_immutable'); END;
+CREATE TRIGGER nc_privacy_generation_nc_revenue_credits_insert AFTER INSERT ON nc_revenue_credits
+BEGIN UPDATE nc_privacy_generation SET value=value+1 WHERE id=1; END;
+CREATE TRIGGER nc_privacy_generation_nc_revenue_credits_update AFTER UPDATE ON nc_revenue_credits
+BEGIN UPDATE nc_privacy_generation SET value=value+1 WHERE id=1; END;
+CREATE TRIGGER nc_privacy_generation_nc_revenue_credits_delete AFTER DELETE ON nc_revenue_credits
+BEGIN UPDATE nc_privacy_generation SET value=value+1 WHERE id=1; END;
+CREATE TRIGGER nc_privacy_owned_nc_revenue_credits_insert BEFORE INSERT ON nc_revenue_credits
+WHEN NOT EXISTS(SELECT 1 FROM nc_privacy_context) AND NOT EXISTS(SELECT 1 FROM rer_portability_state WHERE id=1 AND applying=1) AND (
+  EXISTS(SELECT 1 FROM nc_customers c WHERE c.id=NEW.customer_id AND c.erased_at IS NOT NULL)
+  OR EXISTS(SELECT 1 FROM nc_invoices i JOIN nc_customers c ON c.id=i.customer_id WHERE i.id=NEW.invoice_id AND c.erased_at IS NOT NULL)
+) BEGIN SELECT RAISE(ABORT,'nectar_guard_customer_erased'); END;
+CREATE TRIGGER nc_privacy_owned_nc_revenue_credits_update BEFORE UPDATE ON nc_revenue_credits
+WHEN NOT EXISTS(SELECT 1 FROM nc_privacy_context) AND NOT EXISTS(SELECT 1 FROM rer_portability_state WHERE id=1 AND applying=1) AND (
+  EXISTS(SELECT 1 FROM nc_customers c WHERE c.id IN (NEW.customer_id,OLD.customer_id) AND c.erased_at IS NOT NULL)
+  OR EXISTS(SELECT 1 FROM nc_invoices i JOIN nc_customers c ON c.id=i.customer_id WHERE i.id IN (NEW.invoice_id,OLD.invoice_id) AND c.erased_at IS NOT NULL)
+) BEGIN SELECT RAISE(ABORT,'nectar_guard_customer_erased'); END;
+CREATE TRIGGER nc_usage_credit_source BEFORE INSERT ON nc_credit_notes
+WHEN NEW.correction_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM nc_privacy_context) AND NOT EXISTS(SELECT 1 FROM rer_portability_state WHERE id=1 AND applying=1) AND NOT EXISTS(
+ SELECT 1 FROM nc_usage_corrections c JOIN nc_invoices i ON i.id=NEW.invoice_id
+ WHERE c.id=NEW.correction_id AND c.status='approved' AND c.customer_id=NEW.customer_id AND i.customer_id=NEW.customer_id
+ AND NEW.subtotal_cents+NEW.tax_cents=NEW.amount_cents AND NEW.applied_cents IS NOT NULL
+) BEGIN SELECT RAISE(ABORT,'nectar_guard_correction_source_changed'); END;

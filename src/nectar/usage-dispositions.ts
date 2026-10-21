@@ -138,7 +138,8 @@ export async function decideUsageCorrection(env: Bindings, actor: Actor, input: 
     ...(s.needsSecondApprover?[guard(env,'second_approver_required',"EXISTS(SELECT 1 FROM nc_members WHERE id=? AND status='active' AND role IN ('owner','finance'))",preparer)]:[]),
     stmt(env,"UPDATE nc_usage_corrections SET status='approved',decided_by=?,decided_at=? WHERE id=?",actorLabel(actor),now(),id)]
   for(const period of p.replay.periods) statements.push(stmt(env,'INSERT INTO nc_usage_replays(correction_id,invoice_id,customer_id,input_json,lines_json) VALUES(?,?,?,?,?)',id,period.invoice,s.customer,JSON.stringify(period.afterInput),JSON.stringify(period.after.lines)))
-  for(const event of p.normalized.void_event_ids) statements.push(stmt(env,'INSERT INTO nc_usage_voids(event_id,correction_id,customer_id) VALUES(?,?,?)',event,id,s.customer))
+  // A bulk void is a set operation, not 10,000 D1 statements/subrequests.
+  for(let n=0;n<p.normalized.void_event_ids.length;n+=1000)statements.push(stmt(env,'INSERT INTO nc_usage_voids(id,event_id,correction_id,customer_id) SELECT lower(hex(randomblob(16))),value,?,? FROM json_each(?)',id,s.customer,JSON.stringify(p.normalized.void_event_ids.slice(n,n+1000))))
   const additions=p.normalized.add_event_ids
   for(let n=0;n<additions.length;n+=80){const ids=additions.slice(n,n+80);statements.push(guard(env,'already_billed',`NOT EXISTS(SELECT 1 FROM nc_usage_events WHERE event_id IN (${ids.map(()=>'?').join(',')}) AND (invoice_id IS NOT NULL OR status<>'active'))`,...ids),
     stmt(env,`UPDATE nc_usage_events SET invoice_id=? WHERE event_id IN (${ids.map(()=>'?').join(',')})`,id,...ids))}
@@ -187,5 +188,5 @@ export async function decideUsageCorrection(env: Bindings, actor: Actor, input: 
 
 export async function usageCorrections(env: Bindings, actor: Actor, subscription: string): Promise<Row[]> {
   requireCapability(actor,'read')
-  return await Promise.all((await all(env,'SELECT * FROM nc_usage_corrections WHERE subscription_id=? ORDER BY prepared_at DESC,id',subscription)).map(async row=>({...row,mail:await one(env,'SELECT recipient,subject,body,status,provider_ref FROM nc_usage_correction_mail WHERE correction_id=?',row.id),plan:parseJson<Row>(row.plan_json,{}),payload:parseJson<Row>(row.payload_json,{}),plan_json:undefined,payload_json:undefined})))
+  return await Promise.all((await all(env,'SELECT * FROM nc_usage_corrections WHERE subscription_id=? AND NOT EXISTS(SELECT 1 FROM nc_customers c WHERE c.id=customer_id AND c.erased_at IS NOT NULL) ORDER BY prepared_at DESC,id',subscription)).map(async row=>({...row,mail:await one(env,'SELECT recipient,subject,body,status,provider_ref FROM nc_usage_correction_mail WHERE correction_id=?',row.id),plan:parseJson<Row>(row.plan_json,{}),payload:parseJson<Row>(row.payload_json,{}),plan_json:undefined,payload_json:undefined})))
 }
