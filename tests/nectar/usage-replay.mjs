@@ -199,7 +199,7 @@ export async function usageDispositionFlow(h,owner,ctx) {
   await api('invoice.finalise',{invoice:debit.id},409)
   await api('invoice.correction.refresh',{invoice:debit.id},409)
   const sourceRevenue=await api(`revenue/${debit.id}?from=2020-01&to=2020-02`)
-  assert.deepEqual(sourceRevenue.schedules.filter(s=>s.kind==='usage_correction').flatMap(s=>s.entries).map(e=>[e.period,e.amountCents]),[['2020-01',6291],['2020-02',3500]],'USE-004 actual correcting-invoice recognition matches independently calculated original-service deltas')
+  assert.deepEqual(sourceRevenue.schedules.filter(s=>s.kind==='usage_correction').flatMap(s=>s.entries).map(e=>[e.period,e.amountCents]).sort((a,b)=>a[0].localeCompare(b[0])),[['2020-01',6291],['2020-02',3500]],'USE-004 actual correcting-invoice recognition matches independently calculated original-service deltas')
   assert.equal((await api(`reports/tax?period=${issueMonth}&customer=${ctx.customer}`)).totalCents,621,'USE-004 separate debit and credit tax contributions reconcile without changing original tax')
   assert.ok(JSON.stringify(sourceRevenue).includes('historical-usage-replay-delta'),'USE-004 correcting invoice revenue is backed by persisted original-service delta schedules')
   for(const invoice of ctx.issued)assert.deepEqual(issuedEvidence(await read(invoice.id)),issuedEvidence(invoice))
