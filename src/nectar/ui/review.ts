@@ -77,7 +77,7 @@ export async function previewPage(env: Bindings, actor: Actor, input: Input, url
     return page('Move in', actor, h`<h1>Move in from Stripe Billing</h1><p class="flash error" role="alert">That did not work: ${String(error?.code ?? error?.message ?? 'error').replace(/_/g, ' ')}. ${detail}</p><p><a class="button" href="/app/import">Back</a></p>`, { current: '/app/import', url, status: error?.status ?? 400 })
   }
   return page('Move-in preview', actor, h`<h1>Move-in preview</h1>
-    <section class="card summary"><dl class="figures">${Object.entries(preview.create).map(([kind, n]) => h`<div><dt>New ${kind}s</dt><dd>${n}</dd></div>`)}<div><dt>Rejected</dt><dd>${preview.rejected.length}</dd></div></dl></section>
+    <section class="card summary"><dl class="figures">${Object.entries(preview.create).map(([kind, n]) => h`<div><dt>New ${kind.replaceAll('_',' ')}s</dt><dd>${n}</dd></div>`)}<div><dt>Rejected</dt><dd>${preview.rejected.length}</dd></div></dl></section>
     <section class="card"><h2>Capture coverage</h2>${table(['File', 'Manifest count$', 'Found$', 'Complete'], preview.coverage.map(c => [c.file, c.manifest ?? '—', c.found, tag(c.complete ? 'Reconciled' : 'Not reconciled')]))}</section>
     ${preview.rejected.length ? h`<section class="card"><h2>Not moved</h2>${table(['Record', 'Reason'], preview.rejected.map(r => [r.location, r.reason]))}</section>` : ''}
     ${preview.attention.length ? h`<section class="card"><h2>Check after the move</h2>${table(['Record', 'Note'], preview.attention.map(r => [r.location, r.reason]))}</section>` : ''}

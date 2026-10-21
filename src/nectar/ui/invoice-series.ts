@@ -18,7 +18,7 @@ export async function invoiceSeriesForms(env: Bindings, actor: Actor) {
     <p>Continue from the last retained document in a captured series, or start an unused prefix at 1. This records your choice; it does not read or verify live processor settings. Captured credit notes can continue independently. Multiple entities are not available. Changing a series invalidates saved invoice approvals.</p>
     ${invoices.length ? form('invoice.series','/app/numbering',h`${hidden('revision',b.revision)}${hidden('mode','continue')}${scope()}
       ${select('Document kind','kind',[{value:'invoice',label:'Invoice'},{value:'credit-note',label:'Credit note'}],'invoice')}
-      ${select('Last captured document', 'source_invoice', invoices.map(i=>({value:i.id,label:`${i.number} — ${i.document_kind} — ${i.name}`})),invoices[0].id)}`, 'Continue captured series', { layout:'columns' }) : h`<p>Move in captured documents before continuing a series.</p>`}
+      ${select('Last captured document', 'source_invoice', invoices.map(i=>({value:i.id,label:`${i.number} — ${i.document_kind === 'credit-note' ? 'credit note' : 'invoice'} — ${i.name}`})),invoices[0].id)}`, 'Continue captured series', { layout:'columns' }) : h`<p>Move in captured documents before continuing a series.</p>`}
     ${form('invoice.series','/app/numbering',h`${hidden('revision',b.revision)}${hidden('mode','new')}${scope()}
       ${select('Document kind','kind',[{value:'invoice',label:'Invoice'},{value:'credit-note',label:'Credit note'}],'invoice')}
       ${field('New document prefix','prefix',{hint:'Letters, digits and dashes. A trailing dash separates the number.'})}

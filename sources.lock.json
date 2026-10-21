@@ -77,7 +77,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "68c3263330726b4db7d13035522977def073e1b5b0b19f23d0d4f3e4b333727d",
+      "sha256": "ffd341608fc578799e69edc7ae03dec46c9afd5fc1f7857abd621e6cc9430db0",
       "executable": false
     },
     "DEMO.md": {
@@ -3005,7 +3005,7 @@
       "executable": false
     },
     "src/nectar/ui/invoice-series.ts": {
-      "sha256": "bac132019aeb15c71f83a5b202e6b9d89d725b39ef5f77989bd1680560ebe6f0",
+      "sha256": "3266cfe1683d7967247cf1bcca514a7aba282f53987750cd761a79a52b9a8c0d",
       "executable": false
     },
     "src/nectar/ui/lifecycle.ts": {
@@ -3077,7 +3077,7 @@
       "executable": false
     },
     "src/nectar/ui/review.ts": {
-      "sha256": "3317b072b99773787857bec70674994f43489573b1c14824c10ac23ef5008972",
+      "sha256": "d048237c93f7a4443aebea2d467a273fee8640e35af2e37cbf8d5754099d8940",
       "executable": false
     },
     "src/nectar/ui/security.ts": {
@@ -3493,7 +3493,7 @@
       "executable": false
     },
     "tests/nectar/numbering.mjs": {
-      "sha256": "5255b1c1db9717538acd91204982371bb3c71582d8d8363189ce5ce3d636a762",
+      "sha256": "836f8a835ff9d9644040057616a5cc6c7cb26b3be7400bec23534b55f1a3ed34",
       "executable": false
     },
     "tests/nectar/one-time.mjs": {
