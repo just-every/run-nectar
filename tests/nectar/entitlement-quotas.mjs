@@ -124,6 +124,22 @@ export async function entitlementQuotasFlow(h, owner) {
   }
   await h.api('feature.policy', undefined, changed, 401)
 
+  // ENT-002 inherits GOV-002: policy preparation changes no active decision,
+  // and every subsequent application names a separate approver and exact basis.
+  await api('access.give', {email:'ent002-finance@example.test',name:'Quota Finance',role:'finance'})
+  const finance = await h.signIn('ent002-finance@example.test',{requested:true})
+  const original = await entitlement(soft)
+  const pending = await api('feature.policy', changed)
+  const competing = await api('feature.policy', {...changed,quota:'20000'})
+  assert.deepEqual(await entitlement(soft), original, 'ENT-002 preparing policy never changes access')
+  await api('policy.decide',{request:pending.request,decision:'approved',confirm_single:true},409)
+  await h.api('feature.policy',finance,changed,403)
+  await h.api('policy.decide',finance,{request:pending.request,decision:'approved'})
+  assert.equal((await entitlement(soft)).allowed,false,'ENT-002 a separately approved hard limit takes effect on the next read')
+  await h.api('policy.decide',finance,{request:pending.request,decision:'approved'},409)
+  await h.api('policy.decide',finance,{request:competing.request,decision:'approved'},409)
+  assert.equal((await entitlement(soft)).allowed,false,'ENT-002 duplicate and stale policy approvals cannot change the effective limit')
+
   await h.advanceClock('2026-10-01T12:00:00Z')
   assert.equal(pathOf(await entitlement(overage), overage).quota.used, '0', 'ENT-002 a new subscription period resets the quota without deleting prior usage')
   const september = await api('billrun.prepare', { period: '2026-09' })
