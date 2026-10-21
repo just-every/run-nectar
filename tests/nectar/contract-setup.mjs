@@ -451,7 +451,7 @@ export async function contractIntervalSetup(h, owner) {
 
 // SET-001 inheritance: this proves quoted routing intent and ordinary invoice
 // custody. It makes no claim of processor execution or accounting delivery.
-export async function contractEntitySetup(h, owner) {
+export async function contractEntitySetup(h, owner, {onState = async () => {}, decideSetup} = {}) {
   const api = (path, body, status) => h.api(path, owner, body, status)
   await api('access.give', { email: 'synthetic-nectar-entity-finance@example.test', name: 'Synthetic Entity Finance', role: 'finance' })
   const finance = await h.signIn('synthetic-nectar-entity-finance@example.test', { requested: true })
@@ -474,7 +474,7 @@ export async function contractEntitySetup(h, owner) {
       subscription: { start_date: '2016-01-01', end_date: '2016-03-01', quote: service }, items: [{ key: 'platform', price: 'platform', quote: fee }], ambiguities: [] }
   }
   const propose = (payload, status = 200) => h.api('proposal.create', agent, { kind: 'amendment', title: 'Executed entity order', payload }, status)
-  const decide = (proposal, who = owner, decision = 'approved', status = 200) => h.api('proposal.decide', who, { proposal, decision }, status)
+  const decide = (proposal, who = owner, decision = 'approved', status = 200) => decideSetup && decision === 'approved' && status === 200 ? decideSetup({proposal,decision},who) : h.api('proposal.decide', who, { proposal, decision }, status)
   const snapshot = () => Promise.all([api('customers'), api('catalog'), api('runs'), api('billing-entities')])
   const initial = await snapshot()
   const invalid = order(211, a, entityA)
@@ -514,6 +514,7 @@ export async function contractEntitySetup(h, owner) {
     const markup = await page.text()
     assert.ok(markup.includes(entity.processor_account_ref) && markup.includes(entity.ledger_company_ref))
     assert.match(markup, /Owner-recorded routing intent/)
+    await onState({label:`entity-${number}-prepared`,proposal:prepared.id})
     const before = await snapshot()
     await decide(prepared.id, finance, 'approved', 403)
     assert.deepEqual(await snapshot(), before, 'SET-001 finance approval cannot bypass owner entity-assignment authority')
@@ -522,6 +523,7 @@ export async function contractEntitySetup(h, owner) {
     assert.equal((await api(`customers/${approved.customer}`)).billing_entity_id, id)
     await decide(prepared.id, owner, 'approved', 409)
     installed.push({ approved, prepared, saved, input, entity })
+    await onState({label:`entity-${number}-installed`,proposal:prepared.id,customer:approved.customer,subscription:approved.subscription})
   }
   for (const month of ['2016-01', '2016-02']) {
     const run = await api('billrun.prepare', { period: month })
@@ -540,6 +542,7 @@ export async function contractEntitySetup(h, owner) {
       const due = new Date(`${preview.assumedIssueDate}T00:00:00Z`); due.setUTCDate(due.getUTCDate() + value.entity.payment_terms_days)
       assert.equal(issued.due_date, due.toISOString().slice(0, 10))
       ;(value.issued ??= []).push(issued)
+      await onState({label:`entity-${value.entity.invoice_prefix}-${month}-issued`,invoice:issued.id,customer:value.approved.customer})
     }
   }
 
@@ -556,6 +559,7 @@ export async function contractEntitySetup(h, owner) {
   const afterEdit = await snapshot()
   assert.equal((await api(`proposals/${stale.id}`)).stale, true)
   await decide(stale.id, owner, 'approved', 409)
+  await onState({label:'entity-stale-refused',proposal:stale.id})
   assert.deepEqual(await snapshot(), afterEdit, 'SET-001 an edited route refuses stale approval without installing customer, catalog or subscription changes')
   assert.equal((await api(`proposals/${stale.id}`)).payload.source.text, staleInput.source.text)
   await decide(stale.id, owner, 'rejected')

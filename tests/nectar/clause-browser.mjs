@@ -8,10 +8,11 @@ import { erasureFlow } from './erasure.mjs'
 import { moveCollectionFlow,harnessOptions as collectionOptions } from './move-collection.mjs'
 import { moveHistoryFlow } from './move-history.mjs'
 import { intervalsFlow } from './intervals.mjs'
+import { contractEntitySetup } from './contract-setup.mjs'
 import { intervalCancellationFlow } from './interval-cancel.mjs'
 import { numberingEntitiesFlow } from './numbering-entities.mjs'
 const kind=process.argv[2],directory=process.env.NECTAR_EVIDENCE_DIR??`.evidence/${kind}`
-assert.ok(['erasure','history','collection','numbering','intervals','cancellation'].includes(kind))
+assert.ok(['erasure','history','collection','numbering','intervals','cancellation','entity-setup'].includes(kind))
 await mkdir(directory,{recursive:true})
 const captures=[]
 const h=await harness({assets:true,...(kind==='collection'?collectionOptions():{})});let browser
@@ -48,8 +49,37 @@ try {
     const url=new URL(page.url())
     assert.equal(url.searchParams.get('error'),null,`Native form submission ${url.pathname}: ${url.searchParams.get('error')}`)
   }
-  if(kind==='cancellation')await cancellationBrowser({h,owner,context,page,both,form,submit})
+  if(kind==='entity-setup')await contractEntitySetup(h,owner,{
+    decideSetup:async(payload,actor)=>{
+      assert.equal(actor,owner)
+      await page.goto(h.origin+`/app/proposals/${payload.proposal}`)
+      const decision=form('proposal.decide').filter({has:page.locator('input[name="decision"][value="approved"]')})
+      await submit(decision)
+      const saved=await h.api(`proposals/${payload.proposal}`,owner)
+      assert.equal(saved.status,'approved')
+      return {id:saved.id,...saved.result}
+    },
+    onState:async state=>{
+      if(state.proposal)await both(`${state.label}-proposal`,`/app/proposals/${state.proposal}`)
+      if(state.customer)await both(`${state.label}-customer`,`/app/customers/${state.customer}`)
+      if(state.invoice)await both(`${state.label}-invoice`,`/app/invoices/${state.invoice}`)
+    }
+  })
+  else if(kind==='cancellation')await cancellationBrowser({h,owner,context,page,both,form,submit})
   else if(kind==='numbering')await numberingEntitiesFlow(h,owner,{onState:async state=>{
+    if(state.label==='entity-revenue'){
+      await both('entity-revenue-consolidated','/app/revenue?from=2026-09&to=2026-09')
+      for(const entity of [...state.entities,'business','imported']){
+        await page.goto(h.origin+'/app/revenue?from=2026-09&to=2026-09')
+        const selector=page.locator('form[method="get"]').filter({has:page.locator('select[name="entity"]')})
+        await selector.locator('select[name="entity"]').selectOption(entity)
+        await submit(selector)
+        assert.equal(new URL(page.url()).searchParams.get('entity'),entity)
+        await both(`entity-revenue-${entity}`,new URL(page.url()).pathname+new URL(page.url()).search)
+      }
+      for(const [index,invoice]of state.invoices.entries())await both(`entity-revenue-source-${index}`,`/app/revenue/${invoice}?from=2026-09&to=2026-09&entity=${state.entities[index]}`)
+      return
+    }
     await both(`numbering-${state.label}`,'/app/numbering')
     if(state.label==='entities')await both('numbering-entity-identity','/app/numbering',async()=>{
       await page.locator('details').filter({has:form('entity.update').filter({has:page.locator(`input[name="entity"][value="${state.entities[0]}"]`)})}).locator('summary').first().click()

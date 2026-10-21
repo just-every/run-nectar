@@ -100,4 +100,5 @@ export async function entityRevenueFlow(h, owner, state) {
   await h.api(`revenue?${scoped}`, support, undefined, 403)
   await h.api(`revenue/${firstA.id}?${scoped}`, support, undefined, 403)
   assert.equal((await h.raw(`/app/exports/revenue.csv?${scoped}`, { cookie: support })).status, 403)
+  await state.onState?.({label:'entity-revenue',entities:[entityA,entityB],invoices:[firstA.id,firstB.id],customers:[atlas,harbor]})
 }
