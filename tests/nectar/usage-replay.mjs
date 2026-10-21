@@ -97,7 +97,7 @@ export async function usageReplayFlow(h, owner, options = {}) {
   assert.ok((await h.page(`/app/invoices/${issued[0].id}`, owner)).includes(`/app/usage/replay?subscription=${subscription}`), 'USE-004 invoice links to the correct subscription historical replay')
   await h.page(`/app/usage/replay?subscription=${subscription}&period=2020-01`, accountant)
 
-  // The acceptance-sized replay is real, while financial dispositions stay open.
+  // Prove the acceptance-sized preview before executing each disposition below.
   const bulkSource = await api('meter.create', { code: 'use004-bulk', name: 'Bulk events', unit_label: 'events' })
   const bulkProduct = (await api('product.create', { code: 'use004-bulk', name: 'Bulk processing' })).id
   const bulkPrice = (await api('price.create', { product: bulkProduct, kind: 'unit', meter: bulkSource.id, unit_amount: '0.01', taxable: false })).id
@@ -178,15 +178,17 @@ export async function usageDispositionFlow(h,owner,ctx) {
   assert.ok(corrected.invoice,'USE-004 correcting policy creates a real separate invoice')
   let debit=await read(corrected.invoice)
   assert.deepEqual([debit.subtotal_cents,debit.tax_cents,debit.total_cents],[9791,979,10770])
-  assert.ok(debit.lines.every(l=>l.kind==='usage_correction'&&l.evidence.eventIds.includes(high.event_id)))
+  assert.ok(debit.lines.filter(l=>l.kind==='usage_correction').every(l=>l.evidence.eventIds.includes(high.event_id)))
   await api('invoice.approve',{invoice:debit.id,acknowledge:true})
   await api('invoice.finalise',{invoice:debit.id})
   debit=await read(debit.id)
   assert.equal(debit.status,'issued')
+  assert.equal(debit.carriedApplications.reduce((n,a)=>n+a.amount_cents,0),3939,'USE-004 carried credits also apply once to a later correcting invoice')
+  assert.equal(debit.balanceCents,6831)
   assert.deepEqual([debit.subtotal_cents,debit.tax_cents,debit.total_cents],[9791,979,10770],'USE-004 correcting invoice issue matches its exact approved preview')
   await api('invoice.finalise',{invoice:debit.id},409)
   const sourceRevenue=await api(`revenue/${debit.id}?from=2020-01&to=2020-02`)
-  assert.deepEqual(sourceRevenue.schedules.flatMap(s=>s.entries).map(e=>[e.period,e.amountCents]),[['2020-01',6291],['2020-02',3500]],'USE-004 actual correcting-invoice recognition matches independently calculated original-service deltas')
+  assert.deepEqual(sourceRevenue.schedules.filter(s=>s.kind==='usage_correction').flatMap(s=>s.entries).map(e=>[e.period,e.amountCents]),[['2020-01',6291],['2020-02',3500]],'USE-004 actual correcting-invoice recognition matches independently calculated original-service deltas')
   assert.equal((await api(`reports/tax?period=${issueMonth}&customer=${ctx.customer}`)).totalCents,621,'USE-004 separate debit and credit tax contributions reconcile without changing original tax')
   assert.ok(JSON.stringify(sourceRevenue).includes('historical-usage-replay-delta'),'USE-004 correcting invoice revenue is backed by persisted original-service delta schedules')
   for(const invoice of ctx.issued)assert.deepEqual(issuedEvidence(await read(invoice.id)),issuedEvidence(invoice))
@@ -220,7 +222,13 @@ export async function usageDispositionFlow(h,owner,ctx) {
     if(paid){const payment=await api('payment.record',{customer,amount:(paid/100).toFixed(2),received_on:'2020-08-02',method:'bank_transfer',reference:`synthetic-nectar-paid-${index}`});await api('payment.allocate',{invoice:invoice.id,payment:payment.payment,amount:(paid/100).toFixed(2)})}
     await api('subscription.addon',{subscription:sub,price:base,effective_date:'2020-08-01'})
     const payload={subscription:sub,from_period:'2020-07',through_period:'2020-07',void_event_ids:events.map(e=>e.event_id),add_event_ids:[]}
-    const proposal=await prepare(payload)
+    let proposal
+    if(index===2){
+      const location=await h.submit('usage.correction.prepare',owner,{subscription:sub,from_period:'2020-07',through_period:'2020-07',void_ids:payload.void_event_ids.join('\n'),add_ids:'',reason:'Reviewed source correction',explanation:'We reviewed the retained source events and corrected the recorded usage. The original invoice stays unchanged.'},`/app/usage/replay?subscription=${sub}&correction={id}`)
+      assert.equal(location.searchParams.get('error'),null,'USE-004 ordinary HTML form accepts the complete 10,000-event proposal')
+      proposal=(await corrections(sub)).find(c=>c.id===location.searchParams.get('correction'))
+      assert.ok(proposal)
+    }else proposal=await prepare(payload)
     assert.deepEqual(proposal.plan.delta,{subtotalCents:-10000,taxCents:0,totalCents:-10000})
     assert.equal(proposal.plan.periods[0].eventIds.length,10000)
     assert.equal(proposal.plan.carriedCents,paid,'USE-004 paid/partly-paid corrections retain the exact unapplied liability')
@@ -231,7 +239,9 @@ export async function usageDispositionFlow(h,owner,ctx) {
     if(index===1)h.mailResponses.push({status:500,body:{name:'provider_error'}})
     const beforeMessages=h.mails.length
     await decision(proposal.id,owner,409)
-    const result=await decision(proposal.id,finance)
+    let result
+    if(index===2){const location=await h.submit('usage.correction.decide',finance,{correction:proposal.id,decision:'approved'},`/app/usage/replay?subscription=${sub}`);assert.equal(location.searchParams.get('error'),null);const saved=(await corrections(sub)).find(c=>c.id===proposal.id);assert.equal(saved.status,'approved');result={carriedCents:saved.plan.carriedCents}}
+    else result=await decision(proposal.id,finance)
     assert.equal(h.mails.length,beforeMessages+1)
     assert.equal(result.carriedCents,paid)
     const original=await read(invoice.id)
@@ -305,6 +315,8 @@ export async function usageDispositionFlow(h,owner,ctx) {
   await api('usage.submit',{events:commitmentEvents})
   const commitmentOriginals=[]
   for(const month of ['2020-07','2020-08']){const run=await api('billrun.prepare',{period:month});const invoice=(await api(`runs/${run.id}`)).invoices.find(i=>i.customer_id===commitmentCustomer);await api('invoice.approve',{invoice:invoice.id,acknowledge:true});await api('invoice.finalise',{invoice:invoice.id,issue_date:invoice.period_end});commitmentOriginals.push(await read(invoice.id))}
+  const commitmentPayment=await api('payment.record',{customer:commitmentCustomer,amount:'120',received_on:'2020-08-02',method:'bank_transfer',reference:'synthetic-nectar-commitment-payment'})
+  await api('payment.allocate',{invoice:commitmentOriginals[0].id,payment:commitmentPayment.payment,amount:'120'})
   const commitment=await prepare({subscription:commitmentSub,from_period:'2020-07',through_period:'2020-08',void_event_ids:[commitmentEvents[0].event_id],add_event_ids:[]})
   assert.deepEqual(commitment.plan.periods.map(p=>[p.subtotalCents,p.taxCents,p.totalCents]),[[-10000,-2000,-12000],[10000,2000,12000]],'USE-004 a historical void replays the later minimum settlement with original tax')
   assert.deepEqual(commitment.plan.delta,{subtotalCents:0,taxCents:0,totalCents:0})
@@ -349,7 +361,7 @@ export async function usageDispositionFlow(h,owner,ctx) {
   assert.ok((await api(`subscriptions/${ctx.subscription}/upcoming?period=2020-03`)).calculation.exceptions.some(e=>e.code==='metric_late_correction'),'USE-004 rejection leaves the unresolved late event blocking issue')
   for(let tick=0;tick<2;tick++)assert.equal((await h.raw(`/cdn-cgi/local/scheduled?time=${Date.now()}&cron=${encodeURIComponent('0 14 * * *')}`)).status,200)
   assert.equal(h.mails.length,mailCount,'USE-004 ordinary daily recovery never retries accepted or uncertain correction mail')
-  const erased=outcomes[1],request=await api('erasure.request',{customer:erased.customer})
+  const erased={customer:commitmentCustomer,sub:commitmentSub},request=await api('erasure.request',{customer:erased.customer})
   const verification=h.mails.at(-1).text.match(/https?:\/\/[^\s"<]+\/erase\/[a-f0-9]{64}/)[0]
   assert.equal((await h.raw(new URL(verification).pathname,{form:new URLSearchParams({confirm:'yes'})})).status,200)
   const erasure=await api('erasure.approve',{request:request.id,confirm:true})

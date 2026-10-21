@@ -18,7 +18,7 @@ import type { Bindings } from '../auth.server'
 import { canRead, requireRead, actorLabel, requireCapability, requireMember, type Actor } from './actor'
 import { requireBusiness, taxReady, type Business } from './business'
 import { all, commit, fingerprint as hashInputs, guard, insist, newId, now, one, parseJson, stmt, type Row } from './core'
-import { addDays, isMonth, periodStartingIn, requireDate, today } from './dates'
+import { addDays, isMonth, periodStartingIn, requireDate, today, zonedStart } from './dates'
 import { rated } from './inputs'
 import { manualCalculation } from './manual-invoices'
 import { creditPolicy, creditRequests } from './credit-policy'
@@ -168,7 +168,7 @@ async function currentFingerprint(env: Bindings, business: Business, invoice: Ro
       const approved=await one(env,"SELECT 1 FROM nc_usage_corrections WHERE id=? AND status='approved'",saved.usageCorrection)
       const staged=await all(env,'SELECT id,line_json,tax_cents FROM nc_usage_adjustments WHERE correction_id=? AND invoice_id=? ORDER BY id',saved.usageCorrection,invoice.id)
       insist(approved&&canonicalAdjustments(staged,saved.usageAdjustments),'correction_source_changed',409)
-      const current={...saved,invoiceContent:await invoiceContent(env,business,invoice.customer_id)}
+      const current={...saved,usageCredits:await carriedUsageCredits(env,invoice.customer_id),invoiceContent:await invoiceContent(env,business,invoice.customer_id)}
       return correctionFingerprint(current)
     }
     return (await manualCalculation(env, business, invoice.customer_id, saved.charges.map((c: Row) => c.id), saved.date)).fingerprint
@@ -236,6 +236,7 @@ export async function finalise(env: Bindings, actor: Actor, input: Input) {
     const calculation = parseJson<Row>(invoice.calculation_json, {})
     const usageAdjustments=calculation.inputs?.usageAdjustments??[]
     const carried=usageCreditAllocations(calculation.inputs?.usageCredits??[],invoice.total_cents)
+    insist(carried.every(c=>c.issuedAt<zonedStart(addDays(issueDate,1),business.timezone)),'credit_after_invoice_date',409)
     const consumed: string[] = calculation.consumedEvents ?? []
     const charges: string[] = (calculation.inputs?.charges ?? []).map((c: Row) => c.id)
     const allocation = invoiceNumberAllocation(env, business, customer)

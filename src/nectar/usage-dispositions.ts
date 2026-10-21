@@ -19,6 +19,7 @@ import { rate, type Line, type RatingInput } from './rating'
 import { BALANCE_SQL } from './receivables'
 import { invoiceContent } from './invoice-content'
 import { deliverUsageCorrectionMail } from './usage-disposition-mail'
+import { carriedUsageCredits } from './usage-correction-records'
 import type { UsageAdjustment } from './usage-correction-records'
 
 export const DISPOSITIONS = ['next_invoice','correcting_invoice','credit_note'] as const
@@ -76,9 +77,10 @@ async function plan(env: Bindings, actor: Actor, payload: Row) {
       subtotalCents:p.deltaSubtotalCents,taxCents:p.deltaTaxCents,totalCents:p.deltaTotalCents,
       beforeLines:p.before.lines.map(l=>({description:l.description,amountCents:l.amountCents})),afterLines:p.after.lines.map(l=>({description:l.description,amountCents:l.amountCents})),eventIds:p.eventIds,revenue,postingRevenue: p.deltaTotalCents<0?[{period:issueDate.slice(0,7),amountCents:p.deltaSubtotalCents,method:'credit-contra-issue-month'}]:revenue.map(e=>({period:e.period,amountCents:e.deltaCents,method:'historical-usage-replay-delta'})),balanceCents:balance!.value,creditCents,appliedCents,carriedCents:creditCents-appliedCents})
   }
+  const availableCredits=await carriedUsageCredits(env,customer.id)
   const creditCents=periods.reduce((n,p)=>n+p.creditCents,0)
   const L=customerText(customer.language)
-  const summary={timezone:b.timezone,subscription:sub.id,customer:customer.id,recipient:customer.billing_email,language:customer.language,disposition:policy.disposition,policyRevision:policy.revision,
+  const summary={availableCredits,timezone:b.timezone,subscription:sub.id,customer:customer.id,recipient:customer.billing_email,language:customer.language,disposition:policy.disposition,policyRevision:policy.revision,
     creditPolicyRevision:credit.revision,thresholdCents:credit.two_person_above_cents,issueDate,reason,explanation,periods,delta:replay.delta,
     creditCents,carriedCents:periods.reduce((n,p)=>n+p.carriedCents,0),needsSecondApprover:credit.two_person_above_cents!==null&&creditCents>credit.two_person_above_cents,
     // These are the exact authored words, followed by machine-calculated source
@@ -164,7 +166,7 @@ export async function decideUsageCorrection(env: Bindings, actor: Actor, input: 
       // advanced by the preceding reservation, including customer series.
       if(p.customer.credit_prefix!==null && p.customer.credit_prefix!==undefined)p.customer.next_credit_number++
       else business={...business,next_credit_number:business.next_credit_number+1}
-      documents.push({kind:'credit_note',id:credit,number:allocation.number,invoice:period.invoice,amountCents:-period.totalCents,appliedCents:period.appliedCents,carriedCents:period.carriedCents})
+      documents.push({kind:'credit_note',id:credit,number:allocation.number,invoice:period.invoice,amountCents:-period.totalCents,appliedCents:period.appliedCents,carriedCents:period.carriedCents,issuedAt:at})
     }else if(period.subtotalCents!==0||period.taxCents!==0){
       const adjustment={id:newId(),correction:id,line:adjustmentLine(period,id),taxCents:period.taxCents}
       adjustments.push(adjustment)
@@ -176,7 +178,7 @@ export async function decideUsageCorrection(env: Bindings, actor: Actor, input: 
     const run=newId();invoice=newId()
     const source=p.replay.periods.at(-1)!.afterInput
     const inputs:RatingInput={...source,period:{start:s.issueDate,end:addDays(s.issueDate,1)},items:[],prices:{},amendments:[],events:[],contracts:undefined,charges:undefined,lifecycle:undefined,renewals:undefined,
-      usageAdjustments:adjustments,usageCorrection:id,invoiceContent:await invoiceContent(env,p.business,s.customer)}
+      usageAdjustments:adjustments,usageCorrection:id,usageCredits:[...s.availableCredits,...documents.filter(d=>d.kind==='credit_note'&&d.carriedCents>0).map(d=>({id:d.id,number:d.number,availableCents:d.carriedCents,issuedAt:d.issuedAt,correction:id,source:`/app/invoices/${d.invoice}#credit-${d.id}`}))].sort((a,b)=>a.issuedAt-b.issuedAt||a.id.localeCompare(b.id)),invoiceContent:await invoiceContent(env,p.business,s.customer)}
     const r=rate(inputs),basis=await fingerprint(inputs)
     insist(r.totalCents>=0&&!r.exceptions.some(e=>e.code==='negative_total'),'negative_correcting_invoice',409)
     statements.push(stmt(env,`INSERT INTO nc_bill_runs(id,period,cutoff_at,calc_version,status,summary_json,created_by,created_at,kind) VALUES(?,?,?,?,'draft',?,?,?,'manual')`,run,s.issueDate.slice(0,7),now(),inputs.version,JSON.stringify({invoices:1,totals:{subtotal:r.subtotalCents,tax:r.taxCents,total:r.totalCents},correction:id}),actorLabel(actor),now()),
