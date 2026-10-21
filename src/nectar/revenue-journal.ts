@@ -29,6 +29,7 @@ export async function revenueJournal(env: Bindings, actor: Actor, url: URL) {
     let debit = 0n, credit = 0n
     const query = new URLSearchParams({ period: month.period })
     if (report.customerId) query.set('customer', report.customerId)
+    if (report.entityId) query.set('entity', report.entityId)
     for (const [account, amount] of movements) {
       if (!amount) continue
       const debitCents = safe(amount > 0n ? amount : 0n), creditCents = safe(amount < 0n ? -amount : 0n)
@@ -38,7 +39,7 @@ export async function revenueJournal(env: Bindings, actor: Actor, url: URL) {
     insist(debit === credit, 'revenue_journal_unbalanced', 409)
     return { ...month, debitCents: safe(debit), creditCents: safe(credit) }
   })
-  return { currency: 'USD', definition: JOURNAL_DEFINITION, policyVersion: report.policyVersion, from: report.from, to: report.to, customerId: report.customerId, periods, entries, sources: report.contributions }
+  return { currency: 'USD', definition: JOURNAL_DEFINITION, policyVersion: report.policyVersion, from: report.from, to: report.to, customerId: report.customerId, entityId: report.entityId, periods, entries, sources: report.contributions }
 }
 
 const cell = (value: unknown) => {

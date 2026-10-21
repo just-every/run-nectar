@@ -15,6 +15,24 @@ export interface RevenueInvoiceRecord {
   source?: { kind: 'imported'; provider: string; providerRef: string; href: string; policyVersion: string }
 }
 
+export interface RevenueEntity {
+  id: string | null
+  name: string | null
+  custody: 'issued-entity' | 'installation-business' | 'imported-unassigned'
+}
+
+/** Imported customer assignment does not identify the original invoice issuer.
+ * Native attribution uses only immutable issue columns, including after erasure
+ * withdraws the saved legal label. Current customer/entity settings never enter. */
+export function revenueEntity(record: RevenueInvoiceRecord): RevenueEntity {
+  if (record.source) return { id: null, name: null, custody: 'imported-unassigned' }
+  const id = record.invoice.billing_entity_id ?? null
+  const route = parseJson<Row>(record.invoice.billing_route_json, {})
+  insist(!route.entityId || route.entityId === id, 'revenue_entity_snapshot_mismatch', 409)
+  return { id, name: typeof route.legalName === 'string' ? route.legalName : null,
+    custody: id ? 'issued-entity' : 'installation-business' }
+}
+
 export async function revenueIssueStatements(env: Bindings, invoice: Row): Promise<D1PreparedStatement[]> {
   insist(typeof invoice.id === 'string' && isDate(invoice.issue_date), 'revenue_issue_date_required', 409)
   const business = await requireBusiness(env)
@@ -68,10 +86,10 @@ function projectInvoice(invoice: Row, stored: Row[], entries: Row[], lines: Row[
   return { invoice, schedules, credits, custody }
 }
 
-async function loadRevenueInvoices(env: Bindings, invoice: string | null, customer: string | null): Promise<RevenueInvoiceRecord[]> {
+async function loadRevenueInvoices(env: Bindings, invoice: string | null, customer: string | null, entity: string | null = null): Promise<RevenueInvoiceRecord[]> {
   const business = await requireBusiness(env)
-  const condition = "i.status='issued' AND (? IS NULL OR i.id=?) AND (? IS NULL OR i.customer_id=?)"
-  const params = [invoice, invoice, customer, customer]
+  const condition = "i.status='issued' AND (? IS NULL OR i.id=?) AND (? IS NULL OR i.customer_id=?) AND (? IS NULL OR (?='business' AND i.billing_entity_id IS NULL) OR i.billing_entity_id=?)"
+  const params = [invoice, invoice, customer, customer, entity, entity, entity]
   // One read batch binds invoices, lines, credit notes and snapshots to one
   // database view, with a fixed query count for a whole-company report.
   const results = await env.DB.batch<Row>([
@@ -95,8 +113,9 @@ export async function revenueInvoice(env: Bindings, id: string): Promise<Revenue
   insist(rows.length === 1, 'revenue_invoice_not_found', 404)
   return rows[0]
 }
-export async function revenueInvoices(env: Bindings, customer: string | null = null): Promise<RevenueInvoiceRecord[]> {
-  const rows = [...await loadRevenueInvoices(env, null, customer), ...await historicalRevenueInvoices(env, null, customer)]
+export async function revenueInvoices(env: Bindings, customer: string | null = null, entity: string | null = null): Promise<RevenueInvoiceRecord[]> {
+  const rows = [...(entity === 'imported' ? [] : await loadRevenueInvoices(env, null, customer, entity)),
+    ...(entity === null || entity === 'imported' ? await historicalRevenueInvoices(env, null, customer) : [])]
   insist(new Set(rows.map(row => row.invoice.id)).size === rows.length, 'history_revenue_duplicate_invoice', 409)
   return rows
 }

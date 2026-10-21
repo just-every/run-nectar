@@ -2,11 +2,11 @@ import type { Bindings } from '../auth.server'
 import { requireRead, requireCapability, type Actor } from './actor'
 import { requireBusiness } from './business'
 import { clockInstant } from './clock'
-import { insist } from './core'
+import { all, insist } from './core'
 import { isMonth, localDate } from './dates'
 import { plainMoney } from './decimal'
 import { REVENUE_POLICY_VERSION } from './revenue-allocation'
-import { revenueInvoice, revenueInvoices, type RevenueInvoiceRecord } from './revenue-records'
+import { revenueEntity, revenueInvoice, revenueInvoices, type RevenueEntity, type RevenueInvoiceRecord } from './revenue-records'
 import { csvResponse } from './report-csv'
 
 export const REVENUE_DEFINITION = 'Revenue excludes tax. Service fees, signed discounts and fixed service credits follow business-local service days; usage follows recorded consumption; one-time fees follow their service date; unused commitments follow settlement or expiry. Actual credit notes are invoice-level contra-revenue in their issue month without changing original tax or line schedules. Signed position equals cumulative net billings minus cumulative recognition: a negative balance is an accrued contract asset; a positive balance is deferred revenue. Opposite invoice positions are shown separately before netting. Native historical schedules are read-only policy-v1 projections from saved originals when no issue-time snapshot exists. Retained Stripe schedules use captured tax-exclusive service consideration: recurring month/year fees allocate equally over anchored service months, with calendar-day splits for partial months; other lines follow saved service days. Imported annual advance invoices therefore carry their original deferred revenue across cutover. Native interval invoices retain their exact service-month schedules. Prepaid-credit liabilities, closing revenue periods and posting to an external ledger remain unavailable.'
@@ -25,6 +25,9 @@ export interface RevenueContribution {
   custody: string
   href: string
   source?: RevenueInvoiceRecord['source']
+  entityId: string | null
+  entityName: string | null
+  entityCustody: RevenueEntity['custody']
 }
 export interface RevenueMonth {
   period: string
@@ -46,6 +49,9 @@ export interface RevenueReport {
   from: string
   to: string
   customerId: string | null
+  entityId: string | null
+  entities: { id: string; name: string }[]
+  entityDefinition: string
   months: RevenueMonth[]
   contributions: RevenueContribution[]
   openingCents: number
@@ -60,7 +66,7 @@ const monthIndex = (period: string) => { const [year, month] = period.split('-')
 const monthAt = (index: number) => `${String(Math.floor(index / 12)).padStart(4, '0')}-${String(index % 12 + 1).padStart(2, '0')}`
 
 function filters(url: URL, current: string) {
-  for (const key of ['period', 'from', 'to', 'customer']) insist(url.searchParams.getAll(key).length <= 1, `invalid_${key}`)
+  for (const key of ['period', 'from', 'to', 'customer', 'entity']) insist(url.searchParams.getAll(key).length <= 1, `invalid_${key}`)
   const period = url.searchParams.get('period'), explicitFrom = url.searchParams.get('from'), explicitTo = url.searchParams.get('to')
   insist(period === null || isMonth(period), 'invalid_period')
   insist(!(period && (explicitFrom || explicitTo)), 'choose_period_or_range')
@@ -69,20 +75,39 @@ function filters(url: URL, current: string) {
   insist(monthIndex(to) - monthIndex(from) < 120, 'revenue_range_exceeds_120_months')
   const customer = url.searchParams.get('customer')
   insist(customer === null || /^[\w-]{1,100}$/.test(customer), 'invalid_customer')
-  return { from, to, customer }
+  const selected = url.searchParams.get('entity')
+  insist(selected === null || ['all', 'business', 'imported'].includes(selected) || /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(selected), 'invalid_entity')
+  return { from, to, customer, entity: selected === 'all' ? null : selected }
 }
 
-function sourceContributions(record: RevenueInvoiceRecord): RevenueContribution[] {
+async function entitySelection(env: Bindings, entity: string | null) {
+  const entities = await all<{ id: string; name: string }>(env, 'SELECT id,legal_name AS name FROM nc_billing_entities ORDER BY legal_name,id')
+  insist(entity === null || ['business', 'imported'].includes(entity) || entities.some(row => row.id === entity), 'billing_entity_not_found', 404)
+  return entities
+}
+
+export const REVENUE_ENTITY_DEFINITION = 'Native entity attribution is frozen when the invoice is issued; later customer or entity edits do not reclassify it. Installation business includes native invoices issued without an entity. Imported sources remain entity unassigned because a later customer assignment does not identify their original issuer. Consolidated includes every category exactly once.'
+
+export function revenueQuery(filter: { from: string; to: string; customerId: string | null; entityId: string | null }) {
+  const query = new URLSearchParams({ from: filter.from, to: filter.to })
+  if (filter.customerId) query.set('customer', filter.customerId)
+  if (filter.entityId) query.set('entity', filter.entityId)
+  return query
+}
+
+function sourceContributions(record: RevenueInvoiceRecord, search = ''): RevenueContribution[] {
   const { invoice, schedules, credits, custody } = record
-  const common = { invoiceId: invoice.id, number: invoice.number, customerId: invoice.customer_id, customerName: invoice.customer_name, custody, ...(record.source ? { source: record.source } : {}) }
+  const entity = revenueEntity(record)
+  const common = { invoiceId: invoice.id, number: invoice.number, customerId: invoice.customer_id, customerName: invoice.customer_name, custody,
+    entityId: entity.id, entityName: entity.name, entityCustody: entity.custody, ...(record.source ? { source: record.source } : {}) }
   const rows: RevenueContribution[] = []
   for (const schedule of schedules) {
-    const source = { ...common, lineId: schedule.lineId, creditId: null, policy: schedule.policy, href: `/app/revenue/${encodeURIComponent(invoice.id)}#line-${encodeURIComponent(schedule.lineId)}` }
+    const source = { ...common, lineId: schedule.lineId, creditId: null, policy: schedule.policy, href: `/app/revenue/${encodeURIComponent(invoice.id)}${search}#line-${encodeURIComponent(schedule.lineId)}` }
     rows.push({ ...source, period: invoice.issue_date.slice(0, 7), kind: 'billing', amountCents: schedule.amountCents })
     rows.push(...schedule.entries.map(entry => ({ ...source, period: entry.period, kind: 'recognition' as const, amountCents: entry.amountCents })))
   }
   for (const credit of credits) {
-    const source = { ...common, custody: credit.basis.custody ?? common.custody, number: credit.number, lineId: null, creditId: credit.id, period: credit.period, amountCents: credit.amountCents, policy: 'invoice-level-contra-revenue', href: `/app/revenue/${invoice.id}#credit-${credit.id}` }
+    const source = { ...common, custody: credit.basis.custody ?? common.custody, number: credit.number, lineId: null, creditId: credit.id, period: credit.period, amountCents: credit.amountCents, policy: 'invoice-level-contra-revenue', href: `/app/revenue/${invoice.id}${search}#credit-${credit.id}` }
     rows.push({ ...source, kind: 'credit-billing' }, { ...source, kind: 'credit-recognition' })
   }
   return rows
@@ -105,10 +130,12 @@ function position(rows: RevenueContribution[], before: string) {
 export async function revenueReport(env: Bindings, actor: Actor, url: URL): Promise<RevenueReport> {
   requireRead(actor, 'reports')
   const business = await requireBusiness(env)
-  const { from, to, customer } = filters(url, localDate(clockInstant(env), business.timezone).slice(0, 7))
+  const { from, to, customer, entity } = filters(url, localDate(clockInstant(env), business.timezone).slice(0, 7))
+  const entities = await entitySelection(env, entity)
+  const search = `?${revenueQuery({ from, to, customerId: customer, entityId: entity })}`
   const rows: RevenueContribution[] = []
-  const records = await revenueInvoices(env, customer)
-  for (const record of records) rows.push(...sourceContributions(record))
+  const records = await revenueInvoices(env, customer, entity)
+  for (const record of records) rows.push(...sourceContributions(record, search))
   const months: RevenueMonth[] = []
   for (let index = monthIndex(from); index <= monthIndex(to); index++) {
     const period = monthAt(index), before = position(rows, period), after = position(rows, monthAt(index + 1))
@@ -120,7 +147,8 @@ export async function revenueReport(env: Bindings, actor: Actor, url: URL): Prom
   }
   const contributions = rows.filter(row => row.period >= from && row.period <= to).sort((a, b) => a.period.localeCompare(b.period) || a.invoiceId.localeCompare(b.invoiceId) || a.kind.localeCompare(b.kind) || (a.lineId ?? a.creditId ?? '').localeCompare(b.lineId ?? b.creditId ?? ''))
   const historicalPolicyVersion = records.find(record => record.source)?.source?.policyVersion
-  return { policyVersion: REVENUE_POLICY_VERSION, ...(historicalPolicyVersion ? { historicalPolicyVersion } : {}), definition: REVENUE_DEFINITION, from, to, customerId: customer, months, contributions,
+  return { policyVersion: REVENUE_POLICY_VERSION, ...(historicalPolicyVersion ? { historicalPolicyVersion } : {}), definition: REVENUE_DEFINITION, from, to, customerId: customer,
+    entityId: entity, entities, entityDefinition: REVENUE_ENTITY_DEFINITION, months, contributions,
     openingCents: months[0].openingCents, netBillingsCents: total(contributions, isBilling), recognizedCents: total(contributions, row => !isBilling(row)),
     closingCents: months.at(-1)!.closingCents, accruedContractAssetCents: months.at(-1)!.accruedContractAssetCents, deferredLiabilityCents: months.at(-1)!.deferredLiabilityCents }
 }
@@ -128,12 +156,17 @@ export async function revenueReport(env: Bindings, actor: Actor, url: URL): Prom
 export async function revenueSource(env: Bindings, actor: Actor, invoiceId: string, url: URL) {
   requireRead(actor, 'reports')
   const record = await revenueInvoice(env, invoiceId)
-  const { customer } = filters(url, record.invoice.issue_date.slice(0, 7))
+  const { from, to, customer, entity } = filters(url, record.invoice.issue_date.slice(0, 7))
+  await entitySelection(env, entity)
   insist(!customer || customer === record.invoice.customer_id, 'revenue_invoice_not_found', 404)
+  const attribution = revenueEntity(record)
+  insist(entity === null || (entity === 'imported' ? attribution.custody === 'imported-unassigned' : entity === 'business' ? attribution.custody === 'installation-business' : attribution.id === entity), 'revenue_invoice_not_found', 404)
+  const search = `?${revenueQuery({ from, to, customerId: customer, entityId: entity })}`
   return { policyVersion: record.source?.policyVersion ?? REVENUE_POLICY_VERSION, definition: REVENUE_DEFINITION, custody: record.custody,
+    entity: attribution, entityDefinition: REVENUE_ENTITY_DEFINITION,
     ...(record.source ? { source: record.source } : {}),
     invoice: { id: record.invoice.id, number: record.invoice.number, customerId: record.invoice.customer_id, customerName: record.invoice.customer_name, issueDate: record.invoice.issue_date, subtotalCents: record.invoice.subtotal_cents, taxCents: record.invoice.tax_cents, totalCents: record.invoice.total_cents, sourceFingerprint: record.invoice.source_fingerprint },
-    schedules: record.schedules, credits: record.credits, contributions: sourceContributions(record) }
+    schedules: record.schedules, credits: record.credits, contributions: sourceContributions(record, search) }
 }
 
 const csvCell = (value: unknown) => {
@@ -144,8 +177,8 @@ export async function revenueCsv(env: Bindings, actor: Actor, url: URL) {
   requireCapability(actor, 'export')
   requireRead(actor, 'reports')
   const report = await revenueReport(env, actor, url)
-  const rows: unknown[][] = [['row_kind', 'period', 'invoice', 'customer', 'line_id', 'credit_id', 'policy', 'custody', 'opening', 'net_billings', 'recognized', 'closing', 'accrued_contract_assets', 'deferred_liabilities', 'signed_contribution', 'source_path','source_provider','source_reference']]
-  for (const month of report.months) rows.push(['rollforward', month.period, '', '', '', '', REVENUE_POLICY_VERSION, '', ...[month.openingCents, month.netBillingsCents, month.recognizedCents, month.closingCents, month.accruedContractAssetCents, month.deferredLiabilityCents].map(plainMoney), '', '', '', ''])
-  for (const row of report.contributions) rows.push([row.kind, row.period, row.number, row.customerName, row.lineId, row.creditId, row.policy, row.custody, '', '', '', '', '', '', plainMoney(row.amountCents), row.href,row.source?.provider??'nectar',row.source?.providerRef??row.invoiceId])
+  const rows: unknown[][] = [['row_kind', 'period', 'invoice', 'customer', 'line_id', 'credit_id', 'policy', 'custody', 'opening', 'net_billings', 'recognized', 'closing', 'accrued_contract_assets', 'deferred_liabilities', 'signed_contribution', 'source_path','source_provider','source_reference','entity_id','entity_name','entity_custody']]
+  for (const month of report.months) rows.push(['rollforward', month.period, '', '', '', '', REVENUE_POLICY_VERSION, '', ...[month.openingCents, month.netBillingsCents, month.recognizedCents, month.closingCents, month.accruedContractAssetCents, month.deferredLiabilityCents].map(plainMoney), '', '', '', '', report.entityId ?? 'all', '', ''])
+  for (const row of report.contributions) rows.push([row.kind, row.period, row.number, row.customerName, row.lineId, row.creditId, row.policy, row.custody, '', '', '', '', '', '', plainMoney(row.amountCents), row.href,row.source?.provider??'nectar',row.source?.providerRef??row.invoiceId,row.entityId,row.entityName,row.entityCustody])
   return csvResponse(rows.map(row => row.map(csvCell).join(',')).join('\r\n') + '\r\n', 'nectar-revenue')
 }

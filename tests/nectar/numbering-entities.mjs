@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { file } from './harness.mjs'
+import { entityRevenueFlow } from './entity-revenue.mjs'
 
 export async function numberingEntitiesFlow(h, owner, { onState = async () => {} } = {}) {
   const api = (path, body, status) => h.api(path, owner, body, status)
@@ -10,12 +11,16 @@ export async function numberingEntitiesFlow(h, owner, { onState = async () => {}
   const mutate = async (path, body, status) => api(path, { revision: await revision(), ...body }, status)
   const initial = await api('business')
   await api('business.configure', { ...initial, timezone: 'UTC' })
+  await h.advanceClock('2026-09-10T16:00:00Z')
   const captures = {}
   for (const name of ['manifest','customers','products','prices','subscriptions','invoices','meters'])
     captures[name] = JSON.parse(await readFile(new URL(`../fixtures/stripe/${name}.json`, import.meta.url), 'utf8'))
   captures.invoices.data[0].number = 'ACME-0041'
   captures.invoices.data[1].number = 'ACME-0042'
   captures.invoices.data[2].number = 'HARBOR-0009'
+  // Retain one actual issue date in this synthetic capture so reporting can
+  // distinguish its original issuer from a later customer entity assignment.
+  captures.invoices.data[0].status_transitions = { finalized_at: captures.invoices.data[0].created }
   const files = Object.fromEntries(Object.entries(captures).map(([name, value]) => [name, file(`${name}.json`, JSON.stringify(value), 'application/json')]))
   const preview = await api('import.preview', files)
   const imported = await api('import.apply', { ...files, fingerprint: preview.fingerprint })
@@ -80,7 +85,7 @@ export async function numberingEntitiesFlow(h, owner, { onState = async () => {}
   assert.equal((await issue(harbor, 'Entity B independent customer sequence')).number, 'HARBOR-0010')
   const pending = await draft(atlas, 'Approval predates route change')
   await api('invoice.approve', { invoice: pending.id, acknowledge: true })
-  await mutate('entity.update', { ...identity(1, 'OPCO'), entity: entityA.id, ledger_company_ref: 'synthetic-nectar-new-ledger' })
+  await mutate('entity.update', { ...identity(1, 'OPCO'), entity: entityA.id, legal_name: 'Synthetic entity 1 revised', ledger_company_ref: 'synthetic-nectar-new-ledger' })
   await api('invoice.finalise', { invoice: pending.id, issue_date: '2026-09-10' }, 409)
   assert.equal((await state()).entities.find(row => row.id === entityA.id).next_invoice_number, 45, 'stale approval consumes no entity number')
   assert.deepEqual(JSON.parse((await api(`invoices/${firstA.id}`)).billing_route_json), savedRoute, 'issued route snapshot survives entity edits')
@@ -108,5 +113,6 @@ export async function numberingEntitiesFlow(h, owner, { onState = async () => {}
   await h.api('entity.create', agent, { revision: await revision(), ...identity(3,'DENIED') }, 403)
   await h.api('invoice.series.capture-live', agent, { revision: await revision(), entity: entityA.id, customer: atlas, source_invoice: source.id }, 403)
   assert.match(await h.page('/app/numbering', owner), /owner-recorded|owner observation/i)
+  await entityRevenueFlow(h, owner, { entityA: entityA.id, entityB: entityB.id, atlas, harbor, firstA, firstB, next, sourceInvoice: captures.invoices.data[0].id, accountant, agent })
   console.log('MOVE-011 owner-recorded source configuration, entity/customer sequences, route snapshots, authority, register/filter/CSV passed; live provider and SET-001 routing acceptance remain unproven')
 }
