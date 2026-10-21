@@ -98,6 +98,8 @@ export async function confirmNativeCollection(env: Bindings, actor: Actor, input
     await collectionOwner(env, actor)
     await currentNativeCollection(env, actor, current)
     await prepaidFundingForInvoice(env, row.invoice_id)
+    insist(canonical(await savedCard(selected.stripe, basis.customerRef)) === canonical({ customerRef: basis.customerRef,
+      paymentMethodRef: basis.paymentMethodRef, livemode: basis.livemode, card: basis.card }), 'native_collection_card_changed', 409)
     const identity = paymentIdentity(current, basis)
     const intent = await selected.stripe('/payment_intents', new URLSearchParams({ amount: String(basis.amountCents), currency: 'usd', customer: basis.customerRef,
       payment_method: basis.paymentMethodRef, 'payment_method_types[0]': 'card', confirm: 'true', off_session: 'true', error_on_requires_action: 'true',
