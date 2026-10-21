@@ -52,10 +52,12 @@ export async function harness({ assets = false, localTime, hostname = '127.0.0.1
     await mf.ready
     console.log('HARNESS applying committed migrations')
     // Every committed migration, as `rer setup` leaves a database.
+    console.log('HARNESS acquiring D1 binding')
     const db = await mf.getD1Database('DB')
+    console.log('HARNESS D1 binding acquired')
     for (const name of (await readdir('migrations/core')).filter(name => name.endsWith('.sql')).sort()) {
       setupPhase=`migration:${name}`
-      if(name>='0058')console.log('HARNESS',setupPhase)
+      console.log('HARNESS',setupPhase)
       await db.batch(wrangler.unstable_splitSqlQuery(await readFile(`migrations/core/${name}`, 'utf8')).map(query => db.prepare(query)))
     }
     setupPhase='health'
