@@ -1,0 +1,337 @@
+{
+  "version": 1,
+  "journey": "MOVE-007 Stripe 18-month history",
+  "status": "passed",
+  "startedAt": "2026-10-21T23:41:44.003Z",
+  "head": "5eb8f68ad4a2c5368fd2644a60711d826bd38ed0",
+  "clockId": "clock_1UT98eDg8BoejKxoqOYe0LyS",
+  "sourceIds": {
+    "product": "prod_VU7N1dfX2HSQv9",
+    "prices": [
+      "price_1UT98fDg8BoejKxozmO83rHV",
+      "price_1UT98fDg8BoejKxoFphiaRkZ"
+    ],
+    "paymentMethod": "pm_1UT98gDg8BoejKxo8YpSgfFP",
+    "customer": "cus_VU7NKkQyd0WLxZ",
+    "subscriptions": [
+      "sub_1UT98hDg8BoejKxogopdFgCV",
+      "sub_1UT9BrDg8BoejKxosF962uDI"
+    ],
+    "refund": "re_3UT98hDg8BoejKxo0QIHuslc",
+    "creditNote": "cn_1UT98lDg8BoejKxoe9IMchor",
+    "openInvoice": "in_1UT9CpDg8BoejKxoMKuYBONq",
+    "invoices": [
+      "in_1UT9CpDg8BoejKxoMKuYBONq",
+      "in_1UT9CZDg8BoejKxoET5WOFum",
+      "in_1UT9CMDg8BoejKxogiWMrhfB",
+      "in_1UT9C7Dg8BoejKxoSsxQ5hqm",
+      "in_1UT9BrDg8BoejKxoRvfCEpun",
+      "in_1UT9BoDg8BoejKxoLpzx5NrS",
+      "in_1UT9BYDg8BoejKxoQBjYLHf6",
+      "in_1UT9BLDg8BoejKxoJ8r8tX9x",
+      "in_1UT9B5Dg8BoejKxoeMnlDlCy",
+      "in_1UT9AqDg8BoejKxomAO6n3LL",
+      "in_1UT9AdDg8BoejKxot5QA6MNX",
+      "in_1UT9AQDg8BoejKxo3be7DvW1",
+      "in_1UT9ACDg8BoejKxoo3TEXKeT",
+      "in_1UT99zDg8BoejKxoo2uI1Fk0",
+      "in_1UT99kDg8BoejKxoch4Cnwey",
+      "in_1UT99XDg8BoejKxoSALMsa4M",
+      "in_1UT99HDg8BoejKxodGvOdIAU",
+      "in_1UT992Dg8BoejKxoN1odGjc6",
+      "in_1UT98oDg8BoejKxoDUFpK98g",
+      "in_1UT98hDg8BoejKxofw8v6fA9"
+    ],
+    "lines": [
+      "il_1ToBZLDg8BoejKxoqATTqfun",
+      "il_1TdJGuDg8BoejKxoXJ1edqlA",
+      "il_1TS4UuDg8BoejKxoRNTDQsKq",
+      "il_1THCCSDg8BoejKxo5BzqLA9G",
+      "il_1T5xQSDg8BoejKxoKr1i1i8h",
+      "il_1T5xQSDg8BoejKxoC0COW4bu",
+      "il_1Svo56Dg8BoejKxoXbXlNeaw",
+      "il_1SkZJ6Dg8BoejKxockqsPTba",
+      "il_1SZKX6Dg8BoejKxoCPBQ9lzu",
+      "il_1SOSEeDg8BoejKxoggahDSnI",
+      "il_1SDDSeDg8BoejKxomPmocTZa",
+      "il_1S2LACDg8BoejKxo0ltFEuln",
+      "il_1Rr6OCDg8BoejKxob6O7MoWW",
+      "il_1RfrcCDg8BoejKxohCsAAe7e",
+      "il_1RUzJkDg8BoejKxoqdrhXMmd",
+      "il_1RJkXkDg8BoejKxoG1FleyGP",
+      "il_1R8sFIDg8BoejKxoFmUfQdDS",
+      "il_1QxdTIDg8BoejKxo71fPSPwv",
+      "il_1QnU7wDg8BoejKxoEL86vOcE",
+      "il_1QcFLwDg8BoejKxouTpMfEdH"
+    ],
+    "payments": [
+      "ch_3UT9CeDg8BoejKxo4xsxO1QA",
+      "ch_3UT9CQDg8BoejKxo3Zvc7MKm",
+      "ch_3UT9CEDg8BoejKxo2obJrGRl",
+      "ch_3UT9BzDg8BoejKxo12Yyqebl",
+      "ch_3UT9BsDg8BoejKxo2wRFNTOC",
+      "ch_3UT9BdDg8BoejKxo0vIsfVpn",
+      "ch_3UT9BQDg8BoejKxo3hoDxGB7",
+      "ch_3UT9BADg8BoejKxo2ea8mGt4",
+      "ch_3UT9AwDg8BoejKxo4bvSCOrc",
+      "ch_3UT9AhDg8BoejKxo3GWm7ZQ3",
+      "ch_3UT9AUDg8BoejKxo4YUsKuvT",
+      "ch_3UT9AGDg8BoejKxo00haC4aG",
+      "ch_3UT9A4Dg8BoejKxo4KgwhF3y",
+      "ch_3UT99oDg8BoejKxo02bIyVmy",
+      "ch_3UT99cDg8BoejKxo3JINcbnU",
+      "ch_3UT99NDg8BoejKxo0faR8foH",
+      "ch_3UT998Dg8BoejKxo440FZUP6",
+      "ch_3UT98tDg8BoejKxo14Vc0dto",
+      "ch_3UT98hDg8BoejKxo0mV5TXw5"
+    ],
+    "events": [
+      "evt_1UT98pDg8BoejKxoc1FDgNFR",
+      "evt_1UT98jDg8BoejKxok3jCRDjd",
+      "evt_1UT993Dg8BoejKxo2L80OWBB",
+      "evt_1UT99IDg8BoejKxo13ORbntv",
+      "evt_1UT99XDg8BoejKxoTJFucGqZ",
+      "evt_1UT99kDg8BoejKxoNdKzOV0G",
+      "evt_1UT9A0Dg8BoejKxo4tpMFYvK",
+      "evt_1UT9ADDg8BoejKxoMAH03016",
+      "evt_1UT9ARDg8BoejKxoGQXsBKsb",
+      "evt_1UT9AeDg8BoejKxoMBPI8GNB",
+      "evt_1UT9ArDg8BoejKxoVTuRQ3Gp",
+      "evt_1UT9B5Dg8BoejKxoYN2NPKs5",
+      "evt_1UT9BMDg8BoejKxoyK6PSvD0",
+      "evt_1UT9BYDg8BoejKxoW8CaD7wc",
+      "evt_1UT9BuDg8BoejKxoJY9FnVRH",
+      "evt_1UT9BpDg8BoejKxoeJSUqeRY",
+      "evt_1UT9C8Dg8BoejKxoeZ4282eW",
+      "evt_1UT9CNDg8BoejKxoIsxZUYoo",
+      "evt_1UT9CaDg8BoejKxo30ficFdx"
+    ],
+    "disputes": []
+  },
+  "assertions": {
+    "history": {
+      "importedDocuments": 21,
+      "importedPayments": 19,
+      "importedRefundCents": 2000,
+      "importedCreditCents": 2000,
+      "importedSubscriptionEvents": 19,
+      "annualActiveMappingRejected": true
+    },
+    "monthlyReports": [
+      {
+        "period": "2025-01",
+        "billings": 10000,
+        "collections": 0,
+        "tax": 0,
+        "credits": 2000,
+        "mrr": 10000
+      },
+      {
+        "period": "2025-02",
+        "billings": 10000,
+        "collections": 0,
+        "tax": 0,
+        "credits": 0,
+        "mrr": 10000
+      },
+      {
+        "period": "2025-03",
+        "billings": 10000,
+        "collections": 0,
+        "tax": 0,
+        "credits": 0,
+        "mrr": 10000
+      },
+      {
+        "period": "2025-04",
+        "billings": 10000,
+        "collections": 0,
+        "tax": 0,
+        "credits": 0,
+        "mrr": 10000
+      },
+      {
+        "period": "2025-05",
+        "billings": 10000,
+        "collections": 0,
+        "tax": 0,
+        "credits": 0,
+        "mrr": 10000
+      },
+      {
+        "period": "2025-06",
+        "billings": 10000,
+        "collections": 0,
+        "tax": 0,
+        "credits": 0,
+        "mrr": 10000
+      },
+      {
+        "period": "2025-07",
+        "billings": 10000,
+        "collections": 0,
+        "tax": 0,
+        "credits": 0,
+        "mrr": 10000
+      },
+      {
+        "period": "2025-08",
+        "billings": 10000,
+        "collections": 0,
+        "tax": 0,
+        "credits": 0,
+        "mrr": 10000
+      },
+      {
+        "period": "2025-09",
+        "billings": 10000,
+        "collections": 0,
+        "tax": 0,
+        "credits": 0,
+        "mrr": 10000
+      },
+      {
+        "period": "2025-10",
+        "billings": 10000,
+        "collections": 0,
+        "tax": 0,
+        "credits": 0,
+        "mrr": 10000
+      },
+      {
+        "period": "2025-11",
+        "billings": 10000,
+        "collections": 0,
+        "tax": 0,
+        "credits": 0,
+        "mrr": 10000
+      },
+      {
+        "period": "2025-12",
+        "billings": 10000,
+        "collections": 0,
+        "tax": 0,
+        "credits": 0,
+        "mrr": 10000
+      },
+      {
+        "period": "2026-01",
+        "billings": 10000,
+        "collections": 0,
+        "tax": 0,
+        "credits": 0,
+        "mrr": 10000
+      },
+      {
+        "period": "2026-02",
+        "billings": 10000,
+        "collections": 0,
+        "tax": 0,
+        "credits": 0,
+        "mrr": 10000
+      },
+      {
+        "period": "2026-03",
+        "billings": 1210000,
+        "collections": 0,
+        "tax": 0,
+        "credits": 0,
+        "mrr": 110000
+      },
+      {
+        "period": "2026-04",
+        "billings": 10000,
+        "collections": 0,
+        "tax": 0,
+        "credits": 0,
+        "mrr": 110000
+      },
+      {
+        "period": "2026-05",
+        "billings": 10000,
+        "collections": 0,
+        "tax": 0,
+        "credits": 0,
+        "mrr": 110000
+      },
+      {
+        "period": "2026-06",
+        "billings": 12500,
+        "collections": 0,
+        "tax": 0,
+        "credits": 0,
+        "mrr": 110000
+      }
+    ],
+    "revenue": {
+      "annualInvoice": "in_1UT9BrDg8BoejKxoRvfCEpun",
+      "julyOpeningDeferredCents": 800000,
+      "remainingMonths": 8,
+      "monthlyRecognitionCents": 100000,
+      "closingCents": 0
+    },
+    "collectionAttempt": {
+      "status": "uncertain",
+      "errorCode": "stripe_mirror_unconfirmed",
+      "intentRecorded": true,
+      "chargeRecorded": true
+    },
+    "openCollection": {
+      "invoice": "in_1UT9CpDg8BoejKxoMKuYBONq",
+      "number": "BZCUPSRC-0020",
+      "amountCents": 2500,
+      "currency": "usd",
+      "request": "e9532439-b89b-4fb2-b70c-00be1b5a5e05",
+      "paymentIntent": "pi_3UT9DNDg8BoejKxo1oA0efDF",
+      "charge": "ch_3UT9DNDg8BoejKxo1uWRNSiF",
+      "collectedOn": "2026-10-21",
+      "originalStatus": "paid",
+      "outOfBandMirror": true,
+      "processorPaymentAttempts": 1,
+      "providerMirrorAttempts": 1,
+      "remainingArCents": 0,
+      "sourceOriginalsUnchanged": true,
+      "repeatRefused": true
+    },
+    "importJob": "160a6e1b-d1e5-4e0d-b2bc-d76e445955b9",
+    "firstStripeInvoice": "in_1UT98hDg8BoejKxofw8v6fA9"
+  },
+  "captureHashes": {
+    "customers": "071a97de15fcc5791c7374713bf822cec5525324f73746f3c107142a92247349",
+    "products": "69e80becc232b7d1aaede9df04774c21cb22a645bda3550f1e392a656eea0726",
+    "prices": "ef1236de1fdef01767e7b642d4e14ec9340699f8e23653296fb12e4b8fba4562",
+    "subscriptions": "d4eef9aab2ef971b279040c1018e0a1f61ed9a21c827bb18d20407204f213155",
+    "invoices": "ff0c3a2e043d897ca7d9fb656ea6253ee0ff7e44f78b79bad6713ab20f882ea6",
+    "payments": "5e0340745bcaeb6d6fa5a54c80ee9887b3231d3b6980b50ce5ffd6a0ca223015",
+    "refunds": "40bec7b869f3a1fadbdc64e86da7e05eeb0b9fe589dd74b21dbddddd1dbd46e2",
+    "disputes": "897aa1f7f43627d3e66065d24cfc566049f85a42801dd85499ecaafec193ac9f",
+    "credit_notes": "fbe1e3cd9fb874f1beb13770e52584be20f7fd89ff62454687e628b93bbff7bf",
+    "subscription_events": "78eefb190e799d49630dd6def7dce10dba9310dc2c6881cf007c5e9b81442d5e",
+    "manifest": "eec9c6e1e6650032553872eb1f9905efb900c8e1f02e4442a491a29caf7e7f2c"
+  },
+  "cleanup": {
+    "clockDeleted": true
+  },
+  "apiVersion": "2025-09-30.clover",
+  "accountId": "acct_1URgLjDg8BoejKxo",
+  "clockDeletesAfter": 1795218104,
+  "providerCounts": {
+    "customers": 1,
+    "products": 1,
+    "prices": 2,
+    "subscriptions": 2,
+    "invoices": 20,
+    "payments": 19,
+    "refunds": 1,
+    "disputes": 0,
+    "credit_notes": 1,
+    "subscription_events": 19
+  },
+  "privateCapture": "stripe-history-sandbox-capture-fd086305-00e3-4828-8f7c-722c4f77266d.json",
+  "completedAt": "2026-10-21T23:46:44.873Z",
+  "requestCounts": {
+    "GET": 308,
+    "POST": 51,
+    "DELETE": 1
+  }
+}

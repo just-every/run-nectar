@@ -57,7 +57,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "4562eb827cf77448dbe17712beea1e8f28fa03c725d8f42b3011ef738f29d6b5",
+      "sha256": "21e3b0cbeabd072d319f2235115997e7ccc13c67467c55f6d6cd17736b53159f",
       "executable": false
     },
     "AGENTS.consumer.md": {
@@ -77,7 +77,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "127079a5ae3c4ca638a6b6da2c88929f5ccdec8cacfcb5a38caf4df80001caa4",
+      "sha256": "fe60cac57572246ebe2d9fb9745414c2eff04762973156e3e4b65cfcce83d98f",
       "executable": false
     },
     "DEMO.md": {
@@ -114,6 +114,10 @@
     },
     "docs/composition-baseline.json": {
       "sha256": "19746a5bf331475f7f341ca89200e7aba24889caef15dcd28fd7dc5708fe750d",
+      "executable": false
+    },
+    "docs/evidence/stripe-history-sandbox.json": {
+      "sha256": "705caacfa84a76664791ce5bea982a1c44fc588113b7507f521a82356069cbfa",
       "executable": false
     },
     "docs/getting-started.md": {
