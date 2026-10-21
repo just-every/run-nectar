@@ -7,7 +7,7 @@ are stable; a build round works down this list and records each result here.
 
 Status: **124 clauses: 48 done, 24 partial, 52 missing.**
 All sixteen first-release clauses are **LOCAL PROVEN** (16 of 16); of the
-100 target clauses 26 are proven, 23 partial and 51 missing; of the
+100 target clauses 28 are proven, 21 partial and 51 missing; of the
 8 push-further agent clauses 4 are proven, 3 partial and 1 missing.
 
 Each first-release clause has one flow check in `tests/nectar/flows.mjs`
