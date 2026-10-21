@@ -56,6 +56,7 @@ export async function intervalsFlow(h, owner, { onState = async () => {} } = {})
       if (base) {
         platformInvoices.push(invoice)
         assert.equal(base.amount_cents, 1200000)
+        assert.ok(!invoice.exceptions.some(exception=>exception.code==='missing_usage'),'An advance platform invoice does not demand future monthly consumption')
         assert.equal(invoice.issue_date, index === 0 ? '2026-01-01' : '2027-01-01')
         const source = await api(`revenue/${invoice.id}`), schedule = source.schedules.find(row => row.lineId === base.id)
         assert.deepEqual(schedule.entries.map(row => row.amountCents), Array(12).fill(100000), 'Annual advance recognizes exactly $1,000 per service month')

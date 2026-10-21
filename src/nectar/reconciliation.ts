@@ -27,13 +27,13 @@ export async function controlTotals(env: Bindings, actor: Actor, month: string) 
   return await Promise.all(rows.map(row => compared(env, row, business.timezone)))
 }
 
-export async function reconciliationFor(env: Bindings, subscription: string, period: { start: string; end: string }, zone: string, events: { meterId: string; occurredAt: number }[] = []) {
+export async function reconciliationFor(env: Bindings, subscription: string, period: { start: string; end: string }, zone: string, events: { meterId: string; occurredAt: number }[] = [], selectedMeters?: Set<string>) {
   const lateDays = new Set(events.filter(event => localDate(event.occurredAt, zone) < period.start).map(event => `${event.meterId}|${localDate(event.occurredAt, zone)}`))
   const rows = await all(env, `SELECT DISTINCT c.*, m.code AS meter_code FROM nc_usage_controls c JOIN nc_meters m ON m.id = c.meter_id JOIN nc_subscriptions s ON s.customer_id = c.customer_id
     JOIN nc_items i ON i.subscription_id = s.id JOIN nc_prices p ON p.id = i.price_id JOIN nc_meters pm ON pm.id=p.meter_id AND COALESCE(pm.source_meter_id,p.meter_id) = c.meter_id
     WHERE s.id = ? AND c.day < ? AND c.day >= s.start_date AND (s.end_date IS NULL OR c.day < s.end_date)
     AND i.effective_from <= c.day AND (i.effective_to IS NULL OR c.day < i.effective_to) ORDER BY c.day, m.code`, subscription, period.end)
-  return await Promise.all(rows.filter(row => row.day >= period.start || lateDays.has(`${row.meter_id}|${row.day}`)).map(row => compared(env, row, zone)))
+  return await Promise.all(rows.filter(row => (!selectedMeters || selectedMeters.has(row.meter_id)) && (row.day >= period.start || lateDays.has(`${row.meter_id}|${row.day}`))).map(row => compared(env, row, zone)))
 }
 
 export async function recordControl(env: Bindings, actor: Actor, input: Input) {

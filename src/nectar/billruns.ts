@@ -54,7 +54,8 @@ async function incumbentComparison(env: Bindings, sub: Row, period: { start: str
 
 async function reconciledRating(env: Bindings, business: Business, subscription: string, period: { start: string; end: string },window?:BillingWindow) {
   const result = await rated(env, business, subscription, period,undefined,window)
-  const reconciliation = await reconciliationFor(env, subscription, period, business.timezone, result.input.events)
+  const selectedMeters = window ? new Set(result.input.items.filter(item => window.components.some(component => component.itemId === item.id)).flatMap(item => { const price=result.input.prices[item.priceId]; return price.kind==='unit' ? [price.metric?.sourceId ?? price.meterId!] : [] })) : undefined
+  const reconciliation = selectedMeters?.size===0 ? [] : await reconciliationFor(env, subscription, period, business.timezone, result.input.events, selectedMeters)
   if (!reconciliation.length) return result
   const input = { ...result.input, reconciliation }
   const exceptions = reconciliation.filter(row => row.mismatch && !row.acknowledged).map(row => ({
@@ -69,7 +70,7 @@ export async function draftFor(env: Bindings, business: Business, sub: Row, peri
   const previous = await one(env, "SELECT number, period_start, total_cents, subtotal_cents FROM nc_invoices WHERE subscription_id = ? AND status = 'issued' AND period_start < ? ORDER BY period_start DESC LIMIT 1", sub.id, period.start)
   const incumbent = await incumbentComparison(env, sub, period, rating)
   const metered = rating.lines.some(line => line.kind === 'usage' || line.kind === 'overage' || line.kind === 'metric_usage' || line.kind === 'trial_usage' || line.kind === 'paused_usage')
-  const hasMeteredItem = Object.values((input as any).prices as Record<string, Row>).some(price => price.kind === 'unit') && (input as any).items.some((item: Row) => (input as any).prices[item.priceId]?.kind === 'unit' && item.from < period.end && (item.to ?? '9999') > period.start)
+  const hasMeteredItem = Object.values((input as any).prices as Record<string, Row>).some(price => price.kind === 'unit') && (input as any).items.some((item: Row) => (input as any).prices[item.priceId]?.kind === 'unit' && (!window || window.components.some(component=>component.itemId===item.id)) && item.from < period.end && (item.to ?? '9999') > period.start)
   if (hasMeteredItem && !metered) exceptions.push({ code: 'missing_usage', message: 'This subscription has a metered price but no usage was recorded for the period. Check the usage feed before approving.' })
   if (!sub.billing_email) exceptions.push({ code: 'no_billing_email', message: 'The customer has no billing email.' })
   if (previous && previous.subtotal_cents > 0 && Math.abs(rating.subtotalCents - previous.subtotal_cents) * 4 > previous.subtotal_cents) exceptions.push({ code: 'large_change', message: `The subtotal changed by more than a quarter from invoice ${previous.number}.` })
