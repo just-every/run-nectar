@@ -38,6 +38,9 @@ export interface RatingInput {
   billing?: BillingWindow
   billingDueDate?: string
   commitmentCalendar?: CalendarBasis
+  // Prepared historical simulations retain original claim identities and bind
+  // replacement pricing only inside these complete saved service windows.
+  pricingCounterfactual?: { sourcePriceId: string; targetPriceId: string; from: string; to: string; quantity?: number }
   invoiceContent?: import('./invoice-content').InvoiceContent
   renewals?: RenewalRate[]
   usageAdjustments?: import('./usage-correction-records').UsageAdjustment[]

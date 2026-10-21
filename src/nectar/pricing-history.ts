@@ -3,6 +3,7 @@ import type { Bindings } from '../auth.server'
 import type { Business } from './business'
 import { all, canonical, insist, one, parseJson, type Row } from './core'
 import { addDays, addMonths, addMonthsClamped, periodStartingIn, today } from './dates'
+import { billingServiceWindows } from './billing-composition'
 import { billingAnchor, billingPeriodContaining, dueBillingWindows, intervalBoundary, MONTHLY_ARREARS } from './billing-calendar'
 import type { PriceIn, RatingInput } from './rating'
 
@@ -49,13 +50,13 @@ export async function pricingHistory(env: Bindings, business: Business, sub: Row
   const seen = new Set<string>()
   const invoices = issued.filter(invoice => {
     const input = inputOf(invoice)
-    return input?.billing && input.billing.period.start >= from && input.billing.period.start < to
+    return input?.billing && billingServiceWindows(input.billing).some(window => window.period.end > from && window.period.start < to)
   })
   for (const invoice of invoices) {
-    const window = inputOf(invoice)!.billing!
-    for (const component of window.components) {
+    const parts = billingServiceWindows(inputOf(invoice)!.billing!).filter(window => window.period.end > from && window.period.start < to)
+    for (const window of parts) for (const component of window.components) {
       const match = expectedComponents.get(component.key)
-      insist(match && match.window.key === window.key && canonical(match.component) === canonical(component) && !seen.has(component.key), 'complete_issued_service_history_required', 409, { invoice: invoice.id })
+      insist(match && match.window.key === window.key && canonical(match.component) === canonical(component) && !seen.has(component.key), 'complete_issued_service_history_required', 409, { invoice: invoice.id, serviceWindow: window.key })
       seen.add(component.key)
     }
   }

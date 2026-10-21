@@ -36,10 +36,20 @@ function seatQuantity(target: PriceIn, value: unknown): number {
  * Raw events must already have the intended replay/preview billing eligibility.
  * Signed terms retain their exact original price bindings, values and dates.
  */
-export function applyPricingReplacement(input: RatingInput, target: PriceIn, change: PricingReplacement, events: EventIn[] = input.events): RatingInput {
+export function applyPricingReplacement(input: RatingInput, target: PriceIn, change: PricingReplacement, events: EventIn[] = input.events, serviceRange?: { from: string; to: string }): RatingInput {
   const sources = input.items.filter(item => item.priceId === change.source_price)
   insist(sources.length, 'source_price_not_on_subscription', 409, { subscription: input.subscription.id })
   compatiblePricingCadence(input.prices[change.source_price], target)
+  if (input.billing && serviceRange) {
+    if (target.kind === 'seat') for (const source of sources) seatQuantity(target, change.quantity ?? (input.prices[source.priceId]?.kind === 'seat' ? source.quantity : undefined))
+    // Original item/component identities remain the issued custody. The rating
+    // engine changes semantic prices only inside selected original service parts.
+    const replay: RatingInput & { pricingCounterfactual: { sourcePriceId: string; targetPriceId: string; from: string; to: string; quantity?: number } } = {
+      ...input, prices: { ...input.prices, [target.id]: target }, events,
+      pricingCounterfactual: { sourcePriceId: change.source_price, targetPriceId: target.id, ...serviceRange, ...(change.quantity === undefined ? {} : { quantity: change.quantity }) },
+    }
+    return replay
+  }
   const items = input.items.map(item => item.priceId !== change.source_price ? { ...item } : {
     ...item, priceId: target.id,
     quantity: target.kind === 'seat' ? seatQuantity(target, change.quantity ??
@@ -176,8 +186,8 @@ export async function pricingReplay(env: Bindings, business: Business, payload: 
     const sourceMeter = target.metric?.sourceId ?? target.meterId
     // metricEvents retains the full predecessor history for latest/time-weighted.
     const [lines, raw] = await Promise.all([
-      all(env, `SELECT l.* FROM nc_invoice_lines l JOIN nc_invoices i ON i.id=l.invoice_id WHERE i.subscription_id=? AND i.status='issued' AND i.invoice_kind='recurring' AND i.period_start>=? AND i.period_start<? ORDER BY i.period_start,l.seq`,
-        id, from, to),
+      all(env, `SELECT l.* FROM nc_invoice_lines l JOIN nc_invoices i ON i.id=l.invoice_id WHERE i.subscription_id=? AND i.status='issued' AND i.invoice_kind='recurring' AND i.id IN (SELECT value FROM json_each(?)) ORDER BY i.period_start,l.seq`,
+        id, JSON.stringify(invoices.map(invoice => invoice.id))),
       sourceMeter ? metricEvents(env, sub.customer_id, sourceMeter, zonedStart(to, business.timezone)) : Promise.resolve([]),
     ])
     const periods: ReplayPeriod[] = []
@@ -193,8 +203,10 @@ export async function pricingReplay(env: Bindings, business: Business, payload: 
         tax: calculation.tax ?? {}, consumedEvents: calculation.consumedEvents ?? [],
         exceptions: parseJson(invoice.exceptions_json, []),
       }
-      const events = replayEvents(input, target, sourceId, raw)
-      const afterInput = applyPricingReplacement(input, target, normalized, events)
+      const replayedEvents = replayEvents(input, target, sourceId, raw)
+      const outsideEvents = input.billing ? input.events.filter(event => event.occurredAt < zonedStart(from, input.timezone) || event.occurredAt >= zonedStart(to, input.timezone)) : []
+      const events = [...new Map([...replayedEvents, ...outsideEvents].map(event => [event.eventId, event])).values()].sort((a, b) => a.occurredAt - b.occurredAt || a.eventId.localeCompare(b.eventId))
+      const afterInput = applyPricingReplacement(input, target, normalized, events, { from, to })
       if (afterInput.contracts) afterInput.contracts = { ...afterInput.contracts,
         invoices: afterInput.contracts.invoices.map(previous => ({ ...previous,
           lines: rerated.get(previous.id) ?? previous.lines,

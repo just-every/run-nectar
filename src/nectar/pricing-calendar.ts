@@ -4,6 +4,7 @@ import type { Bindings } from '../auth.server'
 import type { Business } from './business'
 import { canonical, fingerprint, insist, one, type Row } from './core'
 import { addDays, addMonths, addMonthsClamped, periodContaining } from './dates'
+import { composeBillingWindows } from './billing-composition'
 import { billingAnchor, billingPeriodContaining, dueBillingWindows, intervalBoundary, INTERVAL_RATING_VERSION,
   MONTHLY_ARREARS, nonMonthlyArrears, type BillingWindow } from './billing-calendar'
 import { ratingInputs } from './inputs'
@@ -51,7 +52,7 @@ function upcomingRenewal(input: RatingInput, term: Row | null, date: string) {
 type Prior = { input: RatingInput; rating: Rating }
 function remainingInput(input: RatingInput, prior: Prior[]): RatingInput {
   const consumed = new Set(prior.flatMap(entry => entry.rating.consumedEvents))
-  const charged = new Set(prior.flatMap(entry => (entry.input.charges ?? []).map(charge => charge.id)))
+  const charged = new Set(prior.flatMap(entry => entry.rating.lines.flatMap(line => typeof line.evidence.charge === 'string' ? [line.evidence.charge] : [])))
   const credits = new Set(prior.flatMap(entry => entry.rating.lines.filter(line => line.kind === 'credit').map(line => line.evidence.amendment)))
   return { ...input, events: input.events.filter(event => !consumed.has(event.eventId)),
     amendments: input.amendments.filter(amendment => amendment.kind !== 'fixed_credit' || !credits.has(amendment.id)),
@@ -80,14 +81,14 @@ export async function pricingFuture(env: Bindings, business: Business, sub: Row,
       }).sort().at(-1)
     insist(end && end > date, 'pricing_preview_service_required', 409)
     const from = active.map(item => billingPeriodContaining(anchor, input.prices[item.priceId].billing ?? MONTHLY_ARREARS, date).start).sort()[0] ?? date
-    return dueBillingWindows(input, from, addDays(end, 1)).filter(window => window.period.end > date && window.period.start < end)
+    return composeBillingWindows(dueBillingWindows(input, from, addDays(end, 1)).filter(window => window.period.end > date && window.period.start < end))
   }
   const beforeWindows = windows(initial), afterWindows = windows(afterInitial)
   const first = periodContaining(sub.anchor_day, date)
   const entries = new Map<string, { before?: BillingWindow; after?: BillingWindow; period: { start: string; end: string } }>()
   for (const [side, selected] of [['before', beforeWindows], ['after', afterWindows]] as const) for (const [index, window] of selected.entries()) {
     const period = window?.period ?? { start: addMonths(first.start, index), end: addMonths(first.start, index + 1) }
-    const key = window?.key ?? period.start
+    const key = window?.dueDate ?? period.start
     const entry = entries.get(key) ?? { period }
     if (window) entry[side] = window
     entries.set(key, entry)

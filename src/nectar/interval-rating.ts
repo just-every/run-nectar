@@ -1,6 +1,6 @@
 import { canonical, insist } from './core'
-import { addDays, zonedStart } from './dates'
-import { dueBillingWindows, INTERVAL_RATING_VERSION, type BillingWindow } from './billing-calendar'
+import { addDays, isDate, zonedStart } from './dates'
+import { dueBillingWindows, INTERVAL_RATING_VERSION, MONTHLY_ARREARS, type BillingWindow } from './billing-calendar'
 import { billingServiceWindows, composeBillingWindows } from './billing-composition'
 import { commitmentLines } from './commitment-rating'
 import { invoiceTotals } from './invoice-tax'
@@ -38,7 +38,31 @@ export function expandBillingWindows(input: RatingInput): RatingInput[] {
   return validatedServiceWindows(input).map(window => expandServiceWindow(input, window))
 }
 
+function servicePricingInput(input: RatingInput, window: BillingWindow): RatingInput {
+  const change = input.pricingCounterfactual
+  if (!change) return input
+  const source = input.prices[change.sourcePriceId], target = input.prices[change.targetPriceId]
+  insist(source && target && source.id !== target.id && isDate(change.from) && isDate(change.to) && change.from < change.to, 'invalid_pricing_counterfactual', 409)
+  insist(canonical(source.billing ?? MONTHLY_ARREARS) === canonical(target.billing ?? MONTHLY_ARREARS), 'pricing_cadence_change_requires_separate_terms', 409)
+  insist(change.quantity === undefined || target.kind === 'seat', 'quantity_only_for_seat_target')
+  // A boundary invoice can contain last-term arrears and next-term advance.
+  // The latter keeps its saved original price, even for the very same item id.
+  if (window.period.start < change.from || window.period.end > change.to) return input
+  const selected = new Set(window.components.map(component => component.itemId))
+  return { ...input, items: input.items.map(item => {
+    if (!selected.has(item.id) || item.priceId !== source.id) return item
+    const quantity = target.kind === 'seat' ? change.quantity ?? (source.kind === 'seat' ? item.quantity : undefined) : 1
+    insist(typeof quantity === 'number' && Number.isSafeInteger(quantity) && quantity >= (target.pricing ? 0 : 1) && quantity <= (target.pricing ? 1_000_000_000 : 1_000_000), 'invalid_quantity')
+    return { ...item, priceId: target.id, quantity }
+  }) }
+}
+
 function expandServiceWindow(input: RatingInput, window: BillingWindow): RatingInput {
+  const original = input
+  // Original calendars were validated before semantic price bindings change.
+  // Rebind before source selection so flat-to-metered simulations retain their
+  // actual target meter events, rather than losing them to the old flat price.
+  input = servicePricingInput(input, window)
   const components = new Map(window.components.map(component => [component.itemId, component]))
   const selected = input.items.filter(item => components.has(item.id))
   const meters = new Set(selected.map(item => input.prices[item.priceId]).filter(price => price.kind === 'unit').map(price => price.meterId))
@@ -47,8 +71,8 @@ function expandServiceWindow(input: RatingInput, window: BillingWindow): RatingI
   const usedPrices = new Set(items.map(item => item.priceId))
   const prices = Object.fromEntries(Object.entries(input.prices).filter(([id]) => usedPrices.has(id)))
   const sources = new Set(Object.values(prices).flatMap(price => price.metric ? [price.metric.sourceId] : price.meterId ? [price.meterId] : []))
-  const expanded: RatingInput = { ...input, billing: undefined, billingDueDate: window.dueDate, items, prices,
-    commitmentCalendar: { subscription: input.subscription, items: input.items, prices: input.prices },
+  const expanded: RatingInput = { ...input, billing: undefined, pricingCounterfactual: undefined, billingDueDate: window.dueDate, items, prices,
+    commitmentCalendar: { subscription: original.subscription, items: original.items, prices: original.prices },
     events: input.events.filter(event => sources.has(event.meterId) && event.occurredAt < zonedStart(window.period.end, input.timezone)), period: { start: window.nominalStart, end: window.nominalEnd } }
   if (expanded.charges) expanded.charges = expanded.charges.filter(charge => charge.date < window.period.end)
   // Metered usage and historical usage corrections are arrears operands.
@@ -60,7 +84,7 @@ function expandServiceWindow(input: RatingInput, window: BillingWindow): RatingI
   }
   // A simultaneous invoice receives a contract credit once, on the first
   // deterministic due window. Issued applications are excluded by input reads.
-  const first = dueBillingWindows(input, window.dueDate, addDays(window.dueDate, 1))[0]
+  const first = dueBillingWindows(original, window.dueDate, addDays(window.dueDate, 1))[0]
   if (first?.key !== window.key) expanded.amendments = expanded.amendments.filter(amendment => amendment.kind !== 'fixed_credit')
   return expanded
 }
