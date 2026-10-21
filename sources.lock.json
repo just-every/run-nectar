@@ -3569,7 +3569,7 @@
       "executable": false
     },
     "tests/nectar/clause-runner.mjs": {
-      "sha256": "0d8598994e851b51b8cce209781bd886fcf91bcd9448e8582e3ae92a008a2bba",
+      "sha256": "493b2dd6305ddf1e6253a9fbc3ce0eda38091dfd4465f812a999921f9f08e69a",
       "executable": false
     },
     "tests/nectar/cli.mjs": {
