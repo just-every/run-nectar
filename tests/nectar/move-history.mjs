@@ -117,7 +117,8 @@ export async function moveHistoryErasureFlow(h,owner) {
   for(const value of ['billing@alder.example','synthetic-nectar-1','Alder Research','synthetic-nectar-private-7'])for(const projection of projections)assert.ok(!JSON.stringify(projection).includes(value),'imported source identity is withdrawn from projections')
   assert.equal((await api('erasure.purge',{})).removed.length,0)
   await h.advanceClock(`${result.receipt.retained.until}T16:00:00Z`)
-  assert.ok((await api('erasure.purge',{})).removed.includes(customer))
+  const sweep=await api('erasure.purge',{})
+  assert.ok(sweep.removed.includes(customer),JSON.stringify({sweep,until:result.receipt.retained.until,requests:(await api('erasures')).map(row=>({id:row.id,status:row.status,customer:row.customer_id,retainUntil:row.retain_until,purgedAt:row.purged_at}))}))
   await h.api(`revenue/${annual}`,owner,undefined,404)
   console.log('MOVE-007 inherited erasure withdraws all history families and preserves exact financial revenue until due removal')
 }
