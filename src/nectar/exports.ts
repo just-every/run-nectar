@@ -79,43 +79,7 @@ export async function billRunJson(env: Bindings, actor: Actor, id: string) {
   return file(body, `nectar-bill-run-${run.period}.json`, 'application/json; charset=utf-8')
 }
 
-/** Why a customer does or does not have a feature on a date: every subscription's path, step by step. */
-export async function explainEntitlement(env: Bindings, actor: Actor, customerId: string, feature: string, date?: string) {
-  requireRead(actor, 'customers')
-  const business = await requireBusiness(env)
-  const day = date && isDate(date) ? date : today(business.timezone)
-  const customer = await one(env, 'SELECT id, name, external_id, status FROM nc_customers WHERE id = ? OR external_id = ?', customerId, customerId)
-  insist(customer, 'customer_not_found', 404)
-  const subs = await all(env, 'SELECT * FROM nc_subscriptions WHERE customer_id = ? ORDER BY created_at', customer.id)
-  const paths = []
-  for (const sub of subs) {
-    const steps: string[] = []
-    let granted = false
-    if (sub.start_date > day) steps.push(`Subscription starts ${sub.start_date}, after ${day}.`)
-    else if (sub.end_date && sub.end_date <= day) steps.push(`Subscription ended ${sub.end_date}.`)
-    else if (blockedAt(day, lifecycleIntervals(await lifecycleHistory(env, sub.id))).some(i => i.access === 'suspend')) steps.push('Subscription access is suspended by its recorded lifecycle policy.')
-    else {
-      steps.push(sub.trial_end && sub.trial_end > day ? `Subscription is in its trial until ${sub.trial_end}; trials carry the plan's features.` : 'Subscription is active.')
-      const items = await all(env, `SELECT i.quantity, p.version, pr.id AS product_id, pr.name AS product_name, f.feature FROM nc_items i JOIN nc_prices p ON p.id = i.price_id JOIN nc_products pr ON pr.id = p.product_id
-        LEFT JOIN nc_features f ON f.product_id = pr.id AND f.feature = ? WHERE i.subscription_id = ? AND i.effective_from <= ? AND (i.effective_to IS NULL OR i.effective_to > ?)`, feature, sub.id, day, day)
-      if (!items.length) steps.push('No plan item is in effect on this date.')
-      for (const item of items as Row[]) {
-        if (item.feature) { granted = true; steps.push(`${item.product_name} (price v${item.version}) grants "${feature}".`) }
-        else steps.push(`${item.product_name} (price v${item.version}) does not grant "${feature}".`)
-      }
-    }
-    paths.push({ subscription: sub.id, granted, steps })
-  }
-  if (!subs.length) paths.push({ subscription: null, granted: false, steps: ['The customer has no subscriptions.'] })
-  return { customer: { id: customer.id, name: customer.name, externalId: customer.external_id }, feature, date: day, allowed: paths.some(path => path.granted), paths }
-}
-
-/** Every feature the customer holds today, each with its explanation. */
-export async function entitlements(env: Bindings, actor: Actor, customerId: string) {
-  requireRead(actor, 'customers')
-  const features = await all(env, 'SELECT DISTINCT f.feature FROM nc_features f JOIN nc_prices p ON p.product_id = f.product_id JOIN nc_items i ON i.price_id = p.id JOIN nc_subscriptions s ON s.id = i.subscription_id WHERE s.customer_id = ? ORDER BY f.feature', customerId)
-  return await Promise.all(features.map(row => explainEntitlement(env, actor, customerId, row.feature)))
-}
+export { entitlements, explainEntitlement } from './entitlements'
 
 /** Customer custody export, including every note and mention delivery outcome. */
 export async function customersCsv(env: Bindings, actor: Actor,url?:URL) {

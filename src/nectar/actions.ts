@@ -1,3 +1,4 @@
+import { configureFeaturePolicy } from './feature-policy'
 import { configurePortal, issuePortalSession, revokePortalSession } from './portal-policy'
 import { previewUsageCorrection } from './usage-replay'
 import { requestErasure, verifyErasureOtherwise } from './erasure-requests'
@@ -120,6 +121,7 @@ export const actions: Record<string, Handler> = {
   'price.create': createPrice,
   'price.decide': decidePrice,
   'price.retire': retirePrice,
+  'feature.policy': configureFeaturePolicy,
   'feature.grant': grantFeature,
   'charge.add': addCharge,
   'invoice.manual': prepareManualInvoice,

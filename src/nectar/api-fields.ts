@@ -243,6 +243,14 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "note": "text",
     "product": "text"
   },
+  "feature.policy": {
+    "feature": "text",
+    "grace_days": "integer",
+    "meter": "text",
+    "product": "text",
+    "quota": "text",
+    "quota_policy": "text"
+  },
   "import.apply": {
     "*": "has",
     "fingerprint": "text"

@@ -1,0 +1,139 @@
+import assert from 'node:assert/strict'
+
+// ENT-002: real subscriptions, usage, issued invoices and manual allocations,
+// driven only through the built Worker's ordinary HTTP doors.
+export async function entitlementQuotasFlow(h, owner) {
+  const api = (path, body, status) => h.api(path, owner, body, status)
+  await api('business.configure', { ...(await api('business')), timezone: 'UTC', payment_terms_days: 0 })
+  await h.advanceClock('2026-09-02T12:00:00Z')
+  const feature = 'ent002-access'
+  const meter = await api('meter.create', { code: 'ent002-requests', name: 'Entitlement requests', unit_label: 'requests' })
+  const fixtures = []
+  const make = async (code, product, price, policy) => {
+    const external = `ENT002-${code.toUpperCase()}`
+    const customer = (await api('customer.create', { external_id: external, name: `Entitlement ${code}`, billing_email: `${code}@entitlement.example` })).id
+    const subscription = (await api('subscription.create', { customer, start_date: '2026-08-01', anchor_day: 1, price: [price] })).id
+    const fixture = { code, external, customer, subscription, product, price, policy }
+    fixtures.push(fixture)
+    return fixture
+  }
+  const entitlement = fixture => api(`entitlements/${fixture.customer}?feature=${feature}`)
+  const pathOf = (result, fixture) => {
+    const path = result.paths.find(row => row.subscription === fixture.subscription)
+    assert.ok(path, 'ENT-002 explanation identifies the actual subscription')
+    return path
+  }
+  const submit = async (fixture, suffix, quantity, occurred_at = '2026-09-01T12:00:00Z') => {
+    const result = await api('usage.submit', { events: [{ event_id: `ent002-${fixture.code}-${suffix}`, customer: fixture.external, meter: meter.code, quantity, occurred_at }] })
+    assert.equal(result.accepted, 1, 'ENT-002 usage is accepted independently of access policy')
+  }
+  const policies = []
+  for (const policy of ['soft', 'hard', 'overage']) {
+    const product = (await api('product.create', { code: `ent002-${policy}`, name: `Requests with ${policy} quota` })).id
+    const price = (await api('price.create', { product, kind: 'unit', meter: meter.id, unit_amount: '0.02', taxable: false })).id
+    await api('feature.grant', { product, feature })
+    await api('feature.policy', { product, feature, meter: policy === 'soft' ? meter.code : meter.id, quota: '10000', quota_policy: policy, grace_days: 3 })
+    policies.push(await make(policy, product, price, policy))
+  }
+  const [soft, hard, overage] = policies
+  const paused = await make('paused', soft.product, soft.price, 'soft')
+  const cancelled = await make('cancelled', soft.product, soft.price, 'soft')
+  for (const fixture of fixtures) await submit(fixture, 'august', '10', '2026-08-15T12:00:00Z')
+
+  const assertQuota = async (fixture, used, remaining, exhausted) => {
+    const result = await entitlement(fixture)
+    const path = pathOf(result, fixture)
+    assert.equal(result.allowed, fixture.policy !== 'hard' || !exhausted, `ENT-002 ${fixture.policy} quota has its promised access behavior`)
+    assert.equal(path.granted, result.allowed)
+    assert.deepEqual(Object.fromEntries(['meter','used','remaining','policy','exhausted'].map(key => [key,path.quota[key]])), { meter: meter.id, used, remaining, policy: fixture.policy, exhausted }, 'ENT-002 exact current-period quantity and remaining units explain the decision')
+    assert.equal(Number(path.quota.limit), 10000)
+    assert.deepEqual(path.quota.period, {start:'2026-09-01',end:'2026-10-01'})
+    assert.ok(Array.isArray(path.quota.eventIds))
+    assert.equal(typeof path.warning, 'boolean', 'ENT-002 warning is an explicit decision fact')
+    if (!exhausted) assert.equal(path.warning, false)
+    if (fixture.policy === 'soft' && exhausted) assert.equal(path.warning, true, 'ENT-002 a soft quota warns while preserving access')
+    assert.equal(path.payment.restricted, false)
+    assert.equal(path.payment.graceDays, 3)
+    return result
+  }
+  for (const fixture of policies) {
+    await assertQuota(fixture, '0', '10000', false)
+    await submit(fixture, 'below', '9999.75')
+    await assertQuota(fixture, '9999.75', '0.25', false)
+    await submit(fixture, 'exact', '0.25')
+    await assertQuota(fixture, '10000', '0', true)
+    await submit(fixture, 'above', '12.5')
+    await assertQuota(fixture, '10012.5', '0', true)
+  }
+
+  // Genuine August service invoices retain the September 1 due dates that
+  // drive the three-day grace boundary.
+  const run = await api('billrun.prepare', { period: '2026-08' })
+  const drafts = (await api(`runs/${run.id}`)).invoices
+  for (const fixture of fixtures) {
+    const draft = drafts.find(row => row.customer_id === fixture.customer)
+    assert.ok(draft, 'ENT-002 historical subscription service produces an invoice')
+    await api('invoice.approve', { invoice: draft.id, acknowledge: true })
+    await api('invoice.finalise', { invoice: draft.id, issue_date: '2026-09-01' })
+    fixture.invoice = await api(`invoices/${draft.id}`)
+    assert.equal(fixture.invoice.status, 'issued')
+    assert.equal(fixture.invoice.total_cents, 20, 'ENT-002 historical ten requests are rated at the real two-cent price')
+    assert.equal(fixture.invoice.due_date, '2026-09-01')
+  }
+  const detail = fixture => api(`subscriptions/${fixture.subscription}`)
+  await api('subscription.pause', { subscription: paused.subscription, revision: (await detail(paused)).revision, effective_date: '2026-09-04', resume_date: '2026-09-10', access: 'suspend', reason: 'Research paused independently of payment' })
+  await api('subscription.cancel', { subscription: cancelled.subscription, revision: (await detail(cancelled)).revision, mode: 'immediate', effective_date: '2026-09-04', reason: 'Contract ended independently of payment' })
+  const states = new Map(await Promise.all(fixtures.map(async fixture => [fixture.subscription, await detail(fixture)])))
+
+  await h.advanceClock('2026-09-03T23:59:59Z')
+  for (const fixture of fixtures) {
+    const result = await entitlement(fixture)
+    assert.equal(pathOf(result, fixture).payment.restricted, false, 'ENT-002 the last instant before three full due-date days remains in grace')
+    assert.equal(result.allowed, fixture !== hard, 'ENT-002 grace preserves the independent quota and scheduled lifecycle decisions')
+  }
+  await h.advanceClock('2026-09-04T00:00:00Z')
+  for (const fixture of policies) {
+    const result = await entitlement(fixture)
+    const path = pathOf(result, fixture)
+    assert.equal(result.allowed, false, 'ENT-002 unpaid service is restricted at the exact grace boundary')
+    assert.equal(path.payment.restricted, true)
+    assert.deepEqual(path.payment.invoices.map(({ id, number, dueDate, balanceCents }) => ({ id, number, dueDate, balanceCents })), [{ id: fixture.invoice.id, number: fixture.invoice.number, dueDate: fixture.invoice.due_date, balanceCents: 20 }], 'ENT-002 payment restriction cites the real issued invoice and its outstanding cents')
+    assert.equal(path.quota.used, '10012.5', 'ENT-002 payment restriction does not erase quota evidence')
+  }
+
+  for (const fixture of fixtures) {
+    const payment = await api('payment.record', { customer: fixture.customer, amount: '0.20', received_on: '2026-09-04', method: 'bank_transfer', reference: `ENT002-${fixture.code}-SETTLED` })
+    assert.equal((await entitlement(fixture)).allowed, false, 'ENT-002 unallocated cash does not settle an invoice or restore access')
+    await api('payment.allocate', { payment: payment.payment, invoice: fixture.invoice.id, amount: '0.20' })
+    const result = await entitlement(fixture)
+    assert.equal(result.allowed, fixture === soft || fixture === overage, 'ENT-002 allocation restores only access permitted by quota and lifecycle')
+    if (policies.includes(fixture)) assert.equal(pathOf(result, fixture).payment.restricted, false)
+    assert.equal((await api(`invoices/${fixture.invoice.id}`)).balanceCents, 0)
+    assert.deepEqual(await detail(fixture), states.get(fixture.subscription), 'ENT-002 payment restriction and restoration never rewrite pause, cancel or subscription state')
+  }
+
+  await api('access.give', { email: 'ent002-accountant@example.test', name: 'Entitlement Accountant', role: 'accountant' })
+  const accountant = await h.signIn('ent002-accountant@example.test', { requested: true })
+  const agent = { bearer: (await api('credential.issue', { name: 'Entitlement observer', scopes: ['prepare'] })).key }
+  const changed = { product: soft.product, feature, meter: meter.id, quota: '10000', quota_policy: 'hard', grace_days: 3 }
+  const before = await entitlement(soft)
+  for (const who of [accountant, agent]) {
+    await h.api('feature.policy', who, changed, 403)
+    assert.deepEqual(await h.api(`entitlements/${soft.customer}?feature=${feature}`, who), before, 'ENT-002 read authority exposes the same explanation without granting policy-write authority')
+  }
+  await h.api('feature.policy', undefined, changed, 401)
+
+  await h.advanceClock('2026-10-01T12:00:00Z')
+  assert.equal(pathOf(await entitlement(overage), overage).quota.used, '0', 'ENT-002 a new subscription period resets the quota without deleting prior usage')
+  const september = await api('billrun.prepare', { period: '2026-09' })
+  const overageDraft = (await api(`runs/${september.id}`)).invoices.find(row => row.customer_id === overage.customer)
+  assert.ok(overageDraft)
+  await api('invoice.approve', { invoice: overageDraft.id, acknowledge: true })
+  await api('invoice.finalise', { invoice: overageDraft.id, issue_date: '2026-10-01' })
+  const issued = await api(`invoices/${overageDraft.id}`)
+  assert.equal(issued.status, 'issued')
+  assert.equal(issued.total_cents, 20025, 'ENT-002 overage keeps ordinary metered pricing: 10,012.5 requests at $0.02, with no invented free monetary allowance')
+  assert.equal(issued.lines.filter(line => line.price_id === overage.price).reduce((sum, line) => sum + line.amount_cents, 0), 20025)
+  console.log('ENT-002 exact quotas, soft warning, hard restriction, priced overage, issued-invoice grace, manual settlement, lifecycle preservation and authority passed')
+  return { customer: overage.customer, subscription: overage.subscription, invoice: issued.id }
+}
