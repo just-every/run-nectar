@@ -57,10 +57,14 @@ export async function ratingInputs(env: Bindings, business: Business, subscripti
   // Every late event touching an issued service window must be resolved
   // against that saved window. Even sums can have nonlinear prices or a
   // different historical tax basis; a fresh late aggregate cannot issue.
-  const priorIssued=await all(env,"SELECT id,period_start,period_end,json_extract(calculation_json,'$.inputs.timezone') AS timezone FROM nc_invoices WHERE subscription_id=? AND invoice_kind='recurring' AND status='issued' AND period_start<? ORDER BY period_start",sub.id,period.start)
+  const priorIssued=(await all(env,`SELECT i.id,i.period_start,i.period_end,json_extract(i.calculation_json,'$.inputs.timezone') AS timezone,
+    (SELECT json_group_array(DISTINCT COALESCE(json_extract(i.calculation_json,'$.inputs.prices.' || json_quote(l.price_id) || '.metric.sourceId'),l.meter_id))
+      FROM nc_invoice_lines l WHERE l.invoice_id=i.id AND l.meter_id IS NOT NULL AND l.price_id IS NOT NULL) AS source_meters
+    FROM nc_invoices i WHERE i.subscription_id=? AND i.invoice_kind='recurring' AND i.status='issued' AND i.period_start<? ORDER BY i.period_start`,sub.id,period.start))
+    .map((i):Row&{sources:Set<string>}=>({...i,sources:new Set(parseJson<string[]>(i.source_meters,[]))}))
   const unresolvedHistoricalUsage=billableEvents.flatMap(event=>{
     if(event.invoiceId)return []
-    const original=priorIssued.find(i=>event.occurredAt>=zonedStart(i.period_start,i.timezone??business.timezone)&&event.occurredAt<zonedStart(i.period_end,i.timezone??business.timezone))
+    const original=priorIssued.find(i=>i.sources.has(event.meterId)&&event.occurredAt>=zonedStart(i.period_start,i.timezone??business.timezone)&&event.occurredAt<zonedStart(i.period_end,i.timezone??business.timezone))
     return original?[{eventId:event.eventId,invoice:original.id,from:original.period_start,to:original.period_end}]:[]
   })
   const adjustments=await usageAdjustments(env,sub.id),credits=await carriedUsageCredits(env,sub.customer_id)

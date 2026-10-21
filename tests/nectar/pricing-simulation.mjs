@@ -198,6 +198,7 @@ export async function pricingSimulation(h, owner) {
   for (const [index, cohort] of [a, b].entries()) {
     const preview = saved.impact[index].periods[0].after
     const draft = julyInvoices.find(invoice => invoice.customer_id === cohort.customer)
+    assert.ok(!draft.exceptions.some(e=>e.code==='historical_usage_correction'),'AGENT-004 retained events never priced by historical seat-only invoices need no financial correction before the first metered period')
     const issued = await issue(draft, '2026-08-01')
     assert.deepEqual([issued.subtotal_cents, issued.tax_cents, issued.total_cents], [preview.subtotalCents, preview.taxCents, preview.totalCents])
     assert.deepEqual(issued.lines.map(l => [l.price_id, l.kind, l.quantity, l.amount_cents, l.period_start, l.period_end]), preview.lines.map(l => [l.priceId, l.kind, l.quantity, l.amountCents, l.periodStart, l.periodEnd]), 'issued July charges equal the saved future preview')

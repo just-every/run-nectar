@@ -2589,7 +2589,7 @@
       "executable": false
     },
     "src/nectar/inputs.ts": {
-      "sha256": "6e08bf9349014bd210805e1b273fb40186e8e1f59f26b2fb9e0931b78d9b8969",
+      "sha256": "a86760d5841fe2b30950f8d4f702b6df4a6473a36e5c1b76689253a555d43453",
       "executable": false
     },
     "src/nectar/invoice-content.ts": {
@@ -3597,7 +3597,7 @@
       "executable": false
     },
     "tests/nectar/pricing-simulation.mjs": {
-      "sha256": "1ea881ed5b8a76d1f6b9c802bc58c2daa8c7a64c1a97e8afd5a5ac093ec5a761",
+      "sha256": "cb2def7c54e461baba8551ef99446b2525808ed3d5c91e1f0a66c91d5bd02d4d",
       "executable": false
     },
     "tests/nectar/reconciliation.mjs": {
