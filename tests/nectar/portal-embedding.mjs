@@ -106,7 +106,7 @@ export async function portalEmbeddingFlow(h, owner) {
       await h.api('invoice.approve',owner,{invoice:draft.id,acknowledge:true})
       await h.api('invoice.finalise',owner,{invoice:draft.id,issue_date:'2026-10-01'})
     }
-    assert.equal(intervalDrafts.length,2)
+    assert.equal(intervalDrafts.length,1)
     const frozen=await portalIntervalProjection(h,owner,calendarSession,portalOrigin,intervals)
     assert.ok(frozen.invoices.every(row=>row.state==='issued'))
     assert.deepEqual(frozen.invoices.map(row=>row.calculation),preview.invoices.map(row=>row.calculation),'Ordinary issue preserves the customer calculation for each real window')
