@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { applyPolicy } from './policy-helper.mjs'
 
 // ENT-002: real subscriptions, usage, issued invoices and manual allocations,
 // driven only through the built Worker's ordinary HTTP doors.
@@ -32,7 +33,7 @@ export async function entitlementQuotasFlow(h, owner) {
     const product = (await api('product.create', { code: `ent002-${policy}`, name: `Requests with ${policy} quota` })).id
     const price = (await api('price.create', { product, kind: 'unit', meter: meter.id, unit_amount: '0.02', taxable: false })).id
     await api('feature.grant', { product, feature })
-    await api('feature.policy', { product, feature, meter: policy === 'soft' ? meter.code : meter.id, quota: '10000', quota_policy: policy, grace_days: 3 })
+    await applyPolicy(h, owner, 'feature.policy', { product, feature, meter: policy === 'soft' ? meter.code : meter.id, quota: '10000', quota_policy: policy, grace_days: 3 })
     policies.push(await make(policy, product, price, policy))
   }
   const [soft, hard, overage] = policies

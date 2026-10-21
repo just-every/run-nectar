@@ -11,6 +11,6 @@ export function featurePolicies(product: string, features: Row[], meters: Row[],
       ${field('Usage limit', 'quota', { value: f.quota ?? '', required: false, hint: 'Exact quantity, up to six decimal places. The limit is reached at this quantity.' })}
       ${select('At the limit', 'quota_policy', [{ value: 'soft', label: 'Warn and allow' }, { value: 'hard', label: 'Deny' }, { value: 'overage', label: 'Allow and bill at catalog prices' }], f.quota_policy ?? 'soft')}
       ${field('Unpaid grace (calendar days)', 'grace_days', { type: 'number', value: f.grace_days ?? '', required: false, hint: 'Blank leaves access unchanged. Payment or credit settling the balance restores access.' })}
-      <p class="hint">Access limits do not include free units or change billing prices. Removing the meter removes the usage limit.</p>`, 'Save access policy', { layout: 'columns', secondary: true }) : ''}
+      <p><a href="/app/settings#policy-changes">Review prepared policy changes</a></p><p class="hint">Access limits do not include free units or change billing prices. Removing the meter removes the usage limit.</p>`, 'Prepare access policy', { layout: 'columns', secondary: true }) : ''}
   </section>`)
 }

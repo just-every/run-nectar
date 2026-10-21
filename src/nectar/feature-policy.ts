@@ -1,6 +1,6 @@
 // ENT-002: an access threshold is independent of the catalog's billing price.
 import type { Bindings } from '../auth.server'
-import { actorLabel, requireMember, type Actor } from './actor'
+import { actorLabel, requireOwner, type Actor } from './actor'
 import { all, commit, insist, now, one, parseJson, stmt, type Row } from './core'
 import { canonicalDecimal, micros, SCALE } from './decimal'
 import { addDays, periodContaining, zonedStart } from './dates'
@@ -8,10 +8,11 @@ import type { Input } from './input'
 import { aggregateMetric, displayQuantity } from './metric-aggregate'
 import { metricEvents } from './meter-definitions'
 import { addRational, compareRational, rational, type MetricPlan } from './metric-plan'
+import { preparePolicyChange } from './policy-changes'
 import { BALANCE_SQL } from './receivables'
 
 export async function configureFeaturePolicy(env: Bindings, actor: Actor, input: Input) {
-  requireMember(actor, 'records')
+  requireOwner(actor)
   const product = input.text('product', { max: 100 }), feature = input.text('feature', { max: 60 })
   insist(await one(env, 'SELECT 1 FROM nc_features WHERE product_id=? AND feature=?', product, feature), 'feature_not_found', 404)
   const meterRef = input.text('meter', { max: 100, optional: true })
@@ -22,12 +23,7 @@ export async function configureFeaturePolicy(env: Bindings, actor: Actor, input:
   const policy = input.text('quota_policy', { max: 20 })
   insist(['soft','hard','overage'].includes(policy), 'invalid_quota_policy')
   const grace = input.integer('grace_days', { min: 0, max: 365, optional: true })
-  await commit(env, [stmt(env, `INSERT INTO nc_feature_policies(product_id,feature,meter_id,quota,quota_policy,grace_days,updated_at)
-    VALUES(?,?,?,?,?,?,?) ON CONFLICT(product_id,feature) DO UPDATE SET meter_id=excluded.meter_id,quota=excluded.quota,
-    quota_policy=excluded.quota_policy,grace_days=excluded.grace_days,revision=revision+1,updated_at=excluded.updated_at`,
-    product, feature, meter?.id ?? null, quota, policy, grace, now())],
-    { actor: actorLabel(actor), action: 'feature.policy', subject: product, detail: { feature, meter: meter?.id ?? null, quota, policy, graceDays: grace } })
-  return { id: product, feature }
+  return await preparePolicyChange(env, actor, 'feature', { product, feature, meter: meter?.id ?? null, quota, policy, graceDays: grace })
 }
 
 export async function featureDecision(env: Bindings, sub: Row, product: string, feature: string, day: string, timezone: string) {
