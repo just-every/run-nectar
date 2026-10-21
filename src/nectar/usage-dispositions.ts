@@ -114,9 +114,13 @@ async function checked(env: Bindings, actor: Actor, id: string) {
   insist(p.basis===row.basis,'correction_stale',409)
   return {row,p}
 }
+async function financialPreparer(env: Bindings, row: Row) {
+  return row.prepared_by_kind==='member' && await one(env,"SELECT id FROM nc_members WHERE id=? AND status='active' AND role IN ('owner','finance')",row.prepared_by_id) ? row.prepared_by_id : null
+}
 export async function authorizeUsageCorrection(env: Bindings, actor: Actor, input: Input) {
   requireMember(actor,'approve');await requireFreshFactor(env,actor)
   const {row,p}=await checked(env,actor,input.text('correction',{max:100}))
+  insist(!await financialPreparer(env,row),'human_preparer_already_recorded',409)
   await commit(env,[sequenceGuard(env,p.seq),guard(env,'correction_already_decided',"EXISTS(SELECT 1 FROM nc_usage_corrections WHERE id=? AND status='pending' AND authorized_by_id IS NULL)",row.id),
     stmt(env,'UPDATE nc_usage_corrections SET authorized_by_id=?,authorized_basis=? WHERE id=?',actor.id,row.basis,row.id)],
     {actor:actorLabel(actor),action:'usage.correction.authorize',subject:row.id,detail:{basis:row.basis,creditCents:p.summary.creditCents}})
@@ -144,7 +148,7 @@ export async function decideUsageCorrection(env: Bindings, actor: Actor, input: 
   }
   const {row,p}=await checked(env,actor,id),s=p.summary
   await requireFreshFactor(env,actor)
-  const preparer=row.authorized_by_id ?? (row.prepared_by_kind==='member'?row.prepared_by_id:null)
+  const preparer=await financialPreparer(env,row) ?? row.authorized_by_id
   insist(!s.needsSecondApprover || preparer && preparer!==actor.id,'second_approver_required',409)
   const statements=[sequenceGuard(env,p.seq),pending,
     ...(s.needsSecondApprover?[guard(env,'second_approver_required',"EXISTS(SELECT 1 FROM nc_members WHERE id=? AND status='active' AND role IN ('owner','finance'))",preparer)]:[]),
@@ -200,5 +204,5 @@ export async function decideUsageCorrection(env: Bindings, actor: Actor, input: 
 
 export async function usageCorrections(env: Bindings, actor: Actor, subscription: string): Promise<Row[]> {
   requireCapability(actor,'read')
-  return await Promise.all((await all(env,'SELECT * FROM nc_usage_corrections WHERE subscription_id=? AND NOT EXISTS(SELECT 1 FROM nc_customers c WHERE c.id=customer_id AND c.erased_at IS NOT NULL) ORDER BY prepared_at DESC,id',subscription)).map(async row=>({...row,mail:await one(env,'SELECT recipient,subject,body,status,provider_ref FROM nc_usage_correction_mail WHERE correction_id=?',row.id),documents:[...(await all(env,"SELECT id,number,'credit_note' AS kind,'issued' AS status,amount_cents AS amountCents,invoice_id AS invoice FROM nc_credit_notes WHERE correction_id=?",row.id)),...(await all(env,"SELECT DISTINCT i.id,i.number,CASE WHEN i.invoice_kind='recurring' THEN 'next_invoice' ELSE 'correcting_invoice' END AS kind,i.status,i.total_cents AS amountCents,i.id AS invoice FROM nc_usage_adjustments a JOIN nc_invoices i ON i.id=COALESCE(a.invoice_id,a.target_invoice_id) WHERE a.correction_id=?",row.id))],plan:parseJson<Row>(row.plan_json,{}),payload:parseJson<Row>(row.payload_json,{}),plan_json:undefined,payload_json:undefined})))
+  return await Promise.all((await all(env,'SELECT * FROM nc_usage_corrections WHERE subscription_id=? AND NOT EXISTS(SELECT 1 FROM nc_customers c WHERE c.id=customer_id AND c.erased_at IS NOT NULL) ORDER BY prepared_at DESC,id',subscription)).map(async row=>({...row,mail:await one(env,'SELECT recipient,subject,body,status,provider_ref FROM nc_usage_correction_mail WHERE correction_id=?',row.id),needsCreditAuthorization:!await financialPreparer(env,row),documents:[...(await all(env,"SELECT id,number,'credit_note' AS kind,'issued' AS status,amount_cents AS amountCents,invoice_id AS invoice FROM nc_credit_notes WHERE correction_id=?",row.id)),...(await all(env,"SELECT DISTINCT i.id,i.number,CASE WHEN i.invoice_kind='recurring' THEN 'next_invoice' ELSE 'correcting_invoice' END AS kind,i.status,i.total_cents AS amountCents,i.id AS invoice FROM nc_usage_adjustments a JOIN nc_invoices i ON i.id=COALESCE(a.invoice_id,a.target_invoice_id) WHERE a.correction_id=?",row.id))],plan:parseJson<Row>(row.plan_json,{}),payload:parseJson<Row>(row.payload_json,{}),plan_json:undefined,payload_json:undefined})))
 }

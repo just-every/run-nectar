@@ -258,6 +258,7 @@ export async function usageDispositionFlow(h,owner,ctx) {
     await api('invoice.approve',{invoice:pendingInvoice.id,acknowledge:true},409)
     if(index===1)h.mailResponses.push({status:500,body:{name:'provider_error'}})
     const beforeMessages=h.mails.length
+    assert.equal((await h.api('usage.correction.authorize',finance,{correction:proposal.id},409)).error,'human_preparer_already_recorded','USE-004 another authorizer cannot replace the financial preparer and let that preparer self-approve')
     await decision(proposal.id,owner,409)
     let result
     if(index===2){const location=await h.submit('usage.correction.decide',finance,{correction:proposal.id,decision:'approved'},`/app/usage/replay?subscription=${sub}`);assert.equal(location.searchParams.get('error'),null);const saved=(await corrections(sub)).find(c=>c.id===proposal.id);assert.equal(saved.status,'approved');result={carriedCents:saved.plan.carriedCents}}
