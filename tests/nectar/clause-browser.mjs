@@ -43,7 +43,7 @@ try {
         await Promise.all([page.waitForURL('**/app/import/preview'),page.getByRole('button',{name:'Preview the move',exact:true}).click()])
         await shot('import-preview')
       } else {
-        const paths=[['customer-history',`/app/customers/${state.customer}`],['import-applied','/app/import'],['billings',`/app/reports/billings?period=${state.period}&customer=${state.customer}`],['billings-source',`/app/reports/billings/${state.annual}?period=${state.period}&customer=${state.customer}`],['collections-source',`/app/reports/collections/${state.payment}?period=${state.period}&customer=${state.customer}`],['revenue',`/app/revenue?from=2026-07&to=2027-02&customer=${state.customer}`],['revenue-source',`/app/revenue/${state.annual}?from=2026-07&to=2027-02&customer=${state.customer}`],['frozen-report',`/app/report-deliveries/${state.delivery}`]]
+        const paths=[['customer-history',`/app/customers/${state.customer}`],['import-applied','/app/import'],['mrr-history',`/app/reports/mrr?period=2026-06&customer=${state.customer}`],['billings',`/app/reports/billings?period=${state.period}&customer=${state.customer}`],['billings-source',`/app/reports/billings/${state.annual}?period=${state.period}&customer=${state.customer}`],['collections-source',`/app/reports/collections/${state.payment}?period=${state.period}&customer=${state.customer}`],['revenue',`/app/revenue?from=2026-07&to=2027-02&customer=${state.customer}`],['revenue-source',`/app/revenue/${state.annual}?from=2026-07&to=2027-02&customer=${state.customer}`],['frozen-report',`/app/report-deliveries/${state.delivery}`]]
         for(const [label,path]of paths)await shot(label,path)
       }
     }

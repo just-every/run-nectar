@@ -23,11 +23,13 @@ export async function moveHistoryFlow(h,owner,{onState=async()=>{},keepHistory=f
   const first=await read()
   assert.equal(first.incumbentHistory.documents.length,20)
   assert.equal(first.incumbentHistory.records.length,24)
+  assert.deepEqual(first.incumbentHistory.totals,{invoicedCents:1398000,creditedCents:2200,paymentsCents:1398000,refundsCents:2200,remainingCents:0})
   for(const kind of ['payment','refund','dispute','subscription-event'])assert.ok(first.incumbentHistory.records.some(row=>row.kind===kind),kind)
   assert.deepEqual(first.incumbentHistory.records.find(row=>row.provider_ref==='synthetic-nectar-event-1').original,capture.subscription_events.data[1])
   assert.deepEqual(first.incumbentHistory.documents.find(row=>row.provider_ref==='synthetic-nectar-invoice-annual').original,capture.invoices.data.at(-1))
   assert.equal((await api('import.apply',{...files,fingerprint:preview.fingerprint})).job,job.job)
   assert.deepEqual(await read(),first,'repeat apply changes no history')
+  assert.equal((await api('imports')).filter(row=>row.id===job.job).length,1,'a repeated apply appears as one move in the operator journal')
   const report=(metric,period)=>api(`reports/${metric}?period=${period}&customer=${customer}`)
   for(let index=0;index<18;index++) {
     const period=new Date(Date.UTC(2025,index,1)).toISOString().slice(0,7)
@@ -44,6 +46,9 @@ export async function moveHistoryFlow(h,owner,{onState=async()=>{},keepHistory=f
       }
     }
   }
+  const series=(await report('mrr','2026-06')).series
+  assert.equal(series.length,18)
+  assert.deepEqual(series.map(row=>[row.period,row.amountCents,row.sourceCount]),Array.from({length:18},(_,index)=>[new Date(Date.UTC(2025,index,1)).toISOString().slice(0,7),10000+(index>=14?100000:0),index>=14?2:1]))
   const revenue=await api(`revenue?from=2026-07&to=2027-02&customer=${customer}`)
   assert.equal(revenue.openingCents,800000,'four recognized annual months leave eight deferred months')
   assert.equal(revenue.recognizedCents,800000)

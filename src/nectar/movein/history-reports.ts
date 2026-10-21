@@ -9,7 +9,7 @@ export const historicalHref = (customer: string, id: string) => `/app/customers/
 export async function customerHistory(env: Bindings, customer: string, includeOriginal = false) {
   const documents = await all(env, 'SELECT * FROM nc_incumbent_invoices WHERE customer_id=? ORDER BY COALESCE(issue_date,period_start),id', customer)
   const records = await all(env, 'SELECT * FROM nc_incumbent_history WHERE customer_id=? ORDER BY occurred_on,id', customer)
-  return { documents: documents.map(({source_json,lines_json,...row}) => ({ ...row, lines: publicLines(lines_json), ...(includeOriginal?{original:parseJson<Row>(source_json,{})}:{}) })), records: records.map(({payload_json,...row}) => ({ ...row, ...(includeOriginal?{original:parseJson<Row>(payload_json,{})}:row.kind==='subscription-event'?{original:subscriptionSnapshot(parseJson<Row>(payload_json,{}))}:{}) })) }
+  return { totals:{invoicedCents:documents.filter(row=>row.document_kind==='invoice'&&['paid','open','uncollectible'].includes(row.status)).reduce((n,row)=>n+row.total_cents,0), creditedCents:documents.filter(row=>row.document_kind==='credit-note'&&row.status==='issued').reduce((n,row)=>n+row.total_cents,0),paymentsCents:records.filter(row=>row.kind==='payment'&&row.status==='succeeded').reduce((n,row)=>n+row.amount_cents,0),refundsCents:records.filter(row=>row.kind==='refund'&&row.status==='succeeded').reduce((n,row)=>n+row.amount_cents,0),remainingCents:documents.filter(row=>row.document_kind==='invoice'&&row.status==='open').reduce((n,row)=>n+row.remaining_cents,0)}, documents: documents.map(({source_json,lines_json,...row}) => ({ ...row, lines: publicLines(lines_json), ...(includeOriginal?{original:parseJson<Row>(source_json,{})}:{}) })), records: records.map(({payload_json,...row}) => ({ ...row, ...(includeOriginal?{original:parseJson<Row>(payload_json,{})}:row.kind==='subscription-event'?{original:subscriptionSnapshot(parseJson<Row>(payload_json,{}))}:{}) })) }
 }
 function publicLines(text:string) {
   const lines=parseJson<unknown>(text,[])
@@ -40,6 +40,7 @@ export async function historicalContributions(env: Bindings, metric: ReportMetri
     for(const row of payments)add(row,row.amount_cents,[{kind:'imported_payment',label:`${row.provider} payment ${row.provider_ref}`,amountCents:row.amount_cents,href:historicalHref(row.customer_id,row.id)}],parseJson<Row>(row.payload_json,{}),'payment')
     return result
   }
+  const recurringRecords=metric==='mrr'?new Map((await (await import('./history-revenue')).historicalRevenueInvoices(env,null,customer)).map(record=>[record.invoice.id,record])):null
   for(const row of documents) {
     const original=parseJson<Row>(row.source_json,{}),href=historicalHref(row.customer_id,row.id)
     // Older captures lack a finalized date. They remain visible as custody but
@@ -65,9 +66,7 @@ export async function historicalContributions(env: Bindings, metric: ReportMetri
       add(row,row.remaining_cents,[{kind:'original',label:`${row.provider} original invoice`,amountCents:row.total_cents,href},{kind:'source_settlement',label:`${row.provider} recorded settlements and credits`,amountCents:row.remaining_cents-row.total_cents,href}],original,'invoice')
     }
     if(metric==='mrr') {
-      const { historicalRevenueInvoices } = await import('./history-revenue')
-      const records=await historicalRevenueInvoices(env,row.id,row.customer_id)
-      const components=(records[0]?.schedules??[]).flatMap((schedule)=>{
+      const components=(recurringRecords?.get(row.id)?.schedules??[]).flatMap((schedule)=>{
         if(schedule.kind!=='imported_recurring'&&schedule.kind!=='imported_discount')return []
         const amount=schedule.entries.filter(entry=>entry.period===month).reduce((sum,entry)=>sum+entry.amountCents,0)
         return amount?[{kind:'imported_recurring',label:row.erased_at?'Retained recurring consideration':`${row.provider}: ${schedule.lineId}`,amountCents:amount,href}]:[]

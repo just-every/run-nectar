@@ -1,3 +1,4 @@
+import { historicalMrrSeries, type HistoricalMrrMonth } from './movein/history-metrics'
 import { historicalContributions, historicalReportSource } from './movein/history-reports'
 import { financialReport, financialReportSource, type UnbilledReportEvidence } from './financial-reports'
 // Issued-invoice and recorded-receipt reports. Every total has the same source contributions and
@@ -20,7 +21,7 @@ export interface ReportEntry {
   sourceKind?: 'invoice' | 'payment' | 'credit_note' | 'subscription_period'; paymentId?: string
 }
 export interface Report {
-  metric: ReportMetric; title: string; definition: string; period: string; totalCents: number; entries: ReportEntry[]
+  metric: ReportMetric; title: string; definition: string; period: string; totalCents: number; entries: ReportEntry[]; series?:HistoricalMrrMonth[]
 }
 export interface ReportComponent { kind: string; label: string; amountCents: number; lineId?: string; href?: string }
 export interface ReportPayment {
@@ -118,7 +119,7 @@ export async function report(env: Bindings, actor: Actor, metric: string, url: U
   const historical=await historicalContributions(env,selected.metric,month,selected.customer,day,selected.bucket)
   entries.push(...historical.map(source=>source.entry))
   return { metric: selected.metric, ...DEFINITIONS[selected.metric as keyof typeof DEFINITIONS], period: selected.metric === 'ar' ? day : month,
-    totalCents: entries.reduce((sum, entry) => sum + entry.amountCents, 0), entries }
+    totalCents: entries.reduce((sum, entry) => sum + entry.amountCents, 0), entries, ...(selected.metric==='mrr'?{series:await historicalMrrSeries(env,month,selected.customer)}:{}) }
 }
 
 /** Original line and settlement components tie exactly to the selected invoice contribution. */

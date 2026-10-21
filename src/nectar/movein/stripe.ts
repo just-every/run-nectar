@@ -373,7 +373,7 @@ export async function importAction(env: Bindings, actor: Actor, input: Input) {
 export async function importJobs(env: Bindings, actor: Actor) {
   requireMember(actor, 'records')
   const jobs = await all<{ id: string; at: number; detail: string; state: string; total: number }>(env,
-    `SELECT j.id, a.at, a.detail, j.state, j.total FROM nc_audit a JOIN ik_jobs j ON j.id = a.subject
+    `SELECT j.id, a.at, a.detail, j.state, j.total FROM ik_jobs j JOIN nc_audit a ON a.seq=(SELECT MIN(seq) FROM nc_audit WHERE action='import.apply' AND subject=j.id)
      WHERE a.action = 'import.apply' AND j.destination = ? AND j.namespace = ? AND j.mapping_version = ? ORDER BY a.at DESC`, destination, namespace, mappingVersion)
   const result = []
   for (const job of jobs) result.push({ id: job.id, appliedAt: job.at, state: job.state, counts: JSON.parse(job.detail).counts, effects: job.total, blockers: job.state === 'completed' ? await undoBlockers(env, job.id) : [] })
