@@ -25,7 +25,7 @@ export async function reportPage(env: Bindings, actor: Actor, metric: string, ur
 
 export async function reportInvoicePage(env: Bindings, actor: Actor, metric: string, invoice: string, url: URL) {
   const r = await reportInvoice(env, actor, metric, invoice, url)
-  const sourceTitle=r.unbilled?'Unbilled usage':r.credit?'Credit note':r.payment?'Payment':'Invoice'
+  const sourceTitle=r.unbilled?'Unbilled usage':r.credit||r.sourceKind==='credit_note'?'Credit note':r.payment||r.sourceKind==='payment'?'Payment':'Invoice'
   return page(`${sourceTitle} contribution`, actor, h`${tabs(url.search, actor)}<h1>${sourceTitle} ${r.number}</h1><p class="lede">${r.title} · ${r.customerName}</p>
     <p><a href="/app/reports/${metric}${url.search}">Back to report</a> · ${r.historical ? h`<a href="${r.historical.href}">Original ${r.historical.provider} record</a>` : r.unbilled ? h`<a href="${r.unbilled.subscriptionHref}">Subscription preview</a>` : r.payment ? h`<a href="#payment-evidence">Payment evidence</a>` : canRead(actor, 'invoices') ? h`<a href="/app/invoices/${r.invoice?.id ?? invoice}">Open invoice</a>` : ''}</p>
     <section class="card"><h2>Calculation of this contribution</h2>

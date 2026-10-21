@@ -84,7 +84,7 @@ export async function moveHistoryFlow(h,owner,{onState=async()=>{},keepHistory=f
   assert.ok(!JSON.stringify(readerSource).includes('synthetic-nectar-private-7'),'report readers receive exact financial operands without private raw capture fields')
   assert.ok(JSON.stringify((await read()).incumbentHistory).includes('synthetic-nectar-private-7'),'only the owner can inspect full original capture evidence')
 
-  await onState({h,owner,label:'history',customer,annual:annual.id,delivery:delivery.id,period:'2026-03'})
+  await onState({h,owner,label:'history',customer,annual:annual.id,payment:first.incumbentHistory.records.find(row=>row.provider_ref==='synthetic-nectar-payment-annual').id,delivery:delivery.id,period:'2026-03'})
   if(keepHistory)return {customer,annual:annual.id,delivery:delivery.id,saved,first}
   await api('import.job',{job:job.job,action:'undo'})
   assert.equal((await api('customers')).length,0,'untouched historical-only move can be undone')
