@@ -28,6 +28,9 @@ import { exemptionCertificates } from './certificates.mjs'
 import { pricingModels } from './pricing-models.mjs'
 
 const ACTIONS = [...(await readFile(new URL('../../src/nectar/actions.ts', import.meta.url), 'utf8')).matchAll(/^  '([\w.]+)':/gm)].map(match => match[1])
+// Keep the default CI wall intact; local changes to the core billing cycle
+// can select this sequence without rerunning unrelated isolated journeys.
+if (!process.argv.includes('--core-only')) {
 await runIsolated('customer-search','customerSearchFlow')
 await runIsolated('upcoming','upcomingFlow')
 await runIsolated('numbering','numberingFlow')
@@ -60,6 +63,7 @@ await runIsolated('commitments','commitments')
 await runIsolated('metrics','metricsFlow')
 await runIsolated('metric-zones','metricZones')
 await runIsolated('usage-replay','usageReplayFlow')
+}
 const h = await harness()
 const check = async (id, run) => { await run(); console.log(`${id} passed`) }
 const ids = {}, cookie = {}

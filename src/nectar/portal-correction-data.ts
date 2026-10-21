@@ -50,6 +50,18 @@ export async function portalCorrectionsData(env: Bindings, session: CustomerSess
         upcomingSource: `/portal/subscriptions/${encodeURIComponent(entry.subscription)}/upcoming?period=${entry.period.start.slice(0, 7)}`,
         period: entry.period, beforeFingerprint: entry.before.fingerprint, afterFingerprint: entry.after.fingerprint })) })
   }
+  const historicalFilter=proposalId?' AND p.id=?':''
+  for(const row of await all(env,`SELECT p.id,p.plan_json,m.subject,m.body,m.status FROM nc_usage_corrections p
+    JOIN nc_usage_correction_mail m ON m.correction_id=p.id JOIN nc_customers c ON c.id=p.customer_id
+    WHERE p.customer_id=? AND p.status='approved' AND c.erased_at IS NULL${historicalFilter} ORDER BY p.prepared_at,p.id`,...args)){
+    const plan=parseJson<Row>(row.plan_json,{})
+    const periods=plan.periods.map((p:Row)=>({subscription:plan.subscription,invoiceId:p.invoice,period:p.period,
+      before:{...p.before,fingerprint:p.originalFingerprint,lines:p.beforeLines},after:{...p.after,fingerprint:p.fingerprint,lines:p.afterLines},
+      delta:{subtotalCents:p.subtotalCents,taxCents:p.taxCents,totalCents:p.totalCents},eventIds:p.eventIds,
+      credit:{amountCents:p.creditCents,appliedCents:p.appliedCents,carriedCents:p.carriedCents},revenue:p.postingRevenue}))
+    corrections.push({id:row.id,kind:'historical_usage_correction',periods,message:{subject:row.subject,body:row.body,status:row.status},
+      citations:periods.map((p:Row,index:number)=>({source:`/portal/corrections/${row.id}`,recordPath:`/corrections/0/periods/${index}`,invoiceSource:`/portal/invoices/${p.invoiceId}`}))})
+  }
   if (proposalId) insist(corrections.length === 1, 'not_found', 404)
   return { corrections }
 }

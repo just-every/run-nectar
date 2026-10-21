@@ -197,5 +197,13 @@
   "portal.answer.discount": "Remise conservée (%)",
   "portal.answer.fixedcredit": "Crédit contractuel conservé (USD)",
   "portal.request.unavailable": "Demande de facturation indisponible",
-  "portal.request.unavailable.body": "Vérifiez la facture et la question sélectionnées, ou contactez l’entreprise."
+  "portal.request.unavailable.body": "Vérifiez la facture et la question sélectionnées, ou contactez l’entreprise.",
+  "usageCorrection.subject": "Correction historique de l’utilisation",
+  "usageCorrection.period": "{number} ({from} au {to}) : variation du sous-total {subtotal} ; de la taxe {tax} ; du total {total}. Source : {source}. Recalcul : {fingerprint}. Écritures de revenus : {revenue}.",
+  "usageCorrection.creditRevenue": "avoir comptabilisé à l’émission",
+  "usageCorrection.replayRevenue": "service original recalculé",
+  "usageCorrection.footer": "Règle : {policy}. Les corrections négatives créent des avoirs numérotés. Les avoirs pour la prochaine facture sont reportés ; les autres réduisent le solde impayé de la facture originale, avec report de tout excédent. Aucun remboursement en espèces ni facture négative n’est créé. Les écarts positifs sont facturés à la période suivante ou sur une facture corrective distincte. Identifiants des événements originaux et détail des revenus : {receipt}.",
+  "usageCorrection.next_invoice": "prochaine facture",
+  "usageCorrection.correcting_invoice": "facture corrective",
+  "usageCorrection.credit_note": "avoir / débit correctif"
 }

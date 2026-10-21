@@ -197,5 +197,13 @@
   "portal.answer.discount": "Saved discount (%)",
   "portal.answer.fixedcredit": "Saved contract credit (USD)",
   "portal.request.unavailable": "Billing request unavailable",
-  "portal.request.unavailable.body": "Check the selected invoice and question, or contact the business."
+  "portal.request.unavailable.body": "Check the selected invoice and question, or contact the business.",
+  "usageCorrection.subject": "Historical usage correction",
+  "usageCorrection.period": "{number} ({from} to {to}): subtotal change {subtotal}; tax change {tax}; total change {total}. Source: {source}. Replay: {fingerprint}. Revenue postings: {revenue}.",
+  "usageCorrection.creditRevenue": "credit recognized at issue",
+  "usageCorrection.replayRevenue": "replayed original service",
+  "usageCorrection.footer": "Policy: {policy}. Negative corrections are numbered credit notes. Next-invoice credits are carried to later invoices; other credits offset the unpaid original, carrying any excess. No cash refund or negative invoice is created. Positive differences bill next period or on a separate correcting invoice. Original event IDs and revenue details: {receipt}.",
+  "usageCorrection.next_invoice": "next invoice",
+  "usageCorrection.correcting_invoice": "correcting invoice",
+  "usageCorrection.credit_note": "credit note / correcting debit"
 }

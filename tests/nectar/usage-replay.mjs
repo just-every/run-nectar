@@ -150,7 +150,7 @@ export async function usageDispositionFlow(h,owner,ctx) {
   assert.equal(h.mails.length,messagesBefore+1,'USE-004 approval reserves and attempts one frozen customer message')
   const saved=(await corrections(ctx.subscription)).find(c=>c.id===negative.id)
   assert.equal(saved.mail.status,'accepted')
-  assert.ok(saved.mail.body.startsWith(negative.plan.message.body),'USE-004 approved wording and exact calculated tax/revenue citations are preserved')
+  assert.ok(saved.mail.body===negative.plan.message.body,'USE-004 approved wording and exact calculated tax/revenue citations are preserved')
   assert.ok(h.mails.at(-1).text===saved.mail.body,'USE-004 actual network-edge message equals the frozen approved reservation')
   for(const invoice of ctx.issued)assert.deepEqual(issuedEvidence(await read(invoice.id)),issuedEvidence(invoice),'USE-004 all original versions, inputs, tax and issued lines remain immutable')
   const issueMonth=negative.plan.issueDate.slice(0,7)
@@ -204,7 +204,7 @@ export async function usageDispositionFlow(h,owner,ctx) {
     if(index===0){customer=ctx.foreign;sub=ctx.bulkSub;events=ctx.bulk;invoice=ctx.savedBulk}
     else {
       const external=`synthetic-nectar-${index}`
-      customer=(await api('customer.create',{external_id:external,name:`Correction customer ${index}`,billing_email:`synthetic-nectar-${index}@example.test`})).id
+      customer=(await api('customer.create',{external_id:external,name:`Correction customer ${index}`,billing_email:`synthetic-nectar-${index}@example.test`,...(index===2?{language:'es-US'}:{})})).id
       sub=(await api('subscription.create',{customer,start_date:'2020-07-01',price:[ctx.bulkPrice]})).id
       events=Array.from({length:10000},(_,n)=>({event_id:`synthetic-nectar-${index}-${n}`,customer:external,meter:ctx.bulkSource.code,quantity:'1',occurred_at:'2020-07-10T00:00:00Z'}))
       for(let n=0;n<events.length;n+=500)assert.equal((await api('usage.submit',{events:events.slice(n,n+500)})).accepted,500)
@@ -243,6 +243,7 @@ export async function usageDispositionFlow(h,owner,ctx) {
     assert.equal(ledger.carriedUsageCredits.reduce((n,c)=>n+c.availableCents,0),paid)
     const receipt=(await corrections(sub)).find(c=>c.id===proposal.id)
     assert.equal(receipt.mail.status,index===1?'uncertain':'accepted')
+    if(index===2)assert.equal(receipt.mail.subject,'Corrección histórica de uso','USE-004 generated customer messages follow the existing complete Spanish catalogue; authored text is unchanged')
     await observe(`bulk-${disposition}`,[`/app/usage/replay?subscription=${sub}&period=2020-07`,`/app/invoices/${invoice.id}`,`/app/customers/${customer}`])
     // Explicit issue consumes available liability once, after the exact same
     // current-tax invoice calculation the human reviewed.
@@ -324,7 +325,15 @@ export async function usageDispositionFlow(h,owner,ctx) {
   const portalPath=`/portal/invoices/${next.applications[0]}?session=${encodeURIComponent(portal.token)}`
   const portalHtml=await(await h.raw(portalPath)).text()
   assert.ok(portalHtml.includes('USD 48.00'))
-  assert.doesNotMatch(portalHtml,/Reviewed source correction|calculation_json|api\/nectar/)
+  assert.ok(portalHtml.includes('Reviewed source correction'),'USE-004 existing customer-visible credit reasons agree with the operator record')
+  assert.ok(!/calculation_json|api\/nectar|source_fingerprint/.test(portalHtml),'USE-004 customer statement excludes operator-only custody')
+  const publicCorrection=await(await h.raw(`/portal/corrections/${next.correction}?session=${encodeURIComponent(portal.token)}`)).json()
+  const frozenCorrection=(await corrections(next.sub)).find(c=>c.id===next.correction)
+  assert.equal(publicCorrection.corrections[0].message.body,frozenCorrection.mail.body,'USE-004 customer sees the identical frozen approved explanation')
+  assert.deepEqual(publicCorrection.corrections[0].periods.map(p=>p.delta),frozenCorrection.plan.periods.map(p=>({subtotalCents:p.subtotalCents,taxCents:p.taxCents,totalCents:p.totalCents})))
+  assert.ok(!/recipient|provider_ref|calculation_json|\/app\/|\/api\/nectar\//.test(JSON.stringify(publicCorrection)),'USE-004 correction projection preserves the existing portal allowlist')
+  assert.equal((await h.raw(`/portal/corrections/${outcomes[1].correction}?session=${encodeURIComponent(portal.token)}`)).status,404,'USE-004 foreign correction receipts are refused')
+  await observe('portal-explanation',[`/portal/adjustments?session=${encodeURIComponent(portal.token)}`],{customerOnly:true})
   await observe('portal-credit',[portalPath],{customerOnly:true})
   // Preparation and rejection have no financial/message effect; an intervening
   // source or policy change refuses execution and cannot consume events.

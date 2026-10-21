@@ -162,7 +162,7 @@ export async function inspect(env: Bindings, actor: Actor, month: string) {
     const metricLines=meters.some(m=>m.metric_plan_json)?(await rated(env,business,sub.id,period)).rating.lines.filter(l=>l.kind==='metric_usage'):[]
     for (const meter of meters) {
       if(meter.metric_plan_json){for(const line of metricLines.filter(l=>l.meterId===meter.id&&l.periodStart===period.start))perMeter.push({meter:meter.code,unit:meter.unit_label,dimensions:line.evidence.dimensions,total:line.quantity,exact:line.evidence.exactQuantity,events:(line.evidence.eventIds as string[]).length,billed:0,daysWithoutUsage:[],receivedAfterPeriodEnd:[]});continue}
-      const events = await all(env, "SELECT event_id, quantity, occurred_at, received_at, invoice_id FROM nc_usage_events WHERE customer_id = ? AND meter_id = ? AND status = 'active' AND occurred_at >= ? AND occurred_at < ? ORDER BY occurred_at", sub.customer_id, meter.id, from, to)
+      const events = await all(env, "SELECT event_id, quantity, occurred_at, received_at, invoice_id FROM nc_usage_events WHERE customer_id = ? AND meter_id = ? AND status = 'active' AND NOT EXISTS(SELECT 1 FROM nc_usage_voids v WHERE v.event_id=nc_usage_events.event_id) AND occurred_at >= ? AND occurred_at < ? ORDER BY occurred_at", sub.customer_id, meter.id, from, to)
       const total = events.reduce((sum, event) => sum + micros(event.quantity, 'quantity'), 0n)
       const days = new Set(events.map(event => localDate(event.occurred_at, zone)))
       const activeFrom = sub.start_date > period.start ? sub.start_date : period.start

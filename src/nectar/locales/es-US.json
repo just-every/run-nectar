@@ -197,5 +197,13 @@
   "portal.answer.discount": "Descuento guardado (%)",
   "portal.answer.fixedcredit": "Crédito contractual guardado (USD)",
   "portal.request.unavailable": "Solicitud de facturación no disponible",
-  "portal.request.unavailable.body": "Revise la factura y la pregunta seleccionadas, o contacte con la empresa."
+  "portal.request.unavailable.body": "Revise la factura y la pregunta seleccionadas, o contacte con la empresa.",
+  "usageCorrection.subject": "Corrección histórica de uso",
+  "usageCorrection.period": "{number} ({from} a {to}): cambio del subtotal {subtotal}; cambio del impuesto {tax}; cambio del total {total}. Fuente: {source}. Recálculo: {fingerprint}. Asientos de ingresos: {revenue}.",
+  "usageCorrection.creditRevenue": "crédito reconocido al emitirlo",
+  "usageCorrection.replayRevenue": "servicio original recalculado",
+  "usageCorrection.footer": "Política: {policy}. Las correcciones negativas generan notas de crédito numeradas. Los créditos para la próxima factura se aplican a facturas posteriores; los demás reducen el saldo pendiente de la factura original y conservan cualquier excedente. No se crea un reembolso en efectivo ni una factura negativa. Las diferencias positivas se facturan en el próximo período o en una factura correctora separada. Identificadores de los eventos originales y detalles de ingresos: {receipt}.",
+  "usageCorrection.next_invoice": "próxima factura",
+  "usageCorrection.correcting_invoice": "factura correctora",
+  "usageCorrection.credit_note": "nota de crédito / débito corrector"
 }

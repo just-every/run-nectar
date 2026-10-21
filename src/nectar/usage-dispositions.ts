@@ -1,3 +1,4 @@
+import { customerText } from './locale'
 // A correction is reviewed against a complete, immutable issued chain. Only
 // approval appends an effective basis and settles/queues its exact signed delta.
 import type { Bindings } from '../auth.server'
@@ -56,7 +57,7 @@ async function plan(env: Bindings, actor: Actor, payload: Row) {
   const reason=String(payload.reason??'').trim(), explanation=String(payload.explanation??'').trim()
   insist(reason.length>0&&reason.length<=500,'correction_reason_required')
   insist(explanation.length>0&&explanation.length<=8000,'correction_explanation_required')
-  const normalized={subscription:sub.id,from_period:replay.fromPeriod,through_period:replay.throughPeriod,void_event_ids:replay.voidEventIds,add_event_ids:replay.addEventIds,reason,explanation,issue_date:issueDate}
+  const normalized={subscription:sub.id,from_period:replay.fromPeriod,through_period:replay.throughPeriod,void_event_ids:replay.voidEventIds,add_event_ids:replay.addEventIds,reason,explanation,issue_date:issueDate,correction_id:payload.correction_id}
   const periods=[]
   for(const p of replay.periods){
     // Reject a newly introduced blocking rating error rather than silently
@@ -73,15 +74,20 @@ async function plan(env: Bindings, actor: Actor, payload: Row) {
       before:{subtotalCents:p.before.subtotalCents,taxCents:p.before.taxCents,totalCents:p.before.totalCents},
       after:{subtotalCents:p.after.subtotalCents,taxCents:p.after.taxCents,totalCents:p.after.totalCents},
       subtotalCents:p.deltaSubtotalCents,taxCents:p.deltaTaxCents,totalCents:p.deltaTotalCents,
-      eventIds:p.eventIds,revenue,postingRevenue: p.deltaTotalCents<0?[{period:issueDate.slice(0,7),amountCents:p.deltaSubtotalCents,method:'credit-contra-issue-month'}]:revenue.map(e=>({period:e.period,amountCents:e.deltaCents,method:'historical-usage-replay-delta'})),balanceCents:balance!.value,creditCents,appliedCents,carriedCents:creditCents-appliedCents})
+      beforeLines:p.before.lines.map(l=>({description:l.description,amountCents:l.amountCents})),afterLines:p.after.lines.map(l=>({description:l.description,amountCents:l.amountCents})),eventIds:p.eventIds,revenue,postingRevenue: p.deltaTotalCents<0?[{period:issueDate.slice(0,7),amountCents:p.deltaSubtotalCents,method:'credit-contra-issue-month'}]:revenue.map(e=>({period:e.period,amountCents:e.deltaCents,method:'historical-usage-replay-delta'})),balanceCents:balance!.value,creditCents,appliedCents,carriedCents:creditCents-appliedCents})
   }
   const creditCents=periods.reduce((n,p)=>n+p.creditCents,0)
-  const summary={subscription:sub.id,customer:customer.id,recipient:customer.billing_email,language:customer.language,disposition:policy.disposition,policyRevision:policy.revision,
+  const L=customerText(customer.language)
+  const summary={timezone:b.timezone,subscription:sub.id,customer:customer.id,recipient:customer.billing_email,language:customer.language,disposition:policy.disposition,policyRevision:policy.revision,
     creditPolicyRevision:credit.revision,thresholdCents:credit.two_person_above_cents,issueDate,reason,explanation,periods,delta:replay.delta,
     creditCents,carriedCents:periods.reduce((n,p)=>n+p.carriedCents,0),needsSecondApprover:credit.two_person_above_cents!==null&&creditCents>credit.two_person_above_cents,
     // These are the exact authored words, followed by machine-calculated source
     // citations. The author writes in the customer's language; no translation.
-    message:{recipient:customer.billing_email,subject:'Historical usage correction',body:explanation+'\n\n'+periods.map(p=>`${p.number} (${p.period.start} to ${p.period.end}): subtotal delta ${p.subtotalCents} cents, tax delta ${p.taxCents} cents, total delta ${p.totalCents} cents. Source: /app/invoices/${p.invoice}. Replay: ${p.fingerprint}. Revenue postings: ${p.postingRevenue.map(r=>r.period+': '+r.amountCents+' cents ('+r.method+')').join(', ')}.`).join('\n')+'\nPolicy: '+policy.disposition+'. Negative corrections are numbered credit notes; any excess over the unpaid original is carried customer credit, never a cash refund or a negative invoice. Positive differences are queued on the next invoice or a separate correcting invoice. Event IDs and exact revenue deltas are retained in the correction receipt.'}}
+    message:{recipient:customer.billing_email,subject:L.t('usageCorrection.subject'),body:explanation+'\n\n'+periods.map(p=>L.t('usageCorrection.period',{
+      number:p.number,from:L.day(p.period.start),to:L.day(p.period.end),subtotal:L.money(p.subtotalCents),tax:L.money(p.taxCents),total:L.money(p.totalCents),
+      source:`/portal/invoices/${p.invoice}`,fingerprint:p.fingerprint,revenue:p.postingRevenue.map(r=>`${r.period}: ${L.money(r.amountCents)} (${L.t(r.method==='credit-contra-issue-month'?'usageCorrection.creditRevenue':'usageCorrection.replayRevenue')})`).join(', ')
+    })).join('\n')+'\n'+L.t('usageCorrection.footer',{policy:L.t('usageCorrection.'+policy.disposition),receipt:`/portal/corrections/${payload.correction_id}`})}}
+
   const basis=await fingerprint({summary,subRevision:sub.revision,customerRevision:customer.revision,invoiceSettings:customer.invoice_settings_json,
     credit,policy,replayFingerprint:replay.fingerprint})
   insist(await sequence(env)===seq,'correction_source_changed',409)
@@ -90,9 +96,10 @@ async function plan(env: Bindings, actor: Actor, payload: Row) {
 
 export async function prepareUsageCorrection(env: Bindings, actor: Actor, input: Input) {
   requireCapability(actor,'propose')
-  const payload={subscription:input.text('subscription',{max:100}),from_period:input.text('from_period',{max:7}),through_period:input.text('through_period',{max:7}),
+  const id=newId()
+  const payload={correction_id:id,subscription:input.text('subscription',{max:100}),from_period:input.text('from_period',{max:7}),through_period:input.text('through_period',{max:7}),
     void_event_ids:input.has('void_ids')?input.text('void_ids',{max:1500000}).split(/\s+/).filter(Boolean):input.list('void_event_ids'),add_event_ids:input.has('add_ids')?input.text('add_ids',{max:1500000}).split(/\s+/).filter(Boolean):input.list('add_event_ids'),reason:input.text('reason',{max:500}),explanation:input.text('explanation',{max:8000})}
-  const p=await plan(env,actor,payload),id=newId()
+  const p=await plan(env,actor,payload)
   await commit(env,[sequenceGuard(env,p.seq),stmt(env,`INSERT INTO nc_usage_corrections(id,subscription_id,customer_id,payload_json,plan_json,basis,prepared_by_id,prepared_by_kind,prepared_by,prepared_at) VALUES(?,?,?,?,?,?,?,?,?,?)`,
     id,p.summary.subscription,p.summary.customer,JSON.stringify(p.normalized),JSON.stringify(p.summary),p.basis,actor.id,actor.kind,actorLabel(actor),now())],
     {actor:actorLabel(actor),action:'usage.correction.prepare',subject:id,detail:{subscription:p.summary.subscription,basis:p.basis,delta:p.summary.delta,disposition:p.summary.disposition}})
@@ -180,7 +187,7 @@ export async function decideUsageCorrection(env: Bindings, actor: Actor, input: 
     for(const a of adjustments)statements.push(stmt(env,'UPDATE nc_usage_adjustments SET invoice_id=? WHERE id=?',invoice,a.id))
     documents.push({kind:'correcting_invoice',id:invoice,status:'draft',totalCents:r.totalCents})
   }
-  const body=s.message.body+`\nCorrection receipt: /app/usage/replay?subscription=${s.subscription}&correction=${id}.`
+  const body=s.message.body
   statements.push(stmt(env,'INSERT INTO nc_usage_correction_mail(correction_id,customer_id,recipient,subject,body,updated_at) VALUES(?,?,?,?,?,?)',id,s.customer,s.recipient,s.message.subject,body,now()))
   await commit(env,statements,{actor:actorLabel(actor),action:'usage.correction.approve',subject:id,detail:{basis:row.basis,disposition:s.disposition,delta:s.delta,documents,carriedCents:s.carriedCents}})
   await deliverUsageCorrectionMail(env,id)
