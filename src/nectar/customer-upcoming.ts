@@ -18,7 +18,9 @@ export async function customerUpcoming(env: Bindings, actor: Actor, customer: st
     const sourcePath = `/app/subscriptions/${sub.id}?preview_period=${period.start.slice(0, 7)}#upcoming`
     const common = { subscription: sub.id, externalId: sub.external_id, startDate: sub.start_date, period, sourcePath }
     try {
-      const view = await upcoming(env, actor, sub.id, month)
+      // Freeze the selected anchor period across the engine's async reads:
+      // a midnight boundary must not pair one period label with another bill.
+      const view = await upcoming(env, actor, sub.id, period.start.slice(0, 7))
       const calculation = view.calculation
       return { ...common, state: view.state, reason: null, invoiceId: view.invoiceId,
         subtotalCents: calculation.subtotalCents as number, taxCents: calculation.taxCents as number, totalCents: calculation.totalCents as number,
