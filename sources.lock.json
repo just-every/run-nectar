@@ -372,6 +372,10 @@
       "sha256": "687758ba7b151b6c7f6fa06848630ed3b5291c375653f6b5601f8e399653c6f0",
       "executable": false
     },
+    "migrations/core/0050_feature_policy_erasure_fences.sql": {
+      "sha256": "68fd76d59e03537b984b6fc378dc64255399f08d13f9a4a92e3f2030c6ac730f",
+      "executable": false
+    },
     "ONBOARDING.md": {
       "sha256": "95bb235abff28ac36979868486caf2cb73bfbe4ab63037f3e301d189bb9398d9",
       "executable": false
