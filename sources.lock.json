@@ -2924,6 +2924,10 @@
       "sha256": "6b9c61f58071ddf7cd7cdc576542b2ec3de21d45877da30d70045f994a223842",
       "executable": false
     },
+    "src/nectar/pricing-calendar.ts": {
+      "sha256": "66adefdb4be49169380e595583cc2d6b075c18d1825cdfc27db7e2ad08df45c2",
+      "executable": false
+    },
     "src/nectar/pricing-replay.ts": {
       "sha256": "d812b78f6e283fdc15e86dd0dc8ac0022115331906f785e94ca4ef228ecc7893",
       "executable": false
@@ -3013,7 +3017,7 @@
       "executable": false
     },
     "src/nectar/retention-winback.ts": {
-      "sha256": "488f2f13bf9a624ce8e6188160f11f463ffdd93d8e431b4e7473e4e880dfc167",
+      "sha256": "61ca3791a420d7c9458bccccaee15d8db65c8c3a15b92e607a3c9d09c2d0d71e",
       "executable": false
     },
     "src/nectar/revenue-allocation.ts": {
@@ -3594,6 +3598,14 @@
     },
     "tests/nectar/harness.mjs": {
       "sha256": "43c1f5c74b6e4c5077f9e94831a2c4b151915b683d868699823e22705763ada1",
+      "executable": false
+    },
+    "tests/nectar/interval-cancel.mjs": {
+      "sha256": "38e28ef9484cb31552a740a656b80ada1e9b4eb323145ad97dc02083b933cb53",
+      "executable": false
+    },
+    "tests/nectar/intervals.mjs": {
+      "sha256": "143179bf6f1c4a253403f9d4393046a5701e703884f6a0172b553bcfe0b12d5c",
       "executable": false
     },
     "tests/nectar/invoice-content.mjs": {
