@@ -48,7 +48,7 @@ async function generate() {
   }
   const method = await stripe.request('POST', '/v1/payment_methods', { type: 'card', 'card[token]': 'tok_visa' })
   receipt.sourceIds.paymentMethod = method.id
-  const customer = await stripe.request('POST', '/v1/customers', { name: `Nectar sandbox ${stripe.run}`, test_clock: ownedClock,
+  const customer = await stripe.request('POST', '/v1/customers', { name: `Nectar sandbox ${stripe.run}`, email: `nectar-${stripe.run}@example.test`, test_clock: ownedClock,
     payment_method: method.id, 'invoice_settings[default_payment_method]': method.id, 'metadata[nectar_run]': stripe.run })
   receipt.sourceIds.customer = customer.id
   const events = new Map()
