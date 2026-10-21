@@ -46,9 +46,9 @@ function eventsFor(input: RevenueInput) {
 }
 
 function plainWeights(input: RevenueInput, line: Line): UsageMonthWeight[] {
-  const events = eventsFor(input), wanted = ids(line.evidence.eventIds)
+  const events = eventsFor(input), wanted = ids(line.evidence.eventIds), byId = new Map(events.map(event=>[event.eventId,event]))
   const selected = wanted.map(id => {
-    const event = events.find(event => event.eventId === id)
+    const event = byId.get(id)
     insist(event && event.meterId === line.meterId, 'revenue_usage_source_missing', 409, { eventId: id })
     const day = localDate(event.occurredAt, input.timezone)
     insist(day >= line.periodStart && day < line.periodEnd, 'revenue_usage_source_outside_period', 409)

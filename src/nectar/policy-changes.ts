@@ -6,8 +6,8 @@ import { all, commit, guard, insist, newId, now, one, parseJson, stmt, type Row 
 import type { Input } from './input'
 import { requireFreshFactor } from './mfa'
 
-type Kind = 'credit' | 'certificate' | 'tax' | 'lifecycle' | 'feature'
-const TABLES: Record<Kind, string> = { credit: 'nc_credit_policy', certificate: 'nc_certificate_policy', tax: 'nc_business', lifecycle: 'nc_lifecycle_policy', feature: 'nc_feature_policy_revision' }
+type Kind = 'credit' | 'certificate' | 'tax' | 'lifecycle' | 'feature' | 'usage'
+const TABLES: Record<Kind, string> = { credit: 'nc_credit_policy', certificate: 'nc_certificate_policy', tax: 'nc_business', lifecycle: 'nc_lifecycle_policy', feature: 'nc_feature_policy_revision', usage: 'nc_usage_policy' }
 const revisionSQL = (kind: Kind) => `COALESCE((SELECT revision FROM ${TABLES[kind]} WHERE singleton=1),0)`
 const OTHER_APPROVERS = "SELECT 1 FROM nc_members WHERE status='active' AND role IN ('owner','finance') AND id<>?"
 
@@ -33,7 +33,7 @@ export async function policyChanges(env: Bindings, actor: Actor) {
   requireCapability(actor, 'read')
   const rows = await all(env, 'SELECT * FROM nc_policy_changes ORDER BY prepared_at DESC,id DESC LIMIT 200')
   const other = await one(env, OTHER_APPROVERS, actor.id)
-  const revisions = (await one(env, `SELECT ${revisionSQL('credit')} AS credit,${revisionSQL('certificate')} AS certificate,${revisionSQL('tax')} AS tax,${revisionSQL('lifecycle')} AS lifecycle,${revisionSQL('feature')} AS feature`))!
+  const revisions = (await one(env, `SELECT ${revisionSQL('credit')} AS credit,${revisionSQL('certificate')} AS certificate,${revisionSQL('tax')} AS tax,${revisionSQL('lifecycle')} AS lifecycle,${revisionSQL('feature')} AS feature,${revisionSQL('usage')} AS usage`))!
   const result: Row[] = []
   for (const row of rows) result.push({ ...row, payload: parseJson<Row>(row.payload_json, {}), payload_json: undefined,
     stale: row.status === 'pending' && row.base_revision !== revisions[row.kind],
@@ -86,6 +86,7 @@ export async function decidePolicyChange(env: Bindings, actor: Actor, input: Inp
       payload.product,payload.feature,payload.meter,payload.quota,payload.policy,payload.graceDays,at),
       stmt(env, 'UPDATE nc_feature_policy_revision SET revision=revision+1 WHERE singleton=1'))
   }
+  if (kind === 'usage') statements.push(stmt(env, 'UPDATE nc_usage_policy SET disposition=?,revision=revision+1 WHERE singleton=1', payload.disposition))
   if (kind === 'tax') statements.push(stmt(env, 'UPDATE nc_business SET tax_jurisdiction=?,tax_mode=?,tax_rate=?,tax_note=?,tax_reviewed_by=NULL,tax_reviewed_at=NULL,revision=revision+1,updated_at=? WHERE singleton=1', payload.jurisdiction, payload.mode, payload.rate, payload.note, at))
   statements.push(stmt(env, "UPDATE nc_policy_changes SET status='applied',decided_by_id=?,decided_by=?,decided_at=?,approval_mode=? WHERE id=?", actor.id, by, at, mode, row.id))
   await commit(env, statements, { actor: by, action: 'policy.apply', subject: row.id, detail: { kind, payload, preparedBy: row.prepared_by, mode } })

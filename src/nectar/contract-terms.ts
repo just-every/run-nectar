@@ -1,3 +1,4 @@
+import { effectiveReplay } from './usage-correction-records'
 // Immutable signed terms, with separate-human approval for every price ramp.
 import type { Bindings } from '../auth.server'
 import { requireAny, actorLabel, requireMember, type Actor } from './actor'
@@ -17,7 +18,7 @@ export async function contractsFor(env:Bindings,id:string):Promise<(Row & {terms
 export async function contractBasis(env:Bindings,id:string):Promise<ContractBasis> {
   const contracts=(await contractsFor(env,id)).filter(c=>c.status==='approved')
   return {commitments:contracts.flatMap(c=>c.terms.commitments.map(w=>({contract:c.id,from:w.from,to:w.to,minimumCents:cents(w.minimum),taxable:w.taxable}))),included:contracts.flatMap(c=>c.terms.included.map(a=>({...a,contract:c.id}))),
-    invoices:await Promise.all((await all(env,"SELECT id,number,period_start,period_end FROM nc_invoices WHERE subscription_id=? AND invoice_kind='recurring' AND status='issued' ORDER BY period_start",id)).map(async i=>({id:i.id,number:i.number,from:i.period_start,to:i.period_end,lines:(await all(env,'SELECT * FROM nc_invoice_lines WHERE invoice_id=? ORDER BY seq',i.id)).map(l=>({kind:l.kind,description:l.description,quantity:l.quantity,unitAmount:l.unit_amount,amountCents:l.amount_cents,taxable:!!l.taxable,priceId:l.price_id,meterId:l.meter_id,periodStart:l.period_start,periodEnd:l.period_end,evidence:parseJson<Record<string,unknown>>(l.evidence_json,{})}))})))}
+    invoices:await Promise.all((await all(env,"SELECT id,number,period_start,period_end FROM nc_invoices WHERE subscription_id=? AND invoice_kind='recurring' AND status='issued' ORDER BY period_start",id)).map(async i=>({id:i.id,number:i.number,from:i.period_start,to:i.period_end,lines:(await effectiveReplay(env,i.id))?.lines ?? (await all(env,'SELECT * FROM nc_invoice_lines WHERE invoice_id=? ORDER BY seq',i.id)).map(l=>({kind:l.kind,description:l.description,quantity:l.quantity,unitAmount:l.unit_amount,amountCents:l.amount_cents,taxable:!!l.taxable,priceId:l.price_id,meterId:l.meter_id,periodStart:l.period_start,periodEnd:l.period_end,evidence:parseJson<Record<string,unknown>>(l.evidence_json,{})}))})))}
 }
 
 export async function contractBurnDown(env:Bindings,id:string) {

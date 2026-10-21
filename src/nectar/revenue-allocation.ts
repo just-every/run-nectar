@@ -19,7 +19,7 @@ export interface RevenueSchedule {
 }
 const ratableKinds = new Set(['flat', 'seat', 'discount', 'credit'])
 const usageKinds = new Set(['usage', 'late_usage', 'overage', 'metric_usage'])
-const zeroKinds = new Set(['trial', 'trial_usage', 'paused_usage'])
+const zeroKinds = new Set(['trial', 'trial_usage', 'paused_usage','usage_credit_application'])
 const object = (value: unknown): value is Row => !!value && typeof value === 'object' && !Array.isArray(value)
 const safe = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value)
 
@@ -72,7 +72,13 @@ export function recognitionForLine(line: Line, input: RevenueInput, lineId: stri
   validateLine(line)
   insist(typeof lineId === 'string' && lineId.length > 0 && validTimeZone(input.timezone), 'revenue_context_required', 409)
   let entries: RevenueMonthEntry[], policy: string
-  if (ratableKinds.has(line.kind)) { policy = 'ratable-service-days'; entries = ratableEntries(line) }
+  if (line.kind==='usage_correction') {
+    const saved=line.evidence.revenueEntries
+    insist(typeof line.evidence.correction==='string' && Array.isArray(saved) && saved.length>0,'revenue_correction_evidence_required',409)
+    entries=saved as RevenueMonthEntry[];policy='historical-usage-replay-delta'
+    insist(entries.every(e=>/^\d{4}-(0[1-9]|1[0-2])$/.test(e.period)&&safe(e.amountCents)&&object(e.basis)),'revenue_correction_evidence_required',409)
+  }
+  else if (ratableKinds.has(line.kind)) { policy = 'ratable-service-days'; entries = ratableEntries(line) }
   else if (usageKinds.has(line.kind)) { policy = 'consumption-quantity-largest-remainder'; entries = usageRevenueEntries(input, line, lineId) }
   else if (line.kind === 'cancellation_credit') { policy = 'earned-minus-gross'; entries = cancellationEntries(line) }
   else if (line.kind === 'one_time') {

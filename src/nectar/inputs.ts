@@ -1,3 +1,4 @@
+import { carriedUsageCredits, usageAdjustments } from './usage-correction-records'
 import { invoiceContent } from './invoice-content'
 import { RENEWAL_RATING_VERSION } from './renewal-rating'
 // Gathers the recorded inputs that rate one subscription for one period, and
@@ -40,7 +41,7 @@ export async function ratingInputs(env: Bindings, business: Business, subscripti
     .map(row => ({ id: row.id, kind: row.kind, value: row.value, priceId: row.price_id, from: row.effective_from, to: row.effective_to, note: row.note }))
   const prices = await pricesById(env, [...new Set([...items.map(item => item.priceId), ...amendments.flatMap(a => a.priceId ? [a.priceId] : [])])])
   const meters = [...new Set(Object.values(prices).flatMap(price => price.meterId ? [price.meterId] : []))]
-  let events:RatingInput['events'] = meters.length ? (await all(env, `SELECT event_id, meter_id, quantity, occurred_at,properties_json,invoice_id FROM nc_usage_events WHERE customer_id = ? AND status = 'active' AND invoice_id IS NULL AND occurred_at < ? AND meter_id IN (${meters.map(() => '?').join(',')}) ORDER BY occurred_at, event_id`,
+  let events:RatingInput['events'] = meters.length ? (await all(env, `SELECT event_id, meter_id, quantity, occurred_at,properties_json,invoice_id FROM nc_usage_events WHERE customer_id = ? AND status = 'active' AND invoice_id IS NULL AND NOT EXISTS(SELECT 1 FROM nc_usage_voids v WHERE v.event_id=nc_usage_events.event_id) AND occurred_at < ? AND meter_id IN (${meters.map(() => '?').join(',')}) ORDER BY occurred_at, event_id`,
     sub.customer_id, zonedStart(period.end, business.timezone), ...meters)).map(row => ({ eventId: row.event_id, meterId: row.meter_id, quantity: row.quantity, occurredAt: row.occurred_at,...(Object.keys(parseJson(row.properties_json,{})).length?{properties:parseJson(row.properties_json,{})}:{}) })) : []
   const metricSources=[...new Set(Object.values(prices).flatMap(p=>p.metric?[p.metric.sourceId]:[]))]
   for(const source of metricSources){const rows=await metricEvents(env,sub.customer_id,source,zonedStart(period.end,business.timezone));for(const event of rows)if(!events.some(e=>e.eventId===event.eventId))events.push(event)}
@@ -53,7 +54,10 @@ export async function ratingInputs(env: Bindings, business: Business, subscripti
   const creditGovernance = intervals.length ? await creditPolicy(env) : null
   const charges = (await pendingCharges(env, sub.id, period.end)).filter(charge => activeSegments(period.start,period.end,intervals).length > 0 && !intervals.some(i => i.from <= charge.date && (i.to ?? '9999') > charge.date && (i.to ?? '9999') >= period.end))
   const renewals=(await all(env,"SELECT id,effective_date,uplift_percent FROM nc_renewal_events WHERE subscription_id=? AND kind='renew' ORDER BY effective_date,id",sub.id)).map(r=>({id:r.id,effectiveDate:r.effective_date,upliftPercent:r.uplift_percent}))
+  const adjustments=await usageAdjustments(env,sub.id),credits=await carriedUsageCredits(env,sub.customer_id)
+  const pending=(await all(env,"SELECT id FROM nc_usage_corrections WHERE subscription_id=? AND status='pending'",sub.id)).map(row=>row.id)
   return {
+    ...(adjustments.length?{usageAdjustments:adjustments}:{}),...(credits.length?{usageCredits:credits}:{}),...(pending.length?{usageCorrectionPending:pending}:{}),
     ...(renewals.length?{renewals}:{}),
     ...(hasContracts ? {contracts} : {}),
     ...(charges.length ? { charges } : {}),

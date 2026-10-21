@@ -1,3 +1,4 @@
+import { usageCorrections } from './usage-dispositions'
 import { customerUpcoming } from './customer-upcoming'
 import { revenueJournal } from './revenue-journal'
 import { numberRegister } from './number-register'
@@ -65,6 +66,7 @@ export async function customerView(env: Bindings, actor: Actor, id: string, url?
 }
 
 export const views: Record<string, View> = {
+  usageCorrections:(env,actor,_r,_id,url)=>usageCorrections(env,actor,url.searchParams.get("subscription")??""),
   numberRegister:(env,actor)=>numberRegister(env,actor),
   openapi: async env => openApiDocument(env.AUTH_ORIGIN),
   erasures:(env,actor)=>erasureRequests(env,actor),

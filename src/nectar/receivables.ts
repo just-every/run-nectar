@@ -1,3 +1,4 @@
+import { carriedUsageCredits } from './usage-correction-records'
 import { revenueCreditStatements } from './revenue-records'
 import { clockInstant } from './clock'
 import { documentNumberAllocation } from './invoice-numbering'
@@ -18,7 +19,8 @@ import { cents, plainMoney } from './decimal'
 import { addDays, daysBetween, requireDate, today } from './dates'
 import { Input } from './input'
 
-export const BALANCE_SQL = `(i.total_cents - COALESCE((SELECT SUM(amount_cents) FROM nc_credit_notes WHERE invoice_id = i.id), 0) - COALESCE((SELECT SUM(amount_cents) FROM nc_allocations WHERE invoice_id = i.id), 0))`
+export const BALANCE_SQL = `(i.total_cents - COALESCE((SELECT SUM(COALESCE(applied_cents,amount_cents)) FROM nc_credit_notes WHERE invoice_id = i.id), 0) - COALESCE((SELECT SUM(amount_cents) FROM nc_allocations WHERE invoice_id = i.id), 0) - COALESCE((SELECT SUM(amount_cents) FROM nc_usage_credit_applications WHERE invoice_id=i.id),0))`
+export const CARRIED_APPLICATION_SQL = `COALESCE((SELECT SUM(amount_cents) FROM nc_usage_credit_applications WHERE invoice_id=i.id),0)`
 const balanceOf = (id: string) => [`(SELECT ${BALANCE_SQL} FROM nc_invoices i WHERE i.id = ?)`, id] as const
 const UNALLOCATED_SQL = `(p.amount_cents - COALESCE((SELECT SUM(amount_cents) FROM nc_allocations WHERE payment_id = p.id), 0))`
 
@@ -137,13 +139,14 @@ export async function openInvoices(env: Bindings, customerId?: string) {
 export async function customerLedger(env: Bindings, actor: Actor, customerId: string) {
   requireRead(actor, 'customers')
   const invoices = await all(env, `SELECT i.id, i.number, i.issue_date, i.due_date, i.total_cents, ${BALANCE_SQL} AS balance_cents,
-    COALESCE((SELECT SUM(amount_cents) FROM nc_credit_notes WHERE invoice_id = i.id), 0) AS credited_cents,
+    COALESCE((SELECT SUM(COALESCE(applied_cents,amount_cents)) FROM nc_credit_notes WHERE invoice_id = i.id), 0) + ${CARRIED_APPLICATION_SQL} AS credited_cents,
     COALESCE((SELECT SUM(amount_cents) FROM nc_allocations WHERE invoice_id = i.id), 0) AS paid_cents
     FROM nc_invoices i WHERE i.customer_id = ? AND i.status = 'issued' ORDER BY i.issue_date, i.number`, customerId)
   // The customer record includes its own payments, so customer readers see them here.
   const pays = await paymentRows(env, customerId)
   const credits = await all(env, 'SELECT * FROM nc_credit_notes WHERE customer_id = ? ORDER BY issued_at', customerId)
   return {
+    carriedUsageCredits:await carriedUsageCredits(env,customerId),
     invoices:await withMetadata(env,'invoice',invoices), payments: pays, credits:await withMetadata(env,'credit-note',credits),
     invoicedCents: invoices.reduce((sum, row) => sum + row.total_cents, 0),
     creditedCents: invoices.reduce((sum, row) => sum + row.credited_cents, 0),

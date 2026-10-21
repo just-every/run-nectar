@@ -22,7 +22,7 @@ interface CreditSource {
 }
 
 function creditRevenueSchedule(invoiceId: string, creditId: string, amount: number, issueMonth: string): RevenueSchedule {
-  insist(Number.isSafeInteger(amount) && amount > 0 && /^\d{4}-(0[1-9]|1[0-2])$/.test(issueMonth), 'invoice_credit_revenue_source_required', 409)
+  insist(Number.isSafeInteger(amount) && /^\d{4}-(0[1-9]|1[0-2])$/.test(issueMonth), 'invoice_credit_revenue_source_required', 409)
   return { lineId: `credit:${creditId}`, kind: 'credit_note', amountCents: -amount,
     serviceStart: `${issueMonth}-01`, serviceEnd: addMonths(`${issueMonth}-01`, 1), policy: 'credit-contra-issue-month',
     entries: [{ period: issueMonth, amountCents: -amount, basis: { method: 'credit-contra-issue-month', invoiceId, creditId, issueMonth } }],
@@ -67,7 +67,7 @@ async function invoiceCreditPlan(env: Bindings, business: Business, payload: Row
     one(env, 'SELECT id,billing_email,language FROM nc_customers WHERE id=?', invoice.customer_id),
     all(env, 'SELECT * FROM nc_invoice_lines WHERE invoice_id=? ORDER BY seq,id', invoice.id),
     creditPolicy(env),
-    all(env, 'SELECT id,invoice_id,amount_cents,issued_at FROM nc_credit_notes WHERE invoice_id=? ORDER BY issued_at,id', invoice.id),
+    all(env, 'SELECT id,invoice_id,amount_cents,subtotal_cents,issued_at FROM nc_credit_notes WHERE invoice_id=? ORDER BY issued_at,id', invoice.id),
   ])
   insist(customer && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customer.billing_email), 'customer_billing_email_required', 409)
   const recipient = customer.billing_email
@@ -82,11 +82,13 @@ async function invoiceCreditPlan(env: Bindings, business: Business, payload: Row
   const tax = calculation.inputs?.tax
   insist(tax && ['no_tax','flat_rate'].includes(tax.mode), 'invoice_credit_calculation_unavailable', 409)
   const computed = invoiceTotals(tax, lines.map(line => ({ amountCents: line.amount_cents, taxable: !!line.taxable } as Line)))
+  const correctionTax=lines.filter(line=>line.kind==='usage_correction').reduce((n,line)=>n+Number(parseJson<Row>(line.evidence_json,{}).taxDeltaCents??0),0)
+  computed.taxCents+=correctionTax;computed.totalCents+=correctionTax
   insist(!computed.exceptions.length && computed.subtotalCents === invoice.subtotal_cents && computed.taxCents === invoice.tax_cents && computed.totalCents === invoice.total_cents, 'invoice_credit_calculation_mismatch', 409)
   const originalSchedules = recognitionForSavedInvoice(invoice, lines, business.timezone)
   const historicalAdjustments = creditHistory.map(credit => {
     insist(typeof credit.id === 'string' && Number.isSafeInteger(credit.issued_at), 'invoice_credit_revenue_source_required', 409)
-    return creditRevenueSchedule(invoice.id, credit.id, credit.amount_cents, localDate(credit.issued_at, business.timezone).slice(0, 7))
+    return creditRevenueSchedule(invoice.id, credit.id, credit.subtotal_cents??credit.amount_cents, localDate(credit.issued_at, business.timezone).slice(0, 7))
   })
   const issueMonth = localDate(clockInstant(env), business.timezone).slice(0, 7)
   insist(payload.revenueIssueMonth === undefined || payload.revenueIssueMonth === issueMonth, 'proposal_stale', 409)

@@ -1,3 +1,4 @@
+import { carriedUsageCredits,usageCreditAllocations } from './usage-correction-records'
 // USE-006: a live, write-free view of the exact next calculation.
 import type { Bindings } from '../auth.server'
 import { requireRead, type Actor } from './actor'
@@ -58,5 +59,8 @@ export async function upcoming(env: Bindings, actor: Actor, subscriptionId: stri
     ORDER BY a.effective_from,a.id`,sub.id)
   return {subscription:sub.id,customer:sub.customer_id,customerName:sub.customer_name,period,timezone:business.timezone,
     generatedAt,state,invoiceId,meters,credits:credits.map(c=>({...c,amountCents:cents(c.value),appliesThisPeriod:c.effective_from>=period.start && c.effective_from<period.end})),
+    carriedUsageCredits:await carriedUsageCredits(env,sub.customer_id),
+    creditApplications:usageCreditAllocations(input.usageCredits??[],calculation.totalCents),
+    balanceAfterCreditsCents:calculation.totalCents-usageCreditAllocations(input.usageCredits??[],calculation.totalCents).reduce((n,a)=>n+a.amountCents,0),
     remainingContractCreditCents:credits.reduce((sum,c)=>sum+cents(c.value),0),calculation}
 }

@@ -1,5 +1,6 @@
 // USE-004: read-only historical correction evidence. Issued inputs always win
 // over current catalog, subscription, tax and raw-event records.
+import { effectiveReplay } from './usage-correction-records'
 import type { Bindings } from '../auth.server'
 import { requireCapability, type Actor } from './actor'
 import { all, canonical, fingerprint, insist, one, parseJson, type Row } from './core'
@@ -36,18 +37,22 @@ export async function previewUsageCorrection(env: Bindings, actor: Actor, input:
   }
   insist(raw.length === selected.length, 'correction_event_not_found', 404)
   insist(raw.filter(e => added.has(e.event_id)).every(e => !e.invoice_id), 'correction_addition_already_billed', 409)
-  const removed = new Set(voids), found = new Set<string>(), rerated = new Map<string, Line[]>()
+  const priorVoids = new Set((await all(env, 'SELECT event_id FROM nc_usage_voids WHERE customer_id=?', sub.customer_id)).map(row => row.event_id))
+  insist(!voids.some(id => priorVoids.has(id)), 'correction_event_already_voided', 409)
+  const removed = new Set([...priorVoids,...voids]), found = new Set<string>(), rerated = new Map<string, Line[]>()
   const periods = []
   for (const invoice of invoices) {
     const calculation = parseJson<Row>(invoice.calculation_json, {}), saved = calculation.inputs as RatingInput
     insist(saved && saved.subscription?.id === subscription && saved.period?.start === invoice.period_start && saved.period?.end === invoice.period_end && saved.version === invoice.calc_version, 'historical_invoice_inputs_missing', 409)
-    const before = rate(saved)
+    const original = rate(saved)
     const storedLines = await all(env, 'SELECT * FROM nc_invoice_lines WHERE invoice_id=? ORDER BY seq', invoice.id)
-    insist(before.subtotalCents === invoice.subtotal_cents && before.taxCents === invoice.tax_cents && before.totalCents === invoice.total_cents && canonical(before.lines.map(l => [l.kind,l.priceId,l.amountCents,l.evidence])) === canonical(storedLines.map(l => [l.kind,l.price_id,l.amount_cents,parseJson(l.evidence_json,{})])), 'historical_replay_mismatch', 409)
+    insist(original.subtotalCents === invoice.subtotal_cents && original.taxCents === invoice.tax_cents && original.totalCents === invoice.total_cents && canonical(original.lines.map(l => [l.kind,l.priceId,l.amountCents,l.evidence])) === canonical(storedLines.map(l => [l.kind,l.price_id,l.amount_cents,parseJson(l.evidence_json,{})])), 'historical_replay_mismatch', 409)
+    const basis = (await effectiveReplay(env, invoice.id))?.input ?? saved
+    const before = rate(basis)
     const sources = new Set(Object.values(saved.prices).flatMap(p => p.metric ? [p.metric.sourceId] : p.meterId ? [p.meterId] : []))
     const start = zonedStart(saved.period.start, saved.timezone), end = zonedStart(saved.period.end, saved.timezone)
-    for (const event of saved.events) if (removed.has(event.eventId)) found.add(event.eventId)
-    const merged = new Map(saved.events.filter(e => !removed.has(e.eventId)).map(e => [e.eventId, e]))
+    for (const event of basis.events) if (removed.has(event.eventId)) found.add(event.eventId)
+    const merged = new Map(basis.events.filter(e => !removed.has(e.eventId)).map(e => [e.eventId, e]))
     for (const row of raw.filter(e => added.has(e.event_id) && sources.has(e.meter_id) && e.occurred_at < end)) {
       const metricSource = Object.values(saved.prices).some(p => p.metric?.sourceId === row.meter_id)
       if (row.occurred_at < start && !metricSource) continue
@@ -55,10 +60,10 @@ export async function previewUsageCorrection(env: Bindings, actor: Actor, input:
       const event: EventIn = { eventId: row.event_id, meterId: row.meter_id, quantity: row.quantity, occurredAt: row.occurred_at, properties: parseJson(row.properties_json, {}), invoiceId: row.occurred_at < start ? 'historical-context' : null }
       merged.set(event.eventId, event)
     }
-    const afterInput: RatingInput = { ...saved, events: [...merged.values()].sort((a,b) => a.occurredAt-b.occurredAt || a.eventId.localeCompare(b.eventId)), ...(saved.contracts ? { contracts: { ...saved.contracts, invoices: saved.contracts.invoices.map(i => ({ ...i, lines: rerated.get(i.id) ?? i.lines })) } } : {}) }
+    const afterInput: RatingInput = { ...basis, events: [...merged.values()].sort((a,b) => a.occurredAt-b.occurredAt || a.eventId.localeCompare(b.eventId)), ...(basis.contracts ? { contracts: { ...basis.contracts, invoices: basis.contracts.invoices.map(i => ({ ...i, lines: rerated.get(i.id) ?? i.lines })) } } : {}) }
     const after = rate(afterInput)
     rerated.set(invoice.id, after.lines)
-    periods.push({ invoice: invoice.id, number: invoice.number, period: saved.period, version: saved.version, source: `/app/invoices/${invoice.id}`, originalFingerprint: invoice.source_fingerprint, before, after, deltaSubtotalCents: after.subtotalCents-before.subtotalCents, deltaTaxCents: after.taxCents-before.taxCents, deltaTotalCents: after.totalCents-before.totalCents, eventIds: [...new Set([...saved.events.map(e => e.eventId), ...afterInput.events.map(e => e.eventId)])], fingerprint: await fingerprint({ original: invoice.source_fingerprint, afterInput }) })
+    periods.push({ invoice: invoice.id, number: invoice.number, period: saved.period, version: saved.version, source: `/app/invoices/${invoice.id}`, originalFingerprint: invoice.source_fingerprint, before, after, beforeInput: basis, afterInput, deltaSubtotalCents: after.subtotalCents-before.subtotalCents, deltaTaxCents: after.taxCents-before.taxCents, deltaTotalCents: after.totalCents-before.totalCents, eventIds: [...new Set([...saved.events.map(e => e.eventId), ...afterInput.events.map(e => e.eventId)])], fingerprint: await fingerprint({ original: invoice.source_fingerprint, afterInput }) })
   }
   insist(selected.every(id => found.has(id)), 'correction_event_outside_range', 409)
   const totals = { subtotalCents: 0, taxCents: 0, totalCents: 0 }

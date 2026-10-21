@@ -7,8 +7,8 @@ import { all, type Row } from './core'
 import type { D1Sql } from '../modules/import-kit/src/d1/index'
 
 const quote = (name: string) => `"${name.replaceAll('"', '""')}"`
-const relation = new Set(['customer_id','subscription_id','invoice_id','payment_id','proposal_id','credit_id','record_id','subject','related_id','term_id','offer_id','contract_id','note_id'])
-const keep = new Set(['number','kind','document_kind','status','origin','language','currency','method','billing_mode','invoice_kind','calc_version','version','revision','quantity','unit_amount','value','tax_rate','tax_mode','tax_jurisdiction','anchor_day','billing_interval','access','scope','scopes','pricing_model','action','state','approval_mode','mail_status','verified_method','event','created_by_kind','source','proposal_kind'])
+const relation = new Set(['customer_id','subscription_id','invoice_id','payment_id','proposal_id','credit_id','record_id','subject','related_id','term_id','offer_id','contract_id','note_id','correction_id','original_invoice_id'])
+const keep = new Set(['number','kind','document_kind','status','origin','language','currency','method','billing_mode','invoice_kind','calc_version','version','revision','quantity','unit_amount','value','tax_rate','tax_mode','tax_jurisdiction','anchor_day','billing_interval','access','scope','scopes','pricing_model','action','state','approval_mode','mail_status','verified_method','event','created_by_kind','prepared_by_kind','source','proposal_kind'])
 const reserved = new Set(['nc_erased_records','nc_guard','nc_privacy_generation','nc_privacy_context','nc_erasure_requests','nc_erasure_financial','nc_business','nc_members','nc_agent_keys'])
 const keyed = (value: unknown, ids: Set<string>): boolean => typeof value === 'string' ? ids.has(value) : Array.isArray(value) ? value.some(v => keyed(v, ids)) : !!value && typeof value === 'object' && Object.values(value).some(v => keyed(v, ids))
 const json = (text: unknown) => { try { return JSON.parse(String(text)) } catch { return null } }
@@ -68,7 +68,7 @@ export async function erasurePlan(env: Bindings, customer: Row): Promise<Erasure
     }
     if (table==='nc_customers' && row.id===customer.id) { updates.status='archived'; updates.erased_at=Date.now(); updates.revision=crypto.randomUUID(); updates.tax_exempt=0 }
     if (affected) {
-      if (['nc_credit_correction_mail','nc_draft_correction_mail','nc_notifications','nc_note_mentions','nc_renewal_notices'].includes(table)) updates.status='suppressed'
+      if (['nc_usage_correction_mail','nc_credit_correction_mail','nc_draft_correction_mail','nc_notifications','nc_note_mentions','nc_renewal_notices'].includes(table)) updates.status='suppressed'
       if (table==='nc_cadence_deliveries') updates.status='superseded'
       if (table==='nc_notices') updates.status='discarded'
       if (table==='nc_tasks') updates.status='done'

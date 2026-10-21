@@ -52,11 +52,11 @@ const USAGE = new Set(['usage', 'overage', 'metric_usage', 'late_usage', 'trial_
 const DEFINITIONS: Record<FinancialReportMetric, { title: string; definition: string }> = {
   credits: {
     title: 'Issued credit notes',
-    definition: 'Actual numbered credit notes created in the selected month in the business billing timezone, shown as positive credited amounts against their original invoices. These are credits reducing amounts owed, not cash refunds or customer credit balances. Credit notes currently have no recorded tax attribution.',
+    definition: 'Actual numbered credit notes created in the selected month in the business billing timezone, shown as positive credited amounts against their original invoices. Historical usage notes separately retain applied and carried customer credit and saved tax attribution; other notes reduce only amounts owed and have no tax attribution. These are not cash refunds.',
   },
   tax: {
-    title: 'Original invoiced tax',
-    definition: 'Original tax amounts on invoices issued in the selected issue-date month. Later credit notes have no recorded tax attribution and do not adjust this total. This is not net tax due, a filing calculation, or evidence of cash collection or tax remittance.',
+    title: 'Invoiced tax and attributed corrections',
+    definition: 'Original tax amounts on invoices issued in the selected issue-date month, less historical usage credit notes with exact saved tax attribution issued that month. Other credit notes have no tax attribution and do not adjust this total. This is not net tax due, a filing calculation, or evidence of cash collection or tax remittance.',
   },
   unbilled: {
     title: 'Unbilled rated usage',
@@ -144,10 +144,11 @@ async function contributions(env: Bindings, metric: string, url: URL) {
           FROM nc_invoices i JOIN nc_customers c ON c.id = i.customer_id
           WHERE i.status = 'issued' AND substr(i.issue_date, 1, 7) = ? ${customer ? 'AND i.customer_id = ?' : ''}
           ORDER BY c.name, i.number`, month, ...(customer ? [customer] : []))
+    if(selected.metric==='tax')rows.push(...(await all(env,`SELECT n.id,n.number,n.customer_id,-n.tax_cents AS amount_cents,c.name AS customer_name FROM nc_credit_notes n JOIN nc_customers c ON c.id=n.customer_id WHERE n.correction_id IS NOT NULL AND n.tax_cents<>0 AND n.issued_at>=? AND n.issued_at<? ${customer?'AND n.customer_id=?':''} ORDER BY n.issued_at,n.id`,zonedStart(`${month}-01`,business.timezone),zonedStart(addMonths(`${month}-01`,1),business.timezone),...(customer?[customer]:[]))).map(r=>({...r,attributedCredit:true})))
     entries = rows.map(row => ({ invoiceId: row.id, number: row.number, customerId: row.customer_id,
       customerName: row.customer_name, amountCents: row.amount_cents,
-      href: sourceHref(selected.metric, row.id, month, customer), sourceKind: credits ? 'credit_note' : 'invoice',
-      ...(credits ? { creditId: row.id } : {}) }))
+      href: sourceHref(selected.metric, row.id, month, customer), sourceKind: credits||row.attributedCredit ? 'credit_note' : 'invoice',
+      ...(credits||row.attributedCredit ? { creditId: row.id } : {}) }))
   }
   const report: FinancialReport = { metric: selected.metric, ...DEFINITIONS[selected.metric], period: month,
     totalCents: entries.reduce((sum, entry) => sum + entry.amountCents, 0), entries }
@@ -173,8 +174,8 @@ export async function financialReportSource(env: Bindings, actor: Actor, metric:
       amountCents: line.amountCents, lineId: line.lineId, href: line.href }))
     return { ...base, totalCents: entry.amountCents, components, invoice: null, unbilled: evidence }
   }
-  const credit = report.metric === 'credits' ? await one(env, 'SELECT * FROM nc_credit_notes WHERE id = ? AND customer_id = ?', sourceId, entry.customerId) : null
-  insist(report.metric !== 'credits' || credit, 'report_invoice_not_found', 404)
+  const credit = entry.creditId ? await one(env, 'SELECT * FROM nc_credit_notes WHERE id = ? AND customer_id = ?', sourceId, entry.customerId) : null
+  insist(!entry.creditId || credit, 'report_invoice_not_found', 404)
   const invoiceId = credit ? credit.invoice_id : sourceId
   const invoice = await one(env, "SELECT * FROM nc_invoices WHERE id = ? AND customer_id = ? AND status = 'issued'", invoiceId, entry.customerId)
   insist(invoice, 'report_invoice_not_found', 404)

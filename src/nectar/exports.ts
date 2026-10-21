@@ -30,7 +30,7 @@ export async function invoicesCsv(env: Bindings, actor: Actor,url?:URL) {
   requireRead(actor, 'invoices')
   const filter=metadataPredicate('invoice','i.id',url?metadataFilter(url):null)
   const rows = await all(env, `SELECT i.number, i.status, c.external_id, c.name, i.period_start, i.period_end, i.issue_date, i.due_date, i.subtotal_cents, i.tax_cents, i.total_cents,
-    COALESCE((SELECT SUM(amount_cents) FROM nc_credit_notes WHERE invoice_id = i.id), 0) AS credited, COALESCE((SELECT SUM(amount_cents) FROM nc_allocations WHERE invoice_id = i.id), 0) AS paid, i.calc_version, i.approved_fingerprint, i.approved_by, i.issued_by, i.id
+    COALESCE((SELECT SUM(COALESCE(applied_cents,amount_cents)) FROM nc_credit_notes WHERE invoice_id = i.id), 0) + COALESCE((SELECT SUM(amount_cents) FROM nc_usage_credit_applications WHERE invoice_id=i.id),0) AS credited, COALESCE((SELECT SUM(amount_cents) FROM nc_allocations WHERE invoice_id = i.id), 0) AS paid, i.calc_version, i.approved_fingerprint, i.approved_by, i.issued_by, i.id
     FROM nc_invoices i JOIN nc_customers c ON c.id = i.customer_id WHERE i.status = 'issued' AND ${filter.sql} ORDER BY i.number`,...filter.params)
   const meta=await withMetadata(env,'invoice',rows)
   return file(csv(['number', 'status', 'customer_external_id', 'customer', 'period_start', 'period_end', 'issue_date', 'due_date', 'subtotal', 'tax', 'total', 'credited', 'paid', 'balance', 'calculation_version', 'source_fingerprint', 'approved_by', 'issued_by', 'invoice_id','metadata_json'],

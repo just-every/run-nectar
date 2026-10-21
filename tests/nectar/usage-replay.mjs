@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict'
 import { applyPolicy } from './policy-helper.mjs'
 
-// USE-004 public-door historical evidence; financial execution remains open.
-export async function usageReplayFlow(h, owner) {
+// USE-004 public-door historical evidence and governed financial execution.
+export async function usageReplayFlow(h, owner, options = {}) {
   const api = (path, body, status) => h.api(path, owner, body, status)
   await api('business.configure', { ...(await api('business')), timezone: 'UTC' })
   await applyPolicy(h, owner, 'tax.declare', { tax_jurisdiction: 'CA', tax_mode: 'flat_rate', tax_rate: '10', tax_note: 'USE-004 saved historical tax' })
@@ -113,6 +113,169 @@ export async function usageReplayFlow(h, owner) {
   assert.deepEqual(bulkReplay.delta, { subtotalCents: -10000, taxCents: 0, totalCents: -10000 }, 'USE-004 10,000 proposed historical voids replay to the independent exact delta')
   assert.equal(bulkReplay.periods[0].eventIds.length, 10000, 'USE-004 acceptance-sized replay cites every original event')
   assert.deepEqual(await api(`invoices/${bulkInvoice.id}`), savedBulk, 'USE-004 10,000-event replay leaves July immutable')
+  const dispositions=await usageDispositionFlow(h,owner,{subscription,customer,issued,late,body,accountant,readerKey,usageKey,bulkSource,bulkPrice,bulkSub,bulk,bulkInvoice,savedBulk,foreign,options})
   console.log('USE-004 historical range, 10,000-event void preview, maximum/unique/latest/time-weighted deltas, predecessor, tax, authority and unresolved blocking passed')
-  return { subscription, invoice: issued[0].id, lateEvent: late.event_id, paths: [`/app/invoices/${issued[0].id}`, `/app/usage/replay?subscription=${subscription}&period=2020-01`] }
+  return { ...dispositions, subscription, invoice: issued[0].id, lateEvent: late.event_id, paths: [`/app/invoices/${issued[0].id}`, `/app/usage/replay?subscription=${subscription}&period=2020-01`] }
+}
+
+// Immutable money and source fields, independent of later ledger projections.
+const issuedEvidence = invoice => Object.fromEntries(['id','number','status','subtotal_cents','tax_cents','total_cents','source_fingerprint','approved_fingerprint','calc_version','calculation','lines','approved_by','approved_at','issued_by','issued_at','issue_date','due_date'].map(k=>[k,invoice[k]]))
+
+export async function usageDispositionFlow(h,owner,ctx) {
+  const api=(path,body,status)=>h.api(path,owner,body,status), read=id=>api(`invoices/${id}`)
+  const corrections=sub=>api(`usage/corrections?subscription=${sub}`)
+  const decision=(id,who=owner,status=200)=>h.api('usage.correction.decide',who,{correction:id,decision:'approved'},status)
+  const prepare=(payload,who=owner,status=200)=>h.api('usage.correction.prepare',who,{...payload,reason:'Reviewed source correction',explanation:'We reviewed the retained source events and corrected the recorded usage. The original invoice stays unchanged.'},status)
+  const observe=async (state,paths,data={})=>ctx.options.observe?.(state,paths,data)
+  await api('access.give',{email:'synthetic-nectar-finance@example.test',name:'Independent Finance',role:'finance'})
+  const finance=await h.signIn('synthetic-nectar-finance@example.test',{requested:true})
+  await applyPolicy(h,owner,'credit.policy',{two_person_above:'10.00'})
+  // A selected-range preview is never enough to execute a historical chain.
+  assert.equal((await prepare({...ctx.body,through_period:'2020-01',add_event_ids:[ctx.late.event_id]},owner,409)).error,'complete_downstream_replay_required')
+  for(const who of [ctx.accountant,{bearer:ctx.usageKey.key}])await prepare({...ctx.body,add_event_ids:[ctx.late.event_id]},who,403)
+  const negative=await prepare({...ctx.body,add_event_ids:[ctx.late.event_id]},{bearer:ctx.readerKey.key})
+  assert.deepEqual(negative.plan.delta,{subtotalCents:-3581,taxCents:-358,totalCents:-3939},'USE-004 executed metric correction uses independently calculated historical 10% deltas')
+  assert.deepEqual(negative.plan.periods.map(p=>p.postingRevenue),[[{period:negative.plan.issueDate.slice(0,7),amountCents:-2081,method:'credit-contra-issue-month'}],[{period:negative.plan.issueDate.slice(0,7),amountCents:-1500,method:'credit-contra-issue-month'}]],'USE-004 credit revenue preview uses the existing issue-month contra policy and excludes tax')
+  await observe('metric-pending',[`/app/usage/replay?subscription=${ctx.subscription}&period=2020-01`])
+  const messagesBefore=h.mails.length
+  await decision(negative.id,{bearer:ctx.readerKey.key},403)
+  await decision(negative.id,ctx.accountant,403)
+  assert.equal((await decision(negative.id,finance,409)).error,'second_approver_required','USE-004 agent preparation cannot satisfy human credit governance')
+  await api('usage.correction.authorize',{correction:negative.id})
+  assert.equal((await decision(negative.id,owner,409)).error,'second_approver_required','USE-004 above-threshold human preparation needs a different approver')
+  const executed=await decision(negative.id,finance)
+  assert.equal(executed.documents.length,2,'USE-004 every affected issued period has its own exact negative disposition')
+  assert.equal(new Set(executed.documents.map(d=>d.number)).size,2,'USE-004 sequential credits reserve distinct numbers in one atomic execution')
+  assert.equal(executed.carriedCents,3939,'USE-004 next-invoice negative correction creates the full carried credit, even while originals are unpaid')
+  assert.equal(h.mails.length,messagesBefore+1,'USE-004 approval reserves and attempts one frozen customer message')
+  const saved=(await corrections(ctx.subscription)).find(c=>c.id===negative.id)
+  assert.equal(saved.mail.status,'accepted')
+  assert.ok(saved.mail.body.startsWith(negative.plan.message.body),'USE-004 approved wording and exact calculated tax/revenue citations are preserved')
+  assert.ok(h.mails.at(-1).text===saved.mail.body,'USE-004 actual network-edge message equals the frozen approved reservation')
+  for(const invoice of ctx.issued)assert.deepEqual(issuedEvidence(await read(invoice.id)),issuedEvidence(invoice),'USE-004 all original versions, inputs, tax and issued lines remain immutable')
+  await decision(negative.id,finance,409)
+  await prepare({...ctx.body,add_event_ids:[ctx.late.event_id]},owner,409)
+  assert.deepEqual((await api('usage.correction.preview',ctx.body)).delta,{subtotalCents:0,taxCents:0,totalCents:0},'USE-004 cumulative replay starts from the approved effective basis, not the original money again')
+  const unblocked=await api(`subscriptions/${ctx.subscription}/upcoming?period=2020-03`)
+  assert.ok(!unblocked.calculation.exceptions.some(e=>e.code==='metric_late_correction'),'USE-004 only governed resolution clears the late-nonadditive issue block')
+
+  // A second late event changes a previously corrected chain. Actual positive
+  // billing uses original 10% tax, despite today's 20% policy.
+  await applyPolicy(h,owner,'usage.correction.policy',{disposition:'correcting_invoice'})
+  const high={...ctx.late,event_id:'synthetic-nectar-late-high',quantity:'40',occurred_at:'2020-01-25T00:00:00Z'}
+  await api('usage.submit',{events:[high]})
+  const positive=await prepare({...ctx.body,add_event_ids:[high.event_id]})
+  assert.deepEqual(positive.plan.delta,{subtotalCents:9791,taxCents:979,totalCents:10770},'USE-004 maximum/latest/time-weighted second correction bills only the independently calculated cumulative delta')
+  const corrected=await decision(positive.id,finance)
+  assert.ok(corrected.invoice,'USE-004 correcting policy creates a real separate invoice')
+  let debit=await read(corrected.invoice)
+  assert.deepEqual([debit.subtotal_cents,debit.tax_cents,debit.total_cents],[9791,979,10770])
+  assert.ok(debit.lines.every(l=>l.kind==='usage_correction'&&l.evidence.eventIds.includes(high.event_id)))
+  await api('invoice.approve',{invoice:debit.id,acknowledge:true})
+  await api('invoice.finalise',{invoice:debit.id})
+  debit=await read(debit.id)
+  assert.equal(debit.status,'issued')
+  assert.deepEqual([debit.subtotal_cents,debit.tax_cents,debit.total_cents],[9791,979,10770],'USE-004 correcting invoice issue matches its exact approved preview')
+  await api('invoice.finalise',{invoice:debit.id},409)
+  const sourceRevenue=await api(`revenue/${debit.id}?from=2020-01&to=2020-02`)
+  assert.ok(JSON.stringify(sourceRevenue).includes('historical-usage-replay-delta'),'USE-004 correcting invoice revenue is backed by persisted original-service delta schedules')
+  for(const invoice of ctx.issued)assert.deepEqual(issuedEvidence(await read(invoice.id)),issuedEvidence(invoice))
+  await observe('metric-approved',[`/app/usage/replay?subscription=${ctx.subscription}&period=2020-01`,`/app/invoices/${debit.id}`,`/app/invoices/${ctx.issued[0].id}`])
+
+  // The full 10,000-event acceptance is executed under each approved business
+  // policy. Next-period negatives are numbered credits applied on the August
+  // statement; negative correcting balances never become negative invoices.
+  const product=(await api('product.create',{code:'synthetic-nectar-base',name:'Monthly base'})).id
+  const base=(await api('price.create',{product,kind:'flat',unit_amount:'40',taxable:true})).id
+  const outcomes=[]
+  for(const [index,disposition] of ['next_invoice','correcting_invoice','credit_note'].entries()) {
+    await applyPolicy(h,owner,'usage.correction.policy',{disposition})
+    let customer,sub,events,invoice
+    if(index===0){customer=ctx.foreign;sub=ctx.bulkSub;events=ctx.bulk;invoice=ctx.savedBulk}
+    else {
+      const external=`synthetic-nectar-${index}`
+      customer=(await api('customer.create',{external_id:external,name:`Correction customer ${index}`,billing_email:`synthetic-nectar-${index}@example.test`})).id
+      sub=(await api('subscription.create',{customer,start_date:'2020-07-01',price:[ctx.bulkPrice]})).id
+      events=Array.from({length:10000},(_,n)=>({event_id:`synthetic-nectar-${index}-${n}`,customer:external,meter:ctx.bulkSource.code,quantity:'1',occurred_at:'2020-07-10T00:00:00Z'}))
+      for(let n=0;n<events.length;n+=500)assert.equal((await api('usage.submit',{events:events.slice(n,n+500)})).accepted,500)
+      const run=await api('billrun.prepare',{period:'2020-07'})
+      invoice=(await api(`runs/${run.id}`)).invoices.find(i=>i.subscription_id===sub||i.customer_id===customer)
+      await api('invoice.approve',{invoice:invoice.id,acknowledge:true})
+      await api('invoice.finalise',{invoice:invoice.id,issue_date:'2020-08-01'})
+      invoice=await read(invoice.id)
+    }
+    // Paid and partly-paid source invoices must never acquire a negative AR
+    // balance or imply a cash refund; the entire liability stays visible.
+    const paid=index===0?10000:index===1?7500:0
+    if(paid){const payment=await api('payment.record',{customer,amount:(paid/100).toFixed(2),received_on:'2020-08-02',method:'bank_transfer',reference:`synthetic-nectar-paid-${index}`});await api('payment.allocate',{invoice:invoice.id,payment:payment.payment,amount:(paid/100).toFixed(2)})}
+    await api('subscription.addon',{subscription:sub,price:base,effective_date:'2020-08-01'})
+    const payload={subscription:sub,from_period:'2020-07',through_period:'2020-07',void_event_ids:events.map(e=>e.event_id),add_event_ids:[]}
+    const proposal=await prepare(payload)
+    assert.deepEqual(proposal.plan.delta,{subtotalCents:-10000,taxCents:0,totalCents:-10000})
+    assert.equal(proposal.plan.periods[0].eventIds.length,10000)
+    assert.equal(proposal.plan.carriedCents,paid,'USE-004 paid/partly-paid corrections retain the exact unapplied liability')
+    const pendingInvoiceRun=await api('billrun.prepare',{period:'2020-08'})
+    const pendingInvoice=(await api(`runs/${pendingInvoiceRun.id}`)).invoices.find(i=>i.customer_id===customer)
+    assert.ok((await read(pendingInvoice.id)).exceptions.some(e=>e.code==='usage_correction_pending'),'USE-004 even void-only pending corrections block issue')
+    await api('invoice.approve',{invoice:pendingInvoice.id,acknowledge:true},409)
+    if(index===1)h.mailResponses.push({status:500,body:{name:'provider_error'}})
+    const beforeMessages=h.mails.length
+    await decision(proposal.id,owner,409)
+    const result=await decision(proposal.id,finance)
+    assert.equal(h.mails.length,beforeMessages+1)
+    assert.equal(result.carriedCents,paid)
+    const original=await read(invoice.id)
+    assert.deepEqual(issuedEvidence(original),issuedEvidence(invoice),'USE-004 10,000-event execution preserves July issued evidence under every policy')
+    assert.equal(original.balanceCents,0,'USE-004 applied credit is bounded by the unpaid original')
+    assert.equal(original.credits[0].amount_cents,10000)
+    assert.equal(original.credits[0].applied_cents,10000-paid)
+    const ledger=(await api(`customers/${customer}`)).ledger
+    assert.equal(ledger.carriedUsageCredits.reduce((n,c)=>n+c.availableCents,0),paid)
+    const receipt=(await corrections(sub)).find(c=>c.id===proposal.id)
+    assert.equal(receipt.mail.status,index===1?'uncertain':'accepted')
+    await observe(`bulk-${disposition}`,[`/app/usage/replay?subscription=${sub}&period=2020-07`,`/app/invoices/${invoice.id}`,`/app/customers/${customer}`])
+    // Explicit issue consumes available liability once, after the exact same
+    // current-tax invoice calculation the human reviewed.
+    let remaining=paid
+    const applied=[]
+    for(const month of ['2020-08','2020-09','2020-10']) {
+      const preview=await api(`subscriptions/${sub}/upcoming?period=${month}`)
+      assert.deepEqual([preview.calculation.subtotalCents,preview.calculation.taxCents,preview.calculation.totalCents],[4000,800,4800])
+      const expected=Math.min(remaining,4800)
+      assert.equal(preview.balanceAfterCreditsCents,4800-expected)
+      const run=await api('billrun.prepare',{period:month})
+      const next=(await api(`runs/${run.id}`)).invoices.find(i=>i.customer_id===customer)
+      await api('invoice.approve',{invoice:next.id,acknowledge:true})
+      await api('invoice.finalise',{invoice:next.id})
+      const issued=await read(next.id)
+      assert.equal(issued.carriedApplications.reduce((n,a)=>n+a.amount_cents,0),expected)
+      assert.equal(issued.balanceCents,4800-expected,'USE-004 credit applications affect only owed balance, not new consideration/tax/revenue')
+      assert.equal(issued.total_cents,4800)
+      if(expected)assert.ok(issued.lines.some(l=>l.kind==='usage_credit_application'&&l.evidence.appliedCents===expected),'USE-004 August statement line cites the original correction credit and exact application')
+      await api('invoice.finalise',{invoice:next.id},409)
+      remaining-=expected;applied.push(next.id)
+      if(month==='2020-08')await observe(`august-${disposition}`,[`/app/invoices/${next.id}`])
+    }
+    assert.equal(remaining,0)
+    assert.equal((await api(`customers/${customer}`)).ledger.carriedUsageCredits.length,0,'USE-004 sequential applications exhaust the liability exactly once')
+    const register=await api('number-register')
+    assert.ok(register.entries.some(e=>e.id===original.credits[0].id&&e.totalCents===10000),'USE-004 numbered note face value is preserved in the unified register')
+    outcomes.push({sub,customer,correction:proposal.id,invoice:invoice.id,applications:applied})
+  }
+  // Preparation and rejection have no financial/message effect; an intervening
+  // source or policy change refuses execution and cannot consume events.
+  await applyPolicy(h,owner,'usage.correction.policy',{disposition:'next_invoice'})
+  const lateNew={...ctx.late,event_id:'synthetic-nectar-stale',quantity:'45',occurred_at:'2020-02-10T00:00:00Z'}
+  await api('usage.submit',{events:[lateNew]})
+  const stale=await prepare({...ctx.body,add_event_ids:[lateNew.event_id]})
+  await applyPolicy(h,owner,'usage.correction.policy',{disposition:'credit_note'})
+  assert.equal((await decision(stale.id,finance,409)).error,'correction_stale')
+  const mailCount=h.mails.length
+  await api('usage.correction.decide',{correction:stale.id,decision:'rejected'})
+  assert.equal(h.mails.length,mailCount)
+  assert.ok((await api(`subscriptions/${ctx.subscription}/upcoming?period=2020-03`)).calculation.exceptions.some(e=>e.code==='metric_late_correction'),'USE-004 rejection leaves the unresolved late event blocking issue')
+  for(let tick=0;tick<2;tick++)assert.equal((await h.raw(`/cdn-cgi/local/scheduled?time=${Date.now()}&cron=${encodeURIComponent('0 14 * * *')}`)).status,200)
+  assert.equal(h.mails.length,mailCount,'USE-004 ordinary daily recovery never retries accepted or uncertain correction mail')
+  console.log('USE-004 governed cumulative metric dispositions, all three 10,000-event policies, original tax/revenue, paid liability, once-only applications, messages and refusal journeys passed')
+  return {outcomes,debit:debit.id,metricCorrection:negative.id}
 }

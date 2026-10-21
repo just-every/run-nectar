@@ -59,8 +59,8 @@ function projectInvoice(invoice: Row, stored: Row[], entries: Row[], lines: Row[
   }
   const credits = creditNotes.map(note => {
     const saved = creditRows.find(row => row.credit_id === note.id)
-    if (saved) insist(saved.amount_cents === -note.amount_cents && (invoice.erased_at || saved.policy_version === REVENUE_POLICY_VERSION), 'revenue_credit_snapshot_mismatch', 409)
-    return { id: note.id, number: note.number, period: saved?.recognition_date.slice(0, 7) ?? localDate(note.issued_at, timezone).slice(0, 7), amountCents: -note.amount_cents,
+    if (saved) insist(saved.amount_cents === -(note.subtotal_cents??note.amount_cents) && (invoice.erased_at || saved.policy_version === REVENUE_POLICY_VERSION), 'revenue_credit_snapshot_mismatch', 409)
+    return { id: note.id, number: note.number, period: saved?.recognition_date.slice(0, 7) ?? localDate(note.issued_at, timezone).slice(0, 7), amountCents: -(note.subtotal_cents??note.amount_cents),
       basis: saved ? parseJson<Row>(saved.basis_json, {}) : { version: REVENUE_POLICY_VERSION, method: 'invoice-level-contra-revenue', creditId: note.id, invoiceId: id, issuedAt: note.issued_at, timezone, custody: 'derived-saved-originals', originalTaxUnchanged: true } }
   })
   return { invoice, schedules, credits, custody }

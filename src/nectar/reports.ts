@@ -151,7 +151,8 @@ export async function reportInvoice(env: Bindings, actor: Actor, metric: string,
   const sourceHref = `/app/invoices/${encodeURIComponent(invoiceId)}`
   if (metric !== 'mrr') components.push({ kind: 'tax', label: 'Invoice tax', amountCents: invoice.tax_cents, href: `${sourceHref}#lines` })
   if (metric === 'ar') {
-    for (const credit of invoice.credits as Row[]) components.push({ kind: 'credit_note', label: `${credit.number}: ${credit.reason}`, amountCents: -credit.amount_cents, href: `${sourceHref}#recv` })
+    for (const credit of invoice.credits as Row[]) components.push({ kind: 'credit_note', label: `${credit.number}: ${credit.reason}`, amountCents: -(credit.applied_cents??credit.amount_cents), href: `${sourceHref}#recv` })
+    for (const application of invoice.carriedApplications as Row[]) components.push({kind:'credit_application',label:`Carried credit ${application.number}`,amountCents:-application.amount_cents,href:`${sourceHref}#recv`})
     for (const allocation of invoice.allocations as Row[]) components.push({ kind: 'allocation', label: `Payment ${allocation.reference} received ${allocation.received_on}`, amountCents: -allocation.amount_cents, href: `${sourceHref}#recv` })
   }
   const totalCents = components.reduce((sum, component) => sum + component.amountCents, 0)

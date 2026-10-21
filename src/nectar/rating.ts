@@ -1,3 +1,4 @@
+import { usageCreditAllocations } from './usage-correction-records'
 import { renewalOperands, RENEWAL_RATING_VERSION, type RenewalRate } from './renewal-rating'
 import { metricUsage, METRIC_RATING_VERSION, type MetricPrice } from './metric-rating'
 import { commitmentLines, CONTRACT_RATING_VERSION, type ContractBasis } from './commitment-rating'
@@ -33,6 +34,10 @@ export interface RatingInput {
   version: string
   invoiceContent?: import('./invoice-content').InvoiceContent
   renewals?: RenewalRate[]
+  usageAdjustments?: import('./usage-correction-records').UsageAdjustment[]
+  usageCredits?: import('./usage-correction-records').UsageCredit[]
+  usageCorrectionPending?: string[]
+  usageCorrection?: string
   timezone: string
   tax: { mode: 'undeclared' | 'no_tax' | 'flat_rate'; rate: string; jurisdiction: string; exempt: boolean; exemptRef: string; certificate?: unknown; exception?: Exception | null }
   subscription: { id: string; anchorDay: number; startDate: string; trialEnd: string | null; endDate: string | null; billFrom: string | null }
@@ -185,6 +190,16 @@ export function rate(input: RatingInput, presentCancellationCredits = true): Rat
   if (input.charges) lines.push(...chargeLines(input.charges))
   const finalLines = presentCancellationCredits ? cancellationLines(input, lines, input => rate(input, false)) : lines
   const committed=commitmentLines(input,finalLines)
-  const totals = invoiceTotals(input.tax, committed.lines)
-  return { ...totals, lines: committed.lines, exceptions: [...exceptions, ...committed.exceptions, ...totals.exceptions], consumedEvents: [...new Set(consumed)] }
+  const adjustments=input.usageAdjustments??[]
+  const correctedLines=[...committed.lines,...adjustments.map(a=>a.line)]
+  const totals = invoiceTotals(input.tax, correctedLines)
+  // Historical lines are not taxed at today's rate. Their exact signed saved
+  // tax deltas are added once, even when ordinary charges have different tax.
+  const correctionTax=adjustments.reduce((n,a)=>n+a.taxCents,0)
+  totals.taxCents+=correctionTax;totals.totalCents+=correctionTax
+  if(adjustments.length)totals.tax.historicalCorrectionTaxCents=correctionTax
+  insist([totals.subtotalCents,totals.taxCents,totals.totalCents].every(Number.isSafeInteger),'correction_amount_out_of_range')
+  if(input.usageCorrectionPending?.length)exceptions.push({code:'usage_correction_pending',message:'A historical usage correction awaits a human decision. Resolve it before issuing.',detail:input.usageCorrectionPending})
+  const applicationLines:Line[]=usageCreditAllocations(input.usageCredits??[],totals.totalCents).map(c=>({kind:'usage_credit_application',description:`Carried historical correction ${c.number}: ${c.amountCents} cents applied after invoice total`,quantity:'1',unitAmount:'',amountCents:0,taxable:false,priceId:null,meterId:null,periodStart:period.start,periodEnd:period.end,evidence:{credit:c.id,correction:c.correction,appliedCents:c.amountCents,source:c.source,rule:'Customer liability application; not new consideration, tax or revenue'}}))
+  return { ...totals, lines: [...correctedLines,...applicationLines], exceptions: [...exceptions, ...committed.exceptions, ...totals.exceptions], consumedEvents: [...new Set(consumed)] }
 }

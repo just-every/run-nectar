@@ -1,3 +1,4 @@
+import { BALANCE_SQL } from '../receivables'
 // Home (the first-run checklist and today's work), More, business and tax
 // settings, access and credentials, and the audit trail.
 import { invoiceFieldsForm } from './invoice-content'
@@ -34,8 +35,7 @@ export async function homePage(env: Bindings, actor: Actor, url: URL) {
   const pending = await count(env, "SELECT COUNT(*) AS n FROM nc_proposals WHERE status = 'pending'")
   const drafts = await count(env, "SELECT COUNT(*) AS n FROM nc_bill_runs WHERE status = 'draft'")
   const changes = await count(env, "SELECT COUNT(*) AS n FROM nc_changes WHERE status = 'draft'") + await count(env, "SELECT COUNT(*) AS n FROM nc_amendments WHERE status = 'proposed'")
-  const overdue = await one<{ n: number; total: number }>(env, `SELECT COUNT(*) AS n, COALESCE(SUM(i.total_cents - COALESCE((SELECT SUM(amount_cents) FROM nc_credit_notes WHERE invoice_id = i.id), 0) - COALESCE((SELECT SUM(amount_cents) FROM nc_allocations WHERE invoice_id = i.id), 0)), 0) AS total
-    FROM nc_invoices i WHERE i.status = 'issued' AND i.due_date < date('now') AND i.total_cents > COALESCE((SELECT SUM(amount_cents) FROM nc_credit_notes WHERE invoice_id = i.id), 0) + COALESCE((SELECT SUM(amount_cents) FROM nc_allocations WHERE invoice_id = i.id), 0)`)
+  const overdue = await one<{ n: number; total: number }>(env, `SELECT COUNT(*) AS n, COALESCE(SUM(${BALANCE_SQL}),0) AS total FROM nc_invoices i WHERE i.status='issued' AND i.due_date<date('now') AND ${BALANCE_SQL}>0`)
   const tasksOpen = await count(env, "SELECT COUNT(*) AS n FROM nc_tasks WHERE status = 'open'")
   const work = [
     pending && { label: `${pending} proposal${pending === 1 ? '' : 's'} waiting for a decision`, href: '/app/proposals' },

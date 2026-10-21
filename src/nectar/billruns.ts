@@ -1,3 +1,7 @@
+import { invoiceContent } from './invoice-content'
+import { canonical } from './core'
+import { carriedUsageCredits, usageCreditAllocations } from './usage-correction-records'
+import { fingerprint as correctionFingerprint } from './core'
 import { invoiceNumberAllocation } from './invoice-numbering'
 import { revenueIssueStatements } from './revenue-records'
 import { clockInstant } from './clock'
@@ -22,7 +26,7 @@ import { reconciliationFor } from './reconciliation'
 import { RATING_VERSION, type Exception, type Rating } from './rating'
 import type { Input } from './input'
 
-const BLOCKING = new Set(['po_required','tax_undeclared', 'exemption_certificate', 'negative_total', 'usage_reconciliation','commitment_prior_periods','metric_late_correction','metric_duplicate_selection','metric_negative_quantity'])
+const BLOCKING = new Set(['usage_correction_pending','po_required','tax_undeclared', 'exemption_certificate', 'negative_total', 'usage_reconciliation','commitment_prior_periods','metric_late_correction','metric_duplicate_selection','metric_negative_quantity'])
 
 interface Draft { sub: Row; period: { start: string; end: string }; rating: Rating; fingerprint: string; input: { version: string }; comparison: Row; exceptions: Exception[] }
 
@@ -147,18 +151,26 @@ export async function invoiceRecord(env: Bindings, actor: Actor, id: string): Pr
   const lines = await all(env, 'SELECT * FROM nc_invoice_lines WHERE invoice_id = ? ORDER BY seq', id)
   const credits = await all(env, 'SELECT * FROM nc_credit_notes WHERE invoice_id = ? ORDER BY issued_at', id)
   const allocations = await all(env, 'SELECT a.*, p.reference, p.received_on, p.method FROM nc_allocations a JOIN nc_payments p ON p.id = a.payment_id WHERE a.invoice_id = ? ORDER BY a.allocated_at', id)
-  const credited = credits.reduce((sum, row) => sum + row.amount_cents, 0), paid = allocations.reduce((sum, row) => sum + row.amount_cents, 0)
+  const carriedApplications=await all(env,'SELECT a.*,n.number,n.correction_id FROM nc_usage_credit_applications a JOIN nc_credit_notes n ON n.id=a.credit_id WHERE a.invoice_id=? ORDER BY a.applied_at,a.id',id)
+  const credited = credits.reduce((sum, row) => sum + (row.applied_cents??row.amount_cents), 0)+carriedApplications.reduce((n,r)=>n+r.amount_cents,0), paid = allocations.reduce((sum, row) => sum + row.amount_cents, 0)
   return {
     ...invoice,retainedFinancial:await one(env,"SELECT legal_name,document_date,retain_until,tax_json FROM nc_erasure_financial WHERE kind='invoice' AND record_id=?",id),...await metadataFor(env,'invoice',id), creditPolicy: await creditPolicy(env), creditRequests: canRead(actor, 'invoices') ? await creditRequests(env, actor, id) : [], calculation: parseJson(invoice.calculation_json, {}), comparison: parseJson(invoice.comparison_json, {}), exceptions: parseJson(invoice.exceptions_json, []),
     calculation_json: undefined, comparison_json: undefined, exceptions_json: undefined,
     lines: lines.map(line => ({ ...line, evidence: parseJson(line.evidence_json, {}), evidence_json: undefined })),
-    credits:await withMetadata(env,'credit-note',credits), allocations, creditedCents: credited, paidCents: paid, balanceCents: invoice.status === 'issued' ? invoice.total_cents - credited - paid : null,
+    carriedApplications, credits:await withMetadata(env,'credit-note',credits), allocations, creditedCents: credited, paidCents: paid, balanceCents: invoice.status === 'issued' ? invoice.total_cents - credited - paid : null,
   }
 }
 
 async function currentFingerprint(env: Bindings, business: Business, invoice: Row) {
   if (invoice.invoice_kind === 'manual') {
     const saved = parseJson<Row>(invoice.calculation_json, {}).inputs
+    if(saved.usageCorrection){
+      const approved=await one(env,"SELECT 1 FROM nc_usage_corrections WHERE id=? AND status='approved'",saved.usageCorrection)
+      const staged=await all(env,'SELECT id,line_json,tax_cents FROM nc_usage_adjustments WHERE correction_id=? AND invoice_id=? ORDER BY id',saved.usageCorrection,invoice.id)
+      insist(approved&&canonicalAdjustments(staged,saved.usageAdjustments),'correction_source_changed',409)
+      const current={...saved,invoiceContent:await invoiceContent(env,business,invoice.customer_id)}
+      return correctionFingerprint(current)
+    }
     return (await manualCalculation(env, business, invoice.customer_id, saved.charges.map((c: Row) => c.id), saved.date)).fingerprint
   }
   return (await reconciledRating(env, business, invoice.subscription_id, { start: invoice.period_start, end: invoice.period_end })).fingerprint
@@ -222,6 +234,8 @@ export async function finalise(env: Bindings, actor: Actor, input: Input) {
     await cancellationApproval(env,actor,invoice)
     if (await currentFingerprint(env, business, invoice) !== invoice.approved_fingerprint) { refused.push({ invoice: invoice.id, reason: 'source_changed' }); continue }
     const calculation = parseJson<Row>(invoice.calculation_json, {})
+    const usageAdjustments=calculation.inputs?.usageAdjustments??[]
+    const carried=usageCreditAllocations(calculation.inputs?.usageCredits??[],invoice.total_cents)
     const consumed: string[] = calculation.consumedEvents ?? []
     const charges: string[] = (calculation.inputs?.charges ?? []).map((c: Row) => c.id)
     const allocation = invoiceNumberAllocation(env, business, customer)
@@ -234,6 +248,10 @@ export async function finalise(env: Bindings, actor: Actor, input: Input) {
       guard(env, 'source_changed', 'EXISTS(SELECT 1 FROM nc_customers WHERE id=? AND revision=? AND invoice_settings_json=?)', invoice.customer_id, customer.revision, customer.invoice_settings_json),
       guard(env, 'stale', "EXISTS(SELECT 1 FROM nc_invoices WHERE id = ? AND status = 'approved' AND approved_fingerprint = ?)", invoice.id, invoice.approved_fingerprint),
       ...chunk(consumed, 90).map(ids => guard(env, 'already_billed', `NOT EXISTS(SELECT 1 FROM nc_usage_events WHERE event_id IN (${ids.map(() => '?').join(',')}) AND (invoice_id IS NOT NULL OR status <> 'active'))`, ...ids)),
+      ...usageAdjustments.map((a:Row)=>guard(env,'correction_already_billed','EXISTS(SELECT 1 FROM nc_usage_adjustments WHERE id=? AND (invoice_id IS NULL OR invoice_id=?))',a.id,invoice.id)),
+      ...usageAdjustments.map((a:Row)=>stmt(env,'UPDATE nc_usage_adjustments SET invoice_id=? WHERE id=? AND invoice_id IS NULL',invoice.id,a.id)),
+      ...carried.flatMap(c=>[guard(env,'credit_balance_changed',`(SELECT amount_cents-applied_cents-COALESCE((SELECT SUM(amount_cents) FROM nc_usage_credit_applications WHERE credit_id=n.id),0) FROM nc_credit_notes n WHERE n.id=?)>=?`,c.id,c.amountCents),
+        stmt(env,'INSERT INTO nc_usage_credit_applications(id,credit_id,invoice_id,customer_id,amount_cents,applied_at) VALUES(?,?,?,?,?,?)',newId(),c.id,invoice.id,invoice.customer_id,c.amountCents,now())]),
       ...charges.map(id => guard(env, 'charges_already_billed_or_missing', 'EXISTS(SELECT 1 FROM nc_charges WHERE id=? AND invoice_id IS NULL)', id)),
       ...charges.map(id => stmt(env, 'UPDATE nc_charges SET invoice_id=? WHERE id=?', invoice.id, id)),
       ...chunk(consumed, 90).map(ids => stmt(env, `UPDATE nc_usage_events SET invoice_id = ? WHERE event_id IN (${ids.map(() => '?').join(',')})`, invoice.id, ...ids)),
@@ -253,3 +271,7 @@ export async function finalise(env: Bindings, actor: Actor, input: Input) {
 
 const chunk = <T>(list: T[], size: number) => Array.from({ length: Math.ceil(list.length / size) }, (_, index) => list.slice(index * size, index * size + size))
 
+
+function canonicalAdjustments(rows:Row[],saved:Row[]) {
+  return canonical(rows.map(r=>({id:r.id,line:parseJson(r.line_json,{}),taxCents:r.tax_cents})))===canonical([...saved].sort((a,b)=>a.id.localeCompare(b.id)).map(r=>({id:r.id,line:r.line,taxCents:r.taxCents})))
+}

@@ -1,3 +1,4 @@
+import { deliverPendingUsageCorrectionMail } from './nectar/usage-disposition-mail'
 import { portalResponse } from './nectar/portal-http'
 import { removeExpiredFinancialRecords } from './nectar/erasure-purge'
 import { erasurePublic } from './nectar/erasure-public'
@@ -46,6 +47,7 @@ export default withDemo({
     await deliverPendingAlerts(runtimeBindings(env))
     await sendScheduledReports(runtimeBindings(env),controller.scheduledTime)
     await deliverPendingCorrectionMail(runtimeBindings(env))
+    await deliverPendingUsageCorrectionMail(runtimeBindings(env))
     await deliverPendingDraftCorrectionMail(runtimeBindings(env))
   },
   async fetch(request, env, execution) {

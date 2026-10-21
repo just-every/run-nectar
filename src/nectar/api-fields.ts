@@ -608,6 +608,10 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "expected_quantity": "text",
     "meter": "text"
   },
+  "usage.correction.policy": { "disposition": "text" },
+  "usage.correction.prepare": { "void_ids": "text", "add_ids": "text", "subscription": "text", "from_period": "text", "through_period": "text", "void_event_ids": "list", "add_event_ids": "list", "reason": "text", "explanation": "text" },
+  "usage.correction.authorize": { "correction": "text" },
+  "usage.correction.decide": { "correction": "text", "decision": "text" },
   "usage.correction.preview": {
     "add_event_ids": "list",
     "from_period": "text",

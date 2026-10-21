@@ -62,8 +62,8 @@ export async function numberRegister(env: Bindings, actor: Actor): Promise<Numbe
     SELECT 'nectar','invoice',id,id,customer_id,number,currency,subtotal_cents,
       tax_cents,total_cents,NULL,NULL,id FROM nc_invoices WHERE status='issued'
     UNION ALL
-    SELECT 'nectar','credit-note',c.id,c.id,c.customer_id,c.number,i.currency,NULL,
-      NULL,c.amount_cents,NULL,NULL,c.invoice_id
+    SELECT 'nectar','credit-note',c.id,c.id,c.customer_id,c.number,i.currency,c.subtotal_cents,
+      c.tax_cents,c.amount_cents,NULL,NULL,c.invoice_id
     FROM nc_credit_notes c LEFT JOIN nc_invoices i ON i.id=c.invoice_id
     ORDER BY kind,number,source,id`)
   const entries: NumberRegisterEntry[] = rows.map(({ invoiceId, ...row }) => ({ ...row,

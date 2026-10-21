@@ -15,8 +15,10 @@ export async function customerAnswerInvoice(env: Bindings, session: CustomerSess
   insist(row, 'invoice_not_found', 404)
   const calculation = parseJson<Row>(row.calculation_json, {}), inputs = calculation.inputs ?? {}
   const lines = await all(env, 'SELECT id,kind,price_id,meter_id,description,quantity,unit_amount,amount_cents,evidence_json FROM nc_invoice_lines WHERE invoice_id=? ORDER BY seq', id)
-  const credits = await all(env, 'SELECT number,amount_cents FROM nc_credit_notes WHERE invoice_id=? AND customer_id=? ORDER BY issued_at', id, session.customer)
+  const credits = await all(env, 'SELECT number,COALESCE(applied_cents,amount_cents) AS amount_cents FROM nc_credit_notes WHERE invoice_id=? AND customer_id=? ORDER BY issued_at', id, session.customer)
   const allocations = await all(env, 'SELECT a.amount_cents,p.received_on,p.method FROM nc_allocations a JOIN nc_payments p ON p.id=a.payment_id WHERE a.invoice_id=? AND p.customer_id=? ORDER BY a.allocated_at', id, session.customer)
+  const carried=await all(env,'SELECT n.number,a.amount_cents FROM nc_usage_credit_applications a JOIN nc_credit_notes n ON n.id=a.credit_id WHERE a.invoice_id=? AND a.customer_id=? ORDER BY a.applied_at,a.id',id,session.customer)
+  credits.push(...carried)
   const invoice = { ...row, calculation_json: undefined,
     credits, allocations: allocations.map((payment, index) => ({ ...payment, reference: String(index + 1) })),
     creditedCents: credits.reduce((sum, credit) => sum + credit.amount_cents, 0),

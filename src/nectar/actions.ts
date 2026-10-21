@@ -1,3 +1,4 @@
+import { configureUsagePolicy, prepareUsageCorrection, authorizeUsageCorrection, decideUsageCorrection } from './usage-dispositions'
 import { configureInvoiceSeries } from './invoice-numbering'
 import { configureFeaturePolicy } from './feature-policy'
 import { configurePortal, issuePortalSession, revokePortalSession } from './portal-policy'
@@ -139,6 +140,10 @@ export const actions: Record<string, Handler> = {
   'amendment.decide': decideAmendment,
   'change.prepare': prepareChange,
   'change.decide': decideChange,
+  'usage.correction.policy': configureUsagePolicy,
+  'usage.correction.prepare': prepareUsageCorrection,
+  'usage.correction.authorize': authorizeUsageCorrection,
+  'usage.correction.decide': decideUsageCorrection,
   'usage.correction.preview': previewUsageCorrection,
   'usage.submit': submitUsage,
   'usage.control': recordControl,
