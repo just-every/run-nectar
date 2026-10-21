@@ -211,3 +211,83 @@ export async function commitments(h, owner) {
   console.log('CAT-003 three-year annual minimum, overages/late allowance, price/quantity ramps, separate approval/rejection, audit/export, prior-period guard, active-day minimum and issued burn-down passed')
   return { customer, subscription, contract: prepared.contract, invoices: invoices.map(invoice => invoice.id) }
 }
+
+// The same signed minimum closes over real mixed-cadence service, not twelve
+// assumed invoices. Annual advance consideration remains an immutable source.
+export async function intervalCommitmentsFlow(h, owner) {
+  const api = (path, body, status) => h.api(path, owner, body, status)
+  await api('access.give', { email: 'calendar-commitments-finance@example.test', name: 'Calendar Commitment Finance', role: 'finance' })
+  const finance = await h.signIn('calendar-commitments-finance@example.test', { requested: true })
+  const product = async code => (await api('product.create', { code: `calendar-minimum-${code}`, name: `Calendar minimum ${code}` })).id
+  const platform = (await api('price.create', { product: await product('annual'), kind: 'flat', unit_amount: '12000', taxable: false, billing_interval: 'annual', billing_timing: 'advance' })).id
+  const meter = (await api('meter.create', { code: 'calendar-minimum-calls', name: 'Calendar minimum calls', unit_label: 'calls' })).id
+  const cases = []
+  for (const [name, interval, quantity] of [['monthly', 'monthly', 100], ['quarterly', 'quarterly', 200]]) {
+    const price = (await api('price.create', { product: await product(name), kind: 'unit', unit_amount: '1', meter, taxable: false, billing_interval: interval, billing_timing: 'arrears' })).id
+    const externalId = `synthetic-nectar-minimum-${name}`
+    const customer = (await api('customer.create', { external_id: externalId, name: `Calendar minimum ${name}`, billing_email: `${name}@calendar-minimum.example` })).id
+    const subscription = (await api('subscription.create', { customer, start_date: '2040-01-01', term_months: 12, price: [platform, price] })).id
+    const detail = await api(`subscriptions/${subscription}`)
+    const request = await api('contract.prepare', { subscription, revision: detail.revision,
+      clause: 'The service year has a $15,000 pretax minimum. Its $12,000 annual platform fee is billed in advance; actual calls bill in arrears at $1 each. Only a positive shortfall settles after all actual service windows are issued.',
+      commitments: [{ from: '2040-01-01', to: '2041-01-01', minimum: '15000', taxable: false }], included: [], ramps: [] })
+    await h.api('contract.decide', finance, { contract: request.contract, decision: 'approved' })
+    cases.push({ name, quantity, price, externalId, customer, subscription, contract: request.contract, invoices: [], annual: null })
+  }
+  const issue = async (draft, date) => {
+    await api('invoice.approve', { invoice: draft.id, acknowledge: true })
+    await api('invoice.finalise', { invoice: draft.id, issue_date: date })
+    return api(`invoices/${draft.id}`)
+  }
+  const month = index => `${2040 + Math.floor(index / 12)}-${String(index % 12 + 1).padStart(2, '0')}`
+  for (let index = 0; index <= 12; index++) {
+    const current = `${month(index)}-01`
+    await h.advanceClock(`${current}T20:00:00Z`)
+    if (index > 0) await api('usage.submit', { events: cases.map(entry => ({ event_id: `synthetic-nectar-minimum-${entry.name}-${index}`, customer: entry.externalId, meter: 'calendar-minimum-calls', quantity: String(entry.quantity), occurred_at: `${month(index - 1)}-15T12:00:00Z` })) })
+    const prepared = await api('billrun.prepare', { period: month(index) })
+    const drafts = (await api(`runs/${prepared.id}`)).invoices
+    for (const entry of cases) {
+      const draft = drafts.find(invoice => invoice.customer_id === entry.customer)
+      if (!draft) continue
+      if (entry.name === 'monthly' && index === 10) continue // a genuinely missing issued usage window
+      if (entry.name === 'monthly' && index === 12) {
+        const blocked = await api(`invoices/${draft.id}`)
+        const missing = blocked.exceptions.find(exception => exception.code === 'commitment_prior_periods')
+        assert.ok(missing)
+        assert.deepEqual(missing.detail.missing.map(component => [component.from, component.to]), [['2040-10-01', '2040-11-01']], 'Only the actual unissued October component blocks settlement')
+        await api('invoice.approve', { invoice: draft.id, acknowledge: true }, 409)
+        continue
+      }
+      const invoice = await issue(draft, current)
+      entry.invoices.push(invoice)
+      if (index === 0) {
+        assert.equal(invoice.subtotal_cents, 1200000)
+        assert.equal(invoice.lines.some(line => line.kind === 'commitment_trueup'), false, 'Annual advance never settles a future minimum early')
+        entry.annual = { id: invoice.id, calculation: invoice.calculation, lines: invoice.lines }
+      } else if (index < 12) assert.equal(invoice.lines.some(line => line.kind === 'commitment_trueup'), false)
+    }
+  }
+  const monthly = cases.find(entry => entry.name === 'monthly')
+  const backfill = await api('billrun.prepare', { period: '2040-11' })
+  const october = (await api(`runs/${backfill.id}`)).invoices.find(invoice => invoice.customer_id === monthly.customer)
+  monthly.invoices.push(await issue(october, '2041-01-01'))
+  const finalRun = await api('billrun.prepare', { period: '2041-01' })
+  const finalDraft = (await api(`runs/${finalRun.id}`)).invoices.find(invoice => invoice.customer_id === monthly.customer)
+  monthly.invoices.push(await issue(finalDraft, '2041-01-01'))
+  for (const entry of cases) {
+    const trueups = entry.invoices.flatMap(invoice => invoice.lines).filter(line => line.kind === 'commitment_trueup')
+    const expectedUsage = entry.quantity * 12 * 100, expectedTrueup = 1500000 - 1200000 - expectedUsage
+    assert.equal(trueups.length, 1, 'Exactly one closing document settles the signed window')
+    assert.equal(trueups[0].amount_cents, expectedTrueup)
+    assert.equal(trueups[0].evidence.earnedCents, 1200000 + expectedUsage)
+    assert.ok(trueups[0].evidence.priorInvoices.some(invoice => invoice.id === entry.annual.id && invoice.earnedCents === 1200000), 'The unchanged annual advance invoice contributes its saved consideration')
+    assert.equal(entry.invoices.length, entry.name === 'monthly' ? 13 : 5, 'Coverage requires actual interval documents and invents no monthly invoices')
+    assert.equal(entry.invoices.reduce((sum, invoice) => sum + invoice.subtotal_cents, 0), 1500000)
+    const unchanged = await api(`invoices/${entry.annual.id}`)
+    assert.deepEqual({ calculation: unchanged.calculation, lines: unchanged.lines }, { calculation: entry.annual.calculation, lines: entry.annual.lines })
+    const detail = await api(`subscriptions/${entry.subscription}`), burn = detail.burnDown.find(window => window.contract === entry.contract)
+    assert.deepEqual([burn.earnedCents, burn.trueUpCents, burn.billedCents, burn.remainingCents], [1200000 + expectedUsage, expectedTrueup, 1500000, 0])
+  }
+  const repeated = await api('billrun.prepare', { period: '2041-01' })
+  assert.equal((await api(`runs/${repeated.id}`)).invoices.filter(invoice => cases.some(entry => entry.customer === invoice.customer_id)).length, 0, 'Repeated preparation cannot issue a second true-up')
+}

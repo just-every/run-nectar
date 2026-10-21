@@ -50,6 +50,13 @@ try {
       await Promise.all([page.waitForURL('**/app/customers/**'),form.getByRole('button').click()])
       return (await h.api(`customers/${customer}`,owner)).importedCollections.find(row=>row.id===request.id)
     },
+    finalize:async(customer,request)=>{
+      await page.goto(h.origin+`/app/customers/${customer}`)
+      const form=page.locator('form[action="/app/do/imported.collection.finalize"]').filter({has:page.locator(`input[value="${request.id}"]`)})
+      await form.locator('input[name="confirm"]').check()
+      await Promise.all([page.waitForURL('**/app/customers/**'),form.getByRole('button').click()])
+      return (await h.api(`customers/${customer}`,owner)).importedCollections.find(row=>row.id===request.id)
+    },
     onState:async state=>{for(const width of [1440,390]){await page.setViewportSize({width,height:950});await shot(`collection-${state.label}`,`/app/customers/${state.customer}`)}}
   })
   else await moveHistoryFlow(h,owner,{onState:async state=>{

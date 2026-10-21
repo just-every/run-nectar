@@ -42,7 +42,7 @@ const cents = (value: unknown, name: string, signed = false): number => {
   check(Number.isSafeInteger(value) && (signed || (value as number) >= 0), `${name} must be integer cents${signed ? '' : ', at least zero'}`)
   return value as number
 }
-const currency = (value: unknown): string => { check(typeof value === 'string' && /^[a-z]{3}$/.test(value), 'currency must be a lowercase three-letter code'); return value }
+const currency = (value: unknown): string => { check(value === 'usd', 'Historical financial records require USD; currency conversion is not available'); return value }
 export function stripeDate(value: unknown, zone: string): string {
   check(typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= 253402300799, 'created/date must be a valid Unix timestamp in seconds')
   const date = localDate(value * 1000, zone)

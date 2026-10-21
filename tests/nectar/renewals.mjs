@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { publishPrice } from './price-helper.mjs'
 
 // SUB-004: real terms, mail adapter, public cancellation form and scheduled clock.
 export async function renewalsFlow(h,owner,{onState=async()=>{}}={}) {
@@ -104,5 +105,80 @@ export async function renewalsFlow(h,owner,{onState=async()=>{}}={}) {
   await h.api('term.decide',finance,{term:prepared.term,decision:'approved'})
   const agent={bearer:(await h.api('credential.issue',owner,{name:'Renewal reader',scopes:['prepare']})).key}
   for(const action of ['term.prepare','term.decide','term.link']){await h.api(action,null,{},401);await h.api(action,agent,{},403)}
+  await nativeCalendarRenewals(h, owner, finance)
   console.log('SUB-004 annual notice, cancellation, uplift, term end, clock, custody and authority passed')
+}
+
+async function nativeCalendarRenewals(h, owner, finance) {
+  const api = (path, body, status) => h.api(path, owner, body, status)
+  const clock = async date => {
+    await h.advanceClock(`${date}T20:00:00Z`)
+    assert.equal((await h.raw(`/cdn-cgi/local/scheduled?time=${Date.parse(`${date}T20:00:00Z`)}&cron=${encodeURIComponent('0 14 * * *')}`)).status, 200)
+  }
+  const price = async (suffix, fields) => {
+    const product = (await api('product.create', { code: `renewal-calendar-${suffix}`, name: `Renewal ${suffix}` })).id
+    return (await publishPrice(h, owner, { product, taxable: false, ...fields })).id
+  }
+  const annual = await price('annual', { kind: 'seat', unit_amount: '1000', billing_interval: 'annual', billing_timing: 'advance' })
+  const addon = await price('addon', { kind: 'flat', unit_amount: '100', billing_interval: 'annual', billing_timing: 'advance' })
+  const meter = (await api('meter.create', { code: 'renewal-calendar-calls', name: 'Renewal calls', unit_label: 'calls' })).id
+  const usage = await price('usage', { kind: 'unit', unit_amount: '2', meter, billing_interval: 'monthly', billing_timing: 'arrears' })
+  const external = 'synthetic-nectar-renewal-calendar-1'
+  const customer = (await api('customer.create', { external_id: external, name: 'Mixed renewal service', billing_email: 'calendar@renewals.example' })).id
+  const subscription = (await api('subscription.create', { customer, start_date: '2030-01-01', term_months: 12, price: [annual, usage], quantity: ['1', '1'] })).id
+  const attached = await api('subscription.addon', { subscription, price: addon, effective_date: '2030-01-01' })
+  let detail = await api(`subscriptions/${subscription}`)
+  assert.equal(detail.items.find(item => item.id === attached.item).effective_to, '2031-01-01')
+  const firstItem = detail.items.find(item => item.price_id === annual)
+  const change = await api('change.prepare', { subscription, item: firstItem.id, quantity: 2, effective_date: '2030-07-01' })
+  await api('change.decide', { change: change.change, decision: 'approved' })
+  detail = await api(`subscriptions/${subscription}`)
+  const term = await api('term.prepare', { subscription, revision: detail.revision, term_start: '2030-01-01', months: 12, auto_renew: true, notice_days: 30, uplift_percent: '5' })
+  await h.api('term.decide', finance, { term: term.term, decision: 'approved' })
+  // A recorded old-term event must not appear as invented next-term usage.
+  await api('usage.submit', { events: [{ event_id: 'synthetic-nectar-renewal-old-usage', customer: external, meter: 'renewal-calendar-calls', quantity: '5', occurred_at: '2030-11-15T12:00:00Z' }] })
+  const beforeMail = h.mails.length
+  await clock('2030-12-02')
+  detail = await api(`subscriptions/${subscription}`)
+  const notice = detail.renewal.notices[0], snapshot = JSON.parse(notice.snapshot_json)
+  assert.equal(snapshot.invoices.length, 13, 'The complete next annual term contains one annual and twelve monthly documents')
+  assert.deepEqual(snapshot.period, { start: '2031-01-01', end: '2032-01-01' })
+  assert.equal(snapshot.unknownUsage, true, 'Unobserved next-term usage is explicitly unknown')
+  const fixed = snapshot.invoices.filter(invoice => invoice.lines.some(line => line.priceId === annual))
+  assert.equal(fixed.length, 1)
+  assert.deepEqual([fixed[0].subtotalCents, snapshot.totalCents], [220500, 220500], 'Two annual seats and the co-termed addon receive the signed five percent uplift exactly once')
+  assert.equal(snapshot.invoices.filter(invoice => invoice.usage.meters.includes(meter)).length, 12)
+  assert.ok(snapshot.invoices.every(invoice => invoice.inputs.billing && invoice.inputs.events.length === 0), 'Every preview retains an actual service calendar without forecasting consumption')
+  assert.equal(snapshot.invoices.filter(invoice => invoice.usage.meters.includes(meter)).reduce((sum, invoice) => sum + invoice.totalCents, 0), 0)
+  await clock('2030-12-03')
+  assert.equal((await api(`subscriptions/${subscription}`)).renewal.notices.length, 1)
+  assert.equal(h.mails.slice(beforeMail).filter(mail => [mail.to].flat().some(to => to.includes('calendar@renewals.example'))).length, 1, 'Mixed service still has one reserved notice and no re-send')
+  await clock('2031-01-01')
+  detail = await api(`subscriptions/${subscription}`)
+  assert.deepEqual([detail.end_date, detail.contract_end_date], ['2032-01-01', '2032-01-01'])
+  assert.equal(detail.items.find(item => item.id === attached.item).effective_to, '2032-01-01', 'A co-termed addon extends into the approved renewal')
+  assert.equal(detail.items.find(item => item.id === firstItem.id).effective_to, '2030-07-01', 'An earlier approved ramp is never reopened')
+  await api('billrun.prepare', { period: '2031-01' })
+  const draft = (await api(`subscriptions/${subscription}`)).invoices.find(invoice => invoice.period_start === '2031-01-01' && invoice.total_cents === 220500)
+  assert.ok(draft)
+  const actual = await api(`invoices/${draft.id}`)
+  const financial = lines => lines.map(line => [line.priceId, line.kind, line.quantity, line.amountCents, line.periodStart, line.periodEnd])
+  assert.deepEqual(actual.lines.map(line => [line.price_id, line.kind, line.quantity, line.amount_cents, line.period_start, line.period_end]), financial(fixed[0].lines), 'Ordinary renewal billing matches the saved annual notice cents and service spans')
+  await api('invoice.approve', { invoice: draft.id, acknowledge: true })
+  await api('invoice.finalise', { invoice: draft.id, issue_date: '2031-01-01' })
+  const original = await api(`invoices/${draft.id}`)
+  await clock('2031-01-01')
+  assert.equal((await api(`subscriptions/${subscription}`)).renewal.events.length, 1)
+  assert.deepEqual(await api(`invoices/${draft.id}`), original)
+
+  const monthly = await price('month-end', { kind: 'flat', unit_amount: '31', billing_interval: 'monthly', billing_timing: 'arrears' })
+  const monthCustomer = (await api('customer.create', { external_id: 'synthetic-nectar-renewal-month-end', name: 'Month end renewal', billing_email: 'month-end@renewals.example' })).id
+  const monthSub = (await api('subscription.create', { customer: monthCustomer, start_date: '2032-01-31', billing_anchor_date: '2032-01-31', term_months: 1, price: [monthly] })).id
+  const monthTerm = await api('term.prepare', { subscription: monthSub, revision: (await api(`subscriptions/${monthSub}`)).revision, term_start: '2032-01-31', months: 1, auto_renew: true, notice_days: 1, uplift_percent: '0' })
+  await h.api('term.decide', finance, { term: monthTerm.term, decision: 'approved' })
+  for (const [date, end] of [['2032-02-29', '2032-03-31'], ['2032-03-31', '2032-04-30'], ['2032-04-30', '2032-05-31']]) {
+    await clock(date)
+    const renewed = await api(`subscriptions/${monthSub}`)
+    assert.deepEqual([renewed.end_date, renewed.contract_end_date], [end, end], 'Renewals clamp each target month from the original January31 anchor')
+  }
 }

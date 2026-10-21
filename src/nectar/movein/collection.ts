@@ -120,7 +120,7 @@ export async function executeImportedCollection(env: Bindings, actor: Actor, inp
     liveRequest = await saveIntent(env, actor, liveRequest, basis, intent)
     const evidence = await stripeCollectedEvidence(stripe, intent, basis, request, (await requireBusiness(env)).timezone)
     liveRequest = await saveOutcome(env, actor, liveRequest, 'uncertain', evidence, 'stripe_mirror_unconfirmed')
-    return collectionView(await finishMirror(env, actor, liveRequest, stripe, basis, evidence, false))
+    return collectionView(liveRequest)
   } catch (error) {
     const failed = error instanceof CollectionProviderError && !error.uncertain
     return collectionView(await saveOutcome(env, actor, liveRequest, failed && !paymentAttempted ? 'failed' : 'uncertain', null,

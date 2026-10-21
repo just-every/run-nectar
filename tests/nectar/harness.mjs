@@ -55,6 +55,7 @@ export async function harness({ assets = false, localTime, hostname = '127.0.0.1
     const db = await mf.getD1Database('DB')
     for (const name of (await readdir('migrations/core')).filter(name => name.endsWith('.sql')).sort()) {
       setupPhase=`migration:${name}`
+      if(name>='0058')console.log('HARNESS',setupPhase)
       await db.batch(wrangler.unstable_splitSqlQuery(await readFile(`migrations/core/${name}`, 'utf8')).map(query => db.prepare(query)))
     }
     setupPhase='health'

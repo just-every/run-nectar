@@ -208,6 +208,7 @@ export async function pricingSimulation(h, owner) {
   }
   assert.deepEqual((await getProposal(main.id)).impact, saved.impact, 'subsequent billing cannot rewrite the approved customer explanation')
   await mixedIntervalReplay(h, owner, finance)
+  await evergreenIntervalReplay(h, owner)
   console.log('AGENT-004 six issued months, retained usage replay, independently checked deltas, governed cohort scheduling, immutable prepared notices and exact July billing passed')
 }
 
@@ -248,4 +249,34 @@ async function mixedIntervalReplay(h, owner, finance) {
   assert.equal(view.impact[0].notice.status, 'prepared')
   assert.deepEqual(new Set(view.impact[0].notice.invoiceIds), new Set(firstTerm.map(invoice => invoice.id)))
   for (const invoice of originals) assert.deepEqual(await api(`invoices/${invoice.id}`), invoice, 'Interval replay preserves original saved windows, amounts and evidence')
+}
+
+async function evergreenIntervalReplay(h, owner) {
+  for (const [name, periods] of [
+    ['annual', ['2011-01', '2012-01', '2013-01', '2014-01', '2015-01', '2016-01']],
+    ['quarterly', ['2010-04', '2010-07', '2010-10', '2011-01', '2011-04', '2011-07']],
+    ['weekly', ['2010-01', '2010-02']],
+  ]) {
+    const api = (action, body) => h.api(action, owner, body)
+    const customer = (await api('customer.create', { external_id: `synthetic-nectar-replay-${name}`, name: `Saved ${name} service`, billing_email: `${name}@replay.example` })).id
+    const product = (await api('product.create', { code: `saved-replay-${name}`, name: `Replay ${name}` })).id
+    const fields = { product, kind: 'flat', taxable: false, billing_interval: name, billing_timing: 'arrears' }
+    const source = (await publishPrice(h, owner, { ...fields, unit_amount: '100' })).id
+    const target = (await publishPrice(h, owner, { ...fields, unit_amount: '120' })).id
+    const subscription = (await api('subscription.create', { customer, start_date: '2010-01-01', billing_anchor_date: '2010-01-01', price: [source] })).id
+    for (const month of periods) {
+      await api('billrun.prepare', { period: month })
+      for (const invoice of (await api(`subscriptions/${subscription}`)).invoices.filter(invoice => invoice.status === 'draft')) {
+        await api('invoice.approve', { invoice: invoice.id, acknowledge: true })
+        await api('invoice.finalise', { invoice: invoice.id, issue_date: `${month}-28` })
+      }
+    }
+    const created = await api('proposal.create', { kind: 'price_change', title: `Replay six saved ${name} intervals`, payload: { simulation: true, start_month: '2010-01', effective_date: '2025-01-01', source_price: source, target_price: target, subscriptions: [subscription] } })
+    const replay = (await api(`proposals/${created.id}`)).impact[0].historical
+    assert.equal(replay.periods.length, 6, 'Evergreen replay selects six actual saved service intervals')
+    assert.deepEqual([replay.totals.beforeSubtotalCents, replay.totals.afterSubtotalCents, replay.totals.deltaSubtotalCents], [60000, 72000, 12000])
+    assert.ok(replay.periods.every(period => period.before.totalCents === 10000 && period.after.totalCents === 12000))
+    const originals = await Promise.all(replay.periods.map(period => api(`invoices/${period.invoice}`)))
+    assert.deepEqual(replay.periods.map(period => period.period), originals.map(invoice => ({ start: invoice.period_start, end: invoice.period_end })))
+  }
 }

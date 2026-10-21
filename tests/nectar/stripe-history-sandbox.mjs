@@ -166,6 +166,16 @@ async function prove({ capture, customer, monthly, annual, first, refund, credit
   check((await api('customers')).length === 0, 'import_preview_mutated_customers')
   const job = await api('import.apply', { ...files, fingerprint: preview.fingerprint })
   check((await api('import.apply', { ...files, fingerprint: preview.fingerprint })).job === job.job, 'import_replay_changed_job')
+  const originalFiles=(await api('imports')).find(row=>row.id===job.job).originalFiles
+  check(originalFiles.length===Object.keys(capture).length,'retained_source_files_missing')
+  for(const original of originalFiles){
+    const name=original.name.replace(/\.json$/,'')
+    check(Object.hasOwn(capture,name),'unknown_original_capture')
+    const response=await h.raw(`/app/import/${job.job}/originals/${original.id}`,{cookie:owner})
+    check(response.status===200&&response.headers.get('content-type')==='application/octet-stream'&&response.headers.get('content-disposition')?.startsWith('attachment;'),'original_not_opaque_attachment')
+    const bytes=Buffer.from(await response.arrayBuffer()),expected=Buffer.from(JSON.stringify(capture[name]))
+    check(bytes.equals(expected)&&createHash('sha256').update(bytes).digest('hex')===original.sha256,'provider_original_bytes_changed')
+  }
   const imported = (await api('customers')).find(row => row.external_id === customer.id)
   check(imported, 'imported_customer_missing')
   const detail = await api(`customers/${imported.id}`), history = detail.incumbentHistory
@@ -176,17 +186,17 @@ async function prove({ capture, customer, monthly, annual, first, refund, credit
     const retained = importedPayments.find(row => row.provider_ref === charge.id)
     const linked = capture.invoices.data.find(invoice => invoicePayments(invoice).some(payment => belongs(payment, charge)))
     check(retained?.amount_cents === charge.amount && retained.invoice_ref === linked?.id, 'imported_basil_payment_link_mismatch')
-    check(isDeepStrictEqual(retained.original,charge), 'imported_payment_original_changed')
+    check(!Object.hasOwn(retained,'original'),'raw_payment_original_rendered')
   }
   check(history.records.some(row => row.kind === 'refund' && row.provider_ref === refund.id && row.amount_cents === 2000), 'customer_history_refund_missing')
   check(history.documents.some(row => row.provider_ref === credit.id && row.document_kind === 'credit-note' && row.total_cents === 2000), 'customer_history_credit_missing')
   check(history.records.filter(row => row.kind === 'subscription-event').length === capture.subscription_events.data.length, 'customer_history_subscription_events_missing')
-  for (const event of capture.subscription_events.data) check(isDeepStrictEqual(history.records.find(row => row.provider_ref === event.id)?.original,event), 'imported_subscription_snapshot_changed')
-  for (const invoice of capture.invoices.data) check(isDeepStrictEqual(history.documents.find(row => row.provider_ref === invoice.id)?.original,invoice), 'imported_invoice_original_changed')
+  for (const event of capture.subscription_events.data) check(history.records.some(row=>row.provider_ref===event.id&&!Object.hasOwn(row,'original')),'typed_subscription_timeline_missing')
+  for (const invoice of capture.invoices.data)check(history.documents.some(row=>row.provider_ref===invoice.id&&row.total_cents===invoice.total&&!Object.hasOwn(row,'original')),'typed_invoice_history_changed')
   check(!detail.subscriptions.some(row => row.provider_ref === annual.id), 'unsupported_annual_subscription_installed')
   const annualInvoice = capture.invoices.data.find(row => subscriptionOf(row) === annual.id)
   const annualDocument = history.documents.find(row => row.provider_ref === annualInvoice.id)
-  check(annualDocument && annualDocument.original.id === annualInvoice.id, 'annual_original_history_missing')
+  check(annualDocument && annualDocument.provider_ref === annualInvoice.id, 'annual_original_history_missing')
   receipt.assertions.history = { importedDocuments: history.documents.length, importedPayments: importedPayments.length,
     importedRefundCents: 2000, importedCreditCents: 2000, importedSubscriptionEvents: capture.subscription_events.data.length, annualActiveMappingRejected: true }
   step('public-eighteen-month-source-reports')
@@ -242,7 +252,10 @@ async function proveOpenCollection({ api, owner, imported, capture, history, ope
   const missingConfirmation = await h.raw('/api/nectar/imported.collection.execute', { cookie: owner, body: { request: prepared.id, basis_hash: prepared.basis_hash } })
   check(missingConfirmation.status === 400, 'collection_without_confirmation_accepted')
   step('public-explicit-processor-collection-and-out-of-band-mirror')
-  const collected = await api('imported.collection.execute', { request: prepared.id, basis_hash: prepared.basis_hash, confirm: true, disable_auto_advance: true })
+  const pending = await api('imported.collection.execute', { request: prepared.id, basis_hash: prepared.basis_hash, confirm: true, disable_auto_advance: true })
+  check(pending.status === 'uncertain' && pending.charge_ref && !workerStripeRequests.some(row=>row.path.endsWith('/pay')&&row.method==='POST'),'collection_automatically_mirrored')
+  check((await capturedInvoice(open.id)).status==='open','original_mirrored_before_confirmation')
+  const collected=await api('imported.collection.finalize',{request:pending.id,confirm:true})
   check(collected.status === 'collected' && collected.amount_cents === open.amount_remaining && collected.charge_ref && collected.payment_intent_ref, 'imported_collection_not_proven')
   const intent = await stripe.request('GET', `/v1/payment_intents/${collected.payment_intent_ref}`)
   const charge = await stripe.request('GET', `/v1/charges/${collected.charge_ref}`)

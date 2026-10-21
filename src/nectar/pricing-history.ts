@@ -13,6 +13,11 @@ export async function pricingHistory(env: Bindings, business: Business, sub: Row
   const interval = issued.some(invoice => !!inputOf(invoice)?.billing)
   if (!interval) {
     const count = term?.months ?? sub.contract_term_months ?? 6
+    if (term || sub.contract_term_months) {
+      const origin = term ? addMonthsClamped(term.start_date, -Number(term.cycle ?? 0) * count) : sub.start_date
+      const offset = (Number(startMonth.slice(0, 4)) - Number(origin.slice(0, 4))) * 12 + Number(startMonth.slice(5, 7)) - Number(origin.slice(5, 7))
+      insist(offset >= 0 && offset % count === 0, 'complete_issued_term_required', 409)
+    }
     const expected = Array.from({ length: count }, (_, index) => periodStartingIn(sub.anchor_day, addMonths(`${startMonth}-01`, index).slice(0, 7)))
     insist(expected[count - 1].end <= today(business.timezone), 'simulation_requires_historical_periods', 409)
     const invoices = issued.filter(invoice => invoice.period_start >= expected[0].start && invoice.period_start < expected[count - 1].end)

@@ -1,3 +1,4 @@
+import { importOriginalFiles } from '../import-originals'
 // Move-in kit 1: Stripe Billing records. Reads owner-captured Stripe API list
 // responses (customers, products, prices, subscriptions, invoices and,
 // for metered prices, billing meters) plus a manifest of what was captured.
@@ -376,7 +377,7 @@ export async function importJobs(env: Bindings, actor: Actor) {
     `SELECT j.id, a.at, a.detail, j.state, j.total FROM ik_jobs j JOIN nc_audit a ON a.seq=(SELECT MIN(seq) FROM nc_audit WHERE action='import.apply' AND subject=j.id)
      WHERE a.action = 'import.apply' AND j.destination = ? AND j.namespace = ? AND j.mapping_version = ? ORDER BY a.at DESC`, destination, namespace, mappingVersion)
   const result = []
-  for (const job of jobs) result.push({ id: job.id, appliedAt: job.at, state: job.state, counts: JSON.parse(job.detail).counts, effects: job.total, blockers: job.state === 'completed' ? await undoBlockers(env, job.id) : [] })
+  for (const job of jobs) result.push({ originalFiles:actor.kind==='member'&&actor.role==='owner'?await importOriginalFiles(env,actor,job.id):[],id: job.id, appliedAt: job.at, state: job.state, counts: JSON.parse(job.detail).counts, effects: job.total, blockers: job.state === 'completed' ? await undoBlockers(env, job.id) : [] })
   return result
 }
 

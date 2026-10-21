@@ -3,7 +3,7 @@ import { file } from './harness.mjs'
 import { collectionCapture,stripeCollectionEdge } from '../fixtures/stripe-collection-edge.mjs'
 const edge=stripeCollectionEdge()
 export const harnessOptions=()=>({stripeFetch:edge.fetch,stripeSecret:'synthetic-nectar-1'})
-export async function moveCollectionFlow(h,owner,{onState=async()=>{},prepare,execute}={}) {
+export async function moveCollectionFlow(h,owner,{onState=async()=>{},prepare,execute,finalize}={}) {
   const api=(path,body,status)=>{console.log('MOVE collection door',path.split('?')[0]);return h.api(path,owner,body,status)}
   await h.advanceClock('2026-07-01T16:00:00Z')
   const capture=collectionCapture(),files=Object.fromEntries(Object.entries(capture).map(([name,value])=>[name,file(`${name}.json`,JSON.stringify(value),'application/json')]))
@@ -23,8 +23,13 @@ export async function moveCollectionFlow(h,owner,{onState=async()=>{},prepare,ex
   await api('imported.collection.execute',{...prepared.instructions.execute,confirm:false},400)
   await api('imported.collection.execute',{...prepared.instructions.execute,basis_hash:'synthetic-nectar-wrong'},409)
   await onState({label:'review',h,owner,customer,request:prepared})
-  const result=execute?await execute(customer,prepared):await api('imported.collection.execute',prepared.instructions.execute)
-  assert.equal(result.status,'collected');assert.ok(result.charge_ref);assert.ok(result.payment_intent_ref)
+  const pending=execute?await execute(customer,prepared):await api('imported.collection.execute',prepared.instructions.execute)
+  assert.equal(pending.status,'uncertain');assert.ok(pending.charge_ref);assert.ok(pending.payment_intent_ref)
+  assert.equal(edge.calls.filter(call=>call.path.endsWith('/pay')&&call.method==='POST').length,0,'Payment never automatically mirrors the old invoice')
+  assert.equal(edge.invoices.get('synthetic-nectar-open-1').status,'open')
+  await onState({label:'mirror-pending',h,owner,customer,request:pending})
+  const result=finalize?await finalize(customer,pending):await api('imported.collection.finalize',{request:pending.id,confirm:true})
+  assert.equal(result.status,'collected')
   await api('imported.collection.execute',prepared.instructions.execute,409)
   assert.equal((await api('imported.collection.reconcile',{request:result.id})).charge_ref,result.charge_ref)
   assert.equal(edge.calls.filter(call=>call.path==='/payment_intents'&&call.method==='POST').length,1)

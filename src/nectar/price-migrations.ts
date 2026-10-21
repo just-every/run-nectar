@@ -1,7 +1,7 @@
 import { pricingSimulationPlan } from './pricing-simulation-plan'
 import type { Bindings } from '../auth.server'
 import type { Business } from './business'
-import { all, fingerprint, insist, one, parseJson, type Row } from './core'
+import { all, insist, one, parseJson, type Row } from './core'
 import { canonicalDecimal } from './decimal'
 import { isDate, periodContaining } from './dates'
 import { compatiblePricingCadence, pricingFuture, pricingRenewalDate, pricingTerm } from './pricing-calendar'

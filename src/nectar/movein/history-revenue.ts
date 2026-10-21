@@ -10,6 +10,7 @@ import type { RevenueInvoiceRecord } from '../revenue-records'
 import type { RevenueMonthEntry } from '../revenue-usage'
 import type { D1Sql } from '../../modules/import-kit/src/d1/index'
 import { erasureInsertStatements } from '../erasure-sql'
+import { historicalFinancialFacts, historyReference, publicHistoricalLine } from './history-reports'
 
 export const HISTORY_REVENUE_POLICY = 'nectar-imported-revenue-1'
 const retainedKinds = new Set(['imported_recurring', 'imported_discount', 'imported_service'])
@@ -87,6 +88,7 @@ function capturedLines(invoice: Row, raw: Row): Row[] {
   const real = normalized.filter(line => !(line.kind === 'discount' && !line.source_id && !line.id))
   const result: Row[] = real.map((line, index) => {
     const sourceId = line.source_id ?? line.id
+    insist(!present(sourceId) || historyReference(sourceId), 'history_revenue_line_reference_required', 409)
     const original = sourceId ? originals.find(row => row.id === sourceId) : originals[index]
     const source = object(original) ? original : {}
     const expanded = [line.price_source, source.price, source.plan, source.pricing?.price_details?.price].find(object)
@@ -122,11 +124,11 @@ export async function historicalRevenueRecord(invoice: Row, timezone: string): P
   const sourceFingerprint = await fingerprint({ provider: invoice.provider, providerRef: invoice.provider_ref, source: invoice.source_json, lines: invoice.lines_json, issueDate: invoice.issue_date, total: invoice.total_cents, tax: invoice.tax_cents })
   const source = { kind: 'imported' as const, provider: invoice.provider, providerRef: invoice.provider_ref,
     href: `/app/customers/${invoice.customer_id}#history-${invoice.id}`, policyVersion: HISTORY_REVENUE_POLICY }
-  return { invoice: { ...invoice, subtotal_cents: subtotal, source_fingerprint: sourceFingerprint }, custody: 'derived-imported-originals', source, credits: [],
+  return { invoice: { ...historicalFinancialFacts(invoice), customer_name: invoice.customer_name, subtotal_cents: subtotal, source_fingerprint: sourceFingerprint }, custody: 'derived-imported-originals', source, credits: [],
     schedules: lines.map(line => ({ lineId: line.source_id, kind: line.recurring ? 'imported_recurring' : line.kind === 'discount' ? 'imported_discount' : 'imported_service',
       amountCents: historicalLineAmount(line), serviceStart: line.period_start, serviceEnd: line.period_end === line.period_start ? addDays(line.period_start, 1) : line.period_end,
       policy: HISTORY_REVENUE_POLICY, entries: historicalLineEntries(line, invoice.issue_date),
-      basis: { version: HISTORY_REVENUE_POLICY, timezone, source, sourceFingerprint, sourceLineId: line.source_id, priceRef: line.price_ref, capturedLine: line } })) }
+      basis: { version: HISTORY_REVENUE_POLICY, timezone, source, sourceFingerprint, sourceLineId: historyReference(line.source_id) ? line.source_id : null, priceRef: historyReference(line.price_ref) ? line.price_ref : null, capturedLine: publicHistoricalLine(line) } })) }
 }
 
 /** After withdrawal, only the separately retained numeric projection is read.

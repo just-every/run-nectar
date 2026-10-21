@@ -22,7 +22,7 @@ export function collectionAuthority(env: Bindings, actor: Actor) {
 export async function importedCollectionSource(env: Bindings, id: string) {
   const row = await one(env, `SELECT i.*,c.revision AS customer_revision,c.erased_at,c.status AS customer_status FROM nc_incumbent_invoices i
     JOIN nc_customers c ON c.id=i.customer_id WHERE i.id=?`, id)
-  insist(row && row.provider === 'stripe' && row.document_kind === 'invoice' && row.status === 'open' && !row.erased_at && row.customer_status === 'active'
+  insist(row && row.provider === 'stripe' && row.document_kind === 'invoice' && row.currency === 'usd' && row.status === 'open' && !row.erased_at && row.customer_status === 'active'
     && !await one(env, 'SELECT 1 FROM nc_erased_records WHERE record_id IN (?,?)', id, row.customer_id), 'imported_open_invoice_required', 409)
   const original = parseJson<Row>(row.source_json, {})
   insist(original.object === 'invoice' && original.id === row.provider_ref && original.status === 'open' && stripeReference(original.customer)

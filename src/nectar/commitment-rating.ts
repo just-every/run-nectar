@@ -1,4 +1,4 @@
-// Signed commitment windows are independent of the monthly invoice cadence.
+// Signed commitment windows are independent of the invoice cadence.
 // Every historical contribution is saved invoice evidence, never today's prices.
 import type { Line, RatingInput, Exception } from './rating'
 import { activeSegments } from './lifecycle-math'
