@@ -1,7 +1,7 @@
 import { privacyCheckpoint } from './erasure-checkpoint'
 import type { Bindings } from '../auth.server'
 import { actorLabel, requireOwner, type Actor } from './actor'
-import { all, commit, guard, insist, newId, one, parseJson, stmt, type Row } from './core'
+import { all, insist, one, parseJson, type Row } from './core'
 import { clockInstant } from './clock'
 import { business } from './business'
 import { addMonths,localDate } from './dates'
@@ -9,9 +9,9 @@ import type { Input } from './input'
 import type { D1Sql } from '../modules/import-kit/src/d1/index'
 import { erasurePlan } from './erasure-records'
 import { eraseImportCopies } from './erasure-import'
+import { erasureInsertStatements } from './erasure-sql'
 
 const sql = (sql: string, ...params: unknown[]): D1Sql => ({ sql, params })
-const q = (s: string) => `"${s.replaceAll('"','""')}"`
 export async function approveErasure(env: Bindings, actor: Actor, input: Input) {
   requireOwner(actor)
   insist(input.flag('confirm'),'erasure_confirmation_required')
@@ -39,9 +39,11 @@ export async function approveErasure(env: Bindings, actor: Actor, input: Input) 
     sql('UPDATE nc_erasure_requests SET approved_by=?,approved_at=? WHERE id=?',actorLabel(actor),at,id),
     sql('INSERT INTO nc_privacy_context(request_id) VALUES(?)',id),
     ...plan.statements,
-    ...plan.ids.map(record=>sql('INSERT OR IGNORE INTO nc_erased_records(record_id,request_id) VALUES(?,?)',record,id)),
+    ...erasureInsertStatements('nc_erased_records',['record_id','request_id'],plan.ids.map(record=>[record,id]),true),
   ]
-  for(const [kind,records] of [['invoice',invoices],['payment',payments],['credit-note',credits],['incumbent-invoice',incumbent]] as const) for(const record of records) statements.push(sql('INSERT INTO nc_erasure_financial(request_id,kind,record_id,legal_name,amount_cents,tax_cents,document_date,retain_until,tax_json) VALUES(?,?,?,?,?,?,?,?,?)',id,kind,record.id,record.legal_name||customer.name,['invoice','incumbent-invoice'].includes(kind)?record.total_cents:record.amount_cents,['invoice','incumbent-invoice'].includes(kind)?record.tax_cents:0,kind==='invoice'?record.issue_date:kind==='payment'?record.received_on:kind==='incumbent-invoice'?legacyAnchor:localDate(record.issued_at,b.timezone),until,kind==='invoice'?JSON.stringify(Object.fromEntries(Object.entries(parseJson<Row>(record.calculation_json,{}).tax??{}).filter(([key])=>['mode','jurisdiction','taxableBaseCents','rate','exempt','rule'].includes(key)))):'{}'))
+  const retained: unknown[][]=[]
+  for(const [kind,records] of [['invoice',invoices],['payment',payments],['credit-note',credits],['incumbent-invoice',incumbent]] as const) for(const record of records) retained.push([id,kind,record.id,record.legal_name||customer.name,['invoice','incumbent-invoice'].includes(kind)?record.total_cents:record.amount_cents,['invoice','incumbent-invoice'].includes(kind)?record.tax_cents:0,kind==='invoice'?record.issue_date:kind==='payment'?record.received_on:kind==='incumbent-invoice'?legacyAnchor:localDate(record.issued_at,b.timezone),until,kind==='invoice'?JSON.stringify(Object.fromEntries(Object.entries(parseJson<Row>(record.calculation_json,{}).tax??{}).filter(([key])=>['mode','jurisdiction','taxableBaseCents','rate','exempt','rule'].includes(key)))):'{}'])
+  statements.push(...erasureInsertStatements('nc_erasure_financial',['request_id','kind','record_id','legal_name','amount_cents','tax_cents','document_date','retain_until','tax_json'],retained))
   // Every request for this customer loses its recipient/token, not just the one
   // approved. No pending mail or public link can revive an erased identity.
   statements.push(sql(`UPDATE nc_erasure_requests SET recipient='',claimed_email='',token_hash=NULL,evidence_base64=NULL,evidence_name=CASE WHEN evidence_sha256 IS NULL THEN NULL ELSE 'verification-evidence' END,verification_reason=CASE WHEN id=? THEN ? ELSE '' END WHERE customer_id=?`,id,redact(request.verification_reason??''),customer.id),sql(`UPDATE nc_erasure_requests SET status='complete',receipt_json=?,retain_until=? WHERE id=?`,JSON.stringify(receipt),until,id),sql('DELETE FROM nc_guard'),sql('INSERT INTO nc_audit(at,actor,action,subject,detail) VALUES(?,?,?,?,?)',at,actorLabel(actor),'erasure.complete',id,JSON.stringify({customer:customer.id,request:id,verification:receipt.verification,changed:plan.changes,retainUntil:until})))

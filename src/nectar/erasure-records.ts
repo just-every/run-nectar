@@ -5,6 +5,7 @@ import { redactShared,redactSnapshotCsv } from './erasure-snapshots'
 import type { Bindings } from '../auth.server'
 import { all, type Row } from './core'
 import type { D1Sql } from '../modules/import-kit/src/d1/index'
+import { erasureMutationStatements, type ErasureMutation } from './erasure-sql'
 
 const quote = (name: string) => `"${name.replaceAll('"', '""')}"`
 const relation = new Set(['customer_id','subscription_id','invoice_id','payment_id','proposal_id','credit_id','record_id','subject','related_id','term_id','offer_id','contract_id','note_id','correction_id','original_invoice_id'])
@@ -39,13 +40,13 @@ export async function erasurePlan(env: Bindings, customer: Row): Promise<Erasure
   }
   const memberIds=new Map((await all(env,'SELECT id,email FROM nc_members')).map(r=>[r.email,r.id]))
   const privateText=images.filter(i=>i.scoped).flatMap(({row,key})=>Object.entries(row).filter(([column,value])=>typeof value==='string' && value.length && !memberIds.has(value) && !/(?:_by|_by_kind)$/.test(column) && column!=='prepared_name' && !(column in key) && !column.endsWith('_json') && column!=='detail' && !(column.endsWith('_id') && !['external_id','event_id'].includes(column)) && !keep.has(column) && !/(?:_at|_on|_date|_from|_to|_start|_end)$/.test(column)).map(([,value])=>value))
-  const personal = [...privateText,customer.name,customer.billing_email,customer.address,customer.external_id,customer.provider_ref,customer.tax_exempt_ref, ...images.filter(i=>i.scoped && i.table==='nc_contacts').flatMap(i=>[i.row.name,i.row.email])].filter(v=>typeof v==='string' && v.length)
-  const statements: D1Sql[] = [], changes = new Map<string,{kind:string;fields:Set<string>;records:number}>()
+  const personal = [...new Set([...privateText,customer.name,customer.billing_email,customer.address,customer.external_id,customer.provider_ref,customer.tax_exempt_ref, ...images.filter(i=>i.scoped && i.table==='nc_contacts').flatMap(i=>[i.row.name,i.row.email])].filter(v=>typeof v==='string' && v.length))]
+  const mutations: ErasureMutation[] = [], changes = new Map<string,{kind:string;fields:Set<string>;records:number}>()
   for (const image of images) {
     const { table,row,key,required } = image
     // Customer capabilities are runtime custody, not retained financial facts.
     if (table === 'nc_portal_sessions' && image.scoped) {
-      statements.push({ sql: 'DELETE FROM nc_portal_sessions WHERE id=?', params: [row.id] })
+      mutations.push({ table, row, key, updates: null })
       const entry = changes.get(table) ?? { kind: table, fields: new Set<string>(), records: 0 }
       Object.keys(row).forEach(field => entry.fields.add(field)); entry.records++; changes.set(table, entry)
       continue
@@ -78,13 +79,8 @@ export async function erasurePlan(env: Bindings, customer: Row): Promise<Erasure
     if (table==='nc_audit' && affected) {updates.detail='{}'; updates.actor=memberIds.has(row.actor)?`member:${memberIds.get(row.actor)}`:/^(system:|customer:(erasure|renewal|winback))/.test(row.actor)?row.actor:'redacted-actor'}
     const fields=Object.keys(updates).filter(k=>updates[k]!==row[k])
     if (!fields.length) continue
-    const where=Object.keys(key).map(k=>`${quote(k)} IS ?`).join(' AND ')
-    // SQL json_object compares a typed, complete image, including arbitrary
-    // text/files, so an intervening edit aborts this entire operation.
-    const imageSql=`json_object(${Object.keys(row).flatMap(k=>[`'${k}'`,quote(k)]).join(',')})`
-    statements.push({sql:`INSERT INTO nc_guard(code,ok) SELECT 'stale',CASE WHEN EXISTS(SELECT 1 FROM ${quote(table)} WHERE ${where} AND ${imageSql}=?) THEN 1 ELSE 0 END`,params:[...Object.values(key),JSON.stringify(row)]})
-    statements.push({sql:`UPDATE ${quote(table)} SET ${fields.map(k=>`${quote(k)}=?`).join(',')} WHERE ${where}`,params:[...fields.map(k=>updates[k]),...Object.values(key)]})
+    mutations.push({ table, row, key, updates: Object.fromEntries(fields.map(field => [field, updates[field]])) })
     const entry=changes.get(table)??{kind:table,fields:new Set<string>(),records:0};fields.forEach(f=>entry.fields.add(f));entry.records++;changes.set(table,entry)
   }
-  return { generation,personalValues:personal, statements, changes:[...changes.values()].map(v=>({...v,fields:[...v.fields].sort()})),ids:[...ids] }
+  return { generation,personalValues:personal, statements:erasureMutationStatements(mutations), changes:[...changes.values()].map(v=>({...v,fields:[...v.fields].sort()})),ids:[...ids] }
 }
