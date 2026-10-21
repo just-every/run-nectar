@@ -380,7 +380,7 @@ try {
     await h.api('access.give', cookie.owner, { email: 'x@example.test', name: 'Nope', role: 'owner' }, 400)
     cookie.finance = await h.signIn('fran@example.test', { requested: true })
     cookie.accountant = await h.signIn('acct@example.test', { requested: true })
-    const ownerOnly = ['mfa.policy', 'mfa.reset', 'cadence.policy.prepare', 'lifecycle.policy', 'credit.policy', 'certificate.policy', 'business.configure', 'tax.declare', 'tax.review', 'access.give', 'access.end', 'credential.issue', 'credential.revoke', 'subscription.adopt']
+    const ownerOnly = ['mfa.policy', 'mfa.reset', 'cadence.policy.prepare', 'lifecycle.policy', 'credit.policy', 'certificate.policy', 'business.configure', 'invoice.series', 'tax.declare', 'tax.review', 'access.give', 'access.end', 'credential.issue', 'credential.revoke', 'subscription.adopt']
     const metricPreview = await h.api('meter.prepare', cookie.owner, { code:'role-preview', name:'Role preview', unit_label:'events', source_meter:ids.meter, definition:{ aggregation:'count' } })
     assert.ok(ACTIONS.length > 30)
     for (const name of ACTIONS) {
