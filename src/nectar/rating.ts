@@ -26,6 +26,7 @@ import { PRICE_MODEL_RATING_VERSION, rateQuantityPrice, type QuantityPrice } fro
 import { billingAnchor, billingPeriodContaining, INTERVAL_RATING_VERSION, MONTHLY_ARREARS, nonMonthlyArrears, type BillingTerms, type BillingWindow, type CalendarBasis } from './billing-calendar'
 import { rateBillingWindow } from './interval-rating'
 import { intervalMetricUsage } from './interval-metrics'
+import { prepaidLines } from './prepaid-rating'
 
 export const RATING_VERSION = 'nectar-rating-1'
 
@@ -35,6 +36,7 @@ export interface AmendmentIn { id: string; kind: 'discount_percent' | 'fixed_cre
 export interface EventIn { eventId: string; meterId: string; quantity: string; occurredAt: number;properties?:Record<string,import('./metric-plan').PropertyValue>;invoiceId?:string|null }
 export interface RatingInput {
   version: string
+  prepaid?: import('./prepaid-types').PrepaidBasis
   billing?: BillingWindow
   billingDueDate?: string
   commitmentCalendar?: CalendarBasis
@@ -217,7 +219,7 @@ function rateCore(input: RatingInput, presentCancellationCredits = true): Rating
   const finalLines = presentCancellationCredits ? cancellationLines(input, lines, input => rateCore(input, false)) : lines
   const committed=commitmentLines(input,finalLines)
   const adjustments=input.usageAdjustments??[]
-  const correctedLines=[...committed.lines,...adjustments.map(a=>a.line)]
+  const correctedLines=prepaidLines(input,[...committed.lines,...adjustments.map(a=>a.line)])
   const totals = invoiceTotals(input.tax, correctedLines)
   // Historical lines are not taxed at today's rate. Their exact signed saved
   // tax deltas are added once, even when ordinary charges have different tax.

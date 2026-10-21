@@ -1,3 +1,4 @@
+import { prepaidSnapshot } from './prepaid-records'
 import { billingServiceWindows } from './billing-composition'
 import { carriedUsageCredits, usageAdjustments } from './usage-correction-records'
 import { invoiceContent } from './invoice-content'
@@ -76,7 +77,9 @@ export async function ratingInputs(env: Bindings, business: Business, subscripti
   const pending=(await all(env,"SELECT id FROM nc_usage_corrections WHERE subscription_id=? AND status='pending'",sub.id)).map(row=>row.id)
   const term = billing ? await one(env, "SELECT end_date,auto_renew,cancelled_at FROM nc_renewal_terms WHERE subscription_id=? AND status='active' ORDER BY created_at DESC LIMIT 1", sub.id) : null
   const renewing = !!term?.auto_renew && !term.cancelled_at
+  const prepaid = await prepaidSnapshot(env, sub.id)
   return {
+    ...(prepaid ? { prepaid } : {}),
     ...(billing ? { billing } : {}),
     ...(unresolvedHistoricalUsage.length?{unresolvedHistoricalUsage}:{}),
     ...(adjustments.length?{usageAdjustments:adjustments}:{}),...(credits.length?{usageCredits:credits}:{}),...(pending.length?{usageCorrectionPending:pending}:{}),

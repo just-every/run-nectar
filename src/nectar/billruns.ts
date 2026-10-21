@@ -1,3 +1,5 @@
+import { prepaidIssueStatements } from './prepaid-issue'
+import { prepaidPurchaseCalculation, prepaidPurchaseIssueStatements } from './prepaid-purchase'
 import { billingWindowsForMonth,currentBillingWindow } from './billing-plan'
 import { billingComponentClaimStatements } from './billing-components'
 import type { BillingWindow } from './billing-calendar'
@@ -177,6 +179,7 @@ export async function invoiceRecord(env: Bindings, actor: Actor, id: string): Pr
 async function currentFingerprint(env: Bindings, business: Business, invoice: Row) {
   if (invoice.invoice_kind === 'manual') {
     const saved = parseJson<Row>(invoice.calculation_json, {}).inputs
+    if (saved.prepaidPurchase) return (await prepaidPurchaseCalculation(env, business, invoice.customer_id, saved.prepaidPurchase.intent, saved.date)).fingerprint
     if(saved.usageCorrection){
       const approved=await one(env,"SELECT 1 FROM nc_usage_corrections WHERE id=? AND status='approved'",saved.usageCorrection)
       const staged=await all(env,'SELECT id,line_json,tax_cents FROM nc_usage_adjustments WHERE correction_id=? AND target_invoice_id=? ORDER BY id',saved.usageCorrection,invoice.id)
@@ -275,6 +278,8 @@ export async function finalise(env: Bindings, actor: Actor, input: Input) {
       ...charges.map(id => stmt(env, 'UPDATE nc_charges SET invoice_id=? WHERE id=?', invoice.id, id)),
       ...chunk(consumed, 90).map(ids => stmt(env, `UPDATE nc_usage_events SET invoice_id = ? WHERE event_id IN (${ids.map(() => '?').join(',')})`, invoice.id, ...ids)),
       stmt(env, "UPDATE nc_invoices SET legal_name=(SELECT name FROM nc_customers WHERE id=nc_invoices.customer_id), status = 'issued', number = ?, issue_date = ?, due_date = ?, issued_by = ?, issued_at = ?,billing_entity_id=?,billing_route_json=? WHERE id = ?", number, issueDate, due, actorLabel(actor), now(),allocation.entityId,allocation.routeJson, invoice.id),
+      ...prepaidPurchaseIssueStatements(env,invoice,calculation.inputs ?? {}),
+      ...await prepaidIssueStatements(env,invoice,calculation,issueDate),
       ...await revenueIssueStatements(env,{...invoice,issue_date:issueDate}),
       ...(calculation.inputs?.billing?billingComponentClaimStatements(env,invoice.subscription_id,invoice.id,calculation.inputs.billing):[]),
     ], { actor: actorLabel(actor), action: 'invoice.issue', subject: invoice.id, detail: { number, total: invoice.total_cents, fingerprint: invoice.approved_fingerprint, events: consumed.length, charges } })

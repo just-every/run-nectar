@@ -1,4 +1,5 @@
 import { canonical, insist } from './core'
+import { prepaidLines } from './prepaid-rating'
 import { addDays, isDate, zonedStart } from './dates'
 import { dueBillingWindows, INTERVAL_RATING_VERSION, MONTHLY_ARREARS, type BillingWindow } from './billing-calendar'
 import { billingServiceWindows, composeBillingWindows } from './billing-composition'
@@ -107,7 +108,7 @@ export function rateBillingWindow(input: RatingInput, core: (input: RatingInput)
   const serviceInputs = parts.map(part => expandServiceWindow(input, part))
   const results = serviceInputs.map((expanded, index) => {
     const owner = parts[index].key === representative.key
-    const current: RatingInput = { ...expanded, usageCredits: [],
+    const current: RatingInput = { ...expanded, prepaid: undefined, usageCredits: [],
       charges: owner ? expanded.charges : [], usageAdjustments: owner ? expanded.usageAdjustments : [],
       contracts: expanded.contracts ? { ...expanded.contracts, commitments: [] } : undefined }
     return core(current)
@@ -117,7 +118,7 @@ export function rateBillingWindow(input: RatingInput, core: (input: RatingInput)
   const context: RatingInput = { ...serviceInputs[parts.indexOf(representative)],
     items: input.items.filter(item => selected.has(item.id)), prices: input.prices, events: input.events, contracts: input.contracts }
   const committed = commitmentLines(context, serviceLines)
-  const lines = committed.lines.map((line, index) => index < serviceLines.length ? line : withCalendar(line, representative))
+  const lines = prepaidLines(input, committed.lines.map((line, index) => index < serviceLines.length ? line : withCalendar(line, representative)))
   // Tax is rounded once on the complete taxable consideration, never summed
   // from independently rounded service-window subtotals.
   const totals = invoiceTotals(input.tax, lines)
