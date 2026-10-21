@@ -376,6 +376,10 @@
       "sha256": "68fd76d59e03537b984b6fc378dc64255399f08d13f9a4a92e3f2030c6ac730f",
       "executable": false
     },
+    "migrations/core/0051_invoice_numbering.sql": {
+      "sha256": "f966c11bf29e136e88080bf81d606ca868fe06d8760dd751ad0a0eab0faa55cd",
+      "executable": false
+    },
     "ONBOARDING.md": {
       "sha256": "95bb235abff28ac36979868486caf2cb73bfbe4ab63037f3e301d189bb9398d9",
       "executable": false
@@ -2584,6 +2588,10 @@
       "sha256": "d48623149c24eedb0cb585531a8c8a7952c7a992eb795fe95de6583106bbb54e",
       "executable": false
     },
+    "src/nectar/invoice-numbering.ts": {
+      "sha256": "67ae6dc6b154011607e8575dc6729587a6484734325defd354b54db23d3c467d",
+      "executable": false
+    },
     "src/nectar/invoice-tax.ts": {
       "sha256": "82db6f82096fa7f4c00161bb1732476fb9d2d20bea10efd9f3fe1121dcb03498",
       "executable": false
@@ -2714,6 +2722,10 @@
     },
     "src/nectar/notifications.ts": {
       "sha256": "e29c42d92f2540e455681f62c5deb8a1cc31c085e85e95afd7b125053113bdff",
+      "executable": false
+    },
+    "src/nectar/number-register.ts": {
+      "sha256": "3b34094d31612621d8c4384c148cfcb192cb9012d83bd842b39f8ff863f7e940",
       "executable": false
     },
     "src/nectar/one-time-charges.ts": {
@@ -2988,6 +3000,10 @@
       "sha256": "1f9d3a94518112d887a1c2525cbd6c4710806672e239f95011e5106566c5674d",
       "executable": false
     },
+    "src/nectar/ui/invoice-series.ts": {
+      "sha256": "01b558eb8bafc40d6d42342944f05d9b9abc6c01a1606c9d34fbfef9589161b7",
+      "executable": false
+    },
     "src/nectar/ui/lifecycle.ts": {
       "sha256": "a01d84782e670f08f9b9529298168137cd7660c061b76e5ac7e28f615c24d110",
       "executable": false
@@ -3006,6 +3022,10 @@
     },
     "src/nectar/ui/notifications.ts": {
       "sha256": "8bb5cbd25ab88f96522466c45a7350d62a07c38cf1344ae8051f07928344c9c9",
+      "executable": false
+    },
+    "src/nectar/ui/number-register.ts": {
+      "sha256": "9fbf93682416124be5fcf46683f9f004f57d500c12e7f13408647b7df2a7c60d",
       "executable": false
     },
     "src/nectar/ui/pages.ts": {
@@ -3466,6 +3486,10 @@
     },
     "tests/nectar/notifications.mjs": {
       "sha256": "c238c467a49ef2950fd85d8f45b21c2050c6b19eddde826c1fb8bef3fcda58c4",
+      "executable": false
+    },
+    "tests/nectar/numbering.mjs": {
+      "sha256": "5402211b1c3b7865c4f2e6fedc955ccbe225f3956be97edc7af956b21164ce89",
       "executable": false
     },
     "tests/nectar/one-time.mjs": {

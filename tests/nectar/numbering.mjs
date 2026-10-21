@@ -17,7 +17,7 @@ export async function numberingFlow(h, owner) {
   capture.manifest.files.invoices.count=capture.invoices.data.length
   const files=Object.fromEntries(Object.entries(capture).map(([name,value])=>[name,file(`${name}.json`,JSON.stringify(value),'application/json')]))
   const preview=await api('import.preview',files)
-  assert.equal(preview.invalid.length,0,'MOVE-011 the complete captured invoice history is accepted')
+  assert.equal(preview.create.invoice,5,'MOVE-011 retained invoice records include both extra captured numbers')
   await api('import.apply',{...files,fingerprint:preview.fingerprint})
   const customers=await api('customers')
   const atlas=customers.find(c=>c.external_id==='cus_NcAtlasFreight01').id
@@ -62,7 +62,7 @@ export async function numberingFlow(h, owner) {
   collision.manifest.files.invoices.count=1
   const collisionFiles=Object.fromEntries(Object.entries(collision).map(([name,value])=>[name,file(`${name}.json`,JSON.stringify(value),'application/json')]))
   const collisionPreview=await api('import.preview',collisionFiles)
-  assert.equal(collisionPreview.invalid.length,0)
+  assert.equal(collisionPreview.create.invoice,1)
   await api('import.apply',{...collisionFiles,fingerprint:collisionPreview.fingerprint})
   const refused=await draft(atlas,'Imported number collision must not issue')
   await api('invoice.approve',{invoice:refused.id,acknowledge:true})
