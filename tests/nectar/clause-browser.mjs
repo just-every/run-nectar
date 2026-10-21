@@ -5,11 +5,12 @@ import { mkdir } from 'node:fs/promises'
 import { harness } from './harness.mjs'
 import { applyPolicy } from './policy-helper.mjs'
 import { erasureFlow } from './erasure.mjs'
+import { moveCollectionFlow,harnessOptions as collectionOptions } from './move-collection.mjs'
 import { moveHistoryFlow } from './move-history.mjs'
 const kind=process.argv[2],directory=process.env.NECTAR_EVIDENCE_DIR??`.evidence/${kind}`
-assert.ok(['erasure','history'].includes(kind))
+assert.ok(['erasure','history','collection'].includes(kind))
 await mkdir(directory,{recursive:true})
-const h=await harness({assets:true});let browser
+const h=await harness({assets:true,...(kind==='collection'?collectionOptions():{})});let browser
 try {
   await h.raw('/auth/bootstrap',{body:{token:h.vars.SETUP_TOKEN,displayName:'Nectar Owner'}})
   const owner=await h.signIn(h.vars.OWNER_EMAIL)
@@ -33,6 +34,23 @@ try {
       await page.setViewportSize({width,height:950})
       await shot(state.label,state.path)
     }
+  })
+  else if(kind==='collection')await moveCollectionFlow(h,owner,{
+    prepare:async(customer,invoice)=>{
+      await page.goto(h.origin+`/app/customers/${customer}`)
+      await page.locator('select[name="invoice"]').selectOption(invoice)
+      await Promise.all([page.waitForURL('**/app/customers/**'),page.getByRole('button',{name:'Review original invoice',exact:true}).click()])
+      return (await h.api(`customers/${customer}`,owner)).importedCollections.find(row=>row.invoice_id===invoice)
+    },
+    execute:async(customer,request)=>{
+      await page.goto(h.origin+`/app/customers/${customer}`)
+      const form=page.locator('form[action="/app/do/imported.collection.execute"]').filter({has:page.locator(`input[value="${request.id}"]`)})
+      await form.locator('input[name="disable_auto_advance"]').check()
+      await form.locator('input[name="confirm"]').check()
+      await Promise.all([page.waitForURL('**/app/customers/**'),form.getByRole('button').click()])
+      return (await h.api(`customers/${customer}`,owner)).importedCollections.find(row=>row.id===request.id)
+    },
+    onState:async state=>{for(const width of [1440,390]){await page.setViewportSize({width,height:950});await shot(`collection-${state.label}`,`/app/customers/${state.customer}`)}}
   })
   else await moveHistoryFlow(h,owner,{onState:async state=>{
     for(const width of [1440,390]) {

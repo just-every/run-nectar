@@ -23,15 +23,20 @@ import { insist } from './core'
 import { invoiceTotals } from './invoice-tax'
 import { CHARGE_RATING_VERSION, chargeLines, type ChargeIn } from './charge-lines'
 import { PRICE_MODEL_RATING_VERSION, rateQuantityPrice, type QuantityPrice } from './price-model'
+import { billingAnchor, billingPeriodContaining, INTERVAL_RATING_VERSION, MONTHLY_ARREARS, nonMonthlyArrears, type BillingTerms, type BillingWindow } from './billing-calendar'
+import { rateBillingWindow } from './interval-rating'
+import { intervalMetricUsage } from './interval-metrics'
 
 export const RATING_VERSION = 'nectar-rating-1'
 
-export interface PriceIn { id: string; kind: 'flat' | 'seat' | 'unit'; unitAmount: string; meterId: string | null; taxable: boolean; label: string; unitLabel: string; pricing?: QuantityPrice; metric?:MetricPrice }
+export interface PriceIn { id: string; kind: 'flat' | 'seat' | 'unit'; unitAmount: string; meterId: string | null; taxable: boolean; label: string; unitLabel: string; pricing?: QuantityPrice; metric?:MetricPrice; billing?: BillingTerms; sourcePriceId?: string }
 export interface ItemIn { id: string; priceId: string; quantity: number; from: string; to: string | null }
 export interface AmendmentIn { id: string; kind: 'discount_percent' | 'fixed_credit' | 'price_override'; value: string; priceId: string | null; from: string; to: string | null; note: string }
 export interface EventIn { eventId: string; meterId: string; quantity: string; occurredAt: number;properties?:Record<string,import('./metric-plan').PropertyValue>;invoiceId?:string|null }
 export interface RatingInput {
   version: string
+  billing?: BillingWindow
+  billingDueDate?: string
   invoiceContent?: import('./invoice-content').InvoiceContent
   renewals?: RenewalRate[]
   usageAdjustments?: import('./usage-correction-records').UsageAdjustment[]
@@ -41,7 +46,7 @@ export interface RatingInput {
   usageCorrection?: string
   timezone: string
   tax: { mode: 'undeclared' | 'no_tax' | 'flat_rate'; rate: string; jurisdiction: string; exempt: boolean; exemptRef: string; certificate?: unknown; exception?: Exception | null }
-  subscription: { id: string; anchorDay: number; startDate: string; trialEnd: string | null; endDate: string | null; billFrom: string | null }
+  subscription: { id: string; anchorDay: number; startDate: string; trialEnd: string | null; endDate: string | null; billFrom: string | null; billingAnchorDate?: string | null; contractEndDate?: string | null }
   period: { start: string; end: string }
   items: ItemIn[]
   prices: Record<string, PriceIn>
@@ -76,9 +81,15 @@ const unitFor = (input: RatingInput, price: PriceIn, from: string, to: string) =
 }
 
 export function rate(input: RatingInput, presentCancellationCredits = true): Rating {
-  if(input.renewals?.length){const expanded=renewalOperands(input),result=rate(expanded.input,presentCancellationCredits);return {...result,lines:result.lines.map(expanded.restore)}}
-  insist(input.version === RENEWAL_RATING_VERSION || input.version === METRIC_RATING_VERSION || input.version === CONTRACT_RATING_VERSION || input.version === RATING_VERSION || input.version === PRICE_MODEL_RATING_VERSION || input.version === CHARGE_RATING_VERSION || input.version === LIFECYCLE_RATING_VERSION, 'unsupported_rating_version')
-  insist(!Object.values(input.prices).some(price => price.pricing) || input.version === RENEWAL_RATING_VERSION || input.version === METRIC_RATING_VERSION || input.version === CONTRACT_RATING_VERSION || input.version === PRICE_MODEL_RATING_VERSION || input.version === CHARGE_RATING_VERSION || input.version === LIFECYCLE_RATING_VERSION, 'unsupported_rating_version')
+  if (input.billing) return rateBillingWindow(input, inner => rateCore(inner, presentCancellationCredits))
+  insist(!Object.values(input.prices).some(price => price.billing && nonMonthlyArrears(price.billing)), 'billing_window_required')
+  return rateCore(input, presentCancellationCredits)
+}
+
+function rateCore(input: RatingInput, presentCancellationCredits = true): Rating {
+  if(input.renewals?.length){const expanded=renewalOperands(input),result=rateCore(expanded.input,presentCancellationCredits);return {...result,lines:result.lines.map(expanded.restore)}}
+  insist(input.version === INTERVAL_RATING_VERSION || input.version === RENEWAL_RATING_VERSION || input.version === METRIC_RATING_VERSION || input.version === CONTRACT_RATING_VERSION || input.version === RATING_VERSION || input.version === PRICE_MODEL_RATING_VERSION || input.version === CHARGE_RATING_VERSION || input.version === LIFECYCLE_RATING_VERSION, 'unsupported_rating_version')
+  insist(!Object.values(input.prices).some(price => price.pricing) || input.version === INTERVAL_RATING_VERSION || input.version === RENEWAL_RATING_VERSION || input.version === METRIC_RATING_VERSION || input.version === CONTRACT_RATING_VERSION || input.version === PRICE_MODEL_RATING_VERSION || input.version === CHARGE_RATING_VERSION || input.version === LIFECYCLE_RATING_VERSION, 'unsupported_rating_version')
   const { period, subscription: sub } = input
   const periodDays = BigInt(daysBetween(period.start, period.end))
   const lines: Line[] = [], exceptions: Exception[] = [], consumed: string[] = []
@@ -117,8 +128,17 @@ export function rate(input: RatingInput, presentCancellationCredits = true): Rat
 
   // Contract discounts on the fixed and seat lines they cover.
   for (const amendment of input.amendments.filter(a => a.kind === 'discount_percent')) {
-    const covered = recurring.filter(entry => covers(amendment, entry.from, entry.to))
+    const covered = recurring.filter(entry => covers(amendment, entry.from, entry.to) && (!amendment.priceId || entry.line.priceId === amendment.priceId || input.prices[entry.line.priceId!]?.sourcePriceId === amendment.priceId))
     if (!covered.length) continue
+    if (input.version === INTERVAL_RATING_VERSION) {
+      for (const entry of covered) {
+        const amount = -Number(percentOf(BigInt(entry.line.amountCents), micros(amendment.value)))
+        lines.push({ kind: 'discount', description: `Contract discount ${amendment.value}%${amendment.note ? ` (${amendment.note})` : ''}`, quantity: '1', unitAmount: '', amountCents: amount,
+          taxable: entry.line.taxable, priceId: null, meterId: null, periodStart: entry.from, periodEnd: entry.to,
+          evidence: { rule: 'percent of each covered line, rounded half away from zero per line', amendment: amendment.id, percent: amendment.value, parts: [{ line: entry.line.description, cents: amount, taxable: entry.line.taxable, from: entry.from, to: entry.to }] } })
+      }
+      continue
+    }
     const parts = covered.map(entry => ({ line: entry.line.description, cents: -Number(percentOf(BigInt(entry.line.amountCents), micros(amendment.value))), taxable: entry.line.taxable }))
     for (const taxable of [true, false]) {
       const group = parts.filter(part => part.taxable === taxable)
@@ -134,13 +154,13 @@ export function rate(input: RatingInput, presentCancellationCredits = true): Rat
       if (interval.from <= effective && (interval.to ?? FAR) > effective) effective = interval.to ?? FAR
     return effective
   }
-  for (const amendment of input.amendments.filter(a => a.kind === 'fixed_credit' && creditDate(a.from) >= period.start && creditDate(a.from) < period.end)) {
+  for (const amendment of input.amendments.filter(a => a.kind === 'fixed_credit' && (input.version === INTERVAL_RATING_VERSION && input.billingDueDate ? creditDate(a.from) <= input.billingDueDate : creditDate(a.from) >= period.start && creditDate(a.from) < period.end))) {
     const amount = Number(lineCents(micros(amendment.value), 1_000_000n))
     lines.push({ kind: 'credit', description: `Contract credit${amendment.note ? ` (${amendment.note})` : ''}`, quantity: '1', unitAmount: amendment.value, amountCents: -amount, taxable: true, priceId: null, meterId: null, periodStart: period.start, periodEnd: period.end, evidence: { rule: 'one-time credit in the period it starts', amendment: amendment.id } })
   }
 
   // Usage: group by (original period, price in effect, override), sum exactly, then rate.
-  const metricResult=metricUsage(input)
+  const metricResult=input.version === INTERVAL_RATING_VERSION ? intervalMetricUsage(input) : metricUsage(input)
   lines.push(...metricResult.lines);exceptions.push(...metricResult.exceptions);consumed.push(...metricResult.consumed)
   const metricSources=new Set(Object.values(input.prices).flatMap(p=>p.metric?[p.metric.sourceId]:[]))
   const groups = new Map<string, { late: boolean; start: string; end: string; price: PriceIn; unit: string; override: string | null; trial: boolean; paused: boolean; events: EventIn[] }>()
@@ -155,7 +175,7 @@ export function rate(input: RatingInput, presentCancellationCredits = true): Rat
     if (!item || !startOk || date >= period.end) { if (date < period.end) unrated.push(event); continue }
     const price = input.prices[item.priceId]
     const late = date < period.start
-    const window = late ? periodContaining(sub.anchorDay, date) : period
+    const window = late ? input.version === INTERVAL_RATING_VERSION ? billingPeriodContaining(billingAnchor(input), price.billing ?? MONTHLY_ARREARS, date) : periodContaining(sub.anchorDay, date) : period
     const trial = !!sub.trialEnd && date < sub.trialEnd
     const { unit, override } = unitFor(input, price, date, addDays(date, 1))
     const paused = inactive
@@ -190,7 +210,7 @@ export function rate(input: RatingInput, presentCancellationCredits = true): Rat
   if (trialDays > 0) lines.push({ kind: 'trial', description: `Trial: ${trialDays} day(s) not charged`, quantity: String(trialDays), unitAmount: '', amountCents: 0, taxable: false, priceId: null, meterId: null, periodStart: activeFrom, periodEnd: min(sub.trialEnd!, activeTo), evidence: { rule: 'fixed and seat charges start when the trial ends', trialEnd: sub.trialEnd } })
 
   if (input.charges) lines.push(...chargeLines(input.charges))
-  const finalLines = presentCancellationCredits ? cancellationLines(input, lines, input => rate(input, false)) : lines
+  const finalLines = presentCancellationCredits ? cancellationLines(input, lines, input => rateCore(input, false)) : lines
   const committed=commitmentLines(input,finalLines)
   const adjustments=input.usageAdjustments??[]
   const correctedLines=[...committed.lines,...adjustments.map(a=>a.line)]
@@ -204,4 +224,11 @@ export function rate(input: RatingInput, presentCancellationCredits = true): Rat
   if(input.usageCorrectionPending?.length)exceptions.push({code:'usage_correction_pending',message:'A historical usage correction awaits a human decision. Resolve it before issuing.',detail:input.usageCorrectionPending})
   const applicationLines=usageCreditApplicationLines(input.usageCredits??[],totals.totalCents,period)
   return { ...totals, lines: [...correctedLines,...applicationLines], exceptions: [...exceptions, ...committed.exceptions, ...totals.exceptions], consumedEvents: [...new Set(consumed)] }
+}
+
+/** Governed historical service replay consumes an already validated expanded
+ * window, then applies lifecycle changes without changing issued evidence. */
+export function rateIntervalService(input: RatingInput, presentCancellationCredits = false): Rating {
+  insist(input.version === INTERVAL_RATING_VERSION && !input.billing, 'interval_service_input_required')
+  return rateCore(input, presentCancellationCredits)
 }

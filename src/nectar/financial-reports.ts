@@ -136,7 +136,7 @@ async function contributions(env: Bindings, metric: string, url: URL) {
   if (unbilled) entries = [...unbilled.values()].map(source => source.entry)
   else if(selected.metric==='credit-balances'){
     const rows=await all(env,`SELECT n.*,c.name AS customer_name,n.amount_cents-n.applied_cents-COALESCE((SELECT SUM(amount_cents) FROM nc_usage_credit_applications a WHERE a.credit_id=n.id),0) AS available
-      FROM nc_credit_notes n JOIN nc_customers c ON c.id=n.customer_id WHERE n.correction_id IS NOT NULL ${customer?'AND n.customer_id=?':''} ORDER BY n.issued_at,n.id`,...(customer?[customer]:[]))
+      FROM nc_credit_notes n JOIN nc_customers c ON c.id=n.customer_id WHERE (n.correction_id IS NOT NULL OR n.cancellation_id IS NOT NULL) ${customer?'AND n.customer_id=?':''} ORDER BY n.issued_at,n.id`,...(customer?[customer]:[]))
     entries=rows.filter(row=>row.available>0).map(row=>({invoiceId:row.id,creditId:row.id,number:row.number,customerId:row.customer_id,customerName:row.customer_name,amountCents:row.available,sourceKind:'credit_note',href:sourceHref(selected.metric,row.id,month,customer)}))
   }
   else {
@@ -151,7 +151,7 @@ async function contributions(env: Bindings, metric: string, url: URL) {
           FROM nc_invoices i JOIN nc_customers c ON c.id = i.customer_id
           WHERE i.status = 'issued' AND substr(i.issue_date, 1, 7) = ? ${customer ? 'AND i.customer_id = ?' : ''}
           ORDER BY c.name, i.number`, month, ...(customer ? [customer] : []))
-    if(selected.metric==='tax')rows.push(...(await all(env,`SELECT n.id,n.number,n.customer_id,-n.tax_cents AS amount_cents,c.name AS customer_name FROM nc_credit_notes n JOIN nc_customers c ON c.id=n.customer_id WHERE n.correction_id IS NOT NULL AND n.tax_cents<>0 AND n.issued_at>=? AND n.issued_at<? ${customer?'AND n.customer_id=?':''} ORDER BY n.issued_at,n.id`,zonedStart(`${month}-01`,business.timezone),zonedStart(addMonths(`${month}-01`,1),business.timezone),...(customer?[customer]:[]))).map(r=>({...r,attributedCredit:true})))
+    if(selected.metric==='tax')rows.push(...(await all(env,`SELECT n.id,n.number,n.customer_id,-n.tax_cents AS amount_cents,c.name AS customer_name FROM nc_credit_notes n JOIN nc_customers c ON c.id=n.customer_id WHERE (n.correction_id IS NOT NULL OR n.cancellation_id IS NOT NULL) AND n.tax_cents<>0 AND n.issued_at>=? AND n.issued_at<? ${customer?'AND n.customer_id=?':''} ORDER BY n.issued_at,n.id`,zonedStart(`${month}-01`,business.timezone),zonedStart(addMonths(`${month}-01`,1),business.timezone),...(customer?[customer]:[]))).map(r=>({...r,attributedCredit:true})))
     entries = rows.map(row => ({ invoiceId: row.id, number: row.number, customerId: row.customer_id,
       customerName: row.customer_name, amountCents: row.amount_cents,
       href: sourceHref(selected.metric, row.id, month, customer), sourceKind: credits||row.attributedCredit ? 'credit_note' : 'invoice',

@@ -20,16 +20,18 @@ async function freePort() {
   return port
 }
 
-export async function harness({ assets = false, localTime, hostname = '127.0.0.1' } = {}) {
+export async function harness({ assets = false, localTime, hostname = '127.0.0.1', stripeFetch, stripeSecret } = {}) {
   const port = await freePort()
   // WebAuthn refuses IP-address relying parties, so the passkey journey names the loopback host.
   const origin = `http://${hostname}:${port}`
   const secret = () => randomBytes(32).toString('base64url')
   const vars = { AUTH_LOCAL: 'true', AUTH_ORIGIN: origin, OWNER_EMAIL: 'owner@example.test', SESSION_SECRET: secret(), SETUP_TOKEN: secret(), MFA_KEY: secret(), PORTAL_KEY: secret(), MAIL_PROVIDER: 'resend', MAIL_API_KEY: 'test-only-resend-key', MAIL_FROM: 'auth@example.test' }
   if(localTime)vars.NECTAR_LOCAL_TIME=localTime
+  if(stripeSecret)vars.STRIPE_BILLING_SECRET=stripeSecret
   const chunks = (await readdir('dist/server', { recursive: true })).filter(path => path.endsWith('.js') && path !== 'index.js')
   const mails = [], mailResponses = []
   const outboundService = async request => {
+    if (new URL(request.url).origin==='https://api.stripe.com'&&stripeFetch)return stripeFetch(request)
     if (request.url !== 'https://api.resend.com/emails') return new Response('Unexpected outbound request', { status: 599 })
     const message=await request.json();mails.push(message)
     const index=mailResponses.findIndex(response=>!response.to||[message.to].flat().includes(response.to))

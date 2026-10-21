@@ -327,3 +327,118 @@ export async function contractSetup(h, owner) {
   console.log('AGENT-006 executed-order setup: exact source custody, independent 36-month preview and ordinary issued bills, atomic separate approval, rejection/staleness and append-only human resolution passed')
   return { proposal: prepared.id, subscription: approved.subscription, customer: plan.customer.id, invoices: invoices.map(row => row.id) }
 }
+
+const anchoredMonth = (anchor, offset) => {
+  const [year, month, day] = anchor.split('-').map(Number)
+  const first = new Date(Date.UTC(year, month - 1 + offset, 1))
+  const last = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + 1, 0)).getUTCDate()
+  return `${first.toISOString().slice(0, 8)}${String(Math.min(day, last)).padStart(2, '0')}`
+}
+
+function intervalOrder(number, { unit = 'month', count = 12, timing = 'advance', months = 24, mixed = false, meter } = {}) {
+  const id = `synthetic-nectar-${number}`, start = '2018-01-31', end = anchoredMonth(start, months)
+  const customer = `Customer ${id}, Synthetic Cedar, billing ap@cedar.example.`
+  const term = `Service starts ${start}, with a fixed ${months}-month term ending ${end}, anchored to ${start}; all additions co-term at that end.`
+  const fee = `Platform costs USD ${mixed ? '12000' : '100'} every ${count} ${unit}${count === 1 ? '' : 's'}, billed in ${timing}, non-taxable, Net 30.`
+  const usage = 'Calls cost USD 2 each, billed monthly in arrears, non-taxable. Ten calls per monthly period are a buyer-supplied hypothetical scenario, never actual usage.'
+  const addon = `Add-on costs USD 1200 every 12 months, billed in advance from 2019-07-31 and co-termed to ${end}, non-taxable.`
+  const text = [customer, term, fee, ...(mixed ? [usage, addon] : []), 'Executed by Synthetic Buyer and Synthetic Seller.'].join('\n')
+  return {
+    setup: true, source: { name: 'synthetic-executed-order.txt', text, execution_reference: `${id} execution record` },
+    customer: { external_id: id, name: 'Synthetic Cedar', billing_email: 'ap@cedar.example', quote: customer },
+    catalog: [
+      { key: 'platform', new_product: { code: id, name: 'Synthetic Platform' }, kind: 'flat', unit_amount: mixed ? '12000' : '100', interval_unit: unit, interval_count: count, billing_timing: timing, taxable: false, quote: fee },
+      ...(mixed ? [
+        { key: 'calls', new_product: { code: `${id}-calls`, name: 'Synthetic Calls' }, kind: 'unit', unit_amount: '2', meter, interval_unit: 'month', interval_count: 1, billing_timing: 'arrears', taxable: false, quote: usage },
+        { key: 'addon', new_product: { code: `${id}-addon`, name: 'Synthetic Add-on' }, kind: 'flat', unit_amount: '1200', interval_unit: 'month', interval_count: 12, billing_timing: 'advance', taxable: false, quote: addon },
+      ] : []),
+    ],
+    subscription: { external_id: `${id}-service`, start_date: start, billing_anchor_date: start, anchor_day: 31, term_months: months, quote: term },
+    items: [{ key: 'platform', price: 'platform', quote: fee }, ...(mixed ? [{ key: 'calls', price: 'calls', quote: usage }, { key: 'addon', price: 'addon', from: '2019-07-31', quote: addon }] : [])],
+    ...(mixed ? { usage_scenario_label: 'Buyer supplied ten hypothetical calls per month', usage_assumptions: Array.from({ length: months }, (_, i) => ({ period: anchoredMonth(start, i), meter, quantity: '10', quote: usage })) } : {}),
+    ambiguities: [],
+  }
+}
+
+/** CAT-001 inherits executed-source custody, one governed approval, and ordinary billing. */
+export async function contractIntervalSetup(h, owner) {
+  const api = (path, body, status) => h.api(path, owner, body, status)
+  await api('access.give', { email: 'synthetic-nectar-80@example.test', name: 'Synthetic Finance', role: 'finance' })
+  const finance = await h.signIn('synthetic-nectar-80@example.test', { requested: true })
+  const propose = payload => api('proposal.create', { kind: 'amendment', title: 'Synthetic executed interval order', payload })
+  const decide = (id, decision = 'approved', who = finance, status = 200) => h.api('proposal.decide', who, { proposal: id, decision }, status)
+  const snapshot = () => Promise.all([api('customers'), api('catalog'), api('runs')])
+  const initial = await snapshot()
+  for (const [number, options, expected] of [
+    [83, { unit: 'week', count: 1, timing: 'arrears', months: 12 }, 53],
+    [84, { count: 3, months: 36 }, 12],
+    [85, { count: 6, months: 24 }, 4],
+    [86, { count: 5, months: 12 }, 3],
+    [87, { count: 1, timing: 'arrears', months: 1 }, 1],
+  ]) {
+    const payload = intervalOrder(number, options), proposal = await propose(payload)
+    assert.deepEqual(proposal.impact.unresolvedAmbiguities, [])
+    assert.equal(proposal.impact.periods.length, expected, 'CAT-001 finite terms include every actual invoice period, including weekly terms beyond 36 periods')
+    assert.equal(proposal.impact.previewHorizon.through, anchoredMonth('2018-01-31', options.months))
+    const spans = proposal.impact.periods.map(row => [row.period.start, row.period.end])
+    assert.equal(spans[0][0], '2018-01-31')
+    assert.equal(spans.at(-1)[1], anchoredMonth('2018-01-31', options.months))
+    if (number === 87) assert.deepEqual(spans, [['2018-01-31', '2018-02-28']], 'CAT-001 full anchors clamp February without losing day 31')
+    await decide(proposal.id, 'rejected')
+  }
+  assert.deepEqual(await snapshot(), initial, 'CAT-001 rejected full-term previews write no billing records')
+
+  const meter = (await api('meter.create', { code: 'synthetic-nectar-82', name: 'Synthetic Calls', unit_label: 'calls' })).id
+  const payload = intervalOrder(81, { mixed: true, meter }), before = await snapshot()
+  const prepared = await propose(payload), saved = await api(`proposals/${prepared.id}`), plan = saved.payload.plan
+  assert.deepEqual(prepared.impact.unresolvedAmbiguities, [])
+  assert.equal(prepared.impact.periods.length, 27)
+  assert.deepEqual(await snapshot(), before, 'CAT-001 preparation retains only the proposal, never live setup records')
+  assert.equal(plan.subscription.contractTermMonths, 24)
+  assert.equal(plan.subscription.contractEndDate, '2020-01-31')
+  assert.deepEqual(plan.prices.map(price => price.billing), [{ unit: 'month', count: 12, timing: 'advance' }, { unit: 'month', count: 1, timing: 'arrears' }, { unit: 'month', count: 12, timing: 'advance' }])
+  const platform = prepared.impact.periods.filter(row => row.calculation.lines.some(line => line.priceId === plan.prices[0].id))
+  assert.deepEqual(platform.map(row => [row.assumedIssueDate, row.period.start, row.period.end, row.calculation.totalCents]), [['2018-01-31', '2018-01-31', '2019-01-31', 1200000], ['2019-01-31', '2019-01-31', '2020-01-31', 1200000]])
+  const usage = prepared.impact.periods.filter(row => row.calculation.lines.some(line => line.priceId === plan.prices[1].id))
+  assert.equal(usage.length, 24)
+  assert.deepEqual(usage.map(row => row.calculation.totalCents), Array(24).fill(2000))
+  const addon = prepared.impact.periods.find(row => row.calculation.lines.some(line => line.priceId === plan.prices[2].id))
+  assert.deepEqual([addon.assumedIssueDate, addon.period.start, addon.period.end, addon.calculation.totalCents], ['2019-07-31', '2019-07-31', '2020-01-31', 60493], 'CAT-001 co-termed annual add-on earns 184 of 365 days, rounded once')
+  assert.equal(prepared.impact.totals.totalCents, 2508493)
+  assert.deepEqual(prepared.impact.annualTotals.map(row => row.totalCents), [1224000, 1284493])
+  await decide(prepared.id, 'approved', owner, 409)
+  assert.deepEqual(await snapshot(), before, 'CAT-001 self-approval cannot partially apply interval setup')
+  const approved = await decide(prepared.id)
+  await decide(prepared.id, 'approved', finance, 409)
+  const installed = await api(`subscriptions/${approved.subscription}`)
+  assert.equal(installed.billing_anchor_date, '2018-01-31')
+  assert.equal(installed.contract_end_date, '2020-01-31')
+  assert.equal(installed.items.find(item => item.price_id === plan.prices[2].id).effective_to, '2020-01-31')
+  await api('usage.submit', { events: Array.from({ length: 24 }, (_, i) => ({ event_id: `synthetic-nectar-81-calls-${i}`, customer: 'synthetic-nectar-81', meter: 'synthetic-nectar-82', quantity: '10', occurred_at: `${anchoredMonth('2018-01-31', i)}T12:00:00Z` })) })
+  const byMonth = Map.groupBy(prepared.impact.periods, row => row.assumedIssueDate.slice(0, 7))
+  const invoices = []
+  for (const [month, previews] of byMonth) {
+    const firstRun = await api('billrun.prepare', { period: month })
+    const first = (await api(`runs/${firstRun.id}`)).invoices.filter(row => row.customer_id === approved.customer)
+    const rerun = await api('billrun.prepare', { period: month })
+    const drafts = (await api(`runs/${rerun.id}`)).invoices.filter(row => row.customer_id === approved.customer)
+    assert.deepEqual(drafts.map(row => row.total_cents).sort((a, b) => a - b), first.map(row => row.total_cents).sort((a, b) => a - b), 'CAT-001 re-preparation never duplicates or changes interval amounts')
+    assert.equal(drafts.length, previews.length)
+    for (const draft of drafts) {
+      const detail = await api(`invoices/${draft.id}`)
+      const preview = previews.find(row => row.billing.key === detail.calculation.inputs.billing.key)
+      assert.ok(preview, 'CAT-001 ordinary due-date billing selects the exact saved preview window')
+      assert.equal(detail.status, 'draft', 'CAT-001 setup approval leaves ordinary invoice approval separate')
+      assert.deepEqual(detail.lines.map(line => [line.kind, line.price_id, line.quantity, line.unit_amount, line.amount_cents, line.period_start, line.period_end, !!line.taxable]), previewLines(preview.calculation))
+      await api('invoice.approve', { invoice: draft.id, acknowledge: true })
+      await api('invoice.finalise', { invoice: draft.id, issue_date: preview.assumedIssueDate })
+      const issued = await api(`invoices/${draft.id}`)
+      assert.equal(issued.total_cents, preview.calculation.totalCents)
+      invoices.push(issued)
+    }
+  }
+  assert.equal(invoices.length, 27)
+  assert.equal(sum(invoices.map(row => row.total_cents)), prepared.impact.totals.totalCents)
+  for (const invoice of invoices) assert.deepEqual((await api(`invoices/${invoice.id}`)).calculation, invoice.calculation, 'CAT-001 later intervals preserve all previously issued evidence')
+  console.log('CAT-001/AGENT-006 quoted intervals, complete finite terms, day-31 anchors, mixed advance/arrears, co-termination and ordinary issued invoice parity passed')
+}

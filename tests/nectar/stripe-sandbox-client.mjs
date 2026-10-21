@@ -55,6 +55,22 @@ export function stripeSandbox(secret) {
     }
     throw new SandboxFailure('stripe_capture_page_limit')
   }
+  /** Pass the real Worker's Stripe requests to the real test account unchanged.
+   * The observer receives only non-secret protocol fields, never credentials. */
+  async function forward(incoming, observe = () => {}) {
+    const url = new URL(incoming.url), method = incoming.method
+    check(url.origin === 'https://api.stripe.com' && url.pathname.startsWith('/v1/'), 'stripe_worker_origin_refused')
+    check(incoming.headers.get('authorization') === `Bearer ${secret}`, 'stripe_worker_binding_mismatch')
+    check(['GET','POST'].includes(method), 'stripe_worker_method_refused')
+    const body = method === 'POST' ? await incoming.arrayBuffer() : undefined
+    const fields = body ? new URLSearchParams(new TextDecoder().decode(body)) : new URLSearchParams(url.search)
+    observe({ method, path: url.pathname, fields, idempotencyKey: incoming.headers.get('Idempotency-Key') })
+    counts[method]++
+    try {
+      return await fetch(incoming.url, { method, headers: Object.fromEntries(incoming.headers), ...(body ? { body } : {}),
+        redirect: 'error', signal: AbortSignal.timeout(20000) })
+    } catch { throw new SandboxFailure('stripe_worker_transport_failed') }
+  }
   async function advance(clock, target, label) {
     console.log(`Stripe history: advance ${label}`)
     const deadline = Date.now() + 60_000
@@ -70,5 +86,5 @@ export function stripeSandbox(secret) {
     }
     throw new SandboxFailure('stripe_clock_timeout')
   }
-  return { run, counts, request, list, advance, apiVersion: '2025-09-30.clover' }
+  return { run, counts, request, list, forward, advance, apiVersion: '2025-09-30.clover' }
 }

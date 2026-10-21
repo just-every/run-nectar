@@ -40,6 +40,8 @@ export interface Bindings {
  SETUP_TOKEN?: string
  MAIL_PROVIDER?: 'development' | 'resend' | 'sendgrid' | 'cloudflare'
  MAIL_FROM?: string
+ /** Owner-authorized original Stripe invoice collection; runtime secret, never archived. */
+ STRIPE_BILLING_SECRET?: string
  MAIL_API_KEY?: string
  MAIL_ACCOUNT_ID?: string
 }

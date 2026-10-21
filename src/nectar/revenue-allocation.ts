@@ -4,6 +4,7 @@ import { addDays, addMonths, daysBetween, isDate, validTimeZone } from './dates'
 import { roundHalfAway } from './decimal'
 import type { Line, Rating, RatingInput } from './rating'
 import { revenueMonths, usageRevenueEntries, type RevenueInput, type RevenueMonthEntry } from './revenue-usage'
+import { calendarRecognition, CALENDAR_REVENUE_POLICY_VERSION } from './calendar-recognition'
 
 export type { RevenueInput, RevenueMonthEntry } from './revenue-usage'
 export const REVENUE_POLICY_VERSION = 'nectar-revenue-1'
@@ -29,6 +30,8 @@ function validateLine(line: Line) {
 }
 
 function ratableEntries(line: Line): RevenueMonthEntry[] {
+  const calendar = calendarRecognition(line)
+  if (calendar) return calendar
   const totalDays = daysBetween(line.periodStart, line.periodEnd), amount = BigInt(line.amountCents)
   return revenueMonths(line.periodStart, line.periodEnd).map(period => {
     const from = `${period}-01` > line.periodStart ? `${period}-01` : line.periodStart
@@ -78,7 +81,7 @@ export function recognitionForLine(line: Line, input: RevenueInput, lineId: stri
     entries=saved as RevenueMonthEntry[];policy='historical-usage-replay-delta'
     insist(entries.every(e=>/^\d{4}-(0[1-9]|1[0-2])$/.test(e.period)&&safe(e.amountCents)&&object(e.basis)),'revenue_correction_evidence_required',409)
   }
-  else if (ratableKinds.has(line.kind)) { policy = 'ratable-service-days'; entries = ratableEntries(line) }
+  else if (ratableKinds.has(line.kind)) { entries = ratableEntries(line); policy = entries.some(entry => entry.basis.version === CALENDAR_REVENUE_POLICY_VERSION) ? 'ratable-contract-months-v2' : 'ratable-service-days' }
   else if (usageKinds.has(line.kind)) { policy = 'consumption-quantity-largest-remainder'; entries = usageRevenueEntries(input, line, lineId) }
   else if (line.kind === 'cancellation_credit') { policy = 'earned-minus-gross'; entries = cancellationEntries(line) }
   else if (line.kind === 'one_time') {

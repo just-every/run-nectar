@@ -36,6 +36,11 @@
     {
       "binding": "MAIL_API_KEY",
       "environment": "MAIL_API_KEY"
+    },
+    {
+      "binding": "STRIPE_BILLING_SECRET",
+      "environment": "STRIPE_BILLING_SECRET",
+      "optional": true
     }
   ],
   "platforms": [

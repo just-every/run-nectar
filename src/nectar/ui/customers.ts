@@ -1,3 +1,5 @@
+import { intervalLabel } from './intervals'
+import { importedCollectionsSection } from './imported-collections'
 import { customerInvoiceForm } from './invoice-content'
 import { renewalSection } from './renewals'
 // Customers, one customer (contacts, subscriptions, balance, entitlements,
@@ -41,11 +43,12 @@ export async function customerPage(env: Bindings, actor: Actor, id: string, url:
   const c = await customerView(env, actor, id, url)
   if(c.erased_at) return page('Erased customer',actor,h`<h1>Erased customer</h1><section class="card"><p>Personal information has been erased. Required financial records remain until their retention date.</p><p><a href="/app/erasures">Erasure requests and receipts</a></p>${table(['Invoice','Total'],c.ledger.invoices.map((i:any)=>[h`<a href="/app/invoices/${i.id}">${i.number}</a>`,cents(i.total_cents)]))}</section>`,{url,current:'/app/customers'})
   const today = new Date().toISOString().slice(0, 10)
-  const named = await all(env, "SELECT p.id, pr.name, p.version, p.kind, p.unit_amount, p.pricing_model, p.nickname, m.unit_label FROM nc_prices p JOIN nc_products pr ON pr.id = p.product_id LEFT JOIN nc_meters m ON m.id = p.meter_id WHERE p.status = 'active' ORDER BY pr.name, p.version DESC")
-  const label = (p: Record<string, any>) => `${p.name}${p.nickname ? ` — ${p.nickname}` : ''} v${p.version}: ${priceRate(p)} monthly`
+  const named = await all(env, "SELECT p.id, pr.name, p.version, p.kind, p.unit_amount, p.pricing_model, p.nickname,b.interval_unit,b.interval_count,b.billing_timing, m.unit_label FROM nc_prices p JOIN nc_products pr ON pr.id = p.product_id LEFT JOIN nc_price_intervals b ON b.price_id=p.id LEFT JOIN nc_meters m ON m.id = p.meter_id WHERE p.status = 'active' ORDER BY pr.name, p.version DESC")
+  const label = (p: Record<string, any>) => `${p.name}${p.nickname ? ` — ${p.nickname}` : ''} v${p.version}: ${priceRate(p)} · ${intervalLabel(p)}`
   const newSubscription = can(actor, 'records') && named.length ? h`<section class="card" aria-labelledby="new-sub"><h2 id="new-sub">Start a subscription</h2>${form('subscription.create', '/app/subscriptions/{id}', h`${hidden('customer', c.id)}
     ${field('Start date', 'start_date', { type: 'date', value: today })}
     ${field('Billing day of the month (1–28)', 'anchor_day', { type: 'number', required: false, hint: 'Each period starts on this day. Leave empty to use the start date’s day.' })}
+    ${select('Contract term','term_months',[{value:'1',label:'One month'},{value:'12',label:'12 months'},{value:'24',label:'24 months'},{value:'36',label:'36 months'}],'',{required:false,blank:'Evergreen'})}${field('Full billing anchor date','billing_anchor_date',{type:'date',required:false,hint:'For nonmonthly plans and month-end anniversaries. Leave empty to use the start date.'})}
     ${field('Trial ends', 'trial_end', { type: 'date', required: false, hint: 'Fixed and seat charges start on this date.' })}
     ${[0, 1, 2].map(index => h`<div class="pair">${select(`Price ${index + 1}`, 'price', named.map(p => ({ value: p.id, label: label(p) })), '', { required: index === 0, blank: index === 0 ? '' : 'None' })}${field('Seats (per-seat prices)', 'quantity', { type: 'number', value: '1', required: false })}</div>`)}
     <fieldset><legend>Contract exception (optional; bills only once approved)</legend>
@@ -79,9 +82,10 @@ export async function customerPage(env: Bindings, actor: Actor, id: string, url:
       ${can(actor, 'records') ? form('contact.add', `/app/customers/${c.id}`, h`${hidden('customer', c.id)}${field('Name', 'name')}${field('Email', 'email', { type: 'email' })}${field('Role', 'role', { value: 'billing', required: false })}`, 'Add contact', { layout: 'columns', secondary: true }) : ''}</section>
     ${c.incumbentHistory.documents.length || c.incumbentHistory.records.length ? h`<section class="card" aria-labelledby="hist"><h2 id="hist">History from Stripe</h2><p class="hint">Original references and amounts from the previous biller. This history is read-only; it cannot be approved or issued.</p>
       <dl class="figures"><div><dt>Stripe invoiced</dt><dd>${cents(c.incumbentHistory.totals.invoicedCents)}</dd></div><div><dt>Stripe credits</dt><dd>${cents(c.incumbentHistory.totals.creditedCents)}</dd></div><div><dt>Stripe payments</dt><dd>${cents(c.incumbentHistory.totals.paymentsCents)}</dd></div><div><dt>Stripe refunds</dt><dd>${cents(c.incumbentHistory.totals.refundsCents)}</dd></div><div><dt>Stripe remaining</dt><dd>${cents(c.incumbentHistory.totals.remainingCents)}</dd></div></dl>
-      ${c.incumbentHistory.documents.map((i:any)=>h`<article id="history-${i.id}"><h3>${i.document_kind==='credit-note'?'Credit note':'Invoice'} ${i.number||i.provider_ref}</h3><p>${i.provider} · ${i.provider_ref} · ${i.status} · ${cents(i.total_cents)} · remaining ${cents(i.remaining_cents)}</p><p>${i.issue_date?formatDate(i.issue_date):'Finalization date not captured'} · ${formatPeriod(i.period_start,i.period_end)}</p>${details({lines:i.lines,original:i.original},'Original source evidence')}</article>`)}
+      ${c.incumbentHistory.documents.map((i:any)=>h`<article id="history-${i.id}"><h3>${i.document_kind==='credit-note'?'Credit note':'Invoice'} ${i.number||i.provider_ref}</h3><p>${i.provider} · ${i.provider_ref} · ${i.status} · ${cents(i.total_cents)} · remaining at capture ${cents(i.remaining_cents)}</p><p>${i.issue_date?formatDate(i.issue_date):'Finalization date not captured'} · ${formatPeriod(i.period_start,i.period_end)}</p>${details({lines:i.lines,original:i.original},'Original source evidence')}</article>`)}
       ${c.incumbentHistory.records.map((r:any)=>h`<article id="history-${r.id}"><h3>${r.kind.replaceAll('-',' ')} · ${r.provider_ref}</h3><p>${r.provider} · ${formatDate(r.occurred_on)} · ${r.status}${r.amount_cents===null?'':h` · ${cents(r.amount_cents)}`}</p>${details(r.original,'Original source evidence')}</article>`)}
     </section>` : ''}
+    ${importedCollectionsSection(c,actor)}
     ${can(actor, 'records') ? h`<section class="card" aria-labelledby="edit"><h2 id="edit">Edit details</h2>${form('customer.update', `/app/customers/${c.id}`, h`${hidden('customer', c.id)}${hidden('revision', c.revision)}${field('Name', 'name', { value: c.name })}${field('Billing email', 'billing_email', { type: 'email', value: c.billing_email })}${field('Billing address', 'address', { value: c.address, required: false })}${check('Tax exempt', 'tax_exempt', { checked: !!c.tax_exempt })}${field('Exemption certificate reference', 'tax_exempt_ref', { value: c.tax_exempt_ref, required: false })}${languageSelect(c.language)}${customerInvoiceForm(c)}`, 'Save details', { layout: 'columns', secondary: true })}</section>` : ''}`, { current: '/app/customers', url })
 }
 
@@ -92,14 +96,14 @@ export async function subscriptionPage(env: Bindings, actor: Actor, id: string, 
   const today = new Date().toISOString().slice(0, 10)
   const approver = actor.kind === 'member' && can(actor, 'approve'), records = can(actor, 'records')
   const open = s.items.filter((i: any) => !i.effective_to)
-  const prices = records ? await all(env, "SELECT p.id, pr.name, p.version, p.kind, p.unit_amount, p.pricing_model, p.nickname FROM nc_prices p JOIN nc_products pr ON pr.id = p.product_id WHERE p.status = 'active' AND p.kind <> 'unit' ORDER BY pr.name, p.version DESC") : []
+  const prices = records ? await all(env, "SELECT p.id, pr.name, p.version, p.kind, p.unit_amount, p.pricing_model, p.nickname,b.interval_unit,b.interval_count,b.billing_timing FROM nc_prices p JOIN nc_products pr ON pr.id = p.product_id LEFT JOIN nc_price_intervals b ON b.price_id=p.id WHERE p.status = 'active' AND p.kind <> 'unit' ORDER BY pr.name, p.version DESC") : []
   return page('Subscription', actor, h`<p class="crumbs"><a href="/app/customers/${s.customer_id}">${s.customer_name}</a></p><h1>Subscription ${s.external_id ? h`<span>${s.external_id}</span>` : ''}</h1><p>${metadataLink('subscription',s.id)}</p>
     <section class="card summary"><dl class="figures"><div><dt>Status</dt><dd>${tag(subscriptionState(s, today))}</dd></div><div><dt>Started</dt><dd>${formatDate(s.start_date)}</dd></div>
-      <div><dt>Billing day</dt><dd>${s.anchor_day}</dd></div><div><dt>Trial ends</dt><dd>${formatDate(s.trial_end)}</dd></div><div><dt>Ends</dt><dd>${formatDate(s.end_date)}</dd></div>
+      <div><dt>Billing day</dt><dd>${s.anchor_day}</dd></div><div><dt>Trial ends</dt><dd>${formatDate(s.trial_end)}</dd></div><div><dt>Ends</dt><dd>${formatDate(s.end_date)}</dd></div><div><dt>Contract term</dt><dd>${s.contract_term_months?`${s.contract_term_months} months`:'Evergreen'}</dd></div><div><dt>Anniversary anchor</dt><dd>${formatDate(s.billing_anchor_date)}</dd></div>
       ${s.cutover_start ? h`<div><dt>Billed by Nectar from</dt><dd>${formatDate(s.cutover_start)}</dd></div>` : ''}</dl>
       ${s.billing_mode === 'shadow' ? h`<p class="hint">Moved in from Stripe. Nectar rates it in shadow for comparison and issues nothing until the owner adopts it under Move in.</p>` : ''}
       ${details({ 'Internal id': s.id, Revision: s.revision, 'Provider reference': s.provider_ref ?? '—', 'Provider schedule': s.provider_schedule_ref ?? '—', 'Provider collection': s.provider_collection ?? '—' })}</section>
-    <section class="card" aria-labelledby="items"><h2 id="items">Plan</h2>${table(['Price', 'Quantity$', 'From', 'Until'], s.items.map((i: any) => [`${i.product_name}${i.nickname ? ` — ${i.nickname}` : ''} v${i.version} (${priceRate(i)})`, i.quantity, formatDate(i.effective_from), formatDate(i.effective_to)]))}</section>
+    <section class="card" aria-labelledby="items"><h2 id="items">Plan</h2>${table(['Price', 'Quantity$', 'From', 'Until'], s.items.map((i: any) => [`${i.product_name}${i.nickname ? ` — ${i.nickname}` : ''} v${i.version} (${priceRate(i)} · ${intervalLabel(i)})`, i.quantity, formatDate(i.effective_from), formatDate(i.effective_to)]))}</section>
     ${await upcomingSection(env,actor,s,url)}
     ${addonSection(s, prices, actor)}
     ${lifecycleSection(s, actor)}

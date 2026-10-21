@@ -102,6 +102,8 @@ export async function moveHistoryFlow(h,owner,{onState=async()=>{},keepHistory=f
 export async function moveHistoryErasureFlow(h,owner) {
   const {customer,annual,delivery}=await moveHistoryFlow(h,owner,{keepHistory:true})
   const api=(path,body)=>h.api(path,owner,body)
+  const meter=(await api('meter.create',{code:'synthetic-nectar-history-erasure-usage',name:'Historical private usage',unit_label:'events'})).id
+  for(let start=0;start<10000;start+=5000)await api('usage.submit',{events:Array.from({length:5000},(_,offset)=>({event_id:`synthetic-nectar-history-private-${start+offset}`,customer:'synthetic-nectar-1',meter,quantity:'1',occurred_at:'2026-06-15T00:00:00Z',properties:{person:'Alder Research',email:'billing@alder.example'}}))})
   const beforeRevenue=await api(`revenue?from=2026-07&to=2027-02&customer=${customer}`)
   const beforeBillings=await api(`reports/billings?period=2026-03&customer=${customer}`)
   const beforeCollections=await api(`reports/collections?period=2026-03&customer=${customer}`)
@@ -109,6 +111,11 @@ export async function moveHistoryErasureFlow(h,owner) {
   const path=new URL(h.mails.at(-1).text.match(/https?:\/\/[^\s"<]+\/erase\/[a-f0-9]{64}/)[0]).pathname
   assert.equal((await h.raw(path,{form:new URLSearchParams({confirm:'yes'})})).status,200)
   const result=await api('erasure.approve',{request:request.id,confirm:true})
+  assert.equal(result.receipt.changed.find(row=>row.kind==='nc_usage_events').records,10000)
+  const usageCsv=await h.raw('/app/exports/usage.csv',{cookie:owner})
+  const usage=csvRows(await usageCsv.text())
+  assert.equal(usage.length,10000)
+  assert.ok(usage.every(row=>row.event_id.startsWith('erased-')&&row.properties_json==='{}'))
   for(const kind of ['nc_incumbent_history','nc_incumbent_invoices'])assert.ok(result.receipt.changed.some(row=>row.kind===kind&&row.records>0),kind)
   const erased=await api(`customers/${customer}`)
   assert.deepEqual(erased.incumbentHistory,{documents:[],records:[]})

@@ -23,31 +23,35 @@ import { METRIC_RATING_VERSION } from './metric-rating'
 import { parseJson } from './core'
 import { contractBasis } from './contract-terms'
 import { CONTRACT_RATING_VERSION } from './commitment-rating'
+import { INTERVAL_RATING_VERSION, storedBillingTerms, type BillingWindow } from './billing-calendar'
 
 export const priceLabel = (row: Row) => `${row.product_name}${row.nickname ? ` — ${row.nickname}` : ''} (v${row.version})`
 
 export async function pricesById(env: Bindings, ids: string[]): Promise<Record<string, PriceIn>> {
   if (!ids.length) return {}
-  const rows = await all(env, `SELECT p.*, pr.name AS product_name, m.unit_label,m.source_meter_id,m.metric_plan_json,m.metric_version,m.code AS meter_code FROM nc_prices p JOIN nc_products pr ON pr.id = p.product_id LEFT JOIN nc_meters m ON m.id = p.meter_id WHERE p.id IN (${ids.map(() => '?').join(',')})`, ...ids)
-  return Object.fromEntries(rows.map(row => [row.id, { id: row.id, kind: row.kind, unitAmount: row.unit_amount, meterId: row.meter_id, taxable: !!row.taxable, label: priceLabel(row), unitLabel: row.unit_label ?? '',...(row.metric_plan_json?{metric:{sourceId:row.source_meter_id,plan:parseJson(row.metric_plan_json,null as never),dimensions:parseJson(row.dimensions_json,{}),version:row.metric_version,code:row.meter_code}}:{}), ...(row.pricing_model === 'simple' ? {} : { pricing: storedQuantityPrice(row as any) }) }]))
+  const rows = await all(env, `SELECT p.*, b.interval_unit,b.interval_count,b.billing_timing,pr.name AS product_name, m.unit_label,m.source_meter_id,m.metric_plan_json,m.metric_version,m.code AS meter_code FROM nc_prices p JOIN nc_products pr ON pr.id = p.product_id LEFT JOIN nc_price_intervals b ON b.price_id=p.id LEFT JOIN nc_meters m ON m.id = p.meter_id WHERE p.id IN (${ids.map(() => '?').join(',')})`, ...ids)
+  return Object.fromEntries(rows.map(row => [row.id, { id: row.id, kind: row.kind, unitAmount: row.unit_amount, meterId: row.meter_id, taxable: !!row.taxable, label: priceLabel(row), unitLabel: row.unit_label ?? '', ...(storedBillingTerms(row) ? { billing: storedBillingTerms(row) } : {}),...(row.metric_plan_json?{metric:{sourceId:row.source_meter_id,plan:parseJson(row.metric_plan_json,null as never),dimensions:parseJson(row.dimensions_json,{}),version:row.metric_version,code:row.meter_code}}:{}), ...(row.pricing_model === 'simple' ? {} : { pricing: storedQuantityPrice(row as any) }) }]))
 }
 
-export async function ratingInputs(env: Bindings, business: Business, subscriptionId: string, period: { start: string; end: string }, replaceItems?: ItemIn[]): Promise<RatingInput> {
+export async function ratingInputs(env: Bindings, business: Business, subscriptionId: string, period: { start: string; end: string }, replaceItems?: ItemIn[], billing?: BillingWindow): Promise<RatingInput> {
   const sub = await one(env, 'SELECT s.*, c.tax_exempt, c.tax_exempt_ref FROM nc_subscriptions s JOIN nc_customers c ON c.id = s.customer_id WHERE s.id = ?', subscriptionId)
   insist(sub, 'subscription_not_found', 404)
   const items: ItemIn[] = replaceItems ?? (await all(env, 'SELECT id, price_id, quantity, effective_from, effective_to FROM nc_items WHERE subscription_id = ? ORDER BY effective_from, id', sub.id))
     .map(row => ({ id: row.id, priceId: row.price_id, quantity: row.quantity, from: row.effective_from, to: row.effective_to }))
-  const amendments = (await all(env, "SELECT * FROM nc_amendments WHERE subscription_id = ? AND status = 'approved' ORDER BY effective_from, id", sub.id))
+  const amendments = (await all(env, `SELECT * FROM nc_amendments WHERE subscription_id = ? AND status = 'approved'
+    ${billing ? "AND (kind<>'fixed_credit' OR NOT EXISTS(SELECT 1 FROM nc_invoice_lines l JOIN nc_invoices i ON i.id=l.invoice_id WHERE i.subscription_id=nc_amendments.subscription_id AND i.status='issued' AND l.kind='credit' AND json_extract(l.evidence_json,'$.amendment')=nc_amendments.id))" : ''} ORDER BY effective_from, id`, sub.id))
     .map(row => ({ id: row.id, kind: row.kind, value: row.value, priceId: row.price_id, from: row.effective_from, to: row.effective_to, note: row.note }))
   const prices = await pricesById(env, [...new Set([...items.map(item => item.priceId), ...amendments.flatMap(a => a.priceId ? [a.priceId] : [])])])
-  const meters = [...new Set(Object.values(prices).flatMap(price => price.meterId ? [price.meterId] : []))]
+  const selectedMeterIds = billing ? new Set(items.filter(item => billing.components.some(component => component.itemId === item.id)).map(item => prices[item.priceId]).filter(price => price.kind === 'unit').map(price => price.meterId)) : null
+  const eventPrices = Object.values(prices).filter(price => !selectedMeterIds || selectedMeterIds.has(price.meterId))
+  const meters = [...new Set(eventPrices.flatMap(price => price.meterId ? [price.meterId] : []))]
   let events:RatingInput['events'] = meters.length ? (await all(env, `SELECT event_id, meter_id, quantity, occurred_at,properties_json,invoice_id FROM nc_usage_events WHERE customer_id = ? AND status = 'active' AND invoice_id IS NULL AND NOT EXISTS(SELECT 1 FROM nc_usage_voids v WHERE v.event_id=nc_usage_events.event_id) AND occurred_at < ? AND meter_id IN (${meters.map(() => '?').join(',')}) ORDER BY occurred_at, event_id`,
     sub.customer_id, zonedStart(period.end, business.timezone), ...meters)).map(row => ({ eventId: row.event_id, meterId: row.meter_id, quantity: row.quantity, occurredAt: row.occurred_at,...(Object.keys(parseJson(row.properties_json,{})).length?{properties:parseJson(row.properties_json,{})}:{}) })) : []
-  const metricSources=[...new Set(Object.values(prices).flatMap(p=>p.metric?[p.metric.sourceId]:[]))]
+  const metricSources=[...new Set(eventPrices.flatMap(p=>p.metric?[p.metric.sourceId]:[]))]
   for(const source of metricSources){const rows=await metricEvents(env,sub.customer_id,source,zonedStart(period.end,business.timezone));for(const event of rows)if(!events.some(e=>e.eventId===event.eventId))events.push(event)}
   events.sort((a,b)=>a.occurredAt-b.occurredAt||a.eventId.localeCompare(b.eventId))
   const contracts=await contractBasis(env,sub.id)
-  const hasContracts=contracts.commitments.length>0||contracts.included.length>0||(await all(env,"SELECT 1 FROM nc_contracts WHERE subscription_id=? AND status='approved' LIMIT 1",sub.id)).length>0
+  const hasContracts=contracts.commitments.length>0||contracts.included.length>0||!billing&&(await all(env,"SELECT 1 FROM nc_contracts WHERE subscription_id=? AND status='approved' LIMIT 1",sub.id)).length>0
   const certificate = await certificateBasis(env, sub.customer_id, business.tax_jurisdiction, period)
   const intervals = lifecycleIntervals(await lifecycleHistory(env, sub.id))
   const billableEvents = activeSegments(period.start,period.end,intervals).length ? events : events.filter(e=>blockedAt(localDate(e.occurredAt,business.timezone),intervals).length > 0)
@@ -67,25 +71,29 @@ export async function ratingInputs(env: Bindings, business: Business, subscripti
     const original=priorIssued.find(i=>i.sources.has(event.meterId)&&event.occurredAt>=zonedStart(i.period_start,i.timezone??business.timezone)&&event.occurredAt<zonedStart(i.period_end,i.timezone??business.timezone))
     return original?[{eventId:event.eventId,invoice:original.id,from:original.period_start,to:original.period_end}]:[]
   })
-  const adjustments=await usageAdjustments(env,sub.id),credits=await carriedUsageCredits(env,sub.customer_id)
+  const adjustments=billing?.terms.timing==='advance'?[]:await usageAdjustments(env,sub.id),credits=await carriedUsageCredits(env,sub.customer_id)
   const pending=(await all(env,"SELECT id FROM nc_usage_corrections WHERE subscription_id=? AND status='pending'",sub.id)).map(row=>row.id)
+  const term = billing ? await one(env, "SELECT end_date,auto_renew,cancelled_at FROM nc_renewal_terms WHERE subscription_id=? AND status='active' ORDER BY created_at DESC LIMIT 1", sub.id) : null
+  const renewing = !!term?.auto_renew && !term.cancelled_at
   return {
+    ...(billing ? { billing } : {}),
     ...(unresolvedHistoricalUsage.length?{unresolvedHistoricalUsage}:{}),
     ...(adjustments.length?{usageAdjustments:adjustments}:{}),...(credits.length?{usageCredits:credits}:{}),...(pending.length?{usageCorrectionPending:pending}:{}),
     ...(renewals.length?{renewals}:{}),
     ...(hasContracts ? {contracts} : {}),
     ...(charges.length ? { charges } : {}),
     ...(intervals.length ? { lifecycle: intervals, creditGovernance: {thresholdCents:creditGovernance!.two_person_above_cents, revision:creditGovernance!.revision} } : {}),
-    version: renewals.length ? RENEWAL_RATING_VERSION : metricSources.length ? METRIC_RATING_VERSION : hasContracts ? CONTRACT_RATING_VERSION : intervals.length ? LIFECYCLE_RATING_VERSION : charges.length ? CHARGE_RATING_VERSION : Object.values(prices).some(price => price.pricing) ? PRICE_MODEL_RATING_VERSION : RATING_VERSION,
+    version: billing ? INTERVAL_RATING_VERSION : renewals.length ? RENEWAL_RATING_VERSION : metricSources.length ? METRIC_RATING_VERSION : hasContracts ? CONTRACT_RATING_VERSION : intervals.length ? LIFECYCLE_RATING_VERSION : charges.length ? CHARGE_RATING_VERSION : Object.values(prices).some(price => price.pricing) ? PRICE_MODEL_RATING_VERSION : RATING_VERSION,
     invoiceContent: await invoiceContent(env, business, sub.customer_id),
     timezone: business.timezone,
     tax: { mode: business.tax_mode, rate: business.tax_rate, jurisdiction: business.tax_jurisdiction, exempt: certificate?.exempt ?? !!sub.tax_exempt, exemptRef: certificate?.exemptRef ?? sub.tax_exempt_ref, ...(certificate ? { certificate: certificate.certificate, exception: certificate.exception } : {}) },
-    subscription: { id: sub.id, anchorDay: sub.anchor_day, startDate: sub.start_date, trialEnd: sub.trial_end, endDate: sub.end_date, billFrom: sub.cutover_start },
+    subscription: { id: sub.id, anchorDay: sub.anchor_day, startDate: sub.start_date, trialEnd: sub.trial_end, endDate: renewing ? null : sub.end_date, billFrom: sub.cutover_start,
+      ...(sub.billing_anchor_date ? { billingAnchorDate: sub.billing_anchor_date } : {}), ...(term?.end_date || sub.contract_end_date ? { contractEndDate: renewing ? null : term?.end_date ?? sub.contract_end_date } : {}) },
     period, items, prices, amendments, events: billableEvents,
   }
 }
 
-export async function rated(env: Bindings, business: Business, subscriptionId: string, period: { start: string; end: string }, replaceItems?: ItemIn[]) {
-  const input = await ratingInputs(env, business, subscriptionId, period, replaceItems)
+export async function rated(env: Bindings, business: Business, subscriptionId: string, period: { start: string; end: string }, replaceItems?: ItemIn[], billing?: BillingWindow) {
+  const input = await ratingInputs(env, business, subscriptionId, period, replaceItems, billing)
   return { input, rating: rate(input), fingerprint: await fingerprint(input) }
 }

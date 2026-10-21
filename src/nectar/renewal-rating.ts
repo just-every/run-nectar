@@ -16,7 +16,7 @@ export function renewalOperands(input:RatingInput) {
     for(let n=0;n<cuts.length-1;n++) {
       const from=cuts[n],to=cuts[n+1],rates=events.filter(r=>r.effectiveDate>=item.from&&r.effectiveDate<=from),key=`${original.id}@${from}`
       const change=(v:string)=>upliftAmount(v,rates)
-      prices[key]={...original,id:key,unitAmount:change(original.unitAmount),...(original.pricing?{pricing:{...original.pricing,tiers:original.pricing.tiers.map(t=>({...t,unitAmount:change(t.unitAmount),flatAmount:change(t.flatAmount)}))}}:{})}
+      prices[key]={...original,id:key,sourcePriceId:original.sourcePriceId??original.id,unitAmount:change(original.unitAmount),...(original.pricing?{pricing:{...original.pricing,tiers:original.pricing.tiers.map(t=>({...t,unitAmount:change(t.unitAmount),flatAmount:change(t.flatAmount)}))}}:{})}
       aliases.set(key,original.id);applied.set(key,rates);items.push({...item,priceId:key,from,to:to==='9999-12-31'?null:to})
       for(const a of input.amendments.filter(a=>a.kind==='price_override'&&a.priceId===original.id&&a.from<to&&(a.to??'9999-12-31')>from))amendments.push({...a,priceId:key,value:change(a.value),from:a.from>from?a.from:from,to:(a.to??'9999-12-31')<to?a.to:to})
       for(const a of input.contracts?.included??[])if(a.price===original.id)included.push({...a,price:key})

@@ -1,3 +1,7 @@
+import { decideIntervalCancellation } from './interval-cancel'
+import { createBillingEntity,updateBillingEntity,assignCustomerEntity } from './billing-entities'
+import { captureNumberingSource,captureLiveCustomerNumberingSource } from './numbering-source'
+import { prepareImportedCollection,executeImportedCollection,reconcileImportedCollection,finalizeImportedCollection } from './movein/collection'
 import { refreshCorrectingInvoice } from './usage-correction-refresh'
 import { configureUsagePolicy, prepareUsageCorrection, authorizeUsageCorrection, decideUsageCorrection } from './usage-dispositions'
 import { configureInvoiceSeries } from './invoice-numbering'
@@ -82,6 +86,10 @@ export const actions: Record<string, Handler> = {
   'term.decide':decideTerm,
   'term.link':issueCancellationLink,
   'proposal.credit.prepare':prepareInvoiceCredit,
+  'imported.collection.prepare':prepareImportedCollection,
+  'imported.collection.execute':executeImportedCollection,
+  'imported.collection.reconcile':reconcileImportedCollection,
+  'imported.collection.finalize':finalizeImportedCollection,
   'report.schedule':setReportSchedule,
   'setup.resolve':resolveSetup,
   'meter.prepare':prepareMetric,
@@ -91,6 +99,11 @@ export const actions: Record<string, Handler> = {
   'contract.decide':decideContract,
   'business.configure': configureBusiness,
   'invoice.series': configureInvoiceSeries,
+  'entity.create':createBillingEntity,
+  'entity.update':updateBillingEntity,
+  'customer.entity':assignCustomerEntity,
+  'invoice.series.capture':captureNumberingSource,
+  'invoice.series.capture-live':captureLiveCustomerNumberingSource,
   'tax.declare': declareTax,
   'tax.review': reviewTax,
   'mfa.policy': setPolicy,
@@ -134,6 +147,7 @@ export const actions: Record<string, Handler> = {
   'subscription.end': endSubscription,
   'lifecycle.policy': configureLifecyclePolicy,
   'subscription.cancel': cancelSubscription,
+  'subscription.cancel.decide':decideIntervalCancellation,
   'subscription.reactivate': reactivateSubscription,
   'subscription.pause': pauseSubscription,
   'subscription.resume': resumeSubscription,

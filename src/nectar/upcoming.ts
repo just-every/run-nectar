@@ -1,3 +1,7 @@
+import { subscriptionCalendar } from './billing-plan'
+import { dueBillingWindows,type BillingWindow } from './billing-calendar'
+import { addMonths } from './dates'
+import { clockInstant } from './clock'
 import { carriedUsageCredits,usageCreditAllocations } from './usage-correction-records'
 // USE-006: a live, write-free view of the exact next calculation.
 import type { Bindings } from '../auth.server'
@@ -12,15 +16,15 @@ import { displayQuantity } from './metric-aggregate'
 import type { RatingInput } from './rating'
 import { requireSubscription } from './subscriptions'
 
-export async function upcoming(env: Bindings, actor: Actor, subscriptionId: string, month?: string | null) {
+async function upcomingOne(env: Bindings, actor: Actor, subscriptionId: string, month?: string | null,window?:BillingWindow) {
   requireRead(actor, 'subscriptions')
   const business = await requireBusiness(env)
   const sub = await requireSubscription(env, subscriptionId)
   insist(month === undefined || month === null || isMonth(month), 'invalid_period')
-  const period = month ? periodStartingIn(sub.anchor_day,month) : periodContaining(sub.anchor_day,today(business.timezone))
+  const period = window?.period??(month ? periodStartingIn(sub.anchor_day,month) : periodContaining(sub.anchor_day,today(business.timezone,clockInstant(env))))
   insist(sub.start_date < period.end && (!sub.end_date || sub.end_date > period.start), 'subscription_not_in_period', 409)
   insist(!sub.cutover_start || period.end > sub.cutover_start, 'previous_biller_period', 409)
-  const issued = await one(env, "SELECT id FROM nc_invoices WHERE subscription_id=? AND invoice_kind='recurring' AND period_start=? AND status='issued'",sub.id,period.start)
+  const issued = await one(env, "SELECT id FROM nc_invoices WHERE subscription_id=? AND invoice_kind='recurring' AND period_start=? AND status='issued' AND billing_key=?",sub.id,period.start,window?.key??'legacy-monthly-arrears')
   const generatedAt = now()
   let calculation: Row, state: string, invoiceId: string | null = null
   if (issued) {
@@ -34,7 +38,7 @@ export async function upcoming(env: Bindings, actor: Actor, subscriptionId: stri
     state='issued';invoiceId=invoice.id
   } else {
     const customer=await one(env,'SELECT billing_email FROM nc_customers WHERE id=?',sub.customer_id)
-    const draft=await draftFor(env,business,{...sub,billing_email:customer?.billing_email},period)
+    const draft=await draftFor(env,business,{...sub,billing_email:customer?.billing_email},period,window)
     calculation={inputs:draft.input,fingerprint:draft.fingerprint,version:(draft.input as RatingInput).version,
       ...draft.rating,exceptions:draft.exceptions}
     state=sub.billing_mode==='shadow' ? 'shadow' : 'preview'
@@ -58,9 +62,23 @@ export async function upcoming(env: Bindings, actor: Actor, subscriptionId: stri
         WHERE i.subscription_id=a.subscription_id AND i.status='issued' AND l.kind='credit' AND json_extract(l.evidence_json,'$.amendment')=a.id)
     ORDER BY a.effective_from,a.id`,sub.id)
   return {subscription:sub.id,customer:sub.customer_id,customerName:sub.customer_name,period,timezone:business.timezone,
-    generatedAt,state,invoiceId,meters,credits:credits.map(c=>({...c,amountCents:cents(c.value),appliesThisPeriod:c.effective_from>=period.start && c.effective_from<period.end})),
+    generatedAt,state,invoiceId,billingDueDate:window?.dueDate??period.end,billingWindow:window??null,meters,credits:credits.map(c=>({...c,amountCents:cents(c.value),appliesThisPeriod:c.effective_from>=period.start && c.effective_from<period.end})),
     carriedUsageCredits:await carriedUsageCredits(env,sub.customer_id),
     creditApplications:usageCreditAllocations(input.usageCredits??[],calculation.totalCents),
     balanceAfterCreditsCents:calculation.totalCents-usageCreditAllocations(input.usageCredits??[],calculation.totalCents).reduce((n,a)=>n+a.amountCents,0),
     remainingContractCreditCents:credits.reduce((sum,c)=>sum+cents(c.value),0),calculation}
+}
+
+/** Every component due in the selected month is visible; mixed intervals never
+ * collapse into a fictitious single monthly invoice. */
+export async function upcoming(env:Bindings,actor:Actor,subscriptionId:string,month?:string|null) {
+  requireRead(actor,'subscriptions')
+  insist(month===undefined||month===null||isMonth(month),'invalid_period')
+  const sub=await requireSubscription(env,subscriptionId),calendar=await subscriptionCalendar(env,sub)
+  if(!calendar.enabled)return upcomingOne(env,actor,subscriptionId,month)
+  const business=await requireBusiness(env),selected=month??today(business.timezone,clockInstant(env)).slice(0,7),from=`${selected}-01`
+  const windows=dueBillingWindows(calendar.basis,from,addMonths(from,1))
+  insist(windows.length,'billing_window_not_due',409)
+  const invoices=await Promise.all(windows.map(window=>upcomingOne(env,actor,subscriptionId,selected,window)))
+  return {...invoices[0],invoices}
 }

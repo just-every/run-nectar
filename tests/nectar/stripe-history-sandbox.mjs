@@ -5,12 +5,14 @@ import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { isDeepStrictEqual } from 'node:util'
 import { stripeSandbox, check, safeError, reference, monthTime, monthName } from './stripe-sandbox-client.mjs'
 
 const evidence = join(process.cwd(), '.evidence')
 const receipt = { version: 1, journey: 'MOVE-007 Stripe 18-month history', status: 'running', startedAt: new Date().toISOString(), head: null,
   clockId: null, sourceIds: {}, assertions: {}, captureHashes: {}, cleanup: { clockDeleted: false } }
 let stripe, phase = 'test-key', ownedClock, h
+const workerStripeRequests = []
 const step = name => { phase = name; console.log(`Stripe history: ${name}`) }
 const sum = rows => rows.reduce((total, row) => total + row, 0)
 const dateMonth = seconds => new Date(seconds * 1000).toISOString().slice(0, 7)
@@ -91,6 +93,14 @@ async function generate() {
   phase = 'finish-before-cutover'
   await stripe.advance(ownedClock, monthTime(18) - 1, 'before July cutover')
   await captureEvents()
+  step('create-owned-open-cutover-receivable')
+  const draft = await stripe.request('POST', '/v1/invoices', { customer: customer.id, collection_method: 'send_invoice', days_until_due: 30,
+    auto_advance: false, pending_invoice_items_behavior: 'exclude', 'automatic_tax[enabled]': false, 'metadata[nectar_run]': stripe.run })
+  await stripe.request('POST', '/v1/invoiceitems', { customer: customer.id, invoice: draft.id, amount: 2500, currency: 'usd',
+    description: 'Owned sandbox cutover service', 'period[start]': monthTime(17), 'period[end]': monthTime(18), 'metadata[nectar_run]': stripe.run })
+  const opened = await stripe.request('POST', `/v1/invoices/${draft.id}/finalize`, { auto_advance: false })
+  check(opened.status === 'open' && opened.auto_advance === false && opened.total === 2500 && opened.amount_remaining === 2500 && opened.amount_paid === 0, 'stripe_cutover_invoice_not_open')
+  receipt.sourceIds.openInvoice = opened.id
   step('capture-complete-provider-history')
   const customers = await stripe.list('/v1/customers', { test_clock: ownedClock })
   const subscriptions = await stripe.list('/v1/subscriptions', { customer: customer.id, status: 'all' })
@@ -113,7 +123,7 @@ async function generate() {
     coverage: 'Only this journey clock/customer and owned catalog; subscription events captured during generation; all resource pages combined.',
     files: Object.fromEntries(Object.entries(capture).map(([name, value]) => [name, { endpoint: value.url ?? `/v1/${name}`, count: value.data.length, has_more: false }])) }
   check(customers.data.length === 1 && customers.data[0].id === customer.id, 'stripe_clock_customer_scope_changed')
-  check(invoices.data.every(row => row.status === 'paid' && row.status_transitions.finalized_at && row.number), 'stripe_history_contains_unissued_invoice')
+  check(invoices.data.every(row => (row.status === 'paid' || row.id === opened.id && row.status === 'open') && row.status_transitions.finalized_at && row.number), 'stripe_history_contains_unissued_invoice')
   check(invoices.data.filter(row => subscriptionOf(row) === monthly.id).length === 18, 'stripe_monthly_invoice_count')
   check(invoices.data.filter(row => subscriptionOf(row) === annual?.id).length === 1, 'stripe_annual_invoice_count')
   check(capture.subscription_events.data.length > 0, 'stripe_subscription_events_unavailable')
@@ -130,14 +140,15 @@ async function generate() {
     const filename = `stripe-history-sandbox-capture-${stripe.run}.json`
     await writeFile(join(evidence, filename), JSON.stringify(capture), { mode: 0o600, flag: 'wx' }); receipt.privateCapture = filename
   }
-  return { capture, customer, monthly, annual, first, refund, credit }
+  return { capture, customer, monthly, annual, first, refund, credit, open: invoices.data.find(row => row.id === opened.id) }
 }
 
-async function prove({ capture, customer, monthly, annual, first, refund, credit }) {
+async function prove({ capture, customer, monthly, annual, first, refund, credit, open }) {
   step('ordinary-owner-setup')
   const { harness, file } = await import('./harness.mjs')
   const { applyPolicy } = await import('./policy-helper.mjs')
-  h = await harness({ localTime: '2026-07-01T00:00:00Z' })
+  h = await harness({ localTime: '2026-07-01T00:00:00Z', stripeSecret: process.env.STRIPE_SECRET_KEY,
+    stripeFetch: request => stripe.forward(request, entry => workerStripeRequests.push(entry)) })
   check((await h.raw('/auth/bootstrap', { body: { token: h.vars.SETUP_TOKEN, displayName: 'Sandbox Owner' } })).status === 303, 'owner_bootstrap_failed')
   const owner = await h.signIn(h.vars.OWNER_EMAIL)
   check((await h.raw('/setup', { cookie: owner, form: new URLSearchParams({ confirm: 'yes' }) })).status === 303, 'owner_setup_failed')
@@ -151,27 +162,27 @@ async function prove({ capture, customer, monthly, annual, first, refund, credit
   check(preview.rejected.some(row => row.location.includes(annual.id)), 'annual_active_subscription_not_explicitly_rejected')
   check(preview.rejected.some(row => row.location.includes(capture.prices.data[1].id)), 'annual_active_price_not_explicitly_rejected')
   check(preview.rejected.length === 2, 'unexpected_history_mapping_rejection')
-  check(preview.create.invoice === 19 && preview.create.credit_note === 1, 'import_document_count_mismatch')
+  check(preview.create.invoice === capture.invoices.data.length && preview.create.credit_note === 1, 'import_document_count_mismatch')
   check((await api('customers')).length === 0, 'import_preview_mutated_customers')
   const job = await api('import.apply', { ...files, fingerprint: preview.fingerprint })
   check((await api('import.apply', { ...files, fingerprint: preview.fingerprint })).job === job.job, 'import_replay_changed_job')
   const imported = (await api('customers')).find(row => row.external_id === customer.id)
   check(imported, 'imported_customer_missing')
   const detail = await api(`customers/${imported.id}`), history = detail.incumbentHistory
-  check(history.documents.length === 20, 'customer_history_document_count')
+  check(history.documents.length === capture.invoices.data.length + capture.credit_notes.data.length, 'customer_history_document_count')
   const importedPayments = history.records.filter(row => row.kind === 'payment')
   check(importedPayments.length === capture.payments.data.length, 'customer_history_payment_count')
   for (const charge of capture.payments.data) {
     const retained = importedPayments.find(row => row.provider_ref === charge.id)
     const linked = capture.invoices.data.find(invoice => invoicePayments(invoice).some(payment => belongs(payment, charge)))
     check(retained?.amount_cents === charge.amount && retained.invoice_ref === linked?.id, 'imported_basil_payment_link_mismatch')
-    check(JSON.stringify(retained.original) === JSON.stringify(charge), 'imported_payment_original_changed')
+    check(isDeepStrictEqual(retained.original,charge), 'imported_payment_original_changed')
   }
   check(history.records.some(row => row.kind === 'refund' && row.provider_ref === refund.id && row.amount_cents === 2000), 'customer_history_refund_missing')
   check(history.documents.some(row => row.provider_ref === credit.id && row.document_kind === 'credit-note' && row.total_cents === 2000), 'customer_history_credit_missing')
   check(history.records.filter(row => row.kind === 'subscription-event').length === capture.subscription_events.data.length, 'customer_history_subscription_events_missing')
-  for (const event of capture.subscription_events.data) check(JSON.stringify(history.records.find(row => row.provider_ref === event.id)?.original) === JSON.stringify(event), 'imported_subscription_snapshot_changed')
-  for (const invoice of capture.invoices.data) check(JSON.stringify(history.documents.find(row => row.provider_ref === invoice.id)?.original) === JSON.stringify(invoice), 'imported_invoice_original_changed')
+  for (const event of capture.subscription_events.data) check(isDeepStrictEqual(history.records.find(row => row.provider_ref === event.id)?.original,event), 'imported_subscription_snapshot_changed')
+  for (const invoice of capture.invoices.data) check(isDeepStrictEqual(history.documents.find(row => row.provider_ref === invoice.id)?.original,invoice), 'imported_invoice_original_changed')
   check(!detail.subscriptions.some(row => row.provider_ref === annual.id), 'unsupported_annual_subscription_installed')
   const annualInvoice = capture.invoices.data.find(row => subscriptionOf(row) === annual.id)
   const annualDocument = history.documents.find(row => row.provider_ref === annualInvoice.id)
@@ -210,8 +221,76 @@ async function prove({ capture, customer, monthly, annual, first, refund, credit
   receipt.assertions.revenue = { annualInvoice: annualInvoice.id, julyOpeningDeferredCents: 800000, remainingMonths: 8, monthlyRecognitionCents: 100000, closingCents: 0 }
   const csv = await h.raw(`/app/exports/revenue.csv?from=2026-07&to=2027-02&customer=${imported.id}`, { cookie: owner })
   check(csv.status === 200 && (await csv.text()).includes('1000.00'), 'annual_revenue_csv_missing')
+  await proveOpenCollection({ api, owner, imported, capture, history, open })
   receipt.assertions.importJob = job.job
   receipt.assertions.firstStripeInvoice = first.id
+}
+
+async function proveOpenCollection({ api, owner, imported, capture, history, open }) {
+  step('public-open-invoice-collection-preparation')
+  const document = history.documents.find(row => row.provider_ref === open.id)
+  check(document?.status === 'open' && document.remaining_cents === open.amount_remaining, 'imported_open_invoice_missing')
+  const nativeInvoices = await api('invoices'), billingsPeriod = dateMonth(open.status_transitions.finalized_at)
+  const billingsBefore = await api(`reports/billings?period=${billingsPeriod}&customer=${imported.id}`)
+  const arBefore = await api(`reports/ar?customer=${imported.id}`)
+  check(arBefore.totalCents === open.amount_remaining && arBefore.entries.some(row => row.invoiceId === document.id), 'imported_open_invoice_not_in_ar')
+  const prepared = await api('imported.collection.prepare', { invoice: document.id })
+  check(prepared.status === 'pending' && prepared.invoice_ref === open.id && prepared.amount_cents === open.amount_remaining, 'imported_collection_preparation_mismatch')
+  check(workerStripeRequests.every(row => row.method === 'GET'), 'collection_preparation_wrote_provider')
+  const stillOpen = await capturedInvoice(open.id)
+  check(stillOpen.status === 'open' && stillOpen.amount_remaining === open.amount_remaining, 'collection_preparation_changed_invoice')
+  const missingConfirmation = await h.raw('/api/nectar/imported.collection.execute', { cookie: owner, body: { request: prepared.id, basis_hash: prepared.basis_hash } })
+  check(missingConfirmation.status === 400, 'collection_without_confirmation_accepted')
+  step('public-explicit-processor-collection-and-out-of-band-mirror')
+  const collected = await api('imported.collection.execute', { request: prepared.id, basis_hash: prepared.basis_hash, confirm: true, disable_auto_advance: true })
+  check(collected.status === 'collected' && collected.amount_cents === open.amount_remaining && collected.charge_ref && collected.payment_intent_ref, 'imported_collection_not_proven')
+  const intent = await stripe.request('GET', `/v1/payment_intents/${collected.payment_intent_ref}`)
+  const charge = await stripe.request('GET', `/v1/charges/${collected.charge_ref}`)
+  check(intent.status === 'succeeded' && intent.amount_received === open.amount_remaining && reference(intent.customer) === receipt.sourceIds.customer
+    && intent.metadata?.nectar_original_invoice === open.id && intent.metadata?.nectar_collection_request === prepared.id, 'collection_payment_intent_witness_mismatch')
+  check(charge.status === 'succeeded' && charge.paid === true && charge.captured === true && charge.amount === open.amount_remaining
+    && charge.amount_captured === open.amount_remaining && charge.currency === open.currency && reference(charge.payment_intent) === intent.id
+    && reference(charge.customer) === receipt.sourceIds.customer && !reference(charge.invoice), 'collection_charge_witness_mismatch')
+  check(!capture.payments.data.some(row => row.id === charge.id), 'collection_reused_historical_charge')
+  const paid = await capturedInvoice(open.id)
+  check(paid.status === 'paid' && paid.amount_remaining === 0 && paid.auto_advance === false && paid.number === open.number
+    && paid.total === open.total && paid.currency === open.currency && reference(paid.customer) === reference(open.customer), 'original_out_of_band_mirror_mismatch')
+  check(!invoicePayments(paid).some(payment => belongs(payment, charge)), 'native_collection_charged_through_original_invoice')
+  const posts = workerStripeRequests.filter(row => row.method === 'POST')
+  const paymentPosts = posts.filter(row => row.path === '/v1/payment_intents'), mirrorPosts = posts.filter(row => row.path === `/v1/invoices/${open.id}/pay`)
+  check(paymentPosts.length === 1 && paymentPosts[0].fields.get('off_session') === 'true' && paymentPosts[0].fields.get('confirm') === 'true'
+    && paymentPosts[0].fields.get('payment_method') === receipt.sourceIds.paymentMethod && !paymentPosts[0].fields.has('receipt_email')
+    && paymentPosts[0].fields.get('metadata[nectar_original_invoice]') === open.id && paymentPosts[0].idempotencyKey.includes(prepared.review.intentKey), 'native_collection_protocol_mismatch')
+  check(mirrorPosts.length === 1 && mirrorPosts[0].fields.get('paid_out_of_band') === 'true', 'invoice_mark_not_out_of_band')
+  const disableAt = posts.findIndex(row => row.path === `/v1/invoices/${open.id}` && row.fields.get('auto_advance') === 'false')
+  check(disableAt >= 0 && disableAt < posts.indexOf(paymentPosts[0]) && posts.indexOf(paymentPosts[0]) < posts.indexOf(mirrorPosts[0]), 'collection_order_mismatch')
+  // PaymentIntent/charge timestamps are the provider's actual financial dates;
+  // an application clock never substitutes for those saved facts.
+  const collectedOn = new Date(charge.created * 1000).toISOString().slice(0, 10), period = collectedOn.slice(0, 7)
+  check(collected.collected_on === collectedOn, 'collection_financial_date_mismatch')
+  if (charge.created >= monthTime(18)) await h.advanceClock(new Date(charge.created * 1000 + 1000).toISOString())
+  const collections = await api(`reports/collections?period=${period}&customer=${imported.id}`)
+  const priorCollections = sum(capture.payments.data.filter(row => row.status === 'succeeded' && dateMonth(row.created) === period).map(row => row.amount))
+  check(collections.totalCents === priorCollections + charge.amount, 'collection_report_not_exactly_once')
+  const contribution = collections.entries.filter(row => row.sourceReference === charge.id)
+  check(contribution.length === 1 && contribution[0].amountCents === charge.amount, 'collection_charge_report_source_missing')
+  const drill = await api(`reports/collections/${contribution[0].invoiceId}?period=${period}&customer=${imported.id}`)
+  check(drill.totalCents === charge.amount && sum(drill.components.map(row => row.amountCents)) === charge.amount, 'collection_report_drillthrough_mismatch')
+  check((await api(`reports/ar?customer=${imported.id}`)).totalCents === 0, 'paid_imported_invoice_still_in_ar')
+  check(isDeepStrictEqual(await api(`reports/billings?period=${billingsPeriod}&customer=${imported.id}`), billingsBefore), 'collection_changed_original_billings')
+  const after = await api(`customers/${imported.id}`)
+  check(isDeepStrictEqual(after.incumbentHistory.documents, history.documents) && isDeepStrictEqual(after.incumbentHistory.records, history.records), 'collection_mutated_imported_originals')
+  check(after.incumbentHistory.totals.remainingCents === 0 && isDeepStrictEqual(await api('invoices'), nativeInvoices), 'collection_created_or_reissued_native_invoice')
+  const repeat = await h.raw('/api/nectar/imported.collection.execute', { cookie: owner, body: { request: prepared.id, basis_hash: prepared.basis_hash, confirm: true, disable_auto_advance: true } })
+  check(repeat.status === 409, 'collection_payment_repeat_accepted')
+  const reconciled = await api('imported.collection.reconcile', { request: prepared.id })
+  check(reconciled.status === 'collected' && reconciled.charge_ref === charge.id, 'collection_reconciliation_changed_witness')
+  check(workerStripeRequests.filter(row => row.method === 'POST').length === posts.length, 'collection_replay_or_reconcile_wrote_provider')
+  const charges = await stripe.list('/v1/charges', { customer: receipt.sourceIds.customer })
+  check(charges.data.filter(row => row.status === 'succeeded' && !capture.payments.data.some(old => old.id === row.id)).length === 1, 'collection_created_second_charge')
+  receipt.assertions.openCollection = { invoice: open.id, number: open.number, amountCents: open.amount_remaining, currency: open.currency,
+    request: prepared.id, paymentIntent: intent.id, charge: charge.id, collectedOn, originalStatus: 'paid', outOfBandMirror: true,
+    processorPaymentAttempts: paymentPosts.length, providerMirrorAttempts: mirrorPosts.length, remainingArCents: 0, sourceOriginalsUnchanged: true, repeatRefused: true }
 }
 
 try {

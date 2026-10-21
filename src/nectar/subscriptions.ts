@@ -10,7 +10,8 @@ import { requireAny, requireRead, actorLabel, requireCapability, requireMember, 
 import { requireBusiness } from './business'
 import { all, commit, guard, insist, newId, now, one, parseJson, stmt, type Row } from './core'
 import { canonicalDecimal, micros } from './decimal'
-import { isDate, periodContaining, requireDate } from './dates'
+import { addMonthsClamped, isDate, periodContaining, requireDate } from './dates'
+import { nonMonthlyArrears, storedBillingTerms } from './billing-calendar'
 import { rated } from './inputs'
 import { lifecycleHistory, lifecycleIntervals } from './lifecycle-records'
 import { lifecyclePolicy } from './lifecycle-policy'
@@ -19,6 +20,8 @@ import { contractsFor, contractBurnDown } from './contract-terms'
 import { metadataFor,withMetadata } from './metadata'
 import type { Input } from './input'
 import type { ItemIn, Line } from './rating'
+import { intervalChangePreview } from './interval-changes'
+import { intervalCancellations } from './interval-cancel'
 
 export async function requireSubscription(env: Bindings, id: string) {
   const sub = await one(env, 'SELECT s.*, c.name AS customer_name, c.external_id AS customer_external_id, c.erased_at FROM nc_subscriptions s JOIN nc_customers c ON c.id = s.customer_id WHERE s.id = ?', id)
@@ -31,13 +34,13 @@ export async function subscriptionDetail(env: Bindings, actor: Actor, id: string
   const sub = await requireSubscription(env, id)
   insist(!sub.erased_at,'customer_erased',410)
   const [items, amendments, changes, invoices] = await Promise.all([
-    all(env, 'SELECT i.*, p.kind, p.unit_amount, p.pricing_model, p.version, p.nickname, pr.name AS product_name, m.code AS meter_code FROM nc_items i JOIN nc_prices p ON p.id = i.price_id JOIN nc_products pr ON pr.id = p.product_id LEFT JOIN nc_meters m ON m.id = p.meter_id WHERE i.subscription_id = ? ORDER BY i.effective_from, i.id', id),
+    all(env, 'SELECT i.*, p.kind, p.unit_amount, p.pricing_model, p.version, p.nickname,b.interval_unit,b.interval_count,b.billing_timing, pr.name AS product_name, m.code AS meter_code FROM nc_items i JOIN nc_prices p ON p.id = i.price_id LEFT JOIN nc_price_intervals b ON b.price_id=p.id JOIN nc_products pr ON pr.id = p.product_id LEFT JOIN nc_meters m ON m.id = p.meter_id WHERE i.subscription_id = ? ORDER BY i.effective_from, i.id', id),
     all(env, 'SELECT * FROM nc_amendments WHERE subscription_id = ? ORDER BY created_at', id),
     all(env, 'SELECT * FROM nc_changes WHERE subscription_id = ? ORDER BY created_at DESC', id),
     all(env, "SELECT id, number, status, period_start, period_end, total_cents FROM nc_invoices WHERE subscription_id = ? AND status <> 'discarded' ORDER BY period_start DESC", id),
   ])
   const history = await lifecycleHistory(env, id)
-  return { ...sub, renewal:await termRecords(env,actor,id), contracts:await contractsFor(env,id),burnDown:await contractBurnDown(env,id), lifecyclePolicy: await lifecyclePolicy(env), lifecycle: history, intervals: lifecycleIntervals(history),...await metadataFor(env,'subscription',id), items, amendments, changes: changes.map(change => ({ ...change, preview: parseJson(change.preview_json, {}), preview_json: undefined })), invoices:await withMetadata(env,'invoice',invoices) }
+  return { ...sub, cancellations:await intervalCancellations(env,id),renewal:await termRecords(env,actor,id), contracts:await contractsFor(env,id),burnDown:await contractBurnDown(env,id), lifecyclePolicy: await lifecyclePolicy(env), lifecycle: history, intervals: lifecycleIntervals(history),...await metadataFor(env,'subscription',id), items, amendments, changes: changes.map(change => ({ ...change, preview: parseJson(change.preview_json, {}), preview_json: undefined })), invoices:await withMetadata(env,'invoice',invoices) }
 }
 
 // A subscription holds its meters while it is live on or after `from`: no end
@@ -75,8 +78,7 @@ export async function createSubscription(env: Bindings, actor: Actor, input: Inp
   insist(customer, 'customer_not_found', 404)
   const start = requireDate(input.text('start_date', { max: 10 }), 'start_date')
   const day = Number(start.slice(8))
-  const anchor = input.integer('anchor_day', { min: 1, max: 28, optional: true }) ?? (day <= 28 ? day : null)
-  insist(anchor, 'anchor_day_required')
+  let anchor = input.integer('anchor_day', { min: 1, max: 28, optional: true }) ?? (day <= 28 ? day : null)
   const trialEnd = input.text('trial_end', { max: 10, optional: true }) || null
   insist(!trialEnd || (isDate(trialEnd) && trialEnd > start), 'invalid_trial_end')
   const externalId = input.text('external_id', { max: 80, optional: true }) || null
@@ -85,12 +87,21 @@ export async function createSubscription(env: Bindings, actor: Actor, input: Inp
   insist(lines.length > 0 && lines.length <= 20, 'items_required')
   const items: Row[] = []
   for (const line of lines) {
-    const price = await one(env, "SELECT * FROM nc_prices WHERE id = ? AND status = 'active'", line.price)
+    const price = await one(env, "SELECT p.*,b.interval_unit,b.interval_count,b.billing_timing FROM nc_prices p LEFT JOIN nc_price_intervals b ON b.price_id=p.id WHERE p.id = ? AND p.status = 'active'", line.price)
     insist(price, 'price_not_found', 404)
     const quantity = price.kind === 'seat' ? Number(line.quantity) : 1
     insist(Number.isSafeInteger(quantity) && quantity >= (price.pricing_model === 'simple' ? 1 : 0) && quantity <= (price.pricing_model === 'simple' ? 1_000_000 : 1_000_000_000), 'invalid_quantity')
     items.push({ id: newId(), price, quantity })
   }
+  const extended = items.some(item => { const terms = storedBillingTerms(item.price); return terms && nonMonthlyArrears(terms) })
+  const billingAnchorDate = input.text('billing_anchor_date', { max: 10, optional: true }) || (extended ? start : null)
+  insist(!billingAnchorDate || isDate(billingAnchorDate) && billingAnchorDate <= start, 'invalid_billing_anchor_date')
+  if (!anchor && billingAnchorDate) anchor = Math.min(day, 28)
+  insist(anchor, 'anchor_day_required')
+  const termMonths = input.integer('term_months', { min: 1, max: 36, optional: true }) ?? null
+  insist(termMonths === null || [1,12,24,36].includes(termMonths), 'invalid_contract_term')
+  const contractEnd = termMonths ? addMonthsClamped(start, termMonths) : null
+  insist(!trialEnd || !contractEnd || trialEnd < contractEnd, 'invalid_trial_end')
   const meters = [...new Set(await sourceMeterIds(env,items.flatMap(item => item.price.meter_id ? [item.price.meter_id] : [])))]
   await uniqueMeterItems(env,items.map(item=>({id:item.id,priceId:item.price.id,quantity:item.quantity,from:start,to:null})))
   insist(!await meterClash(env, customer.id, meters, start), 'meter_already_billed', 409)
@@ -102,12 +113,12 @@ export async function createSubscription(env: Bindings, actor: Actor, input: Inp
   }
   const statements = [
     ...(meters.length ? [guard(env, 'meter_already_billed', `NOT EXISTS(${CLASH(meters.length)})`, customer.id, id, start, start, ...meters)] : []),
-    stmt(env, "INSERT INTO nc_subscriptions (id, customer_id, external_id, anchor_day, start_date, trial_end, billing_mode, origin, revision, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'live', 'native', ?, ?, ?, ?)", id, customer.id, externalId, anchor, start, trialEnd, newId(), by, at, at),
+    stmt(env, "INSERT INTO nc_subscriptions (id, customer_id, external_id, anchor_day, start_date, trial_end,end_date,billing_anchor_date,contract_term_months,contract_end_date, billing_mode, origin, revision, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?,?,?,?,?,'live', 'native', ?, ?, ?, ?)", id, customer.id, externalId, anchor, start, trialEnd,contractEnd,billingAnchorDate,termMonths,contractEnd, newId(), by, at, at),
     ...items.map(item => stmt(env, "INSERT INTO nc_items (id, subscription_id, price_id, quantity, effective_from, origin, created_at) VALUES (?, ?, ?, ?, ?, 'native', ?)", item.id, id, item.price.id, item.quantity, start, at)),
     ...(exception ? [stmt(env, "INSERT INTO nc_amendments (id, subscription_id, kind, value, price_id, effective_from, effective_to, note, clause, status, origin, created_by, created_at, prepared_by_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'proposed', 'native', ?, ?, ?)",
       newId(), id, exception.kind, exception.value, exception.priceId, exception.from, exception.to, exception.note, exception.clause, by, at, actor.id)] : []),
   ]
-  await commit(env, statements, { actor: by, action: 'subscription.create', subject: id, detail: { customer: customer.external_id, start, anchor, trialEnd, items: items.map(item => ({ price: item.price.id, quantity: item.quantity })), exception: exception?.kind ?? null } })
+  await commit(env, statements, { actor: by, action: 'subscription.create', subject: id, detail: { customer: customer.external_id, start, anchor, trialEnd,billingAnchorDate,termMonths,contractEnd, items: items.map(item => ({ price: item.price.id, quantity: item.quantity })), exception: exception?.kind ?? null } })
   return { id }
 }
 
@@ -174,15 +185,19 @@ export async function prepareChange(env: Bindings, actor: Actor, input: Input) {
   const items: ItemIn[] = (await all(env, 'SELECT * FROM nc_items WHERE subscription_id = ? ORDER BY effective_from, id', sub.id)).map(row => ({ id: row.id, priceId: row.price_id, quantity: row.quantity, from: row.effective_from, to: row.effective_to }))
   const changed: ItemIn[] = [...items.map(row => row.id === item.id ? { ...row, to: date } : row), { id: 'change', priceId: price.id, quantity, from: date, to: item.effective_to }]
   await uniqueMeterItems(env,changed)
-  const before = (await rated(env, business, sub.id, period, items)).rating
-  const after = (await rated(env, business, sub.id, period, changed)).rating
-  const next = periodContaining(sub.anchor_day, period.end)
-  const nextAfter = (await rated(env, business, sub.id, next, changed)).rating
-  const preview = {
+  const intervalPreview = await intervalChangePreview(env, business, sub, items, changed, item.price_id, price.id, date)
+  let preview: Row | null = intervalPreview
+  if (!preview) {
+    const before = (await rated(env, business, sub.id, period, items)).rating
+    const after = (await rated(env, business, sub.id, period, changed)).rating
+    const next = periodContaining(sub.anchor_day, period.end)
+    const nextAfter = (await rated(env, business, sub.id, next, changed)).rating
+    preview = {
     period, effectiveDate: date,
     before: { lines: recurringLines(before.lines), cents: recurringLines(before.lines).reduce((sum, line) => sum + line.amountCents, 0) },
     after: { lines: recurringLines(after.lines), cents: recurringLines(after.lines).reduce((sum, line) => sum + line.amountCents, 0) },
     nextPeriod: { period: next, lines: recurringLines(nextAfter.lines), cents: recurringLines(nextAfter.lines).reduce((sum, line) => sum + line.amountCents, 0) },
+    }
   }
   const id = newId()
   await commit(env, [stmt(env, "INSERT INTO nc_changes (id, subscription_id, item_id, new_price_id, new_quantity, effective_date, subscription_revision, preview_json, status, created_by, created_at, prepared_by_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?)",

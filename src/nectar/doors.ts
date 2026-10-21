@@ -6,6 +6,7 @@ export const API_DOORS: [string, string][] = [
   ['^usage/corrections$','usageCorrections'],
   ['^openapi$','openapi'],
   ['^number-register$','numberRegister'],
+  ['^billing-entities$','billingEntities'],
   ['^erasures$','erasures'],
   ['^revenue-journal$','revenueJournal'],
   ['^revenue$', 'revenue'], ['^revenue/([\\w-]+)$','revenueSource'],

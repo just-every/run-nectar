@@ -27,6 +27,18 @@ export function addMonths(date: string, months: number): string {
   return `${Math.floor(index / 12)}-${String((index % 12) + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
 }
 
+/** Preserve the original contractual day, clamping only the target month.
+ * Call with the original anchor for every boundary: Jan31, Feb28, Mar31. */
+export function addMonthsClamped(date: string, months: number): string {
+  insist(isDate(date) && Number.isSafeInteger(months), 'invalid_calendar_date')
+  const [year, month, day] = date.split('-').map(Number), index = year * 12 + month - 1 + months
+  const targetYear = Math.floor(index / 12), targetMonth = ((index % 12) + 12) % 12 + 1
+  insist(targetYear >= 1 && targetYear <= 9999, 'billing_calendar_out_of_range')
+  const first = `${String(targetYear).padStart(4, '0')}-${String(targetMonth).padStart(2, '0')}-01`
+  const next = new Date(`${first}T00:00:00Z`); next.setUTCMonth(next.getUTCMonth() + 1); next.setUTCDate(0)
+  return `${first.slice(0, 8)}${String(Math.min(day, next.getUTCDate())).padStart(2, '0')}`
+}
+
 export function validTimeZone(zone: string): boolean {
   try { new Intl.DateTimeFormat('en-US', { timeZone: zone }); return /^[A-Za-z_]+(\/[A-Za-z0-9_+-]+)*$/.test(zone) } catch { return false }
 }

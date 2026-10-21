@@ -1,3 +1,6 @@
+import { billingWindowsForMonth,currentBillingWindow } from './billing-plan'
+import { billingComponentClaimStatements } from './billing-components'
+import type { BillingWindow } from './billing-calendar'
 import { invoiceContent } from './invoice-content'
 import { canonical } from './core'
 import { carriedUsageCredits, usageCreditAllocations } from './usage-correction-records'
@@ -49,8 +52,8 @@ async function incumbentComparison(env: Bindings, sub: Row, period: { start: str
   return { found: true, invoices: [...new Set(lines.map(line => line.invoice))], rows, incumbentSubtotalCents: incumbentTotal, nectarSubtotalCents: rating.subtotalCents, reconciled: rows.every(row => row.nectarCents === row.incumbentCents) }
 }
 
-async function reconciledRating(env: Bindings, business: Business, subscription: string, period: { start: string; end: string }) {
-  const result = await rated(env, business, subscription, period)
+async function reconciledRating(env: Bindings, business: Business, subscription: string, period: { start: string; end: string },window?:BillingWindow) {
+  const result = await rated(env, business, subscription, period,undefined,window)
   const reconciliation = await reconciliationFor(env, subscription, period, business.timezone, result.input.events)
   if (!reconciliation.length) return result
   const input = { ...result.input, reconciliation }
@@ -60,8 +63,8 @@ async function reconciledRating(env: Bindings, business: Business, subscription:
   return { input, rating: { ...result.rating, exceptions: [...result.rating.exceptions, ...exceptions] }, fingerprint: await hashInputs(input) }
 }
 
-export async function draftFor(env: Bindings, business: Business, sub: Row, period: { start: string; end: string }): Promise<Draft> {
-  const { rating, fingerprint, input } = await reconciledRating(env, business, sub.id, period)
+export async function draftFor(env: Bindings, business: Business, sub: Row, period: { start: string; end: string },window?:BillingWindow): Promise<Draft> {
+  const { rating, fingerprint, input } = await reconciledRating(env, business, sub.id, period,window)
   const exceptions = [...rating.exceptions]
   const previous = await one(env, "SELECT number, period_start, total_cents, subtotal_cents FROM nc_invoices WHERE subscription_id = ? AND status = 'issued' AND period_start < ? ORDER BY period_start DESC LIMIT 1", sub.id, period.start)
   const incumbent = await incumbentComparison(env, sub, period, rating)
@@ -85,6 +88,15 @@ export async function prepareRun(env: Bindings, actor: Actor, input: Input) {
   const subs = await all(env, 'SELECT s.*, c.name AS customer_name, c.billing_email FROM nc_subscriptions s JOIN nc_customers c ON c.id = s.customer_id WHERE c.erased_at IS NULL ORDER BY c.name, s.created_at')
   const drafts: Draft[] = [], skipped: Row[] = [], open: Row[] = []
   for (const sub of subs) {
+    const windows=await billingWindowsForMonth(env,sub,month)
+    if(windows) {
+      for(const window of windows) {
+        if(window.dueDate>day){open.push({subscription:sub.id,customer:sub.customer_name,periodEnd:window.period.end,dueDate:window.dueDate});continue}
+        drafts.push(await draftFor(env,business,sub,window.period,window))
+      }
+      if(!windows.length)skipped.push({subscription:sub.id,customer:sub.customer_name,reason:'No unbilled component is due in this month'})
+      continue
+    }
     const period = periodStartingIn(sub.anchor_day, month)
     if (sub.start_date >= period.end || (sub.end_date && sub.end_date <= period.start)) continue
     if (sub.cutover_start && period.end <= sub.cutover_start) { skipped.push({ subscription: sub.id, customer: sub.customer_name, reason: `billed by the previous biller before cutover on ${sub.cutover_start}` }); continue }
@@ -110,10 +122,10 @@ export async function prepareRun(env: Bindings, actor: Actor, input: Input) {
   statements.push(stmt(env, "INSERT INTO nc_bill_runs (id, period, cutoff_at, calc_version, status, summary_json, created_by, created_at) VALUES (?, ?, ?, ?, 'draft', ?, ?, ?)", runId, month, at, runVersion, JSON.stringify(summary), actorLabel(actor), at))
   for (const draft of drafts) {
     const invoiceId = newId()
-    statements.push(stmt(env, `INSERT INTO nc_invoices (id, bill_run_id, customer_id, subscription_id, period_start, period_end, status, subtotal_cents, tax_cents, total_cents, calc_version, source_fingerprint, calculation_json, comparison_json, exceptions_json, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, invoiceId, runId, draft.sub.customer_id, draft.sub.id, draft.period.start, draft.period.end, draft.sub.billing_mode === 'shadow' ? 'shadow' : 'draft',
+    statements.push(stmt(env, `INSERT INTO nc_invoices (id, bill_run_id, customer_id, subscription_id, period_start, period_end, status, subtotal_cents, tax_cents, total_cents, calc_version, source_fingerprint, calculation_json, comparison_json, exceptions_json, created_at,billing_key)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?)`, invoiceId, runId, draft.sub.customer_id, draft.sub.id, draft.period.start, draft.period.end, draft.sub.billing_mode === 'shadow' ? 'shadow' : 'draft',
       draft.rating.subtotalCents, draft.rating.taxCents, draft.rating.totalCents, draft.input.version, draft.fingerprint,
-      JSON.stringify({ version: draft.input.version, fingerprint: draft.fingerprint, tax: draft.rating.tax, consumedEvents: draft.rating.consumedEvents, inputs: draft.input }), JSON.stringify(draft.comparison), JSON.stringify(draft.exceptions), at))
+      JSON.stringify({ version: draft.input.version, fingerprint: draft.fingerprint, tax: draft.rating.tax, consumedEvents: draft.rating.consumedEvents, inputs: draft.input }), JSON.stringify(draft.comparison), JSON.stringify(draft.exceptions), at,(draft.input as any).billing?.key??'legacy-monthly-arrears'))
     draft.rating.lines.forEach((line, index) => statements.push(stmt(env, `INSERT INTO nc_invoice_lines (id, invoice_id, seq, kind, description, quantity, unit_amount, amount_cents, taxable, price_id, meter_id, period_start, period_end, evidence_json)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, newId(), invoiceId, index + 1, line.kind, line.description, line.quantity, line.unitAmount, line.amountCents, line.taxable ? 1 : 0, line.priceId, line.meterId, line.periodStart, line.periodEnd, JSON.stringify(line.evidence))))
   }
@@ -173,7 +185,7 @@ async function currentFingerprint(env: Bindings, business: Business, invoice: Ro
     }
     return (await manualCalculation(env, business, invoice.customer_id, saved.charges.map((c: Row) => c.id), saved.date)).fingerprint
   }
-  return (await reconciledRating(env, business, invoice.subscription_id, { start: invoice.period_start, end: invoice.period_end })).fingerprint
+  return (await reconciledRating(env, business, invoice.subscription_id, { start: invoice.period_start, end: invoice.period_end },await currentBillingWindow(env,invoice))).fingerprint
 }
 
 async function approveOne(env: Bindings, actor: Actor, business: Business, invoice: Row, acknowledged: boolean) {
@@ -226,7 +238,7 @@ export async function finalise(env: Bindings, actor: Actor, input: Input) {
   // The invoice date defaults to today; it may be any day from the end of the billed period up to today.
   const day = today(business.timezone,clockInstant(env))
   const issueDate = input.has('issue_date') ? requireDate(input.text('issue_date', { max: 10 }), 'issue_date') : day
-  insist(issueDate <= day && targets.every(invoice => issueDate >= (invoice.invoice_kind === 'manual' ? invoice.period_start : invoice.period_end)), 'invalid_issue_date')
+  insist(issueDate <= day && targets.every(invoice => issueDate >= (invoice.invoice_kind === 'manual' ? invoice.period_start : parseJson<Row>(invoice.calculation_json,{}).inputs?.billing?.dueDate??invoice.period_end)), 'invalid_issue_date')
   const issued: string[] = [], refused: Row[] = []
   for (const invoice of targets) {
     const customer = await one(env, 'SELECT * FROM nc_customers WHERE id=?', invoice.customer_id)
@@ -239,7 +251,7 @@ export async function finalise(env: Bindings, actor: Actor, input: Input) {
     insist(carried.every(c=>c.issuedAt<zonedStart(addDays(issueDate,1),business.timezone)),'credit_after_invoice_date',409)
     const consumed: string[] = calculation.consumedEvents ?? []
     const charges: string[] = (calculation.inputs?.charges ?? []).map((c: Row) => c.id)
-    const allocation = invoiceNumberAllocation(env, business, customer)
+    const allocation = await invoiceNumberAllocation(env, business, customer)
     const { number } = allocation
     const content = calculation.inputs?.invoiceContent
     insist(!content?.poRequired || content.poNumber, 'po_required', 409)
@@ -256,8 +268,9 @@ export async function finalise(env: Bindings, actor: Actor, input: Input) {
       ...charges.map(id => guard(env, 'charges_already_billed_or_missing', 'EXISTS(SELECT 1 FROM nc_charges WHERE id=? AND invoice_id IS NULL)', id)),
       ...charges.map(id => stmt(env, 'UPDATE nc_charges SET invoice_id=? WHERE id=?', invoice.id, id)),
       ...chunk(consumed, 90).map(ids => stmt(env, `UPDATE nc_usage_events SET invoice_id = ? WHERE event_id IN (${ids.map(() => '?').join(',')})`, invoice.id, ...ids)),
-      stmt(env, "UPDATE nc_invoices SET legal_name=(SELECT name FROM nc_customers WHERE id=nc_invoices.customer_id), status = 'issued', number = ?, issue_date = ?, due_date = ?, issued_by = ?, issued_at = ? WHERE id = ?", number, issueDate, due, actorLabel(actor), now(), invoice.id),
+      stmt(env, "UPDATE nc_invoices SET legal_name=(SELECT name FROM nc_customers WHERE id=nc_invoices.customer_id), status = 'issued', number = ?, issue_date = ?, due_date = ?, issued_by = ?, issued_at = ?,billing_entity_id=?,billing_route_json=? WHERE id = ?", number, issueDate, due, actorLabel(actor), now(),allocation.entityId,allocation.routeJson, invoice.id),
       ...await revenueIssueStatements(env,{...invoice,issue_date:issueDate}),
+      ...(calculation.inputs?.billing?billingComponentClaimStatements(env,invoice.subscription_id,invoice.id,calculation.inputs.billing):[]),
     ], { actor: actorLabel(actor), action: 'invoice.issue', subject: invoice.id, detail: { number, total: invoice.total_cents, fingerprint: invoice.approved_fingerprint, events: consumed.length, charges } })
     issued.push(number)
     business = await requireBusiness(env)

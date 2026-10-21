@@ -35,6 +35,7 @@ await runIsolated('customer-search','customerSearchFlow')
 await runIsolated('upcoming','upcomingFlow')
 await runIsolated('numbering','numberingFlow')
 await runIsolated('move-history','moveHistoryFlow')
+await runIsolated('move-collection','moveCollectionFlow')
 await runIsolated('entitlement-quotas','entitlementQuotasFlow')
 await runIsolated('portal-sessions','portalSessionsFlow')
 await runIsolated('portal-answers','portalAnswersFlow')
@@ -390,7 +391,7 @@ try {
     await h.api('access.give', cookie.owner, { email: 'x@example.test', name: 'Nope', role: 'owner' }, 400)
     cookie.finance = await h.signIn('fran@example.test', { requested: true })
     cookie.accountant = await h.signIn('acct@example.test', { requested: true })
-    const ownerOnly = ['mfa.policy', 'mfa.reset', 'cadence.policy.prepare', 'lifecycle.policy', 'credit.policy', 'certificate.policy', 'business.configure', 'invoice.series', 'tax.declare', 'tax.review', 'access.give', 'access.end', 'credential.issue', 'credential.revoke', 'subscription.adopt']
+    const ownerOnly = ['imported.collection.prepare','imported.collection.execute','imported.collection.reconcile','imported.collection.finalize','mfa.policy', 'mfa.reset', 'cadence.policy.prepare', 'lifecycle.policy', 'credit.policy', 'certificate.policy', 'business.configure', 'invoice.series','entity.create','entity.update','customer.entity','invoice.series.capture','invoice.series.capture-live', 'tax.declare', 'tax.review', 'access.give', 'access.end', 'credential.issue', 'credential.revoke', 'subscription.adopt']
     const metricPreview = await h.api('meter.prepare', cookie.owner, { code:'role-preview', name:'Role preview', unit_label:'events', source_meter:ids.meter, definition:{ aggregation:'count' } })
     assert.ok(ACTIONS.length > 30)
     for (const name of ACTIONS) {

@@ -2,11 +2,12 @@ import type { Bindings } from '../auth.server'
 import type { Business } from './business'
 import { all, insist, newId, one, parseJson, type Row } from './core'
 import { canonicalDecimal, cents, micros } from './decimal'
-import { addMonths, periodContaining, requireDate } from './dates'
+import { addMonthsClamped, addMonths, requireDate } from './dates'
 import { Input } from './input'
 import { renewalSettings } from './renewal-terms'
 import { contractBasis } from './contract-terms'
 import { setupCatalog, setupOwnership } from './setup-catalog'
+import { setupAnchor, setupIntervalAmbiguities } from './setup-intervals'
 import { setupPreview } from './setup-preview'
 import { invoiceSettings, contentForSettings } from './invoice-content'
 import { fields, flag, object, quoted, rows, setupAmbiguities, setupSource } from './setup-source'
@@ -22,7 +23,7 @@ const periodCount = (from: string, to: string) => {
   const [fy, fm, fd] = from.split('-').map(Number), [ty, tm, td] = to.split('-').map(Number)
   const count = (ty - fy) * 12 + tm - fm + (td > fd ? 1 : 0)
   insist(count > 0, 'invalid_subscription_end')
-  setupDate(addMonths(from, count), 'preview_end')
+  setupDate(addMonthsClamped(from, count), 'preview_end')
   return count
 }
 
@@ -78,11 +79,12 @@ export async function setupPlan(env: Bindings, business: Business, payload: Row,
     basis.subscription = found
     originals = await all(env, 'SELECT * FROM nc_items WHERE subscription_id=? ORDER BY effective_from,id', found.id)
     basis.items = originals
-    subscription = { id: found.id, create: false, revision: found.revision, customerId: customer.id, externalId: found.external_id, startDate: found.start_date, anchorDay: found.anchor_day, trialEnd: found.trial_end, endDate: found.end_date, billFrom: found.cutover_start, effectiveDate, previewStart: effectiveDate }
+    subscription = { id: found.id, create: false, revision: found.revision, customerId: customer.id, externalId: found.external_id, startDate: found.start_date, anchorDay: found.anchor_day, trialEnd: found.trial_end, endDate: found.end_date, billFrom: found.cutover_start, effectiveDate, previewStart: effectiveDate, billingAnchorDate: found.billing_anchor_date, contractTermMonths: found.contract_term_months, contractEndDate: found.contract_end_date }
   } else {
-    fields(s, ['external_id', 'start_date', 'anchor_day', 'trial_end', 'months', 'end_date', 'evergreen', 'renewal', 'quote'])
+    fields(s, ['external_id', 'start_date', 'anchor_day', 'trial_end', 'months', 'end_date', 'evergreen', 'renewal', 'billing_anchor_date', 'term_months', 'quote'])
     const startDate = setupDate(sr.text('start_date', { max: 10 }), 'start_date'), day = Number(startDate.slice(8))
-    const anchorDay = sr.integer('anchor_day', { min: 1, max: 28, optional: true }) ?? (day <= 28 ? day : null)
+    const requestedAnchor = sr.has('billing_anchor_date') ? setupDate(sr.text('billing_anchor_date', { max: 10 }), 'billing_anchor_date') : null
+    const anchorDay = sr.integer('anchor_day', { min: 1, max: 31, optional: true }) ?? Number((requestedAnchor ?? startDate).slice(8))
     insist(anchorDay, 'anchor_day_required')
     const trialEnd = sr.text('trial_end', { max: 10, optional: true }) || null
     insist(!trialEnd || requireDate(trialEnd, 'trial_end') > startDate, 'invalid_trial_end')
@@ -98,28 +100,33 @@ export async function setupPlan(env: Bindings, business: Business, payload: Row,
       }
       flag(r, 'auto_renew')
       Input.of(r).text('uplift_percent', { max: 24 })
-      renewal = { id: prior.renewal?.id ?? newId(), ...renewalSettings(Input.of(r), startDate), quote: r.quote }
+      const settings = renewalSettings(Input.of(r), startDate)
+      renewal = { id: prior.renewal?.id ?? newId(), ...settings, end_date: addMonthsClamped(startDate, settings.months), quote: r.quote }
       insist(Number(startDate.slice(8)) === anchorDay, 'term_start_must_match_anchor')
     }
     const evergreen = flag(s, 'evergreen')
-    const termChoices = [sr.has('end_date'), sr.has('months'), evergreen].filter(Boolean).length
+    const contractTermMonths = sr.integer('term_months', { min: 1, max: 120, optional: true }) ?? null
+    const fullAnchor = requestedAnchor ?? (day > 28 || anchorDay > 28 ? startDate : contractTermMonths ? setupAnchor(startDate, anchorDay, null) : null)
+    insist(!fullAnchor || fullAnchor <= startDate && Number(fullAnchor.slice(8)) === anchorDay, 'invalid_billing_anchor_date')
+    const termChoices = [sr.has('end_date'), sr.has('months'), !!contractTermMonths, evergreen].filter(Boolean).length
     insist(termChoices === 1 || !!renewal && termChoices === 0, 'choose_finite_term_or_evergreen')
-    const termMonths = sr.has('months') ? sr.integer('months', { min: 1, max: 119987 })! : null
-    const declaredEnd = evergreen || (!sr.has('end_date') && !termMonths) ? null : setupDate(sr.has('end_date') ? sr.text('end_date', { max: 10 }) : addMonths(startDate, termMonths!), 'end_date')
+    const termMonths = sr.has('months') ? sr.integer('months', { min: 1, max: 119987 })! : contractTermMonths
+    const declaredEnd = evergreen || (!sr.has('end_date') && !termMonths) ? null : setupDate(sr.has('end_date') ? sr.text('end_date', { max: 10 }) : addMonthsClamped(startDate, termMonths!), 'end_date')
     insist(!renewal || !declaredEnd || declaredEnd === renewal.end_date, 'renewal_initial_term_mismatch')
     insist(!renewal || !evergreen || renewal.auto_renew, 'evergreen_requires_auto_renewal')
     const endDate = renewal?.end_date ?? declaredEnd
     insist(!endDate || endDate > startDate, 'invalid_subscription_end')
-    const previewStart = periodContaining(anchorDay, startDate).start
+    const previewStart = setupAnchor(startDate, anchorDay, fullAnchor)
     insist(!trialEnd || !endDate || trialEnd < endDate, 'invalid_trial_end')
-    subscription = { id: prior.subscription?.id ?? newId(), create: true, customerId: customer.id, externalId, startDate, anchorDay, trialEnd, endDate, billFrom: null, effectiveDate: startDate, previewStart }
+    subscription = { id: prior.subscription?.id ?? newId(), create: true, customerId: customer.id, externalId, startDate, anchorDay, trialEnd, endDate, billFrom: null, effectiveDate: startDate, previewStart, billingAnchorDate: fullAnchor, contractTermMonths: contractTermMonths ?? termMonths, contractEndDate: endDate }
     basis.subscription = { externalId, absent: true }
   }
+  for (const setting of ['billing_anchor_date', 'anchor_day', 'term_months', 'months', 'end_date']) if (s[setting] !== undefined) quotes.push({ field: `subscription.${setting}`, quote: s.quote })
   if (subscription.endDate) setupDate(subscription.endDate, 'end_date')
   subscription.evergreen = !!renewal?.auto_renew || !subscription.endDate
   const serviceEnd = subscription.evergreen ? null : subscription.endDate
   const months = serviceEnd ? periodCount(subscription.previewStart, serviceEnd) : 36
-  const previewEnd = serviceEnd ?? setupDate(addMonths(subscription.previewStart, months), 'preview_end')
+  const previewEnd = serviceEnd ?? setupDate(addMonthsClamped(subscription.previewStart, months), 'preview_end')
   subscription.previewEnd = previewEnd
   const catalog = await setupCatalog(env, input, source, prior, basis, quotes)
   const priceFor = (key: unknown) => { const p = catalog.prices.find(p => p.key === key); insist(p, 'setup_catalog_key_not_found'); return p }
@@ -188,7 +195,7 @@ export async function setupPlan(env: Bindings, business: Business, payload: Row,
   for (const [i, a] of amendments.entries()) insist(![...previousAmendments.map(p => ({ kind: p.kind, priceId: p.price_id, from: p.effective_from, to: p.effective_to })), ...amendments.slice(0, i)].some(p => p.kind === a.kind && p.priceId === a.priceId && (a.kind === 'fixed_credit' ? p.from === a.from : a.from < (p.to ?? '9999-12-31') && p.from < (a.to ?? '9999-12-31'))), 'overlapping_setup_exception')
   const plan: Row = { customer, invoiceContent, ...catalog, subscription, renewal, items, itemUpdates, insertItems: items.filter(i => i.create), amendments, contract: { id: contractId, clause: quotes.map(q => q.quote).join('\n\n'), terms: { commitments, included, ramps: [] } }, months }
   await setupOwnership(env, plan, catalog.meters, basis)
-  const ambiguities = setupAmbiguities(input, source, invoiceContent.paymentTermsDays, !!renewal)
+  const ambiguities = setupIntervalAmbiguities(setupAmbiguities(input, source, invoiceContent.paymentTermsDays, !!renewal), plan, source, quotes)
   if (invoiceContent.poRequired && !invoiceContent.poNumber) ambiguities.push({ issue: 'The required purchase order number is unresolved.', code: 'po_required' })
   const preview = await setupPreview(env, business, plan, input, basis, quotes, existingTerms, ambiguities)
   return { normalized: { setup: true, input, source, plan }, impact: preview, basis }

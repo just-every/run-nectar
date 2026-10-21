@@ -161,11 +161,12 @@ export async function decideUsageCorrection(env: Bindings, actor: Actor, input: 
     stmt(env,`UPDATE nc_usage_events SET invoice_id=? WHERE event_id IN (${ids.map(()=>'?').join(',')})`,id,...ids))}
   let business=p.business
   const documents:Row[]=[],adjustments:UsageAdjustment[]=[]
+  let entitySequenceOffset=0
   for(const period of s.periods){
     if(period.totalCents<0){
-      const allocation=documentNumberAllocation(env,business,p.customer,'credit-note'),credit=newId(),at=clockInstant(env)
-      statements.push(...allocation.statements,stmt(env,`INSERT INTO nc_credit_notes(id,number,invoice_id,customer_id,amount_cents,reason,issued_by,issued_at,applied_cents,subtotal_cents,tax_cents,correction_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,
-        credit,allocation.number,period.invoice,s.customer,-period.totalCents,s.reason,actorLabel(actor),at,period.appliedCents,-period.subtotalCents,-period.taxCents,id),
+      const allocation=await documentNumberAllocation(env,business,p.customer,'credit-note',entitySequenceOffset++),credit=newId(),at=clockInstant(env)
+      statements.push(...allocation.statements,stmt(env,`INSERT INTO nc_credit_notes(id,number,invoice_id,customer_id,amount_cents,reason,issued_by,issued_at,applied_cents,subtotal_cents,tax_cents,correction_id,billing_entity_id,billing_route_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        credit,allocation.number,period.invoice,s.customer,-period.totalCents,s.reason,actorLabel(actor),at,period.appliedCents,-period.subtotalCents,-period.taxCents,id,allocation.entityId,allocation.routeJson),
         stmt(env,`INSERT INTO nc_revenue_credits(id,credit_id,invoice_id,customer_id,recognition_date,amount_cents,policy_version,basis_json) VALUES(?,?,?,?,?,?,?,?)`,
           credit,credit,period.invoice,s.customer,`${s.issueDate.slice(0,7)}-01`,period.subtotalCents,'nectar-revenue-1',JSON.stringify({method:'historical-usage-credit',correction:id,originalInvoice:period.invoice,originalTaxUnchanged:true,taxDeltaCents:period.taxCents,replayFingerprint:period.fingerprint,servicePeriodDeltas:period.revenue})))
       // The next reservation in this same batch compares against the counter

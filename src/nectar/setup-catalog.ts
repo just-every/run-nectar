@@ -1,3 +1,4 @@
+import { readBillingTerms, storedBillingTerms } from './billing-calendar'
 import { serviceEndSql } from './renewal-sql'
 import type { Bindings } from '../auth.server'
 import { all, insist, newId, one, parseJson, type Row } from './core'
@@ -12,7 +13,7 @@ export async function setupCatalog(env: Bindings, payload: Row, source: Row, pri
   const entries = rows(payload.catalog, 'catalog', 120)
   insist(entries.length > 0, 'setup_catalog_required')
   for (const entry of entries) {
-    fields(entry, ['key', 'existing', 'product', 'new_product', 'kind', 'unit_amount', 'meter', 'taxable', 'nickname', 'pricing_model', 'tiers', 'package_size', 'dimensions', 'quote'])
+    fields(entry, ['key', 'existing', 'product', 'new_product', 'kind', 'unit_amount', 'meter', 'taxable', 'nickname', 'pricing_model', 'tiers', 'package_size', 'dimensions', 'interval_unit', 'interval_count', 'billing_interval', 'billing_timing', 'quote'])
     quoted(source, entry, `catalog.${entry.key}`, quotes)
     const input = Input.of(entry), key = input.text('key', { max: 100 })
     insist(!prices.some(p => p.key === key), 'duplicate_catalog_key')
@@ -20,12 +21,12 @@ export async function setupCatalog(env: Bindings, payload: Row, source: Row, pri
     let product: Row, price: Row
     if (entry.existing) {
       fields(entry, ['key', 'existing', 'quote'])
-      const found = await one(env, 'SELECT * FROM nc_prices WHERE id=?', input.text('existing', { max: 100 }))
+      const found = await one(env, 'SELECT p.*,bi.interval_unit,bi.interval_count,bi.billing_timing FROM nc_prices p LEFT JOIN nc_price_intervals bi ON bi.price_id=p.id WHERE p.id=?', input.text('existing', { max: 100 }))
       insist(found && found.status === 'active', 'price_not_found', 404)
       product = (await one(env, 'SELECT * FROM nc_products WHERE id=?', found.product_id))!
       insist(product && product.status === 'active', 'product_archived', 409)
       basis.prices.push(found)
-      price = { id: found.id, key, create: false, product: product.id, version: found.version, kind: found.kind, amount: found.unit_amount, meterId: found.meter_id, taxable: !!found.taxable, nickname: found.nickname, pricing: storedQuantityPrice(found as any) ?? null, dimensions: parseJson(found.dimensions_json, {}) }
+      price = { id: found.id, key, create: false, product: product.id, version: found.version, kind: found.kind, amount: found.unit_amount, meterId: found.meter_id, taxable: !!found.taxable, nickname: found.nickname, pricing: storedQuantityPrice(found as any) ?? null, dimensions: parseJson(found.dimensions_json, {}), ...(storedBillingTerms(found) ? { billing: storedBillingTerms(found) } : {}) }
     } else {
       if (entry.new_product) {
         const proposed = object(entry.new_product, 'new_product'); fields(proposed, ['code', 'name'])
@@ -42,6 +43,8 @@ export async function setupCatalog(env: Bindings, payload: Row, source: Row, pri
         product = found
       }
       const kind = input.text('kind', { max: 10 })
+      const billing = ['interval_unit', 'interval_count', 'billing_interval', 'billing_timing'].some(key => input.has(key)) ? readBillingTerms(input, kind) : undefined
+      if (billing) for (const setting of ['interval_unit', 'interval_count', 'billing_timing']) quotes.push({ field: `catalog.${key}.${setting}`, quote: entry.quote })
       insist(['flat', 'seat', 'unit'].includes(kind), 'invalid_kind')
       const pricing = readQuantityPrice(input, kind) ?? null
       const amount = pricing ? '0.00' : canonicalDecimal(input.text('unit_amount', { max: 24 }), 'unit_amount')
@@ -60,7 +63,7 @@ export async function setupCatalog(env: Bindings, payload: Row, source: Row, pri
           for (const v of Object.values(dimensions)) insist(v === null || typeof v === 'string' || typeof v === 'boolean' || typeof v === 'number' && Number.isSafeInteger(v), 'invalid_metric_dimensions')
         } else insist(entry.dimensions === undefined, 'unexpected_dimensions')
       } else insist(entry.meter === undefined && entry.dimensions === undefined, 'unexpected_meter')
-      price = { id: prior.prices?.find((p: Row) => p.key === key)?.id ?? newId(), key, create: true, product: product.id, version: maxVersion + prices.filter(p => p.create && p.product === product.id).length + 1, kind, amount, meterId, taxable: flag(entry, 'taxable', true), nickname: input.text('nickname', { max: 80, optional: true }), pricing, dimensions }
+      price = { id: prior.prices?.find((p: Row) => p.key === key)?.id ?? newId(), key, create: true, product: product.id, version: maxVersion + prices.filter(p => p.create && p.product === product.id).length + 1, kind, amount, meterId, taxable: flag(entry, 'taxable', true), nickname: input.text('nickname', { max: 80, optional: true }), pricing, dimensions, ...(billing ? { billing } : {}) }
     }
     if (!products.some(p => p.id === product.id)) {
       products.push({ id: product.id, code: product.code, name: product.name, create: !!product.create })
@@ -84,7 +87,7 @@ export async function setupCatalog(env: Bindings, payload: Row, source: Row, pri
 export async function setupOwnership(env: Bindings, plan: Row, meters: Row[], basis: Row) {
   const known = [...plan.prices]
   for (const id of new Set<string>(plan.items.map((i: Row) => i.priceId))) if (!known.some(p => p.id === id)) {
-    const p = (await one(env, 'SELECT * FROM nc_prices WHERE id=?', id))!
+    const p = (await one(env, 'SELECT p.*,bi.interval_unit,bi.interval_count,bi.billing_timing FROM nc_prices p LEFT JOIN nc_price_intervals bi ON bi.price_id=p.id WHERE p.id=?', id))!
     insist(p, 'price_not_found', 404)
     known.push({ id: p.id, meterId: p.meter_id, dimensions: parseJson(p.dimensions_json, {}) })
     if (p.meter_id && !meters.some(m => m.id === p.meter_id)) { const m = await one(env, 'SELECT * FROM nc_meters WHERE id=?', p.meter_id); insist(m, 'meter_not_found', 404); meters.push(m) }

@@ -468,3 +468,9 @@ account names to ledger accounts, and review before posting. No close lock or
 external posting occurs. Signed decreases reverse debit/credit; zero rows are
 omitted. CSV source links retain period/customer scope. Later records may
 change open-period exports; closed evidence is not claimed.
+
+### Collecting a retained open Stripe invoice
+
+The owner configures the optional installation secret `STRIPE_BILLING_SECRET` through the private setup answers or the declared optional deployment secret. For an existing deployment, use `rer deploy --set-secret STRIPE_BILLING_SECRET --env-file /private/mode-0600.env`; the secret stays out of arguments, archives, audit and responses. This connection does not adopt subscriptions or authorize automatic charges.
+
+A current owner with a fresh required factor calls `imported.collection.prepare` with `invoice` (the retained invoice id). The result freezes the original number, amount, account, source and current provider evidence for review. `imported.collection.execute` takes `request`, `basis_hash`, `confirm: true` and `disable_auto_advance: true`. It durably claims one attempt, stops the original invoice's automatic advancement, and collects only that reviewed remaining amount. A paid, voided, changed, erased or already-claimed source refuses another attempt. `imported.collection.reconcile` with `request` checks an uncertain result; it does not create another payment. Collection receipts contribute once to collections and reduce aging without rewriting original history. The customer page exposes the same explicit forms. Automatic cutover, dunning, portals and non-Stripe collectors remain MOVE-009 obligations.

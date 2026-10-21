@@ -202,6 +202,12 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "tax_exempt": "flag",
     "tax_exempt_ref": "text"
   },
+  "customer.entity": {
+    "confirm": "flag",
+    "customer": "text",
+    "entity": "text",
+    "revision": "integer"
+  },
   "customer.update": {
     "address": "text",
     "billing_email": "text",
@@ -219,6 +225,27 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "revision": "text",
     "tax_exempt": "flag",
     "tax_exempt_ref": "text"
+  },
+  "entity.create": {
+    "*": "has",
+    "address": "text",
+    "ein": "text",
+    "invoice_number_width": "integer",
+    "invoice_prefix": "text",
+    "legal_name": "text",
+    "payment_terms_days": "integer",
+    "revision": "integer",
+    "tax_registration": "text"
+  },
+  "entity.update": {
+    "*": "has",
+    "address": "text",
+    "ein": "text",
+    "entity": "text",
+    "legal_name": "text",
+    "payment_terms_days": "integer",
+    "revision": "integer",
+    "tax_registration": "text"
   },
   "erasure.approve": {
     "confirm": "flag",
@@ -262,6 +289,22 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
   "import.preview": {
     "*": "has"
   },
+  "imported.collection.execute": {
+    "basis_hash": "text",
+    "confirm": "flag",
+    "disable_auto_advance": "flag",
+    "request": "text"
+  },
+  "imported.collection.finalize": {
+    "confirm": "flag",
+    "request": "text"
+  },
+  "imported.collection.prepare": {
+    "invoice": "text"
+  },
+  "imported.collection.reconcile": {
+    "request": "text"
+  },
   "invoice.approve": {
     "acknowledge": "flag",
     "invoice": "text",
@@ -282,12 +325,30 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
   },
   "invoice.series": {
     "customer": "text",
+    "entity": "text",
     "kind": "text",
     "mode": "text",
     "prefix": "text",
     "revision": "integer",
+    "source_capture": "text",
     "source_invoice": "text",
     "width": "integer"
+  },
+  "invoice.series.capture": {
+    "capture": "json",
+    "confirm": "flag",
+    "customer": "text",
+    "entity": "text",
+    "kind": "text",
+    "revision": "integer",
+    "source_invoice": "text"
+  },
+  "invoice.series.capture-live": {
+    "customer": "text",
+    "entity": "text",
+    "kind": "text",
+    "revision": "integer",
+    "source_invoice": "text"
   },
   "lifecycle.policy": {
     "credit_unused": "flag",
@@ -412,9 +473,13 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "session": "text"
   },
   "price.create": {
+    "*": "has",
+    "billing_timing": "text",
     "dimension_property": "list",
     "dimension_value": "list",
     "dimensions": "json",
+    "interval_count": "integer",
+    "interval_unit": "has",
     "kind": "text",
     "meter": "text",
     "nickname": "text",
@@ -485,14 +550,17 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "downgrade_source_price_id": "text",
     "enabled": "flag",
     "pause_months": "integer",
+    "pause_price_id": "text",
     "revision": "text",
     "save_kind": "text",
     "save_months": "integer",
     "save_percent": "integer",
+    "save_price_id": "text",
     "winback_days": "integer",
     "winback_enabled": "flag",
     "winback_months": "integer",
-    "winback_percent": "integer"
+    "winback_percent": "integer",
+    "winback_price_id": "text"
   },
   "role.define": {
     "capabilities": "list",
@@ -525,15 +593,21 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "revision": "text",
     "subscription": "text"
   },
+  "subscription.cancel.decide": {
+    "cancellation": "text",
+    "decision": "text"
+  },
   "subscription.create": {
     "*": "has",
     "anchor_day": "integer",
+    "billing_anchor_date": "text",
     "customer": "text",
     "exception_kind": "has",
     "external_id": "text",
     "price": "list",
     "quantity": "list",
     "start_date": "text",
+    "term_months": "integer",
     "trial_end": "text"
   },
   "subscription.end": {

@@ -18,7 +18,7 @@ const API_PROBE = { notes: 'notes/payment/none', metadata: 'metadata/price/none'
 const PAGE_PROBE = { metadata: '/app/metadata/price/none', report: '/app/reports/billings', reportInvoice: '/app/reports/billings/none', reportCsv: '/app/exports/reports/billings.csv', metadataCsv: '/app/exports/objects/customer.csv', reportLine: '/app/invoices/none/lines/none' }
 const fill = pattern => pattern.replace(/^\^|\$$/g, '').replace(/\(\[[^)]*\]\+\)/g, 'none').replace(/\\\./g, '.')
 
-const READ_ALL_API = API_DOORS.map(([, name]) => name).filter(name => !['members', 'roles', 'imports', 'audit', 'reportSchedule', 'reportDelivery', 'noteMembers'].includes(name))
+const READ_ALL_API = API_DOORS.map(([, name]) => name).filter(name => !['members', 'roles', 'imports', 'audit', 'reportSchedule', 'reportDelivery', 'noteMembers','billingEntities'].includes(name))
 const READ_ALL_PAGES = PAGE_DOORS.map(([, name]) => name).filter(name => !['revenueJournalCsv', 'numberRegisterCsv', 'erasureEvidence', 'revenueCsv', 'reportSchedule', 'reportDelivery', 'reportDeliveryCsv', 'reportCsv', 'metadataCsv', 'runFile', 'import', 'exports', 'customersFile', 'invoicesFile', 'usageFile', 'subscriptionsFile', 'audit', 'noticeFile'].includes(name))
 const COMMON = { api: ['openapi', 'me', 'notifications', 'mfa'], pages: ['home', 'more', 'security', 'passkeyScript'] }
 const EXPECTED = {

@@ -1,3 +1,5 @@
+import { readBillingTerms } from './billing-calendar'
+import { billingTermsStatements } from './billing-components'
 import type { Bindings } from '../auth.server'
 import { actorLabel, type Actor } from './actor'
 import { guard, insist, newId, now, one, stmt, canonical, parseJson, type Row } from './core'
@@ -24,7 +26,7 @@ export async function readPriceDraft(env: Bindings, input: Input) {
   const taxable = input.has('taxable') ? input.flag('taxable') : true
   const nickname = input.text('nickname', { max: 80, optional: true })
   const version = ((await one<{ v: number }>(env, 'SELECT COALESCE(MAX(version),0) AS v FROM nc_prices WHERE product_id=?', product.id))!.v) + 1
-  return { product: product.id, productCode: product.code, version, kind, amount, meterId, taxable, nickname, pricing: pricing ?? null,dimensions }
+  return { product: product.id, productCode: product.code, version, kind, amount, meterId, taxable, nickname, pricing: pricing ?? null,dimensions,billing:readBillingTerms(input,kind) }
 }
 
 export function priceStatements(env: Bindings, actor: Actor, draft: Row, id: string) {
@@ -33,5 +35,6 @@ export function priceStatements(env: Bindings, actor: Actor, draft: Row, id: str
     guard(env, 'product_archived', "EXISTS(SELECT 1 FROM nc_products WHERE id=? AND status='active')", draft.product),
     stmt(env, "INSERT INTO nc_prices (id,product_id,version,kind,unit_amount,meter_id,taxable,nickname,origin,revision,created_by,created_at,pricing_model,tiers_json,package_size,dimensions_json) VALUES (?,?,?,?,?,?,?,?,'native',?,?,?,?,?,?,?)",
       id, draft.product, draft.version, draft.kind, draft.amount, draft.meterId, draft.taxable ? 1 : 0, draft.nickname, newId(), actorLabel(actor), now(), draft.pricing?.model ?? 'simple', draft.pricing ? JSON.stringify(draft.pricing.tiers) : null, draft.pricing?.packageSize ?? null,canonical(draft.dimensions??{})),
+    ...billingTermsStatements(env,id,draft.billing??{unit:'month',count:1,timing:'arrears'}),
   ]
 }

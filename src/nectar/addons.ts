@@ -10,7 +10,7 @@ import type { Input } from './input'
 import { requireSubscription } from './subscriptions'
 
 const ISSUED = `SELECT 1 FROM nc_invoices WHERE subscription_id = ?
-  AND invoice_kind = 'recurring' AND status = 'issued' AND period_end > ?`
+  AND invoice_kind = 'recurring' AND status = 'issued' AND period_end > ? AND json_extract(calculation_json,'$.inputs.billing.terms.timing') IS NOT 'advance'`
 const ACTIVE_ITEMS = `SELECT COUNT(*) AS count FROM nc_items WHERE subscription_id = ?
   AND effective_from <= ? AND (effective_to IS NULL OR effective_to > ?)`
 const DUPLICATE_PRICE = `SELECT 1 FROM nc_items WHERE subscription_id = ? AND price_id = ?
@@ -30,7 +30,7 @@ export async function attachAddon(env: Bindings, actor: Actor, input: Input) {
   const sub = await requireSubscription(env, input.text('subscription', { max: 100 }))
   insist(sub.billing_mode === 'live', 'subscription_not_live', 409)
   const renewing=await one(env,"SELECT 1 FROM nc_renewal_terms WHERE subscription_id=? AND status='active' AND auto_renew=1 AND cancelled_at IS NULL",sub.id)
-  const end=renewing?null:sub.end_date
+  const end=renewing?null:sub.end_date??sub.contract_end_date
   const price = await requirePrice(env, input.text('price', { max: 100 }))
   insist(price.status === 'active', 'price_not_found', 404)
   const date = requireDate(input.text('effective_date', { max: 10 }), 'effective_date')
@@ -59,7 +59,7 @@ export async function attachAddon(env: Bindings, actor: Actor, input: Input) {
     guard(env, 'too_many_items', `(${ACTIVE_ITEMS}) < 20`, sub.id, date, date),
     guard(env, 'price_already_attached', `NOT EXISTS(${DUPLICATE_PRICE})`, sub.id, price.id, date, end ?? '9999-12-31'),
     ...(price.meter_id ? [guard(env, 'meter_already_billed', `NOT EXISTS(${METER_CLASH})`, ...meterParams)] : []),
-    stmt(env, "INSERT INTO nc_items (id, subscription_id, price_id, quantity, effective_from, origin, created_at) VALUES (?, ?, ?, ?, ?, 'native', ?)", item, sub.id, price.id, quantity, date, at),
+    stmt(env, "INSERT INTO nc_items (id, subscription_id, price_id, quantity, effective_from,effective_to, origin, created_at) VALUES (?, ?, ?, ?, ?,?, 'native', ?)", item, sub.id, price.id, quantity, date,end, at),
     stmt(env, 'UPDATE nc_subscriptions SET revision = ?, updated_at = ? WHERE id = ?', newId(), at, sub.id),
   ], { actor: actorLabel(actor), action: 'subscription.addon', subject: sub.id, detail: { item, price: price.id, quantity, date } })
   return { id: sub.id, item }

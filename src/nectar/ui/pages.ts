@@ -40,7 +40,7 @@ type Page = (env: Bindings, actor: Actor, request: Request, url: URL, id: string
 
 export const pages: Record<string, Page> = {
   numberRegister:(env,actor,_r,url)=>numberRegisterPage(env,actor,url),
-  numberRegisterCsv:(env,actor)=>numberRegisterExport(env,actor),
+  numberRegisterCsv:(env,actor,_r,url)=>numberRegisterExport(env,actor,url),
   usageReplay:(env,actor,_r,url)=>usageReplayPage(env,actor,url),
   erasures:(env,actor,_r,url)=>erasurePage(env,actor,url),
   erasureEvidence:(env,actor,_r,_u,id)=>erasureEvidence(env,actor,id),

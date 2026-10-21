@@ -84,6 +84,15 @@
       "required": false,
       "help": "Optional Auth install. Leave empty to use email links.",
       "default": ""
+    },
+    {
+      "name": "STRIPE_BILLING_SECRET",
+      "label": "Stripe billing secret",
+      "help": "Optional. Enables owner-reviewed collection of retained open Stripe invoices. Kept in installation secrets and excluded from archives.",
+      "kind": "secret",
+      "required": false,
+      "ownerVisible": true,
+      "group": "owner"
     }
   ],
   "steps": [

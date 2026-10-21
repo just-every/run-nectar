@@ -10,6 +10,7 @@ import { readArchive } from '@runeditrun/rer/modules/portability'
 import { command,devKey,signIn } from './cli.mjs'
 import { file } from './harness.mjs'
 import { applyPolicy } from './policy-helper.mjs'
+import { stripeHistoryCapture } from '../fixtures/stripe-history.mjs'
 assert.equal(process.env.NECTAR_TEST_CHECKOUT,'1','Use only a disposable checkout')
 const root=process.cwd(),scratch=await mkdtemp(join(tmpdir(),'nectar-erasure-archive-'))
 await access(join(root,'.dev.vars')).then(()=>{throw new Error('A fresh unconfigured checkout is required')},e=>{if(e.code!=='ENOENT')throw e})
@@ -42,6 +43,12 @@ try{
  await api('contact.add',cookie,{customer:customer.id,name:'Amelia Privatecontact',email:'amelia.private@gov005.example'})
  const keyed=await fetch(`${origin}/api/nectar/note.add`,{method:'POST',headers:{cookie,origin,'content-type':'application/json','idempotency-key':'gov005-archive-note'},body:JSON.stringify({kind:'customer',record:customer.id,body:'private imported customer note GOV005'})});assert.equal(keyed.status,200)
  await api('metadata.write',cookie,{kind:'customer',record:customer.id,revision:0,metadata:{private:'private metadata GOV005'}})
+ const historyCapture=stripeHistoryCapture()
+ const historyFiles=Object.fromEntries(Object.entries(historyCapture).map(([name,value])=>[name,file(`${name}.json`,JSON.stringify(value),'application/json')]))
+ const historyPreview=await api('import.preview',cookie,historyFiles);await api('import.apply',cookie,{...historyFiles,fingerprint:historyPreview.fingerprint})
+ const historicalCustomer=(await api('customers',cookie)).find(c=>c.external_id==='synthetic-nectar-1')
+ const historicRevenue=await api(`revenue?from=2026-07&to=2027-02&customer=${historicalCustomer.id}`,cookie)
+ assert.equal(historicRevenue.openingCents,800000)
  await stop()
  const before=join(scratch,'before.rer'),after=join(scratch,'after.rer'),restored=join(scratch,'restored.rer')
  await command(root,['export','--output',before]);assert.ok(JSON.stringify(items(await rows(before))).includes('Amelia Privatecontact'))
@@ -55,11 +62,18 @@ try{
  assert.equal(erased.receipt.retained.legacyAnchor,day,'GOV-005 missing legacy issue/payment dates use the approval business-local date')
  assert.match(erased.receipt.retained.legacyDateRule,/unavailable/,'GOV-005 the receipt identifies missing legacy date evidence')
  assert.equal(erased.receipt.retained.until,`${Number(day.slice(0,4))+7}${day.slice(4)}`,'GOV-005 legacy financial custody expires seven calendar years after approval')
+ const historicalRequest=await api('erasure.request',cookie,{customer:historicalCustomer.id})
+ await api('erasure.verify',cookie,{request:historicalRequest.id,reason:'Independently checked historical account owner',evidence:file('historical-owner.txt','Signed owner history request','text/plain')})
+ const historicalErasure=await api('erasure.approve',cookie,{request:historicalRequest.id,confirm:true})
+ assert.equal(historicalErasure.receipt.retained.legacyAnchor,null)
+ assert.ok(historicalErasure.receipt.changed.some(row=>row.kind==='nc_incumbent_history'))
+ assert.deepEqual((await api(`revenue?from=2026-07&to=2027-02&customer=${historicalCustomer.id}`,cookie)).months,historicRevenue.months)
  await stop();await command(root,['export','--output',after])
- const archived=items(await rows(after)),privateValues=[customer.billing_email,customer.address,customer.external_id,'Amelia Privatecontact','amelia.private@gov005.example','private imported customer note GOV005','private metadata GOV005'].filter(Boolean)
+ const archived=items(await rows(after)),privateValues=[customer.billing_email,customer.address,customer.external_id,'Amelia Privatecontact','amelia.private@gov005.example','private imported customer note GOV005','private metadata GOV005',historicalCustomer.billing_email,historicalCustomer.external_id,'synthetic-nectar-private-7'].filter(Boolean)
  for(const item of archived){const serialized=JSON.stringify(item);for(const value of privateValues)assert.ok(!serialized.includes(value),`GOV-005 archive ${item.table} removes personal text`)
   if(item.kind==='row')for(const [column,value] of Object.entries(item.row)){if(typeof value==='object'&&value?.blob){const decoded=Buffer.from(value.blob,'base64').toString();for(const personal of privateValues)assert.ok(!decoded.includes(personal),`GOV-005 retained blob ${item.table}.${column} has no erased personal data`)}}
  }
+ assert.ok(archived.some(r=>r.kind==='row'&&r.table==='nc_incumbent_revenue'),'MOVE-007 anonymous revenue schedules are in the actual archive')
  assert.ok(archived.some(r=>r.kind==='row'&&r.table==='ik_d1_erasure_journal'),'GOV-005 import custody retirement is journalled')
  await command(root,['reset','--yes'])
  await command(root,['import','--input',before,'--journal',after,'--yes'],{refuse:true})

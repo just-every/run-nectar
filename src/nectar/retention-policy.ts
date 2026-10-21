@@ -9,6 +9,9 @@ export interface RetentionSettings {
   save_kind: 'discount' | 'pause' | 'downgrade'
   save_percent: number
   save_months: number
+  save_price_id: string
+  pause_price_id: string
+  winback_price_id: string
   pause_months: number
   downgrade_source_price_id: string
   downgrade_price_id: string
@@ -20,7 +23,7 @@ export interface RetentionSettings {
 
 const DEFAULTS: RetentionSettings = {
   enabled: false, save_kind: 'discount', save_percent: 50, save_months: 2,
-  pause_months: 1, downgrade_source_price_id:'', downgrade_price_id: '', winback_enabled: false,
+  pause_months: 1, save_price_id: '', pause_price_id: '', winback_price_id: '', downgrade_source_price_id:'', downgrade_price_id: '', winback_enabled: false,
   winback_days: 60, winback_percent: 30, winback_months: 3,
 }
 const ACTIVE = "SELECT * FROM nc_retention_policies WHERE status='approved' ORDER BY decided_at DESC,id DESC LIMIT 1"
@@ -31,7 +34,7 @@ const ACTIVE_APPROVER = "EXISTS(SELECT 1 FROM nc_members WHERE id=? AND status='
 
 export async function retentionPolicy(env: Bindings): Promise<RetentionSettings & { id: string | null; revision: string }> {
   const row = await one(env, ACTIVE)
-  return row ? { ...JSON.parse(row.payload_json) as RetentionSettings, id: row.id, revision: row.id }
+  return row ? { ...DEFAULTS, ...JSON.parse(row.payload_json) as RetentionSettings, id: row.id, revision: row.id }
     : { ...DEFAULTS, id: null, revision: 'initial' }
 }
 
@@ -44,6 +47,9 @@ function settings(input: Input): RetentionSettings {
   return {
     enabled: input.flag('enabled'), save_kind: kind,
     save_percent: input.integer('save_percent', { min: 0, max: 100, optional: true }) ?? DEFAULTS.save_percent,
+    save_price_id: input.text('save_price_id', { max: 100, optional: true }),
+    pause_price_id: input.text('pause_price_id', { max: 100, optional: true }),
+    winback_price_id: input.text('winback_price_id', { max: 100, optional: true }),
     save_months: input.integer('save_months', { min: 1, max: 36, optional: true }) ?? DEFAULTS.save_months,
     pause_months: input.integer('pause_months', { min: 1, max: 12, optional: true }) ?? DEFAULTS.pause_months,
     downgrade_source_price_id:source,downgrade_price_id: target, winback_enabled: input.flag('winback_enabled'),

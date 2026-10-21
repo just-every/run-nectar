@@ -14,8 +14,8 @@ export async function usageAdjustments(env: Bindings, subscription: string): Pro
 }
 export async function carriedUsageCredits(env: Bindings, customer: string): Promise<UsageCredit[]> {
   return (await all(env, `SELECT n.*, n.amount_cents-n.applied_cents-COALESCE((SELECT SUM(a.amount_cents) FROM nc_usage_credit_applications a WHERE a.credit_id=n.id),0) AS available
-    FROM nc_credit_notes n WHERE n.customer_id=? AND n.correction_id IS NOT NULL ORDER BY n.issued_at,n.id`, customer))
-    .filter(row => row.available>0).map(row => ({ id: row.id, number: row.number, availableCents: row.available, issuedAt: row.issued_at, correction: row.correction_id, source: `/app/invoices/${row.invoice_id}#credit-${row.id}` }))
+    FROM nc_credit_notes n WHERE n.customer_id=? AND (n.correction_id IS NOT NULL OR n.cancellation_id IS NOT NULL) ORDER BY n.issued_at,n.id`, customer))
+    .filter(row => row.available>0).map(row => ({ id: row.id, number: row.number, availableCents: row.available, issuedAt: row.issued_at, correction: row.correction_id??row.cancellation_id, source: `/app/invoices/${row.invoice_id}#credit-${row.id}` }))
 }
 export function usageCreditAllocations(credits: UsageCredit[], totalCents: number) {
   let left = Math.max(0,totalCents)

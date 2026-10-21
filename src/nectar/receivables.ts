@@ -44,7 +44,7 @@ export async function creditNoteStatements(env: Bindings, actor: Actor, input: I
   const authorization = await authorizeCredit(env, actor, input, invoice, amount, reason, proposalId)
   const customer = await one(env, 'SELECT * FROM nc_customers WHERE id=?', invoice.customer_id)
   insist(customer && !customer.erased_at, 'customer_not_found', 404)
-  const allocation = documentNumberAllocation(env, business, customer, 'credit-note')
+  const allocation = await documentNumberAllocation(env, business, customer, 'credit-note')
   const number = allocation.number
   const id = newId(), issuedAt=clockInstant(env)
   const [balanceSql, balanceParam] = balanceOf(invoice.id)
@@ -52,7 +52,7 @@ export async function creditNoteStatements(env: Bindings, actor: Actor, input: I
     ...authorization.guards,
     ...allocation.statements,
     guard(env, 'exceeds_balance', `${balanceSql} >= ?`, balanceParam, amount),
-    stmt(env, 'INSERT INTO nc_credit_notes (id, number, invoice_id, customer_id, amount_cents, reason, proposal_id, issued_by, issued_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', id, number, invoice.id, invoice.customer_id, amount, reason, proposalId ?? null, actorLabel(actor), issuedAt),
+    stmt(env, 'INSERT INTO nc_credit_notes (id, number, invoice_id, customer_id, amount_cents, reason, proposal_id, issued_by, issued_at,billing_entity_id,billing_route_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?,?,?)', id, number, invoice.id, invoice.customer_id, amount, reason, proposalId ?? null, actorLabel(actor), issuedAt,allocation.entityId,allocation.routeJson),
     ...await revenueCreditStatements(env,{id,invoice:invoice.id,customer:invoice.customer_id,amountCents:amount,issuedAt}),
     ...(authorization.request ? [stmt(env, "UPDATE nc_credit_requests SET status='issued',approved_by=?,approved_at=?,credit_id=? WHERE id=?", actorLabel(actor), now(), id, authorization.request.id)] : []),
   ], audits: [{ actor: actorLabel(actor), action: 'credit.issue', subject: id, detail: { number, invoice: invoice.number, amount, reason, request: authorization.request?.id ?? null, preparedBy: authorization.request?.prepared_name ?? actorLabel(actor) } }], result: { id: invoice.id, credit: id, number } }
