@@ -3641,7 +3641,7 @@
       "executable": false
     },
     "tests/nectar/interval-cancel.mjs": {
-      "sha256": "ba95976ee09f916378f6a08a2e8ec9c4005e7f80c95711e31ea2da0ff0216cf6",
+      "sha256": "b8dd33feaeeb0577c8ce6812237e088996dd8f8f61c85cc32d530e01614237e9",
       "executable": false
     },
     "tests/nectar/intervals.mjs": {
