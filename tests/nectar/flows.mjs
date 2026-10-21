@@ -18,7 +18,6 @@ import { file, harness } from './harness.mjs'
 import { reconciliationFlow } from './reconciliation.mjs'
 import { oneTimeBilling } from './one-time.mjs'
 import { invoicePaginationFlow } from './invoice-pagination.mjs'
-import { upcomingFlow } from './upcoming.mjs'
 import { notesFlow } from './notes.mjs'
 import { reportsFlow } from './reports.mjs'
 import { priceSwitches } from './price-switches.mjs'
@@ -30,6 +29,7 @@ import { pricingModels } from './pricing-models.mjs'
 
 const ACTIONS = [...(await readFile(new URL('../../src/nectar/actions.ts', import.meta.url), 'utf8')).matchAll(/^  '([\w.]+)':/gm)].map(match => match[1])
 await runIsolated('customer-search','customerSearchFlow')
+await runIsolated('upcoming','upcomingFlow')
 await runIsolated('numbering','numberingFlow')
 await runIsolated('entitlement-quotas','entitlementQuotasFlow')
 await runIsolated('portal-sessions','portalSessionsFlow')
@@ -538,7 +538,6 @@ try {
   await reportsFlow(h, cookie.owner)
   await invoicePaginationFlow(h, cookie.owner)
   await notesFlow(h, cookie.owner)
-  await upcomingFlow(h, cookie.owner)
   await notificationsFlow(h,cookie.owner)
   await metadataFlow(h,cookie.owner)
 
