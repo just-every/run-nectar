@@ -53,10 +53,10 @@ export interface NumberRegister {
 export async function numberRegister(env: Bindings, actor: Actor): Promise<NumberRegister> {
   requireRead(actor, 'invoices')
   const rows = await all<NumberRegisterEntry & { invoiceId: string | null }>(env, `
-    SELECT provider AS source,'invoice' AS kind,id,provider_ref AS sourceReference,
-      customer_id AS customerId,number,NULL AS currency,total_cents-tax_cents AS subtotalCents,
-      tax_cents AS taxCents,total_cents AS totalCents,paid_cents AS paidCents,
-      remaining_cents AS remainingCents,NULL AS invoiceId
+    SELECT provider AS source,document_kind AS kind,id,provider_ref AS sourceReference,
+      customer_id AS customerId,number,NULL AS currency,CASE WHEN document_kind='invoice' THEN total_cents-tax_cents END AS subtotalCents,
+      CASE WHEN document_kind='invoice' THEN tax_cents END AS taxCents,total_cents AS totalCents,CASE WHEN document_kind='invoice' THEN paid_cents END AS paidCents,
+      CASE WHEN document_kind='invoice' THEN remaining_cents END AS remainingCents,NULL AS invoiceId
     FROM nc_incumbent_invoices
     UNION ALL
     SELECT 'nectar','invoice',id,id,customer_id,number,currency,subtotal_cents,

@@ -21,7 +21,7 @@ import { KINDS, nectarTargets } from './target'
 
 const namespace = 'stripe', mappingVersion = 'stripe-billing-1', destination = 'billing'
 const FILE_BYTES = 6_000_000
-export const FILES = ['manifest', 'customers', 'products', 'prices', 'meters', 'subscriptions', 'invoices'] as const
+export const FILES = ['manifest', 'customers', 'products', 'prices', 'meters', 'subscriptions', 'invoices', 'credit_notes'] as const
 type FileName = typeof FILES[number]
 const REQUIRED: FileName[] = ['manifest', 'customers', 'products', 'prices', 'subscriptions']
 const MAX_ITEMS = 6
@@ -103,6 +103,7 @@ async function build(env: Bindings, actor: Actor, input: Input) {
     const hasMore = parsed[name]?.has_more === true || declared?.has_more === true
     coverage.push({ file: name, manifest: typeof declared?.count === 'number' ? declared.count : null, found: lists[name].length, complete: !hasMore && declared?.count === lists[name].length })
   }
+  insist(!manifest.files?.credit_notes?.count || !!parsed.credit_notes, 'capture_incomplete')
   const incomplete = coverage.filter(entry => !entry.complete)
   if (incomplete.length) throw new NectarError('capture_incomplete', 400, incomplete)
 
@@ -117,6 +118,7 @@ async function build(env: Bindings, actor: Actor, input: Input) {
   for (const [index, item] of lists.customers.entries()) record('customer', item, 'customers', index)
   for (const [index, item] of lists.subscriptions.entries()) record('subscription', item, 'subscriptions', index)
   for (const [index, item] of (lists.invoices ?? []).entries()) record('invoice', item, 'invoices', index)
+  for (const [index, item] of (lists.credit_notes ?? []).entries()) record('credit_note', item, 'credit_notes', index)
 
   // What already exists in Nectar.
   const nativeCustomers = new Map((await all(env, "SELECT id, external_id, origin FROM nc_customers")).map(row => [row.external_id, row]))
@@ -129,6 +131,7 @@ async function build(env: Bindings, actor: Actor, input: Input) {
 
   const rejected: Preview['rejected'] = [], attention: Preview['attention'] = []
   const create: Record<string, number> = { meter: 0, product: 0, price: 0, customer: 0, subscription: 0, invoice: 0 }
+  if (lists.credit_notes) create.credit_note = 0
   const at = (source: SourceRecord) => `${source.location.artifact} #${source.location.row} (${String(source.sourceId).split(':').slice(1).join(':')})`
   const reject = (source: SourceRecord, reason: string) => { rejected.push({ location: at(source), reason }); return { effects: [], rejection: reason } }
   const note = (source: SourceRecord, reason: string) => attention.push({ location: at(source), reason })
@@ -246,6 +249,18 @@ async function build(env: Bindings, actor: Actor, input: Input) {
         if (!existing.has(`subscription:${id}`)) create.subscription++
         return { effects: [effect('subscription', id, { customerId, externalId: o.id, anchorDay, startDate: start, trialEnd, endDate: end && end > start ? end : null, providerRef: o.id, scheduleRef: o.schedule ? idOf(o.schedule) : null, collection: String(o.collection_method ?? ''), items: mapped.sort((a, b) => a.id.localeCompare(b.id)), amendments: amendments.sort((a, b) => a.id.localeCompare(b.id)) })] }
       }
+      // Credit notes retain exact source numbers and amounts as read-only custody.
+      // They never create a Nectar credit or change native/imported balances.
+      if (source.kind === 'credit_note') {
+        const customerId = customerTarget(idOf(o.customer))
+        const invoice = (lists.invoices ?? []).find(i => i.id === idOf(o.invoice) && i.status !== 'draft' && idOf(i.customer) === idOf(o.customer))
+        if (!customerId || !invoice) return reject(source, 'credit note needs its captured invoice and matching customer')
+        if (!['issued','void'].includes(o.status) || typeof o.number !== 'string' || !o.number || !Number.isSafeInteger(o.total) || o.total < 0 || o.currency !== 'usd') return reject(source, 'unsupported credit-note status, number, currency or amount')
+        const id = hex(`nectar:stripe:credit_note:${o.id}`)
+        if (conflict('credit_note', id, source)) return reject(source, 'already imported earlier with different values')
+        if (!existing.has(`credit_note:${id}`)) create.credit_note++
+        return { effects: [effect('credit_note', id, { provider:'stripe', providerRef:o.id, customerId, subscriptionId:null, number:o.number, status:o.status, periodStart:dateOf(o.created), periodEnd:null, totalCents:o.total, taxCents:0, paidCents:0, remainingCents:0, lines:JSON.stringify({ invoice:idOf(o.invoice) }) })] }
+      }
       // Invoices: read-only history for shadow comparison.
       if (o.status === 'draft') return reject(source, 'draft invoices are not history; they are skipped')
       const customerId = customerTarget(idOf(o.customer))
@@ -272,6 +287,7 @@ async function build(env: Bindings, actor: Actor, input: Input) {
       'Stripe keeps card details; they are not part of this move. Payment collection stays with Stripe until a payment adapter exists.',
       'Moved-in subscriptions are in shadow: Nectar rates them and compares with Stripe, but issues nothing until the owner adopts each one at a cutover date.',
       ...(lists.invoices ? [] : ['No invoices.json: without Stripe invoices there is nothing to compare shadow drafts against.']),
+      ...(lists.credit_notes ? [] : ['No credit_notes.json: imported credit-note numbering is not captured.']),
       'Keep billing in Stripe until a shadow bill run agrees with Stripe for a full period.',
     ],
     carry,
@@ -348,7 +364,7 @@ export async function shadowSubscriptions(env: Bindings, actor: Actor) {
   const subs = await all(env, "SELECT s.id, s.anchor_day, s.start_date, s.provider_ref, c.name AS customer_name FROM nc_subscriptions s JOIN nc_customers c ON c.id = s.customer_id WHERE s.billing_mode = 'shadow' ORDER BY c.name")
   const result: Row[] = []
   for (const sub of subs) {
-    const lines = (await all(env, 'SELECT lines_json FROM nc_incumbent_invoices WHERE subscription_id = ?', sub.id)).flatMap(row => parseJson<Row[]>(row.lines_json, []))
+    const lines = (await all(env, "SELECT lines_json FROM nc_incumbent_invoices WHERE document_kind='invoice' AND subscription_id = ?", sub.id)).flatMap(row => parseJson<Row[]>(row.lines_json, []))
     const lastBilled = lines.map(line => line.period_start).filter(isDate).sort().pop() ?? null
     const earliest = lastBilled ? periodContaining(sub.anchor_day, lastBilled).end : periodContaining(sub.anchor_day, sub.start_date).start
     const reconciled = (await all(env, "SELECT comparison_json FROM nc_invoices WHERE subscription_id = ? AND status = 'shadow'", sub.id)).some(row => parseJson<Row>(row.comparison_json, {}).incumbent?.reconciled === true)

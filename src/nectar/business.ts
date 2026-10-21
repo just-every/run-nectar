@@ -12,7 +12,7 @@ import { invoiceFields, invoiceFieldInput } from './invoice-content'
 
 export interface Business {
   legal_name: string; address: string; billing_email: string; currency: 'USD'; timezone: string; invoice_prefix: string
-  invoice_number_width: number; next_invoice_number: number; next_credit_number: number; payment_terms_days: number; invoice_fields_json: string
+  invoice_number_width: number; next_invoice_number: number; next_credit_number: number; credit_prefix: string | null; credit_number_width: number; payment_terms_days: number; invoice_fields_json: string
   tax_jurisdiction: string; tax_mode: 'undeclared' | 'no_tax' | 'flat_rate'; tax_rate: string; tax_note: string
   tax_reviewed_by: string | null; tax_reviewed_at: number | null; revision: number; updated_at: number
 }
@@ -54,7 +54,7 @@ export async function configureBusiness(env: Bindings, actor: Actor, input: Inpu
   const address = input.text('address', { max: 400, optional: true })
   const invoiceFieldsJson = input.has('invoice_fields') ? JSON.stringify(invoiceFields(input.json('invoice_fields'))) : input.flag('invoice_fields_edit') ? JSON.stringify(invoiceFieldInput(input)) : current?.invoice_fields_json ?? '{}'
   if (!current) {
-    await commit(env, [stmt(env, 'INSERT INTO nc_business (singleton, legal_name, address, billing_email, timezone, invoice_prefix, payment_terms_days, invoice_fields_json, updated_at) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?)', legalName, address, email, timezone, prefix, terms, invoiceFieldsJson, now())],
+    await commit(env, [stmt(env, 'INSERT INTO nc_business (singleton, legal_name, address, billing_email, timezone, invoice_prefix, credit_prefix, payment_terms_days, invoice_fields_json, updated_at) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?)', legalName, address, email, timezone, prefix, `${prefix}-CN-`, terms, invoiceFieldsJson, now())],
       { actor: actorLabel(actor), action: 'business.configure', subject: 'business', detail: { legalName, timezone, prefix, terms } })
     return await business(env)
   }

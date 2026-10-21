@@ -159,24 +159,25 @@ const subscription: Kind = {
   count: "(SELECT COUNT(*) FROM nc_subscriptions WHERE origin = 'import')",
 }
 
-const invoice: Kind = {
+const historicalDocument = (documentKind: 'invoice' | 'credit-note'): Kind => ({
   async read(db, id) {
-    const row = await db.prepare('SELECT * FROM nc_incumbent_invoices WHERE id = ?').bind(id).first<any>()
-    return row ? { revision: row.revision, value: { provider: row.provider, providerRef: row.provider_ref, customerId: row.customer_id, subscriptionId: row.subscription_id, number: row.number, status: row.status, periodStart: row.period_start, periodEnd: row.period_end, totalCents: row.total_cents, taxCents: row.tax_cents, paidCents: row.paid_cents, remainingCents: row.remaining_cents, lines: row.lines_json } } : undefined
+    const row = await db.prepare('SELECT * FROM nc_incumbent_invoices WHERE id = ? AND document_kind = ?').bind(id, documentKind).first<any>()
+    return row ? { revision: row.revision, value: withDependents({ provider: row.provider, providerRef: row.provider_ref, customerId: row.customer_id, subscriptionId: row.subscription_id, number: row.number, status: row.status, periodStart: row.period_start, periodEnd: row.period_end, totalCents: row.total_cents, taxCents: row.tax_cents, paidCents: row.paid_cents, remainingCents: row.remaining_cents, lines: row.lines_json }, await dependents(db, `((SELECT COUNT(*) FROM nc_audit WHERE action='invoice.series' AND json_extract(detail,'$.sourceInvoice')=?1))`, id)) } : undefined
   },
   matches(value, id, revision) {
-    const main = eq([['provider', value.provider], ['provider_ref', value.providerRef], ['customer_id', value.customerId], ['subscription_id', value.subscriptionId], ['number', value.number], ['status', value.status], ['period_start', value.periodStart], ['period_end', value.periodEnd], ['total_cents', value.totalCents], ['tax_cents', value.taxCents], ['paid_cents', value.paidCents], ['remaining_cents', value.remainingCents], ['lines_json', value.lines], ['revision', revision]])
-    return sql(`EXISTS(SELECT 1 FROM nc_incumbent_invoices WHERE id = ? AND ${main.text})`, id, ...main.params)
+    const main = eq([['document_kind', documentKind], ['provider', value.provider], ['provider_ref', value.providerRef], ['customer_id', value.customerId], ['subscription_id', value.subscriptionId], ['number', value.number], ['status', value.status], ['period_start', value.periodStart], ['period_end', value.periodEnd], ['total_cents', value.totalCents], ['tax_cents', value.taxCents], ['paid_cents', value.paidCents], ['remaining_cents', value.remainingCents], ['lines_json', value.lines], ['revision', revision]])
+    const free = noDependents(`((SELECT COUNT(*) FROM nc_audit WHERE action='invoice.series' AND json_extract(detail,'$.sourceInvoice')=?1))`, id)
+    return sql(`EXISTS(SELECT 1 FROM nc_incumbent_invoices WHERE id = ? AND ${main.text}) AND ${free.text}`, id, ...main.params, ...free.params)
   },
   absent: id => sql('NOT EXISTS(SELECT 1 FROM nc_incumbent_invoices WHERE id = ?)', id),
-  write: (value, id, revision) => [sql('INSERT INTO nc_incumbent_invoices (id, provider, provider_ref, customer_id, subscription_id, number, status, period_start, period_end, total_cents, tax_cents, paid_cents, remaining_cents, lines_json, revision) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-    id, value.provider, value.providerRef, value.customerId, value.subscriptionId, value.number, value.status, value.periodStart, value.periodEnd, value.totalCents, value.taxCents, value.paidCents, value.remainingCents, value.lines, revision)],
+  write: (value, id, revision) => [sql('INSERT INTO nc_incumbent_invoices (id, provider, provider_ref, customer_id, subscription_id, number, status, period_start, period_end, total_cents, tax_cents, paid_cents, remaining_cents, lines_json, revision, document_kind) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    id, value.provider, value.providerRef, value.customerId, value.subscriptionId, value.number, value.status, value.periodStart, value.periodEnd, value.totalCents, value.taxCents, value.paidCents, value.remainingCents, value.lines, revision, documentKind)],
   remove: id => [sql('DELETE FROM nc_incumbent_invoices WHERE id = ?', id)],
-  ids: async db => (await db.prepare('SELECT id FROM nc_incumbent_invoices ORDER BY id').all<{ id: string }>()).results.map(row => row.id),
-  count: '(SELECT COUNT(*) FROM nc_incumbent_invoices)',
-}
+  ids: async db => (await db.prepare('SELECT id FROM nc_incumbent_invoices WHERE document_kind = ? ORDER BY id').bind(documentKind).all<{ id: string }>()).results.map(row => row.id),
+  count: `(SELECT COUNT(*) FROM nc_incumbent_invoices WHERE document_kind='${documentKind}')`,
+})
 
-export const KINDS: Record<string, Kind> = { meter, product, price, customer, subscription, invoice }
+export const KINDS: Record<string, Kind> = { meter, product, price, customer, subscription, invoice: historicalDocument('invoice'), credit_note: historicalDocument('credit-note') }
 const kindOf = (name: string) => { const kind = KINDS[name]; if (!kind) throw new Error(`TARGET_KIND_UNKNOWN: ${name}`); return kind }
 
 export const nectarTargets: D1TargetAdapter = {

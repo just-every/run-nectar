@@ -358,7 +358,7 @@ settling the invoice restores access subject to the other restrictions.
 ### Captured invoice series and number register (MOVE-011, partial)
 
 `GET /api/nectar/number-register` returns every retained imported invoice, issued
-Nectar invoice and native credit note, exact series, duplicates, unparsed numbers
+Nectar invoice and imported/native credit note, exact series, duplicates, unparsed numbers
 and compact inclusive internal gap ranges. Series group by document kind, exact
 prefix and recorded suffix width. Gaps run only between the smallest and largest
 recorded suffix; they do not infer documents before or after the capture.
@@ -367,14 +367,22 @@ amounts in stored cents. Both require invoice-read authority; CSV also requires
 export authority. These reads write nothing.
 
 The owner opens `/app/numbering` or posts `invoice.series` with the current
-business `revision`. `mode: "continue"` selects a retained `source_invoice` id;
+business `revision`. Optional `kind` is `invoice` (default) or `credit-note`;
+invoice and credit sequences are independent at both scopes. `mode: "continue"` selects a retained `source_invoice` id;
 its exact terminal numeric suffix sets the minimum width and next number. A
-source older than another recorded number in that prefix is refused.
+source of the wrong document kind/customer, or older than another recorded number in that prefix is refused.
 `mode: "new"` takes an unused `prefix` and `width` (1–12) and starts at 1.
 Optional `customer` chooses that customer's independent sequence; otherwise the
 business sequence is used. Customer sequences take precedence. This owner
 cutover action inherits the existing fresh-factor check, saves the selected
 source in audit and invalidates saved invoice approvals. Imported-number
 collisions refuse issue without consuming a number. No request claims to read
-or verify live processor configuration. Live settings import, imported
-credit-note numbering and multiple entities remain unimplemented.
+or verify live processor configuration. Live settings import and multiple entities
+remain unimplemented. An optional `credit_notes` capture (Stripe's list response
+and manifest count) retains issued/void credit-note numbers, source references
+and amounts in the import journal and register; it creates no balance adjustment.
+Each credit needs its captured invoice and matching customer. Tax breakdowns are
+not retained or reported as zero. Ordinary `credit.issue` / governed
+`credit.approve` consumes the configured sequence atomically; rejected approvals
+and number collisions consume nothing. A source used for continuation blocks
+strict import undo. No capture is presented as live provider verification.

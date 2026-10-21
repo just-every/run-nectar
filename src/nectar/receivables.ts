@@ -1,5 +1,6 @@
 import { revenueCreditStatements } from './revenue-records'
 import { clockInstant } from './clock'
+import { documentNumberAllocation } from './invoice-numbering'
 import { withMetadata } from './metadata'
 import { metadataFilter,metadataPredicate } from './metadata-query'
 import { alertStatements } from './notifications'
@@ -39,15 +40,16 @@ export async function creditNoteStatements(env: Bindings, actor: Actor, input: I
   insist(amount <= invoice.balance_cents, 'exceeds_balance', 409)
   const reason = input.text('reason', { max: 500 })
   const authorization = await authorizeCredit(env, actor, input, invoice, amount, reason, proposalId)
-  const sequence = business.next_credit_number
-  const number = `${business.invoice_prefix}-CN-${String(sequence).padStart(6, '0')}`
+  const customer = await one(env, 'SELECT * FROM nc_customers WHERE id=?', invoice.customer_id)
+  insist(customer && !customer.erased_at, 'customer_not_found', 404)
+  const allocation = documentNumberAllocation(env, business, customer, 'credit-note')
+  const number = allocation.number
   const id = newId(), issuedAt=clockInstant(env)
   const [balanceSql, balanceParam] = balanceOf(invoice.id)
   return { statements: [
     ...authorization.guards,
-    guard(env, 'stale', 'EXISTS(SELECT 1 FROM nc_business WHERE singleton = 1 AND next_credit_number = ?)', sequence),
+    ...allocation.statements,
     guard(env, 'exceeds_balance', `${balanceSql} >= ?`, balanceParam, amount),
-    stmt(env, 'UPDATE nc_business SET next_credit_number = next_credit_number + 1 WHERE singleton = 1'),
     stmt(env, 'INSERT INTO nc_credit_notes (id, number, invoice_id, customer_id, amount_cents, reason, proposal_id, issued_by, issued_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', id, number, invoice.id, invoice.customer_id, amount, reason, proposalId ?? null, actorLabel(actor), issuedAt),
     ...await revenueCreditStatements(env,{id,invoice:invoice.id,customer:invoice.customer_id,amountCents:amount,issuedAt}),
     ...(authorization.request ? [stmt(env, "UPDATE nc_credit_requests SET status='issued',approved_by=?,approved_at=?,credit_id=? WHERE id=?", actorLabel(actor), now(), id, authorization.request.id)] : []),

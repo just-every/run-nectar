@@ -53,7 +53,7 @@ export async function proposalPage(env: Bindings, actor: Actor, id: string, url:
 const uploadFields = () => h`${fileField('Manifest (manifest.json)', 'manifest', { required: true, accept: '.json', hint: 'Lists each captured file with its object count and has_more: false.' })}
   ${fileField('Customers (GET /v1/customers)', 'customers', { required: true, accept: '.json' })}${fileField('Products (GET /v1/products)', 'products', { required: true, accept: '.json' })}
   ${fileField('Prices (GET /v1/prices)', 'prices', { required: true, accept: '.json' })}${fileField('Subscriptions (GET /v1/subscriptions?status=all)', 'subscriptions', { required: true, accept: '.json' })}
-  ${fileField('Invoices (GET /v1/invoices), for shadow comparison', 'invoices', { accept: '.json' })}${fileField('Billing meters (GET /v1/billing/meters), for metered prices', 'meters', { accept: '.json' })}`
+  ${fileField('Invoices (GET /v1/invoices), for shadow comparison', 'invoices', { accept: '.json' })}${fileField('Credit notes (GET /v1/credit_notes), optional numbered history', 'credit_notes', { accept: '.json' })}${fileField('Billing meters (GET /v1/billing/meters), for metered prices', 'meters', { accept: '.json' })}`
 
 export async function importPage(env: Bindings, actor: Actor, url: URL) {
   const jobs = await importJobs(env, actor)

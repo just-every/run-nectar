@@ -28,7 +28,7 @@ interface Draft { sub: Row; period: { start: string; end: string }; rating: Rati
 
 async function incumbentComparison(env: Bindings, sub: Row, period: { start: string }, rating: Rating) {
   if (!sub.provider_ref) return null
-  const invoices = await all(env, 'SELECT * FROM nc_incumbent_invoices WHERE subscription_id = ?', sub.id)
+  const invoices = await all(env, "SELECT * FROM nc_incumbent_invoices WHERE document_kind='invoice' AND subscription_id = ?", sub.id)
   const lines = invoices.flatMap(invoice => parseJson<Row[]>(invoice.lines_json, []).map((line): Row => ({ ...line, invoice: invoice.number || invoice.provider_ref })))
     .filter(line => line.period_start === period.start)
   if (!lines.length) return { found: false }

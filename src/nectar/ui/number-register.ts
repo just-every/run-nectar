@@ -20,7 +20,7 @@ export async function numberRegisterPage(env: Bindings, actor: Actor, url: URL) 
     <section class="card"><h2>What this register covers</h2>
       <p>All ${register.entries.length} stored records are listed below, including imported records in every status. Draft Nectar invoices are excluded. Credit amounts are positive as recorded.</p>
       <p>Number series share an exact prefix, digit width and document kind across sources. Missing ranges are inclusive and only between the smallest and largest recorded suffix. They identify absent numbers in these records; they do not prove a document was issued or deleted.</p>
-      <p>Imported currency and credit tax breakdowns are not retained in these tables. The CSV includes all stored amount fields in cents. This report does not establish numbering completeness per legal entity or completion of imported credit-note migration.</p>
+      <p>Imported currency and credit tax breakdowns are not retained in these tables. The CSV includes all stored amount fields in cents. This report does not establish numbering completeness per legal entity or live provider configuration.</p>
     </section>
     ${await invoiceSeriesForms(env, actor)}
     <section class="card"><h2>Series</h2>

@@ -279,6 +279,7 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
   },
   "invoice.series": {
     "customer": "text",
+    "kind": "text",
     "mode": "text",
     "prefix": "text",
     "revision": "integer",
