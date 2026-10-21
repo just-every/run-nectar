@@ -9,7 +9,7 @@ export async function effectiveReplay(env: Bindings, invoice: string) {
   return rows.length ? { input: parseJson<RatingInput>(rows[0].input_json, null as never), lines: parseJson<Line[]>(rows[0].lines_json, []) } : null
 }
 export async function usageAdjustments(env: Bindings, subscription: string): Promise<UsageAdjustment[]> {
-  return (await all(env, 'SELECT * FROM nc_usage_adjustments WHERE subscription_id=? AND invoice_id IS NULL ORDER BY id', subscription))
+  return (await all(env, 'SELECT * FROM nc_usage_adjustments WHERE subscription_id=? AND invoice_id IS NULL AND target_invoice_id IS NULL ORDER BY id', subscription))
     .map(row => ({ id: row.id, correction: row.correction_id, line: parseJson<Line>(row.line_json, null as never), taxCents: row.tax_cents }))
 }
 export async function carriedUsageCredits(env: Bindings, customer: string): Promise<UsageCredit[]> {
@@ -20,4 +20,9 @@ export async function carriedUsageCredits(env: Bindings, customer: string): Prom
 export function usageCreditAllocations(credits: UsageCredit[], totalCents: number) {
   let left = Math.max(0,totalCents)
   return credits.flatMap(credit => { const amountCents = Math.min(left,credit.availableCents); left-=amountCents; return amountCents ? [{ ...credit, amountCents }] : [] })
+}
+
+export function usageCreditApplicationLines(credits: UsageCredit[], totalCents: number, period: {start:string;end:string}): Line[] {
+  return usageCreditAllocations(credits,totalCents).map(c=>({kind:'usage_credit_application',description:`Carried historical correction ${c.number}: ${c.amountCents} cents applied after invoice total`,quantity:'1',unitAmount:'',amountCents:0,taxable:false,priceId:null,meterId:null,periodStart:period.start,periodEnd:period.end,
+    evidence:{credit:c.id,correction:c.correction,appliedCents:c.amountCents,source:c.source,rule:'Customer liability application; not new consideration, tax or revenue'}}))
 }

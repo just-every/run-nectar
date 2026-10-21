@@ -21,7 +21,7 @@ CREATE TABLE nc_usage_adjustments (
  id TEXT PRIMARY KEY, correction_id TEXT NOT NULL REFERENCES nc_usage_corrections(id),
  customer_id TEXT NOT NULL REFERENCES nc_customers(id), subscription_id TEXT NOT NULL REFERENCES nc_subscriptions(id),
  original_invoice_id TEXT NOT NULL REFERENCES nc_invoices(id), line_json TEXT NOT NULL, tax_cents INTEGER NOT NULL,
- invoice_id TEXT REFERENCES nc_invoices(id)
+ invoice_id TEXT REFERENCES nc_invoices(id), target_invoice_id TEXT REFERENCES nc_invoices(id)
 );
 ALTER TABLE nc_credit_notes ADD COLUMN applied_cents INTEGER CHECK(applied_cents>=0 AND applied_cents<=amount_cents);
 ALTER TABLE nc_credit_notes ADD COLUMN subtotal_cents INTEGER;

@@ -1,4 +1,4 @@
-import { usageCreditAllocations } from './usage-correction-records'
+import { usageCreditApplicationLines } from './usage-correction-records'
 import { renewalOperands, RENEWAL_RATING_VERSION, type RenewalRate } from './renewal-rating'
 import { metricUsage, METRIC_RATING_VERSION, type MetricPrice } from './metric-rating'
 import { commitmentLines, CONTRACT_RATING_VERSION, type ContractBasis } from './commitment-rating'
@@ -202,6 +202,6 @@ export function rate(input: RatingInput, presentCancellationCredits = true): Rat
   if(adjustments.length)totals.tax.historicalCorrectionTaxCents=correctionTax
   insist([totals.subtotalCents,totals.taxCents,totals.totalCents].every(Number.isSafeInteger),'correction_amount_out_of_range')
   if(input.usageCorrectionPending?.length)exceptions.push({code:'usage_correction_pending',message:'A historical usage correction awaits a human decision. Resolve it before issuing.',detail:input.usageCorrectionPending})
-  const applicationLines:Line[]=usageCreditAllocations(input.usageCredits??[],totals.totalCents).map(c=>({kind:'usage_credit_application',description:`Carried historical correction ${c.number}: ${c.amountCents} cents applied after invoice total`,quantity:'1',unitAmount:'',amountCents:0,taxable:false,priceId:null,meterId:null,periodStart:period.start,periodEnd:period.end,evidence:{credit:c.id,correction:c.correction,appliedCents:c.amountCents,source:c.source,rule:'Customer liability application; not new consideration, tax or revenue'}}))
+  const applicationLines=usageCreditApplicationLines(input.usageCredits??[],totals.totalCents,period)
   return { ...totals, lines: [...correctedLines,...applicationLines], exceptions: [...exceptions, ...committed.exceptions, ...totals.exceptions], consumedEvents: [...new Set(consumed)] }
 }

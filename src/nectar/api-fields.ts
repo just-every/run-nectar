@@ -262,6 +262,7 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
   "import.preview": {
     "*": "has"
   },
+  "invoice.correction.refresh": {"invoice":"text"},
   "invoice.approve": {
     "acknowledge": "flag",
     "invoice": "text",

@@ -1,3 +1,4 @@
+import { carriedUsageCredits,usageCreditApplicationLines } from './usage-correction-records'
 // A standalone invoice uses the same immutable lines, approval, numbering and
 // receivables ledger as subscription invoices, without inventing a subscription.
 import type { Bindings } from '../auth.server'
@@ -20,11 +21,11 @@ export async function manualCalculation(env: Bindings, b: Business, customerId: 
   insist(rows.every(row => row.effective_date <= date), 'charge_in_future')
   const certificate = await certificateBasis(env, customerId, b.tax_jurisdiction, { start: date, end: addDays(date, 1) })
   const tax = { mode: b.tax_mode, rate: b.tax_rate, jurisdiction: b.tax_jurisdiction, exempt: certificate?.exempt ?? !!customer.tax_exempt, exemptRef: certificate?.exemptRef ?? customer.tax_exempt_ref, ...(certificate ? { certificate: certificate.certificate, exception: certificate.exception } : {}) }
-  const charges = rows.map(chargeInput), lines = chargeLines(charges)
-  const input = { version: CHARGE_RATING_VERSION, customer: customerId, date, charges, tax, invoiceContent: await invoiceContent(env, b, customerId) }
+  const charges = rows.map(chargeInput), lines = chargeLines(charges),usageCredits=await carriedUsageCredits(env,customerId)
+  const input = { ...(usageCredits.length?{usageCredits}:{}),version: CHARGE_RATING_VERSION, customer: customerId, date, charges, tax, invoiceContent: await invoiceContent(env, b, customerId) }
   const totals = invoiceTotals(tax, lines)
   if (input.invoiceContent.poRequired && !input.invoiceContent.poNumber) totals.exceptions.push({ code: 'po_required', message: 'A purchase order number is required before this invoice can be approved or issued.' })
-  return { input, rating: { ...totals, lines, consumedEvents: [] }, fingerprint: await fingerprint(input) }
+  return { input, rating: { ...totals, lines:[...lines,...usageCreditApplicationLines(usageCredits,totals.totalCents,{start:date,end:addDays(date,1)})], consumedEvents: [] }, fingerprint: await fingerprint(input) }
 }
 
 export async function prepareManualInvoice(env: Bindings, actor: Actor, input: Input) {

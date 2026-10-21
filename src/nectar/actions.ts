@@ -1,3 +1,4 @@
+import { refreshCorrectingInvoice } from './usage-correction-refresh'
 import { configureUsagePolicy, prepareUsageCorrection, authorizeUsageCorrection, decideUsageCorrection } from './usage-dispositions'
 import { configureInvoiceSeries } from './invoice-numbering'
 import { configureFeaturePolicy } from './feature-policy'
@@ -149,6 +150,7 @@ export const actions: Record<string, Handler> = {
   'usage.control': recordControl,
   'usage.acknowledge': acknowledgeControl,
   'billrun.prepare': prepareRun,
+  'invoice.correction.refresh': refreshCorrectingInvoice,
   'invoice.approve': approve,
   'invoice.finalise': finalise,
   'policy.decide': decidePolicyChange,

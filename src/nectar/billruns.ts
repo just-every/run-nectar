@@ -166,7 +166,7 @@ async function currentFingerprint(env: Bindings, business: Business, invoice: Ro
     const saved = parseJson<Row>(invoice.calculation_json, {}).inputs
     if(saved.usageCorrection){
       const approved=await one(env,"SELECT 1 FROM nc_usage_corrections WHERE id=? AND status='approved'",saved.usageCorrection)
-      const staged=await all(env,'SELECT id,line_json,tax_cents FROM nc_usage_adjustments WHERE correction_id=? AND invoice_id=? ORDER BY id',saved.usageCorrection,invoice.id)
+      const staged=await all(env,'SELECT id,line_json,tax_cents FROM nc_usage_adjustments WHERE correction_id=? AND target_invoice_id=? ORDER BY id',saved.usageCorrection,invoice.id)
       insist(approved&&canonicalAdjustments(staged,saved.usageAdjustments),'correction_source_changed',409)
       const current={...saved,usageCredits:await carriedUsageCredits(env,invoice.customer_id),invoiceContent:await invoiceContent(env,business,invoice.customer_id)}
       return correctionFingerprint(current)
@@ -249,7 +249,7 @@ export async function finalise(env: Bindings, actor: Actor, input: Input) {
       guard(env, 'source_changed', 'EXISTS(SELECT 1 FROM nc_customers WHERE id=? AND revision=? AND invoice_settings_json=?)', invoice.customer_id, customer.revision, customer.invoice_settings_json),
       guard(env, 'stale', "EXISTS(SELECT 1 FROM nc_invoices WHERE id = ? AND status = 'approved' AND approved_fingerprint = ?)", invoice.id, invoice.approved_fingerprint),
       ...chunk(consumed, 90).map(ids => guard(env, 'already_billed', `NOT EXISTS(SELECT 1 FROM nc_usage_events WHERE event_id IN (${ids.map(() => '?').join(',')}) AND (invoice_id IS NOT NULL OR status <> 'active'))`, ...ids)),
-      ...usageAdjustments.map((a:Row)=>guard(env,'correction_already_billed','EXISTS(SELECT 1 FROM nc_usage_adjustments WHERE id=? AND (invoice_id IS NULL OR invoice_id=?))',a.id,invoice.id)),
+      ...usageAdjustments.map((a:Row)=>guard(env,'correction_already_billed','EXISTS(SELECT 1 FROM nc_usage_adjustments WHERE id=? AND invoice_id IS NULL AND (target_invoice_id IS NULL OR target_invoice_id=?))',a.id,invoice.id)),
       ...usageAdjustments.map((a:Row)=>stmt(env,'UPDATE nc_usage_adjustments SET invoice_id=? WHERE id=? AND invoice_id IS NULL',invoice.id,a.id)),
       ...carried.flatMap(c=>[guard(env,'credit_balance_changed',`(SELECT amount_cents-applied_cents-COALESCE((SELECT SUM(amount_cents) FROM nc_usage_credit_applications WHERE credit_id=n.id),0) FROM nc_credit_notes n WHERE n.id=?)>=?`,c.id,c.amountCents),
         stmt(env,'INSERT INTO nc_usage_credit_applications(id,credit_id,invoice_id,customer_id,amount_cents,applied_at) VALUES(?,?,?,?,?,?)',newId(),c.id,invoice.id,invoice.customer_id,c.amountCents,now())]),

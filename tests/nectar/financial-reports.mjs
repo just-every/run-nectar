@@ -12,7 +12,7 @@ const monthAfter = (period, count = 1) => {
 }
 
 // Parse the exported public format, including comma/quote/newline escaping.
-function csvRows(text) {
+export function csvRows(text) {
   const rows = [], row = []
   let cell = '', quoted = false
   for (let i = 0; i < text.length; i++) {

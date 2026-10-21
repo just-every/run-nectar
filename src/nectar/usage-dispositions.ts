@@ -75,7 +75,7 @@ async function plan(env: Bindings, actor: Actor, payload: Row) {
       before:{subtotalCents:p.before.subtotalCents,taxCents:p.before.taxCents,totalCents:p.before.totalCents},
       after:{subtotalCents:p.after.subtotalCents,taxCents:p.after.taxCents,totalCents:p.after.totalCents},
       subtotalCents:p.deltaSubtotalCents,taxCents:p.deltaTaxCents,totalCents:p.deltaTotalCents,
-      beforeLines:p.before.lines.map(l=>({description:l.description,amountCents:l.amountCents})),afterLines:p.after.lines.map(l=>({description:l.description,amountCents:l.amountCents})),eventIds:p.eventIds,revenue,postingRevenue: p.deltaTotalCents<0?[{period:issueDate.slice(0,7),amountCents:p.deltaSubtotalCents,method:'credit-contra-issue-month'}]:revenue.map(e=>({period:e.period,amountCents:e.deltaCents,method:'historical-usage-replay-delta'})),balanceCents:balance!.value,creditCents,appliedCents,carriedCents:creditCents-appliedCents})
+      beforeLines:p.before.lines.map(l=>({description:l.description,amountCents:l.amountCents})),afterLines:p.after.lines.map(l=>({description:l.description,amountCents:l.amountCents})),eventIds:p.eventIds,revenue,postingRevenue: p.deltaTotalCents<0?[{period:issueDate.slice(0,7),amountCents:p.deltaSubtotalCents,method:'credit-contra-issue-month'}]:revenue.filter(e=>e.deltaCents!==0).map(e=>({period:e.period,amountCents:e.deltaCents,method:'historical-usage-replay-delta'})),balanceCents:balance!.value,creditCents,appliedCents,carriedCents:creditCents-appliedCents})
   }
   const availableCredits=await carriedUsageCredits(env,customer.id)
   const creditCents=periods.reduce((n,p)=>n+p.creditCents,0)
@@ -124,10 +124,12 @@ export async function authorizeUsageCorrection(env: Bindings, actor: Actor, inpu
 }
 
 function adjustmentLine(p: Row, correction: string): Line {
+  const revenue=p.revenue.filter((e:Row)=>e.deltaCents!==0)
+  if(!revenue.length)revenue.push({period:p.period.start.slice(0,7),deltaCents:0})
   return {kind:'usage_correction',description:`Historical usage correction · ${p.number} · ${p.period.start} to ${p.period.end}`,
     quantity:'1',unitAmount:'',amountCents:p.subtotalCents,taxable:false,priceId:null,meterId:null,periodStart:p.period.start,periodEnd:p.period.end,
     evidence:{correction,originalInvoice:p.invoice,originalNumber:p.number,originalFingerprint:p.originalFingerprint,replayFingerprint:p.fingerprint,eventIds:p.eventIds,
-      taxDeltaCents:p.taxCents,revenueEntries:p.revenue.map((e: Row)=>({period:e.period,amountCents:e.deltaCents,basis:{method:'historical-usage-replay-delta',correction,originalInvoice:p.invoice,replayFingerprint:p.fingerprint}}))}}
+      taxDeltaCents:p.taxCents,revenueEntries:revenue.map((e: Row)=>({period:e.period,amountCents:e.deltaCents,basis:{method:'historical-usage-replay-delta',correction,originalInvoice:p.invoice,replayFingerprint:p.fingerprint}}))}}
 }
 
 export async function decideUsageCorrection(env: Bindings, actor: Actor, input: Input) {
@@ -186,7 +188,7 @@ export async function decideUsageCorrection(env: Bindings, actor: Actor, input: 
       ...r.lines.map((line,index)=>stmt(env,`INSERT INTO nc_invoice_lines(id,invoice_id,seq,kind,description,quantity,unit_amount,amount_cents,taxable,price_id,meter_id,period_start,period_end,evidence_json) VALUES(?,?,?,?,?,?,?,?,0,NULL,NULL,?,?,?)`,newId(),invoice,index+1,line.kind,line.description,line.quantity,line.unitAmount,line.amountCents,line.periodStart,line.periodEnd,JSON.stringify(line.evidence))))
     // The dedicated invoice owns these staged adjustments; ordinary recurring
     // drafts must not also pick them up before it is issued.
-    for(const a of adjustments)statements.push(stmt(env,'UPDATE nc_usage_adjustments SET invoice_id=? WHERE id=?',invoice,a.id))
+    for(const a of adjustments)statements.push(stmt(env,'UPDATE nc_usage_adjustments SET target_invoice_id=? WHERE id=?',invoice,a.id))
     documents.push({kind:'correcting_invoice',id:invoice,status:'draft',totalCents:r.totalCents})
   }
   const body=s.message.body
