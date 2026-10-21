@@ -20,6 +20,7 @@ export async function prepareNativeCollection(env: Bindings, actor: Actor, input
   await collectionOwner(env, actor)
   input.only(['invoice', 'returnTo'])
   const source = await nativeCollectionSource(env, input.text('invoice', { max: 100 }))
+  await prepaidFundingForInvoice(env, source.row.id)
   insist(!await one(env, 'SELECT 1 FROM nc_native_collection_claims WHERE invoice_id=?', source.row.id), 'native_collection_already_claimed', 409)
   const selected = await stripeForAccount(env, source.accountRef).catch(providerUnavailable)
   const binding = await one(env, 'SELECT * FROM nc_stripe_customer_bindings WHERE customer_id=? AND account_ref=?', source.row.customer_id, selected.account)
@@ -80,6 +81,7 @@ export async function confirmNativeCollection(env: Bindings, actor: Actor, input
   const row = await storedNativeCollection(env, input.text('request', { max: 100 }))
   insist(row.status === 'pending', 'native_collection_already_claimed', 409)
   const { source, basis } = await currentNativeCollection(env, actor, row)
+  await prepaidFundingForInvoice(env, row.invoice_id)
   insist(input.text('basis_hash', { max: 100 }) === row.basis_hash && input.integer('amount_cents', { min: 50, max: 99999999 }) === basis.amountCents
     && input.text('account_ref', { max: 255 }) === basis.accountRef && input.text('stripe_customer_ref', { max: 255 }) === basis.customerRef
     && input.text('payment_method_ref', { max: 255 }) === basis.paymentMethodRef, 'native_collection_confirmation_changed', 409)
@@ -95,6 +97,7 @@ export async function confirmNativeCollection(env: Bindings, actor: Actor, input
   try {
     await collectionOwner(env, actor)
     await currentNativeCollection(env, actor, current)
+    await prepaidFundingForInvoice(env, row.invoice_id)
     const identity = paymentIdentity(current, basis)
     const intent = await selected.stripe('/payment_intents', new URLSearchParams({ amount: String(basis.amountCents), currency: 'usd', customer: basis.customerRef,
       payment_method: basis.paymentMethodRef, 'payment_method_types[0]': 'card', confirm: 'true', off_session: 'true', error_on_requires_action: 'true',
