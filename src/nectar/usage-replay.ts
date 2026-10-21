@@ -13,7 +13,7 @@ function eventIds(ids: string[]) {
   return ids
 }
 
-export async function previewUsageCorrection(env: Bindings, actor: Actor, input: Input) {
+async function historicalReplay(env: Bindings, actor: Actor, input: Input, maxPeriods: number) {
   requireCapability(actor, 'read')
   const subscription = input.text('subscription', { max: 100 })
   const from = input.text('from_period', { max: 7 }), through = input.text('through_period', { max: 7 })
@@ -22,9 +22,13 @@ export async function previewUsageCorrection(env: Bindings, actor: Actor, input:
   insist(sub, 'subscription_not_found', 404)
   insist(!await one(env, 'SELECT 1 FROM nc_erased_records WHERE record_id=?', subscription), 'customer_erased', 410)
   const expected = []
-  for (let month = from; month <= through; month = addMonths(`${month}-01`, 1).slice(0, 7)) {
-    insist(expected.length < 36, 'correction_range_too_large')
+  for (let month = from;;) {
+    insist(expected.length < maxPeriods, 'correction_range_too_large')
     expected.push(periodStartingIn(sub.anchor_day, month))
+    if(month===through)break
+    const next=addMonths(`${month}-01`,1).slice(0,7)
+    insist(isMonth(next)&&next>month,'invalid_period')
+    month=next
   }
   const invoices = await all(env, "SELECT * FROM nc_invoices WHERE subscription_id=? AND status='issued' AND invoice_kind='recurring' AND period_start>=? AND period_start<? ORDER BY period_start,id", subscription, expected[0].start, expected.at(-1)!.end)
   insist(invoices.length === expected.length && expected.every((p, i) => invoices[i].period_start === p.start && invoices[i].period_end === p.end), 'complete_issued_range_required', 409)
@@ -73,3 +77,8 @@ export async function previewUsageCorrection(env: Bindings, actor: Actor, input:
   }
   return { status: 'unresolved', scope: 'selected-issued-range-only', subscription, fromPeriod: from, throughPeriod: through, voidEventIds: voids, addEventIds: additions, periods, delta: totals, fingerprint: await fingerprint(periods.map(p => p.fingerprint)), warning: 'Preview only. Later periods may also be affected by predecessor changes. No event, invoice, credit, approval or issue block has changed; financial disposition requires a separate governed correction.' }
 }
+
+// Read-only exploration keeps its published 36-period bound. Financial
+// preparation must include all downstream issued windows, even beyond it.
+export const previewUsageCorrection=(env:Bindings,actor:Actor,input:Input)=>historicalReplay(env,actor,input,36)
+export const replayUsageDisposition=(env:Bindings,actor:Actor,input:Input)=>historicalReplay(env,actor,input,Infinity)

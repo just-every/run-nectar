@@ -12,7 +12,7 @@ import { addDays, localDate } from './dates'
 import { Input } from './input'
 import { requireFreshFactor } from './mfa'
 import { preparePolicyChange } from './policy-changes'
-import { previewUsageCorrection } from './usage-replay'
+import { replayUsageDisposition } from './usage-replay'
 import { recognitionForRating } from './revenue-allocation'
 import { revenuePeriodDeltas, revenuePreview } from './draft-correction-plan'
 import { rate, type Line, type RatingInput } from './rating'
@@ -36,7 +36,7 @@ const sequenceGuard = (env: Bindings, seq: number) => guard(env,'correction_sour
 async function plan(env: Bindings, actor: Actor, payload: Row) {
   const seq = await sequence(env)
   const b = await requireBusiness(env)
-  const replay = await previewUsageCorrection(env,actor,Input.of(payload))
+  const replay = await replayUsageDisposition(env,actor,Input.of(payload))
   insist(replay.voidEventIds.length+replay.addEventIds.length>0,'correction_required')
   const sub = await one(env,"SELECT * FROM nc_subscriptions WHERE id=? AND billing_mode='live'",replay.subscription)
   insist(sub,'live_subscription_required',409)

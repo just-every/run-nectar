@@ -268,6 +268,7 @@ export async function usageDispositionFlow(h,owner,ctx) {
     await observe(`bulk-${disposition}`,[`/app/usage/replay?subscription=${sub}&period=2020-07`,`/app/invoices/${invoice.id}`,`/app/customers/${customer}`])
     // Explicit issue consumes available liability once, after the exact same
     // current-tax invoice calculation the human reviewed.
+    assert.equal((await api(`reports/credit-balances?customer=${customer}`)).totalCents,paid,'USE-004 company/customer liability report equals the current carried ledger')
     let remaining=paid
     const applied=[]
     for(const month of ['2020-08','2020-09','2020-10']) {
@@ -287,6 +288,9 @@ export async function usageDispositionFlow(h,owner,ctx) {
       if(expected)assert.ok(issued.lines.some(l=>l.kind==='usage_credit_application'&&l.evidence.appliedCents===expected),'USE-004 August statement line cites the original correction credit and exact application')
       await api('invoice.finalise',{invoice:next.id},409)
       remaining-=expected;applied.push(next.id)
+      const creditBalance=await api(`reports/credit-balances?customer=${customer}`)
+      assert.equal(creditBalance.totalCents,remaining)
+      for(const entry of creditBalance.entries){const source=await api(entry.href.replace('/app/',''));assert.equal(source.components.reduce((n,c)=>n+c.amountCents,0),entry.amountCents)}
       if(month==='2020-08')await observe(`august-${disposition}`,[`/app/invoices/${next.id}`])
     }
     assert.equal(remaining,0)
@@ -340,6 +344,31 @@ export async function usageDispositionFlow(h,owner,ctx) {
   const settled=(await api(`subscriptions/${commitmentSub}`)).burnDown[0]
   assert.deepEqual([settled.earnedCents,settled.trueUpCents,settled.remainingCents],[10000,10000,0],'USE-004 subsequent commitment consumers use the effective replay chain and do not settle twice')
   await observe('commitment',[`/app/usage/replay?subscription=${commitmentSub}&period=2020-07`,`/app/invoices/${commitmentExecution.invoice}`])
+  const longCustomer=(await api('customer.create',{external_id:'synthetic-nectar-long',name:'Long retained history',billing_email:'synthetic-nectar-long@example.test'})).id
+  const longSub=(await api('subscription.create',{customer:longCustomer,start_date:'2015-01-01',price:[ctx.bulkPrice]})).id
+  const longEvent={event_id:'synthetic-nectar-long-event',customer:'synthetic-nectar-long',meter:ctx.bulkSource.code,quantity:'100',occurred_at:'2015-01-10T00:00:00Z'}
+  await api('usage.submit',{events:[longEvent]})
+  const longInvoices=[]
+  for(let index=0;index<37;index++){
+    const period=new Date(Date.UTC(2015,index,1)).toISOString().slice(0,7),run=await api('billrun.prepare',{period})
+    const invoice=(await api(`runs/${run.id}`)).invoices.find(i=>i.customer_id===longCustomer)
+    await api('invoice.approve',{invoice:invoice.id,acknowledge:true});await api('invoice.finalise',{invoice:invoice.id,issue_date:invoice.period_end});longInvoices.push(await read(invoice.id))
+  }
+  const longPayment=await api('payment.record',{customer:longCustomer,amount:'1',received_on:'2015-02-02',method:'bank_transfer',reference:'synthetic-nectar-long-payment'})
+  await api('payment.allocate',{invoice:longInvoices[0].id,payment:longPayment.payment,amount:'1'})
+  const longPayload={subscription:longSub,from_period:'2015-01',through_period:'2018-01',void_event_ids:[longEvent.event_id],add_event_ids:[]}
+  assert.equal((await api('usage.correction.preview',longPayload,400)).error,'correction_range_too_large','USE-004 published read-only exploration bound is preserved')
+  const longCorrection=await prepare(longPayload)
+  assert.equal(longCorrection.plan.periods.length,37,'USE-004 required downstream financial replay is not truncated at the read-only preview limit')
+  assert.deepEqual(longCorrection.plan.delta,{subtotalCents:-100,taxCents:0,totalCents:-100})
+  await observe('long-history',[`/app/usage/replay?subscription=${longSub}&period=2015-01`])
+  await decision(longCorrection.id,finance)
+  for(const original of longInvoices)assert.deepEqual(issuedEvidence(await read(original.id)),issuedEvidence(original))
+  const availableReport=await api(`reports/credit-balances?customer=${longCustomer}`)
+  assert.equal(availableReport.totalCents,100)
+  const availableSource=await api(availableReport.entries[0].href.replace('/app/',''))
+  assert.equal(availableSource.components.reduce((n,c)=>n+c.amountCents,0),100)
+  await observe('credit-balance-report',[`/app/reports/credit-balances?customer=${longCustomer}`,availableReport.entries[0].href])
   // Existing customer-only doors must reflect the applied liability without
   // exposing operator explanations, calculation inputs or other customers.
   await api('portal.configure',{hosts:[h.origin],parents:[]})
@@ -395,6 +424,8 @@ export async function usageDispositionFlow(h,owner,ctx) {
   assert.equal(delivery.status,'accepted')
   assert.equal(delivery.reports.find(r=>r.metric==='tax').totalCents,8621,'USE-004 frozen scheduled reports include the same exact attributed tax figures')
   assert.equal(csvRows(delivery.csv).find(r=>r.report==='tax'&&r.source==='TOTAL').amount,'86.21')
+  assert.equal(delivery.reports.find(r=>r.metric==='credit-balances').totalCents,100,'USE-004 scheduled balance snapshot equals the positive outstanding credit liability')
+  assert.equal(csvRows(delivery.csv).find(r=>r.report==='credit-balances'&&r.source==='TOTAL').amount,'1.00')
   const sent=h.mails.length;assert.equal((await scheduled()).status,200);assert.equal(h.mails.length,sent,'USE-004 new correction report sources retain once-only snapshot delivery')
   const erased={customer:commitmentCustomer,sub:commitmentSub},request=await api('erasure.request',{customer:erased.customer})
   const verification=h.mails.at(-1).text.match(/https?:\/\/[^\s"<]+\/erase\/[a-f0-9]{64}/)[0]

@@ -9,7 +9,7 @@ import { ratingInputs } from './inputs'
 import { rate, type EventIn, type Exception, type Line, type RatingInput } from './rating'
 import type { Report, ReportComponent, ReportEntry, ReportInvoice } from './reports'
 
-export type FinancialReportMetric = 'credits' | 'tax' | 'unbilled'
+export type FinancialReportMetric = 'credits' | 'tax' | 'unbilled' | 'credit-balances'
 export interface FinancialReportEntry extends Omit<ReportEntry, 'sourceKind'> {
   sourceKind: 'invoice' | 'credit_note' | 'subscription_period'
   creditId?: string
@@ -50,6 +50,7 @@ export interface FinancialReportSource extends Omit<ReportInvoice, 'metric' | 's
 
 const USAGE = new Set(['usage', 'overage', 'metric_usage', 'late_usage', 'trial_usage', 'paused_usage'])
 const DEFINITIONS: Record<FinancialReportMetric, { title: string; definition: string }> = {
+  'credit-balances': {title:'Carried usage-correction credit balances',definition:'Current unspent numbered historical-usage credits: full note less credit applied to the original invoice and later invoice applications. Each cent is a customer liability until applied. This is a current snapshot across note issue dates, not a historical month-end reconstruction; the selected month labels its export. It excludes unallocated payments, generic goodwill grants, prepaid credits and cash refunds, whose full ledgers remain under INV-006 and CAT-004.'},
   credits: {
     title: 'Issued credit notes',
     definition: 'Actual numbered credit notes created in the selected month in the business billing timezone, shown as positive credited amounts against their original invoices. Historical usage notes separately retain applied and carried customer credit and saved tax attribution; other notes reduce only amounts owed and have no tax attribution. These are not cash refunds.',
@@ -132,6 +133,11 @@ async function contributions(env: Bindings, metric: string, url: URL) {
   const unbilled = selected.metric === 'unbilled' ? await unbilledSources(env, business, month, customer) : null
   let entries: FinancialReportEntry[]
   if (unbilled) entries = [...unbilled.values()].map(source => source.entry)
+  else if(selected.metric==='credit-balances'){
+    const rows=await all(env,`SELECT n.*,c.name AS customer_name,n.amount_cents-n.applied_cents-COALESCE((SELECT SUM(amount_cents) FROM nc_usage_credit_applications a WHERE a.credit_id=n.id),0) AS available
+      FROM nc_credit_notes n JOIN nc_customers c ON c.id=n.customer_id WHERE n.correction_id IS NOT NULL ${customer?'AND n.customer_id=?':''} ORDER BY n.issued_at,n.id`,...(customer?[customer]:[]))
+    entries=rows.filter(row=>row.available>0).map(row=>({invoiceId:row.id,creditId:row.id,number:row.number,customerId:row.customer_id,customerName:row.customer_name,amountCents:row.available,sourceKind:'credit_note',href:sourceHref(selected.metric,row.id,month,customer)}))
+  }
   else {
     const credits = selected.metric === 'credits'
     const rows = credits
@@ -180,9 +186,15 @@ export async function financialReportSource(env: Bindings, actor: Actor, metric:
   const invoice = await one(env, "SELECT * FROM nc_invoices WHERE id = ? AND customer_id = ? AND status = 'issued'", invoiceId, entry.customerId)
   insist(invoice, 'report_invoice_not_found', 404)
   const href = `/app/invoices/${encodeURIComponent(invoice.id)}`
-  const components: ReportComponent[] = [{ kind: credit ? 'credit_note' : 'tax',
+  let components: ReportComponent[] = [{ kind: credit ? 'credit_note' : 'tax',
     label: credit ? `${credit.number}: ${credit.reason}` : `Original tax on invoice ${invoice.number}`,
     amountCents: entry.amountCents, href: `${href}#${credit ? 'recv' : 'lines'}` }]
+  if(report.metric==='credit-balances'&&credit){
+    components=[{kind:'credit_note',label:`Full credit note ${credit.number}`,amountCents:credit.amount_cents,href:`${href}#credit-${credit.id}`},
+      {kind:'original_credit_application',label:'Applied to the original invoice',amountCents:-credit.applied_cents,href:`${href}#recv`},
+      ...(await all(env,'SELECT a.*,i.number FROM nc_usage_credit_applications a JOIN nc_invoices i ON i.id=a.invoice_id WHERE a.credit_id=? ORDER BY a.applied_at,a.id',credit.id)).map(a=>({kind:'credit_application',label:`Applied to invoice ${a.number}`,amountCents:-a.amount_cents,href:`/app/invoices/${a.invoice_id}#recv`}))]
+    insist(components.reduce((n,c)=>n+c.amountCents,0)===entry.amountCents,'credit_balance_source_changed',409)
+  }
   const saved = parseJson<Row>(invoice.calculation_json, {})
   return { ...base, totalCents: entry.amountCents, components,
     invoice: { id: invoice.id, number: invoice.number, customerId: invoice.customer_id, customerName: entry.customerName,
