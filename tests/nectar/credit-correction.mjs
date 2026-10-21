@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { applyPolicy } from './policy-helper.mjs'
+import { csvRows } from './financial-reports.mjs'
 
 // AGENT-002: real issued invoices, human decisions, and the existing mail edge.
 export async function creditCorrectionFlow(h, owner, onState=async()=>{}) {
@@ -288,6 +289,7 @@ export async function creditCorrectionFlow(h, owner, onState=async()=>{}) {
     assert.deepEqual((await detail(prepared.id)).correctionMail, acceptedCustody)
     for (const proposal of failed) assert.deepEqual((await detail(proposal.id)).correctionMail, proposal.custody)
     assert.equal(h.mails.filter(mail => mailTo(mail, 'attacker@example.test')).length, 0)
+    await annualAdvanceCorrection(h, owner, { finance, accountant, agent, checkRevenue, checkBooked, unchanged })
     console.log('AGENT-002 issued credit corrections: exact evidence, frozen preview and mail, human approval, stale and duplicate refusal, governed threshold, durable provider outcomes passed')
     return { invoice: seats.id, proposal: prepared.id, governed: high.id, rejected: rejected.id }
   } finally {
@@ -295,4 +297,101 @@ export async function creditCorrectionFlow(h, owner, onState=async()=>{}) {
     await applyPolicy(h, owner, 'tax.declare', { tax_jurisdiction: previous.tax_jurisdiction, tax_mode: previous.tax_mode, tax_rate: previous.tax_rate, tax_note: previous.tax_note })
     if (previous.taxReady) await api('tax.review', { revision: (await api('business')).revision })
   }
+}
+
+// CAT-001 inherits the ordinary AGENT-002 proposal, approval, credit and
+// message doors. The annual source remains $1,000 in every service month;
+// its reviewed invoice-level credit is a separate issue-month contra entry.
+async function annualAdvanceCorrection(h, owner, { finance, accountant, agent, checkRevenue, checkBooked, unchanged }) {
+  const api = (path, body, status) => h.api(path, owner, body, status)
+  await h.advanceClock('2026-07-15T16:00:00Z')
+  const email = 'synthetic-nectar-annual-correction@example.test'
+  const customer = (await api('customer.create', { external_id: 'synthetic-nectar-201', name: 'Synthetic annual correction', billing_email: email })).id
+  const product = (await api('product.create', { code: 'synthetic-nectar-202', name: 'Synthetic annual platform' })).id
+  const price = (await api('price.create', { product, kind: 'flat', unit_amount: '12000', taxable: true, billing_interval: 'annual', billing_timing: 'advance' })).id
+  const subscription = (await api('subscription.create', { customer, start_date: '2026-01-01', term_months: 24, price: [price] })).id
+  const run = await api('billrun.prepare', { period: '2026-01' })
+  const draft = (await api(`runs/${run.id}`)).invoices.find(row => row.customer_id === customer)
+  assert.ok(draft)
+  await api('invoice.approve', { invoice: draft.id, acknowledge: true })
+  await api('invoice.finalise', { invoice: draft.id, issue_date: '2026-01-01' })
+  const id = draft.id, issued = await api(`invoices/${id}`), revenue = await api(`revenue/${id}`)
+  const fixture = { id, customer, subscription, issued, revenue, subscriptionBefore: await api(`subscriptions/${subscription}`) }
+  assert.deepEqual([issued.subtotal_cents, issued.tax_cents, issued.total_cents], [1200000, 120000, 1320000])
+  const line = issued.lines.find(row => row.price_id === price)
+  assert.deepEqual([line.period_start, line.period_end, line.evidence.calendar.terms.timing], ['2026-01-01', '2027-01-01', 'advance'])
+  const months = Array.from({ length: 12 }, (_, index) => `2026-${String(index + 1).padStart(2, '0')}`)
+  assert.deepEqual(revenue.schedules.flatMap(schedule => schedule.entries.map(entry => [entry.period, entry.amountCents])), months.map(month => [month, 100000]), 'CAT-001 the issued $12,000 advance fee recognizes exactly $1,000 in each actual service month')
+  const payload = { invoice_credit: true, invoice: id, amount: '1500.00', reason: 'Synthetic annual platform overbilling',
+    explanation: 'The original annual platform line billed $12,000 for January through December. The reviewed annual requirement was $10,500; the $1,500 excess is an invoice-level credit.',
+    subject: `Reviewed annual correction for ${issued.number}`,
+    body: 'We reviewed a $1,500 invoice-level credit against the annual platform fee. The original $1,200 tax and the issued invoice remain unchanged; this credit computes no tax reversal. The amount owed falls from $13,200 to $11,700.',
+    citations: [{ line_id: line.id, source: `/app/invoices/${id}/lines/${line.id}`, quote: line.description },
+      { line_id: line.id, source: `/app/invoices/${id}/lines/${line.id}#evidence`, quote: '"timing":"advance"' }] }
+  const propose = () => h.api('proposal.create', agent, { kind: 'amendment', title: payload.reason, payload })
+  const readProposal = proposal => api(`proposals/${proposal}`)
+  const decide = (proposal, who = owner, status = 200, decision = 'approved') => h.api('proposal.decide', who, { proposal, decision }, status)
+  const mailCount = () => h.mails.filter(mail => [mail.to].flat().includes(email)).length
+  const initialMail = mailCount()
+
+  const rejected = await propose()
+  await decide(rejected.id, owner, 200, 'rejected')
+  await unchanged(fixture, [], 1320000)
+  assert.equal(mailCount(), initialMail)
+  const stale = await propose()
+  await h.advanceClock('2026-08-01T16:00:00Z')
+  await decide(stale.id, owner, 409)
+  assert.equal((await readProposal(stale.id)).stale, true, 'CAT-001 an annual correction cannot issue in a different recognition month from the reviewed preview')
+  await unchanged(fixture, [], 1320000)
+  assert.equal(mailCount(), initialMail)
+  await decide(stale.id, owner, 200, 'rejected')
+  await h.advanceClock('2026-07-15T16:00:00Z')
+
+  const prepared = await propose(), saved = await readProposal(prepared.id)
+  const preview = await checkRevenue(saved, fixture)
+  assert.deepEqual(preview.periods, months.map(period => ({ period, beforeCents: 100000, afterCents: period === '2026-07' ? -50000 : 100000, deltaCents: period === '2026-07' ? -150000 : 0 })), 'CAT-001 every annual service-month delta is reviewed, including eleven unchanged months')
+  assert.equal(saved.impact.credit.needsSecondApprover, true)
+  for (const who of [agent, accountant]) await decide(prepared.id, who, 403)
+  await decide(prepared.id, owner, 409)
+  const binding = await h.api('proposal.credit.prepare', finance, { proposal: prepared.id })
+  await decide(prepared.id, finance, 409)
+  assert.equal((await h.api('credit.approve', owner, { request: binding.request }, 409)).error, 'credit_request_proposal_bound')
+  await unchanged(fixture, [], 1320000)
+  assert.equal(mailCount(), initialMail)
+  await decide(prepared.id)
+  const corrected = await unchanged(fixture, [[150000, payload.reason]], 1170000), credit = corrected.credits[0]
+  assert.equal(credit.proposal_id, prepared.id)
+  await checkBooked(saved, fixture, credit)
+  const approved = await readProposal(prepared.id)
+  assert.deepEqual(approved.impact, saved.impact)
+  assert.equal(approved.correctionMail.body, saved.impact.mail.body)
+  assert.deepEqual(JSON.parse(approved.correctionMail.citations_json), saved.impact.mail.citations)
+  assert.equal(approved.correctionMail.status, 'accepted')
+  assert.equal(mailCount(), initialMail + 1)
+  await decide(prepared.id, owner, 409)
+  assert.equal(mailCount(), initialMail + 1)
+
+  const query = `from=2026-01&to=2026-12&customer=${customer}`
+  const actual = await api(`revenue?${query}`)
+  assert.deepEqual(actual.months.map(month => [month.period, month.recognizedCents]), preview.after.periods.map(month => [month.period, month.amountCents]), 'CAT-001 actual recognition equals the exact approved annual correction preview in every month')
+  assert.deepEqual(actual.months.map((month, index) => [month.netBillingsCents, month.closingCents]), months.map((period, index) => [index === 0 ? 1200000 : period === '2026-07' ? -150000 : 0, (11 - index) * 100000]), 'CAT-001 original annual deferral and the separate correction reconcile across the whole service year')
+  assert.deepEqual([actual.netBillingsCents, actual.recognizedCents, actual.closingCents], [1050000, 1050000, 0])
+  const source = await api(`revenue/${id}?${query}`)
+  assert.deepEqual(source.schedules, revenue.schedules)
+  assert.deepEqual(source.credits.map(row => [row.id, row.period, row.amountCents]), [[credit.id, '2026-07', -150000]])
+  const drill = await api(`invoices/${id}/lines/${line.id}`)
+  assert.equal(drill.line.id, line.id)
+  assert.deepEqual(drill.line.evidence, line.evidence)
+  const csv = await h.raw(`/app/exports/revenue.csv?${query}`, { cookie: owner })
+  assert.equal(csv.status, 200)
+  const rows = csvRows(await csv.text()), cents = value => Math.round(Number(value.replace(/^'/, '')) * 100)
+  assert.deepEqual(rows.filter(row => row.row_kind === 'recognition').map(row => [row.period, cents(row.signed_contribution)]), months.map(period => [period, 100000]))
+  assert.deepEqual(rows.filter(row => row.row_kind.startsWith('credit-')).map(row => [row.row_kind, row.period, row.credit_id, cents(row.signed_contribution)]).sort(), [['credit-billing', '2026-07', credit.id, -150000], ['credit-recognition', '2026-07', credit.id, -150000]])
+  const journal = await api(`revenue-journal?${query}`)
+  assert.deepEqual(journal.periods.map(month => [month.period, month.netBillingsCents, month.recognizedCents, month.closingCents]), actual.months.map(month => [month.period, month.netBillingsCents, month.recognizedCents, month.closingCents]))
+  for (const period of journal.periods) assert.equal(period.debitCents, period.creditCents)
+  assert.deepEqual(journal.entries.filter(entry => entry.period === '2026-07').map(entry => [entry.account, entry.debitCents, entry.creditCents]).sort(), [['deferred-revenue', 100000, 0], ['pretax-billings-clearing', 0, 150000], ['recognized-revenue', 50000, 0]])
+  const journalCsv = await h.raw(`/app/exports/revenue-journal.csv?${query}`, { cookie: owner })
+  assert.equal(journalCsv.status, 200)
+  assert.deepEqual(csvRows(await journalCsv.text()).map(row => [row.period, row.account, cents(row.debit), cents(row.credit)]), journal.entries.map(entry => [entry.period, entry.account, entry.debitCents, entry.creditCents]))
 }
