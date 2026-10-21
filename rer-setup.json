@@ -92,7 +92,8 @@
       "kind": "secret",
       "required": false,
       "ownerVisible": true,
-      "group": "owner"
+      "group": "owner",
+      "input": "entered"
     }
   ],
   "steps": [

@@ -16,6 +16,7 @@ CREATE TABLE nc_imported_collections (
   charge_ref TEXT,
   payment_ref TEXT,
   payment_intent_ref TEXT,
+  history_payment_id TEXT,
   custody TEXT,
   error_code TEXT,
   prepared_by TEXT NOT NULL,

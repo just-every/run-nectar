@@ -13,6 +13,7 @@ import { cancellationPlan } from './interval-cancel-plan'
 import { cancellationIssuedGuard, cancellationTransitionStatements, prepareIntervalCancellation } from './interval-cancel'
 import { billingPeriodContaining, MONTHLY_ARREARS, storedBillingTerms } from './billing-calendar'
 import { intervalReactivationStatements } from './interval-reactivate'
+import { clockInstant } from './clock'
 
 export async function cancelSubscription(env: Bindings, actor: Actor, input: Input) {
   requireMember(actor, 'approve')
@@ -26,9 +27,9 @@ export async function cancelSubscription(env: Bindings, actor: Actor, input: Inp
   const mode = input.text('mode',{max:20})
   insist(mode === 'immediate' || mode === 'term_end', 'invalid_cancel_mode')
   const business = await requireBusiness(env)
-  const requested = requireDate(input.text('effective_date',{max:10,optional:true}) || today(business.timezone),'effective_date')
-  const cadence = await one(env, 'SELECT c.* FROM nc_items i JOIN nc_price_intervals c ON c.price_id=i.price_id WHERE i.subscription_id=? AND i.effective_from<=? AND (i.effective_to IS NULL OR i.effective_to>?) ORDER BY i.effective_from,i.id LIMIT 1', sub.id, requested, requested)
-  const fallbackEnd = cadence ? billingPeriodContaining(sub.billing_anchor_date ?? periodContaining(sub.anchor_day, sub.start_date).start, storedBillingTerms(cadence) ?? MONTHLY_ARREARS, requested).end : periodContaining(sub.anchor_day,requested).end
+  const requested = requireDate(input.text('effective_date',{max:10,optional:true}) || today(business.timezone,clockInstant(env)),'effective_date')
+  const cadences = await all(env, "SELECT c.* FROM nc_items i JOIN nc_prices p ON p.id=i.price_id JOIN nc_price_intervals c ON c.price_id=i.price_id WHERE i.subscription_id=? AND p.kind<>'unit' AND i.effective_from<=? AND (i.effective_to IS NULL OR i.effective_to>?)", sub.id, requested, requested)
+  const fallbackEnd = cadences.map(cadence => billingPeriodContaining(sub.billing_anchor_date ?? periodContaining(sub.anchor_day, sub.start_date).start, storedBillingTerms(cadence) ?? MONTHLY_ARREARS, requested).end).sort().at(-1) ?? periodContaining(sub.anchor_day,requested).end
   const date = mode === 'term_end' ? term?.end_date ?? sub.contract_end_date ?? fallbackEnd : requested
   insist(!term||date<=term.end_date,'invalid_end_date')
   insist(!sub.contract_end_date || term || date <= sub.contract_end_date, 'invalid_end_date')

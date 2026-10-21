@@ -10,6 +10,29 @@ import { metricEvents } from './meter-definitions'
 import { addRational, compareRational, rational, type MetricPlan } from './metric-plan'
 import { preparePolicyChange } from './policy-changes'
 import { BALANCE_SQL } from './receivables'
+import { billingAnchor, billingPeriodContaining, MONTHLY_ARREARS, storedBillingTerms } from './billing-calendar'
+import { subscriptionCalendar } from './billing-plan'
+
+async function quotaPeriod(env: Bindings, sub: Row, product: string, meter: string, day: string) {
+  const [calendar, items] = await Promise.all([
+    subscriptionCalendar(env, sub),
+    all(env, `SELECT p.meter_id,b.interval_unit,b.interval_count,b.billing_timing FROM nc_items i
+      JOIN nc_prices p ON p.id=i.price_id LEFT JOIN nc_price_intervals b ON b.price_id=p.id
+      WHERE i.subscription_id=? AND p.product_id=? AND i.effective_from<=? AND (i.effective_to IS NULL OR i.effective_to>?)`, sub.id, product, day, day),
+  ])
+  const metered = items.filter(item => item.meter_id === meter)
+  const candidates = metered.length ? metered : items
+  const cadences = new Map(candidates.map(item => {
+    const terms = storedBillingTerms(item) ?? MONTHLY_ARREARS
+    return [`${terms.unit}:${terms.count}`, terms] as const
+  }))
+  insist(cadences.size === 1, 'feature_quota_billing_period_ambiguous', 409)
+  // Old subscriptions retain their existing monthly anchor semantics.
+  if (!calendar.enabled) return periodContaining(sub.anchor_day, day)
+  const terms = [...cadences.values()][0]!
+  const { start, end } = billingPeriodContaining(billingAnchor(calendar.basis), terms, day)
+  return { start, end }
+}
 
 export async function configureFeaturePolicy(env: Bindings, actor: Actor, input: Input) {
   requireOwner(actor)
@@ -34,7 +57,7 @@ export async function featureDecision(env: Bindings, sub: Row, product: string, 
   if (policy?.meter_id) {
     const meter = await one(env, 'SELECT * FROM nc_meters WHERE id=?', policy.meter_id)
     insist(meter, 'meter_not_found', 404)
-    const period = periodContaining(sub.anchor_day, day)
+    const period = await quotaPeriod(env, sub, product, meter.id, day)
     const from = zonedStart(period.start, timezone), to = zonedStart(period.end, timezone)
     const events = await metricEvents(env, sub.customer_id, meter.source_meter_id ?? meter.id, to)
     let used = rational(0n)

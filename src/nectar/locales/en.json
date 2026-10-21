@@ -205,5 +205,8 @@
   "usageCorrection.footer": "Policy: {policy}. Negative corrections are numbered credit notes. Next-invoice credits are carried to later invoices; other credits offset the unpaid original, carrying any excess. No cash refund or negative invoice is created. Positive differences bill next period or on a separate correcting invoice. Original event IDs and revenue details: {receipt}.",
   "usageCorrection.next_invoice": "next invoice",
   "usageCorrection.correcting_invoice": "correcting invoice",
-  "usageCorrection.credit_note": "credit note / correcting debit"
+  "usageCorrection.credit_note": "credit note / correcting debit",
+  "renewal.save.discount_periods": "{percent}% off the selected fixed or seat price for {months} invoice periods",
+  "return.offer.body_periods": "Resume this subscription with {percent}% off the selected fixed or seat price for {months} invoice periods, including the current unissued period. Usage is excluded. The discount ends automatically.",
+  "winback.body_periods": "Return to your subscription with {percent}% off the selected fixed or seat price for {months} invoice periods. Usage is excluded. Offer expires {date} in {zone}. Accept once: {link}"
 }

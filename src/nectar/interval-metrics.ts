@@ -3,10 +3,20 @@
 import { billingAnchor, billingPeriodContaining, MONTHLY_ARREARS } from './billing-calendar'
 import { localDate, zonedStart } from './dates'
 import { metricUsage } from './metric-rating'
+import { canonical } from './core'
 import type { Exception, Line, RatingInput } from './rating'
 
 export function intervalMetricUsage(input: RatingInput) {
   const lines: Line[] = [], exceptions: Exception[] = [], consumed = new Set<string>()
+  for (const [index, item] of input.items.entries()) {
+    const price = input.prices[item.priceId]
+    if (!price?.metric) continue
+    const duplicate = input.items.slice(0, index).find(other => {
+      const previous = input.prices[other.priceId]
+      return previous?.meterId === price.meterId && canonical(previous.metric?.dimensions) === canonical(price.metric!.dimensions) && item.from < (other.to ?? '9999') && other.from < (item.to ?? '9999')
+    })
+    if (duplicate) exceptions.push({ code: 'metric_duplicate_selection', message: 'The same metric version and dimensions overlap on this subscription.', detail: { items: [duplicate.id, item.id] } })
+  }
   for (const item of input.items) {
     const price = input.prices[item.priceId], metric = price?.metric
     if (!metric) continue

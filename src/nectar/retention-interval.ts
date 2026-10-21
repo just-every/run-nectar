@@ -12,6 +12,7 @@ export interface RetentionDuration {
 /** A quoted duration counts actual selected-price invoice windows, never the
  * unrelated usage cadence of a mixed subscription. Ambiguous selection refuses. */
 export async function retentionDuration(env: Bindings, sub: Row, day: string, count: number, priceId = '', fromDate?: string, reactivating = false): Promise<RetentionDuration> {
+  insist(!reactivating || !sub.contract_end_date || day < sub.contract_end_date, 'reactivation_requires_approved_term', 409)
   const { basis, enabled } = await subscriptionCalendar(env, sub)
   if (!enabled) {
     const from = fromDate ?? periodContaining(sub.anchor_day, day).start
@@ -23,7 +24,7 @@ export async function retentionDuration(env: Bindings, sub: Row, day: string, co
   insist(cadences.size === 1 && (priceId || eligible.length === 1), 'retention_price_required_for_mixed_intervals', 409)
   const selected = priceId || eligible[0][0], terms = basis.prices[selected].billing ?? MONTHLY_ARREARS
   const calendar: CalendarBasis = { ...basis, items: basis.items.filter(item => item.priceId === selected) }
-  if (reactivating) calendar.subscription = { ...calendar.subscription, endDate: null, contractEndDate: null }
+  if (reactivating) calendar.subscription = { ...calendar.subscription, endDate: null, contractEndDate: sub.contract_end_date ?? null }
   const anchor = billingAnchor(calendar), containing = billingPeriodContaining(anchor, terms, fromDate ?? day)
   const through = intervalBoundary(anchor, terms, containing.index + count + 1)
   const windows = dueBillingWindows(calendar, containing.start, addDays(through, 1))
@@ -33,4 +34,12 @@ export async function retentionDuration(env: Bindings, sub: Row, day: string, co
   const from = fromDate ?? windows[0].period.start, to = windows.at(-1)!.period.end
   insist(windows[0].period.start === from && windows.every((window, i) => !i || windows[i - 1].period.end === window.period.start), 'retention_periods_must_be_contiguous', 409)
   return { from, to, priceId: selected, billing: terms, windows, calendar }
+}
+
+/** A scoped price discount cannot be blocked by an unrelated usage invoice;
+ * every already-issued affected service line remains protected. */
+export function retentionIssuedCondition(priceId: string | null, kind: string) {
+  return priceId && kind === 'discount'
+    ? { sql: "NOT EXISTS(SELECT 1 FROM nc_invoices i JOIN nc_invoice_lines l ON l.invoice_id=i.id WHERE i.subscription_id=? AND i.status='issued' AND l.price_id=? AND l.period_end>?)", scoped: true }
+    : { sql: "NOT EXISTS(SELECT 1 FROM nc_invoices WHERE subscription_id=? AND status='issued' AND period_end>?)", scoped: false }
 }

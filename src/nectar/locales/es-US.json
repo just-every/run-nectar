@@ -205,5 +205,8 @@
   "usageCorrection.footer": "Política: {policy}. Las correcciones negativas generan notas de crédito numeradas. Los créditos para la próxima factura se aplican a facturas posteriores; los demás reducen el saldo pendiente de la factura original y conservan cualquier excedente. No se crea un reembolso en efectivo ni una factura negativa. Las diferencias positivas se facturan en el próximo período o en una factura correctora separada. Identificadores de los eventos originales y detalles de ingresos: {receipt}.",
   "usageCorrection.next_invoice": "próxima factura",
   "usageCorrection.correcting_invoice": "factura correctora",
-  "usageCorrection.credit_note": "nota de crédito / débito corrector"
+  "usageCorrection.credit_note": "nota de crédito / débito corrector",
+  "renewal.save.discount_periods": "{percent} % de descuento en el precio fijo o por usuario seleccionado durante {months} períodos de facturación",
+  "return.offer.body_periods": "Reanude esta suscripción con un {percent} % de descuento en el precio fijo o por usuario seleccionado durante {months} períodos de facturación, incluido el período actual sin emitir. El uso no tiene descuento. El descuento termina automáticamente.",
+  "winback.body_periods": "Regrese a su suscripción con un {percent} % de descuento en el precio fijo o por usuario seleccionado durante {months} períodos de facturación. El uso no tiene descuento. La oferta vence el {date} en {zone}. Acéptela una sola vez: {link}"
 }

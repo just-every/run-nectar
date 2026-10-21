@@ -24,14 +24,14 @@ export function stripeCollectionEdge() {
     if(path==='/invoice_payments')return response(list([]))
     if(path==='/payment_intents/search') {
       const query=url.searchParams.get('query')??''
-      return response({...list([...payments.values()].filter(row=>Object.values(row.metadata).some(value=>query.includes(value)))),next_page:null})
+      return response({...list([...payments.values()].filter(row=>Object.values(row.metadata).some(value=>query.includes(value)))),next_page:null,object:'search_result'})
     }
     if(path==='/payment_intents'&&body) {
       assert.equal(body.get('amount'),'11000');assert.equal(body.get('currency'),'usd');assert.equal(body.get('customer'),'synthetic-nectar-1')
       assert.equal(body.get('payment_method'),'synthetic-nectar-method');assert.equal(body.get('confirm'),'true');assert.equal(body.get('off_session'),'true');assert.equal(body.has('receipt_email'),false)
       const metadata=Object.fromEntries([...body].filter(([key])=>key.startsWith('metadata[')).map(([key,value])=>[key.slice(9,-1),value]))
       const id=`synthetic-nectar-intent-${payments.size+1}`,charge=`synthetic-nectar-charge-${payments.size+1}`,created=Date.parse('2026-07-01T16:00:00Z')/1000
-      const receipt={id,object:'payment_intent',status:'succeeded',amount:11000,amount_received:11000,currency:'usd',customer:'synthetic-nectar-1',livemode:false,latest_charge:charge,metadata,created}
+      const receipt={id,object:'payment_intent',status:'succeeded',amount:11000,amount_received:11000,currency:'usd',customer:'synthetic-nectar-1',livemode:false,latest_charge:charge,payment_method:'synthetic-nectar-method',metadata,created}
       payments.set(id,receipt);charges.set(charge,{id:charge,object:'charge',payment_intent:id,customer:'synthetic-nectar-1',paid:true,captured:true,status:'succeeded',currency:'usd',amount:11000,amount_captured:11000,livemode:false,created})
       if(loseNextPayment){loseNextPayment=false;throw new Error('synthetic lost provider response')}
       return response(receipt)
@@ -43,7 +43,7 @@ export function stripeCollectionEdge() {
       const id=path.split('/')[2],invoice=invoices.get(id);assert.ok(invoice,`known original ${id}`)
       if(body&&path.endsWith('/pay')) {
         assert.equal(body.get('paid_out_of_band'),'true','native charge is mirrored, never charged through the old invoice')
-        invoice.status='paid';invoice.amount_paid=invoice.total;invoice.amount_remaining=0;invoice.auto_advance=false
+        invoice.status='paid';invoice.amount_paid=invoice.total;invoice.amount_remaining=0;invoice.auto_advance=false;invoice.paid_out_of_band=true
         if(loseNextMirror){loseNextMirror=false;throw new Error('synthetic lost mirror response')}
       } else if(body){assert.equal(body.get('auto_advance'),'false');invoice.auto_advance=false}
       return response(invoice)

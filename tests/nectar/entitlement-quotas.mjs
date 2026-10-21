@@ -151,6 +151,87 @@ export async function entitlementQuotasFlow(h, owner) {
   assert.equal(issued.status, 'issued')
   assert.equal(issued.total_cents, 20025, 'ENT-002 overage keeps ordinary metered pricing: 10,012.5 requests at $0.02, with no invented free monetary allowance')
   assert.equal(issued.lines.filter(line => line.price_id === overage.price).reduce((sum, line) => sum + line.amount_cents, 0), 20025)
+  await intervalQuotas(h, owner, meter)
   console.log('ENT-002 exact quotas, soft warning, hard restriction, priced overage, issued-invoice grace, manual settlement, lifecycle preservation and authority passed')
   return { customer: overage.customer, subscription: overage.subscription, invoice: issued.id }
+}
+
+// A quota inherits the billed meter's calendar, including its full anniversary.
+// When access usage is not sold as a meter, only an unambiguous product cadence
+// can supply that calendar.
+async function intervalQuotas(h, owner, meter) {
+  const api = (path, body, status) => h.api(path, owner, body, status)
+  const feature = 'synthetic-nectar-interval-access'
+  const make = async (number, intervals, start, metered = true) => {
+    const code = `synthetic-nectar-${number}`
+    const product = (await api('product.create', { code, name: `Synthetic interval quota ${number}` })).id
+    const prices = []
+    for (const [index, interval] of intervals.entries()) prices.push((await api('price.create', {
+      product, kind: metered && index === 0 ? 'unit' : 'flat',
+      ...(metered && index === 0 ? { meter: meter.id } : {}),
+      unit_amount: interval === 'weekly' ? '3' : metered && index === 0 ? '2' : '1',
+      taxable: false, billing_interval: interval, billing_timing: 'arrears',
+    })).id)
+    await api('feature.grant', { product, feature })
+    await applyPolicy(h, owner, 'feature.policy', { product, feature, meter: meter.id, quota: '10', quota_policy: 'hard' })
+    const customer = (await api('customer.create', { external_id: code, name: code, billing_email: `${code}@example.test` })).id
+    const subscription = (await api('subscription.create', { customer, start_date: start, anchor_day: 1, price: prices })).id
+    return { code, customer, subscription, price: prices[0] }
+  }
+  const read = (row, date, status) => api(`entitlements/${row.customer}?feature=${feature}${date ? `&date=${date}` : ''}`, undefined, status)
+  const decision = (result, row) => result.paths.find(path => path.subscription === row.subscription)
+  const usage = async (row, suffix, quantity, occurred_at) => {
+    assert.equal((await api('usage.submit', { events: [{ event_id: `${row.code}-${suffix}`, customer: row.code, meter: meter.code, quantity, occurred_at }] })).accepted, 1)
+  }
+  const quota = async (row, date, period, used, allowed) => {
+    const result = await read(row, date), path = decision(result, row)
+    assert.deepEqual(path.quota.period, period)
+    assert.equal(path.quota.used, used)
+    assert.equal(result.allowed, allowed)
+    return path.quota
+  }
+  const issue = async (row, from, to, cents, issueDate) => {
+    const run = await api('billrun.prepare', { period: '2026-11' })
+    const candidates = (await api(`runs/${run.id}`)).invoices.filter(invoice => invoice.customer_id === row.customer)
+    const invoices = await Promise.all(candidates.map(invoice => api(`invoices/${invoice.id}`)))
+    const draft = invoices.find(invoice => invoice.lines.some(line => line.price_id === row.price && line.period_start === from && line.period_end === to))
+    assert.ok(draft, 'Actual interval billing includes the same service period as its quota')
+    await api('invoice.approve', { invoice: draft.id, acknowledge: true })
+    await api('invoice.finalise', { invoice: draft.id, issue_date: issueDate })
+    const issued = await api(`invoices/${draft.id}`)
+    assert.equal(issued.status, 'issued')
+    const lines = issued.lines.filter(line => line.price_id === row.price)
+    assert.equal(lines.reduce((sum, line) => sum + line.amount_cents, 0), cents, 'The ordinary invoice rates the actual quota-period usage without a monetary allowance')
+    return issued
+  }
+
+  await h.advanceClock('2026-11-14T23:59:59Z')
+  const annual = await make(188, ['annual', 'monthly'], '2025-11-15')
+  await usage(annual, 'earlier-month', '6', '2026-10-01T12:00:00Z')
+  await usage(annual, 'last-day', '4', '2026-11-14T12:00:00Z')
+  const annualPeriod = { start: '2025-11-15', end: '2026-11-15' }
+  await quota(annual, '2026-11-14', annualPeriod, '10', false)
+  const annualAccess = await make(189, ['annual'], '2025-11-15', false)
+  await usage(annualAccess, 'access', '6', '2026-10-01T12:00:00Z')
+  await quota(annualAccess, '2026-11-14', annualPeriod, '6', true)
+  const ambiguous = await make(190, ['annual', 'monthly'], '2025-11-15', false)
+  assert.equal((await read(ambiguous, '2026-11-14', 409)).error, 'feature_quota_billing_period_ambiguous', 'Conflicting nonmetered product cadences cannot silently supply a monthly quota')
+
+  await h.advanceClock('2026-11-15T00:00:00Z')
+  await quota(annual, undefined, { start: '2026-11-15', end: '2027-11-15' }, '0', true)
+  await usage(annual, 'anniversary', '3', '2026-11-15T00:00:00Z')
+  const next = await quota(annual, undefined, { start: '2026-11-15', end: '2027-11-15' }, '3', true)
+  assert.deepEqual(next.eventIds, [`${annual.code}-anniversary`], 'The anniversary event belongs only to the new annual quota')
+  await issue(annual, annualPeriod.start, annualPeriod.end, 2000, '2026-11-15')
+
+  const weekly = await make(191, ['weekly'], '2026-11-16')
+  await h.advanceClock('2026-11-22T23:59:59Z')
+  await usage(weekly, 'week-start', '4', '2026-11-17T12:00:00Z')
+  await usage(weekly, 'week-end', '6', '2026-11-22T12:00:00Z')
+  await quota(weekly, undefined, { start: '2026-11-16', end: '2026-11-23' }, '10', false)
+  await h.advanceClock('2026-11-23T00:00:00Z')
+  await quota(weekly, undefined, { start: '2026-11-23', end: '2026-11-30' }, '0', true)
+  await usage(weekly, 'next-week', '1', '2026-11-23T00:00:00Z')
+  await quota(weekly, undefined, { start: '2026-11-23', end: '2026-11-30' }, '1', true)
+  await issue(weekly, '2026-11-16', '2026-11-23', 3000, '2026-11-23')
 }

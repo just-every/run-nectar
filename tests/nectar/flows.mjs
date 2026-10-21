@@ -34,6 +34,11 @@ if (!process.argv.includes('--core-only')) {
 await runIsolated('customer-search','customerSearchFlow')
 await runIsolated('upcoming','upcomingFlow')
 await runIsolated('numbering','numberingFlow')
+await runIsolated('numbering-entities','numberingEntitiesFlow')
+await runIsolated('intervals','intervalsFlow')
+await runIsolated('interval-cancel','intervalCancellationFlow')
+await runIsolated('contract-setup','contractIntervalSetup')
+await runIsolated('retention','retentionIntervalFlow')
 await runIsolated('move-history','moveHistoryFlow')
 await runIsolated('move-collection','moveCollectionFlow')
 await runIsolated('entitlement-quotas','entitlementQuotasFlow')
@@ -420,7 +425,7 @@ try {
       assert.equal(response.status, 401, path)
       const accountant = await h.raw(`/api/nectar/${path}`, { cookie: cookie.accountant })
       assert.ok([200, 400, 403, 404].includes(accountant.status), `${path}: ${accountant.status}`)
-      if (['members', 'credentials', 'imports'].includes(path)) assert.equal(accountant.status, 403, path)
+      if (['members', 'credentials', 'imports','billing-entities'].includes(path)) assert.equal(accountant.status, 403, path)
     }
     for (const [pattern] of PAGE_DOORS) {
       const path = pattern.replace(/^\^|\$$/g, '').replace(/\(\[[^)]*\]\+\)/g, 'none').replace(/\\\./g, '.')

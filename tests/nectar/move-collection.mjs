@@ -59,5 +59,12 @@ export async function moveCollectionFlow(h,owner,{onState=async()=>{},prepare,ex
   assert.equal(edge.calls.filter(call=>call.path==='/payment_intents'&&call.method==='POST').length,2,'uncertain attempt is never repeated')
   assert.equal((await api(`reports/collections?period=2026-07&customer=${customer}`)).totalCents,22000)
   await api('import.job',{job:imported.job,action:'undo'},409)
+  const erasure=await api('erasure.request',{customer})
+  await api('erasure.verify',{request:erasure.id,reason:'Independently verified the imported account owner',evidence:file('owner.txt','Verified request evidence','text/plain')})
+  const erased=await api('erasure.approve',{request:erasure.id,confirm:true})
+  assert.ok(erased.receipt.changed.some(row=>row.kind==='nc_imported_collections'))
+  assert.equal((await api(`reports/collections?period=2026-07&customer=${customer}`)).totalCents,22000,'erasure retains actual collected amounts and dates')
+  await api('imported.collection.finalize',{request:checked.id,confirm:true},409)
+  await api('imported.collection.prepare',{invoice:invoice(4)},409)
   console.log('MOVE collection: exact original, native charge, out-of-band mirror, source refusal, uncertainty, read-only reconciliation and no second charge')
 }

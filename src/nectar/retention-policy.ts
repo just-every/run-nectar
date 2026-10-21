@@ -60,11 +60,18 @@ function settings(input: Input): RetentionSettings {
 }
 
 async function validateDowngrade(env:Bindings,payload:RetentionSettings) {
-  if(!payload.enabled||payload.save_kind!=='downgrade')return []
-  const rows=await all(env,"SELECT id,kind,meter_id,dimensions_json FROM nc_prices WHERE id IN (?,?) AND status='active'",payload.downgrade_source_price_id,payload.downgrade_price_id)
+  const scoped=[]
+  for (const id of new Set([payload.save_price_id,payload.pause_price_id,payload.winback_price_id].filter(Boolean))) {
+    insist(await one(env,"SELECT 1 FROM nc_prices WHERE id=? AND status='active' AND kind IN ('flat','seat')",id),'retention_price_unavailable',409)
+    scoped.push(guard(env,'retention_price_unavailable',"EXISTS(SELECT 1 FROM nc_prices WHERE id=? AND status='active' AND kind IN ('flat','seat'))",id))
+  }
+  if(!payload.enabled||payload.save_kind!=='downgrade')return scoped
+  const rows=await all(env,"SELECT p.id,p.kind,p.meter_id,p.dimensions_json,b.interval_unit,b.interval_count,b.billing_timing FROM nc_prices p LEFT JOIN nc_price_intervals b ON b.price_id=p.id WHERE p.id IN (?,?) AND p.status='active'",payload.downgrade_source_price_id,payload.downgrade_price_id)
   const source=rows.find(r=>r.id===payload.downgrade_source_price_id),target=rows.find(r=>r.id===payload.downgrade_price_id)
   insist(source&&target&&source.id!==target.id&&source.kind===target.kind&&source.meter_id===target.meter_id&&source.dimensions_json===target.dimensions_json,'downgrade_not_compatible',409)
-  return [guard(env,'downgrade_not_compatible',"(SELECT COUNT(*) FROM nc_prices WHERE id IN (?,?) AND status='active')=2",source.id,target.id)]
+  const cadence=(price:Record<string,any>)=>JSON.stringify([price.interval_unit??'month',price.interval_count??1,price.billing_timing??'arrears'])
+  insist(cadence(source)===cadence(target),'downgrade_not_compatible',409)
+  return [...scoped,guard(env,'downgrade_not_compatible',"(SELECT COUNT(*) FROM nc_prices WHERE id IN (?,?) AND status='active')=2",source.id,target.id)]
 }
 
 export async function prepareRetentionPolicy(env: Bindings, actor: Actor, input: Input) {
