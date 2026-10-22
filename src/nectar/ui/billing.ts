@@ -1,4 +1,3 @@
-import {hierarchyCreditSection} from './hierarchy-credits'
 import { nativeCollectionSection } from './native-collection'
 // Billing: bill runs, the bill-run review
 // and one invoice with its lines, calculation evidence, credits and payments.
@@ -100,7 +99,6 @@ export async function invoicePage(env: Bindings, actor: Actor, id: string, url: 
     ${i.status === 'draft' && approver ? h`<section class="card" aria-labelledby="decide"><h2 id="decide">Approve</h2><p class="hint">Approval names these exact inputs. If usage, prices, contract terms or tax change before finalizing, the approval no longer holds.</p>
       ${form('invoice.approve', `/app/invoices/${i.id}`, h`${hidden('invoice', i.id)}${i.exceptions.length ? check('I reviewed the exceptions above', 'acknowledge') : ''}`, 'Approve this invoice', { primary: true })}</section>` : ''}
     ${i.status === 'approved' && approver ? h`<section class="card"><h2>Finalize</h2>${form('invoice.finalise', `/app/invoices/${i.id}`, h`${hidden('invoice', i.id)}${field('Invoice date (default today)', 'issue_date', { type: 'date', required: false, hint: 'Any day from the service date for standalone work, or the saved billing due date, up to today.' })}`, 'Number and issue this invoice', { layout: 'row-form' })}</section>` : ''}
-    ${await hierarchyCreditSection(env,actor,i)}
     ${i.status === 'issued' ? h`<section class="card" aria-labelledby="recv"><h2 id="recv">Credits and payments</h2>
       ${table(['Credit note', 'Reason', 'Face amount$', 'Applied here$'], i.credits.map((c: any) => [h`<span id="credit-${c.id}">${c.number}</span> ${metadataLink('credit-note',c.id)}`, c.reason, cents(c.amount_cents), cents(c.applied_cents??c.amount_cents)]), { empty: 'No credit notes.' })}
       ${table(['Carried correction credit','Applied$'],i.carriedApplications.map((a:any)=>[a.number,cents(a.amount_cents)]),{empty:'No carried correction credit applied.'})}

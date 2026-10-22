@@ -350,17 +350,6 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "parent": "text",
     "revision": "integer"
   },
-  "hierarchy.credit.approve": {
-    "confirm": "flag",
-    "request": "text"
-  },
-  "hierarchy.credit.prepare": {
-    "amount": "text",
-    "consent": "flag",
-    "grant": "text",
-    "invoice": "text",
-    "reason": "text"
-  },
   "hierarchy.invoice.prepare": {
     "invoices": "list",
     "parent": "text"

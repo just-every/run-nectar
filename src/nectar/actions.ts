@@ -1,4 +1,3 @@
-import {prepareHierarchyCredit,approveHierarchyCredit} from './hierarchy-credits'
 import { preparePlanChange,decidePlanChange,preparePlanChangeCredit } from './plan-changes'
 import { setHierarchy,prepareConsolidation,recordHierarchyCommitment } from './hierarchies'
 import { registerWebhook,rotateWebhook,disableWebhook,replayWebhook,dispatchWebhookDoor } from './webhooks'
@@ -85,8 +84,6 @@ export const actions: Record<string, Handler> = {
   'plan.change.credit.prepare': preparePlanChangeCredit,
   'plan.change.prepare': preparePlanChange,
   'plan.change.decide': decidePlanChange,
-  'hierarchy.credit.prepare': prepareHierarchyCredit,
-  'hierarchy.credit.approve': approveHierarchyCredit,
   'hierarchy.configure': setHierarchy,
   'hierarchy.invoice.prepare': prepareConsolidation,
   'hierarchy.commitment': recordHierarchyCommitment,
