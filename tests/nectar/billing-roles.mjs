@@ -28,7 +28,7 @@ const EXPECTED = {
     pages: ['prepaidRefundList', 'prepaidRefundSource', 'numberRegister', 'customers', 'customer', 'certificateFile', 'invoice', 'receivables', 'noticeFile', 'cadences', 'billingAnswers', 'reportLine', 'metadataList'],
   },
   sales: {
-    actions: ['change.prepare', 'amendment.propose', 'contract.prepare'],
+    actions: ['change.prepare', 'plan.change.prepare', 'amendment.propose', 'contract.prepare'],
     api: ['customers', 'customer', 'catalog', 'promotions', 'subscription', 'upcoming', 'entitlement', 'metadata', 'metadataObjects'],
     pages: ['customers', 'customer', 'certificateFile', 'catalog', 'subscription', 'metadata', 'metadataList'],
   },

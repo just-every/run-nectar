@@ -1,10 +1,11 @@
 import type { Bindings } from '../auth.server'
-import { actorLabel,canRead,requireAny,requireMember,requireRead,type Actor } from './actor'
+import { actorLabel,can,canRead,requireAny,requireMember,requireRead,type Actor } from './actor'
 import { all,commit,fingerprint,guard,insist,newId,now,one,parseJson,stmt,type Row } from './core'
 import { clockInstant } from './clock'
 import { requireBusiness } from './business'
 import { addDays,localDate } from './dates'
 import { lifecyclePolicy } from './lifecycle-policy'
+import { requireFreshFactor } from './mfa'
 import { requireSubscription } from './subscriptions'
 import { Input } from './input'
 import { planChangeLine,planChangeQuote } from './plan-change-preview'
@@ -17,8 +18,9 @@ import { invoiceContent } from './invoice-content'
 import { carriedUsageCredits,usageCreditApplicationLines } from './usage-correction-records'
 
 const reason='Unused advance service from approved plan change'
+const quoteView=(q:Row)=>({effectiveDate:q.effectiveDate,period:q.period,policy:q.policy,mode:q.mode,before:q.before,after:q.after,delta:q.delta,waivedDelta:q.waivedDelta})
 export async function preparePlanChange(env: Bindings, actor: Actor, input: Input) {
-  requireAny(actor,['records','draft']);requireRead(actor,'invoices');requireRead(actor,'subscriptions')
+  requireAny(actor,['records','draft']);requireRead(actor,'subscriptions')
   input.only(['subscription','item','price','quantity','mode','returnTo'])
   const sub=await requireSubscription(env,input.text('subscription')),item=await one(env,'SELECT * FROM nc_items WHERE id=? AND subscription_id=?',input.text('item'),sub.id)
   insist(item&&sub.billing_mode==='live'&&!sub.erased_at,'item_not_found',404)
@@ -31,13 +33,13 @@ export async function preparePlanChange(env: Bindings, actor: Actor, input: Inpu
     guard(env,'policy_changed','COALESCE((SELECT revision FROM nc_lifecycle_policy WHERE singleton=1),0)=?',policy.revision),
     stmt(env,'INSERT INTO nc_plan_changes(id,subscription_id,customer_id,item_id,new_item_id,new_price_id,new_quantity,effective_date,mode,policy,policy_revision,subscription_revision,source_invoice_id,quote_json,basis,prepared_by,prepared_name,prepared_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',id,sub.id,sub.customer_id,item.id,newItem,price.id,quantity,quote.effectiveDate,mode,policy.prorationPolicy,policy.revision,sub.revision,quote.sourceInvoice,JSON.stringify(quote),quote.basis,actor.id,actorLabel(actor),now()),
   ]
-  if(quote.delta.totalCents<0){
+  if(quote.delta.totalCents<0&&can(actor,'approve')){
     requireMember(actor,'approve')
     const invoice=await issuedInvoice(env,quote.sourceInvoice),request=newId()
     statements.push(stmt(env,'INSERT INTO nc_credit_requests(id,invoice_id,amount_cents,reason,prepared_by,prepared_name,prepared_at,basis,policy_revision,balance_cents) VALUES(?,?,?,?,?,?,?,?,?,?)',request,invoice.id,-quote.delta.totalCents,reason,actor.id,actorLabel(actor),now(),await creditBasis(invoice,cp),cp.revision,invoice.balance_cents),stmt(env,'INSERT INTO nc_plan_change_credit_requests(request_id,change_id,invoice_id,customer_id) VALUES(?,?,?,?)',request,id,invoice.id,sub.customer_id))
   }
   await commit(env,statements,{actor:actorLabel(actor),action:'plan-change.prepare',subject:id,detail:{subscription:sub.id,mode,policy:policy.prorationPolicy,effective:quote.effectiveDate,basis:quote.basis,delta:quote.delta}})
-  return {id:sub.id,change:id,quote}
+  return {id:sub.id,change:id,quote:canRead(actor,'invoices')?quote:quoteView(quote)}
 }
 async function documentInput(env: Bindings, row: Row, date: string) {
   const b=await requireBusiness(env)
@@ -70,6 +72,7 @@ export async function decidePlanChange(env: Bindings, actor: Actor, input: Input
   }
   insist(row.prepared_by!==actor.id,'second_approver_required',409)
   const sub=await requireSubscription(env,row.subscription_id),item=await one(env,'SELECT * FROM nc_items WHERE id=?',row.item_id),policy=await lifecyclePolicy(env)
+  insist(!sub.erased_at,'customer_erased',410)
   insist(sub.revision===row.subscription_revision&&policy.revision===row.policy_revision,'stale',409)
   const b=await requireBusiness(env),saved=parseJson<Row>(row.quote_json,{}),date=localDate(clockInstant(env),b.timezone)
   // An immediate quote names its actual business-local date; approval tomorrow
@@ -101,8 +104,32 @@ export async function decidePlanChange(env: Bindings, actor: Actor, input: Input
   if(debit){const {finalise}=await import('./billruns');await finalise(env,actor,Input.of({invoice:debit,issue_date:date}))}
   return {id:sub.id,status:'approved',change:row.id,invoice:debit,credit,delta:quote.delta}
 }
+// Sales prepare a priced quote, never a credit request or invoice read.
+export async function preparePlanChangeCredit(env:Bindings,actor:Actor,input:Input){
+  requireMember(actor,'approve');await requireFreshFactor(env,actor)
+  input.only(['change','returnTo'])
+  const row=await one(env,"SELECT * FROM nc_plan_changes WHERE id=? AND status='pending'",input.text('change'))
+  insist(row,'pending_change_not_found',404)
+  const saved=parseJson<Row>(row.quote_json,{}),sub=await requireSubscription(env,row.subscription_id),item=await one(env,'SELECT * FROM nc_items WHERE id=?',row.item_id),policy=await lifecyclePolicy(env)
+  insist(!sub.erased_at,'customer_erased',410)
+  insist(saved.delta?.totalCents<0,'no_credit_required',409)
+  insist(sub.revision===row.subscription_revision&&policy.revision===row.policy_revision,'stale',409)
+  const b=await requireBusiness(env),date=localDate(clockInstant(env),b.timezone)
+  insist(row.mode==='immediate'?date===row.effective_date:date<=row.effective_date,'plan_change_date_changed',409)
+  const quote=await planChangeQuote(env,sub,item!,row.new_price_id,row.new_quantity,row.mode,row.mode==='period_end'?saved.period.start:row.effective_date,row.policy,row.new_item_id)
+  insist(quote.basis===row.basis,'stale',409)
+  const invoice=await issuedInvoice(env,row.source_invoice_id),cp=await creditPolicy(env),request=newId(),generation=(await one(env,'SELECT value FROM nc_privacy_generation WHERE id=1'))!.value
+  await commit(env,[guard(env,'stale','(SELECT value FROM nc_privacy_generation WHERE id=1)=?',generation),guard(env,'plan_credit_already_prepared','NOT EXISTS(SELECT 1 FROM nc_plan_change_credit_requests WHERE change_id=?)',row.id),
+    stmt(env,'INSERT INTO nc_credit_requests(id,invoice_id,amount_cents,reason,prepared_by,prepared_name,prepared_at,basis,policy_revision,balance_cents) VALUES(?,?,?,?,?,?,?,?,?,?)',request,invoice.id,-quote.delta.totalCents,reason,actor.id,actorLabel(actor),now(),await creditBasis(invoice,cp),cp.revision,invoice.balance_cents),
+    stmt(env,'INSERT INTO nc_plan_change_credit_requests(request_id,change_id,invoice_id,customer_id) VALUES(?,?,?,?)',request,row.id,invoice.id,row.customer_id)],{actor:actorLabel(actor),action:'plan-change.credit.prepare',subject:row.id,detail:{request,invoice:invoice.id,amount:-quote.delta.totalCents,basis:row.basis}})
+  return {id:row.subscription_id,change:row.id,request}
+}
 export async function planChangesFor(env: Bindings, actor: Actor, subscription: string) {
   requireRead(actor,'subscriptions')
-  if(!canRead(actor,'invoices'))return []
-  return (await all(env,'SELECT * FROM nc_plan_changes WHERE subscription_id=? ORDER BY prepared_at,id',subscription)).map(r=>({...r,quote:parseJson<Row>(r.quote_json,{}),quote_json:undefined}))
+  const full=canRead(actor,'invoices'),rows=await all(env,'SELECT * FROM nc_plan_changes WHERE subscription_id=? ORDER BY prepared_at,id',subscription)
+  if(!full)return rows.filter(r=>r.prepared_by===actor.id&&(can(actor,'draft')||can(actor,'records'))).map(r=>({id:r.id,subscription_id:r.subscription_id,effective_date:r.effective_date,mode:r.mode,policy:r.policy,status:r.status,prepared_by:r.prepared_by,prepared_name:r.prepared_name,prepared_at:r.prepared_at,quote:quoteView(parseJson<Row>(r.quote_json,{}))}))
+  const cp=await creditPolicy(env)
+  const result=[]
+  for(const r of rows){const credit=await one(env,'SELECT c.* FROM nc_plan_change_credit_requests b JOIN nc_credit_requests c ON c.id=b.request_id WHERE b.change_id=?',r.id);result.push({...r,quote:parseJson<Row>(r.quote_json,{}),quote_json:undefined,creditRequest:credit?{id:credit.id,preparedBy:credit.prepared_by,requiresOther:cp.two_person_above_cents!==null&&credit.amount_cents>cp.two_person_above_cents}:null})}
+  return result
 }

@@ -544,6 +544,9 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "received_on": "text",
     "reference": "text"
   },
+  "plan.change.credit.prepare": {
+    "change": "text"
+  },
   "plan.change.decide": {
     "change": "text",
     "decision": "text"

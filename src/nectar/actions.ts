@@ -1,5 +1,5 @@
 import {prepareHierarchyCredit,approveHierarchyCredit} from './hierarchy-credits'
-import { preparePlanChange,decidePlanChange } from './plan-changes'
+import { preparePlanChange,decidePlanChange,preparePlanChangeCredit } from './plan-changes'
 import { setHierarchy,prepareConsolidation,recordHierarchyCommitment } from './hierarchies'
 import { registerWebhook,rotateWebhook,disableWebhook,replayWebhook,dispatchWebhookDoor } from './webhooks'
 import { issueWriteOff, prepareWriteOff, approveWriteOff, recoverWriteOff } from './write-offs'
@@ -82,6 +82,7 @@ import { prepareMetric,previewMetric,activateMetric } from './meter-definitions'
 type Handler = (env: Bindings, actor: Actor, input: Input, request: Request) => Promise<unknown>
 
 export const actions: Record<string, Handler> = {
+  'plan.change.credit.prepare': preparePlanChangeCredit,
   'plan.change.prepare': preparePlanChange,
   'plan.change.decide': decidePlanChange,
   'hierarchy.credit.prepare': prepareHierarchyCredit,
