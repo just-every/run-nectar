@@ -4,7 +4,7 @@
 import { execFileSync } from 'node:child_process'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { stripeSandbox, check, reference, safeError } from './stripe-sandbox-client.mjs'
+import { stripeSandbox, check, reference, safeError, SandboxFailure } from './stripe-sandbox-client.mjs'
 import { csvRows } from './financial-reports.mjs'
 import { prepaidReportParity } from './prepaid-report-parity.mjs'
 import { totp } from './mfa.mjs'
@@ -15,14 +15,22 @@ const date=instant=>new Date(instant).toISOString().slice(0,10)
 const dayOffset=(day,n)=>date(Date.parse(`${day}T00:00:00Z`)+n*86400000)
 const sum=values=>values.reduce((total,value)=>total+value,0)
 const csvCents=value=>Math.round(Number(String(value).replace(/^'/,''))*100)
-let phase='held-test-key',stripe,clock,clockTime,providerCustomer,method,account,h,owner,finance,factor,verifiedAt=0,today,row
+let phase='held-test-key',stripe,clock,clockTime,providerCustomer,method,account,h,owner,finance,factor,verifiedAt=0,today,row,offsetMs=0,currentInstant=0,fundedOn
 const step=name=>{phase=name;console.log(`Prepaid topup sandbox: ${name}`)}
-const api=(path,body,status)=>h.api(path,owner,body,status)
+async function safeApi(path,who,body,status=200){
+  const action=path.split(/[/?]/)[0].replace(/[^A-Za-z0-9_.-]/g,'').slice(0,60)
+  const auth=typeof who==='string'?{cookie:who}:who??{}
+  const response=await h.raw(`/api/nectar/${path}`,{...auth,body})
+  if(response.status!==status){receipt.apiFailure={action,status:response.status,expectedStatus:status};throw new SandboxFailure(`api_${action.replace(/[^A-Za-z0-9_]/g,'_')}`,response.status)}
+  if(response.status===204)return null
+  try{return await response.json()}catch{throw new SandboxFailure('api_invalid_json',response.status)}
+}
+const api=(path,body,status)=>safeApi(path,owner,body,status)
 const posts=()=>workerRequests.filter(entry=>entry.method==='POST').length
 async function now({provider=false}={}){
-  const instant=Date.now()
-  check(date(instant)===today,'sandbox_crossed_utc_day')
-  if(provider&&Math.floor(instant/1000)>clockTime){clockTime=Math.floor(instant/1000);await stripe.advance(clock,clockTime,'owned-topup-current-time')}
+  const instant=Math.max(currentInstant,Date.now()+offsetMs)
+  currentInstant=instant;today=date(instant)
+  if(provider&&Math.floor(instant/1000)>clockTime){clockTime=Math.floor(instant/1000);await stripe.advance(clock,clockTime,'owned-topup-monotonic-time')}
   await h.advanceClock(new Date(instant).toISOString())
   if(factor&&instant-verifiedAt>10*60*1000){await api('mfa.verify',{code:totp(factor,instant)});verifiedAt=instant}
 }
@@ -50,10 +58,11 @@ async function providerProof(collection,amount){
   const charge=charges[0]
   check(intent.status==='succeeded'&&intent.amount===amount&&intent.amount_received===amount&&intent.currency==='usd'&&intent.livemode===false&&reference(intent.customer)===providerCustomer.id&&reference(intent.payment_method)===method&&reference(intent.latest_charge)===charge.id&&!intent.receipt_email,'actual_intent_proof_mismatch')
   check(charge.id===collection.charge_ref&&charge.status==='succeeded'&&charge.paid===true&&charge.captured===true&&charge.amount===amount&&charge.amount_captured===amount&&charge.amount_refunded===0&&!charge.refunded&&!charge.disputed&&charge.currency==='usd'&&charge.livemode===false&&reference(charge.customer)===providerCustomer.id&&reference(charge.payment_method)===method&&!charge.receipt_email,'actual_captured_charge_proof_mismatch')
+  check(date(charge.created*1000)===today,'actual_capture_date_mismatch')
   const invoice=await api(`invoices/${collection.invoice_id}`),payments=(await api('payments')).filter(payment=>payment.id===collection.payment_id)
   check(invoice.balanceCents===0&&invoice.paidCents===amount&&invoice.allocations.length===1&&invoice.allocations[0].payment_id===collection.payment_id&&invoice.allocations[0].amount_cents===amount,'purchase_not_allocated_exactly_once')
   check(payments.length===1&&payments[0].amount_cents===amount&&payments[0].reference===`stripe:${account.id}:${intent.id}`&&payments[0].method==='card_external','actual_receipt_not_recorded_exactly_once')
-  return {invoiceId:invoice.id,paymentId:collection.payment_id,paymentIntentId:intent.id,chargeId:charge.id,amountCents:amount}
+  return {invoiceId:invoice.id,paymentId:collection.payment_id,paymentIntentId:intent.id,chargeId:charge.id,amountCents:amount,capturedAt:charge.created*1000,capturedOn:date(charge.created*1000)}
 }
 async function parity(expectedBalance,expectedLiability){
   const state=await api(`prepaid/${row.subscription}`)
@@ -87,6 +96,7 @@ async function setup(){
   step('bootstrap-real-worker-owner-finance-and-route')
   const {harness}=await import('./harness.mjs'),{applyPolicy}=await import('./policy-helper.mjs')
   h=await harness({localTime:new Date().toISOString(),stripeSecret:process.env.STRIPE_SECRET_KEY,stripeFetch:forward})
+  h.api=safeApi
   check((await h.raw('/auth/bootstrap',{body:{token:h.vars.SETUP_TOKEN,displayName:'Prepaid Sandbox Owner'}})).status===303,'owner_bootstrap_failed')
   owner=await h.signIn(h.vars.OWNER_EMAIL)
   check((await h.raw('/setup',{cookie:owner,form:new URLSearchParams({confirm:'yes'})})).status===303,'owner_setup_failed')
@@ -105,14 +115,14 @@ async function setup(){
   const product=(await api('product.create',{code:'synthetic-nectar-701',name:'Synthetic daily prepaid service'})).id
   const meterCode='synthetic-nectar-702',meter=(await api('meter.create',{code:meterCode,name:'Synthetic daily units',unit_label:'units'})).id
   const price=(await api('price.create',{product,meter,kind:'unit',unit_amount:'1',taxable:false,billing_interval:'daily',billing_timing:'arrears'})).id
-  const subscription=(await api('subscription.create',{customer,start_date:dayOffset(today,-2),price:[price]})).id
+  const subscription=(await api('subscription.create',{customer,start_date:today,price:[price]})).id
   row={customer,subscription,external,meterCode,entity};receipt.ids={...receipt.ids,nativeCustomerId:customer,subscriptionId:subscription,entityId:entity}
   await api('portal.configure',{hosts:[h.origin],parents:[]})
 }
 async function fundAndAuthorize(){
   step('approved-initial-purchase-real-owner-confirmed-10000-dollar-charge')
   await now()
-  const terms={subscription:row.subscription,mode:'grant',kind:'money',source:'purchase',amount:'10000',effective_date:dayOffset(today,-2),expires_date:dayOffset(today,90),priority:10,expiry_consent:true}
+  const terms={subscription:row.subscription,mode:'grant',kind:'money',source:'purchase',amount:'10000',effective_date:today,expires_date:dayOffset(today,90),priority:10,expiry_consent:true}
   const paid=await api('prepaid.prepare',terms)
   await h.api('prepaid.decide',finance,{request:paid.request,decision:'approved'})
   const purchase=await api('prepaid.purchase.prepare',{intent:paid.request,issue_date:today})
@@ -122,6 +132,7 @@ async function fundAndAuthorize(){
   check(prepared.review.amountCents===1000000&&prepared.review.accountRef===account.id&&prepared.review.customerRef===providerCustomer.id&&prepared.review.paymentMethodRef===method&&!prepared.review.livemode,'initial_exact_owner_review_mismatch')
   const collected=await api('collection.confirm',prepared.instructions.confirm);check(collected.status==='collected','initial_real_purchase_not_collected')
   receipt.purchases=[await providerProof(collected,1000000)]
+  fundedOn=receipt.purchases[0].capturedOn;receipt.fundingDate=fundedOn
   const initialPosts=posts();await api('collection.confirm',prepared.instructions.confirm,409)
   check((await api('collection.reconcile',{request:collected.id})).payment_id===collected.payment_id&&posts()===initialPosts,'initial_purchase_replay_created_provider_write')
   const promo=await api('prepaid.prepare',{...terms,source:'promotion',amount:'1000',priority:0});await h.api('prepaid.decide',finance,{request:promo.request,decision:'approved'})
@@ -143,8 +154,14 @@ async function fundAndAuthorize(){
 }
 async function consume(){
   step('issue-only-two-completed-daily-usage-windows')
-  const days=[dayOffset(today,-2),dayOffset(today,-1)],amounts=[6000,4100]
-  await api('usage.submit',{events:days.map((day,index)=>({event_id:`synthetic-nectar-${710+index}`,customer:row.external,meter:row.meterCode,quantity:String(amounts[index]),occurred_at:`${day}T12:00:00Z`}))})
+  const days=[fundedOn,dayOffset(fundedOn,1)],amounts=[6000,4100]
+  step('advance-real-stripe-and-worker-clocks-through-two-funded-service-days')
+  offsetMs=2*86400000
+  await now({provider:true})
+  check(today===dayOffset(fundedOn,2),'completed_funded_service_days_required')
+  const firstUsage=receipt.purchases[0].capturedAt+1000
+  check(date(firstUsage)===fundedOn,'funding_too_close_to_day_boundary')
+  await api('usage.submit',{events:days.map((day,index)=>({event_id:`synthetic-nectar-${710+index}`,customer:row.external,meter:row.meterCode,quantity:String(amounts[index]),occurred_at:index===0?new Date(firstUsage).toISOString():`${day}T12:00:00Z`}))})
   const issued=[]
   for(const [index,day] of days.entries()){
     const due=dayOffset(day,1),run=await api('billrun.prepare',{period:due.slice(0,7)}),candidates=(await api(`runs/${run.id}`)).invoices.filter(invoice=>invoice.customer_id===row.customer&&invoice.period_start===day&&invoice.period_end===due)
