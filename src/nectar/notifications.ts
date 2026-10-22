@@ -5,10 +5,10 @@ import { memberCapabilities, requirePerson, actorLabel, type Actor, type Capabil
 import { all, commit, insist, now, one, stmt } from './core'
 import type { Input } from './input'
 
-export const NOTIFICATION_EVENTS = ['mentions', 'payment_mismatch', 'billrun_exceptions', 'proposals'] as const
+export const NOTIFICATION_EVENTS = ['mentions', 'payment_mismatch', 'billrun_exceptions', 'proposals', 'webhook_failures'] as const
 export type NotificationEvent = typeof NOTIFICATION_EVENTS[number]
 export type AlertEvent = Exclude<NotificationEvent, 'mentions'>
-const defaults = { mentions: true, payment_mismatch: false, billrun_exceptions: false, proposals: false }
+const defaults = { mentions: true, payment_mismatch: false, billrun_exceptions: false, proposals: false, webhook_failures: false }
 
 export async function memberPreferences(env: Bindings, member: string) {
   const row = await one(env, 'SELECT * FROM nc_notification_preferences WHERE member_id=?', member)
@@ -25,8 +25,8 @@ export async function setNotificationPreferences(env: Bindings, actor: Actor, in
   requirePerson(actor)
   input.only([...NOTIFICATION_EVENTS, 'returnTo'])
   const values = NOTIFICATION_EVENTS.map(event => input.flag(event) ? 1 : 0)
-  await commit(env, [stmt(env, `INSERT INTO nc_notification_preferences(member_id,mentions,payment_mismatch,billrun_exceptions,proposals)
-    VALUES (?,?,?,?,?) ON CONFLICT(member_id) DO UPDATE SET mentions=excluded.mentions,payment_mismatch=excluded.payment_mismatch,billrun_exceptions=excluded.billrun_exceptions,proposals=excluded.proposals`, actor.id,...values)],
+  await commit(env, [stmt(env, `INSERT INTO nc_notification_preferences(member_id,mentions,payment_mismatch,billrun_exceptions,proposals,webhook_failures)
+    VALUES (?,?,?,?,?,?) ON CONFLICT(member_id) DO UPDATE SET mentions=excluded.mentions,payment_mismatch=excluded.payment_mismatch,billrun_exceptions=excluded.billrun_exceptions,proposals=excluded.proposals,webhook_failures=excluded.webhook_failures`, actor.id,...values)],
     { actor: actorLabel(actor), action: 'notification.preferences', subject: actor.id, detail: Object.fromEntries(NOTIFICATION_EVENTS.map((e,i) => [e,!!values[i]])) })
   return { preferences: await memberPreferences(env,actor.id) }
 }
@@ -37,6 +37,8 @@ const ALERT_AUTHORITY: Record<AlertEvent, { read: Capability[]; act: Capability[
   payment_mismatch: { read: ['read', 'read.payments'], act: ['receivables'] },
   billrun_exceptions: { read: ['read', 'read.invoices'], act: ['approve'] },
   proposals: { read: ['read'], act: ['approve'] },
+  // DEV-001: event payloads span every record family; replaying needs records or credentials.
+  webhook_failures: { read: ['read'], act: ['records', 'credentials'] },
 }
 const ALERT_SQL = (event: AlertEvent, member = '') => `SELECT m.id,m.email,m.role,r.capabilities AS custom FROM nc_members m JOIN nc_notification_preferences p ON p.member_id=m.id
     LEFT JOIN nc_roles r ON r.id=m.custom_role_id WHERE m.status='active' AND p.${event}=1${member}`
@@ -45,10 +47,13 @@ const authorized = (event: AlertEvent, row: { role: Role; custom: string | null 
   return need.read.some(c => held.has(c)) && need.act.some(c => held.has(c))
 }
 
-export async function alertStatements(env: Bindings, event: AlertEvent, subject: string, href: string) {
+/** `when` (an SQL condition and its parameters) queues the alert only if it still holds inside the batch. */
+export async function alertStatements(env: Bindings, event: AlertEvent, subject: string, href: string, when?: { sql: string; params: unknown[] }) {
   insist(href.startsWith('/app/'), 'invalid_notification_link')
   const recipients = (await all<{ id: string; email: string; role: Role; custom: string | null }>(env, ALERT_SQL(event))).filter(m => authorized(event, m))
-  return recipients.map(m => stmt(env, `INSERT OR IGNORE INTO nc_notifications(event,subject,href,member_id,email,status,updated_at) VALUES (?,?,?,?,?,'pending',?)`, event,subject,href,m.id,m.email,now()))
+  return recipients.map(m => when
+    ? stmt(env, `INSERT OR IGNORE INTO nc_notifications(event,subject,href,member_id,email,status,updated_at) SELECT ?,?,?,?,?,'pending',? WHERE ${when.sql}`, event,subject,href,m.id,m.email,now(),...when.params)
+    : stmt(env, `INSERT OR IGNORE INTO nc_notifications(event,subject,href,member_id,email,status,updated_at) VALUES (?,?,?,?,?,'pending',?)`, event,subject,href,m.id,m.email,now()))
 }
 
 /** Rechecked just before each send, so removed authority stops the next one. */

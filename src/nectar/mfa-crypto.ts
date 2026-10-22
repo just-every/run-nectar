@@ -52,24 +52,25 @@ export async function matchTotp(secret: Uint8Array, code: string, instant: numbe
   return null
 }
 
-async function sealingKey(mfaKey: string) {
+// Each kind of sealed value derives its own AES key from MFA_KEY; DEV-001 webhook signing uses its own purpose.
+async function sealingKey(mfaKey: string, purpose: string) {
   const material = await crypto.subtle.importKey('raw', new TextEncoder().encode(mfaKey), 'HKDF', false, ['deriveKey'])
-  return await crypto.subtle.deriveKey({ name: 'HKDF', hash: 'SHA-256', salt: new TextEncoder().encode('nectar-mfa'), info: new TextEncoder().encode('totp-secret-v1') }, material, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt'])
+  return await crypto.subtle.deriveKey({ name: 'HKDF', hash: 'SHA-256', salt: new TextEncoder().encode('nectar-mfa'), info: new TextEncoder().encode(purpose) }, material, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt'])
 }
 
 /** `v1.<iv>.<ciphertext>`, readable only under the same MFA_KEY and the same factor and member. */
-export async function seal(mfaKey: string, secret: Uint8Array, binding: string) {
+export async function seal(mfaKey: string, secret: Uint8Array, binding: string, purpose = 'totp-secret-v1') {
   const iv = crypto.getRandomValues(new Uint8Array(12))
-  const sealed = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: new TextEncoder().encode(binding) }, await sealingKey(mfaKey), secret as BufferSource))
+  const sealed = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: new TextEncoder().encode(binding) }, await sealingKey(mfaKey, purpose), secret as BufferSource))
   return `v1.${b64url(iv)}.${b64url(sealed)}`
 }
 
 /** The secret, or null when the key is missing or is not the one it was sealed under. */
-export async function unseal(mfaKey: string | undefined, sealed: string, binding: string) {
+export async function unseal(mfaKey: string | undefined, sealed: string, binding: string, purpose = 'totp-secret-v1') {
   const [version, iv, body] = sealed.split('.')
   if (!mfaKey || version !== 'v1' || !iv || !body) return null
   try {
-    return new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: fromB64url(iv) as BufferSource, additionalData: new TextEncoder().encode(binding) }, await sealingKey(mfaKey), fromB64url(body) as BufferSource))
+    return new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: fromB64url(iv) as BufferSource, additionalData: new TextEncoder().encode(binding) }, await sealingKey(mfaKey, purpose), fromB64url(body) as BufferSource))
   } catch { return null }
 }
 

@@ -234,11 +234,53 @@ An already issued selected period returns `state:"issued"`, its invoice id and i
 
 ## INT-003: team email choices
 
-A signed-in member (including an accountant) reads `GET /api/nectar/notifications` and replaces their own choices with `POST /api/nectar/notification.preferences`: `mentions`, `payment_mismatch`, `billrun_exceptions`, `proposals` are booleans. The HTML form on More uses the same handler. No member-id override is accepted; credentials cannot read or change these choices. Mentions start enabled to preserve existing CUS-002 behavior; the other categories start disabled.
+A signed-in member (including an accountant) reads `GET /api/nectar/notifications` and replaces their own choices with `POST /api/nectar/notification.preferences`: `mentions`, `payment_mismatch`, `billrun_exceptions`, `proposals`, `webhook_failures` are booleans. The HTML form on More uses the same handler. No member-id override is accepted; credentials cannot read or change these choices. Mentions start enabled to preserve existing CUS-002 behavior; the other categories start disabled.
 
 Manual payment mismatch means the customer has an issued invoice with a positive current balance and the payment amount equals none of that customer's current invoice balances (after credits and allocations). Drafts and fully settled customers do not trigger it. The payment's alert links to its exact anchor on the customer record. A prepared run with any exception links to that run; a newly pending proposal links to that proposal. The current owner and finance roles receive these three categories only when opted in and still active/authorized. Accountants receive permitted mentions only. New alerts carry the event label and signed-in link, without financial amounts or record content; mention mail retains the note.
 
-The originating write queues each event/member pair atomically. Delivery claims it once, rechecks the member and preference, and records provider acceptance/reference, development suppression, rejection, failure or uncertainty. `accepted` means provider acceptance, never mailbox delivery. Pending unclaimed alerts resume on the scheduled handler; accepted/rejected/failed/uncertain or interrupted `sending` claims never automatically retry. `GET notifications` returns only the caller's recent alert receipts. Mention receipts remain on the note itself. Dispute and webhook-failure event categories remain obligations of AR-003, PAY-004 and DEV-001 before those event capabilities ship.
+The originating write queues each event/member pair atomically. Delivery claims it once, rechecks the member and preference, and records provider acceptance/reference, development suppression, rejection, failure or uncertainty. `accepted` means provider acceptance, never mailbox delivery. Pending unclaimed alerts resume on the scheduled handler; accepted/rejected/failed/uncertain or interrupted `sending` claims never automatically retry. `GET notifications` returns only the caller's recent alert receipts. Mention receipts remain on the note itself. Dispute and processor-webhook failure categories remain obligations of AR-003 and PAY-004 before those event capabilities ship. `webhook_failures` (DEV-001) emails a member who has full read and records or credentials once per endpoint outage, linked to the failed delivery.
+
+## Signed outbound webhooks (`DEV-001`, partial)
+
+The owner or a developer (credentials) registers an endpoint with `POST webhook.create` (`url`, `events`: a list of event types or `*`, optional `description`); the answer carries the endpoint `id` and its signing `secret`, shown this once. URLs are HTTPS on a public host name with the default port; a local installation also accepts `http://127.0.0.1`, `localhost` or `[::1]` receivers. `POST webhook.update` (`endpoint`, current `revision`, `status` `active`/`disabled`, `events`, `description`) narrows, disables or re-enables it; a disabled endpoint keeps its waiting deliveries for when it is enabled again. `POST webhook.rotate` (`endpoint`, `overlap_hours` 0–168, default 24) returns a new secret; earlier secrets keep signing until `previous_secrets_valid_until`. A member with records or credentials sends one stored delivery again with `POST webhook.replay` (`delivery`). `/app/webhooks` offers the same, shows each secret once, and lists recent deliveries; `/app/webhooks/deliveries/{id}` shows one delivery's attempts and exact payload.
+
+Full readers read `GET webhooks` (endpoints, their secrets' ids and signing windows, the event catalog, the Stripe mapping below and `retry_minutes`), `GET webhooks/deliveries` (newest first; `endpoint`, `status` and `event` filters; cursor pages), `GET webhooks/deliveries/{id}` (attempts with outcome, HTTP status and duration; never response bodies) and `GET webhooks/events/{id}`.
+
+Events are stored in the same transaction as the record change, by every door, while at least one endpoint is active: `customer.created`, `customer.updated`, `subscription.created`, `subscription.updated`, `subscription.canceled` (the end date was recorded), `subscription.paused`, `subscription.resumed`, `subscription.reactivated`, `invoice.created`, `invoice.finalized`, `invoice.paid` (a payment allocation or balance application brought an issued invoice to zero), `payment.recorded`, `payment.failed` (an owner-confirmed charge was declined or needs customer action), `credit_note.created`, `customer_balance.updated` and `entitlements.updated` (the set of features granted today changed; recomputed after subscription, item, lifecycle and feature-grant writes, and daily). `usage.threshold_crossed` arrives with USE-005. Moved-in shadow customers and subscriptions emit the same events as native ones (`origin` is `import`, `billing_mode` is `shadow`).
+
+```json
+{"id":"evt_…","object":"event","type":"invoice.paid","created":1785600000,
+ "data":{"object":{"id":"…","object":"invoice","number":"CD-000001","status":"issued","total_cents":10000,"amount_paid_cents":10000,"amount_remaining_cents":0,"…":"…"},
+         "metadata":{"customer":{"app_account_id":"acct_1"},"subscription":{},"invoice":{},"prices":{"<price id>":{}},"payments":{"<payment id>":{}},"credit_notes":{}}}}
+```
+
+Payloads carry ids, states, dates, amounts and each relevant record's metadata as it stood at the event; never names, email or postal addresses or free-text reasons. Read details through the API with your credential.
+
+Each delivery is a POST of the stored bytes with `Nectar-Event-Id`, `Nectar-Event-Type`, `Nectar-Delivery-Id` and `Nectar-Signature: t=<unix seconds>,v1=<hex>[,v1=<hex>]`, where each v1 is HMAC-SHA256 of `<t>.<raw body>` under one signing secret. Verify against the raw body and reject a `t` far from your clock; `examples/webhook-receiver/receiver.mjs` does both and handles each event id once. A 2xx answer within 10 seconds delivers it; anything else (including redirects) retries after 1, 5, 30, 60, 120, 240 and 480 minutes and then every 720 minutes, 4,536 minutes in all, after which the delivery stays failed until replayed. Retries run on a one-minute schedule; a write request starts its new deliveries as soon as it has answered.
+
+| Stripe Billing event | Nectar event | Note |
+| --- | --- | --- |
+| `customer.created` | `customer.created` | |
+| `customer.updated` | `customer.updated` | |
+| `customer.deleted` | `customer.updated` | Nectar archives customers and never deletes them: read `data.object.status`. |
+| `customer.subscription.created` | `subscription.created` | |
+| `customer.subscription.updated` | `subscription.updated` | |
+| `customer.subscription.deleted` | `subscription.canceled` | Sent when the end date is recorded; `data.object.end_date` is the day service ends. |
+| `customer.subscription.paused` | `subscription.paused` | |
+| `customer.subscription.resumed` | `subscription.resumed` | |
+| `customer.subscription.trial_will_end` | none | Read `trial_end` on subscription events; the trial outcome arrives as `subscription.updated`. |
+| `invoice.created` | `invoice.created` | Bill-run drafts can be prepared again; act on `invoice.finalized`. |
+| `invoice.finalized` | `invoice.finalized` | |
+| `invoice.paid` | `invoice.paid` | |
+| `invoice.payment_succeeded` | `invoice.paid` | Stripe sends both; Nectar sends `invoice.paid` once. |
+| `invoice.payment_failed` | `payment.failed` | Owner-confirmed charges only until automatic collection ships (PAY-003). |
+| `invoice.payment_action_required` | `payment.failed` | `data.object.status` is `customer_action_required`. |
+| `invoice.voided` | none | Issued invoices are corrected by credit note (`credit_note.created`); voids ship with INV-005. |
+| `invoice.upcoming` | none | Read `GET subscriptions/{id}/upcoming`. |
+| `payment_method.attached`, `.updated`, `.detached` | none | Nectar keeps no payment methods until PAY-002 and PORT-004 ship them. |
+| `entitlements.active_entitlement_summary.updated` | `entitlements.updated` | |
+
+Not yet shipped: a live Stripe shadow run whose mirrored changes emit the mapped events (MOVE-006 sync).
 
 ## DEV-005: metadata revisions
 
@@ -246,7 +288,7 @@ The originating write queues each event/member pair atomically. Delivery claims 
 
 `GET objects/{kind}?metadata_key=...&metadata_value=...` lists records whose latest map contains that exact key and string value. The same filter works on `/app/exports/objects/{kind}.csv`; all six kinds have this CSV. Customer/catalog/payment lists and existing customer/subscription/invoice CSVs also support the filter, and original API records project metadata plus metadata_revision. `GET customers?search=...` searches current values on customer-owned record kinds and subscribed prices, as well as customer name/id/email, by case-insensitive substring. Search never uses superseded metadata. The customer screen exposes that search; record screens and Exports link to metadata editors and the collection browser.
 
-The portable installation archive retains every metadata revision. DEV-003 inherits SDK parity and DEV-001 inherits event-time metadata copies in invoice.paid and other relevant payloads before those capabilities ship.
+The portable installation archive retains every metadata revision. DEV-003 inherits SDK parity. Webhook payloads (DEV-001) copy the relevant maps as they stood when the event happened; later replacements never rewrite a stored event.
 
 SUB-003 lifecycle dates use the business timezone and [start, end) intervals. Subscription detail includes append-only `lifecycle`, derived `intervals` and current `lifecyclePolicy`; the subscription CSV includes `lifecycle_json`. Pause bills neither paused service nor paused usage; earlier unbilled usage/fees and contract credits are deferred to resumed service. Cancellation of current in-arrears plans shows full recurring charges less a signed `cancellation_credit` computed from exact earned lines, including discounts; tax uses those signed lines. The existing credit threshold requires another person to approve and issue an invoice above the limit. The saved calculation includes the policy revision, so policy changes invalidate approval. No-credit policy retains the final recurring period, while a later reactivation month only bills active days. Dates touching issued periods are refused. Policy edits use the existing two-person or explicit sole-owner confirmation journal. Future advance-billed cancellations, customer balances and processor refunds remain CAT-001/INV-005/INV-006/PAY-007 obligations.
 

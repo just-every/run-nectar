@@ -3,6 +3,7 @@ import { postPendingLedger } from './ledger-postings'
 import { closePeriod } from './period-close'
 import { applyBalance, approveBalanceRequest, grantGoodwill, prepareBalanceRequest, returnBalance } from './balance'
 import { createCoupon, createPromotionCode } from './promotions'
+import { createWebhook, replayWebhook, rotateWebhook, updateWebhook } from './webhooks'
 import { extendTrial, resolveTrial } from './trials'
 import { preparePrepaidRefund, decidePrepaidRefund, reconcilePrepaidRefund } from './prepaid-refund-actions'
 import { preparePrepaidTopupAuthorization, decidePrepaidTopupAuthorization, revokePrepaidTopupAuthorization } from './prepaid-topup-authorization'
@@ -78,6 +79,10 @@ import { prepareMetric,previewMetric,activateMetric } from './meter-definitions'
 type Handler = (env: Bindings, actor: Actor, input: Input, request: Request) => Promise<unknown>
 
 export const actions: Record<string, Handler> = {
+  'webhook.create': createWebhook,
+  'webhook.update': updateWebhook,
+  'webhook.rotate': rotateWebhook,
+  'webhook.replay': replayWebhook,
   'collection.customer.bind': bindNativeCollectionCustomer,
   'collection.prepare': prepareNativeCollection,
   'collection.confirm': confirmNativeCollection,

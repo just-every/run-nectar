@@ -498,7 +498,8 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "billrun_exceptions": "has",
     "mentions": "has",
     "payment_mismatch": "has",
-    "proposals": "has"
+    "proposals": "has",
+    "webhook_failures": "has"
   },
   "payment.allocate": {
     "amount": "text",
@@ -867,6 +868,25 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
   "usage.submit": {
     "events": "json",
     "file": "file"
+  },
+  "webhook.create": {
+    "description": "text",
+    "events": "list",
+    "url": "text"
+  },
+  "webhook.replay": {
+    "delivery": "text"
+  },
+  "webhook.rotate": {
+    "endpoint": "text",
+    "overlap_hours": "integer"
+  },
+  "webhook.update": {
+    "description": "text",
+    "endpoint": "text",
+    "events": "list",
+    "revision": "integer",
+    "status": "text"
   },
   "writeoff.approve": {
     "request": "text"

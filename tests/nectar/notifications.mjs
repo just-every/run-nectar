@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 
-const choices = (enabled = []) => Object.fromEntries(['mentions', 'payment_mismatch', 'billrun_exceptions', 'proposals'].map(event => [event, enabled.includes(event)]))
+const choices = (enabled = []) => Object.fromEntries(['mentions', 'payment_mismatch', 'billrun_exceptions', 'proposals', 'webhook_failures'].map(event => [event, enabled.includes(event)]))
 const content = mail => `${mail.subject} ${mail.text ?? ''} ${mail.html ?? ''}`
 const recipients = mails => mails.flatMap(mail => [mail.to].flat()).sort()
 

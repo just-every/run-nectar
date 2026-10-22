@@ -63,6 +63,7 @@ export const MORE: { href: string; label: string; about: string; icon: IconName;
   { href: '/app/settings', label: 'Business and tax', icon: 'settings', about: 'Billing identity, timezone, invoice numbering and the declared tax policy.', show: actor => can(actor, 'read') },
   { href: '/app/security', label: 'Sign-in security', icon: 'access', about: 'Your authenticator app, passkeys and recovery codes.', show: actor => actor.kind === 'member' },
   { href: '/app/access', label: 'Access', icon: 'access', about: 'Who can sign in, their roles, and agent credentials.', show: actor => actor.kind === 'member' && can(actor, 'credentials') },
+  { href: '/app/webhooks', label: 'Webhooks', icon: 'synced', about: 'Signed events to your endpoints, the delivery log, replays and secret rotation.', show: actor => actor.kind === 'member' && can(actor, 'read') },
 ]
 
 const headers = {

@@ -26,6 +26,7 @@ import { identity } from './identity'
 import { sendCertificateReminders } from './nectar/certificate-reminders'
 import { deliverPendingAlerts } from './nectar/notification-mail'
 import { nectarResponse } from './nectar/http'
+import { deliverAfterWrite, runWebhooks } from './nectar/webhook-jobs'
 
 const api = new Hono<{ Bindings: Bindings }>()
 api.get('/health', (context) => context.json({ status: 'ok', ...deploymentHealth(context.env) }))
@@ -39,8 +40,12 @@ function noTransform(response: Response): Response {
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers })
 }
 
+// DEV-001 webhook retries run every minute; every other job keeps the daily tick.
+const WEBHOOK_CRON = '* * * * *'
+
 export default withDemo({
   async scheduled(controller, env) {
+    if (controller.cron === WEBHOOK_CRON) return await runWebhooks(runtimeBindings(env), controller.scheduledTime)
     await removeExpiredFinancialRecords(runtimeBindings(env))
     await runPrepaidSettlement(runtimeBindings(env))
     await runCadences(runtimeBindings(env),controller.scheduledTime)
@@ -53,28 +58,36 @@ export default withDemo({
     await deliverPendingCorrectionMail(runtimeBindings(env))
     await deliverPendingUsageCorrectionMail(runtimeBindings(env))
     await deliverPendingDraftCorrectionMail(runtimeBindings(env))
+    await runWebhooks(runtimeBindings(env), controller.scheduledTime, { daily: true })
   },
   async fetch(request, env, execution) {
-    const asset = await staticAssetResponse(request, env)
-    if (asset) return asset
-    const portal = await portalResponse(request, runtimeBindings(env))
-    if (portal) return portal
-    const auth = await authResponse(request, env)
-    if (auth) return auth
-    const erasure=await erasurePublic(request,runtimeBindings(env))
-    if(erasure)return erasure
-    const returned=await retentionPublic(request,runtimeBindings(env))
-    if(returned)return returned
-    const renewal=await renewalPublic(request,runtimeBindings(env))
-    if(renewal)return renewal
-    const nectar = await nectarResponse(request, env)
-    if (nectar) return nectar
-    // The installed variant: the Lobby at / and the public claim state it reads.
-    // Local dev serves the saved origin's data at its own port (RER_DEV_ORIGIN).
-    const state = await setupStateResponse(request, runtimeBindings(env))
-    if (state) return state
-    const lobby = await lobbyResponse(request, runtimeBindings(env), identity)
-    if (lobby) return lobby
-    return dispatch(request, () => api.fetch(request, env, execution), async () => noTransform(await start.fetch(request)))
+    const response = respond(request, env, execution)
+    // Webhook deliveries start once a write has answered (DEV-001).
+    if (request.method === 'POST') execution.waitUntil(response.then(() => deliverAfterWrite(runtimeBindings(env)), () => undefined))
+    return await response
   },
 } satisfies ExportedHandler<Bindings>, { seed: seedDemo })
+
+async function respond(request: Request, env: Bindings, execution: ExecutionContext): Promise<Response> {
+  const asset = await staticAssetResponse(request, env)
+  if (asset) return asset
+  const portal = await portalResponse(request, runtimeBindings(env))
+  if (portal) return portal
+  const auth = await authResponse(request, env)
+  if (auth) return auth
+  const erasure=await erasurePublic(request,runtimeBindings(env))
+  if(erasure)return erasure
+  const returned=await retentionPublic(request,runtimeBindings(env))
+  if(returned)return returned
+  const renewal=await renewalPublic(request,runtimeBindings(env))
+  if(renewal)return renewal
+  const nectar = await nectarResponse(request, env)
+  if (nectar) return nectar
+  // The installed variant: the Lobby at / and the public claim state it reads.
+  // Local dev serves the saved origin's data at its own port (RER_DEV_ORIGIN).
+  const state = await setupStateResponse(request, runtimeBindings(env))
+  if (state) return state
+  const lobby = await lobbyResponse(request, runtimeBindings(env), identity)
+  if (lobby) return lobby
+  return dispatch(request, () => api.fetch(request, env, execution), async () => noTransform(await start.fetch(request)))
+}

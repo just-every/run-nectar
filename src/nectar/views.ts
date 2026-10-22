@@ -2,6 +2,7 @@ import { writeOffList } from './write-offs'
 import { ledgerPostings } from './ledger-postings'
 import { periodCloses } from './period-close'
 import { promotionsView } from './promotions'
+import { webhookDeliveries, webhookDelivery, webhookEvent, webhooksView } from './webhooks'
 import { balanceView } from './balance'
 import { readPrepaidRefunds } from './prepaid-refund-records'
 import { readPrepaidTopupAuthorizations, readPrepaidTopupClaims } from './prepaid-topup-records'
@@ -78,6 +79,10 @@ export async function customerView(env: Bindings, actor: Actor, id: string, url?
 }
 
 export const views: Record<string, View> = {
+  webhooks:(env,actor)=>webhooksView(env,actor),
+  webhookDeliveries:(env,actor,_r,_id,url)=>webhookDeliveries(env,actor,url),
+  webhookDelivery:(env,actor,_r,id)=>webhookDelivery(env,actor,id),
+  webhookEvent:(env,actor,_r,id)=>webhookEvent(env,actor,id),
   prepaidRefunds:(env,actor,_r,_id,url)=>readPrepaidRefunds(env,actor,url.searchParams.get('subscription')??undefined),
   prepaidTopupAuthorizations:(env,actor,_r,_id,url)=>readPrepaidTopupAuthorizations(env,actor,url.searchParams.get('subscription')??undefined),
   prepaidTopupClaims:(env,actor,_r,_id,url)=>readPrepaidTopupClaims(env,actor,url.searchParams.get('subscription')??undefined),

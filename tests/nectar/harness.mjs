@@ -20,7 +20,7 @@ async function freePort() {
   return port
 }
 
-export async function harness({ assets = false, localTime, hostname = '127.0.0.1', stripeFetch, stripeSecret, stripeSecondarySecret, quickbooksFetch } = {}) {
+export async function harness({ assets = false, localTime, hostname = '127.0.0.1', stripeFetch, stripeSecret, stripeSecondarySecret, quickbooksFetch, webhookFetch } = {}) {
   const port = await freePort()
   // WebAuthn refuses IP-address relying parties, so the passkey journey names the loopback host.
   const origin = `http://${hostname}:${port}`
@@ -35,6 +35,8 @@ export async function harness({ assets = false, localTime, hostname = '127.0.0.1
   const outboundService = async request => {
     if (new URL(request.url).hostname==='api.stripe.com'&&stripeFetch)return stripeFetch(request)
     if (new URL(request.url).hostname==='sandbox-quickbooks.api.intuit.com'&&quickbooksFetch)return quickbooksFetch(request)
+    // DEV-001: webhook endpoints under .webhooks.test reach the journey's receiving app.
+    if (new URL(request.url).hostname.endsWith('.webhooks.test')&&webhookFetch)return webhookFetch(request)
     if (request.url !== 'https://api.resend.com/emails') return new Response('Unexpected outbound request', { status: 599 })
     const message=await request.json();mails.push(message)
     const index=mailResponses.findIndex(response=>!response.to||[message.to].flat().includes(response.to))
