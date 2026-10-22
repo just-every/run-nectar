@@ -3737,7 +3737,7 @@
       "executable": false
     },
     "tests/nectar/financial-reports.mjs": {
-      "sha256": "96214481383011660b5c3194b0d5caac8fabafb9ce658004d97405ac7b0477fb",
+      "sha256": "0fe0f9b1e28d1efd8e1137b5ea5a01d5c72e9e81242cce2659a0f26da4c3be3a",
       "executable": false
     },
     "tests/nectar/flows.mjs": {
@@ -3905,7 +3905,7 @@
       "executable": false
     },
     "tests/nectar/prepaid-report-parity.mjs": {
-      "sha256": "73b4b770b33cf8cb58f7d07b2237512ce145d7f398b471e7fbab92b41ef1dd32",
+      "sha256": "72d75c616ccd50df251ab7069c2ed350c3a2d1a05dbf4257ad394cdf8ba21032",
       "executable": false
     },
     "tests/nectar/prepaid.mjs": {
