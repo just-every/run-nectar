@@ -4,6 +4,29 @@ import { prepaidFlow } from './prepaid.mjs'
 import { csvRows } from './financial-reports.mjs'
 import { file } from './harness.mjs'
 
+function assertRenderedLot(html,lot,locale,catalogue) {
+  const cards=[...html.matchAll(/<section\b[^>]*class="card"[^>]*>([\s\S]*?)<\/section>/g)].map(match=>match[1])
+  const card=cards.find(card=>card.includes(`href="${lot.href}?`)||card.includes(`href="${lot.href}"`))
+  assert.ok(card,`The rendered card links to its exact prepaid source ${lot.id}`)
+  const text=html=>html.replace(/<[^>]*>/g,'').replace(/&nbsp;|&#160;/g,' ').trim()
+  const fields=new Map([...card.matchAll(/<dt>([\s\S]*?)<\/dt>\s*<dd>([\s\S]*?)<\/dd>/g)].map(match=>[text(match[1]),text(match[2])]))
+  const parts=new Intl.NumberFormat(locale).formatToParts(1234.5)
+  const group=parts.find(part=>part.type==='group')?.value,decimal=parts.find(part=>part.type==='decimal')?.value??'.'
+  const number=value=>{
+    assert.equal(typeof value,'string','Each financial quantity has a rendered labelled value')
+    const digits=value.match(/[−-]?\d[\d.,\s  ]*/)?.[0]
+    assert.ok(digits,`A numeric amount is visible in ${value}`)
+    const normalized=(group?digits.replaceAll(group,''):digits).replaceAll(decimal,'.').replaceAll('−','-').replace(/[\s  ]/g,'')
+    assert.ok(Number.isFinite(Number(normalized)))
+    return Number(normalized)
+  }
+  for(const [key,expected,scale] of [['remaining',lot.remainingN,lot.kind==='money'?100:1000000],['available',lot.availableN,lot.kind==='money'?100:1000000],['liability',lot.liabilityCents,100]]){
+    const value=fields.get(catalogue[`portal.prepaid.${key}`])
+    assert.equal(Math.round(number(value)*scale),expected,`The ${locale} ${key} amount on ${lot.id} equals its exact financial source`)
+    if(lot.kind==='money'||key==='liability')assert.match(value,/USD/,'Money remains denominated in USD')
+  }
+}
+
 export async function portalPrepaidFlow(h,owner,{onState=async()=>{}}={}) {
   let proved=false
   await prepaidFlow(h,owner,{onState:async state=>{
@@ -69,7 +92,8 @@ export async function portalPrepaidFlow(h,owner,{onState=async()=>{}}={}) {
     const spanishHtml=await spanish.text()
     assert.match(spanishHtml,/lang="es-US"/)
     assert.doesNotMatch(spanishHtml,/portal\.prepaid\.|untranslated_key|Contract liability|Purchased credit|Promotional credit/)
-    for(const lot of unitData.lots)assert.ok(spanishHtml.includes(String(lot.remainingQuantity??'')))
+    const spanishCatalogue=JSON.parse(await readFile(new URL('../../src/nectar/locales/es-US.json',import.meta.url),'utf8'))
+    for(const lot of unitData.lots)assertRenderedLot(spanishHtml,lot,spanishCatalogue['language.intl'],spanishCatalogue)
     await json(unitSession,money.lots[0].href,404)
     await json(moneySession,unitData.lots[0].href,404)
     const ignored=await json(moneySession,`/portal/prepaid/data?customer=${units.customer}&subscription=${units.subscription}`)
