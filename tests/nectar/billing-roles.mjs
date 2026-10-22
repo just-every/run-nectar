@@ -29,7 +29,7 @@ const EXPECTED = {
   },
   sales: {
     actions: ['change.prepare', 'amendment.propose', 'contract.prepare'],
-    api: ['customers', 'customer', 'catalog', 'subscription', 'upcoming', 'entitlement', 'metadata', 'metadataObjects'],
+    api: ['customers', 'customer', 'catalog', 'promotions', 'subscription', 'upcoming', 'entitlement', 'metadata', 'metadataObjects'],
     pages: ['customers', 'customer', 'certificateFile', 'catalog', 'subscription', 'metadata', 'metadataList'],
   },
   support: {

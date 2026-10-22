@@ -1,3 +1,4 @@
+import { runTrials } from './nectar/trials'
 import { runPrepaidSettlement } from './nectar/prepaid-jobs'
 import { deliverPendingUsageCorrectionMail } from './nectar/usage-disposition-mail'
 import { portalResponse } from './nectar/portal-http'
@@ -43,6 +44,7 @@ export default withDemo({
     await removeExpiredFinancialRecords(runtimeBindings(env))
     await runPrepaidSettlement(runtimeBindings(env))
     await runCadences(runtimeBindings(env),controller.scheduledTime)
+    await runTrials(runtimeBindings(env),controller.scheduledTime)
     await runRenewals(runtimeBindings(env),controller.scheduledTime)
     await runWinbacks(runtimeBindings(env),controller.scheduledTime)
     await sendCertificateReminders(env, controller.scheduledTime)

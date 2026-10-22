@@ -6,6 +6,7 @@ import { termRecords } from './renewal-terms'
 // when a person approves that preview against the same subscription revision.
 import type { Bindings } from '../auth.server'
 import { requirePrice } from './catalog'
+import { promotionRedemption } from './promotions'
 import { requireAny, requireRead, actorLabel, requireCapability, requireMember, type Actor } from './actor'
 import { requireBusiness } from './business'
 import { all, commit, guard, insist, newId, now, one, parseJson, stmt, type Row } from './core'
@@ -81,6 +82,8 @@ export async function createSubscription(env: Bindings, actor: Actor, input: Inp
   let anchor = input.integer('anchor_day', { min: 1, max: 28, optional: true }) ?? (day <= 28 ? day : null)
   const trialEnd = input.text('trial_end', { max: 10, optional: true }) || null
   insist(!trialEnd || (isDate(trialEnd) && trialEnd > start), 'invalid_trial_end')
+  const trialPayment = input.text('trial_payment', { max: 4, optional: true }) || null
+  insist(trialPayment === null || trialEnd && (trialPayment === 'card' || trialPayment === 'none'), 'invalid_trial_payment')
   const externalId = input.text('external_id', { max: 80, optional: true }) || null
   const priceIds = input.list('price', { keepEmpty: true }), quantities = input.list('quantity', { keepEmpty: true })
   const lines = priceIds.map((price, index) => ({ price, quantity: quantities[index] ?? '' })).filter(line => line.price)
@@ -111,14 +114,17 @@ export async function createSubscription(env: Bindings, actor: Actor, input: Inp
     insist(items.some(item => item.price.id === exception.priceId), 'override_price_not_on_subscription')
     insist(items.find(item => item.price.id === exception.priceId)!.price.pricing_model === 'simple', 'override_price_model')
   }
+  const promotion = input.text('promotion_code', { max: 40, optional: true }) ? await promotionRedemption(env, actor, { text: input.text('promotion_code', { max: 40 }), customer, subscription: id, start, trialEnd, items }) : null
   const statements = [
     ...(meters.length ? [guard(env, 'meter_already_billed', `NOT EXISTS(${CLASH(meters.length)})`, customer.id, id, start, start, ...meters)] : []),
     stmt(env, "INSERT INTO nc_subscriptions (id, customer_id, external_id, anchor_day, start_date, trial_end,end_date,billing_anchor_date,contract_term_months,contract_end_date, billing_mode, origin, revision, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?,?,?,?,?,'live', 'native', ?, ?, ?, ?)", id, customer.id, externalId, anchor, start, trialEnd,contractEnd,billingAnchorDate,termMonths,contractEnd, newId(), by, at, at),
     ...items.map(item => stmt(env, "INSERT INTO nc_items (id, subscription_id, price_id, quantity, effective_from, origin, created_at) VALUES (?, ?, ?, ?, ?, 'native', ?)", item.id, id, item.price.id, item.quantity, start, at)),
+    ...(trialPayment ? [stmt(env, 'UPDATE nc_subscriptions SET trial_payment=? WHERE id=?', trialPayment, id)] : []),
+    ...(promotion?.statements ?? []),
     ...(exception ? [stmt(env, "INSERT INTO nc_amendments (id, subscription_id, kind, value, price_id, effective_from, effective_to, note, clause, status, origin, created_by, created_at, prepared_by_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'proposed', 'native', ?, ?, ?)",
       newId(), id, exception.kind, exception.value, exception.priceId, exception.from, exception.to, exception.note, exception.clause, by, at, actor.id)] : []),
   ]
-  await commit(env, statements, { actor: by, action: 'subscription.create', subject: id, detail: { customer: customer.external_id, start, anchor, trialEnd,billingAnchorDate,termMonths,contractEnd, items: items.map(item => ({ price: item.price.id, quantity: item.quantity })), exception: exception?.kind ?? null } })
+  await commit(env, statements, { actor: by, action: 'subscription.create', subject: id, detail: { customer: customer.external_id, start, anchor, trialEnd,billingAnchorDate,termMonths,contractEnd, trialPayment, promotion: promotion?.detail ?? null, items: items.map(item => ({ price: item.price.id, quantity: item.quantity })), exception: exception?.kind ?? null } })
   return { id }
 }
 

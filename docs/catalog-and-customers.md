@@ -52,3 +52,24 @@ On the subscription, **Preview change** shows the affected period as it is and
 with the change (prorated by days), and the next full period. **Approve this
 preview** commits exactly that; the bill run charges what the preview showed. A
 change dated inside a period already invoiced is refused.
+
+## Coupons, promotion codes and trials
+
+Under **Catalog → Coupons and promotion codes**, a person with approval creates
+reusable **coupons**: a percentage or an amount, once, for a number of months or
+forever, optionally restricted to products (percentage coupons only; an amount
+coupon is a run of one-time credits). A **promotion code** redeems a coupon with
+an optional redemption limit, an expiry date and a first-time-customer rule (a
+customer with a paid invoice is refused). Type the code in **Promotion code**
+when starting a subscription: Nectar checks it and records the redemption in the
+same transaction, then bills the discount on the covered fixed and seat lines for
+the coupon's duration, counted from the first billed day (the trial end date when
+there is a trial). A coupon restricted to a product discounts only that product's
+lines on a mixed invoice.
+
+A trial records whether a payment method is on file. An operator can **Extend
+trial**, which moves the first charge to the new end date. At the end date a
+trial with a payment method converts to paid, and one without ends unpaid with no
+charge; a trial with no recorded payment method is never resolved automatically.
+Nectar does not charge the card by itself: collect the first invoice through the
+owner-confirmed card collection.

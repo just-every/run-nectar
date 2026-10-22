@@ -176,6 +176,14 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "revision": "text",
     "subscription": "text"
   },
+  "coupon.create": {
+    "duration": "text",
+    "kind": "text",
+    "months": "integer",
+    "name": "text",
+    "products": "list",
+    "value": "text"
+  },
   "credential.issue": {
     "api_version": "text",
     "name": "text",
@@ -600,6 +608,13 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "description": "text",
     "name": "text"
   },
+  "promotion.create": {
+    "code": "text",
+    "coupon": "text",
+    "expires_on": "text",
+    "first_time_only": "flag",
+    "max_redemptions": "integer"
+  },
   "proposal.create": {
     "evidence": "json",
     "kind": "text",
@@ -702,10 +717,12 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "exception_kind": "has",
     "external_id": "text",
     "price": "list",
+    "promotion_code": "text",
     "quantity": "list",
     "start_date": "text",
     "term_months": "integer",
-    "trial_end": "text"
+    "trial_end": "text",
+    "trial_payment": "text"
   },
   "subscription.end": {
     "end_date": "text",
@@ -769,6 +786,13 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "subscription": "text",
     "term_start": "text",
     "uplift_percent": "text"
+  },
+  "trial.extend": {
+    "days": "integer",
+    "subscription": "text"
+  },
+  "trial.resolve": {
+    "subscription": "text"
   },
   "usage.acknowledge": {
     "basis": "text",

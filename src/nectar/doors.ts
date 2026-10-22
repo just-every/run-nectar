@@ -4,6 +4,7 @@
 // Patterns are relative to /api/nectar/ (API) or absolute (pages).
 export const API_DOORS: [string, string][] = [
   ['^period-closes(?:/(\\d{4}-\\d{2}))?$','periodCloses'],
+  ['^promotions$','promotions'],
   ['^write-offs$','writeOffs'],
   ['^ledger-postings$','ledgerPostings'],
   ['^prepaid/refunds$','prepaidRefunds'],

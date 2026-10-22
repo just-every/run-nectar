@@ -17,7 +17,7 @@ role or credential scope itself.
 
 `me`, `business`, `customers`, `customers/ID`, `catalog`, `subscriptions/ID`,
 `usage/batches`, `usage/inspect?period=YYYY-MM`, `runs`, `runs/ID`,
-`invoices/ID`, `ageing`, `write-offs`, `ledger-postings`, `period-closes`, `payments`, `notices`, `tasks`, `proposals`,
+`invoices/ID`, `ageing`, `promotions`, `write-offs`, `ledger-postings`, `period-closes`, `payments`, `notices`, `tasks`, `proposals`,
 `proposals/ID`, `entitlements/CUSTOMER` (all features held today) and
 `entitlements/CUSTOMER?feature=CODE&date=YYYY-MM-DD` (one decision, explained
 step by step; `CUSTOMER` may be the internal id or the external id), `imports`,
@@ -42,7 +42,11 @@ records their role does not read.
 | `charge.add` | owner, finance | `customer`, optional `subscription`, `effective_date`; either `price` and optional decimal `quantity`, or custom `amount`, `description`, `taxable` |
 | `invoice.manual` | owner, finance | `customer`, `charges[]` (1–20 unbilled charge ids), `service_date`; returns a standalone draft for normal approval and issue |
 | `subscription.addon` | a person with approval | `subscription`, `price`, seat `quantity`, `effective_date`; attaches an immutable catalogue price with recurring proration |
-| `subscription.create` | owner, finance | `customer`, `start_date`, `anchor_day`, `trial_end`, `price[]`, `quantity[]`, optional `exception_*` |
+| `subscription.create` | owner, finance | `customer`, `start_date`, `anchor_day`, `trial_end`, `price[]`, `quantity[]`, optional `exception_*`, optional `trial_payment` (`card` or `none`, with `trial_end`) and `promotion_code` (redeemed in the same transaction) |
+| `coupon.create` | a person with approval | `name`, `kind` (`percent` or `amount`), `value`, `duration` (`once`, `repeating` with `months`, `forever`), optional `products[]`; amount coupons are one-time credits, unrestricted and never forever |
+| `promotion.create` | a person with approval | `code`, `coupon`, optional `max_redemptions`, `expires_on`, `first_time_only` |
+| `trial.extend` | owner, finance | `subscription`, `days` (1-90) on a running, unbilled trial; the first charge moves with the end date |
+| `trial.resolve` | a person with approval | `subscription`; at or after the end date a trial with a payment method converts and one without ends unpaid (the daily job does this too) |
 | `amendment.propose` / `amendment.decide` | finance / a person with approval | `subscription`, `kind`, `value`, `effective_from`, `effective_to`, `price`, `note`, `clause` / `amendment`, `decision` |
 | `change.prepare` / `change.decide` | finance / a person with approval | `subscription`, `item`, `price`, `quantity`, `effective_date` / `change`, `decision` |
 | `subscription.end` | a person with approval | `subscription`, `end_date` |

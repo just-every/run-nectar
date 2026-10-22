@@ -1,3 +1,7 @@
+import { clockInstant } from '../clock'
+import { requireBusiness } from '../business'
+import { localDate } from '../dates'
+import { trialSection } from './promotions'
 import { intervalLabel } from './intervals'
 import { importedCollectionsSection } from './imported-collections'
 import { customerInvoiceForm } from './invoice-content'
@@ -50,6 +54,8 @@ export async function customerPage(env: Bindings, actor: Actor, id: string, url:
     ${field('Billing day of the month (1–28)', 'anchor_day', { type: 'number', required: false, hint: 'Each period starts on this day. Leave empty to use the start date’s day.' })}
     ${select('Contract term','term_months',[{value:'1',label:'One month'},{value:'12',label:'12 months'},{value:'24',label:'24 months'},{value:'36',label:'36 months'}],'',{required:false,blank:'Evergreen'})}${field('Full billing anchor date','billing_anchor_date',{type:'date',required:false,hint:'For nonmonthly plans and month-end anniversaries. Leave empty to use the start date.'})}
     ${field('Trial ends', 'trial_end', { type: 'date', required: false, hint: 'Fixed and seat charges start on this date.' })}
+    ${select('Payment method on file for the trial', 'trial_payment', [{ value: 'card', label: 'Yes: converts to paid at the end date' }, { value: 'none', label: 'No: ends unpaid at the end date' }], '', { required: false, blank: 'Not recorded' })}
+    ${field('Promotion code', 'promotion_code', { required: false, hint: 'Redeems the code for this subscription.' })}
     ${[0, 1, 2].map(index => h`<div class="pair">${select(`Price ${index + 1}`, 'price', named.map(p => ({ value: p.id, label: label(p) })), '', { required: index === 0, blank: index === 0 ? '' : 'None' })}${field('Seats (per-seat prices)', 'quantity', { type: 'number', value: '1', required: false })}</div>`)}
     <fieldset><legend>Contract exception (optional; bills only once approved)</legend>
     ${select('Kind', 'exception_kind', [{ value: 'discount_percent', label: 'Discount (%) on fixed and seat charges' }, { value: 'fixed_credit', label: 'One-time credit ($)' }], '', { required: false, blank: 'No exception' })}
@@ -95,6 +101,7 @@ export async function subscriptionPage(env: Bindings, actor: Actor, id: string, 
   const s = await subscriptionDetail(env, actor, id)
   const today = new Date().toISOString().slice(0, 10)
   const approver = actor.kind === 'member' && can(actor, 'approve'), records = can(actor, 'records')
+  const trialDay = localDate(clockInstant(env), (await requireBusiness(env)).timezone)
   const open = s.items.filter((i: any) => !i.effective_to)
   const prices = records ? await all(env, "SELECT p.id, pr.name, p.version, p.kind, p.unit_amount, p.pricing_model, p.nickname,b.interval_unit,b.interval_count,b.billing_timing FROM nc_prices p JOIN nc_products pr ON pr.id = p.product_id LEFT JOIN nc_price_intervals b ON b.price_id=p.id WHERE p.status = 'active' AND p.kind <> 'unit' ORDER BY pr.name, p.version DESC") : []
   return page('Subscription', actor, h`<p class="crumbs"><a href="/app/customers/${s.customer_id}">${s.customer_name}</a></p><h1>Subscription ${s.external_id ? h`<span>${s.external_id}</span>` : ''}</h1><p>${metadataLink('subscription',s.id)}${canRead(actor,'invoices')?h` · <a href="/app/prepaid/${s.id}">Prepaid credits</a>`:''}</p>
@@ -103,6 +110,7 @@ export async function subscriptionPage(env: Bindings, actor: Actor, id: string, 
       ${s.cutover_start ? h`<div><dt>Billed by Nectar from</dt><dd>${formatDate(s.cutover_start)}</dd></div>` : ''}</dl>
       ${s.billing_mode === 'shadow' ? h`<p class="hint">Moved in from Stripe. Nectar rates it in shadow for comparison and issues nothing until the owner adopts it under Move in.</p>` : ''}
       ${details({ 'Internal id': s.id, Revision: s.revision, 'Provider reference': s.provider_ref ?? '—', 'Provider schedule': s.provider_schedule_ref ?? '—', 'Provider collection': s.provider_collection ?? '—' })}</section>
+    ${trialSection(s, actor, trialDay)}
     <section class="card" aria-labelledby="items"><h2 id="items">Plan</h2>${table(['Price', 'Quantity$', 'From', 'Until'], s.items.map((i: any) => [`${i.product_name}${i.nickname ? ` — ${i.nickname}` : ''} v${i.version} (${priceRate(i)} · ${intervalLabel(i)})`, i.quantity, formatDate(i.effective_from), formatDate(i.effective_to)]))}</section>
     ${await upcomingSection(env,actor,s,url)}
     ${addonSection(s, prices, actor)}

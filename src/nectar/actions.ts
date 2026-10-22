@@ -1,6 +1,8 @@
 import { issueWriteOff, prepareWriteOff, approveWriteOff, recoverWriteOff } from './write-offs'
 import { postPendingLedger } from './ledger-postings'
 import { closePeriod } from './period-close'
+import { createCoupon, createPromotionCode } from './promotions'
+import { extendTrial, resolveTrial } from './trials'
 import { preparePrepaidRefund, decidePrepaidRefund, reconcilePrepaidRefund } from './prepaid-refund-actions'
 import { preparePrepaidTopupAuthorization, decidePrepaidTopupAuthorization, revokePrepaidTopupAuthorization } from './prepaid-topup-authorization'
 import { reconcilePrepaidTopup } from './prepaid-topup-charge'
@@ -208,6 +210,10 @@ export const actions: Record<string, Handler> = {
   'writeoff.recover': recoverWriteOff,
   'ledger.post': postPendingLedger,
   'revenue.close': closePeriod,
+  'coupon.create': createCoupon,
+  'promotion.create': createPromotionCode,
+  'trial.extend': extendTrial,
+  'trial.resolve': resolveTrial,
   'payment.record': recordPayment,
   'payment.allocate': allocate,
   'reminder.prepare': prepareReminder,

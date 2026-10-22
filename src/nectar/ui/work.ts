@@ -12,6 +12,7 @@ import { formatPeriod, isMonth, today } from '../dates'
 import { quantityText } from '../decimal'
 import { batches, inspect } from '../usage'
 import { catalogueApprovals } from './price-approvals'
+import { promotionsSection } from './promotions'
 import { pricingTiers, quantityPriceForm } from './pricing'
 import { check, details, field, fileField, form, h, hidden, page, select, table, tag, when } from './html'
 
@@ -55,6 +56,7 @@ export async function catalogPage(env: Bindings, actor: Actor, url: URL) {
           ${quantityPriceForm(p.id, c.meters, !c.prices.some((x: any) => x.product_id === p.id))}${form('feature.grant', '/app/catalog', h`${hidden('product', p.id)}${field('Feature code', 'feature')}${field('Note', 'note', { required: false })}`, 'Grant feature', { layout: 'columns', secondary: true })}</div>` : ''}</article>`) : h`<p class="empty">No products yet.</p>`}
       ${records ? h`<h3>Add a product</h3>${form('product.create', '/app/catalog', h`${field('Code', 'code', { hint: 'Lowercase letters, digits, dots, dashes.' })}${field('Name', 'name')}${field('Description', 'description', { required: false })}`, 'Add product', { layout: 'columns' })}` : ''}</section>
     ${metricSection(c,canRead(actor,'customers')?await customers(env,actor):[],actor)}
+    ${await promotionsSection(env, actor, c.products)}
     ${catalogueApprovals(c.priceRequests, c.meters, actor)}
     <section class="card" aria-labelledby="meters"><h2 id="meters">Meters</h2>${table(['Code', 'Name', 'Unit'], c.meters.map((m: any) => [m.code, m.name, m.unit_label]), { empty: 'No meters yet.' })}
       ${records ? form('meter.create', '/app/catalog', h`${field('Code (the meter name in usage files)', 'code')}${field('Name', 'name')}${field('Unit', 'unit_label', { hint: 'For example: API call, GB, message.' })}`, 'Add meter', { layout: 'columns', secondary: true }) : ''}</section>`, { current: '/app/catalog', url })
