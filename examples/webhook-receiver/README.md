@@ -1,0 +1,5 @@
+# Nectar webhook receiver
+
+Run `node examples/webhook-receiver/server.mjs` with `NECTAR_WEBHOOK_SECRET` supplied by your secret manager. Put loopback port 9090 behind your own HTTPS ingress and register its `/webhooks` URL in Nectar → More → Outbound webhooks. Do not commit the generated receipt file. This sample verifies the raw request bytes, HMAC-SHA256, timestamp tolerance (five minutes) and overlapping secrets before accepting an event. Signed requests may repeat: durable receipt ids deduplicate reception. Real business side effects and the unique receipt must share your application's transaction; the sample records reception only.
+
+Rotation: save the new secret in `NECTAR_WEBHOOK_SECRET`, retain the former value as `NECTAR_WEBHOOK_PREVIOUS_SECRET` during the configured overlap, then remove it. Nectar includes signatures for both keys during overlap and only the new key afterward. Manual replay keeps the original event id and payload and generates a fresh timestamp/signature. Never treat replay as a new financial action.

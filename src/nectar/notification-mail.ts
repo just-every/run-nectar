@@ -4,7 +4,7 @@ import { all, commit, now, stmt } from './core'
 import { eligibleRecipient, type AlertEvent } from './notifications'
 import { esc } from './ui/html'
 
-export const ALERT_LABELS = { payment_mismatch: 'Payment does not match an invoice balance', billrun_exceptions: 'Bill-run exceptions waiting', proposals: 'Proposal awaiting approval' }
+export const ALERT_LABELS = { webhook_failure: 'Outbound webhook delivery failed', payment_mismatch: 'Payment does not match an invoice balance', billrun_exceptions: 'Bill-run exceptions waiting', proposals: 'Proposal awaiting approval' }
 
 /** A sending claim is never automatically retried: an interrupted send may
  * already have reached the provider. Acceptance is not mailbox delivery. */

@@ -1,3 +1,5 @@
+import { registerWebhook,rotateWebhook } from '../webhooks'
+import { webhooksPage,webhookDeliveryPage } from './webhooks'
 import { prepaidRefundCsv } from '../prepaid-refund-export'
 import { readPrepaidRefundProof } from '../prepaid-refund-access'
 import { prepaidRefundListPage, prepaidRefundSourcePage } from './prepaid-refunds'
@@ -46,6 +48,8 @@ import { reportPage, reportInvoicePage, reportLinePage } from './reports'
 type Page = (env: Bindings, actor: Actor, request: Request, url: URL, id: string) => Promise<Response>
 
 export const pages: Record<string, Page> = {
+  webhooks:(env,actor,_r,url)=>webhooksPage(env,actor,url),
+  webhookDelivery:(env,actor,_r,url,id)=>webhookDeliveryPage(env,actor,id,url),
   prepaidRefundList:(env,actor,_r,url)=>prepaidRefundListPage(env,actor,url),
   prepaidRefundProof:(env,actor,_r,_url,id)=>readPrepaidRefundProof(env,actor,id),
   prepaidRefundCsv:(env,actor,_r,url)=>prepaidRefundCsv(env,actor,url),
@@ -110,6 +114,8 @@ export const pages: Record<string, Page> = {
 type PostPage = (env: Bindings, actor: Actor, input: Input, url: URL, request: Request) => Promise<Response>
 
 export const postPages: Record<string, PostPage> = {
+  '/app/webhooks/register':async(env,actor,input,url)=>webhooksPage(env,actor,url,await registerWebhook(env,actor,input)),
+  '/app/webhooks/rotate':async(env,actor,input,url)=>webhooksPage(env,actor,url,await rotateWebhook(env,actor,input)),
   '/app/usage/replay':(env,actor,input,url)=>usageReplayPage(env,actor,url,input),
   ...securityPosts,
   '/app/answers':(env,actor,input,url)=>billingAnswersPage(env,actor,url,input),

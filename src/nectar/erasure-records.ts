@@ -76,6 +76,7 @@ export async function erasurePlan(env: Bindings, customer: Row): Promise<Erasure
     if (affected) {
       if (['nc_usage_correction_mail','nc_credit_correction_mail','nc_draft_correction_mail','nc_notifications','nc_note_mentions','nc_renewal_notices'].includes(table)) updates.status='suppressed'
       if (table==='nc_cadence_deliveries') updates.status='superseded'
+      if (table==='nc_webhook_deliveries') {updates.status='suppressed';updates.claim=null}
       if (table==='nc_notices') updates.status='discarded'
       if (table==='nc_tasks') updates.status='done'
       if (table==='nc_renewal_terms') {updates.auto_renew=0;updates.token_hash=null;updates.status='ended'}

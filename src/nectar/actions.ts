@@ -1,3 +1,4 @@
+import { registerWebhook,rotateWebhook,disableWebhook,replayWebhook,dispatchWebhookDoor } from './webhooks'
 import { issueWriteOff, prepareWriteOff, approveWriteOff, recoverWriteOff } from './write-offs'
 import { postPendingLedger } from './ledger-postings'
 import { closePeriod } from './period-close'
@@ -78,6 +79,11 @@ import { prepareMetric,previewMetric,activateMetric } from './meter-definitions'
 type Handler = (env: Bindings, actor: Actor, input: Input, request: Request) => Promise<unknown>
 
 export const actions: Record<string, Handler> = {
+  'webhook.register': registerWebhook,
+  'webhook.rotate': rotateWebhook,
+  'webhook.disable': disableWebhook,
+  'webhook.replay': replayWebhook,
+  'webhook.dispatch': dispatchWebhookDoor,
   'collection.customer.bind': bindNativeCollectionCustomer,
   'collection.prepare': prepareNativeCollection,
   'collection.confirm': confirmNativeCollection,

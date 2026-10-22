@@ -5,10 +5,10 @@ import { memberCapabilities, requirePerson, actorLabel, type Actor, type Capabil
 import { all, commit, insist, now, one, stmt } from './core'
 import type { Input } from './input'
 
-export const NOTIFICATION_EVENTS = ['mentions', 'payment_mismatch', 'billrun_exceptions', 'proposals'] as const
+export const NOTIFICATION_EVENTS = ['mentions', 'payment_mismatch', 'billrun_exceptions', 'proposals', 'webhook_failure'] as const
 export type NotificationEvent = typeof NOTIFICATION_EVENTS[number]
 export type AlertEvent = Exclude<NotificationEvent, 'mentions'>
-const defaults = { mentions: true, payment_mismatch: false, billrun_exceptions: false, proposals: false }
+const defaults = { mentions: true, payment_mismatch: false, billrun_exceptions: false, proposals: false, webhook_failure: false }
 
 export async function memberPreferences(env: Bindings, member: string) {
   const row = await one(env, 'SELECT * FROM nc_notification_preferences WHERE member_id=?', member)
@@ -25,8 +25,8 @@ export async function setNotificationPreferences(env: Bindings, actor: Actor, in
   requirePerson(actor)
   input.only([...NOTIFICATION_EVENTS, 'returnTo'])
   const values = NOTIFICATION_EVENTS.map(event => input.flag(event) ? 1 : 0)
-  await commit(env, [stmt(env, `INSERT INTO nc_notification_preferences(member_id,mentions,payment_mismatch,billrun_exceptions,proposals)
-    VALUES (?,?,?,?,?) ON CONFLICT(member_id) DO UPDATE SET mentions=excluded.mentions,payment_mismatch=excluded.payment_mismatch,billrun_exceptions=excluded.billrun_exceptions,proposals=excluded.proposals`, actor.id,...values)],
+  await commit(env, [stmt(env, `INSERT INTO nc_notification_preferences(member_id,mentions,payment_mismatch,billrun_exceptions,proposals,webhook_failure)
+    VALUES (?,?,?,?,?,?) ON CONFLICT(member_id) DO UPDATE SET mentions=excluded.mentions,payment_mismatch=excluded.payment_mismatch,billrun_exceptions=excluded.billrun_exceptions,proposals=excluded.proposals,webhook_failure=excluded.webhook_failure`, actor.id,...values)],
     { actor: actorLabel(actor), action: 'notification.preferences', subject: actor.id, detail: Object.fromEntries(NOTIFICATION_EVENTS.map((e,i) => [e,!!values[i]])) })
   return { preferences: await memberPreferences(env,actor.id) }
 }
@@ -34,6 +34,7 @@ export async function setNotificationPreferences(env: Bindings, actor: Actor, in
 // GOV-001/INT-003: an alert needs the member's current authority to read the
 // record and act on it, never a role name alone; opting in grants nothing.
 const ALERT_AUTHORITY: Record<AlertEvent, { read: Capability[]; act: Capability[] }> = {
+  webhook_failure: { read: ['settings'], act: ['settings'] },
   payment_mismatch: { read: ['read', 'read.payments'], act: ['receivables'] },
   billrun_exceptions: { read: ['read', 'read.invoices'], act: ['approve'] },
   proposals: { read: ['read'], act: ['approve'] },
@@ -41,6 +42,7 @@ const ALERT_AUTHORITY: Record<AlertEvent, { read: Capability[]; act: Capability[
 const ALERT_SQL = (event: AlertEvent, member = '') => `SELECT m.id,m.email,m.role,r.capabilities AS custom FROM nc_members m JOIN nc_notification_preferences p ON p.member_id=m.id
     LEFT JOIN nc_roles r ON r.id=m.custom_role_id WHERE m.status='active' AND p.${event}=1${member}`
 const authorized = (event: AlertEvent, row: { role: Role; custom: string | null }) => {
+  if(event==='webhook_failure')return row.role==='owner'||row.role==='finance'
   const held = memberCapabilities(row.role, row.custom), need = ALERT_AUTHORITY[event]
   return need.read.some(c => held.has(c)) && need.act.some(c => held.has(c))
 }
