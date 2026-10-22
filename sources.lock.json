@@ -57,7 +57,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "d4b8a0682ef674d93432f55ed8d017cfe4d8b97520d934db48b3348e00854b2b",
+      "sha256": "a3256a8107be1973a0f127bd29135e80d596cedbda63c80a0fa3c88f622522b7",
       "executable": false
     },
     "AGENTS.consumer.md": {
@@ -69,7 +69,7 @@
       "executable": false
     },
     "API.md": {
-      "sha256": "528928872569df42477cae5b5c6174f779bc9abe38a218fe5d50e7d389dd184b",
+      "sha256": "6bca693759bf60d5387e83df78f6c20f6ab629d5f8099199b3e7a08aa4af0ec2",
       "executable": false
     },
     "base-copies.json": {
@@ -77,7 +77,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "5857e590a9199245886828a21e63fee64fee34de11348a100a488611fbc2e059",
+      "sha256": "01e5e16a341725db9238c26ca3d224753203c0f7e6d716fa5df85cd42e72fc05",
       "executable": false
     },
     "DEMO.md": {
@@ -472,6 +472,10 @@
       "sha256": "8a8feefefa14d93f785e9398e94dac107e173bcaa4e00733abb18255edd62b70",
       "executable": false
     },
+    "migrations/core/0075_webhook_lifecycle.sql": {
+      "sha256": "760a64720e01c3f7fff2aa1a1962013ceba6b1709e0859c2cc965c9e05b406e8",
+      "executable": false
+    },
     "ONBOARDING.md": {
       "sha256": "95bb235abff28ac36979868486caf2cb73bfbe4ab63037f3e301d189bb9398d9",
       "executable": false
@@ -705,7 +709,7 @@
       "executable": false
     },
     "scripts/installer/local.mjs": {
-      "sha256": "80b1e28649842bdc92aed999d49aa547f492f7df586d99f8e3433dcb52ed0afe",
+      "sha256": "b623334582d4a57080e017144eb80bd59e3e606a33d72b5a91ce18e3a53d0141",
       "executable": false
     },
     "scripts/installer/seed.mjs": {
@@ -3628,8 +3632,12 @@
       "sha256": "4edd09d7df0de0476c7267519ce25e5e263d7922f9fbd73b8e7288ae60b3466b",
       "executable": false
     },
+    "src/nectar/webhook-entitlements.ts": {
+      "sha256": "cae12aad368ee31d2a88aa4c0c7889d87b2f20cee9e9255b90f0089923876bd2",
+      "executable": false
+    },
     "src/nectar/webhooks.ts": {
-      "sha256": "84ecad9cee6247cddbc4d4fe0f7d96c33d409819a2ad2b3b379daaea7a68fe3f",
+      "sha256": "342f552f9ef00ec01df7bab2f030ed44bc00fd8dcc3254f1b8ecc9455675558e",
       "executable": false
     },
     "src/nectar/write-offs.ts": {
@@ -3953,7 +3961,7 @@
       "executable": false
     },
     "tests/nectar/flows.mjs": {
-      "sha256": "e0f5e5f9d069b79fa2e9a071fbcaac52870ddb613352e8928304638764052563",
+      "sha256": "1cfd782064736fa14b01f704520e794b466a7b2b6fca9dad90905c8badde1dcb",
       "executable": false
     },
     "tests/nectar/harness.mjs": {
@@ -4265,7 +4273,7 @@
       "executable": false
     },
     "tests/nectar/webhooks.mjs": {
-      "sha256": "7a730f4be9f33622ef5e5463acb74046a520774d99f0e51eb03c5102754e143e",
+      "sha256": "6ad8a188e659af3a54c6392e2b8d3b4a4524032d493c9897366959e4ca1b6694",
       "executable": false
     },
     "tests/nectar/write-off-browser.mjs": {
@@ -4277,7 +4285,7 @@
       "executable": false
     },
     "tests/runtime.mjs": {
-      "sha256": "d005042a00cc0fbfd657960ef53d0bf29f45475e0d4f473bec49c9954d8a2f31",
+      "sha256": "190b9164b9d1de581f5853e2afa16a4d42f622fe7d20285bd8b312def3f75133",
       "executable": false
     },
     "tests/site/site.test.mjs": {

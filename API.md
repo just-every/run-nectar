@@ -539,15 +539,16 @@ Requests contain JSON `{id, created_at, type, data, metadata}`. Verify **raw byt
 | Stripe event family | Nectar event | Current boundary |
 | --- | --- | --- |
 | `customer.created` / `customer.updated` | `customer.created` / `customer.updated` | Native customer writes and imported customer row changes |
-| `customer.subscription.created` / `customer.subscription.updated` / `customer.subscription.deleted` | `subscription.created` / `subscription.updated` | Persisted subscription revisions, including shadow rows; deletion means recorded end-date change, not row deletion |
+| `customer.subscription.created` / `customer.subscription.updated` / `customer.subscription.deleted` | `subscription.created` / `subscription.updated` | Complete native post-transaction item snapshots; imported row changes are emitted but complete live shadow parity remains unproved; deletion means recorded end-date change, not row deletion |
 | `invoice.created` / `invoice.finalized` | `invoice.created` / `invoice.issued` | Saved drafts and immutable issuance |
-| `invoice.paid` | `invoice.paid` | Recorded payment allocations reach the issued invoice total after numbered credits |
-| `invoice.payment_succeeded` / `invoice.payment_failed` | `payment.recorded` / not yet produced | Captured/recorded payment facts; failure lifecycle remains PAY-004 |
-| `payment_method.*` | not yet produced | PAY-002/PAY-005 payment-method lifecycle remains unbuilt |
-| `entitlements.active_entitlement_summary.updated` | not yet produced | Full entitlement lifecycle producer remains a DEV-001 gap |
+| `invoice.paid` | `invoice.paid` | Recorded ledger balance reaches zero through allocations, numbered applied credits, carried credits or goodwill; payload labels recorded-ledger-settlement and cash allocated separately; write-offs are not paid |
+| `invoice.payment_succeeded` / `invoice.payment_failed` | `payment.recorded` / `payment.failed` | Captured/recorded payment facts and PAY-008 declined/uncertain outcomes; live automatic PAY-004 failure lifecycle remains unbuilt |
+| `payment_method.*` | `payment_method.observed` | Only the reviewed PAY-008 card reference observed during collection, not a claimed provider attach/update/detach; full PAY-002/PAY-005 lifecycle remains unbuilt |
+| `entitlements.active_entitlement_summary.updated` | `entitlements.updated` | Current ENT-002 typed access/quota decisions, including dated pause/resume boundaries, observed in bounded scheduled pages; no raw usage or private reasons |
+| Existing ENT-002 quota exhaustion | `usage.threshold_crossed` | Once per observed non-exhausted → exhausted quota period; independent usage/spend thresholds and threshold invoices remain USE-005 |
 | `credit_note.created` | `credit.created` | Numbered credit created; narrative excluded |
 
-DEV-001 remains PARTIAL: the mapped live Stripe shadow-event journey, payment-method/entitlement/usage-threshold producers, complete subscription-item event snapshots, complete paid transitions through every financial settlement door and policy approval remain unproved. This map states the current API; it does not claim a live sync or a completed replacement for unsupported event families.
+DEV-001 remains PARTIAL: the mapped live Stripe shadow-event journey, provider payment-method lifecycle and complete imported subscription snapshots, independent paid-transition assertions for credit-only/carried/goodwill settlement, and policy approval remain unproved. Native subscription audit commits snapshot complete item metadata; native lifecycle events contain dates and typed access facts, never narrative. Entitlement observation scans up to 100 customers per dispatch, continues by cursor and does not promise a one-minute bound at arbitrary scale. This map states the current API; it does not claim a live sync or a completed replacement for unsupported event families.
 
 ## Parent payers and division consolidation (CAT-009, partial)
 

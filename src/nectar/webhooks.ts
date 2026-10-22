@@ -1,3 +1,4 @@
+import { observeWebhookEntitlements } from './webhook-entitlements'
 // Outbound webhooks: explicit owner consent, immutable snapshots and durable
 // at-least-once delivery. A receiver must deduplicate the stable event id.
 import type { Bindings } from '../auth.server'
@@ -76,6 +77,7 @@ async function signature(secret: Uint8Array, timestamp: number, body: string) {
 }
 const delays=[60000,300000,1800000,3600000,21600000,86400000]
 export async function dispatchWebhooks(env: Bindings) {
+  await observeWebhookEntitlements(env)
   const at=clockInstant(env)
   await env.DB.prepare('UPDATE nc_webhook_endpoints SET previous_sealed=NULL,overlap_until=NULL WHERE overlap_until<=?').bind(at).run()
   const due=await all(env,`SELECT d.*,p.url,p.secret_sealed,p.previous_sealed,p.overlap_until,e.payload_json,e.type FROM nc_webhook_deliveries d JOIN nc_webhook_endpoints p ON p.id=d.endpoint_id JOIN nc_webhook_events e ON e.id=d.event_id LEFT JOIN nc_customers c ON c.id=d.customer_id WHERE p.enabled=1 AND c.erased_at IS NULL AND ((d.status='pending' AND d.next_at<=?) OR (d.status='sending' AND d.next_at<=?)) ORDER BY d.next_at,d.id LIMIT 50`,at,at)

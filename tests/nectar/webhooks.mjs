@@ -1,10 +1,13 @@
+import { nativeCollectionEdge } from './native-collection.mjs'
+import { applyPolicy } from './policy-helper.mjs'
 import assert from 'node:assert/strict'
 import { mkdtemp,rm,readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { receiver,verify } from '../../examples/webhook-receiver/server.mjs'
+const lifecycleEdge=nativeCollectionEdge()
 let receive,online=false,clock=Date.now(),secrets=[],requests=[],received=[],directory
-export const harnessOptions=()=>({webhookFetch:async request=>{
+export const harnessOptions=()=>({stripeFetch:lifecycleEdge.fetch,stripeSecret:'synthetic-nectar-1',webhookFetch:async request=>{
   const body=await request.text();requests.push({body,header:request.headers.get('nectar-signature')})
   return online?receive(new Request(request.url,{method:'POST',headers:request.headers,body})):new Response(null,{status:503})
 }})
@@ -124,5 +127,80 @@ export async function webhooksFlow(h,owner,{onState=async()=>{},register}={}){
     assert.ok(JSON.parse(await readFile(join(directory,'receipts.json'),'utf8'))[paid.event_id])
     console.log('webhooksFlow: consent, atomic snapshots, retries, receiver HMAC/dedupe, rotation, replay and authorized failure custody passed')
     return {customer,subscription,invoice,delivery:paid.id}
+  }finally{await rm(directory,{recursive:true,force:true})}
+}
+
+// DEV-001: existing native lifecycle doors, dated changes and current quota
+// thresholds produce received, signed typed facts without private narratives.
+export async function webhookLifecycleFlow(h,owner,{onState=async()=>{}}={}) {
+  const api=(path,body,status)=>h.api(path,owner,body,status)
+  directory=await mkdtemp(join(tmpdir(),'nectar-lifecycle-receiver-'))
+  clock=Date.parse('2026-10-22T10:00:00Z');await h.advanceClock(new Date(clock).toISOString())
+  online=true;requests=[];received=[]
+  try{
+    const endpoint=await api('webhook.register',{url:'https://receiver.nectar-app.com/webhooks',consent:true});secrets=[endpoint.secret]
+    receive=receiver({secrets:()=>secrets,stateFile:join(directory,'receipts.json'),clock:()=>clock,onEvent:async e=>received.push(e)})
+    const customer=(await api('customer.create',{external_id:'synthetic-nectar-webhook-lifecycle',name:'Lifecycle account',billing_email:'lifecycle@example.test'})).id
+    const product=(await api('product.create',{code:'synthetic-nectar-webhook-lifecycle',name:'Lifecycle service'})).id
+    const price=(await api('price.create',{product,kind:'flat',unit_amount:'100',taxable:false})).id
+    for(const [kind,record]of [['customer',customer],['price',price]])await api('metadata.write',{kind,record,revision:0,metadata:{app_account_id:`synthetic-nectar-${kind}`}})
+    const subscription=(await api('subscription.create',{customer,start_date:'2026-10-01',price:[price]})).id
+    const created=(await api('webhooks')).deliveries.find(d=>d.type==='subscription.created')
+    const payload=JSON.parse((await api(`webhooks/${created.id}`)).event.payload_json)
+    assert.equal(payload.metadata.find(m=>m.kind==='prices').objects[0].metadata.app_account_id,'synthetic-nectar-price','creation snapshot includes price metadata after item insertion in the same transaction')
+    assert.equal(payload.metadata.find(m=>m.kind==='customer').metadata.app_account_id,'synthetic-nectar-customer')
+    await api('feature.grant',{product,feature:'api-access',note:'Private feature narrative excluded'})
+    const dispatch=async()=>{await api('webhook.dispatch',{});assert.ok(requests.every(r=>verify(r.body,r.header,secrets,JSON.parse(r.header.split(',')[0].slice(2))*1000)))}
+    // Row events use their wall clock; advance the disposable clock beyond it.
+    clock=Math.max(clock,Date.now()+60000);await h.advanceClock(new Date(clock).toISOString());await dispatch()
+    const entitlementEvents=()=>received.filter(e=>e.type==='entitlements.updated'&&e.data.customer_id===customer)
+    assert.equal(entitlementEvents().at(-1).data.features.find(f=>f.feature==='api-access').allowed,true)
+    const date=new Date(clock).toISOString().slice(0,10)
+    const tomorrow=new Date(Date.parse(date)+86400000).toISOString().slice(0,10),resume=new Date(Date.parse(date)+3*86400000).toISOString().slice(0,10)
+    const sub=await api(`subscriptions/${subscription}`)
+    await api('subscription.pause',{subscription,revision:sub.revision,effective_date:tomorrow,resume_date:resume,access:'suspend',reason:'Private lifecycle narrative excluded'})
+    await dispatch()
+    assert.ok((await api('webhooks')).deliveries.some(d=>d.type==='subscription.lifecycle_changed'))
+    clock=Date.parse(tomorrow+'T12:00:00Z');await h.advanceClock(new Date(clock).toISOString());await dispatch()
+    assert.equal(entitlementEvents().at(-1).data.features[0].allowed,false,'a dated pause emits the actual changed entitlement without another domain write')
+    await onState({label:'entitlements-paused'})
+    const pausedCount=entitlementEvents().length;await dispatch();assert.equal(entitlementEvents().length,pausedCount,'unchanged state does not duplicate the event')
+    clock=Date.parse(resume+'T12:00:00Z');await h.advanceClock(new Date(clock).toISOString());await dispatch()
+    assert.equal(entitlementEvents().at(-1).data.features[0].allowed,true,'dated resume emits restored access')
+    const charge=(await api('charge.add',{customer,amount:'50',description:'Lifecycle payment fixture',effective_date:date,taxable:false})).charge
+    const invoice=(await api('invoice.manual',{customer,charges:[charge],service_date:date})).id
+    await api('invoice.approve',{invoice,acknowledge:true});await api('invoice.finalise',{invoice,issue_date:date})
+    await api('collection.customer.bind',{customer,account_ref:'synthetic-nectar-native-account-1',stripe_customer_ref:'synthetic-nectar-native-customer-1',confirm:true})
+    const collection=await api('collection.prepare',{invoice});lifecycleEdge.refuseNext('card_declined')
+    await api('collection.confirm',collection.instructions.confirm)
+    await api('credit.issue',{invoice,amount:'10',reason:'Private credit narrative excluded'})
+    const payment=(await api('payment.record',{customer,amount:'40',received_on:date,method:'bank_transfer',reference:'synthetic-nectar-lifecycle-settlement'})).payment
+    await api('payment.allocate',{payment,invoice,amount:'40'})
+    clock=Math.max(clock,Date.now()+60000);await h.advanceClock(new Date(clock).toISOString());await dispatch()
+    assert.ok(received.some(e=>e.type==='payment_method.observed'&&e.data.payment_method_ref==='synthetic-nectar-native-card-1'))
+    assert.ok(received.some(e=>e.type==='payment.failed'&&e.data.status==='declined'))
+    assert.equal(received.filter(e=>e.type==='invoice.paid'&&e.data.invoice_id===invoice).length,1)
+    await dispatch();assert.equal(received.filter(e=>e.type==='invoice.paid'&&e.data.invoice_id===invoice).length,1)
+    await onState({label:'payment-failed-and-settled'})
+    assert.ok(!JSON.stringify(received).includes('Private lifecycle narrative'))
+    assert.ok(!JSON.stringify(received).includes('Private credit narrative'))
+    assert.ok(!JSON.stringify(received).includes('Private feature narrative'))
+    // Existing governed ENT-002 quota crossing has one threshold event.
+    const qc=(await api('customer.create',{external_id:'synthetic-nectar-webhook-quota',name:'Quota account',billing_email:'quota@example.test'})).id
+    const meter=(await api('meter.create',{code:'synthetic-nectar-webhook-quota',name:'Quota calls',unit_label:'calls'})).id
+    const qp=(await api('product.create',{code:'synthetic-nectar-webhook-quota',name:'Quota service'})).id
+    const priceQ=(await api('price.create',{product:qp,kind:'unit',unit_amount:'1',meter,taxable:false})).id
+    await api('feature.grant',{product:qp,feature:'quota-api'})
+    await api('subscription.create',{customer:qc,start_date:'2026-10-01',price:[priceQ]})
+    await applyPolicy(h,owner,'feature.policy',{product:qp,feature:'quota-api',meter,quota:'10',quota_policy:'hard'})
+    await dispatch()
+    await api('usage.submit',{events:[{event_id:'synthetic-nectar-webhook-quota-1',customer:'synthetic-nectar-webhook-quota',meter:'synthetic-nectar-webhook-quota',quantity:'10',occurred_at:new Date(clock).toISOString()}]})
+    await dispatch()
+    const crossed=received.filter(e=>e.type==='usage.threshold_crossed'&&e.data.customer_id===qc)
+    assert.equal(crossed.length,1);assert.equal(crossed[0].data.quota.limit,'10.00');assert.equal(crossed[0].data.quota.used,'10')
+    assert.equal(crossed[0].data.quota.eventIds,undefined,'threshold payload does not expose a raw event list')
+    await dispatch();assert.equal(received.filter(e=>e.type==='usage.threshold_crossed'&&e.data.customer_id===qc).length,1)
+    await onState({label:'quota-crossing',delivery:(await api('webhooks')).deliveries.find(d=>d.type==='usage.threshold_crossed').id})
+    console.log('webhookLifecycleFlow: complete native creation metadata, dated entitlements, quota crossings, observed cards, payment failure and once-only settlement passed')
   }finally{await rm(directory,{recursive:true,force:true})}
 }
