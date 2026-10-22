@@ -106,7 +106,6 @@ function rateCore(input: RatingInput, presentCancellationCredits = true): Rating
   const billFrom = sub.trialEnd ? max(activeFrom, sub.trialEnd) : activeFrom
   const trialDays = sub.trialEnd && sub.trialEnd > activeFrom ? daysBetween(activeFrom, min(sub.trialEnd, activeTo)) : 0
   const label = (price: PriceIn) => price.label
-  const boundaries = input.amendments.flatMap(a => [a.from, a.to])
 
   // Fixed and per-seat charges, prorated by days in effect.
   const recurring: { line: Line; from: string; to: string }[] = []
@@ -115,6 +114,7 @@ function rateCore(input: RatingInput, presentCancellationCredits = true): Rating
     if (!price || price.kind === 'unit') continue
     const from = max(item.from, billFrom), to = min(item.to ?? FAR, activeTo)
     if (from >= to) continue
+    const boundaries=input.amendments.filter(amendment=>(amendment.kind==='discount_percent'||amendment.kind==='price_override')&&(!amendment.priceId||amendment.priceId===price.id||amendment.priceId===price.sourcePriceId)).flatMap(amendment=>[amendment.from,amendment.to])
     for (const [activeStart, activeEnd] of activeSegments(from, to, input.lifecycle ?? [])) for (const [start, end] of split(activeStart, activeEnd, boundaries)) {
       const days = BigInt(daysBetween(start, end))
       const { unit, override } = unitFor(input, price, start, end)

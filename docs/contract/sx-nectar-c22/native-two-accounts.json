@@ -1,0 +1,86 @@
+{
+  "version": 1,
+  "journey": "Native invoice collection on two real Stripe test accounts",
+  "status": "passed",
+  "head": "a51a1f4a2a269b0fab11ea96745fe5127c33b94e",
+  "accounts": [
+    {
+      "accountId": "acct_1URgLjDg8BoejKxo",
+      "clockId": "clock_1UTA4KDg8BoejKxoM7jGIX69",
+      "customerId": "cus_VU8Lr7UTyFCEN0",
+      "paymentMethodId": "pm_1UTA4LDg8BoejKxosTsSDJB4",
+      "paymentIntentId": "pi_3UTA4hDg8BoejKxo1w4srNxx",
+      "chargeId": "ch_3UTA4hDg8BoejKxo1CbPw6C4"
+    },
+    {
+      "accountId": "acct_1UQQUH5ErG20QHq8",
+      "clockId": "clock_1UTA4M5ErG20QHq8LFdvk5OI",
+      "customerId": "cus_VU8LUZx4w4e8G5",
+      "paymentMethodId": "pm_1UTA4M5ErG20QHq8T8bU82vP",
+      "paymentIntentId": "pi_3UTA4m5ErG20QHq81zo0nsJB",
+      "chargeId": "ch_3UTA4m5ErG20QHq81uzPjAJa"
+    }
+  ],
+  "nativeIds": [
+    {
+      "customerId": "f9d6aade-fecc-479e-ae83-44ab240824bf",
+      "entityId": "d629ecd5-2fbf-43a0-8db2-fc8d4d8a55f7",
+      "invoiceId": "19638c69-0fdb-45e9-aece-0838de9eea2b",
+      "collectionId": "5043dcd7-32a6-4416-af0d-a8664326e81a",
+      "paymentId": "96758697-ec96-4d5b-9c03-e59ff0d8c41f",
+      "allocationId": "90bef287-c619-4b25-bda7-d42eced023aa"
+    },
+    {
+      "customerId": "ec06dd1c-eecf-441d-9748-c84232bc5a2d",
+      "entityId": "c4a48a1e-8949-4593-8ad2-75c2579d5418",
+      "invoiceId": "9b428b05-5e9f-4d1d-9f91-3c91dab79c90",
+      "collectionId": "4b92be35-9d94-4e47-a4e6-8f177436c252",
+      "paymentId": "66516f80-b16e-45fc-a2af-bf6bb8755877",
+      "allocationId": "011418b5-4f2f-45c6-bcb7-e508a6a2927c"
+    }
+  ],
+  "checks": {
+    "primaryAccountUS": true,
+    "actualTwoAccountCollection": true,
+    "originalSourcesUnchanged": true,
+    "uncertainRecoveryOnlyGets": true,
+    "repeatRefused": true,
+    "zeroCustomerEmail": true,
+    "receiptsInOrdinaryFinancialReports": true,
+    "entityRevenueCsvAndConsolidatedParity": true,
+    "balancedReadOnlyStagingJournals": true
+  },
+  "counts": {
+    "workerPaymentAttempts": 2,
+    "droppedRealSuccessResponses": 1,
+    "accounts": [
+      {
+        "accountId": "acct_1URgLjDg8BoejKxo",
+        "GET": 20,
+        "POST": 4,
+        "DELETE": 1
+      },
+      {
+        "accountId": "acct_1UQQUH5ErG20QHq8",
+        "GET": 22,
+        "POST": 4,
+        "DELETE": 1
+      }
+    ]
+  },
+  "hashes": {
+    "issuedSource1": "f564972e97dd4a16f32a1f818c4a1d0676ef5c7de06cd341c4060d9ec39d2b16",
+    "issuedSource2": "ee29a1256f34bafc97034832a75f6dab40b6d393477d6e76faccc07e30952e70",
+    "financialAndRevenue": "acb4dee199484399ef465e41cc95c0b614154de11b5662029ffd040bd4b57440"
+  },
+  "cleanup": [
+    {
+      "clockId": "clock_1UTA4KDg8BoejKxoM7jGIX69",
+      "deleted": true
+    },
+    {
+      "clockId": "clock_1UTA4M5ErG20QHq8LFdvk5OI",
+      "deleted": true
+    }
+  ]
+}

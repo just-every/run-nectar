@@ -210,7 +210,7 @@ try{
   receipt.head=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();check(/^[a-f0-9]{40}$/.test(receipt.head),'candidate_head_required')
   await setup();const authorization=await fundAndAuthorize();await consume();await topup(authorization)
   receipt.status='passed'
-}catch(error){receipt.status='failed';receipt.failure={phase,...safeError(error)};process.exitCode=1;console.error(`Prepaid topup sandbox: failed phase=${phase} code=${receipt.failure.code} status=${receipt.failure.status??'none'}`)}
+}catch(error){receipt.status='failed';receipt.failure={phase,...safeError(error),errorType:error?.name,location:String(error?.stack??'').split('\n').filter(line=>line.includes('at ')&&line.includes('prepaid-topup-sandbox.mjs')).map(line=>line.replace(/file:\/\/[^ ]*prepaid-topup-sandbox.mjs/, 'prepaid-topup-sandbox.mjs')).slice(0,2)};process.exitCode=1;console.error(`Prepaid topup sandbox: failed phase=${phase} code=${receipt.failure.code} status=${receipt.failure.status??'none'}`)}
 finally{
   if(h)try{await h.close()}catch(error){receipt.status='failed';receipt.runtimeCleanup=safeError(error);process.exitCode=1}
   if(clock)try{const deleted=await stripe.request('DELETE',`/v1/test_helpers/test_clocks/${clock}`);check(deleted.deleted===true&&deleted.id===clock,'owned_clock_cleanup_unconfirmed');receipt.clockDeleted=true}catch(error){receipt.status='failed';receipt.cleanupFailure=safeError(error);process.exitCode=1}
