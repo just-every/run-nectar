@@ -263,8 +263,8 @@ export async function prepaidCorrectionFlow(h,owner){
   assert.ok(receipt.receipt.changed.some(row=>row.kind==='nc_prepaid_corrections'))
   assert.deepEqual((await api(`revenue?from=2026-01&to=2026-12&customer=${customer}`)).months,revenueBefore.months)
   await h.advanceClock('2033-03-02T18:00:00Z')
-  assert.deepEqual((await api('erasure.purge')).removed,[erase.id])
-  assert.deepEqual((await api('erasure.purge')).removed,[])
+  assert.deepEqual((await api('erasure.purge',{})).removed,[erase.id])
+  assert.deepEqual((await api('erasure.purge',{})).removed,[])
   console.log('CAT-004 governed historical prepaid replay: exact tax, signed liability/recognition, immutable originals, repeated correction, source/CSV and stale refusal passed')
   return {subscription,customer,purchase,issued,first,second}
 }
