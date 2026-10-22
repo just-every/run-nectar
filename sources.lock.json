@@ -57,7 +57,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "5061044e44d37ee5436c4720c55aa86a34f48329a7c65a8ce4798135c4d3dfb6",
+      "sha256": "8b9d7ca03d765d6699c8767d738fd8e0f1fdfc4b6d27fde30fb6ce772c0a6414",
       "executable": false
     },
     "AGENTS.consumer.md": {
@@ -77,7 +77,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "730af8b778f84f3c442fd32155c14399b457e577ecc47f6f67ac11812260ee58",
+      "sha256": "3be58c61a71088d4c1b048379c9689fcec426687b012d83e226172eb8858ad14",
       "executable": false
     },
     "DEMO.md": {
@@ -4013,7 +4013,7 @@
       "executable": false
     },
     "tests/nectar/prepaid.mjs": {
-      "sha256": "3a70b3c452fc3aeb3f5bdef3cbef3f446badd2d1c1f599b91e84c2f43f3a8849",
+      "sha256": "cea0c234ce5b873f8a720a16b080f4b007c20c32c822b4b33a2a2ae6bd5416ef",
       "executable": false
     },
     "tests/nectar/price-approvals.mjs": {
