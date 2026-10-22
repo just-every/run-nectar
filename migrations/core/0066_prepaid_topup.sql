@@ -5,7 +5,7 @@ CREATE TABLE nc_prepaid_topup_authorizations(
  quote_json TEXT NOT NULL CHECK(json_valid(quote_json)),basis_hash TEXT NOT NULL,start_date TEXT NOT NULL,end_date TEXT NOT NULL,
  prepared_by_id TEXT NOT NULL REFERENCES nc_members(id),prepared_at INTEGER NOT NULL,
  status TEXT NOT NULL CHECK(status IN ('awaiting_customer','pending','active','rejected','revoked','card_changed','expired')),
- customer_session_id TEXT REFERENCES nc_portal_sessions(id),accepted_at INTEGER,accepted_basis_hash TEXT,approved_by_id TEXT REFERENCES nc_members(id),approved_at INTEGER,approval_mode TEXT,ended_at INTEGER,
+ customer_session_id TEXT,accepted_at INTEGER,accepted_basis_hash TEXT,approved_by_id TEXT REFERENCES nc_members(id),approved_at INTEGER,approval_mode TEXT,ended_at INTEGER,
  CHECK(status NOT IN ('pending','active','rejected') OR (customer_session_id IS NOT NULL AND accepted_at IS NOT NULL AND accepted_basis_hash=basis_hash)),
  CHECK(status<>'active' OR (approved_by_id IS NOT NULL AND approved_at IS NOT NULL AND approval_mode IN ('single-approver','two-person'))));
 CREATE UNIQUE INDEX nc_prepaid_topup_active ON nc_prepaid_topup_authorizations(subscription_id) WHERE status='active';

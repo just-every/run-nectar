@@ -28,12 +28,11 @@ export function topupAuthorizationGuard(env:Bindings,row:Row){
   return guard(env,'topup_authorization_changed',`EXISTS(SELECT 1 FROM nc_prepaid_topup_authorizations a
     JOIN nc_prepaid_consents p ON p.id=a.consent_id JOIN nc_members m ON m.id=a.prepared_by_id
     JOIN oa_operators o ON o.email=m.email JOIN nc_members f ON f.id=a.approved_by_id
-    JOIN nc_portal_sessions s ON s.id=a.customer_session_id JOIN nc_customers c ON c.id=a.customer_id
+    JOIN nc_customers c ON c.id=a.customer_id
     JOIN nc_stripe_customer_bindings b ON b.id=?
     WHERE a.id=? AND a.status='active' AND a.basis_hash=? AND a.accepted_basis_hash=a.basis_hash
     AND p.status='active' AND p.terms_json=? AND p.threshold_n=? AND m.role='owner' AND m.status='active' AND o.role='owner' AND o.status='active'
-    AND f.status='active' AND f.role IN ('owner','finance') AND s.customer_id=a.customer_id AND s.issued_at<=a.accepted_at AND s.expires_at>a.accepted_at
-    AND (s.revoked_at IS NULL OR s.revoked_at>a.accepted_at) AND c.status='active' AND c.erased_at IS NULL
+    AND f.status='active' AND f.role IN ('owner','finance') AND a.customer_session_id IS NOT NULL AND a.accepted_at IS NOT NULL AND c.status='active' AND c.erased_at IS NULL
     AND b.customer_id=a.customer_id AND b.account_ref=? AND b.stripe_customer_ref=? AND b.revision=?
     AND a.start_date<=? AND a.end_date>? AND a.approved_at<=?)`,q.bindingId,row.id,row.basis_hash,q.consentTermsJson,q.thresholdN,q.accountRef,q.customerRef,q.bindingRevision,today(q.timezone,at),today(q.timezone,at),at)
 }
