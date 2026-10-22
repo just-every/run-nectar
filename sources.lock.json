@@ -3025,7 +3025,7 @@
       "executable": false
     },
     "src/nectar/plan-changes.ts": {
-      "sha256": "16a4e550907cc995d767a5f56a1aa7142f3e8d8af0aea6c6b3d6aaf05dfd70b0",
+      "sha256": "9704ae0a21aa54714312662fe6fb0b05939d65913549ec22eaa7bd249e053cd3",
       "executable": false
     },
     "src/nectar/policy-changes.ts": {
@@ -3521,7 +3521,7 @@
       "executable": false
     },
     "src/nectar/ui/plan-changes.ts": {
-      "sha256": "5e0640d32d225154985cedf98837ef5b072ee5dc187d22c1d1c2d56e310d6f68",
+      "sha256": "4693235f5111f12d5e725b50dbf0d07746dbcc6bc60da28bda76f6eca1957248",
       "executable": false
     },
     "src/nectar/ui/policies.ts": {
@@ -4121,7 +4121,7 @@
       "executable": false
     },
     "tests/nectar/plan-changes.mjs": {
-      "sha256": "1cb9c6d8babea1ee54ffb80aa974e67a15aad4be58043a8c49881ae8e8e5d165",
+      "sha256": "f8478a195eceec79b9508d71bc6803e4fcad0fa2c6dbd851bd50647e26dbf3d5",
       "executable": false
     },
     "tests/nectar/policy-approvals.mjs": {

@@ -126,8 +126,8 @@ export async function preparePlanChangeCredit(env:Bindings,actor:Actor,input:Inp
 }
 export async function planChangesFor(env: Bindings, actor: Actor, subscription: string) {
   requireRead(actor,'subscriptions')
-  const full=canRead(actor,'invoices'),rows=await all(env,'SELECT * FROM nc_plan_changes WHERE subscription_id=? ORDER BY prepared_at,id',subscription)
-  if(!full)return rows.filter(r=>r.prepared_by===actor.id&&(can(actor,'draft')||can(actor,'records'))).map(r=>({id:r.id,subscription_id:r.subscription_id,effective_date:r.effective_date,mode:r.mode,policy:r.policy,status:r.status,prepared_by:r.prepared_by,prepared_name:r.prepared_name,prepared_at:r.prepared_at,quote:quoteView(parseJson<Row>(r.quote_json,{}))}))
+  const full=canRead(actor,'invoices'),rows=await all(env,'SELECT c.*,p.version AS target_version,r.name AS target_name FROM nc_plan_changes c JOIN nc_prices p ON p.id=c.new_price_id JOIN nc_products r ON r.id=p.product_id WHERE c.subscription_id=? ORDER BY c.prepared_at,c.id',subscription)
+  if(!full)return rows.filter(r=>r.prepared_by===actor.id&&(can(actor,'draft')||can(actor,'records'))).map(r=>({id:r.id,subscription_id:r.subscription_id,new_price_id:r.new_price_id,new_quantity:r.new_quantity,...(canRead(actor,'catalog')?{target_name:r.target_name,target_version:r.target_version}:{}),effective_date:r.effective_date,mode:r.mode,policy:r.policy,status:r.status,prepared_by:r.prepared_by,prepared_name:r.prepared_name,prepared_at:r.prepared_at,quote:quoteView(parseJson<Row>(r.quote_json,{}))}))
   const cp=await creditPolicy(env)
   const result=[]
   for(const r of rows){const credit=await one(env,'SELECT c.* FROM nc_plan_change_credit_requests b JOIN nc_credit_requests c ON c.id=b.request_id WHERE b.change_id=?',r.id);result.push({...r,quote:parseJson<Row>(r.quote_json,{}),quote_json:undefined,creditRequest:credit?{id:credit.id,preparedBy:credit.prepared_by,requiresOther:cp.two_person_above_cents!==null&&credit.amount_cents>cp.two_person_above_cents}:null})}

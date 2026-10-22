@@ -140,6 +140,7 @@ export async function salesPlanChangesFlow(h,owner,{onState=async()=>{},prepare,
  assert.ok((await h.page(`/app/subscriptions/${fixtures[0].subscription}`,people.sales)).includes(`value="${high}"`),'sales can select their permitted catalogue price in the real plan form')
  const upgrade=await preview({subscription:fixtures[0].subscription,item:fixtures[0].item,price:high,mode:'immediate'},people.sales)
  assert.deepEqual(Object.keys(upgrade.quote).sort(),minimal)
+ assert.ok((await h.page(`/app/subscriptions/${fixtures[0].subscription}`,people.finance)).includes('Target plan: <strong>Annual sales tier 2 v1</strong>'),'the approver sees the saved target plan, not just a money delta')
  await h.api(`invoices/${fixtures[0].invoice}`,people.sales,undefined,403)
  const own=(await h.api(`subscriptions/${fixtures[0].subscription}`,people.sales)).planChanges
  assert.equal(own.length,1,'sales see their own quote, not another preparer\'s saved source')
