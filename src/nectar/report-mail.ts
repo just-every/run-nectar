@@ -36,7 +36,7 @@ export async function sendScheduledReports(env: Bindings, instant=Date.now()) {
         capabilities:memberCapabilities(member.role as Role,member.custom)}
       const seq=(await one(env,'SELECT COALESCE(MAX(seq),0) AS seq FROM nc_audit'))!.seq
       const reports:Report[]=[]
-      for(const metric of ['billings','collections','ar','credits','tax','unbilled','credit-balances'])reports.push(await report(env,actor,metric,new URL(`https://report.invalid/?period=${period}`)))
+      for(const metric of ['billings','collections','refunds','ar','credits','tax','unbilled','credit-balances'])reports.push(await report(env,actor,metric,new URL(`https://report.invalid/?period=${period}`)))
       const sourceEvidence=[]
       for(const r of reports)for(const entry of r.entries){
         const sourceUrl=new URL(entry.href,env.AUTH_ORIGIN)

@@ -12,15 +12,16 @@ import { all, insist, one, type Row } from './core'
 import { daysBetween, isMonth, today } from './dates'
 import { openInvoices } from './receivables'
 
-export type ReportMetric = 'mrr' | 'billings' | 'ar' | 'collections' | 'credits' | 'tax' | 'unbilled' | 'credit-balances'
+export type ReportMetric = 'mrr' | 'billings' | 'ar' | 'collections' | 'credits' | 'tax' | 'unbilled' | 'credit-balances' | 'refunds'
 export interface ReportEntry {
   // invoiceId is the report source id; collections use the payment id here
   // for the shared detail route and identify it explicitly with sourceKind.
   sourcePath?: string
   sourceProvider?: string; sourceReference?: string
   invoiceId: string; number: string; customerId: string; customerName: string; amountCents: number; href: string
-  sourceKind?: 'invoice' | 'payment' | 'credit_note' | 'subscription_period' | 'prepaid_grant'; paymentId?: string
+  sourceKind?: 'invoice' | 'payment' | 'credit_note' | 'subscription_period' | 'prepaid_grant' | 'prepaid_refund'; paymentId?: string
   prepaid?: import('./financial-prepaid').PrepaidReportBalance
+  refund?: import('./financial-refunds').PrepaidReportRefund
 }
 export interface Report {
   metric: ReportMetric; title: string; definition: string; period: string; totalCents: number; entries: ReportEntry[]; series?:HistoricalMrrMonth[]
@@ -45,7 +46,7 @@ export interface ReportInvoice extends ReportEntry {
 
 const RECURRING = new Set(['flat', 'seat', 'usage', 'overage', 'metric_usage', 'discount', 'cancellation_credit'])
 const BUCKETS = new Set(['current', '1-30', '31-60', '61-90', '90+', 'overdue'])
-const DEFINITIONS: Record<Exclude<ReportMetric,'credits'|'tax'|'unbilled'|'credit-balances'>, { title: string; definition: string }> = {
+const DEFINITIONS: Record<Exclude<ReportMetric,'credits'|'tax'|'unbilled'|'credit-balances'|'refunds'>, { title: string; definition: string }> = {
   mrr: {
     title: 'Billed monthly recurring revenue',
     definition: 'Billed monthly recurring revenue for subscription periods starting in the selected month: issued flat, seat, metered usage, recurring discount and cancellation-credit lines, including actual proration. Excludes late usage, one-time charges, fixed credits, credit notes and tax. Native invoices use the current monthly catalogue; retained Stripe recurring lines contribute over their original service months, including annual fees allocated across twelve months. It is not a normalized current subscription run rate.',
@@ -83,7 +84,7 @@ function inBucket(due: string, day: string, selected: string | null) {
 /** Reads contributions without inventing recurring amounts or allocating AR to individual lines. */
 export async function report(env: Bindings, actor: Actor, metric: string, url: URL): Promise<Report> {
   requireRead(actor, 'reports')
-  if (['credits','tax','unbilled','credit-balances'].includes(metric)) return await financialReport(env,actor,metric,url)
+  if (['credits','tax','unbilled','credit-balances','refunds'].includes(metric)) return await financialReport(env,actor,metric,url)
   const selected = filters(metric, url)
   const day = today((await requireBusiness(env)).timezone)
   const month = selected.period ?? day.slice(0, 7)
@@ -132,7 +133,7 @@ export async function report(env: Bindings, actor: Actor, metric: string, url: U
 /** Original line and settlement components tie exactly to the selected invoice contribution. */
 export async function reportInvoice(env: Bindings, actor: Actor, metric: string, invoiceId: string, url: URL): Promise<ReportInvoice> {
   requireRead(actor, 'reports')
-  if (['credits','tax','unbilled','credit-balances'].includes(metric)) return await financialReportSource(env,actor,metric,invoiceId,url)
+  if (['credits','tax','unbilled','credit-balances','refunds'].includes(metric)) return await financialReportSource(env,actor,metric,invoiceId,url)
   const view = await report(env, actor, metric, url)
   const entry = view.entries.find(row => row.invoiceId === invoiceId)
   insist(entry, 'report_invoice_not_found', 404)
