@@ -1,3 +1,4 @@
+import {hierarchyCreditModel} from './hierarchy-credits'
 import { planChangeInvoiceFingerprint } from './plan-changes'
 import { consolidationCalculation,hierarchyPreIssue,hierarchyIssueStatements } from './hierarchies'
 import { writeOffsFor } from './write-offs'
@@ -177,7 +178,7 @@ export async function invoiceRecord(env: Bindings, actor: Actor, id: string): Pr
   const balanceApplications = await all(env, "SELECT * FROM nc_balance_entries WHERE kind='application' AND grant_id IS NOT NULL AND invoice_id=? ORDER BY created_at,id", id)
   const credited = credits.reduce((sum, row) => sum + (row.applied_cents??row.amount_cents), 0)+carriedApplications.reduce((n,r)=>n+r.amount_cents,0)+balanceApplications.reduce((n,r)=>n+r.amount_cents,0), paid = allocations.reduce((sum, row) => sum + row.amount_cents, 0)
   return {
-    ...invoice,retainedFinancial:await one(env,"SELECT legal_name,document_date,retain_until,tax_json FROM nc_erasure_financial WHERE kind='invoice' AND record_id=?",id),...await metadataFor(env,'invoice',id), creditPolicy: await creditPolicy(env), creditRequests: canRead(actor, 'invoices') ? await creditRequests(env, actor, id) : [], calculation: parseJson(invoice.calculation_json, {}), comparison: parseJson(invoice.comparison_json, {}), exceptions: parseJson(invoice.exceptions_json, []),
+    ...invoice,hierarchyCredits:await hierarchyCreditModel(env,actor,invoice),retainedFinancial:await one(env,"SELECT legal_name,document_date,retain_until,tax_json FROM nc_erasure_financial WHERE kind='invoice' AND record_id=?",id),...await metadataFor(env,'invoice',id), creditPolicy: await creditPolicy(env), creditRequests: canRead(actor, 'invoices') ? await creditRequests(env, actor, id) : [], calculation: parseJson(invoice.calculation_json, {}), comparison: parseJson(invoice.comparison_json, {}), exceptions: parseJson(invoice.exceptions_json, []),
     calculation_json: undefined, comparison_json: undefined, exceptions_json: undefined,
     lines: lines.map(line => ({ ...line, evidence: parseJson(line.evidence_json, {}), evidence_json: undefined })),
     carriedApplications, credits:await withMetadata(env,'credit-note',credits), allocations, balanceApplications, writeOffs, writtenOffCents: writtenOff, creditedCents: credited, paidCents: paid, balanceCents: invoice.status === 'issued' ? invoice.total_cents - credited - paid - writtenOff : null,

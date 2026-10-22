@@ -2,7 +2,7 @@ import { catalogueApprovals, catalogueSingleApproval } from './catalogue-approva
 import { publishPrice } from './price-helper.mjs'
 import { policyApprovals } from './policy-approvals.mjs'
 import { notificationsFlow } from './notifications.mjs'
-import { runIsolated } from './isolated.mjs'
+import { runIsolated as runIsolatedJourney } from './isolated.mjs'
 import { metadataFlow } from './metadata.mjs'
 import { applyPolicy } from './policy-helper.mjs'
 import { queuedEntrypoint } from '@runeditrun/rer/queued-entry'
@@ -27,6 +27,13 @@ import { creditPolicy } from './credit-policy.mjs'
 import { exemptionCertificates } from './certificates.mjs'
 import { pricingModels } from './pricing-models.mjs'
 
+// The two CI jobs partition isolated installations; shard 0 also runs the
+// shared core sequence below. An ordinary local invocation still runs all.
+const verifyShard=process.env.NECTAR_VERIFY_SHARD
+assert.ok(verifyShard===undefined||verifyShard==='0'||verifyShard==='1','invalid NECTAR_VERIFY_SHARD')
+let isolatedIndex=0
+const runIsolated=async(...args)=>{const index=isolatedIndex++;if(verifyShard===undefined||index%2===Number(verifyShard))await runIsolatedJourney(...args)}
+
 const ACTIONS = [...(await readFile(new URL('../../src/nectar/actions.ts', import.meta.url), 'utf8')).matchAll(/^  '([\w.]+)':/gm)].map(match => match[1])
 // Keep the default CI wall intact; local changes to the core billing cycle
 // can select this sequence without rerunning unrelated isolated journeys.
@@ -35,6 +42,7 @@ await runIsolated('webhooks','webhooksFlow')
 await runIsolated('webhooks','webhookLifecycleFlow')
 await runIsolated('hierarchies','hierarchiesFlow')
 await runIsolated('hierarchies','hierarchyTaxFlow')
+await runIsolated('hierarchies','hierarchyCreditsFlow')
 await runIsolated('plan-changes','planChangesFlow')
 await runIsolated('customer-search','customerSearchFlow')
 await runIsolated('upcoming','upcomingFlow')
@@ -98,6 +106,7 @@ await runIsolated('metrics','metricsFlow')
 await runIsolated('metric-zones','metricZones')
 await runIsolated('usage-replay','usageReplayFlow')
 }
+if(verifyShard==='1'){console.log('All isolated shard 1 journeys passed; core sequence belongs to shard 0');process.exit(0)}
 const h = await harness()
 const check = async (id, run) => { await run(); console.log(`${id} passed`) }
 const ids = {}, cookie = {}

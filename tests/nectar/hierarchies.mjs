@@ -114,3 +114,67 @@ export async function hierarchyTaxFlow(h,owner,{onState=async()=>{}}={}) {
   await onState({label:'division-tax-custody',invoice,parent,children})
   console.log('hierarchyTaxFlow: exempt parent preserves each division\'s tax exemption and once-rounded cents, outside revenue')
 }
+
+// Existing parent credit pays a division once without inventing another grant.
+export async function hierarchyCreditsFlow(h,owner,{onState=async()=>{},prepare,approve}={}) {
+ const api=(path,body,status)=>h.api(path,owner,body,status)
+ await h.advanceClock('2026-11-03T12:00:00Z')
+ await api('business.configure',{...await api('business'),timezone:'UTC'})
+ const make=async(n)=>(await api('customer.create',{external_id:`synthetic-nectar-shared-credit-${n}`,name:n===0?'Credit parent':`Credit division ${n}`,billing_email:`credit-division-${n}@example.test`})).id
+ const parent=await make(0),child=await make(1),other=await make(2)
+ await api('hierarchy.configure',{customer:child,parent,billing_mode:'separate',revision:0,consent:true})
+ await api('hierarchy.configure',{customer:other,parent,billing_mode:'separate',revision:0,consent:true})
+ await api('access.give',{email:'shared-credit-finance@example.test',name:'Shared credit finance',role:'finance'})
+ await api('access.give',{email:'shared-credit-accountant@example.test',name:'Shared credit accountant',role:'accountant'})
+ const finance=await h.signIn('shared-credit-finance@example.test',{requested:true}),accountant=await h.signIn('shared-credit-accountant@example.test',{requested:true}),agent={bearer:(await api('credential.issue',{name:'Shared credit observer',scopes:['prepare']})).key}
+ for(const who of [finance,accountant,agent])await h.api('hierarchy.credit.prepare',who,{},403)
+ for(const who of [accountant,agent,undefined])await h.api('hierarchy.credit.approve',who,{},who?403:401)
+ const {applyPolicy}=await import('./policy-helper.mjs')
+ await applyPolicy(h,owner,'credit.policy',{two_person_above:'1000',balance_application:'manual'})
+ await api('balance.goodwill',{customer:parent,amount:'2000',reason:'Parent grant over limit'},409)
+ const funding=await api('balance.prepare',{kind:'goodwill',customer:parent,amount:'2000',reason:'Authorized parent goodwill'})
+ await h.api('balance.approve',finance,{request:funding.request})
+ const grant=(await api(`customers/${parent}/balance`)).grants[0].id
+ const manual=async(customer,amount)=>{const charge=(await api('charge.add',{customer,amount,description:'Division service',effective_date:'2026-10-01',taxable:false})).charge;const id=(await api('invoice.manual',{customer,charges:[charge],service_date:'2026-10-01'})).id;await api('invoice.approve',{invoice:id,acknowledge:true});await api('invoice.finalise',{invoice:id,issue_date:'2026-10-22'});return id}
+ const invoice=await manual(child,'1500'),second=await manual(other,'100')
+ const form={invoice,grant,amount:'1500',reason:'Shared parent agreement',consent:true}
+ const save=prepare??(body=>api('hierarchy.credit.prepare',body)),execute=approve??((body,who)=>h.api('hierarchy.credit.approve',who,body))
+ await api('hierarchy.credit.prepare',{...form,consent:false},400)
+ const request=(await save(form)).request
+ await api('hierarchy.credit.approve',{request,confirm:true},409)
+ await h.api('hierarchy.credit.approve',finance,{request},400)
+ assert.equal((await api(`invoices/${invoice}`)).balanceCents,150000)
+ await onState({label:'shared-credit-pending',invoice,parent,finance})
+ if(approve)await execute({request,confirm:true},finance)
+ else {const replies=await Promise.all([1,2].map(()=>h.raw('/api/nectar/hierarchy.credit.approve',{cookie:finance,body:{request,confirm:true}})));assert.deepEqual(replies.map(r=>r.status).sort(),[200,409],'a concurrent second approval cannot apply credit twice');assert.equal((await replies.find(r=>r.status===200).json()).appliedCents,150000)}
+ await h.api('hierarchy.credit.approve',finance,{request,confirm:true},409)
+ const paid=await api(`invoices/${invoice}`),balance=await api(`customers/${parent}/balance`)
+ assert.deepEqual([paid.balanceCents,paid.creditedCents,paid.paidCents],[0,150000,0])
+ assert.equal(balance.goodwillCents,50000);assert.equal(balance.totalCents,50000)
+ assert.equal(balance.ledger.filter(r=>r.kind==='goodwill').reduce((n,r)=>n+r.amountCents,0)-balance.ledger.filter(r=>r.kind==='application').reduce((n,r)=>n+r.amountCents,0),50000)
+ assert.equal((await api(`customers/${child}/balance`)).totalCents,0,'no second child grant is invented')
+ assert.equal((await api('reports/credit-balances')).totalCents,50000)
+ assert.equal((await api(`revenue/${invoice}`)).schedules.reduce((n,s)=>n+s.amountCents,0),150000,'sharing credit does not rewrite consideration or tax')
+ assert.equal((await h.api(`invoices/${invoice}`,accountant)).hierarchyCredits,null,'nonapprovers get no request narrative or parent grant inventory')
+ const custody=paid.hierarchyCredits.requests.find(r=>r.id===request)
+ assert.deepEqual([custody.prepared_name,custody.approved_name,custody.approval_mode],['owner@example.test','shared-credit-finance@example.test','two-person'])
+ await onState({label:'shared-credit-applied',invoice,parent,finance})
+ const stale=(await api('hierarchy.credit.prepare',{...form,invoice:second,amount:'100'})).request
+ await applyPolicy(h,owner,'credit.policy',{two_person_above:'900',balance_application:'manual'})
+ await h.api('hierarchy.credit.approve',finance,{request:stale,confirm:true},409)
+ assert.equal((await api(`invoices/${second}`)).balanceCents,10000)
+ const fresh=(await api('hierarchy.credit.prepare',{...form,invoice:second,amount:'100'})).request
+ await api('hierarchy.credit.approve',{request:fresh,confirm:true})
+ assert.equal((await api(`customers/${parent}/balance`)).goodwillCents,40000,'below-limit application permits the explicit owner confirmation')
+ // Erasure of one division withdraws its request narrative but preserves the
+ // parent's remaining credit and the other division's exact settlement.
+ await api('erasure.request',{customer:child})
+ const mail=h.mails.at(-1),href=`${mail.text??''} ${mail.html??''}`.match(/https?:\/\/[^\s"<]+\/erase\/[a-f0-9]{64}/)[0]
+ await h.raw(new URL(href).pathname,{form:new URLSearchParams({confirm:'yes'})})
+ await api('erasure.approve',{request:(await api('erasures')).find(r=>r.customer_id===child).id,confirm:true})
+ const erased=await api(`invoices/${invoice}`)
+ assert.equal(erased.balanceCents,0);assert.equal(erased.hierarchyCredits.requests.find(r=>r.id===request).reason,'','the erased division request narrative is withdrawn')
+ assert.equal((await api(`customers/${parent}/balance`)).goodwillCents,40000)
+ assert.equal((await api(`invoices/${second}`)).balanceCents,0)
+ console.log('hierarchyCreditsFlow: governed existing-parent goodwill, once-only application, exact ledgers/report/revenue and refusal/erasure passed')
+}
