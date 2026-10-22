@@ -205,5 +205,8 @@
   "usageCorrection.footer": "Règle : {policy}. Les corrections négatives créent des avoirs numérotés. Les avoirs pour la prochaine facture sont reportés ; les autres réduisent le solde impayé de la facture originale, avec report de tout excédent. Aucun remboursement en espèces ni facture négative n’est créé. Les écarts positifs sont facturés à la période suivante ou sur une facture corrective distincte. Identifiants des événements originaux et détail des revenus : {receipt}.",
   "usageCorrection.next_invoice": "prochaine facture",
   "usageCorrection.correcting_invoice": "facture corrective",
-  "usageCorrection.credit_note": "avoir / débit correctif"
+  "usageCorrection.credit_note": "avoir / débit correctif",
+  "renewal.save.discount_periods": "{percent} % de réduction sur le prix fixe ou par utilisateur sélectionné pendant {months} périodes de facturation",
+  "return.offer.body_periods": "Reprenez cet abonnement avec {percent} % de réduction sur le prix fixe ou par utilisateur sélectionné pendant {months} périodes de facturation, y compris la période actuelle non facturée. L’utilisation est exclue. La réduction prend fin automatiquement.",
+  "winback.body_periods": "Reprenez votre abonnement avec {percent} % de réduction sur le prix fixe ou par utilisateur sélectionné pendant {months} périodes de facturation. L’utilisation est exclue. L’offre expire le {date} dans le fuseau {zone}. Acceptez une seule fois : {link}"
 }
