@@ -137,6 +137,7 @@ export async function salesPlanChangesFlow(h,owner,{onState=async()=>{},prepare,
  const preview=prepare??((fields,who)=>h.api('plan.change.prepare',who,fields)),execute=decide??((fields,who)=>h.api('plan.change.decide',who,fields))
  const minimal=['after','before','delta','effectiveDate','mode','period','policy','waivedDelta'].sort()
  const ownerOtherQuote=await api('plan.change.prepare',{subscription:fixtures[0].subscription,item:fixtures[0].item,price:high,mode:'immediate'})
+ assert.ok((await h.page(`/app/subscriptions/${fixtures[0].subscription}`,people.sales)).includes(`value="${high}"`),'sales can select their permitted catalogue price in the real plan form')
  const upgrade=await preview({subscription:fixtures[0].subscription,item:fixtures[0].item,price:high,mode:'immediate'},people.sales)
  assert.deepEqual(Object.keys(upgrade.quote).sort(),minimal)
  await h.api(`invoices/${fixtures[0].invoice}`,people.sales,undefined,403)
