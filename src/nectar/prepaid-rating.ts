@@ -48,6 +48,6 @@ export function prepaidLines(input: RatingInput, source: Line[]): Line[] {
 }
 function drawLine(source: Line, lineIndex: number, promotion: boolean, amountCents: number, allocations: PrepaidAllocation[], transitions: PrepaidEntry[]): Line {
   return {kind:'prepaid_drawdown',description:promotion?'Promotional prepaid service drawdown':'Purchased prepaid service drawdown',quantity:'1',unitAmount:'',amountCents,taxable:promotion && source.taxable,priceId:source.priceId,meterId:source.meterId,periodStart:source.periodStart,periodEnd:source.periodEnd,
-    evidence:{prepaid:{version:'nectar-prepaid-1',lineIndex,allocations,transitions,sourceKind:source.kind,sourcePeriod:{start:source.periodStart,end:source.periodEnd}},calendar:source.evidence.calendar,
+    evidence:{prepaid:{version:'nectar-prepaid-1',unitPrecision:1000000,allocationPolicy:'source-day quantities; nonadditive day weights normalized; units before money; priority then expiry',lineIndex,allocations,transitions,sourceKind:source.kind,sourcePeriod:{start:source.periodStart,end:source.periodEnd}},calendar:source.evidence.calendar,
       revenueEntries:allocations.length?[{period:allocations[0].date.slice(0,7),amountCents,basis:{method:'prepaid-source-day-adjustment',lineIndex}}]:[{period:source.periodStart.slice(0,7),amountCents:0,basis:{method:'prepaid-boundary-only'}}]}}
 }

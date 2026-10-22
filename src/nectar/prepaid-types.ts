@@ -9,7 +9,8 @@ export interface PrepaidGrant extends PrepaidTerms {
   id: string; subscription: string; customer: string; purchaseInvoice: string | null; purchaseLine: string | null
 }
 export interface PrepaidEntry {
-  id: string; grantId: string; kind: 'grant' | 'drawdown' | 'expiry' | 'rollover'
+  id: string; grantId: string; kind: 'grant' | 'drawdown' | 'expiry' | 'rollover' | 'correction'
+  correctionKind?: 'drawdown' | 'expiry' | 'rollover'
   amountN: number; liabilityCents: number; recognitionCents: number; serviceDate: string
   invoiceId: string | null; lineIndex: number | null; purchaseInvoice: string | null; purchaseLine: string | null
 }

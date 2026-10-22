@@ -8,7 +8,7 @@ export function lotStates(basis: PrepaidBasis) {
     const entries = basis.entries.filter(entry => entry.grantId === grant.id)
     const remainingN = entries.reduce((sum, entry) => sum + entry.amountN, 0), liabilityCents = entries.reduce((sum, entry) => sum + entry.liabilityCents, 0)
     insist(Number.isSafeInteger(remainingN) && remainingN >= 0 && Number.isSafeInteger(liabilityCents) && liabilityCents >= 0, 'prepaid_ledger_invalid', 409)
-    return { grant, remainingN, liabilityCents, lastBoundary: entries.filter(entry => ['expiry','rollover'].includes(entry.kind)).map(entry => entry.serviceDate).sort().at(-1) ?? grant.effectiveDate }
+    return { grant, remainingN, liabilityCents, lastBoundary: entries.filter(entry => ['expiry','rollover'].includes(entry.kind==='correction'?entry.correctionKind??'':entry.kind)).map(entry => entry.serviceDate).sort().at(-1) ?? grant.effectiveDate }
   })
 }
 export function releaseValue(lot: PrepaidLotState, amount: number) {

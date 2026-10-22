@@ -42,7 +42,7 @@ export async function preparePrepaid(env: Bindings, actor: Actor, input: Input) 
   const terms = readTerms(input), mode = input.text('mode', { max: 10, optional: true }) || 'grant'
   insist(mode === 'grant' || mode === 'consent', 'invalid_prepaid_mode')
   if (terms.meterId) insist(await one(env, 'SELECT id FROM nc_meters WHERE id=?', terms.meterId), 'meter_not_found', 404)
-  const payload: Row = { terms }
+  const payload: Row = { terms, allocationPolicy: 'Unit grants before dollar grants; within each denomination priority, earliest expiry, effective date, then immutable grant ID. Exact source-day weights retain the complete usage pricing interval.' }
   if (mode === 'consent') {
     insist(terms.source === 'purchase' && input.flag('funding_consent'), 'prepaid_funding_consent_required')
     payload.thresholdN = quantity(input, 'threshold', terms.kind)

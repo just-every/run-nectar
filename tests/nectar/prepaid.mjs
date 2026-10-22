@@ -140,6 +140,13 @@ export async function prepaidFlow(h,owner,{fundPurchase,onState=async()=>{}}={})
   await h.api(`prepaid/${units.subscription}`,undefined,undefined,401)
   assert.equal((await h.api(`prepaid/${units.subscription}`,reader)).balances[0].remainingN,unitState.balances[0].remainingN+1000000)
   await onState({row,units,purchaseInvoice,topupInvoice,january,february,expired,unitState})
+  await h.advanceClock('2026-04-01T18:00:00Z')
+  await api('prepaid.settle',{subscription:row.subscription})
+  const paidExpiry=await state(row.subscription)
+  assert.equal(moneyBalance(paidExpiry),500000,'Unused original paid credit expires; the later independently funded purchase retains its own effective terms')
+  const valuedExpiry=paidExpiry.entries.find(entry=>entry.kind==='expiry'&&entry.purchaseInvoice===purchaseInvoice.id)
+  assert.equal(valuedExpiry.amountN,-90000);assert.equal(valuedExpiry.recognitionCents,90000)
+  assert.equal(paidExpiry.entries.filter(entry=>entry.purchaseInvoice===purchaseInvoice.id).reduce((sum,entry)=>sum+entry.recognitionCents,0),purchaseInvoice.total_cents,'Purchased consideration is recognized exactly once through actual consumption and approved expiry')
   console.log('CAT-004 prepaid foundation: governed money/units, real paid purchases, pure previews, priority, source tax, exact consumption, capped rollover, expiry and consent-bound pending topups passed')
   return {row,units,purchaseInvoice,topupInvoice,january,february,expired,unitState}
 }
