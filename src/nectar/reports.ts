@@ -20,6 +20,7 @@ export interface ReportEntry {
   sourceProvider?: string; sourceReference?: string
   invoiceId: string; number: string; customerId: string; customerName: string; amountCents: number; href: string
   sourceKind?: 'invoice' | 'payment' | 'credit_note' | 'subscription_period' | 'prepaid_grant'; paymentId?: string
+  prepaid?: import('./financial-prepaid').PrepaidReportBalance
 }
 export interface Report {
   metric: ReportMetric; title: string; definition: string; period: string; totalCents: number; entries: ReportEntry[]; series?:HistoricalMrrMonth[]

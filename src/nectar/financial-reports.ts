@@ -2,17 +2,21 @@ import { historicalContributions, historicalReportSource } from './movein/histor
 // Financial contributions use recorded ledger values or the real invoice engine.
 // Unbilled calculations are live read snapshots, never issued-invoice evidence.
 import type { Bindings } from '../auth.server'
-import { requireRead, type Actor } from './actor'
+import { canRead, requireRead, type Actor } from './actor'
 import { requireBusiness, type Business } from './business'
 import { all, fingerprint, insist, one, parseJson, type Row } from './core'
 import { addMonths, isMonth, localDate, periodStartingIn, today, zonedStart } from './dates'
 import { ratingInputs } from './inputs'
 import { rate, type EventIn, type Exception, type Line, type RatingInput } from './rating'
+import { prepaidFinancialSources, type PrepaidReportBalance } from './financial-prepaid'
+import { clockInstant } from './clock'
 import type { Report, ReportComponent, ReportEntry, ReportInvoice } from './reports'
 
 export type FinancialReportMetric = 'credits' | 'tax' | 'unbilled' | 'credit-balances'
 export interface FinancialReportEntry extends Omit<ReportEntry, 'sourceKind'> {
-  sourceKind: 'invoice' | 'credit_note' | 'subscription_period'
+  sourceKind: 'invoice' | 'credit_note' | 'subscription_period' | 'prepaid_grant'
+  grantId?: string
+  prepaid?: PrepaidReportBalance
   creditId?: string
   subscriptionId?: string
   periodStart?: string
@@ -46,12 +50,13 @@ export interface FinancialReportSource extends Omit<ReportInvoice, 'metric' | 's
   sourceKind: FinancialReportEntry['sourceKind']
   credit?: { id: string; number: string; invoiceId: string; amountCents: number; reason: string; issuedAt: number; issuedOn: string; issuedBy: string }
   unbilled?: UnbilledReportEvidence
+  prepaid?: PrepaidReportBalance
   calculation?: { inputs: Row; fingerprint: string; version: string; tax: unknown }
 }
 
 const USAGE = new Set(['usage', 'overage', 'metric_usage', 'late_usage', 'trial_usage', 'paused_usage'])
 const DEFINITIONS: Record<FinancialReportMetric, { title: string; definition: string }> = {
-  'credit-balances': {title:'Carried usage-correction credit balances',definition:'Current unspent numbered historical-usage credits: full note less credit applied to the original invoice and later invoice applications. Each cent is a customer liability until applied. This is a current snapshot across note issue dates, not a historical month-end reconstruction; the selected month labels its export. It excludes unallocated payments, generic goodwill grants, prepaid credits and cash refunds, whose full ledgers remain under INV-006 and CAT-004.'},
+  'credit-balances': {title:'Customer credit balances',definition:'Current USD monetary available credits, including purchased and promotional prepaid money, plus unconsumed paid unit consideration and carried numbered correction/cancellation credits less actual applications. Unit quantities remain separately typed by meter and are never added as USD; promotional units carry zero paid liability. Only purchased prepaid value is a contract liability. The snapshot uses the current business date across source issue dates; the selected month labels its export, not historical month-end balances. Expired money is unavailable without mutating its ledger; unpaid expiry liability and pending settlement remain explicit in source evidence. Unallocated payments, generic goodwill and cash refunds are excluded.'},
   credits: {
     title: 'Issued credit notes',
     definition: 'Actual numbered credit notes created in the selected month in the business billing timezone, shown as positive credited amounts against their original invoices. Historical usage notes separately retain applied and carried customer credit and saved tax attribution; other notes reduce only amounts owed and have no tax attribution. These are not cash refunds.',
@@ -132,12 +137,14 @@ async function contributions(env: Bindings, metric: string, url: URL) {
   const selected = await selection(env, metric, url)
   const { month, customer, business } = selected
   const unbilled = selected.metric === 'unbilled' ? await unbilledSources(env, business, month, customer) : null
+  const prepaid = selected.metric === 'credit-balances' ? await prepaidFinancialSources(env, today(business.timezone, clockInstant(env)), customer, id => sourceHref(selected.metric, id, month, customer)) : null
   let entries: FinancialReportEntry[]
   if (unbilled) entries = [...unbilled.values()].map(source => source.entry)
   else if(selected.metric==='credit-balances'){
     const rows=await all(env,`SELECT n.*,c.name AS customer_name,n.amount_cents-n.applied_cents-COALESCE((SELECT SUM(amount_cents) FROM nc_usage_credit_applications a WHERE a.credit_id=n.id),0) AS available
       FROM nc_credit_notes n JOIN nc_customers c ON c.id=n.customer_id WHERE (n.correction_id IS NOT NULL OR n.cancellation_id IS NOT NULL) ${customer?'AND n.customer_id=?':''} ORDER BY n.issued_at,n.id`,...(customer?[customer]:[]))
     entries=rows.filter(row=>row.available>0).map(row=>({invoiceId:row.id,creditId:row.id,number:row.number,customerId:row.customer_id,customerName:row.customer_name,amountCents:row.available,sourceKind:'credit_note',href:sourceHref(selected.metric,row.id,month,customer)}))
+    entries.push(...[...prepaid!.values()].map(source => source.entry))
   }
   else {
     const credits = selected.metric === 'credits'
@@ -161,7 +168,7 @@ async function contributions(env: Bindings, metric: string, url: URL) {
   entries.push(...historical.map(source=>source.entry as FinancialReportEntry))
   const report: FinancialReport = { metric: selected.metric, ...DEFINITIONS[selected.metric], period: month,
     totalCents: entries.reduce((sum, entry) => sum + entry.amountCents, 0), entries }
-  return { report, unbilled, business }
+  return { report, unbilled, prepaid, business }
 }
 
 /** Every contribution is sourced from actual ledger rows or exact rated usage lines. */
@@ -173,12 +180,17 @@ export async function financialReport(env: Bindings, actor: Actor, metric: strin
 /** Source membership and its components are read together; filtered-out sources refuse. */
 export async function financialReportSource(env: Bindings, actor: Actor, metric: string, sourceId: string, url: URL): Promise<FinancialReportSource> {
   requireRead(actor, 'reports')
-  const { report, unbilled, business } = await contributions(env, metric, url)
+  const { report, unbilled, prepaid, business } = await contributions(env, metric, url)
   const entry = report.entries.find(row => row.invoiceId === sourceId)
   insist(entry, 'report_invoice_not_found', 404)
   const historical=await historicalReportSource(env,report,sourceId,url,today(business.timezone))
   if(historical)return historical as FinancialReportSource
   const base = { ...entry, metric: report.metric, title: report.title, definition: report.definition, period: report.period }
+  if (entry.sourceKind === 'prepaid_grant') {
+    const source = prepaid!.get(sourceId)!
+    const components = source.components.map(component => canRead(actor, 'subscriptions') && canRead(actor, 'invoices') ? component : { ...component, href: undefined })
+    return { ...base, totalCents: entry.amountCents, invoice: null, components, prepaid: source.prepaid }
+  }
   if (unbilled) {
     const evidence = unbilled.get(sourceId)!.evidence
     const components: ReportComponent[] = evidence.lines.map(line => ({ kind: line.kind, label: line.description,
