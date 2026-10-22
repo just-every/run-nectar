@@ -1,4 +1,7 @@
 import type { Bindings } from '../auth.server'
+import { today } from './dates'
+import { requireBusiness } from './business'
+import { clockInstant } from './clock'
 import { all, guard, insist, newId, now, one, parseJson, stmt, type Row } from './core'
 import { PREPAID_VERSION, type PrepaidBasis, type PrepaidGrant, type PrepaidTerms } from './prepaid-types'
 
@@ -23,7 +26,8 @@ export function prepaidFundingIntentStatements(env: Bindings, id: string, subscr
   return [stmt(env, 'INSERT INTO nc_prepaid_funding_intents(id,subscription_id,customer_id,request_id,consent_id,amount_cents,terms_json,created_at) VALUES(?,?,?,?,?,?,?,?)', id, subscription, customer, request, consent, terms.valueCents, JSON.stringify(terms), now())]
 }
 export async function prepaidFundingForInvoice(env: Bindings, invoice: string): Promise<{id:string}|null> {
-  const intent = await one(env, "SELECT id,consent_id FROM nc_prepaid_funding_intents WHERE invoice_id=? AND status='pending'", invoice)
+  const intent = await one(env, "SELECT id,consent_id,terms_json FROM nc_prepaid_funding_intents WHERE invoice_id=? AND status='pending'", invoice)
+  if (intent) { const terms=prepaidTerms(intent); insist(!terms.expiresDate || terms.expiresDate>today((await requireBusiness(env)).timezone,clockInstant(env)), 'prepaid_funding_expired',409) }
   if (intent?.consent_id) insist(await one(env, "SELECT id FROM nc_prepaid_consents WHERE id=? AND status='active'", intent.consent_id), 'prepaid_consent_revoked', 409)
   return intent ? {id:intent.id} : null
 }

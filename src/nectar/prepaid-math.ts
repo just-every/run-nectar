@@ -29,7 +29,7 @@ export function boundaryEntries(lot: PrepaidLotState, until: string): PrepaidEnt
     const expiry = grant.expiresDate === date
     const retained = expiry ? 0 : Math.min(Number(BigInt(lot.remainingN) * BigInt(grant.rolloverPercent) / 100n), grant.rolloverCapN ?? lot.remainingN)
     const amount = lot.remainingN - retained, value = releaseValue(lot, amount)
-    entries.push({ id: `${grant.id}:${expiry ? 'expiry' : 'rollover'}:${date}`, grantId: grant.id, kind: expiry ? 'expiry' : 'rollover', amountN: -amount, liabilityCents: -value, recognitionCents: value, serviceDate: date, invoiceId: null, lineIndex: null, purchaseInvoice: grant.purchaseInvoice, purchaseLine: grant.purchaseLine })
+    entries.push({ id: `${grant.id}-${expiry ? 'expiry' : 'rollover'}-${date}`, grantId: grant.id, kind: expiry ? 'expiry' : 'rollover', amountN: -amount, liabilityCents: -value, recognitionCents: value, serviceDate: date, invoiceId: null, lineIndex: null, purchaseInvoice: grant.purchaseInvoice, purchaseLine: grant.purchaseLine })
     lot.remainingN -= amount; lot.liabilityCents -= value; lot.lastBoundary = date
   }
   return entries

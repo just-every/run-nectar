@@ -10,6 +10,7 @@ export function prepaidQuantity(line: Line): Rational {
   return exact ? rational(BigInt(exact.numerator), BigInt(exact.denominator)) : parseRational(line.quantity)
 }
 export function weightedIntegers(total: bigint, weights: { date: string; weight: Rational }[]) {
+  insist(total >= 0n && weights.every(row=>row.weight.n >= 0n), 'prepaid_negative_source_weights')
   const sum = weights.reduce((value, row) => addRational(value, row.weight), rational(0n))
   if (!sum.n) { insist(total === 0n, 'prepaid_source_weights_required'); return weights.map(row => ({ date: row.date, amount: 0n })) }
   const parts = weights.map(row => { const share = multiplyRational(rational(total), divideRational(row.weight, sum)); return { date: row.date, amount: share.n / share.d, remainder: rational(share.n % share.d, share.d) } })

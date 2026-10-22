@@ -28,10 +28,10 @@ function drawEntries(invoice: Row, calculation: Row): PrepaidEntry[] {
     for (const [part,allocation] of prepaid.allocations.entries()) {
       const grant = basis.grants.find(grant=>grant.id===allocation.grantId)
       insist(grant,'prepaid_source_changed',409)
-      entries.push({id:`${invoice.id}:${index}:${part}`,grantId:grant.id,kind:'drawdown',amountN:-allocation.amountN,liabilityCents:-allocation.valueCents,recognitionCents:allocation.valueCents,serviceDate:allocation.date,invoiceId:invoice.id,lineIndex:allocation.lineIndex,purchaseInvoice:grant.purchaseInvoice,purchaseLine:grant.purchaseLine})
+      entries.push({id:`${invoice.id}-${index}-${part}`,grantId:grant.id,kind:'drawdown',amountN:-allocation.amountN,liabilityCents:-allocation.valueCents,recognitionCents:allocation.valueCents,serviceDate:allocation.date,invoiceId:invoice.id,lineIndex:allocation.lineIndex,purchaseInvoice:grant.purchaseInvoice,purchaseLine:grant.purchaseLine})
     }
   }
-  return entries.sort((a,b)=>a.serviceDate.localeCompare(b.serviceDate)||(['expiry','rollover'].includes(a.kind)?-1:1))
+  return entries.sort((a,b)=>a.serviceDate.localeCompare(b.serviceDate)||Number(['expiry','rollover'].includes(b.kind))-Number(['expiry','rollover'].includes(a.kind))||(a.lineIndex??0)-(b.lineIndex??0)||a.id.localeCompare(b.id))
 }
 export async function prepaidIssueStatements(env: Bindings, invoice: Row, calculation: Row, _issueDate: string) {
   const basis = calculation.inputs?.prepaid as PrepaidBasis|undefined
@@ -44,12 +44,14 @@ export async function prepaidTopupStatements(env: Bindings, basis: PrepaidBasis,
   const consent = await one(env,"SELECT * FROM nc_prepaid_consents WHERE subscription_id=? AND status='active'",basis.subscription)
   if (!consent || await one(env,"SELECT 1 FROM nc_prepaid_funding_intents WHERE consent_id=? AND status='pending'",consent.id)) return []
   const terms = prepaidTerms(consent), date = today((await requireBusiness(env)).timezone,clockInstant(env))
+  if (terms.expiresDate && terms.expiresDate <= date) return []
   const lots = lotStates({...basis,entries:[...basis.entries,...additions]})
   const balance = lots.filter(lot=>lot.grant.kind===terms.kind && lot.grant.meterId===terms.meterId && lot.grant.effectiveDate<=date && (!lot.grant.expiresDate||lot.grant.expiresDate>date)).reduce((sum,lot)=>sum+lot.remainingN,0)
   if (balance > consent.threshold_n) return []
   // The unique pending row is a funding request, never a processor attempt.
   const id = crypto.randomUUID()
-  return [guard(env,'prepaid_consent_revoked',"EXISTS(SELECT 1 FROM nc_prepaid_consents WHERE id=? AND status='active')",consent.id),...prepaidFundingIntentStatements(env,id,basis.subscription,basis.customer,{...terms,effectiveDate:date},null,consent.id)]
+  return [guard(env,'prepaid_consent_revoked',"EXISTS(SELECT 1 FROM nc_prepaid_consents WHERE id=? AND status='active')",consent.id),...prepaidFundingIntentStatements(env,id,basis.subscription,basis.customer,{...terms,effectiveDate:date},null,consent.id),
+    stmt(env,"INSERT INTO nc_audit(at,actor,action,subject,detail) SELECT ?,prepared_by,'prepaid.topup.prepare',?,? FROM nc_prepaid_requests WHERE id=?",now(),id,JSON.stringify({subscription:basis.subscription,consent:consent.id,balanceN:balance,thresholdN:consent.threshold_n,amountCents:terms.valueCents}),consent.request_id)]
 }
 export async function settlePrepaid(env: Bindings, actor: Actor, input: Input) {
   requireOwner(actor); await requireFreshFactor(env,actor)

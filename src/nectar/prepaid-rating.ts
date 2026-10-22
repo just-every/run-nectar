@@ -2,6 +2,7 @@
 import { insist, type Row } from './core'
 import { micros, roundHalfAway } from './decimal'
 import { metricQuantityPrice } from './metric-pricing'
+import { upliftAmount, type RenewalRate } from './renewal-rating'
 import { rational, subtractRational } from './metric-plan'
 import type { Line, RatingInput } from './rating'
 import { prepaidDays, prepaidQuantity, weightedIntegers } from './prepaid-days'
@@ -26,7 +27,9 @@ export function prepaidLines(input: RatingInput, source: Line[]): Line[] {
     if (n) {
       const before = context.amount, allocation = use(lot,n,day.date,context.index)
       day.unitsN -= n; context.quantity = subtractRational(context.quantity,rational(BigInt(n),1000000n))
-      context.amount = context.price.pricing ? metricQuantityPrice(context.price.pricing,context.quantity).amountCents : Number(roundHalfAway(micros(context.line.unitAmount || context.price.unitAmount) * context.quantity.n * 100n,1000000n * context.quantity.d))
+      const rates = context.line.evidence.renewals as RenewalRate[] | undefined
+      const pricing = context.price.pricing && rates?.length ? {...context.price.pricing,tiers:context.price.pricing.tiers.map(tier=>({...tier,unitAmount:upliftAmount(tier.unitAmount,rates),flatAmount:upliftAmount(tier.flatAmount,rates)}))} : context.price.pricing
+      context.amount = pricing ? metricQuantityPrice(pricing,context.quantity).amountCents : Number(roundHalfAway(micros(context.line.unitAmount || context.price.unitAmount) * context.quantity.n * 100n,1000000n * context.quantity.d))
       additions.push(drawLine(context.line,context.index,lot.grant.source === 'promotion',context.amount-before,[allocation],transitions))
     } else if (transitions.length) additions.push(drawLine(context.line,context.index,false,0,[],transitions))
   }

@@ -55,3 +55,10 @@ CREATE TRIGGER nc_prepaid_consents_content BEFORE UPDATE OF subscription_id,cust
 CREATE TRIGGER nc_prepaid_funding_intents_content BEFORE UPDATE OF subscription_id,customer_id,request_id,consent_id,amount_cents,terms_json,created_at ON nc_prepaid_funding_intents WHEN NOT EXISTS(SELECT 1 FROM nc_privacy_context) AND NOT EXISTS(SELECT 1 FROM rer_portability_state WHERE id=1 AND applying=1) BEGIN SELECT RAISE(ABORT,'nectar_immutable'); END;
 CREATE TRIGGER nc_prepaid_request_decided BEFORE UPDATE ON nc_prepaid_requests WHEN OLD.status<>'pending' AND NOT EXISTS(SELECT 1 FROM nc_privacy_context) AND NOT EXISTS(SELECT 1 FROM rer_portability_state WHERE id=1 AND applying=1) BEGIN SELECT RAISE(ABORT,'nectar_immutable'); END;
 CREATE TRIGGER nc_prepaid_funding_decided BEFORE UPDATE ON nc_prepaid_funding_intents WHEN OLD.status<>'pending' AND NOT EXISTS(SELECT 1 FROM nc_privacy_context) AND NOT EXISTS(SELECT 1 FROM rer_portability_state WHERE id=1 AND applying=1) BEGIN SELECT RAISE(ABORT,'nectar_immutable'); END;
+CREATE UNIQUE INDEX nc_prepaid_draw_once ON nc_prepaid_ledger(grant_id,invoice_id,line_index,service_date) WHERE kind='drawdown';
+CREATE UNIQUE INDEX nc_prepaid_grant_once ON nc_prepaid_ledger(grant_id) WHERE kind='grant';
+CREATE TRIGGER nc_prepaid_ledger_value BEFORE INSERT ON nc_prepaid_ledger WHEN NOT EXISTS(SELECT 1 FROM nc_privacy_context) AND NOT EXISTS(SELECT 1 FROM rer_portability_state WHERE id=1 AND applying=1) AND (
+ COALESCE((SELECT SUM(liability_cents) FROM nc_prepaid_ledger WHERE grant_id=NEW.grant_id),0)+NEW.liability_cents<0
+ OR NEW.kind='grant' AND NOT EXISTS(SELECT 1 FROM nc_prepaid_grants WHERE id=NEW.grant_id AND amount_n=NEW.amount_n AND value_cents=NEW.liability_cents AND NEW.recognition_cents=0)
+ OR NEW.kind<>'grant' AND (NEW.amount_n>0 OR NEW.liability_cents>0 OR NEW.recognition_cents<>-NEW.liability_cents)
+) BEGIN SELECT RAISE(ABORT,'nectar_guard_prepaid_value_changed'); END;
