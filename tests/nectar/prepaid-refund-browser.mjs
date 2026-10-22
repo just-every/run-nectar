@@ -57,12 +57,23 @@ try {
     return saved
   }
   const openEvidence=async(page,refund)=>{
-    const disclosure=card(page,refund).locator('details')
+    const disclosure=card(page,refund).locator('details').filter({has:page.locator('summary').filter({hasText:'Frozen approval quote and reason'})})
     if(await disclosure.getAttribute('open')===null)await disclosure.locator('summary').click()
     const quote=JSON.parse(await disclosure.locator('dd code').first().textContent())
     assert.deepEqual(quote,refund.quote,'The rendered review preserves the exact original capture and unused value')
   }
+  const readerContext=await browser.newContext(),readerPage=await readerContext.newPage()
   await prepaidRefundFlow(h,owner,{
+    onTypedState:async({label,row,refund,readers})=>{
+      for(const {role,who} of readers){
+        await asActor(readerContext,who)
+        await both(readerPage,`${role}-${row.n}-${label}`,refund.source)
+        assert.equal(await readerPage.locator('form').count(),0)
+        assert.equal(await readerPage.locator('a[download]').count(),0)
+        assert.ok(!(await readerPage.locator('main').textContent()).includes('Synthetic unused paid service returned to its original card'))
+      }
+      if(label==='typed-pending'){await both(readerPage,'collections-refund-list',`/app/prepaid/refunds?customer=${row.customer}`)}
+    },
     approveRefund:async({row,refund,finance})=>{
       await asActor(financeContext,finance)
       await visit(financePage,refund.source)

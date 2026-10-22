@@ -56,7 +56,7 @@ export async function customerPage(env: Bindings, actor: Actor, id: string, url:
     ${field('Value', 'exception_value', { required: false })}${field('From', 'exception_effective_from', { type: 'date', required: false })}${field('Until (optional)', 'exception_effective_to', { type: 'date', required: false })}
     ${field('Note', 'exception_note', { required: false })}${area('Contract clause (quote it)', 'exception_clause', '', false, 2)}</fieldset>`, 'Start subscription', { layout: 'columns' })}</section>` : ''
   const ledger = c.ledger, hasHistory=c.incumbentHistory.documents.length>0||c.incumbentHistory.records.length>0
-  return page(c.name, actor, h`<p class="crumbs"><a href="/app/customers">Customers</a></p><h1>${c.name}</h1><p>${metadataLink('customer',c.id)}</p>
+  return page(c.name, actor, h`<p class="crumbs"><a href="/app/customers">Customers</a></p><h1>${c.name}</h1>${canRead(actor,'payments')&&canRead(actor,'invoices')?h`<p><a href="/app/prepaid/refunds?customer=${c.id}">Prepaid refund requests</a></p>`:''}<p>${metadataLink('customer',c.id)}</p>
     <section class="card summary"><dl class="figures">
       <div><dt>Customer ID</dt><dd>${c.external_id}</dd></div><div class="wide"><dt>Billing email</dt><dd>${addresses(c.billing_email || '—')}</dd></div>
       <div><dt>${hasHistory?'Nectar invoiced':'Invoiced'}</dt><dd>${cents(ledger.invoicedCents)}</dd></div><div><dt>${hasHistory?'Nectar credited':'Credited'}</dt><dd>${cents(ledger.creditedCents)}</dd></div><div><dt>${hasHistory?'Paid on Nectar invoices':'Paid'}</dt><dd>${cents(ledger.paidCents)}</dd></div>

@@ -36,6 +36,9 @@ export const API_DOORS: [string, string][] = [
 export const LIST_DOORS = ['usageCorrections', 'erasures', 'noteMembers', 'customers', 'batches', 'runs', 'payments', 'notices', 'tasks', 'policies', 'proposals', 'imports', 'shadow', 'members', 'roles', 'credentials', 'audit', 'metadataObjects', 'notes']
 
 export const PAGE_DOORS: [string, string][] = [
+  ['^/app/prepaid/refunds$','prepaidRefundList'],
+  ['^/app/prepaid/refunds/([\\w-]+)/proof$','prepaidRefundProof'],
+  ['^/app/exports/prepaid-refunds\\.csv$','prepaidRefundCsv'],
   ['^/app/prepaid/refunds/([\\w-]+)$','prepaidRefundSource'],
   ['^/app/prepaid/topup-authorizations/([\\w-]+)$','prepaidTopupSource'],
   ['^/app/prepaid/([\\w-]+/entries/[^/]+)$','prepaidSource'],
