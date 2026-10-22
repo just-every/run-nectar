@@ -2581,7 +2581,7 @@
       "executable": false
     },
     "src/nectar/doors.ts": {
-      "sha256": "0ebf798a5c7d0dee0b6ad9bf9b9b824cb00053b322b27832cbe63599759e06ca",
+      "sha256": "6168534cc21acef64eae73bcced098a89540a724554aff6ccb051a7d4cc0e497",
       "executable": false
     },
     "src/nectar/draft-correction-mail.ts": {
@@ -2613,7 +2613,7 @@
       "executable": false
     },
     "src/nectar/erasure-records.ts": {
-      "sha256": "fe40383ee788bdc42ced3fc8bcf13da5caec2c8fa0b1a15b108a1fab0cd3c724",
+      "sha256": "d5a92036c1138365f190076190229ecc73e65a11012f485f3bbce0de447ceeaa",
       "executable": false
     },
     "src/nectar/erasure-requests.ts": {
@@ -2761,11 +2761,11 @@
       "executable": false
     },
     "src/nectar/locales/en.json": {
-      "sha256": "552337076ff044b76702744a2ad5e9f560dcf05c081ec156197d7a3acc5c8c8d",
+      "sha256": "01825c23c905978b77ca750f4b62de4c5061209a303becc4be9dc2b96f886310",
       "executable": false
     },
     "src/nectar/locales/es-US.json": {
-      "sha256": "33b10edadbb8088053329e7fe1715bc2c4b8904a486df2b8ee27539a004c2737",
+      "sha256": "511e52b32516a975ba01585af6f505b46975b176f8389ad0b9b9e2e54580337f",
       "executable": false
     },
     "src/nectar/manual-invoices.ts": {
@@ -2945,7 +2945,7 @@
       "executable": false
     },
     "src/nectar/portal-http.ts": {
-      "sha256": "e01e4141bb0060c420c56e2ad33030633833450e838917b3f33cf245f76926a4",
+      "sha256": "bdb8f0b7a8327c622eb7551e849cc3efb073629efd02e8addc93457f2cdc7bce",
       "executable": false
     },
     "src/nectar/portal-page.ts": {
@@ -2956,8 +2956,12 @@
       "sha256": "f091a4c6f7873b9db2f0776db9d1baa63fb189a32ec2bd7a8a672d562b697e3b",
       "executable": false
     },
+    "src/nectar/portal-prepaid-topups.ts": {
+      "sha256": "6bfa9f1e6afa80086f878b267fa46be2cdf16f868add1b3f1e3225c86ae03dec",
+      "executable": false
+    },
     "src/nectar/portal-prepaid.ts": {
-      "sha256": "48ec4354ab878802644b7720f70d370be93483c4acc7dacfcdaf0bfa30c9959e",
+      "sha256": "42a812a62f8e621831f381de3b2a6089dfbbe657a9455f0c42fbf8330735856a",
       "executable": false
     },
     "src/nectar/portal-privacy.ts": {
@@ -3041,7 +3045,7 @@
       "executable": false
     },
     "src/nectar/prepaid-topup-jobs.ts": {
-      "sha256": "90ed743dc91ca7732b341bde15c0c46a81b84fc5ed82ffb31ee613700defce77",
+      "sha256": "d4e80f461c32124095676ca5534c3f6a394bb3a7d0a3f11983b083009a5744e4",
       "executable": false
     },
     "src/nectar/prepaid-topup-purchase.ts": {
@@ -3353,15 +3357,19 @@
       "executable": false
     },
     "src/nectar/ui/pages.ts": {
-      "sha256": "06808a2eae79258088795a46a75a926e11c579c6951ce669a90a27873fc62246",
+      "sha256": "234e83f9f6060a0fe64020f57ff4dd39717d8da4747425ed419b72bbe9c063bc",
       "executable": false
     },
     "src/nectar/ui/policies.ts": {
       "sha256": "e68d1dd30fa8b42c3f029c27fb47a446d893e6989140985a98cb0222a7b88a04",
       "executable": false
     },
+    "src/nectar/ui/prepaid-topups.ts": {
+      "sha256": "4fbf38a992ee30335a438d940e911d9d10f3ad0e8341aaf3d2a7f9fc5c934056",
+      "executable": false
+    },
     "src/nectar/ui/prepaid.ts": {
-      "sha256": "b034d2d694be78a7dd3a1d06aa85b2b0b2b438ab52bc10c88a62a56a5a643f67",
+      "sha256": "f22f26dfd9a0fabe4bf8ff79fb662b0d628f59f4e5bf9987c921a8cb0a4a30f0",
       "executable": false
     },
     "src/nectar/ui/price-approvals.ts": {
@@ -3633,7 +3641,7 @@
       "executable": false
     },
     "tests/fixtures/locales/fr.json": {
-      "sha256": "e62624ee3f82aaf6cba6e4c047e13b15e9b23f49a093c48eb879dd6c3bd4ae6b",
+      "sha256": "59de9a6c478fb45a87f5f5cb7e3a9e0a26e3615a797ff1552d94b70acdb1fd03",
       "executable": false
     },
     "tests/fixtures/stripe-collection-edge.mjs": {
@@ -3689,7 +3697,7 @@
       "executable": false
     },
     "tests/nectar/billing-roles.mjs": {
-      "sha256": "5c8539540bbfd86744b944f9ce616c430ae1938adbac9f4268a63342c913a0c9",
+      "sha256": "6895caa136a7e63df78dbff7176b9bb8fb89f6ee84fa3611e2cf88ad39710dae",
       "executable": false
     },
     "tests/nectar/cadences.mjs": {
