@@ -170,7 +170,7 @@ async function consume(){
     await api('invoice.approve',{invoice:invoice.id,acknowledge:true});await api('invoice.finalise',{invoice:invoice.id,issue_date:today})
     const saved=await api(`invoices/${invoice.id}`)
     check(saved.status==='issued'&&saved.total_cents===0&&saved.period_start===day&&saved.period_end===due&&saved.calculation.inputs.billing.dueDate===due,'completed_daily_invoice_mismatch')
-    check(sum(saved.calculation.lines.filter(line=>line.kind==='prepaid_drawdown').map(line=>line.amountCents))===-amounts[index]*100,'daily_usage_drawdown_mismatch')
+    check(sum(saved.lines.filter(line=>line.kind==='prepaid_drawdown').map(line=>line.amount_cents))===-amounts[index]*100,'daily_usage_drawdown_mismatch')
     issued.push(saved.id)
     await parity(index===0?500000:90000,index===0?500000:90000)
   }
