@@ -1,7 +1,7 @@
 // Explicit manual collection only. A durable invoice claim precedes the one
 // off-session confirmation; all recovery reads Stripe without another POST.
 import type { Bindings } from '../../auth.server'
-import { actorLabel, type Actor } from '../actor'
+import { actorLabel, requireOwner, type Actor } from '../actor'
 import { requireBusiness } from '../business'
 import { clockInstant } from '../clock'
 import { canonical, commit, fingerprint, guard, insist, newId, one, stmt, type Row } from '../core'
@@ -139,7 +139,7 @@ export async function reconcileNativeCollection(env: Bindings, actor: Actor, inp
 }
 
 export async function readNativeCollections(env: Bindings, actor: Actor, customer?: string) {
-  await collectionOwner(env, actor)
+  requireOwner(actor)
   insist(customer === undefined || /^[\w-]{1,100}$/.test(customer), 'invalid_customer')
   return (await nativeCollectionRows(env, customer)).map(nativeCollectionView)
 }

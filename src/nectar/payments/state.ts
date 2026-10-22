@@ -39,7 +39,7 @@ export function paymentIdentity(row: Row, basis: NativeCollectionBasis): Payment
   return { invoiceId: row.invoice_id, requestId: row.id, accountRef: basis.accountRef, customerRef: basis.customerRef,
     paymentMethodRef: basis.paymentMethodRef, livemode: basis.livemode, key: basis.key, amountCents: row.amount_cents }
 }
-export function nativeCollectionView(row: Row) {
+export function nativeCollectionView(row: Row): Row {
   const basis = parseJson<NativeCollectionBasis | null>(row.basis_json, null), { basis_json, proof_json, ...safe } = row
   return { ...safe, review: basis, proof: parseJson<Row | null>(proof_json, null), instructions: {
     confirm: basis && row.status === 'pending' ? { request: row.id, basis_hash: row.basis_hash, confirm: true,
