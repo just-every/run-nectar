@@ -21,12 +21,14 @@ interface CreditSource {
   generation: number; issueMonth: string; timezone: string
 }
 
-function creditRevenueSchedule(invoiceId: string, creditId: string, amount: number, issueMonth: string): RevenueSchedule {
+function creditRevenueSchedule(invoiceId: string, creditId: string, amount: number, issueMonth: string, prepaid = false): RevenueSchedule {
   insist(Number.isSafeInteger(amount) && /^\d{4}-(0[1-9]|1[0-2])$/.test(issueMonth), 'invoice_credit_revenue_source_required', 409)
-  return { lineId: `credit:${creditId}`, kind: 'credit_note', amountCents: -amount,
-    serviceStart: `${issueMonth}-01`, serviceEnd: addMonths(`${issueMonth}-01`, 1), policy: 'credit-contra-issue-month',
-    entries: [{ period: issueMonth, amountCents: -amount, basis: { method: 'credit-contra-issue-month', invoiceId, creditId, issueMonth } }],
-    basis: { version: REVENUE_POLICY_VERSION, invoiceId, creditId, issueMonth, attribution: 'invoice-level; original lines and tax unchanged' } }
+  const recognitionCents = prepaid ? 0 : -amount
+  const method = prepaid ? 'unfunded-prepaid-liability-reversal' : 'credit-contra-issue-month'
+  return { lineId: `credit:${creditId}`, kind: 'credit_note', amountCents: recognitionCents,
+    serviceStart: `${issueMonth}-01`, serviceEnd: addMonths(`${issueMonth}-01`, 1), policy: method,
+    entries: [{ period: issueMonth, amountCents: recognitionCents, basis: { method, invoiceId, creditId, issueMonth } }],
+    basis: { version: REVENUE_POLICY_VERSION, invoiceId, creditId, issueMonth, ...(prepaid ? { billingsDeltaCents: -amount, liabilityDeltaCents: -amount, recognitionCents: 0 } : {}), attribution: 'invoice-level; original lines and tax unchanged' } }
 }
 
 function text(value: unknown, field: string, max: number) {
@@ -85,22 +87,25 @@ async function invoiceCreditPlan(env: Bindings, business: Business, payload: Row
   const correctionTax=lines.filter(line=>line.kind==='usage_correction').reduce((n,line)=>n+Number(parseJson<Row>(line.evidence_json,{}).taxDeltaCents??0),0)
   computed.taxCents+=correctionTax;computed.totalCents+=correctionTax
   insist(!computed.exceptions.length && computed.subtotalCents === invoice.subtotal_cents && computed.taxCents === invoice.tax_cents && computed.totalCents === invoice.total_cents, 'invoice_credit_calculation_mismatch', 409)
+  const prepaid = lines.some(line => line.kind === 'prepaid_purchase')
   const originalSchedules = recognitionForSavedInvoice(invoice, lines, business.timezone)
   const historicalAdjustments = creditHistory.map(credit => {
     insist(typeof credit.id === 'string' && Number.isSafeInteger(credit.issued_at), 'invoice_credit_revenue_source_required', 409)
-    return creditRevenueSchedule(invoice.id, credit.id, credit.subtotal_cents??credit.amount_cents, localDate(credit.issued_at, business.timezone).slice(0, 7))
+    return creditRevenueSchedule(invoice.id, credit.id, credit.subtotal_cents??credit.amount_cents, localDate(credit.issued_at, business.timezone).slice(0, 7), prepaid)
   })
   const issueMonth = localDate(clockInstant(env), business.timezone).slice(0, 7)
   insist(payload.revenueIssueMonth === undefined || payload.revenueIssueMonth === issueMonth, 'proposal_stale', 409)
+  const prepaidBillings = computed.subtotalCents - creditHistory.reduce((sum, credit) => sum + (credit.subtotal_cents ?? credit.amount_cents), 0)
   const beforeRevenue = await revenuePreview([...originalSchedules, ...historicalAdjustments])
-  const adjustment = creditRevenueSchedule(invoice.id, 'proposed', amount, issueMonth)
+  const adjustment = creditRevenueSchedule(invoice.id, 'proposed', amount, issueMonth, prepaid)
   const afterRevenue = await revenuePreview([...originalSchedules, ...historicalAdjustments, adjustment])
   const revenueDeltas = revenuePeriodDeltas(beforeRevenue, afterRevenue)
-  insist(revenueDeltas.reduce((sum, entry) => sum + BigInt(entry.deltaCents), 0n) === -BigInt(amount)
+  insist(revenueDeltas.reduce((sum, entry) => sum + BigInt(entry.deltaCents), 0n) === (prepaid ? 0n : -BigInt(amount))
     && revenueDeltas.every(entry => entry.period === issueMonth || entry.deltaCents === 0), 'invoice_credit_revenue_mismatch', 409)
   const L = customerText(customer.language)
+  const creditText = prepaid ? 'correction.revenue.prepaidCredit' : 'correction.revenue.credit'
   const revenueExplanation = [L.t('correction.revenue.heading'), L.t('correction.revenue.policy', { policy: REVENUE_POLICY_VERSION }),
-    L.t('correction.revenue.credit', { amount: L.money(amount), from: L.day(`${issueMonth}-01`) }),
+    L.t(creditText, { amount: L.money(amount), from: L.day(`${issueMonth}-01`) }),
     ...revenueDeltas.map(entry => L.t('correction.revenue.period', { from: L.day(`${entry.period}-01`), before: L.money(entry.beforeCents), after: L.money(entry.afterCents), change: L.money(entry.deltaCents) }))].join('\n')
   const invoiceSource = `/app/invoices/${encodeURIComponent(invoice.id)}`
   const revenueCitations: Row[] = originalSchedules.flatMap((schedule, index) => schedule.entries.map((entry, entryIndex) => ({
@@ -108,13 +113,19 @@ async function invoiceCreditPlan(env: Bindings, business: Business, payload: Row
     quote: L.t('correction.revenue.schedule', { line: schedule.lineId, amount: L.money(entry.amountCents), from: L.day(`${entry.period}-01`), policy: REVENUE_POLICY_VERSION }),
     policyVersion: REVENUE_POLICY_VERSION, fingerprint: beforeRevenue.fingerprint, recordPath: `/revenue/before/schedules/${index}/entries/${entryIndex}`,
   })))
+  if (prepaid) originalSchedules.forEach((schedule, index) => revenueCitations.push({
+    line_id: schedule.lineId, source: `${invoiceSource}/lines/${encodeURIComponent(schedule.lineId)}#calculation`,
+    quote: lines.find(line => line.id === schedule.lineId)?.description ?? schedule.policy,
+    policyVersion: REVENUE_POLICY_VERSION, fingerprint: beforeRevenue.fingerprint, recordPath: `/revenue/before/schedules/${index}`,
+    amountCents: schedule.amountCents, recognitionCents: 0,
+  }))
   revenueCitations.push({ source: invoiceSource, quote: L.t('correction.revenue.policy', { policy: REVENUE_POLICY_VERSION }),
     policyVersion: REVENUE_POLICY_VERSION, fingerprint: beforeRevenue.fingerprint, recordPath: '/revenue/policyVersion' })
   historicalAdjustments.forEach((schedule, index) => revenueCitations.push({ source: invoiceSource, credit_id: creditHistory[index].id,
-    quote: L.t('correction.revenue.credit', { amount: L.money(creditHistory[index].amount_cents), from: L.day(`${schedule.entries[0].period}-01`) }),
+    quote: L.t(creditText, { amount: L.money(creditHistory[index].amount_cents), from: L.day(`${schedule.entries[0].period}-01`) }),
     policyVersion: REVENUE_POLICY_VERSION, fingerprint: beforeRevenue.fingerprint, recordPath: `/revenue/before/schedules/${originalSchedules.length + index}` }))
-  revenueCitations.push({ source: invoiceSource, quote: L.t('correction.revenue.credit', { amount: L.money(amount), from: L.day(`${issueMonth}-01`) }),
-    policyVersion: REVENUE_POLICY_VERSION, fingerprint: afterRevenue.fingerprint, recordPath: '/revenue/adjustment', amountCents: -amount, period: issueMonth })
+  revenueCitations.push({ source: invoiceSource, quote: L.t(creditText, { amount: L.money(amount), from: L.day(`${issueMonth}-01`) }),
+    policyVersion: REVENUE_POLICY_VERSION, fingerprint: afterRevenue.fingerprint, recordPath: '/revenue/adjustment', amountCents: prepaid ? 0 : -amount, period: issueMonth })
   const normalized = { invoice_credit: true, invoice: invoice.id, amount: plainMoney(amount), reason, explanation, recipient, subject, body, citations,
     revenueIssueMonth: issueMonth, revenueNotice: { explanation: revenueExplanation, citations: revenueCitations } }
   const mailBody = `${body}\n\n${revenueExplanation}`, mailExplanation = `${explanation}\n\n${revenueExplanation}`
@@ -128,7 +139,9 @@ async function invoiceCreditPlan(env: Bindings, business: Business, payload: Row
     tax: 'Original invoice tax remains unchanged. This credit does not compute or record a tax reversal.',
     futureInvoices: 'This credit note does not rewrite future invoices or change subscription pricing or contract terms.',
     revenue: { policyVersion: REVENUE_POLICY_VERSION, issueMonth, before: beforeRevenue, after: afterRevenue, periods: revenueDeltas,
-      adjustment: { kind: 'contra-revenue', amountCents: -amount, period: issueMonth, invoiceId: invoice.id }, citations: revenueCitations },
+      ...(prepaid ? { billings: { beforeCents: prepaidBillings, afterCents: prepaidBillings - amount, deltaCents: -amount },
+        liability: { beforeCents: prepaidBillings, afterCents: prepaidBillings - amount, deltaCents: -amount } } : {}),
+      adjustment: { kind: prepaid ? 'prepaid-liability-reversal' : 'contra-revenue', amountCents: prepaid ? 0 : -amount, ...(prepaid ? { billingsDeltaCents: -amount, liabilityDeltaCents: -amount } : {}), period: issueMonth, invoiceId: invoice.id }, citations: revenueCitations },
     mrr: 'This proposal does not change subscription terms or compute normalized MRR.',
     portal: 'No customer portal visibility or delivery is asserted by this proposal.',
     mail: { recipient, subject, body: mailBody, explanation: mailExplanation, citations: mailCitations, outcome: 'Queued only after human approval; provider acceptance does not confirm mailbox delivery.',
