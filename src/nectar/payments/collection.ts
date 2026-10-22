@@ -12,7 +12,7 @@ import { prepaidFundingForInvoice } from '../prepaid-records'
 import { prepaidFundingStatements } from '../prepaid-funding'
 import { nativeCollectionSource, nativeSourceGuard } from './source'
 import { bindingGuard, currentNativeCollection, nativeCollectionRows, nativeCollectionView, paymentIdentity, storedNativeCollection, type NativeCollectionBasis } from './state'
-import { capturedPayment, providerUnavailable, readIntent, savedCard, stripeForAccount, verifyIntent } from './stripe'
+import { NativeStripeError, refusedPayment, capturedPayment, providerUnavailable, readIntent, savedCard, stripeForAccount, verifyIntent } from './stripe'
 
 export { bindNativeCollectionCustomer } from './customer'
 
@@ -74,6 +74,14 @@ async function recordCaptured(env: Bindings, actor: Actor, row: Row, proof: Capt
   return nativeCollectionView(await storedNativeCollection(env, held.id))
 }
 
+async function recordIntentOutcome(env: Bindings, actor: Actor, row: Row, stripe: Awaited<ReturnType<typeof stripeForAccount>>['stripe'], intent: Row, identity: ReturnType<typeof paymentIdentity>) {
+  const intentRef = verifyIntent(intent, identity)
+  const current = await changeOutcome(env, actor, row, { payment_intent_ref: intentRef }, 'intent.record')
+  const refusal = await refusedPayment(stripe, intent, identity)
+  if (refusal) return nativeCollectionView(await changeOutcome(env, actor, current, { status: refusal.status, error_code: refusal.errorCode, proof_json: canonical(refusal) }, 'refused'))
+  return recordCaptured(env, actor, current, await capturedPayment(stripe, intent, identity, (await requireBusiness(env)).timezone))
+}
+
 export async function confirmNativeCollection(env: Bindings, actor: Actor, input: Input) {
   await collectionOwner(env, actor)
   input.only(['request', 'basis_hash', 'confirm', 'amount_cents', 'account_ref', 'stripe_customer_ref', 'payment_method_ref', 'returnTo'])
@@ -105,15 +113,20 @@ export async function confirmNativeCollection(env: Bindings, actor: Actor, input
       payment_method: basis.paymentMethodRef, 'payment_method_types[0]': 'card', confirm: 'true', off_session: 'true', error_on_requires_action: 'true',
       'metadata[nectar_native_collection_key]': basis.key, 'metadata[nectar_native_collection_request]': row.id,
       'metadata[nectar_native_invoice]': row.invoice_id }), `nectar-native-${basis.key}`)
-    const intentRef = verifyIntent(intent, identity)
-    current = await changeOutcome(env, actor, current, { payment_intent_ref: intentRef }, 'intent.record')
-    const proof = await capturedPayment(selected.stripe, intent, identity, (await requireBusiness(env)).timezone)
-    return await recordCaptured(env, actor, current, proof)
-  } catch {
-    // No response/body is logged or retried. Even a definitive provider refusal
-    // cannot release the unique invoice claim for another confirm request.
+    const observed = intent.status === 'succeeded' ? intent : await readIntent(selected.stripe, identity, verifyIntent(intent, identity), at, clockInstant(env))
+    return await recordIntentOutcome(env, actor, current, selected.stripe, observed, identity)
+  } catch (error) {
+    // A provider error can identify the same intent for a definitive read.
+    // Unknown results retain the original durable claim and never create again.
     current = await storedNativeCollection(env, row.id)
-    if (current.status === 'collected') return nativeCollectionView(current)
+    if (['collected','declined','customer_action_required'].includes(current.status)) return nativeCollectionView(current)
+    if (error instanceof NativeStripeError && error.intentRef) {
+      try {
+        const identity = paymentIdentity(current, basis)
+        const observed = await readIntent(selected.stripe, identity, error.intentRef, at, clockInstant(env))
+        return await recordIntentOutcome(env, actor, current, selected.stripe, observed, identity)
+      } catch { current = await storedNativeCollection(env, row.id) }
+    }
     return nativeCollectionView(await changeOutcome(env, actor, current, { status: 'uncertain', error_code: current.charge_ref ? 'native_payment_record_pending' : 'native_payment_unconfirmed' }, 'uncertain'))
   }
 }
@@ -122,18 +135,16 @@ export async function reconcileNativeCollection(env: Bindings, actor: Actor, inp
   await collectionOwner(env, actor)
   input.only(['request', 'returnTo'])
   let row = await storedNativeCollection(env, input.text('request', { max: 100 }))
-  if (row.status === 'collected') return nativeCollectionView(row)
+  if (['collected', 'declined', 'customer_action_required'].includes(row.status)) return nativeCollectionView(row)
   insist(['claimed', 'uncertain'].includes(row.status), 'native_collection_not_reconcilable', 409)
   const { basis } = await currentNativeCollection(env, actor, row)
   try {
     const selected = await stripeForAccount(env, basis.accountRef)
-    const identity = paymentIdentity(row, basis), intent = await readIntent(selected.stripe, identity, row.payment_intent_ref)
-    const intentRef = verifyIntent(intent, identity)
-    row = await changeOutcome(env, actor, row, { payment_intent_ref: intentRef }, 'intent.read')
-    return await recordCaptured(env, actor, row, await capturedPayment(selected.stripe, intent, identity, (await requireBusiness(env)).timezone))
+    const identity = paymentIdentity(row, basis), intent = await readIntent(selected.stripe, identity, row.payment_intent_ref, row.claimed_at, clockInstant(env))
+    return await recordIntentOutcome(env, actor, row, selected.stripe, intent, identity)
   } catch {
     row = await storedNativeCollection(env, row.id)
-    if (row.status === 'collected') return nativeCollectionView(row)
+    if (['collected', 'declined', 'customer_action_required'].includes(row.status)) return nativeCollectionView(row)
     return nativeCollectionView(await changeOutcome(env, actor, row, { status: 'uncertain', error_code: row.charge_ref ? 'native_payment_record_pending' : 'native_payment_unconfirmed' }, 'uncertain'))
   }
 }
