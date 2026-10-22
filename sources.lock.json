@@ -69,7 +69,7 @@
       "executable": false
     },
     "API.md": {
-      "sha256": "0322e2881901bd8bb041dfee49d980507d3a5b3a365bbb33be67f0caa599343e",
+      "sha256": "22ffb44f23532f8928a19b30fa3ed1d4c38bdec0a811c9bb0d75425c95e281f1",
       "executable": false
     },
     "base-copies.json": {
@@ -2625,7 +2625,7 @@
       "executable": false
     },
     "src/nectar/erasure-records.ts": {
-      "sha256": "aa1fb3ac9865ae4f8b8d243c46735c0e675db62405023feedd648763db0535b6",
+      "sha256": "c82ed01086f5518d269c8cd5794748fb6d38c70d9c230c853365eb7125e23bf7",
       "executable": false
     },
     "src/nectar/erasure-requests.ts": {
@@ -3997,7 +3997,7 @@
       "executable": false
     },
     "tests/nectar/prepaid-refund-browser.mjs": {
-      "sha256": "35b5516329db35a340be629cc685f68d56144d471cdb6375a0af7399aa7f9c79",
+      "sha256": "42416d85eed3f1293769357a0dc1131e086a36af504a06cd9cd8d922111c60a1",
       "executable": false
     },
     "tests/nectar/prepaid-refunds.mjs": {

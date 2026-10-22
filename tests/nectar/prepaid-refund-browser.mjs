@@ -64,7 +64,7 @@ try {
   }
   const readerContext=await browser.newContext(),readerPage=await readerContext.newPage()
   await prepaidRefundFlow(h,owner,{
-    onTypedState:async({label,row,refund,readers})=>{
+    onTypedState:async({label,row,refund,readers,finance})=>{
       for(const {role,who} of readers){
         await asActor(readerContext,who)
         await both(readerPage,`${role}-${row.n}-${label}`,refund.source)
@@ -72,7 +72,23 @@ try {
         assert.equal(await readerPage.locator('a[download]').count(),0)
         assert.ok(!(await readerPage.locator('main').textContent()).includes('Synthetic unused paid service returned to its original card'))
       }
-      if(label==='typed-pending'){await both(readerPage,'collections-refund-list',`/app/prepaid/refunds?customer=${row.customer}`)}
+      if(label==='typed-pending'){
+        await both(readerPage,'collections-refund-list',`/app/prepaid/refunds?customer=${row.customer}`)
+        await both(readerPage,'collections-customer-refund-entry',`/app/customers/${row.customer}`)
+        assert.ok(await readerPage.locator(`a[href="/app/prepaid/refunds?customer=${row.customer}"]`).count())
+        await asActor(readerContext,readers.find(reader=>reader.role==='accountant').who)
+        await both(readerPage,'accountant-refund-list-export',`/app/prepaid/refunds?subscription=${row.subscription}`)
+        const [download]=await Promise.all([readerPage.waitForEvent('download'),readerPage.getByRole('link',{name:'Export refund lifecycle CSV'}).click()])
+        assert.equal(await download.failure(),null)
+      }
+      if(label==='typed-refunded'&&row.n===1){
+        await asActor(financeContext,finance);await visit(financePage,refund.source)
+        const [download]=await Promise.all([financePage.waitForEvent('download'),financePage.getByRole('link',{name:/Download processor proof/}).click()])
+        assert.equal(await download.failure(),null)
+        const stream=await download.createReadStream(),chunks=[]
+        for await(const chunk of stream)chunks.push(chunk)
+        assert.equal(JSON.parse(Buffer.concat(chunks)).proof,'succeeded-refund-and-balance-debit')
+      }
     },
     approveRefund:async({row,refund,finance})=>{
       await asActor(financeContext,finance)
