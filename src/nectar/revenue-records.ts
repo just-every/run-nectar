@@ -85,7 +85,7 @@ function projectInvoice(invoice: Row, stored: Row[], entries: Row[], lines: Row[
     if (saved) insist(saved.amount_cents === -(note.subtotal_cents??note.amount_cents) && (invoice.erased_at || saved.policy_version === REVENUE_POLICY_VERSION), 'revenue_credit_snapshot_mismatch', 409)
     const creditBasis=saved?parseJson<Row>(saved.basis_json,{}):{}
     const prepaid=lines.some(line=>line.kind==='prepaid_purchase')
-    insist(!prepaid || !saved || creditBasis.recognitionCents===0,'revenue_prepaid_credit_basis_required',409)
+    insist(invoice.erased_at || !prepaid || !saved || creditBasis.recognitionCents===0,'revenue_prepaid_credit_basis_required',409)
     return { id: note.id, number: note.number, ...(prepaid?{recognitionCents:0}:{}), period: saved?.recognition_date.slice(0, 7) ?? localDate(note.issued_at, timezone).slice(0, 7), amountCents: -(note.subtotal_cents??note.amount_cents),
       basis: saved ? parseJson<Row>(saved.basis_json, {}) : { version: REVENUE_POLICY_VERSION, method: 'invoice-level-contra-revenue', creditId: note.id, invoiceId: id, issuedAt: note.issued_at, timezone, custody: 'derived-saved-originals', originalTaxUnchanged: true } }
   })
