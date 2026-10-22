@@ -27,6 +27,16 @@ export function prepaidFundingIntentStatements(env: Bindings, id: string, subscr
 }
 export async function prepaidFundingForInvoice(env: Bindings, invoice: string): Promise<{id:string}|null> {
   const intent = await one(env, "SELECT id,consent_id,terms_json FROM nc_prepaid_funding_intents WHERE invoice_id=? AND status='pending'", invoice)
+  if (intent) {
+    const source=await one(env, `SELECT i.total_cents,i.subtotal_cents,i.tax_cents,i.currency,
+      (SELECT COUNT(*) FROM nc_credit_notes WHERE invoice_id=i.id) AS credits,
+      (SELECT COUNT(*) FROM nc_usage_credit_applications WHERE invoice_id=i.id) AS applications,
+      (SELECT COUNT(*) FROM nc_invoice_lines WHERE invoice_id=i.id AND kind='prepaid_purchase' AND amount_cents=i.total_cents AND json_extract(evidence_json,'$.prepaidPurchase')=?) AS purchase_lines,
+      (SELECT COUNT(*) FROM nc_invoice_lines WHERE invoice_id=i.id) AS lines
+      FROM nc_invoices i WHERE i.id=? AND i.status='issued'`,intent.id,invoice)
+    const amount=await one(env,'SELECT amount_cents FROM nc_prepaid_funding_intents WHERE id=?',intent.id)
+    insist(source && source.total_cents===amount?.amount_cents && source.subtotal_cents===source.total_cents && source.tax_cents===0 && source.currency==='USD' && source.credits===0 && source.applications===0 && source.purchase_lines===1 && source.lines===1, 'prepaid_purchase_changed',409)
+  }
   if (intent) { const terms=prepaidTerms(intent); insist(!terms.expiresDate || terms.expiresDate>today((await requireBusiness(env)).timezone,clockInstant(env)), 'prepaid_funding_expired',409) }
   if (intent?.consent_id) insist(await one(env, "SELECT id FROM nc_prepaid_consents WHERE id=? AND status='active'", intent.consent_id), 'prepaid_consent_revoked', 409)
   return intent ? {id:intent.id} : null
