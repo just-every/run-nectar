@@ -3,7 +3,7 @@ import { sharedCreditReasonSql } from './shared-credit-custody'
 // internal notes, metadata, credentials, audit actors or unissued invoices.
 import type { Bindings } from '../auth.server'
 import { all, insist, one } from './core'
-import { BALANCE_SQL } from './receivables'
+import { BALANCE_SQL, GOODWILL_APPLIED_SQL } from './receivables'
 import type { CustomerSession } from './portal-session'
 
 export async function portalData(env: Bindings, session: CustomerSession, invoiceId?: string) {
@@ -12,7 +12,7 @@ export async function portalData(env: Bindings, session: CustomerSession, invoic
   const merchant = await one(env, 'SELECT legal_name,currency FROM nc_business WHERE singleton=1')
   const brand = await one(env, 'SELECT brand_name,brand_color FROM nc_portal_policy WHERE singleton=1')
   const invoices = await all(env, `SELECT i.id,i.number,i.issue_date,i.due_date,i.subtotal_cents,i.tax_cents,i.total_cents,${BALANCE_SQL} AS balance_cents,
-    COALESCE((SELECT SUM(COALESCE(applied_cents,amount_cents)) FROM nc_credit_notes WHERE invoice_id=i.id),0) + COALESCE((SELECT SUM(amount_cents) FROM nc_usage_credit_applications WHERE invoice_id=i.id),0) AS credited_cents,
+    COALESCE((SELECT SUM(COALESCE(applied_cents,amount_cents)) FROM nc_credit_notes WHERE invoice_id=i.id),0) + COALESCE((SELECT SUM(amount_cents) FROM nc_usage_credit_applications WHERE invoice_id=i.id),0) + ${GOODWILL_APPLIED_SQL} AS credited_cents,
     COALESCE((SELECT SUM(amount_cents) FROM nc_allocations WHERE invoice_id=i.id),0) AS paid_cents
     FROM nc_invoices i WHERE i.customer_id=? AND i.status='issued' ${invoiceId ? 'AND i.id=?' : ''} ORDER BY i.issue_date DESC,i.number DESC`, session.customer, ...(invoiceId ? [invoiceId] : []))
   if (invoiceId) insist(invoices.length === 1, 'not_found', 404)

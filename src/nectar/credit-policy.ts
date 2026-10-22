@@ -9,7 +9,7 @@ import type { Input } from './input'
 import { requireFreshFactor } from './mfa'
 
 export async function creditPolicy(env: Bindings) {
-  return await one(env, 'SELECT * FROM nc_credit_policy WHERE singleton=1') ?? { two_person_above_cents: null, support_limit_cents: 0, revision: 0 }
+  return await one(env, 'SELECT * FROM nc_credit_policy WHERE singleton=1') ?? { two_person_above_cents: null, support_limit_cents: 0, balance_application: 'manual', revision: 0 }
 }
 
 /** GOV-001: the most a support credit may be, zero until the owner sets one. */
@@ -24,7 +24,9 @@ export async function configureCreditPolicy(env: Bindings, actor: Actor, input: 
   const support = supportText ? cents(supportText, 'support_limit') : supportText === '' ? 0 : supportLimitCents(current)
   // GOV-007: changing the support role's credit limit asks for a fresh factor.
   if (support !== supportLimitCents(current)) await requireFreshFactor(env, actor)
-  return await preparePolicyChange(env, actor, 'credit', { twoPersonAboveCents: limit, supportLimitCents: support })
+  const application = input.text('balance_application', { max: 10, optional: true }) || current.balance_application
+  insist(application === 'manual' || application === 'automatic', 'invalid_balance_application')
+  return await preparePolicyChange(env, actor, 'credit', { twoPersonAboveCents: limit, supportLimitCents: support, balanceApplication: application })
 }
 
 export const creditBasis = (invoice: Row, policy: Row) => fingerprint({ invoice: invoice.id, balanceCents: invoice.balance_cents, totalCents: invoice.total_cents, policyRevision: policy.revision, threshold: policy.two_person_above_cents })

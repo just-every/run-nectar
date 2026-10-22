@@ -16,14 +16,14 @@ import { actorLabel, can, requireAny, requireCapability, requireMember, requireR
 import { requireBusiness } from './business'
 import { all, commit, guard, insist, newId, now, one, stmt, type Row } from './core'
 import { authorizeCredit, prepareCreditRequest } from './credit-policy'
-import { BALANCE_SQL, CARRIED_APPLICATION_SQL, WRITE_OFF_NET_SQL } from './balance-sql'
+import { BALANCE_SQL, CARRIED_APPLICATION_SQL, GOODWILL_APPLIED_SQL, WRITE_OFF_NET_SQL } from './balance-sql'
 import { cents, plainMoney } from './decimal'
 import { addDays, daysBetween, requireDate, today } from './dates'
 import { Input } from './input'
 
-export { BALANCE_SQL, CARRIED_APPLICATION_SQL, WRITE_OFF_NET_SQL } from './balance-sql'
+export { BALANCE_SQL, CARRIED_APPLICATION_SQL, GOODWILL_APPLIED_SQL, WRITE_OFF_NET_SQL } from './balance-sql'
 const balanceOf = (id: string) => [`(SELECT ${BALANCE_SQL} FROM nc_invoices i WHERE i.id = ?)`, id] as const
-export const UNALLOCATED_SQL = `(p.amount_cents - COALESCE((SELECT SUM(amount_cents) FROM nc_allocations WHERE payment_id = p.id), 0))`
+export const UNALLOCATED_SQL = `(p.amount_cents - COALESCE((SELECT SUM(amount_cents) FROM nc_allocations WHERE payment_id = p.id), 0) - COALESCE((SELECT SUM(amount_cents) FROM nc_balance_entries WHERE kind='return' AND payment_id = p.id), 0))`
 
 export async function issuedInvoice(env: Bindings, id: string) {
   const invoice = await one(env, `SELECT i.*, ${BALANCE_SQL} AS balance_cents FROM nc_invoices i WHERE i.id = ?`, id)
@@ -182,7 +182,7 @@ export async function openInvoices(env: Bindings, customerId?: string) {
 export async function customerLedger(env: Bindings, actor: Actor, customerId: string) {
   requireRead(actor, 'customers')
   const invoices = await all(env, `SELECT i.id, i.number, i.issue_date, i.due_date, i.total_cents, ${BALANCE_SQL} AS balance_cents,
-    COALESCE((SELECT SUM(COALESCE(applied_cents,amount_cents)) FROM nc_credit_notes WHERE invoice_id = i.id), 0) + ${CARRIED_APPLICATION_SQL} AS credited_cents,
+    COALESCE((SELECT SUM(COALESCE(applied_cents,amount_cents)) FROM nc_credit_notes WHERE invoice_id = i.id), 0) + ${CARRIED_APPLICATION_SQL} + ${GOODWILL_APPLIED_SQL} AS credited_cents,
     COALESCE((SELECT SUM(amount_cents) FROM nc_allocations WHERE invoice_id = i.id), 0) AS paid_cents, ${WRITE_OFF_NET_SQL} AS written_off_cents
     FROM nc_invoices i WHERE i.customer_id = ? AND i.status = 'issued' ORDER BY i.issue_date, i.number`, customerId)
   // The customer record includes its own payments, so customer readers see them here.

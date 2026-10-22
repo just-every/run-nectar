@@ -23,10 +23,10 @@ export async function preparePolicyChange(env: Bindings, actor: Actor, kind: Kin
 
 export async function policySettings(env: Bindings, actor: Actor) {
   requireCapability(actor, 'read')
-  const credit = await one(env, 'SELECT two_person_above_cents,support_limit_cents,revision FROM nc_credit_policy WHERE singleton=1')
+  const credit = await one(env, 'SELECT two_person_above_cents,support_limit_cents,balance_application,revision FROM nc_credit_policy WHERE singleton=1')
   const usage = await one(env,'SELECT disposition,revision FROM nc_usage_policy WHERE singleton=1')
   const certificate = await one(env, 'SELECT enabled,revision FROM nc_certificate_policy WHERE singleton=1')
-  return { usageDisposition:usage?.disposition??'next_invoice',usagePolicyRevision:usage?.revision??0,creditLimitCents: credit?.two_person_above_cents ?? null, supportLimitCents: credit?.support_limit_cents ?? 0, creditRevision: credit?.revision ?? 0,
+  return { usageDisposition:usage?.disposition??'next_invoice',usagePolicyRevision:usage?.revision??0,creditLimitCents: credit?.two_person_above_cents ?? null, supportLimitCents: credit?.support_limit_cents ?? 0, balanceApplication: credit?.balance_application ?? 'manual', creditRevision: credit?.revision ?? 0,
     certificateRemindersEnabled: !!certificate?.enabled, certificateRevision: certificate?.revision ?? 0 }
 }
 
@@ -75,7 +75,7 @@ export async function decidePolicyChange(env: Bindings, actor: Actor, input: Inp
     const current = await one(env, 'SELECT support_limit_cents FROM nc_credit_policy WHERE singleton=1')
     const support = payload.supportLimitCents ?? current?.support_limit_cents ?? 0
     if (support !== (current?.support_limit_cents ?? 0)) await requireFreshFactor(env, actor)
-    statements.push(stmt(env, 'INSERT INTO nc_credit_policy (singleton,two_person_above_cents,support_limit_cents,revision,changed_by,changed_at) VALUES (1,?,?,1,?,?) ON CONFLICT(singleton) DO UPDATE SET two_person_above_cents=excluded.two_person_above_cents,support_limit_cents=excluded.support_limit_cents,revision=revision+1,changed_by=excluded.changed_by,changed_at=excluded.changed_at', payload.twoPersonAboveCents, support, row.prepared_by, at))
+    statements.push(stmt(env, 'INSERT INTO nc_credit_policy (singleton,two_person_above_cents,support_limit_cents,balance_application,revision,changed_by,changed_at) VALUES (1,?,?,?,1,?,?) ON CONFLICT(singleton) DO UPDATE SET two_person_above_cents=excluded.two_person_above_cents,support_limit_cents=excluded.support_limit_cents,balance_application=excluded.balance_application,revision=revision+1,changed_by=excluded.changed_by,changed_at=excluded.changed_at', payload.twoPersonAboveCents, support, payload.balanceApplication ?? (await one(env, 'SELECT balance_application FROM nc_credit_policy WHERE singleton=1'))?.balance_application ?? 'manual', row.prepared_by, at))
   }
   if (kind === 'certificate') statements.push(stmt(env, 'INSERT INTO nc_certificate_policy (singleton,enabled,revision,changed_by,changed_at) VALUES (1,?,1,?,?) ON CONFLICT(singleton) DO UPDATE SET enabled=excluded.enabled,revision=revision+1,changed_by=excluded.changed_by,changed_at=excluded.changed_at', payload.enabled ? 1 : 0, row.prepared_by, at))
   if (kind === 'lifecycle') statements.push(stmt(env, 'INSERT INTO nc_lifecycle_policy (singleton,credit_unused,reactivation_days,revision,changed_by,changed_at) VALUES (1,?,?,1,?,?) ON CONFLICT(singleton) DO UPDATE SET credit_unused=excluded.credit_unused,reactivation_days=excluded.reactivation_days,revision=revision+1,changed_by=excluded.changed_by,changed_at=excluded.changed_at', payload.creditUnused ? 1 : 0, payload.reactivationDays, row.prepared_by, at))

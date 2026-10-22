@@ -75,9 +75,9 @@ async function prepaidReportFixtures(h, owner, { subscription, customer, meter, 
   await api('prepaid.decide', { request: future.request, decision: 'approved', confirm_single: true })
   const before = await api(`prepaid/${subscription}`)
   const report = await api(`reports/credit-balances?period=${period}&customer=${customer}`)
-  assert.equal(report.totalCents, 2600, '$25 available money plus $1 unconsumed paid unit consideration, never unit quantities as USD')
-  assert.equal(report.entries.length, 4, 'The future-dated grant is not available at the current business date')
-  assert.equal((await api(`reports/credit-balances?period=${monthAfter(period)}&customer=${customer}`)).totalCents, 2600, 'The selected export month cannot turn a future lot into current available credit')
+  assert.equal(report.totalCents, 3300, '$25 available money, $1 unconsumed paid unit consideration and $7 of unallocated receipts (INV-006), never unit quantities as USD')
+  assert.equal(report.entries.length, 5, 'The future-dated grant is not available at the current business date; the unallocated receipt is the fifth source')
+  assert.equal((await api(`reports/credit-balances?period=${monthAfter(period)}&customer=${customer}`)).totalCents, 3300, 'The selected export month cannot turn a future lot into current available credit')
   for (const grant of grants) {
     const entry = report.entries.find(row => row.prepaid?.grantId === grant.id)
     assert.ok(entry)
@@ -153,7 +153,7 @@ export async function financialReportsFlow(h, owner) {
   assert.equal((await h.api(`invoices/${invoice.id}`, owner)).credits.reduce((n, credit) => n + credit.amount_cents, 0), 1250)
   const prepaid = await prepaidReportFixtures(h, owner, { subscription: subscriptions[0], customer: billed, meter, period, issue, payment })
 
-  const expected = { refunds: 0, billings: 14459, collections: 4800, ar: 13509, credits: 1250, tax: 1124, unbilled: 1235, 'credit-balances': 2600 }
+  const expected = { refunds: 0, billings: 14459, collections: 4800, ar: 13509, credits: 1250, tax: 1124, unbilled: 1235, 'credit-balances': 3300 }
   const read = (metric, target) => h.api(`reports/${metric}?period=${period}${target ? `&customer=${target}` : ''}`, owner)
   const exportCsv = async (path, who = owner) => {
     const result = await h.raw(path, { cookie: who })
@@ -199,7 +199,7 @@ export async function financialReportsFlow(h, owner) {
   assert.equal(sum(taxSource.components), 1124)
   assert.deepEqual(taxSource.calculation.inputs, invoice.calculation.inputs)
   const prepaidCsv = csvRows(await exportCsv(`/app/exports/reports/credit-balances.csv?period=${period}&customer=${billed}`)).filter(row => row.source !== 'TOTAL')
-  assert.equal(prepaidCsv.length, 4)
+  assert.equal(prepaidCsv.length, 5, 'four prepaid grants and the unallocated receipt')
   assert.deepEqual(prepaidCsv.filter(row => row.prepaid_kind === 'units').map(row => [row.prepaid_source, Number(row.prepaid_available_quantity), row.prepaid_paid_liability, row.amount]).sort(), [['promotion', 1.25, '0.00', '0.00'], ['purchase', 3, '1.00', '1.00']])
   const unbilledEntry = reports.find(report => report.metric === 'unbilled').entries[0]
   const unbilledSource = await h.api(unbilledEntry.href.replace('/app/', ''), owner)
@@ -336,7 +336,7 @@ export async function financialReportsFlow(h, owner) {
   await h.api('prepaid.decide', finance.who, { request: laterGrant.request, decision: 'approved' })
   assert.equal((await read('unbilled')).totalCents, 2470)
   assert.equal((await read('collections')).totalCents, 5121)
-  assert.equal((await read('credit-balances')).totalCents, 2800)
+  assert.equal((await read('credit-balances')).totalCents, 3821, 'INV-006: unallocated receipts across the installation now count')
   assert.deepEqual(await h.api(`report-deliveries/${frozen.id}`, owner), frozen, 'later rated usage and payments cannot rewrite a delivered report')
   assert.equal(await exportCsv(`/app/report-deliveries/${frozen.id}.csv`), frozen.csv)
   await save(finance.who, false)

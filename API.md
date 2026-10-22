@@ -17,7 +17,7 @@ role or credential scope itself.
 
 `me`, `business`, `customers`, `customers/ID`, `catalog`, `subscriptions/ID`,
 `usage/batches`, `usage/inspect?period=YYYY-MM`, `runs`, `runs/ID`,
-`invoices/ID`, `ageing`, `promotions`, `write-offs`, `ledger-postings`, `period-closes`, `payments`, `notices`, `tasks`, `proposals`,
+`invoices/ID`, `customers/ID/balance`, `ageing`, `promotions`, `write-offs`, `ledger-postings`, `period-closes`, `payments`, `notices`, `tasks`, `proposals`,
 `proposals/ID`, `entitlements/CUSTOMER` (all features held today) and
 `entitlements/CUSTOMER?feature=CODE&date=YYYY-MM-DD` (one decision, explained
 step by step; `CUSTOMER` may be the internal id or the external id), `imports`,
@@ -62,7 +62,7 @@ records their role does not read.
 | `invoice.approve` | a person with approval | `invoice` or `run`, `acknowledge` when exceptions are listed |
 | `invoice.finalise` | a person with approval | `invoice` or `run`, optional `issue_date` |
 | `credit.issue` | a person with approval | `invoice`, `amount`, `reason`; above the owner threshold, use a prepared request and a different approver |
-| `credit.policy` | owner | `two_person_above` (decimal dollars; empty disables the threshold); prepares a policy request |
+| `credit.policy` | owner | `two_person_above` (decimal dollars; empty disables the threshold), optional `balance_application` (`manual` or `automatic`); prepares a policy request |
 | `credit.prepare` | a person with approval | `invoice`, `amount`, `reason`; returns `request` against the current balance and policy |
 | `credit.approve` | a person with approval | `request`; above the threshold, the approver must differ from its preparer |
 | `writeoff.issue` | a person with approval | `invoice`, `amount`, `reason`; at or below the owner's `credit.policy` threshold one person executes, above it use `writeoff.prepare` and a different approver. Posts the bad-debt journal and returns `posting` |
@@ -70,6 +70,10 @@ records their role does not read.
 | `writeoff.approve` | a person with approval | `request`; above the threshold the approver must differ from its preparer; a changed balance or policy is refused (`write_off_stale`) |
 | `writeoff.recover` | a person with approval | `write_off`, `payment`, `amount`; allocates a recorded payment to the invoice and reverses that part of the bad debt |
 | `revenue.close` | a person with approval | `period` (`YYYY-MM`); closes that month, freezes its packet and posts its journals |
+| `balance.goodwill` | a person with approval | `customer`, `amount`, `reason`; at or below the threshold one person executes |
+| `balance.return` | a person with approval | `customer`, `payment`, `amount`, `reason`, `reference`; returns unallocated cash and records the transfer the business sent |
+| `balance.prepare` / `balance.approve` | a person with approval | `kind` (`goodwill` or `return`) plus the same fields / `request`; above the threshold a different approver executes |
+| `balance.apply` | a person with approval | `invoice`; applies goodwill then oldest cash |
 | `ledger.post` | a person with approval | optional `posting`; retries pending QuickBooks postings once each and adopts an entry the ledger already holds |
 | `payment.record`, `payment.allocate` | owner, finance | `customer`, `amount`, `received_on`, `method`, `reference`, `evidence` / `payment`, `invoice`, `amount` |
 | `reminder.prepare`, `reminder.approve`, `reminder.discard`, `task.create`, `task.complete` | owner, finance (approve and complete: a person) | `customer` / `notice`, `recipient`, `subject`, `body` / `task`, `outcome` |

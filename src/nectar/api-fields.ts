@@ -39,6 +39,34 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "reason": "text",
     "topic": "text"
   },
+  "balance.apply": {
+    "invoice": "text"
+  },
+  "balance.approve": {
+    "request": "text"
+  },
+  "balance.goodwill": {
+    "amount": "text",
+    "customer": "text",
+    "payment": "text",
+    "reason": "text",
+    "reference": "text"
+  },
+  "balance.prepare": {
+    "amount": "text",
+    "customer": "text",
+    "kind": "text",
+    "payment": "text",
+    "reason": "text",
+    "reference": "text"
+  },
+  "balance.return": {
+    "amount": "text",
+    "customer": "text",
+    "payment": "text",
+    "reason": "text",
+    "reference": "text"
+  },
   "billrun.prepare": {
     "period": "text"
   },
@@ -206,6 +234,7 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "request": "text"
   },
   "credit.policy": {
+    "balance_application": "text",
     "support_limit": "text",
     "two_person_above": "text"
   },

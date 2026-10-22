@@ -48,6 +48,20 @@ pending ledger postings** (`ledger.post`) posts it once, adopting an entry the
 ledger already recorded. Granting and refreshing the connection is part of the
 full books sync (`BOOK-001`).
 
+## Customer credit balance
+
+A customer's **Credit balance** (customer record) is their unallocated cash
+(overpayments), goodwill credit and carried correction credit, with its own
+ledger. **Grant goodwill credit** adds goodwill; **Record return of balance**
+returns the unallocated cash of a payment and records the wire or check
+reference of the money the business sent back (Nectar sends none). The owner's
+second-person threshold applies: above it, **Prepare for a second approver** and
+a different approver executes the saved request. The balance applies to an
+invoice when an approver runs `balance.apply`, or automatically when it issues
+if the owner sets `balance_application` to `automatic` through `credit.policy`;
+goodwill applies first, then the oldest cash. The credit balances report, its
+source pages, CSV and scheduled snapshots equal this ledger.
+
 ## Payments
 
 Open **Receivables → Payments received** and **Record payment**: the customer,

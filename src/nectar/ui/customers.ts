@@ -1,3 +1,4 @@
+import { balanceSection } from './balance'
 import { clockInstant } from '../clock'
 import { requireBusiness } from '../business'
 import { localDate } from '../dates'
@@ -82,6 +83,7 @@ export async function customerPage(env: Bindings, actor: Actor, id: string, url:
     <section class="card" aria-labelledby="money"><h2 id="money">Invoices and payments</h2>
       ${table(['Invoice', 'Issued', 'Due', 'Total$', 'Credited$', 'Paid$', 'Written off$', 'Owed$'], ledger.invoices.map((i: any) => [canRead(actor, 'invoices') ? h`<a href="/app/invoices/${i.id}">${i.number}</a>` : i.number, formatDate(i.issue_date), formatDate(i.due_date), cents(i.total_cents), cents(i.credited_cents), cents(i.paid_cents), cents(i.written_off_cents), cents(i.balance_cents)]), { empty: 'No issued invoices yet.' })}
       ${ledger.payments.length ? table(['Payment', 'Received', 'Amount$', 'Unallocated$'], ledger.payments.map((p: any) => [h`<span id="payment-${p.id}">${p.reference}</span> ${canRead(actor, 'payments') ? metadataLink('payment',p.id) : ''}`, formatDate(p.received_on), cents(p.amount_cents), cents(p.unallocated_cents)])) : ''}</section>
+    ${await balanceSection(env, actor, id)}
     <section class="card" aria-labelledby="credits"><h2 id="credits">Credit notes</h2><p>Carried historical correction credit available: ${cents(ledger.carriedUsageCredits.reduce((n:number,c:any)=>n+c.availableCents,0))}. It applies to later invoices; no cash refund is recorded.</p>${table(['Credit note', 'Invoice', 'Amount$', 'Reason'], ledger.credits.map((credit: any) => [credit.number, canRead(actor, 'invoices') ? h`<a href="/app/invoices/${credit.invoice_id}">${ledger.invoices.find((invoice: any) => invoice.id === credit.invoice_id)?.number}</a>` : ledger.invoices.find((invoice: any) => invoice.id === credit.invoice_id)?.number, cents(credit.amount_cents), credit.reason]), { empty: 'No credit notes.' })}</section>
     <section class="card" aria-labelledby="ents"><h2 id="ents">Entitlements</h2>${c.entitlements.length ? h`<ul class="explain">${c.entitlements.map((e: any) => h`<li>${tag(e.allowed ? 'Allowed' : 'Denied')} <strong>${e.feature}</strong><ul>${e.paths.flatMap((path: any) => path.steps).map((step: string) => h`<li>${step}</li>`)}</ul></li>`)}</ul>` : h`<p class="empty">No features granted. Products grant features in the Catalog.</p>`}</section>
     <section class="card" aria-labelledby="contacts"><h2 id="contacts">Billing contacts</h2>${table(['Name', 'Email', 'Role'], c.contacts.map((x: any) => [x.name, x.email, x.role]), { empty: 'No extra contacts.' })}

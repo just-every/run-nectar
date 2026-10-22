@@ -34,6 +34,7 @@ if (!process.argv.includes('--core-only')) {
 await runIsolated('customer-search','customerSearchFlow')
 await runIsolated('upcoming','upcomingFlow')
 await runIsolated('write-offs','writeOffFlow')
+await runIsolated('customer-balance','customerBalanceFlow')
 await runIsolated('promotions','promotionsFlow')
 await runIsolated('promotions','trialsFlow')
 await runIsolated('period-close','periodCloseFlow')

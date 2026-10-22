@@ -1,3 +1,4 @@
+import { balanceFinancialSources, balanceSourceComponents } from './financial-balance'
 import { sharedCreditNotes } from './shared-credit-custody'
 import { prepaidRefundFinancialSources, refundReportComponents, type PrepaidReportRefund } from './financial-refunds'
 import { historicalContributions, historicalReportSource } from './movein/history-reports'
@@ -16,7 +17,7 @@ import type { Report, ReportComponent, ReportEntry, ReportInvoice } from './repo
 
 export type FinancialReportMetric = 'credits' | 'tax' | 'unbilled' | 'credit-balances' | 'refunds'
 export interface FinancialReportEntry extends Omit<ReportEntry, 'sourceKind'> {
-  sourceKind: 'invoice' | 'credit_note' | 'subscription_period' | 'prepaid_grant' | 'prepaid_refund'
+  sourceKind: 'invoice' | 'credit_note' | 'customer_balance' | 'subscription_period' | 'prepaid_grant' | 'prepaid_refund'
   grantId?: string
   prepaid?: PrepaidReportBalance
   creditId?: string
@@ -59,7 +60,7 @@ export interface FinancialReportSource extends Omit<ReportInvoice, 'metric' | 's
 
 const USAGE = new Set(['usage', 'overage', 'metric_usage', 'late_usage', 'trial_usage', 'paused_usage'])
 const DEFINITIONS: Record<FinancialReportMetric, { title: string; definition: string }> = {
-  'credit-balances': {title:'Customer credit balances',definition:'Current USD monetary available credits, including purchased and promotional prepaid money, plus unconsumed paid unit consideration and carried numbered correction/cancellation credits less actual applications. Unit quantities remain separately typed by meter and are never added as USD; promotional units carry zero paid liability. Only purchased prepaid value is a contract liability. The snapshot uses the current business date across source issue dates; the selected month labels its export, not historical month-end balances. Expired money is unavailable without mutating its ledger; unpaid expiry liability and pending settlement remain explicit in source evidence. Unallocated payments, generic goodwill and cash refunds are excluded.'},
+  'credit-balances': {title:'Customer credit balances',definition:'Current USD monetary available credits, including purchased and promotional prepaid money, plus unconsumed paid unit consideration and carried numbered correction/cancellation credits less actual applications. Unit quantities remain separately typed by meter and are never added as USD; promotional units carry zero paid liability. Only purchased prepaid value is a contract liability. The snapshot uses the current business date across source issue dates; the selected month labels its export, not historical month-end balances. Expired money is unavailable without mutating its ledger; unpaid expiry liability and pending settlement remain explicit in source evidence. Cash overpayments (the unallocated amount of a payment) and goodwill grants less their applications and returns are included; cash refunds of prepaid credit are reported separately.'},
   refunds: { title: 'Prepaid cash refunds', definition: 'Verified successful cash refunds of unused purchased prepaid value, shown as negative USD outflows by their actual refunded-on date in the business billing timezone. The original purchase and gross collection remain unchanged. Each refund cites its original paid purchase and receipt, numbered liability credit and zero-revenue prepaid liability reversal. Pending, uncertain, failed and promotional credits are excluded.' },
   credits: {
     title: 'Issued credit notes',
@@ -151,6 +152,7 @@ async function contributions(env: Bindings, metric: string, url: URL) {
       FROM nc_credit_notes n JOIN nc_customers c ON c.id=n.customer_id WHERE (n.correction_id IS NOT NULL OR n.cancellation_id IS NOT NULL) AND NOT EXISTS(SELECT 1 FROM nc_prepaid_refund_credits x WHERE x.credit_id=n.id) ${customer?'AND n.customer_id=?':''} ORDER BY n.issued_at,n.id`,...(customer?[customer]:[]))
     entries=rows.filter(row=>row.available>0).map(row=>({invoiceId:row.id,creditId:row.id,number:row.number,customerId:row.customer_id,customerName:row.customer_name,amountCents:row.available,sourceKind:'credit_note',href:sourceHref(selected.metric,row.id,month,customer)}))
     entries.push(...[...prepaid!.values()].map(source => source.entry))
+    entries.push(...(await balanceFinancialSources(env, customer, id => sourceHref(selected.metric, id, month, customer))) as FinancialReportEntry[])
   }
   else {
     const credits = selected.metric === 'credits'
@@ -196,6 +198,11 @@ export async function financialReportSource(env: Bindings, actor: Actor, metric:
   const historical=await historicalReportSource(env,report,sourceId,url,today(business.timezone))
   if(historical)return historical as FinancialReportSource
   const base = { ...entry, metric: report.metric, title: report.title, definition: report.definition, period: report.period }
+  if (entry.sourceKind === 'customer_balance') {
+    const components = (await balanceSourceComponents(env, sourceId)).map(component => canRead(actor, 'invoices') ? component : { ...component, href: undefined })
+    insist(components.reduce((sum, row) => sum + row.amountCents, 0) === entry.amountCents, 'credit_balance_source_changed', 409)
+    return { ...base, totalCents: entry.amountCents, invoice: null, components }
+  }
   if (entry.sourceKind === 'prepaid_grant') {
     const source = prepaid!.get(sourceId)!
     const components = source.components.map(component => canRead(actor, 'subscriptions') && canRead(actor, 'invoices') ? component : { ...component, href: undefined })
