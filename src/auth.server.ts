@@ -43,6 +43,10 @@ export interface Bindings {
  /** Owner-authorized original Stripe invoice collection; runtime secret, never archived. */
  STRIPE_BILLING_SECRET?: string
  STRIPE_SECONDARY_SECRET_KEY?: string
+ /** AR-004 bad-debt journal posting; the token is a runtime secret, never archived or stored in records. */
+ QUICKBOOKS_ACCESS_TOKEN?: string
+ QUICKBOOKS_ENVIRONMENT?: 'sandbox' | 'production'
+ QUICKBOOKS_COMPANY_ID?: string
  MAIL_API_KEY?: string
  MAIL_ACCOUNT_ID?: string
 }

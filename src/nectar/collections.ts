@@ -21,7 +21,7 @@ const bucket = (overdue: number) => overdue <= 0 ? 'current' : overdue <= 30 ? '
 export async function ageing(env: Bindings, actor: Actor) {
   requireRead(actor, 'invoices')
   const business = await requireBusiness(env)
-  const day = today(business.timezone)
+  const day = today(business.timezone, clockInstant(env))
   const rows = (await openInvoices(env)).map((row): Row => ({ ...row, daysOverdue: Math.max(0, daysBetween(row.due_date, day)), bucket: bucket(daysBetween(row.due_date, day)) }))
   const customers = new Map<string, Row>()
   for (const row of rows) {

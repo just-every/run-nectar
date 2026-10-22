@@ -94,6 +94,16 @@
       "ownerVisible": true,
       "group": "owner",
       "input": "entered"
+    },
+    {
+      "name": "QUICKBOOKS_ACCESS_TOKEN",
+      "label": "QuickBooks Online access token",
+      "help": "Optional. Posts bad-debt write-off and recovery journals to QuickBooks Online. Kept in installation secrets and excluded from archives.",
+      "kind": "secret",
+      "required": false,
+      "ownerVisible": true,
+      "group": "owner",
+      "input": "entered"
     }
   ],
   "steps": [

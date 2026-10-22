@@ -41,6 +41,21 @@
       "binding": "STRIPE_BILLING_SECRET",
       "environment": "STRIPE_BILLING_SECRET",
       "optional": true
+    },
+    {
+      "binding": "QUICKBOOKS_ACCESS_TOKEN",
+      "environment": "QUICKBOOKS_ACCESS_TOKEN",
+      "optional": true
+    },
+    {
+      "binding": "QUICKBOOKS_ENVIRONMENT",
+      "environment": "QUICKBOOKS_ENVIRONMENT",
+      "optional": true
+    },
+    {
+      "binding": "QUICKBOOKS_COMPANY_ID",
+      "environment": "QUICKBOOKS_COMPANY_ID",
+      "optional": true
     }
   ],
   "platforms": [

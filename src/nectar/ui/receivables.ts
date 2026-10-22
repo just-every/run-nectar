@@ -30,7 +30,7 @@ function ledger(desk: Desk, focus: string | null, jump: string): Html {
   if (!rows.length) return h`<section class="card ledger-card">${table([], [], { empty: 'No issued invoices yet. Invoices appear here once a bill run is approved and finalized under Billing.', lead: true })}</section>`
   const row = (r: any) => {
     const owed = r.balance_cents > 0
-    const status = !owed ? (r.paid_on ? pill('good', 'paid', `Paid ${dayText(r.paid_on)}`) : pill('good', 'paid', 'Credited'))
+    const status = !owed ? (r.written_off_cents > 0 ? pill('quiet', 'alert', 'Written off') : r.paid_on ? pill('good', 'paid', `Paid ${dayText(r.paid_on)}`) : pill('good', 'paid', 'Credited'))
       : r.daysOverdue > 0 ? pill(r.daysOverdue > 30 ? 'bad' : 'warn', r.daysOverdue > 30 ? 'warn' : 'clock', `${plural(r.daysOverdue, 'day')} overdue`)
       : pill('quiet', 'clock', `Due ${dayText(r.due_date)}`)
     const method = r.method ? METHODS[r.method] : null

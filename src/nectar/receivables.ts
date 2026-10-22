@@ -16,14 +16,14 @@ import { actorLabel, can, requireAny, requireCapability, requireMember, requireR
 import { requireBusiness } from './business'
 import { all, commit, guard, insist, newId, now, one, stmt, type Row } from './core'
 import { authorizeCredit, prepareCreditRequest } from './credit-policy'
+import { BALANCE_SQL, CARRIED_APPLICATION_SQL, WRITE_OFF_NET_SQL } from './balance-sql'
 import { cents, plainMoney } from './decimal'
 import { addDays, daysBetween, requireDate, today } from './dates'
 import { Input } from './input'
 
-export const BALANCE_SQL = `(i.total_cents - COALESCE((SELECT SUM(COALESCE(applied_cents,amount_cents)) FROM nc_credit_notes WHERE invoice_id = i.id), 0) - COALESCE((SELECT SUM(amount_cents) FROM nc_allocations WHERE invoice_id = i.id), 0) - COALESCE((SELECT SUM(amount_cents) FROM nc_usage_credit_applications WHERE invoice_id=i.id),0))`
-export const CARRIED_APPLICATION_SQL = `COALESCE((SELECT SUM(amount_cents) FROM nc_usage_credit_applications WHERE invoice_id=i.id),0)`
+export { BALANCE_SQL, CARRIED_APPLICATION_SQL, WRITE_OFF_NET_SQL } from './balance-sql'
 const balanceOf = (id: string) => [`(SELECT ${BALANCE_SQL} FROM nc_invoices i WHERE i.id = ?)`, id] as const
-const UNALLOCATED_SQL = `(p.amount_cents - COALESCE((SELECT SUM(amount_cents) FROM nc_allocations WHERE payment_id = p.id), 0))`
+export const UNALLOCATED_SQL = `(p.amount_cents - COALESCE((SELECT SUM(amount_cents) FROM nc_allocations WHERE payment_id = p.id), 0))`
 
 export async function issuedInvoice(env: Bindings, id: string) {
   const invoice = await one(env, `SELECT i.*, ${BALANCE_SQL} AS balance_cents FROM nc_invoices i WHERE i.id = ?`, id)
@@ -183,7 +183,7 @@ export async function customerLedger(env: Bindings, actor: Actor, customerId: st
   requireRead(actor, 'customers')
   const invoices = await all(env, `SELECT i.id, i.number, i.issue_date, i.due_date, i.total_cents, ${BALANCE_SQL} AS balance_cents,
     COALESCE((SELECT SUM(COALESCE(applied_cents,amount_cents)) FROM nc_credit_notes WHERE invoice_id = i.id), 0) + ${CARRIED_APPLICATION_SQL} AS credited_cents,
-    COALESCE((SELECT SUM(amount_cents) FROM nc_allocations WHERE invoice_id = i.id), 0) AS paid_cents
+    COALESCE((SELECT SUM(amount_cents) FROM nc_allocations WHERE invoice_id = i.id), 0) AS paid_cents, ${WRITE_OFF_NET_SQL} AS written_off_cents
     FROM nc_invoices i WHERE i.customer_id = ? AND i.status = 'issued' ORDER BY i.issue_date, i.number`, customerId)
   // The customer record includes its own payments, so customer readers see them here.
   const pays = await paymentRows(env, customerId)
@@ -194,6 +194,7 @@ export async function customerLedger(env: Bindings, actor: Actor, customerId: st
     invoicedCents: invoices.reduce((sum, row) => sum + row.total_cents, 0),
     creditedCents: invoices.reduce((sum, row) => sum + row.credited_cents, 0),
     paidCents: invoices.reduce((sum, row) => sum + row.paid_cents, 0),
+    writtenOffCents: invoices.reduce((sum, row) => sum + row.written_off_cents, 0),
     balanceCents: invoices.reduce((sum, row) => sum + row.balance_cents, 0),
     unallocatedCents: pays.reduce((sum, row) => sum + row.unallocated_cents, 0),
   }
@@ -205,9 +206,9 @@ export async function receivablesDesk(env: Bindings, actor: Actor) {
   requireRead(actor, 'invoices')
   requireRead(actor, 'payments')
   const business = await requireBusiness(env)
-  const day = today(business.timezone), month = day.slice(0, 7)
+  const day = today(business.timezone, clockInstant(env)), month = day.slice(0, 7)
   const rows = await all(env, `SELECT i.id, i.number, i.customer_id, c.name AS customer_name, c.address, i.issue_date, i.due_date, i.total_cents, ${BALANCE_SQL} AS balance_cents,
-    COALESCE((SELECT SUM(amount_cents) FROM nc_allocations WHERE invoice_id = i.id), 0) AS paid_cents,
+    COALESCE((SELECT SUM(amount_cents) FROM nc_allocations WHERE invoice_id = i.id), 0) AS paid_cents, ${WRITE_OFF_NET_SQL} AS written_off_cents,
     (SELECT MAX(p.received_on) FROM nc_allocations a JOIN nc_payments p ON p.id = a.payment_id WHERE a.invoice_id = i.id) AS paid_on,
     (SELECT p.method FROM nc_allocations a JOIN nc_payments p ON p.id = a.payment_id WHERE a.invoice_id = i.id ORDER BY p.received_on DESC LIMIT 1) AS method
     FROM nc_invoices i JOIN nc_customers c ON c.id = i.customer_id WHERE i.status = 'issued'`)

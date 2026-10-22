@@ -22,8 +22,9 @@ export async function collectibleInvoice(env: Bindings, invoiceId: string, insta
   const credits=await all(env,'SELECT id,amount_cents FROM nc_credit_notes WHERE invoice_id=? ORDER BY id',invoiceId)
   const day=today(business.timezone,instant), paused=!!promise&&day<=promise.pay_date
   const collectibleCents=Math.max(0,invoice.balance_cents-disputedCents)
-  const hold=invoice.balance_cents<=0?'paid':paused?'promise':collectibleCents<=0?'disputed':null
-  const basis=canonical({balanceCents:invoice.balance_cents,allocations,credits,disputes:disputes.map(row=>[row.id,row.line_id,row.amount_cents]),promise:promise?.id??null,paused})
+  const writtenOff=await one<{n:number}>(env,"SELECT COUNT(*) AS n FROM nc_write_offs WHERE invoice_id=? AND status='executed'",invoiceId)
+  const hold=invoice.balance_cents<=0?(writtenOff?.n?'written_off':'paid'):paused?'promise':collectibleCents<=0?'disputed':null
+  const basis=canonical({balanceCents:invoice.balance_cents,allocations,credits,writtenOff:writtenOff?.n||undefined,disputes:disputes.map(row=>[row.id,row.line_id,row.amount_cents]),promise:promise?.id??null,paused})
   return {...invoice,business,day,disputes,promise,disputedCents,collectibleCents,paused,hold,basis}
 }
 

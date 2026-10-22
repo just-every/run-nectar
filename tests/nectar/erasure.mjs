@@ -105,6 +105,12 @@ export async function erasureFlow(h, owner, onState = async () => {}) {
   await h.api('invoice.finalise', owner, { invoice, issue_date: '2026-01-05' })
   const payment = (await h.api('payment.record', owner, { customer, amount: '120', received_on: '2026-01-20', method: 'bank_transfer', reference: privateValues[7], evidence: privateValues[4] })).payment
   await h.api('payment.allocate', owner, { payment, invoice, amount: '120' })
+  const badDebtCharge = (await h.api('charge.add', owner, { customer, amount: '80', description: 'Uncollectable service', taxable: false, effective_date: '2026-01-06' })).charge
+  const badDebt = (await h.api('invoice.manual', owner, { customer, charges: [badDebtCharge], service_date: '2026-01-06' })).id
+  await h.api('invoice.approve', owner, { invoice: badDebt, acknowledge: true })
+  await h.api('invoice.finalise', owner, { invoice: badDebt, issue_date: '2026-01-06' })
+  privateValues.push('private-writeoff-GOV005-AR004')
+  await h.api('writeoff.issue', owner, { invoice: badDebt, amount: '80', reason: privateValues.at(-1) })
   await h.api('note.add', owner, { kind: 'invoice', record: invoice, body: privateValues[5] })
   await h.api('metadata.write', owner, { kind: 'invoice', record: invoice, revision: 0, metadata: { personal: privateValues[6] } })
   const peerCharge=(await h.api('charge.add',owner,{customer:unrelated,amount:'37',description:'Other customer service',taxable:false,effective_date:'2026-01-05'})).charge
@@ -165,7 +171,7 @@ export async function erasureFlow(h, owner, onState = async () => {}) {
   await h.api('erasure.approve', owner, { request: request.id, confirm: true }, 409)
   assert.ok(approved.receipt.changed.some(row => row.kind === 'nc_customers' && row.fields.includes('billing_email') && row.records === 1))
   assert.ok(approved.receipt.changed.some(row => row.kind === 'nc_customers' && row.fields.includes('invoice_settings_json')), 'INV-004 GOV-005 erases PO, memo and customer fields as well as saved invoice inputs')
-  for (const kind of ['nc_contacts', 'nc_notes', 'nc_metadata_revisions', 'nc_payments', 'nc_invoice_lines']) assert.ok(approved.receipt.changed.some(row => row.kind === kind && row.records > 0), `GOV-005 receipt enumerates changed ${kind}`)
+  for (const kind of ['nc_contacts', 'nc_notes', 'nc_metadata_revisions', 'nc_payments', 'nc_invoice_lines', 'nc_write_offs']) assert.ok(approved.receipt.changed.some(row => row.kind === kind && row.records > 0), `GOV-005 receipt enumerates changed ${kind}`)
   for(const kind of rich.receiptKinds) assert.ok(approved.receipt.changed.some(row=>row.kind===kind),`GOV-005 populated ${kind} is on receipt`)
   assert.ok(approved.receipt.importCustody.receiptId,'GOV-005 native and source-custody receipts are bound atomically')
   assert.ok(approved.receipt.importCustody.stores)
@@ -176,7 +182,7 @@ export async function erasureFlow(h, owner, onState = async () => {}) {
   assert.equal(retainedInvoice.status, 'issued')
   for (const key of ['number', 'issue_date', 'subtotal_cents', 'tax_cents', 'total_cents', 'paidCents', 'balanceCents']) assert.equal(retainedInvoice[key], originalInvoice[key], `GOV-005 retains issued financial fact ${key}`)
   assert.equal(retainedInvoice.retainedFinancial.legal_name, 'Marigold FORMER Legal LLC')
-  assert.equal(approved.receipt.retained.legalLabels.issueSnapshots,1,'GOV-005 newly issued documents retain the actual issue snapshot')
+  assert.equal(approved.receipt.retained.legalLabels.issueSnapshots,2,'GOV-005 newly issued documents (paid and written-off) retain the actual issue snapshot')
   assert.equal(approved.receipt.retained.legalLabels.legacyDisplayedLabels,0,'GOV-005 the receipt distinguishes current snapshots from legacy displayed labels')
   assert.equal(retainedInvoice.retainedFinancial.retain_until, '2033-01-20')
   const erasedCustomer = await h.api(`customers/${customer}`, owner)
@@ -187,7 +193,7 @@ export async function erasureFlow(h, owner, onState = async () => {}) {
   const frozenAfter=await h.api(`report-deliveries/${rich.report}`,owner)
   assert.deepEqual(frozenAfter.reports.map(r=>[r.metric,r.totalCents]),frozenBefore.reports.map(r=>[r.metric,r.totalCents]),'GOV-005 shared report numbers stay unchanged')
   assert.ok(JSON.stringify(frozenAfter).includes('Marigold OTHER Legal LLC'),'GOV-005 shared reports preserve the unrelated customer')
-  const projections = [frozenAfter,erasedCustomer, retainedInvoice, await h.api('customers', owner), await h.api('payments', owner), await h.api(`notes/customer/${customer}`, owner), await h.api(`metadata/customer/${customer}`, owner), await h.api(`metadata/invoice/${invoice}`, owner), await h.api('audit', owner)]
+  const projections = [frozenAfter,erasedCustomer, retainedInvoice, await h.api('customers', owner), await h.api('payments', owner), await h.api('write-offs', owner), await h.api('ledger-postings', owner), await h.api(`notes/customer/${customer}`, owner), await h.api(`metadata/customer/${customer}`, owner), await h.api(`metadata/invoice/${invoice}`, owner), await h.api('audit', owner)]
   for (const value of privateValues) for(const [index,projection] of projections.entries()) assert.ok(!JSON.stringify(projection).includes(value), `GOV-005 personal value removed from API projection ${index}: ${value}`)
   for (const screen of [`/app/customers/${customer}`, '/app/customers', '/app/audit', '/app/erasures']) {
     const html = (await h.page(screen, owner)).replaceAll('<wbr>', '')

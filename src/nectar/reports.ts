@@ -9,6 +9,7 @@ import { requireRead, type Actor } from './actor'
 import { invoiceRecord } from './billruns'
 import { requireBusiness } from './business'
 import { all, insist, one, type Row } from './core'
+import { clockInstant } from './clock'
 import { daysBetween, isMonth, today } from './dates'
 import { openInvoices } from './receivables'
 
@@ -86,7 +87,7 @@ export async function report(env: Bindings, actor: Actor, metric: string, url: U
   requireRead(actor, 'reports')
   if (['credits','tax','unbilled','credit-balances','refunds'].includes(metric)) return await financialReport(env,actor,metric,url)
   const selected = filters(metric, url)
-  const day = today((await requireBusiness(env)).timezone)
+  const day = today((await requireBusiness(env)).timezone, clockInstant(env))
   const month = selected.period ?? day.slice(0, 7)
   let rows: Row[]
   if (selected.metric === 'ar') {
@@ -137,7 +138,7 @@ export async function reportInvoice(env: Bindings, actor: Actor, metric: string,
   const view = await report(env, actor, metric, url)
   const entry = view.entries.find(row => row.invoiceId === invoiceId)
   insist(entry, 'report_invoice_not_found', 404)
-  const historical=await historicalReportSource(env,view,invoiceId,url,today((await requireBusiness(env)).timezone))
+  const historical=await historicalReportSource(env,view,invoiceId,url,today((await requireBusiness(env)).timezone, clockInstant(env)))
   if(historical)return historical
   if (view.metric === 'collections') {
     const [payment, allocations] = await Promise.all([
@@ -170,6 +171,10 @@ export async function reportInvoice(env: Bindings, actor: Actor, metric: string,
   if (metric === 'ar') {
     for (const credit of invoice.credits as Row[]) components.push({ kind: 'credit_note', label: `${credit.number}: ${credit.reason}`, amountCents: -(credit.applied_cents??credit.amount_cents), href: `${sourceHref}#recv` })
     for (const application of invoice.carriedApplications as Row[]) components.push({kind:'credit_application',label:`Carried credit ${application.number}`,amountCents:-application.amount_cents,href:`${sourceHref}#recv`})
+    for (const writeOff of (invoice.writeOffs as Row[]).filter(row => row.status === 'executed')) {
+      components.push({ kind: 'write_off', label: `Bad debt write-off: ${writeOff.reason}`, amountCents: -writeOff.amountCents, href: `${sourceHref}#write-offs` })
+      for (const recovery of writeOff.recoveries as Row[]) components.push({ kind: 'write_off_recovery', label: `Recovery ${recovery.reference} reinstates receivable`, amountCents: recovery.amountCents, href: `${sourceHref}#write-offs` })
+    }
     for (const allocation of invoice.allocations as Row[]) components.push({ kind: 'allocation', label: `Payment ${allocation.reference} received ${allocation.received_on}`, amountCents: -allocation.amount_cents, href: `${sourceHref}#recv` })
   }
   const totalCents = components.reduce((sum, component) => sum + component.amountCents, 0)

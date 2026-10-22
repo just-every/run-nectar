@@ -3,6 +3,7 @@ import { nativeCollectionSection } from './native-collection'
 // and one invoice with its lines, calculation evidence, credits and payments.
 import { metadataLink } from './metadata'
 import { creditApprovals } from './credit-approvals'
+import { writeOffSection } from './write-offs'
 import { supportLimitCents } from '../credit-policy'
 import { notesSection } from './notes'
 import type { Bindings } from '../../auth.server'
@@ -101,12 +102,13 @@ export async function invoicePage(env: Bindings, actor: Actor, id: string, url: 
       ${table(['Credit note', 'Reason', 'Face amount$', 'Applied here$'], i.credits.map((c: any) => [h`<span id="credit-${c.id}">${c.number}</span> ${metadataLink('credit-note',c.id)}`, c.reason, cents(c.amount_cents), cents(c.applied_cents??c.amount_cents)]), { empty: 'No credit notes.' })}
       ${table(['Carried correction credit','Applied$'],i.carriedApplications.map((a:any)=>[a.number,cents(a.amount_cents)]),{empty:'No carried correction credit applied.'})}
       ${table(['Payment', 'Received', 'Allocated$'], i.allocations.map((a: any) => [a.reference, formatDate(a.received_on), cents(a.amount_cents)]), { empty: 'No payments allocated.' })}
-      <p>Invoiced ${cents(i.total_cents)} = credited ${cents(i.creditedCents)} + paid ${cents(i.paidCents)} + owed ${cents(i.balanceCents)}.</p>
+      <p>Invoiced ${cents(i.total_cents)} = credited ${cents(i.creditedCents)} + paid ${cents(i.paidCents)}${i.writtenOffCents ? ` + written off ${cents(i.writtenOffCents)}` : ''} + owed ${cents(i.balanceCents)}.</p>
       ${approver && i.balanceCents > 0 ? form('credit.issue', `/app/invoices/${i.id}`, h`${hidden('invoice', i.id)}${field('Credit amount ($)', 'amount')}${field('Reason', 'reason')}`, 'Issue credit note', { layout: 'columns', secondary: true }) : ''}
       ${!approver && actor.kind === 'member' && can(actor, 'credits.limited') && i.status === 'issued' && i.balanceCents > 0 ? form('credit.issue', `/app/invoices/${i.id}`, h`${hidden('invoice', i.id)}${field('Credit amount ($)', 'amount', { hint: `Support credits go up to ${money(supportLimitCents(i.creditPolicy))}, the limit the owner set.` })}${field('Reason', 'reason')}`, 'Issue support credit', { layout: 'columns', secondary: true }) : ''}
       ${pays.length && i.balanceCents > 0 ? form('payment.allocate', `/app/invoices/${i.id}`, h`${hidden('invoice', i.id)}${select('Payment', 'payment', pays.map((p: any) => ({ value: p.id, label: `${p.reference} — ${money(p.unallocated_cents)} unallocated` })), pays[0].id)}${field('Amount ($)', 'amount')}`, 'Allocate payment', { layout: 'columns', secondary: true }) : ''}</section>` : ''}
     ${await nativeCollectionSection(env,actor,i)}
     ${i.status === 'issued' ? creditApprovals(i, actor) : ''}
+    ${i.status === 'issued' ? writeOffSection(i, actor, pays) : ''}
     ${await notesSection(env,actor,i.customer_id,'invoice',i.id,`/app/invoices/${i.id}#notes`)}
     ${details({ Invoice: i.id, 'Rating rules': i.calc_version, 'Source fingerprint': i.source_fingerprint, 'Approved fingerprint': i.approved_fingerprint ?? '—', 'Approved by': personName(actor, i.approved_by), 'Issued by': personName(actor, i.issued_by), 'Usage events billed': (i.calculation.consumedEvents ?? []).length }, 'Calculation details')}`, { current: '/app/billing', url })
 }

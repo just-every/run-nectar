@@ -371,6 +371,9 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "revision": "integer",
     "source_invoice": "text"
   },
+  "ledger.post": {
+    "posting": "text"
+  },
   "lifecycle.policy": {
     "credit_unused": "flag",
     "reactivation_days": "integer"
@@ -808,5 +811,23 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
   "usage.submit": {
     "events": "json",
     "file": "file"
+  },
+  "writeoff.approve": {
+    "request": "text"
+  },
+  "writeoff.issue": {
+    "amount": "text",
+    "invoice": "text",
+    "reason": "text"
+  },
+  "writeoff.prepare": {
+    "amount": "text",
+    "invoice": "text",
+    "reason": "text"
+  },
+  "writeoff.recover": {
+    "amount": "text",
+    "payment": "text",
+    "write_off": "text"
   }
 }

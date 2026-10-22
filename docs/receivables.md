@@ -19,6 +19,35 @@ that liability once after their total, with the credit number on an informationa
 line. This records no cash refund and no negative invoice. General overpayment,
 goodwill, prepaid and refundable balances remain separate unfinished capabilities.
 
+## Write-offs and bad debt
+
+On an issued invoice, **Bad debt write-offs** lets a person with approval write
+off an uncollectable balance with a reason. The saved request names the exact
+balance, amount, reason and accounting effect (debit **Bad Debts**, credit
+**Accounts Receivable (A/R)** for the customer). Execution removes the amount
+from ageing, the AR report and collection, and leaves the issued invoice
+unchanged: invoiced = credited + paid + written off + owed. The owner's
+second-person threshold (set with the credit threshold) applies: above it,
+**Write off now** is refused and a different authorized person must approve the
+saved request; at or below it one person executes. A changed balance, policy or
+already-executed request is refused and changes nothing. Agents cannot write
+off, prepare or approve.
+
+A later recovery is recorded with **Record recovery**: pick the recorded payment
+and the amount (never more than the payment's unallocated amount or the
+write-off still outstanding). The payment is allocated to the invoice, the
+write-off's net amount falls, and the ledger receives the reversing entry.
+
+Each write-off and recovery saves its balanced journal entry in the same
+transaction and posts it to QuickBooks Online with the installation's
+`QUICKBOOKS_ACCESS_TOKEN`, `QUICKBOOKS_ENVIRONMENT` (`sandbox` or `production`)
+and the entity's recorded company (or `QUICKBOOKS_COMPANY_ID` when the customer
+has no billing entity). A failed or unconfigured post never undoes the
+write-off: it waits as a pending posting with an error code, and **Retry
+pending ledger postings** (`ledger.post`) posts it once, adopting an entry the
+ledger already recorded. Granting and refreshing the connection is part of the
+full books sync (`BOOK-001`).
+
 ## Payments
 
 Open **Receivables → Payments received** and **Record payment**: the customer,
@@ -27,7 +56,7 @@ or **Card (taken outside Nectar)**) and its reference, which must be unique.
 Then allocate it on the invoice with **Allocate payment**. An allocation never
 exceeds the payment's unallocated amount or the invoice's balance.
 
-Every invoice shows the sum: invoiced = credited + paid + owed.
+Every invoice shows the sum: invoiced = credited + paid + written off + owed.
 
 ## Ageing
 

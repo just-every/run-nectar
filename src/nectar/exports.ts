@@ -1,3 +1,4 @@
+import { WRITE_OFF_NET_SQL } from './balance-sql'
 import { customerHistory } from './movein/history-reports'
 import { termRecords } from './renewal-terms'
 // Flow 13: leave with the data. Invoices, usage and subscriptions as CSV, a
@@ -31,11 +32,11 @@ export async function invoicesCsv(env: Bindings, actor: Actor,url?:URL) {
   requireRead(actor, 'invoices')
   const filter=metadataPredicate('invoice','i.id',url?metadataFilter(url):null)
   const rows = await all(env, `SELECT i.number, i.status, c.external_id, c.name, i.period_start, i.period_end, i.issue_date, i.due_date, i.subtotal_cents, i.tax_cents, i.total_cents,
-    COALESCE((SELECT SUM(COALESCE(applied_cents,amount_cents)) FROM nc_credit_notes WHERE invoice_id = i.id), 0) + COALESCE((SELECT SUM(amount_cents) FROM nc_usage_credit_applications WHERE invoice_id=i.id),0) AS credited, COALESCE((SELECT SUM(amount_cents) FROM nc_allocations WHERE invoice_id = i.id), 0) AS paid, i.calc_version, i.approved_fingerprint, i.approved_by, i.issued_by, i.id
+    COALESCE((SELECT SUM(COALESCE(applied_cents,amount_cents)) FROM nc_credit_notes WHERE invoice_id = i.id), 0) + COALESCE((SELECT SUM(amount_cents) FROM nc_usage_credit_applications WHERE invoice_id=i.id),0) AS credited, COALESCE((SELECT SUM(amount_cents) FROM nc_allocations WHERE invoice_id = i.id), 0) AS paid, ${WRITE_OFF_NET_SQL} AS written_off, i.calc_version, i.approved_fingerprint, i.approved_by, i.issued_by, i.id
     FROM nc_invoices i JOIN nc_customers c ON c.id = i.customer_id WHERE i.status = 'issued' AND ${filter.sql} ORDER BY i.number`,...filter.params)
   const meta=await withMetadata(env,'invoice',rows)
-  return file(csv(['number', 'status', 'customer_external_id', 'customer', 'period_start', 'period_end', 'issue_date', 'due_date', 'subtotal', 'tax', 'total', 'credited', 'paid', 'balance', 'calculation_version', 'source_fingerprint', 'approved_by', 'issued_by', 'invoice_id','metadata_json'],
-    meta.map(r => [r.number, r.status, r.external_id, r.name, r.period_start, r.period_end, r.issue_date, r.due_date, plainMoney(r.subtotal_cents), plainMoney(r.tax_cents), plainMoney(r.total_cents), plainMoney(r.credited), plainMoney(r.paid), plainMoney(r.total_cents - r.credited - r.paid), r.calc_version, r.approved_fingerprint, r.approved_by, r.issued_by, r.id,JSON.stringify(r.metadata)])), 'nectar-invoices.csv', 'text/csv; charset=utf-8')
+  return file(csv(['number', 'status', 'customer_external_id', 'customer', 'period_start', 'period_end', 'issue_date', 'due_date', 'subtotal', 'tax', 'total', 'credited', 'paid', 'balance', 'calculation_version', 'source_fingerprint', 'approved_by', 'issued_by', 'invoice_id','metadata_json','written_off'],
+    meta.map(r => [r.number, r.status, r.external_id, r.name, r.period_start, r.period_end, r.issue_date, r.due_date, plainMoney(r.subtotal_cents), plainMoney(r.tax_cents), plainMoney(r.total_cents), plainMoney(r.credited), plainMoney(r.paid), plainMoney(r.total_cents - r.credited - r.paid - r.written_off), r.calc_version, r.approved_fingerprint, r.approved_by, r.issued_by, r.id,JSON.stringify(r.metadata),plainMoney(r.written_off)])), 'nectar-invoices.csv', 'text/csv; charset=utf-8')
 }
 
 export async function usageCsv(env: Bindings, actor: Actor) {

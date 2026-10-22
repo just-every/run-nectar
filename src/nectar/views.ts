@@ -1,3 +1,5 @@
+import { writeOffList } from './write-offs'
+import { ledgerPostings } from './ledger-postings'
 import { readPrepaidRefunds } from './prepaid-refund-records'
 import { readPrepaidTopupAuthorizations, readPrepaidTopupClaims } from './prepaid-topup-records'
 import { readNativeCollections } from './payments/collection'
@@ -111,6 +113,8 @@ export const views: Record<string, View> = {
   invoices: (env, actor, _r, _id, url) => invoiceList(env,actor,url),
   invoice: (env, actor, _request, id, url) => invoiceView(env, actor, id, url),
   ageing: (env, actor) => ageing(env, actor),
+  writeOffs: (env, actor) => writeOffList(env, actor),
+  ledgerPostings: async (env, actor) => ({ postings: await ledgerPostings(env, actor) }),
   payments: (env, actor,_r,_id,url) => payments(env, actor,undefined,url),
   notices: (env, actor) => notices(env, actor),
   tasks: (env, actor) => tasks(env, actor),

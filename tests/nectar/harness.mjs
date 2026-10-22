@@ -20,7 +20,7 @@ async function freePort() {
   return port
 }
 
-export async function harness({ assets = false, localTime, hostname = '127.0.0.1', stripeFetch, stripeSecret, stripeSecondarySecret } = {}) {
+export async function harness({ assets = false, localTime, hostname = '127.0.0.1', stripeFetch, stripeSecret, stripeSecondarySecret, quickbooksFetch } = {}) {
   const port = await freePort()
   // WebAuthn refuses IP-address relying parties, so the passkey journey names the loopback host.
   const origin = `http://${hostname}:${port}`
@@ -29,10 +29,12 @@ export async function harness({ assets = false, localTime, hostname = '127.0.0.1
   if(localTime)vars.NECTAR_LOCAL_TIME=localTime
   if(stripeSecret)vars.STRIPE_BILLING_SECRET=stripeSecret
   if(stripeSecondarySecret)vars.STRIPE_SECONDARY_SECRET_KEY=stripeSecondarySecret
+  if(quickbooksFetch)Object.assign(vars,{QUICKBOOKS_ACCESS_TOKEN:'synthetic-nectar-qbo',QUICKBOOKS_ENVIRONMENT:'sandbox',QUICKBOOKS_COMPANY_ID:'synthetic-nectar-company'})
   const chunks = (await readdir('dist/server', { recursive: true })).filter(path => path.endsWith('.js') && path !== 'index.js')
   const mails = [], mailResponses = []
   const outboundService = async request => {
     if (new URL(request.url).hostname==='api.stripe.com'&&stripeFetch)return stripeFetch(request)
+    if (new URL(request.url).hostname==='sandbox-quickbooks.api.intuit.com'&&quickbooksFetch)return quickbooksFetch(request)
     if (request.url !== 'https://api.resend.com/emails') return new Response('Unexpected outbound request', { status: 599 })
     const message=await request.json();mails.push(message)
     const index=mailResponses.findIndex(response=>!response.to||[message.to].flat().includes(response.to))

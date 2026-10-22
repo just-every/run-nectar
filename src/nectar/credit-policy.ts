@@ -2,6 +2,7 @@
 import type { Bindings } from '../auth.server'
 import { actorLabel, can, requireAny, requireMember, requireOwner, requireRead, type Actor } from './actor'
 import { all, commit, fingerprint, guard, insist, newId, now, one, stmt, type Row } from './core'
+import { BALANCE_SQL } from './balance-sql'
 import { cents } from './decimal'
 import { preparePolicyChange } from './policy-changes'
 import type { Input } from './input'
@@ -44,7 +45,7 @@ export async function creditRequestStatements(env: Bindings, actor: Actor, input
   const id = newId(), basis = await creditBasis(invoice, policy)
   return { request: id, result: { id: invoice.id, request: id }, statements: [
     guard(env, 'credit_policy_changed', 'COALESCE((SELECT revision FROM nc_credit_policy WHERE singleton=1),0)=?', policy.revision),
-    guard(env, 'credit_request_stale', "(SELECT i.total_cents-COALESCE((SELECT SUM(COALESCE(applied_cents,amount_cents)) FROM nc_credit_notes WHERE invoice_id=i.id),0)-COALESCE((SELECT SUM(amount_cents) FROM nc_allocations WHERE invoice_id=i.id),0) -COALESCE((SELECT SUM(amount_cents) FROM nc_usage_credit_applications WHERE invoice_id=i.id),0) FROM nc_invoices i WHERE i.id=? AND status='issued')=?", invoice.id, invoice.balance_cents),
+    guard(env, 'credit_request_stale', `(SELECT ${BALANCE_SQL} FROM nc_invoices i WHERE i.id=? AND status='issued')=?`, invoice.id, invoice.balance_cents),
     stmt(env, 'INSERT INTO nc_credit_requests (id,invoice_id,amount_cents,reason,prepared_by,prepared_name,prepared_at,basis,policy_revision,balance_cents) VALUES (?,?,?,?,?,?,?,?,?,?)', id, invoice.id, amount, reason, actor.id, actorLabel(actor), now(), basis, policy.revision, invoice.balance_cents),
   ], audits: [{ actor: actorLabel(actor), action: 'credit.prepare', subject: id, detail: { invoice: invoice.id, amount, reason, basis, policyRevision: policy.revision } }] }
 }
@@ -88,6 +89,6 @@ export async function authorizeCredit(env: Bindings, actor: Actor, input: Input,
     ...(request ? [guard(env, 'credit_request_already_issued', "EXISTS(SELECT 1 FROM nc_credit_requests WHERE id=? AND status='pending')", request.id),
       guard(env, 'credit_request_proposal_bound', 'NOT EXISTS(SELECT 1 FROM nc_credit_correction_requests WHERE request_id=? AND proposal_id<>?)', request.id, proposalId ?? ''),
       guard(env,'credit_request_cancellation_bound','NOT EXISTS(SELECT 1 FROM nc_interval_cancel_requests WHERE request_id=? AND cancellation_id<>?)',request.id,cancellationId??''),
-      guard(env, 'credit_request_stale', '(SELECT i.total_cents-COALESCE((SELECT SUM(COALESCE(applied_cents,amount_cents)) FROM nc_credit_notes WHERE invoice_id=i.id),0)-COALESCE((SELECT SUM(amount_cents) FROM nc_allocations WHERE invoice_id=i.id),0) -COALESCE((SELECT SUM(amount_cents) FROM nc_usage_credit_applications WHERE invoice_id=i.id),0) FROM nc_invoices i WHERE i.id=?)=?', invoice.id, request.balance_cents)] : []),
+      guard(env, 'credit_request_stale', `(SELECT ${BALANCE_SQL} FROM nc_invoices i WHERE i.id=?)=?`, invoice.id, request.balance_cents)] : []),
   ] }
 }
