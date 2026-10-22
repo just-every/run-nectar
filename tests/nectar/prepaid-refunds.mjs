@@ -38,8 +38,8 @@ export function prepaidRefundEdge(){
   }
   return {fetch,native,calls,refunds,loseNext(){lose=true},failNext(){fail=true},visible(value){visible=value},at(value){created=Date.parse(value)/1000;native.capturedAt(value)},pauseNext(){let arrived,release;const seen=new Promise(resolve=>arrived=resolve),wait=new Promise(resolve=>release=resolve);hold={arrived,release:wait};return {arrived:seen,release}}}
 }
-const edge=prepaidRefundEdge()
-export const harnessOptions=()=>({stripeFetch:edge.fetch,stripeSecret:'synthetic-nectar-1',stripeSecondarySecret:'synthetic-nectar-2'})
+let edge=prepaidRefundEdge()
+export const harnessOptions=()=>{edge=prepaidRefundEdge();return {stripeFetch:edge.fetch,stripeSecret:'synthetic-nectar-1',stripeSecondarySecret:'synthetic-nectar-2'}}
 export async function prepaidRefundFlow(h,owner,{onState=async()=>{},onTypedState=async()=>{},onSharedState=async()=>{},approveRefund,reconcileRefund}={}){
   const api=(path,body,status)=>h.api(path,owner,body,status),refundPosts=()=>edge.calls.filter(call=>call.method==='POST').length
   await h.advanceClock('2026-11-01T18:00:00Z');edge.at('2026-11-01T18:00:00Z')
@@ -284,33 +284,43 @@ export async function prepaidRefundFlow(h,owner,{onState=async()=>{},onTypedStat
 // Corrected history may restore retained credit or bill excess, never spend the
 // refunded portion again or create another processor refund.
 export async function prepaidRefundCorrectionFlow(h,owner,{onState=async()=>{}}={}) {
+  for(const kind of ['money','units'])await refundCorrectionCase(h,owner,kind,onState)
+}
+async function refundCorrectionCase(h,owner,kind,onState) {
+  const n=kind==='money'?860:880,refundCents=kind==='money'?6000:83,excessCents=kind==='money'?4000:100
   const api=(path,body,status)=>h.api(path,owner,body,status)
   await h.advanceClock('2026-01-01T18:00:00Z');edge.at('2026-01-01T18:00:00Z')
   await api('business.configure',{...await api('business'),timezone:'UTC'})
-  await api('access.give',{email:'synthetic-nectar-861@example.test',name:'Synthetic refund correction finance',role:'finance'})
-  const finance=await h.signIn('synthetic-nectar-861@example.test',{requested:true})
-  const customer=(await api('customer.create',{external_id:'synthetic-nectar-862',name:'Synthetic refund correction customer',billing_email:'synthetic-nectar-862@example.test'})).id
-  const product=(await api('product.create',{code:'synthetic-nectar-863',name:'Synthetic refundable monthly service'})).id
-  const meter=(await api('meter.create',{code:'synthetic-nectar-864',name:'Synthetic refundable monthly units',unit_label:'units'})).id
+  await api('access.give',{email:`synthetic-nectar-${n+1}@example.test`,name:'Synthetic refund correction finance',role:'finance'})
+  const finance=await h.signIn(`synthetic-nectar-${n+1}@example.test`,{requested:true})
+  const customer=(await api('customer.create',{external_id:`synthetic-nectar-${n+2}`,name:'Synthetic refund correction customer',billing_email:`synthetic-nectar-${n+2}@example.test`})).id
+  const product=(await api('product.create',{code:`synthetic-nectar-${n+3}`,name:'Synthetic refundable monthly service'})).id
+  const meter=(await api('meter.create',{code:`synthetic-nectar-${n+4}`,name:'Synthetic refundable monthly units',unit_label:'units'})).id
   const price=(await api('price.create',{product,meter,kind:'unit',unit_amount:'2',taxable:false})).id
   const subscription=(await api('subscription.create',{customer,start_date:'2026-01-01',price:[price]})).id
-  const grant=await api('prepaid.prepare',{subscription,mode:'grant',kind:'money',source:'purchase',amount:'100',effective_date:'2026-01-01',expires_date:'2027-01-01',priority:10,expiry_consent:true})
+  const grant=await api('prepaid.prepare',{subscription,mode:'grant',kind,source:'purchase',amount:kind==='money'?'100':'3',...(kind==='units'?{meter,purchase_amount:'1'}:{}),effective_date:'2026-01-01',expires_date:'2027-01-01',priority:10,expiry_consent:true})
   await h.api('prepaid.decide',finance,{request:grant.request,decision:'approved'})
   const purchase=(await api('prepaid.purchase.prepare',{intent:grant.request,issue_date:'2026-01-01'})).invoice
   await api('invoice.approve',{invoice:purchase,acknowledge:true});await api('invoice.finalise',{invoice:purchase,issue_date:'2026-01-01'})
-  await api('collection.customer.bind',{customer,account_ref:'synthetic-nectar-native-account-1',stripe_customer_ref:'synthetic-nectar-native-customer-1',confirm:true})
+  await api('collection.customer.bind',{customer,account_ref:'synthetic-nectar-native-account-1',stripe_customer_ref:`synthetic-nectar-native-customer-${kind==='money'?1:3}`,confirm:true})
   const prepared=await api('collection.prepare',{invoice:purchase});await api('collection.confirm',prepared.instructions.confirm)
   const state=()=>api(`prepaid/${subscription}`)
-  const usage=(id,quantity)=>api('usage.submit',{events:[{event_id:`synthetic-nectar-${id}`,customer:'synthetic-nectar-862',meter:'synthetic-nectar-864',quantity,occurred_at:'2026-01-15T12:00:00Z'}]})
-  await usage(865,'20');await h.advanceClock('2026-02-01T18:00:00Z');edge.at('2026-02-01T18:00:00Z')
+  const usage=(id,quantity)=>api('usage.submit',{events:[{event_id:`synthetic-nectar-${id}`,customer:`synthetic-nectar-${n+2}`,meter:`synthetic-nectar-${n+4}`,quantity,occurred_at:'2026-01-15T12:00:00Z'}]})
+  await usage(n+5,kind==='money'?'20':'0.5');await h.advanceClock('2026-02-01T18:00:00Z');edge.at('2026-02-01T18:00:00Z')
   const run=await api('billrun.prepare',{period:'2026-01'}),invoice=(await api(`runs/${run.id}`)).invoices.find(row=>row.subscription_id===subscription)
   assert.ok(invoice);await api('invoice.approve',{invoice:invoice.id,acknowledge:true});await api('invoice.finalise',{invoice:invoice.id,issue_date:'2026-02-01'})
   const lot=(await state()).grants[0],request=await api('prepaid.refund.prepare',{grant:lot.id,reason:'Synthetic unused monthly service returned to original card'})
-  const refund=await h.api('prepaid.refund.decide',finance,{refund:request.id,basis_hash:request.basis,decision:'approved'})
-  assert.equal(refund.status,'refunded');assert.equal(refund.cashAmountCents,-6000)
+  const paused=edge.pauseNext(),approval=h.api('prepaid.refund.decide',finance,{refund:request.id,basis_hash:request.basis,decision:'approved'})
+  await paused.arrived
+  try{
+    const refused=await api('usage.correction.prepare',{subscription,from_period:'2026-01',through_period:'2026-01',void_event_ids:[`synthetic-nectar-${n+5}`],add_event_ids:[],reason:'Synthetic pending refund correction',explanation:'An unresolved refund must retain its whole-lot reservation.'},409)
+    assert.equal(refused.error,'prepaid_refund_pending')
+  }finally{paused.release()}
+  const refund=await approval
+  assert.equal(refund.status,'refunded');assert.equal(refund.cashAmountCents,-refundCents)
   const originals=await Promise.all([purchase,invoice.id].map(id=>api(`invoices/${id}`))),refunded=await state(),refundEntry=refunded.entries.find(entry=>entry.kind==='refund')
   const beforePosts=edge.calls.filter(call=>call.method==='POST').length
-  for(const [id,voidId,quantity,expectedBalance,expectedRecognition,expectedDelta] of [[866,865,'10',2000,2000,0],[867,866,'40',0,4000,4000]]){
+  for(const [id,voidId,quantity,expectedBalance,expectedLiability,expectedRecognition,expectedDelta] of (kind==='money'?[[n+6,n+5,'10',2000,2000,2000,0],[n+7,n+6,'40',0,0,4000,4000]]:[[n+6,n+5,'0.25',250000,8,9,0],[n+7,n+6,'1',0,0,17,100]])){
     await usage(id,quantity)
     const before=await state(),body={subscription,from_period:'2026-01',through_period:'2026-01',void_event_ids:[`synthetic-nectar-${voidId}`],add_event_ids:[`synthetic-nectar-${id}`]}
     const preview=await api('usage.correction.preview',body)
@@ -322,13 +332,13 @@ export async function prepaidRefundCorrectionFlow(h,owner,{onState=async()=>{}}=
     assert.equal(applied.status,'approved')
     await h.api('usage.correction.decide',finance,{correction:correction.id,decision:'approved'},409)
     const after=await state()
-    assert.equal(after.balances[0].remainingN,expectedBalance);assert.equal(after.balances[0].liabilityCents,expectedBalance)
+    assert.equal(after.balances[0].remainingN,expectedBalance);assert.equal(after.balances[0].liabilityCents,expectedLiability)
     assert.equal(after.entries.reduce((total,entry)=>total+entry.recognitionCents,0),expectedRecognition)
     assert.deepEqual(after.entries.find(entry=>entry.kind==='refund'),refundEntry)
     for(const entry of refunded.entries)assert.deepEqual(after.entries.find(saved=>saved.id===entry.id),entry,'Every original financial statement survives correction')
     const facts=(await api(`prepaid/refunds?subscription=${subscription}`)).find(row=>row.id===refund.id)
-    assert.equal(facts.status,'refunded');assert.equal(facts.credit,refund.credit);assert.equal(facts.cashAmountCents,-6000)
-    assert.equal((await api(`reports/refunds?period=2026-02&customer=${customer}`)).totalCents,-6000)
+    assert.equal(facts.status,'refunded');assert.equal(facts.credit,refund.credit);assert.equal(facts.cashAmountCents,-refundCents)
+    assert.equal((await api(`reports/refunds?period=2026-02&customer=${customer}`)).totalCents,-refundCents)
     const rows=csvRows(await(await h.raw(`/app/exports/prepaid/${subscription}.csv`,{cookie:owner})).text())
     assert.equal(rows.length,after.entries.length)
     for(const entry of after.entries.filter(row=>row.kind==='correction'))assert.equal((await api(`prepaid/${subscription}/entries/${entry.id}`)).entry.recognitionCents,entry.recognitionCents)
@@ -336,17 +346,17 @@ export async function prepaidRefundCorrectionFlow(h,owner,{onState=async()=>{}}=
     assert.equal(source.schedules.flatMap(row=>row.entries).reduce((total,row)=>total+row.amountCents,0),expectedRecognition)
     for(const original of originals)assert.deepEqual((await api(`invoices/${original.id}`)).calculation,original.calculation)
     assert.equal(edge.calls.filter(call=>call.method==='POST').length,beforePosts,'Corrections never retry or increase a cash refund')
-    await onState({label:`refund-correction-${id}`,subscription,customer,purchase,invoice:invoice.id,correction:correction.id,refund:refund.id})
+    await onState({label:`refund-correction-${kind}-${id}`,subscription,customer,purchase,invoice:invoice.id,correction:correction.id,refund:refund.id})
   }
   const corrections=await api(`usage/corrections?subscription=${subscription}`)
-  assert.ok(corrections.some(row=>row.plan.delta.totalCents===4000))
+  assert.ok(corrections.some(row=>row.plan.delta.totalCents===excessCents))
   await h.advanceClock('2026-03-01T18:00:00Z')
   const nextRun=await api('billrun.prepare',{period:'2026-02'}),next=(await api(`runs/${nextRun.id}`)).invoices.find(row=>row.subscription_id===subscription)
-  assert.equal(next.total_cents,4000,'The approved excess appears once on the ordinary next invoice')
+  assert.equal(next.total_cents,excessCents,'The approved excess appears once on the ordinary next invoice')
   await api('invoice.approve',{invoice:next.id,acknowledge:true});await api('invoice.finalise',{invoice:next.id,issue_date:'2026-03-01'})
-  assert.equal((await api(`invoices/${next.id}`)).total_cents,4000)
+  assert.equal((await api(`invoices/${next.id}`)).total_cents,excessCents)
   assert.equal((await state()).balances[0].remainingN,0)
-  assert.equal((await api(`reports/refunds?period=2026-02&customer=${customer}`)).totalCents,-6000)
-  await onState({label:'refund-correction-issued-excess',subscription,customer,purchase,invoice:next.id,refund:refund.id})
+  assert.equal((await api(`reports/refunds?period=2026-02&customer=${customer}`)).totalCents,-refundCents)
+  await onState({label:`refund-correction-${kind}-issued-excess`,subscription,customer,purchase,invoice:next.id,refund:refund.id})
   return {subscription,customer,purchase}
 }

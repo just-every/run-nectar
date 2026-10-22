@@ -183,6 +183,16 @@ async function topup(authorization){
   step('actual-automatic-5000-dollar-topup-and-receipt-ledger-parity')
   await now({provider:true})
   const mailCount=h.mails.length,result=await api('prepaid.topup.run',{authorization:authorization.id})
+  // Keep a typed receipt even when Nectar correctly refuses a capture made
+  // before the future-dated funding terms. Never replace dates or retry a POST.
+  const automaticIntents=await stripe.list('/v1/payment_intents',{customer:providerCustomer.id})
+  const automaticIntent=automaticIntents.data.find(intent=>intent.id===result.payment_intent_ref)
+  const automaticCharges=await stripe.list('/v1/charges',{customer:providerCustomer.id})
+  const automaticCharge=automaticCharges.data.find(charge=>reference(charge.payment_intent)===automaticIntent?.id)
+  receipt.automaticAttempt={status:result.status,errorCode:result.error_code??null,workerDate:today,
+    paymentIntentId:automaticIntent?.id??null,intentStatus:automaticIntent?.status??null,amountReceivedCents:automaticIntent?.amount_received??null,
+    chargeId:automaticCharge?.id??null,chargeStatus:automaticCharge?.status??null,captured:automaticCharge?.captured??false,
+    amountCapturedCents:automaticCharge?.amount_captured??null,capturedOn:automaticCharge?date(automaticCharge.created*1000):null}
   check(result.status==='collected','automatic_real_topup_not_collected')
   const claims=await api(`prepaid/topup-claims?subscription=${row.subscription}`)
   check(claims.length===1&&claims[0].id===result.id&&claims[0].status==='collected'&&claims[0].amount_cents===500000,'automatic_crossing_claim_not_exactly_once')

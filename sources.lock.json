@@ -57,7 +57,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "0381ccd2cd5e6274120b0d66c8494261d7fcf83b3a3856eed35d626913ea1c55",
+      "sha256": "0100f5ff2e9576ef045a92555af1bc16cbc0f27ce61fd3cbdedae0245a3777a7",
       "executable": false
     },
     "AGENTS.consumer.md": {
@@ -77,7 +77,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "290fe6a13b3f0dbc968939cff313d4a47ecc6292e0f2db1818b62f2c1bf2c59f",
+      "sha256": "60e1b407e4d579966b00635bf34a476431b87b170cfdedd9a52fbbd7f8edc007",
       "executable": false
     },
     "DEMO.md": {
@@ -4005,7 +4005,7 @@
       "executable": false
     },
     "tests/nectar/prepaid-refunds.mjs": {
-      "sha256": "6287ed21a3a9151acf2f09493bb8b8b9ac9e48f6631a3ddebb968d86b0831047",
+      "sha256": "d3638ec2d17f6b71fbf4bc1b3e7aa0ca60726f56bc213bdece2d2a46aa8a8d15",
       "executable": false
     },
     "tests/nectar/prepaid-report-parity.mjs": {
@@ -4017,7 +4017,7 @@
       "executable": false
     },
     "tests/nectar/prepaid-topup-sandbox.mjs": {
-      "sha256": "414e7549308d2182e9186ea6d5d11cc701dfe536df32fe6ae7417016b8183338",
+      "sha256": "1ddc882b95a049b9d426d98ac8c63070da1e1e8350bca756b2c4c94a0518bf92",
       "executable": false
     },
     "tests/nectar/prepaid-topup.mjs": {
