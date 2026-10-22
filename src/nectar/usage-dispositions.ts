@@ -83,6 +83,7 @@ async function plan(env: Bindings, actor: Actor, payload: Row) {
   const prepaidPeriods=replay.periods.filter(period=>period.beforeInput.prepaid)
   const prepaidCurrent=prepaidPeriods.length?await prepaidSnapshot(env,sub.id):null
   insist(!prepaidPeriods.length || prepaidCurrent,'prepaid_account_not_found',409)
+  insist(!prepaidCurrent||!await one(env,"SELECT 1 FROM nc_prepaid_refunds WHERE subscription_id=? AND status IN ('approved','claimed','uncertain')",sub.id),'prepaid_refund_pending',409)
   const prepaidPlan=prepaidCurrent?await planPrepaidCorrection(prepaidCurrent,prepaidPeriods,issueDate):null
   const prepaid=prepaidPlan?{subscription:prepaidPlan.subscription,revision:prepaidPlan.revision,date:prepaidPlan.date,originals:prepaidPlan.originals,deltas:prepaidPlan.deltas,basis:prepaidPlan.basis}:null
   const availableCredits=await carriedUsageCredits(env,customer.id)

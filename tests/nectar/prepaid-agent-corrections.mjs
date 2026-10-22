@@ -1,12 +1,14 @@
 import assert from 'node:assert/strict'
 import { applyPolicy } from './policy-helper.mjs'
+import { publishPrice } from './price-helper.mjs'
+import { prepaidReportParity } from './prepaid-report-parity.mjs'
 import { csvRows } from './financial-reports.mjs'
 
 const sum = (rows, key) => rows.reduce((total, row) => total + row[key], 0)
 const numeric = value => Number(String(value).replace(/^'/, ''))
 const original = invoice => ({calculation:invoice.calculation,lines:invoice.lines,number:invoice.number,total:invoice.total_cents,source:invoice.source_fingerprint})
 
-async function fixture(h,owner,n,{annual=false,paid=false}={}) {
+async function fixture(h,owner,n,{annual=false,paid=false,finite=true}={}) {
   const api=(path,body,status)=>h.api(path,owner,body,status)
   await h.advanceClock('2026-01-01T18:00:00Z')
   await applyPolicy(h,owner,'tax.declare',{tax_jurisdiction:'CA',tax_mode:'no_tax',tax_note:'Synthetic agent prepaid correction consideration'})
@@ -24,7 +26,7 @@ async function fixture(h,owner,n,{annual=false,paid=false}={}) {
     const platform=(await api('product.create',{code:`synthetic-nectar-${n+4}`,name:'Synthetic annual platform'})).id
     prices.push((await api('price.create',{product:platform,kind:'flat',unit_amount:'12000',billing_interval:'annual',billing_timing:'advance',taxable:false})).id)
   }
-  const subscription=(await api('subscription.create',{customer,start_date:'2026-01-01',price:prices,term_months:24})).id
+  const subscription=(await api('subscription.create',{customer,start_date:'2026-01-01',price:prices,...(finite?{term_months:24}:{})})).id
   const grant=async(source,amount,priority)=>{
     const request=await api('prepaid.prepare',{subscription,mode:'grant',kind:'money',source,amount,effective_date:'2026-01-01',expires_date:'2027-01-01',priority,expiry_consent:true})
     await h.api('prepaid.decide',finance,{request:request.request,decision:'approved'})
@@ -68,7 +70,7 @@ async function fixture(h,owner,n,{annual=false,paid=false}={}) {
     await api('invoice.approve',{invoice:id,acknowledge:true});await api('invoice.finalise',{invoice:id,issue_date:date})
     return api(`invoices/${id}`)
   }
-  return {api,customer,subscription,price,purchase,intent,email,agent,state,event,propose,detail,approve,issue}
+  return {api,customer,subscription,product,meter,price,purchase,intent,email,agent,finance,state,event,propose,detail,approve,issue}
 }
 
 // The proposal and its customer explanation must agree with the actual credit:
@@ -169,4 +171,57 @@ export async function prepaidAgentDraftCorrectionsFlow(h,owner) {
     assert.equal(csv.length,after.entries.length)
     assert.deepEqual(original(await api(`invoices/${f.purchase}`)),original(purchase))
   }
+}
+
+// Two proposed periods share one finite wallet on each side of the migration.
+// Approval and ordinary issue must preserve the preview's depletion and excess.
+export async function prepaidCommercialMigrationFlow(h,owner,{onState=async()=>{}}={}) {
+  const f=await fixture(h,owner,810,{paid:true,finite:false}),{api}=f
+  const target=(await publishPrice(h,owner,{product:f.product,meter:f.meter,kind:'unit',unit_amount:'2',taxable:false})).id
+  await api('usage.submit',{events:[f.event(816,'6000','02'),f.event(817,'6000','03')]})
+  await h.advanceClock('2026-04-01T18:00:00Z')
+  const state=await f.state(),purchase=await api(`invoices/${f.purchase}`)
+  const created=await api('proposal.create',{kind:'price_change',title:'Synthetic prepaid commercial migration',payload:{target_price:target,effective_date:'2026-02-01',subscriptions:[f.subscription]}})
+  const saved=await f.detail(created.id),periods=saved.impact[0].periods
+  const figures=rating=>[sum(rating.lines.filter(line=>line.kind==='usage'),'amountCents'),sum(rating.lines.filter(line=>line.kind==='prepaid_drawdown'),'amountCents'),rating.totalCents]
+  assert.deepEqual(periods.map(p=>figures(p.before)),[[600000,-600000,0],[600000,-500000,100000]],'The unchanged-price comparison depletes its own wallet across periods')
+  assert.deepEqual(periods.map(p=>figures(p.after)),[[1200000,-1100000,100000],[1200000,0,1200000]],'The migrated-price comparison depletes a separate wallet and bills only excess')
+  assert.deepEqual(await f.state(),state,'Preparing a commercial migration never consumes credits')
+  await onState({label:'migration-prepared',f,proposal:saved})
+  await h.api('proposal.decide',f.agent,{proposal:saved.id,decision:'approved'},403)
+  await api('proposal.decide',{proposal:saved.id,decision:'approved'},409)
+  await h.api('proposal.decide',f.finance,{proposal:saved.id,decision:'approved'})
+  await h.api('proposal.decide',f.finance,{proposal:saved.id,decision:'approved'},409)
+  for(const [index,date]of ['2026-03-01','2026-04-01'].entries()){
+    const invoice=await f.issue(index===0?'2026-02':'2026-03',date),calculation=invoice.calculation
+    assert.deepEqual([invoice.subtotal_cents,invoice.tax_cents,invoice.total_cents],[periods[index].after.subtotalCents,periods[index].after.taxCents,periods[index].after.totalCents])
+    assert.deepEqual(figures({lines:invoice.lines.map(line=>({kind:line.kind,amountCents:line.amount_cents})),totalCents:invoice.total_cents}),figures(periods[index].after),'Issued usage, drawdown and cash owed equal the independently approved commercial preview')
+    await prepaidReportParity(h,owner,{customer:f.customer,subscription:f.subscription})
+    await onState({label:`migration-issued-${index}`,f,proposal:saved,invoice})
+  }
+  const after=await f.state()
+  assert.equal(sum(after.balances,'remainingN'),0);assert.equal(sum(after.balances,'liabilityCents'),0)
+  assert.equal(sum(after.entries,'recognitionCents'),1000000,'Promotions never earn purchased consideration')
+  const source=await api(`revenue/${f.purchase}?from=2026-01&to=2026-12`)
+  assert.equal(sum(source.schedules.flatMap(schedule=>schedule.entries),'amountCents'),1000000)
+  assert.deepEqual(original(await api(`invoices/${f.purchase}`)),original(purchase))
+  // The historical comparison carries changed usage consideration through six
+  // saved periods; actual issued draws and purchase recognition stay immutable.
+  const g=await fixture(h,owner,830,{paid:true,finite:false})
+  const next=(await publishPrice(h,owner,{product:g.product,meter:g.meter,kind:'unit',unit_amount:'2',taxable:false})).id
+  const originals=[]
+  for(let index=0;index<6;index++){
+    const month=String(index+1).padStart(2,'0'),due=String(index+2).padStart(2,'0')
+    await g.api('usage.submit',{events:[g.event(840+index,'1000',month)]})
+    originals.push(await g.issue(`2026-${month}`,`2026-${due}-01`))
+  }
+  const ledger=await g.state()
+  const simulation=await g.api('proposal.create',{kind:'price_change',title:'Synthetic saved prepaid commercial comparison',payload:{simulation:true,source_price:g.price,target_price:next,subscriptions:[g.subscription],start_month:'2026-01',effective_date:'2026-07-01'}})
+  const comparison=await g.detail(simulation.id),history=comparison.impact[0].historical.periods
+  assert.deepEqual(history.map(period=>period.before.totalCents),Array(6).fill(0))
+  assert.deepEqual(history.map(period=>period.after.totalCents),[0,0,0,0,0,100000],'A six-period historical comparison cannot repeatedly spend the original purchased wallet')
+  assert.deepEqual(await g.state(),ledger)
+  for(const invoice of originals)assert.deepEqual(original(await g.api(`invoices/${invoice.id}`)),original(invoice))
+  await onState({label:'migration-historical',f:g,proposal:comparison})
+  return {subscription:f.subscription,customer:f.customer,proposal:saved.id}
 }

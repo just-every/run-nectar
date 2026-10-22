@@ -32,7 +32,13 @@ export function introducePrepaidGrants(basis:PrepaidBasis,snapshot:PrepaidBasis)
   for(const grant of snapshot.grants)if(!basis.grants.some(saved=>saved.id===grant.id))basis.grants.push(grant)
   for(const entry of snapshot.entries)if(entry.kind==='grant'&&!basis.entries.some(saved=>saved.id===entry.id))basis.entries.push(entry)
 }
-export function replayPrepaidHistory(periods: PrepaidReplayPeriod[]) {
+// Returned consideration is an immutable reservation for the whole replay.
+// It cannot fund newly corrected historical service; excess uses the ordinary
+// governed disposition. The original refund date, quantity and cash stay fixed.
+export function introducePrepaidRefunds(basis:PrepaidBasis,entries:PrepaidEntry[]) {
+  for(const entry of entries)if(entry.kind==='refund'&&basis.grants.some(grant=>grant.id===entry.grantId)&&!basis.entries.some(saved=>saved.id===entry.id))basis.entries.push(entry)
+}
+export function replayPrepaidHistory(periods: PrepaidReplayPeriod[], refunds:PrepaidEntry[]=[]) {
   insist(periods.length>0,'prepaid_correction_source_required',409)
   const first=periods[0].beforeInput.prepaid!
   insist(first && periods.every((period,index)=>period.beforeInput.prepaid?.subscription===first.subscription && period.afterInput.subscription.id===first.subscription && (!index||periods[index-1].beforeInput.period.start<period.beforeInput.period.start)) && new Set(periods.map(period=>period.invoice)).size===periods.length,'prepaid_correction_source_required',409)
@@ -41,6 +47,7 @@ export function replayPrepaidHistory(periods: PrepaidReplayPeriod[]) {
   for(const period of periods){
     const snapshot=period.beforeInput.prepaid!
     introducePrepaidGrants(running,snapshot)
+    introducePrepaidRefunds(running,refunds)
     appendPrepaidBoundaries(running,snapshot)
     const input:RatingInput={...period.afterInput,prepaid:{...running,revision:snapshot.revision,grants:[...running.grants],entries:[...running.entries]},
       ...(period.afterInput.contracts?{contracts:{...period.afterInput.contracts,invoices:period.afterInput.contracts.invoices.map(invoice=>({...invoice,lines:rerated.get(invoice.id)??invoice.lines}))}}:{})}
@@ -50,4 +57,4 @@ export function replayPrepaidHistory(periods: PrepaidReplayPeriod[]) {
   }
   return {replay,running}
 }
-export const replayPrepaidPeriods = (periods:PrepaidReplayPeriod[]) => replayPrepaidHistory(periods).replay
+export const replayPrepaidPeriods = (periods:PrepaidReplayPeriod[], refunds:PrepaidEntry[]=[]) => replayPrepaidHistory(periods,refunds).replay

@@ -1,6 +1,9 @@
 // Assert the report, source, CSV and monthly frozen snapshot at real ledger
 // transitions. The scheduled transport is the harness's mail network edge.
 import assert from 'node:assert/strict'
+import { performance } from 'node:perf_hooks'
+import { writeFile } from 'node:fs/promises'
+import { execFileSync } from 'node:child_process'
 import { csvRows } from './financial-reports.mjs'
 
 export async function prepaidReportParity(h,owner,row,{snapshotActor,snapshots=[]}={}) {
@@ -42,4 +45,53 @@ export async function prepaidReportParity(h,owner,row,{snapshotActor,snapshots=[
   }
   for(const saved of snapshots)assert.deepEqual(await h.api(`report-deliveries/${saved.delivery.id}`,saved.actor),saved.delivery,'Later grants, consumption, top-ups and expiry never rewrite an earlier delivered report')
   return snapshots
+}
+
+// Outside push Verify: measure completed public reads after a committed ledger
+// transition. The timestamp is monotonic wall time, independent of the test's
+// business clock; there is no polling, cached expectation or database access.
+export async function prepaidRefreshParity(h,owner,row) {
+  const started=performance.now(),state=await h.api(`prepaid/${row.subscription}`,owner)
+  const view=await h.api(`subscriptions/${row.subscription}/upcoming?period=${state.date.slice(0,7)}`,owner)
+  const fields=balances=>balances.map(({kind,meterId,remainingN,availableN,liabilityCents})=>({kind,meterId,remainingN,availableN,liabilityCents})).sort((a,b)=>`${a.kind}:${a.meterId}`.localeCompare(`${b.kind}:${b.meterId}`))
+  for(const upcoming of view.invoices??[view])assert.deepEqual(fields(upcoming.prepaid.balances),fields(state.balances))
+  const page=await h.page(`/app/subscriptions/${row.subscription}?preview_period=${state.date.slice(0,7)}`,owner)
+  const sections=[...page.matchAll(/<h3>Prepaid balances<\/h3>([\s\S]*?)<\/table>/g)].map(match=>match[1])
+  assert.ok(sections.length,'The operator refresh includes its actual prepaid table')
+  const money=n=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(n/100)
+  const units=n=>`${new Intl.NumberFormat('en-US',{maximumFractionDigits:6}).format(n/1000000)} units`
+  for(const section of sections)for(const balance of view.prepaid.balances){
+    const text=section.replace(/<[^>]*>/g,' ')
+    for(const key of ['remainingN','availableN','purchasedRemainingN','promotionalRemainingN'])assert.ok(text.includes(balance.kind==='money'?money(balance[key]):units(balance[key])),`Operator refresh shows ${key} from the current ledger`)
+    assert.ok(text.includes(money(balance.liabilityCents)))
+  }
+  assert.deepEqual(await h.api(`prepaid/${row.subscription}`,owner),state,'Refreshing the operator/API doors never consumes or settles prepaid credits')
+  const elapsedMs=performance.now()-started
+  assert.ok(elapsedMs<=60000,`Public operator/API refresh took ${elapsedMs} ms`)
+  return {revision:state.revision,entryKinds:[...new Set(state.entries.map(entry=>entry.kind))],elapsedMs}
+}
+
+export async function prepaidRefreshFlow(h,owner,{receiptPath}={}) {
+  const {prepaidFlow}=await import('./prepaid.mjs'),{prepaidTopupFlow}=await import('./prepaid-topup.mjs')
+  const samples=[]
+  // Existing public journeys expose callbacks only after the ledger transition
+  // has committed. Measure each distinct grant/drawdown/rollover/expiry state.
+  await prepaidFlow(h,owner,{onRefresh:async row=>samples.push({transition:'ledger-transition',...await prepaidRefreshParity(h,owner,row)})})
+  // Top-up has its own isolated installation and real processor network edge.
+  const {harness}=await import('./harness.mjs'),{harnessOptions}=await import('./prepaid-topup.mjs'),{applyPolicy}=await import('./policy-helper.mjs')
+  const topup=await harness(harnessOptions())
+  try{
+    assert.equal((await topup.raw('/auth/bootstrap',{body:{token:topup.vars.SETUP_TOKEN,displayName:'Synthetic refresh owner'}})).status,303)
+    const who=await topup.signIn(topup.vars.OWNER_EMAIL)
+    await topup.raw('/setup',{cookie:who,form:new URLSearchParams({confirm:'yes'})})
+    await topup.api('business.configure',who,{legal_name:'Synthetic refresh topup',timezone:'UTC',invoice_prefix:'REFRESH',payment_terms_days:30})
+    await applyPolicy(topup,who,'tax.declare',{tax_jurisdiction:'CA',tax_mode:'no_tax',tax_note:'Synthetic refresh timing proof'})
+    await topup.api('tax.review',who,{revision:(await topup.api('business',who)).revision})
+    await prepaidTopupFlow(topup,who,{onState:async state=>{if(state.label==='funded')samples.push({transition:'automatic-topup',...await prepaidRefreshParity(topup,who,state.row)})}})
+  }finally{await topup.close()}
+  for(const kind of ['grant','drawdown','expiry','rollover'])assert.ok(samples.some(sample=>sample.entryKinds.includes(kind)),`Refresh proof covers ${kind}`)
+  assert.ok(samples.some(sample=>sample.transition==='automatic-topup'))
+  const receipt={head:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),runId:process.env.NECTAR_RUN_ID??null,status:'passed',samples,maxElapsedMs:Math.max(...samples.map(sample=>sample.elapsedMs))}
+  if(receiptPath)await writeFile(receiptPath,JSON.stringify(receipt,null,2)+'\n')
+  return receipt
 }

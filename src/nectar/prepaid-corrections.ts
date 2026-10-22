@@ -7,7 +7,7 @@ import { requireFreshFactor } from './mfa'
 import { isDate } from './dates'
 import { lotStates } from './prepaid-math'
 import { prepaidRevisionGuard, prepaidSnapshot } from './prepaid-records'
-import { appendPrepaidBoundaries, introducePrepaidGrants, prepaidEntryKind, replayPrepaidHistory, type PrepaidReplayPeriod, type PrepaidReplayResult } from './prepaid-replay'
+import { appendPrepaidBoundaries, introducePrepaidGrants, introducePrepaidRefunds, prepaidEntryKind, replayPrepaidHistory, type PrepaidReplayPeriod, type PrepaidReplayResult } from './prepaid-replay'
 import type { PrepaidBasis, PrepaidEntry } from './prepaid-types'
 export { replayPrepaidPeriods, type PrepaidReplayPeriod } from './prepaid-replay'
 export interface PrepaidCorrectionPlan {
@@ -19,7 +19,7 @@ export interface PrepaidCorrectionPlan {
  * the already corrected ledger rather than reversing an unrelated decision. */
 export async function planPrepaidCorrection(current: PrepaidBasis, periods: PrepaidReplayPeriod[], date: string): Promise<PrepaidCorrectionPlan> {
   insist(isDate(date),'invalid_prepaid_correction_date')
-  const {replay,running}=replayPrepaidHistory(periods), first=periods[0].beforeInput.prepaid!
+  const {replay,running}=replayPrepaidHistory(periods,current.entries), first=periods[0].beforeInput.prepaid!
   insist(first.subscription===current.subscription && first.customer===current.customer,'prepaid_correction_source_required',409)
   const replayIds=new Set(periods.map(period=>period.invoice))
   // Earlier effective draws may have different opaque correction IDs from
@@ -34,6 +34,7 @@ export async function planPrepaidCorrection(current: PrepaidBasis, periods: Prep
   }
   insist(canonical(outsideDraws(current.entries))===canonical(outsideDraws(first.entries)),'prepaid_full_history_required',409)
   introducePrepaidGrants(running,current)
+  introducePrepaidRefunds(running,current.entries)
   appendPrepaidBoundaries(running,current)
   const buckets=new Map<string,{template:PrepaidEntry;amountN:number;liabilityCents:number;recognitionCents:number}>()
   for(const [entries,sign] of [[current.entries,-1],[running.entries,1]] as const)for(const entry of entries){

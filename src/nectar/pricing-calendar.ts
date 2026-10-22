@@ -1,3 +1,4 @@
+import { prepaidDrawEntries } from './prepaid-replay'
 // Pricing changes use the same service calendars as ordinary billing. A price
 // migration changes money/packaging, never silently changes the signed cadence.
 import type { Bindings } from '../auth.server'
@@ -54,7 +55,9 @@ function remainingInput(input: RatingInput, prior: Prior[]): RatingInput {
   const consumed = new Set(prior.flatMap(entry => entry.rating.consumedEvents))
   const charged = new Set(prior.flatMap(entry => entry.rating.lines.flatMap(line => typeof line.evidence.charge === 'string' ? [line.evidence.charge] : [])))
   const credits = new Set(prior.flatMap(entry => entry.rating.lines.filter(line => line.kind === 'credit').map(line => line.evidence.amendment)))
-  return { ...input, events: input.events.filter(event => !consumed.has(event.eventId)),
+  const prepaid=input.prepaid?{...input.prepaid,grants:[...input.prepaid.grants],entries:[...input.prepaid.entries]}:undefined
+  if(prepaid)for(const [index,entry]of prior.entries())for(const draw of prepaidDrawEntries(`projected-prepaid-${input.subscription.id}-${index}`,entry.rating.lines,prepaid))if(!prepaid.entries.some(saved=>saved.id===draw.id))prepaid.entries.push(draw)
+  return { ...input, ...(prepaid?{prepaid}:{}), events: input.events.filter(event => !consumed.has(event.eventId)),
     amendments: input.amendments.filter(amendment => amendment.kind !== 'fixed_credit' || !credits.has(amendment.id)),
     ...(input.charges ? { charges: input.charges.filter(charge => !charged.has(charge.id)) } : {}),
     ...(input.contracts ? { contracts: { ...input.contracts, invoices: [...input.contracts.invoices, ...prior.map((entry, index) => ({

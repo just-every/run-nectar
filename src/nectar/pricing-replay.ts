@@ -1,3 +1,6 @@
+import { prepaidSnapshot } from './prepaid-records'
+import { appendPrepaidBoundaries, introducePrepaidGrants, introducePrepaidRefunds, prepaidDrawEntries } from './prepaid-replay'
+import type { PrepaidBasis } from './prepaid-types'
 // Historical simulations use issued evidence, never a reconstruction from
 // today's subscription. Nothing in this module writes billing records.
 import type { Bindings } from '../auth.server'
@@ -192,6 +195,8 @@ export async function pricingReplay(env: Bindings, business: Business, payload: 
     ])
     const periods: ReplayPeriod[] = []
     const rerated = new Map<string, Line[]>()
+    let prepaid:PrepaidBasis|undefined
+    const refunds=(await prepaidSnapshot(env,sub.id))?.entries.filter(entry=>entry.kind==='refund')??[]
     for (const invoice of invoices) {
       const input = savedInput(invoice)
       insist(input.items.some(item => item.priceId === sourceId && item.from < input.period.end && (item.to ?? '9999-12-31') > input.period.start),
@@ -211,7 +216,14 @@ export async function pricingReplay(env: Bindings, business: Business, payload: 
         invoices: afterInput.contracts.invoices.map(previous => ({ ...previous,
           lines: rerated.get(previous.id) ?? previous.lines,
         })) }
+      if(afterInput.prepaid){
+        const snapshot=afterInput.prepaid
+        prepaid??={...snapshot,grants:[...snapshot.grants],entries:[...snapshot.entries]}
+        introducePrepaidGrants(prepaid,snapshot);introducePrepaidRefunds(prepaid,refunds);appendPrepaidBoundaries(prepaid,snapshot)
+        afterInput.prepaid={...prepaid,revision:snapshot.revision,grants:[...prepaid.grants],entries:[...prepaid.entries]}
+      }
       const after = rate(afterInput)
+      if(prepaid)for(const entry of prepaidDrawEntries(invoice.id,after.lines,prepaid))if(!prepaid.entries.some(saved=>saved.id===entry.id))prepaid.entries.push(entry)
       checkSelections(afterInput, after)
       rerated.set(invoice.id, after.lines)
       const periodRaw = raw.filter(event => event.occurredAt < zonedStart(input.period.end, input.timezone) &&
