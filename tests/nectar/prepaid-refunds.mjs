@@ -38,9 +38,9 @@ export function prepaidRefundEdge(){
 }
 const edge=prepaidRefundEdge()
 export const harnessOptions=()=>({stripeFetch:edge.fetch,stripeSecret:'synthetic-nectar-1',stripeSecondarySecret:'synthetic-nectar-2'})
-export async function prepaidRefundFlow(h,owner){
+export async function prepaidRefundFlow(h,owner,{onState=async()=>{}}={}){
   const api=(path,body,status)=>h.api(path,owner,body,status),refundPosts=()=>edge.calls.filter(call=>call.method==='POST').length
-  await h.advanceClock('2026-11-02T18:00:00Z');edge.at('2026-11-02T18:00:00Z')
+  await h.advanceClock('2026-11-01T18:00:00Z');edge.at('2026-11-01T18:00:00Z')
   await api('business.configure',{...await api('business'),timezone:'UTC'})
   await applyPolicy(h,owner,'tax.declare',{tax_jurisdiction:'CA',tax_mode:'no_tax',tax_note:'Synthetic unused paid refund'})
   await api('tax.review',{revision:(await api('business')).revision})
@@ -68,25 +68,29 @@ export async function prepaidRefundFlow(h,owner){
       await api('collection.customer.bind',{customer,account_ref:`synthetic-nectar-native-account-${n===2?2:1}`,stripe_customer_ref:`synthetic-nectar-native-customer-${n}`,confirm:true})
       const prepared=await api('collection.prepare',{invoice:row.invoice});await api('collection.confirm',prepared.instructions.confirm)
     }
-    await usage(row,620+n,n===2?'0.5':'20','2026-11-01');row.service=(await issue(row))[0]
-    const state=await api(`prepaid/${subscription}`);row.grant=state.grants[0].id;row.before=state;row.original=await api(`invoices/${row.invoice}`)
+    await usage(row,620+n,n===2?'0.5':'20','2026-11-01')
+    row.original=await api(`invoices/${row.invoice}`)
   }
+  await h.advanceClock('2026-11-02T18:00:00Z');edge.at('2026-11-02T18:00:00Z')
+  for(const row of rows){row.service=(await issue(row))[0];const state=await api(`prepaid/${row.subscription}`);row.grant=state.grants[0].id;row.before=state}
   await api('prepaid.refund.prepare',{grant:rows[3].grant,reason:'Unverified bank receipt cannot be a card refund'},409)
   for(const who of [finance,agent])await h.api('prepaid.refund.prepare',who,{grant:rows[0].grant,reason:'Unauthorized'},403)
   const prepare=row=>api('prepaid.refund.prepare',{grant:row.grant,reason:'Synthetic unused paid service returned to its original card'})
-  const first=await prepare(rows[0]);assert.deepEqual([first.quote.amountN,first.quote.amountCents],[6000,6000])
+  const first=await prepare(rows[0]);await onState({label:'prepared',rows,refund:first});assert.deepEqual([first.quote.amountN,first.quote.amountCents],[6000,6000])
   assert.deepEqual(await api(`prepaid/${rows[0].subscription}`),rows[0].before,'Preparing a refund reserves no balance and changes no ledger')
   await api('prepaid.refund.decide',{refund:first.id,basis_hash:first.basis,decision:'approved'},409)
   await h.api('prepaid.refund.decide',agent,{refund:first.id,basis_hash:first.basis,decision:'approved'},403)
   const paused=edge.pauseNext(),approval=h.api('prepaid.refund.decide',finance,{refund:first.id,basis_hash:first.basis,decision:'approved'})
   await paused.arrived
   try{
+    await onState({label:'held',rows,refund:first})
     await usage(rows[0],630,'5','2026-11-02')
     const upcoming=await api(`subscriptions/${rows[0].subscription}/upcoming?period=2026-11`)
     const next=(upcoming.invoices??[upcoming]).find(invoice=>invoice.billingDueDate==='2026-11-03')
     assert.equal(next.calculation.totalCents,1000,'Usage cannot spend credits reserved by an in-flight refund')
   }finally{paused.release()}
   const refunded=await approval
+  await onState({label:'refunded',rows,refund:refunded})
   assert.equal(refunded.status,'refunded');assert.equal(refunded.cashAmountCents,-6000);assert.ok(refunded.credit)
   assert.equal(refundPosts(),1)
   await h.api('prepaid.refund.decide',finance,{refund:first.id,basis_hash:first.basis,decision:'approved'},409)
@@ -104,10 +108,12 @@ export async function prepaidRefundFlow(h,owner){
   const unit=await prepare(rows[1]);assert.deepEqual([unit.quote.amountN,unit.quote.amountCents],[2500000,83])
   edge.loseNext();edge.visible(false)
   const unknown=await h.api('prepaid.refund.decide',finance,{refund:unit.id,basis_hash:unit.basis,decision:'approved'})
+  await onState({label:'uncertain',rows,refund:unknown})
   assert.equal(unknown.status,'uncertain');const afterUnknown=refundPosts()
   assert.equal((await api('prepaid.refund.reconcile',{refund:unit.id})).status,'uncertain');assert.equal(refundPosts(),afterUnknown)
   edge.visible(true)
   const recovered=await api('prepaid.refund.reconcile',{refund:unit.id})
+  await onState({label:'reconciled',rows,refund:recovered})
   assert.equal(recovered.status,'refunded');assert.equal(recovered.cashAmountCents,-83);assert.equal(refundPosts(),afterUnknown)
   const unitState=await api(`prepaid/${rows[1].subscription}`)
   assert.equal(unitState.entries.filter(entry=>entry.kind==='refund').length,1);assert.equal(unitState.entries.find(entry=>entry.kind==='refund').recognitionCents,0)
@@ -121,6 +127,7 @@ export async function prepaidRefundFlow(h,owner){
   const stale=await prepare(rows[2]);await usage(rows[2],631,'1','2026-11-02')
   await h.api('prepaid.refund.decide',finance,{refund:stale.id,basis_hash:stale.basis,decision:'approved'},409)
   assert.equal(refundPosts(),afterFailed);await h.api('prepaid.refund.decide',finance,{refund:stale.id,decision:'rejected'})
+  await onState({label:'refused',rows,refund:stale})
   console.log('CAT-004 unused paid money/units refunds: original capture, independent approval, exact zero-revenue liability/cash, reservation race, rejected/failed/stale and GET-only unknown recovery passed')
   return {rows,refunded,recovered}
 }
