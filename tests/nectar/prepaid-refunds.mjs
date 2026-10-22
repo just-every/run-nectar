@@ -40,7 +40,7 @@ export function prepaidRefundEdge(){
 }
 const edge=prepaidRefundEdge()
 export const harnessOptions=()=>({stripeFetch:edge.fetch,stripeSecret:'synthetic-nectar-1',stripeSecondarySecret:'synthetic-nectar-2'})
-export async function prepaidRefundFlow(h,owner,{onState=async()=>{},onTypedState=async()=>{},approveRefund,reconcileRefund}={}){
+export async function prepaidRefundFlow(h,owner,{onState=async()=>{},onTypedState=async()=>{},onSharedState=async()=>{},approveRefund,reconcileRefund}={}){
   const api=(path,body,status)=>h.api(path,owner,body,status),refundPosts=()=>edge.calls.filter(call=>call.method==='POST').length
   await h.advanceClock('2026-11-01T18:00:00Z');edge.at('2026-11-01T18:00:00Z')
   await api('business.configure',{...await api('business'),timezone:'UTC'})
@@ -49,11 +49,13 @@ export async function prepaidRefundFlow(h,owner,{onState=async()=>{},onTypedStat
   await api('access.give',{email:'synthetic-nectar-601@example.test',name:'Synthetic refund finance',role:'finance'})
   const finance=await h.signIn('synthetic-nectar-601@example.test',{requested:true}),agent={bearer:(await api('credential.issue',{name:'Synthetic refund observer',scopes:['prepare']})).key}
   const readers=[]
-  for(const [index,role] of ['support','accountant','collections'].entries()){
+  for(const [index,role] of ['support','accountant','collections','developer'].entries()){
     const email=`synthetic-nectar-${650+index}@example.test`
     await api('access.give',{email,name:`Synthetic refund ${role}`,role})
     readers.push({role,who:await h.signIn(email,{requested:true})})
   }
+  await api('access.give',{email:'synthetic-nectar-654@example.test',name:'Synthetic refund sales',role:'sales'})
+  const sales=await h.signIn('synthetic-nectar-654@example.test',{requested:true})
   const support=readers.find(reader=>reader.role==='support').who
   const typedRefund=async(row,refund,status,{erased=false}={})=>{
     const results=[]
@@ -132,6 +134,18 @@ export async function prepaidRefundFlow(h,owner,{onState=async()=>{},onTypedStat
   const refunded=await approval
   await onState({label:'refunded',rows,refund:refunded})
   await typedRefund(rows[0],first,'refunded')
+  for(const {role,who} of [...readers,{role:'agent',who:agent}]){
+    const sharedInvoice=await h.api(`invoices/${rows[0].invoice}`,who)
+    assert.equal(sharedInvoice.credits.find(credit=>credit.id===refunded.credit).reason,'unused_paid_credit',`${role} invoice credit has only a typed reason category`)
+    const sharedCustomer=await h.api(`customers/${rows[0].customer}`,who)
+    assert.equal(sharedCustomer.ledger.credits.find(credit=>credit.id===refunded.credit).reason,'unused_paid_credit',`${role} customer credit has only a typed reason category`)
+    if(role!=='agent')for(const path of [`/app/invoices/${rows[0].invoice}`,`/app/customers/${rows[0].customer}`])assert.ok(!(await h.page(path,who)).includes(first.reason),`${role} shared page excludes private refund narrative`)
+  }
+  assert.equal((await h.api(`customers/${rows[0].customer}`,sales)).ledger.credits.find(credit=>credit.id===refunded.credit).reason,'unused_paid_credit')
+  assert.ok(!(await h.page(`/app/customers/${rows[0].customer}`,sales)).includes(first.reason))
+  await h.api(`invoices/${rows[0].invoice}`,sales,undefined,403)
+  assert.equal((await h.api(`prepaid/refunds?subscription=${rows[0].subscription}`,finance)).find(row=>row.id===first.id).reason,first.reason,'Finance keeps private request narrative')
+  await onSharedState({row:rows[0],refund:refunded,readers,sales})
   for(const who of [support,agent]){
     const auth=typeof who==='string'?{cookie:who}:who
     for(const id of [first.id,'unavailable'])assert.equal((await h.raw(`/app/prepaid/refunds/${id}/proof`,auth)).status,403)
@@ -181,6 +195,7 @@ export async function prepaidRefundFlow(h,owner,{onState=async()=>{},onTypedStat
     const source=await h.raw(`${lot.href}?session=${encodeURIComponent(session.token)}`,{headers:{accept:'text/html'}})
     assert.equal(source.status,200)
     assert.doesNotMatch(await source.text(),/portal\.prepaid\.|untranslated_key|payment_intent|provider_ref|quote_json/)
+    const portalInvoice=await h.raw(`/portal/invoices/${rows[0].invoice}?session=${encodeURIComponent(session.token)}`);assert.equal(portalInvoice.status,200);assert.ok(!(await portalInvoice.text()).includes(first.reason))
     await onState({label:'customer-refund',rows,refund:refunded,portalSession:session,portalSource:lot.href,language})
   }
   const unit=await prepare(rows[1]);assert.deepEqual([unit.quote.amountN,unit.quote.amountCents],[2500000,83])
