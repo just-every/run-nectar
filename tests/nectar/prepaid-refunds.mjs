@@ -143,6 +143,11 @@ export async function prepaidRefundFlow(h,owner,{onState=async()=>{},onTypedStat
   assert.ok(proofAudit);assert.equal(proofAudit.actor,'synthetic-nectar-601@example.test')
   assert.deepEqual(JSON.parse(proofAudit.detail),{request:first.id,sha256:createHash('sha256').update(proofBytes).digest('hex'),size:proofBytes.length})
   assert.equal(JSON.parse(proofBytes.toString()).proof,'succeeded-refund-and-balance-debit')
+  const accountant=readers.find(reader=>reader.role==='accountant').who
+  const lifecycleCsv=await h.raw(`/app/exports/prepaid-refunds.csv?subscription=${rows[0].subscription}`,{cookie:accountant});assert.equal(lifecycleCsv.status,200)
+  const lifecycleText=await lifecycleCsv.text(),lifecycle=csvRows(lifecycleText).find(row=>row.id===first.id)
+  assert.ok(lifecycle);assert.equal(lifecycle.preparedBy,first.preparedBy);assert.equal(lifecycle.approvedBy,financePending.approvedBy??(await h.api(`prepaid/refunds?subscription=${rows[0].subscription}`,accountant)).find(row=>row.id===first.id).approvedBy);assert.equal(lifecycle.approvalMode,'two-person')
+  assert.doesNotMatch(lifecycleText,/Synthetic unused paid service returned to its original card|chargeRef|paymentMethodRef|succeeded-refund-and-balance-debit/)
   assert.equal(refunded.status,'refunded');assert.equal(refunded.cashAmountCents,-6000);assert.ok(refunded.credit)
   assert.equal(refundPosts(),1)
   await h.api('prepaid.refund.decide',finance,{refund:first.id,basis_hash:first.basis,decision:'approved'},409)
