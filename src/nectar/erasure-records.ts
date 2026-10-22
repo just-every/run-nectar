@@ -65,7 +65,8 @@ export async function erasurePlan(env: Bindings, customer: Row): Promise<Erasure
       if (foreignKeys.has(column) || (column.endsWith('_id') && !['external_id','event_id'].includes(column)) || column === 'id' || column === 'subject' || keep.has(column) || /(?:_at|_on|_date|_from|_to|_start|_end)$/.test(column)) continue
       if (column === 'external_id' || column === 'event_id' || column === 'reference') updates[column] = `erased-${row.id ?? customer.id}`
       else if (column === 'name' && table === 'nc_customers') updates[column] = 'Erased customer'
-      else if (column === 'provider_ref' || column === 'provider_schedule_ref' || column === 'stripe_customer_ref' || column==='payment_intent_ref' || column==='charge_ref' || column==='payment_method_ref') updates[column] = required.has(column) ? `erased-${row.id ?? customer.id}` : null
+      else if (['payment_intent_ref','charge_ref','payment_method_ref'].includes(column)) updates[column]=`erased-${row.id ?? customer.id}`
+      else if (column === 'provider_ref' || column === 'provider_schedule_ref' || column === 'stripe_customer_ref') updates[column] = required.has(column) ? `erased-${row.id ?? customer.id}` : null
       else updates[column] = column==='body' && table==='nc_notes' ? '[erased]' : ''
     }
     if(table==='nc_imported_collections'&&affected&&row.charge_ref)updates.history_payment_id=images.find(image=>image.table==='nc_incumbent_history'&&image.row.kind==='payment'&&image.row.status==='succeeded'&&image.row.provider_ref===row.charge_ref)?.row.id??row.history_payment_id

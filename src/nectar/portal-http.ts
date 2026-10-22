@@ -1,3 +1,4 @@
+import { portalTopupPage } from './portal-prepaid-topups'
 import { portalPrepaidTopupAuthorization, acceptPrepaidTopupAuthorization, revokePortalPrepaidTopupAuthorization } from './prepaid-topup-authorization'
 import { portalPrepaidData, portalPrepaidSource, portalPrepaidPage, portalPrepaidSourcePage, portalPrepaidCsv } from './portal-prepaid'
 import type { Bindings } from '../auth.server'
@@ -34,10 +35,11 @@ export async function portalResponse(request: Request, env: Bindings): Promise<R
     if(['/portal/prepaid-topup.accept','/portal/prepaid-topup.revoke'].includes(url.pathname)&&request.method==='POST'){
       const input=await Input.from(request)
       const result=url.pathname==='/portal/prepaid-topup.accept'?await acceptPrepaidTopupAuthorization(env,request,input):await revokePortalPrepaidTopupAuthorization(env,request,input)
-      return Response.json(result,{headers})
+      if(request.headers.get('content-type')?.startsWith('application/json'))return Response.json(result,{headers})
+      return new Response(null,{status:303,headers:{...headers,location:`/portal/prepaid-topups/${result.id}?session=${encodeURIComponent(url.searchParams.get('session')!)}`}})
     }
     const topupAuthorization=url.pathname.match(/^\/portal\/prepaid-topups\/([\w-]+)$/)?.[1]
-    if(topupAuthorization)return Response.json(await portalPrepaidTopupAuthorization(env,request,topupAuthorization),{headers})
+    if(topupAuthorization&&!request.headers.get('accept')?.includes('text/html'))return Response.json(await portalPrepaidTopupAuthorization(env,request,topupAuthorization),{headers})
     if (url.pathname === '/portal/answer-proposal' && request.method === 'POST') {
       if (request.headers.get('origin') !== session.origin) throw new NectarError('forbidden',403)
       const result=await portalProposeCredit(env,session,await Input.from(request))
@@ -67,12 +69,12 @@ export async function portalResponse(request: Request, env: Bindings): Promise<R
     if (url.pathname === '/portal/answer') return Response.json(await portalAnswer(env,session,input), { headers })
     const proposal = url.pathname.match(/^\/portal\/proposals\/([\w-]+)$/)?.[1]
     const invoice = url.pathname.match(/^\/portal\/invoices\/([\w-]+)$/)?.[1]
-    if (!['/portal','/portal/data','/portal/privacy','/portal/answers','/portal/upcoming','/portal/adjustments','/portal/prepaid'].includes(url.pathname) && !invoice && !proposal && !prepaidSource) throw new NectarError('not_found', 404)
+    if (!['/portal','/portal/data','/portal/privacy','/portal/answers','/portal/upcoming','/portal/adjustments','/portal/prepaid'].includes(url.pathname) && !invoice && !proposal && !prepaidSource && !topupAuthorization) throw new NectarError('not_found', 404)
     const data = await portalData(env, session, invoice), L = customerText(data.customer.language)
     if (url.pathname === '/portal/data') return Response.json(data, { headers: { ...headers, 'content-security-policy': "default-src 'none'; frame-ancestors 'none'" } })
     const token = url.searchParams.get('session')!
     const link = (path: string) => `${path}?session=${encodeURIComponent(token)}`
-    const body = url.pathname==='/portal/prepaid'?await portalPrepaidPage(env,session,link):prepaidSource?await portalPrepaidSourcePage(env,session,prepaidSource,link):url.pathname==='/portal/upcoming' ? await portalUpcomingPage(env,session,url,link) : url.pathname==='/portal/adjustments' ? await portalAdjustmentsPage(env,session,link) : proposal ? portalCreditProposalPage(session,await portalCreditProposal(env,session,proposal),link) : url.pathname === '/portal/answers' ? await portalAnswersPage(env,session,input,link) : url.pathname === '/portal/privacy' ? await portalPrivacy(env, session, link) : h`<header><h1>${L.t('portal.heading')}</h1><p>${data.customer.name}</p><p>${L.t('portal.readonly')}</p><a href="${link('/portal/privacy')}">${L.t('portal.privacy.heading')}</a> · <a href="${link('/portal/upcoming')}">${L.t('portal.upcoming.heading')}</a> · <a href="${link('/portal/adjustments')}">${L.t('portal.adjustments.heading')}</a> · <a href="${link('/portal/prepaid')}">${L.t('portal.prepaid.heading')}</a></header>
+    const body = topupAuthorization?await portalTopupPage(env,request,session,topupAuthorization,link):url.pathname==='/portal/prepaid'?await portalPrepaidPage(env,session,link):prepaidSource?await portalPrepaidSourcePage(env,session,prepaidSource,link):url.pathname==='/portal/upcoming' ? await portalUpcomingPage(env,session,url,link) : url.pathname==='/portal/adjustments' ? await portalAdjustmentsPage(env,session,link) : proposal ? portalCreditProposalPage(session,await portalCreditProposal(env,session,proposal),link) : url.pathname === '/portal/answers' ? await portalAnswersPage(env,session,input,link) : url.pathname === '/portal/privacy' ? await portalPrivacy(env, session, link) : h`<header><h1>${L.t('portal.heading')}</h1><p>${data.customer.name}</p><p>${L.t('portal.readonly')}</p><a href="${link('/portal/privacy')}">${L.t('portal.privacy.heading')}</a> · <a href="${link('/portal/upcoming')}">${L.t('portal.upcoming.heading')}</a> · <a href="${link('/portal/adjustments')}">${L.t('portal.adjustments.heading')}</a> · <a href="${link('/portal/prepaid')}">${L.t('portal.prepaid.heading')}</a></header>
       ${invoice ? h`<p><a href="${link('/portal')}">${L.t('portal.back')}</a></p>` : ''}
       ${data.invoices.length ? data.invoices.map(row => h`<section class="card"><h2>${invoice ? row.number : h`<a href="${link(`/portal/invoices/${row.id}`)}">${row.number}</a>`}</h2>
         <dl><dt>${L.t('portal.issued')}</dt><dd>${L.day(row.issue_date)}</dd><dt>${L.t('portal.due')}</dt><dd>${L.day(row.due_date)}</dd>
@@ -84,7 +86,7 @@ export async function portalResponse(request: Request, env: Bindings): Promise<R
     Object.entries(headers).forEach(([key,value]) => resultHeaders.set(key,value))
     // Match the ordinary erasure confirmation page: origin-only referrers let
     // native POST forms supply Origin without ever disclosing the session URL.
-    if (['/portal/privacy','/portal/answers','/portal/upcoming','/portal/adjustments'].includes(url.pathname)) resultHeaders.set('referrer-policy', 'strict-origin')
+    if (topupAuthorization||['/portal/privacy','/portal/answers','/portal/upcoming','/portal/adjustments'].includes(url.pathname)) resultHeaders.set('referrer-policy', 'strict-origin')
     resultHeaders.set('content-security-policy', `default-src 'none'; style-src 'self'; font-src 'self'; img-src 'self'; form-action 'self'; frame-ancestors ${session.audience === 'embedded' ? session.parent : "'none'"}; base-uri 'none'`)
     return new Response(request.method === 'HEAD' ? null : response.body, { headers: resultHeaders })
   } catch (error) {

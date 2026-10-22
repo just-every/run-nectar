@@ -26,6 +26,8 @@ export async function runPrepaidTopup(env:Bindings,actor:Actor,authorization:str
   const manual=await all(env,"SELECT id,invoice_id FROM nc_prepaid_funding_intents WHERE consent_id=? AND status='pending'",q.consent)
   insist(manual.every(intent=>!intent.invoice_id),'topup_manual_purchase_in_progress',409)
   const period=date.slice(0,7),id=newId(),funding=newId(),key=newId(),at=clockInstant(env)
+  const exposure=(await one(env,'SELECT COALESCE(SUM(amount_cents),0) AS total FROM nc_prepaid_topup_claims WHERE authorization_id=? AND period=?',authorization,period))!.total
+  insist(exposure+q.amountCents<=q.periodCapCents,'topup_monthly_cap',409)
   await commit(env,[owner,topupAuthorizationGuard(env,row),prepaidRevisionGuard(env,q.subscription,basis.revision),
     guard(env,'topup_state_changed','EXISTS(SELECT 1 FROM nc_prepaid_topup_states WHERE authorization_id=? AND armed=1 AND revision=? AND cycle=?)',authorization,state.revision,state.cycle),
     guard(env,'topup_monthly_cap',"COALESCE((SELECT SUM(amount_cents) FROM nc_prepaid_topup_claims WHERE authorization_id=? AND period=?),0)+?<=?",authorization,period,q.amountCents,q.periodCapCents),

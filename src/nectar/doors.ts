@@ -35,6 +35,7 @@ export const API_DOORS: [string, string][] = [
 export const LIST_DOORS = ['usageCorrections', 'erasures', 'noteMembers', 'customers', 'batches', 'runs', 'payments', 'notices', 'tasks', 'policies', 'proposals', 'imports', 'shadow', 'members', 'roles', 'credentials', 'audit', 'metadataObjects', 'notes']
 
 export const PAGE_DOORS: [string, string][] = [
+  ['^/app/prepaid/topup-authorizations/([\\w-]+)$','prepaidTopupSource'],
   ['^/app/prepaid/([\\w-]+/entries/[^/]+)$','prepaidSource'],
   ['^/app/prepaid/([\\w-]+)$','prepaid'],
   ['^/app/exports/prepaid/([\\w-]+)\\.csv$','prepaidCsv'],
