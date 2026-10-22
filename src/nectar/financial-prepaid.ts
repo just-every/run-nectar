@@ -35,6 +35,7 @@ export async function prepaidFinancialSources(env: Bindings, date: string, custo
     stmt(env, `SELECT l.* FROM nc_prepaid_ledger l JOIN nc_prepaid_grants g ON g.id=l.grant_id
       WHERE ${selected} AND l.service_date<=? ORDER BY l.service_date,l.created_at,l.id`, date, customer, customer, date),
   ])
+  const held=new Set((await env.DB.prepare("SELECT grant_id FROM nc_prepaid_refunds WHERE status IN ('approved','claimed','uncertain')").all<Row>()).results.map(row=>row.grant_id))
   const sources = new Map<string, { entry: { invoiceId: string; number: string; customerId: string; customerName: string; amountCents: number; sourceKind: 'prepaid_grant'; grantId: string; href: string; prepaid: PrepaidReportBalance }; components: ReportComponent[]; prepaid: PrepaidReportBalance }>()
   for (const row of grantResult.results) {
     const grant: PrepaidGrant = { id: row.id, subscription: row.subscription_id, customer: row.customer_id, kind: row.kind, source: row.source,
@@ -46,8 +47,9 @@ export async function prepaidFinancialSources(env: Bindings, date: string, custo
       invoiceId: entry.invoice_id, lineIndex: entry.line_index, purchaseInvoice: entry.purchase_invoice_id, purchaseLine: entry.purchase_line_id }))
     const lot = lotStates({ version: PREPAID_VERSION, subscription: grant.subscription, customer: grant.customer, revision: 0, grants: [grant], entries: ledger })[0]
     const expired = !!grant.expiresDate && grant.expiresDate <= date
-    const availableN = expired ? 0 : lot.remainingN
-    const amountCents = grant.kind === 'money' ? availableN : lot.liabilityCents
+    const refundPending=held.has(grant.id)
+    const availableN = expired || refundPending ? 0 : lot.remainingN
+    const amountCents = refundPending ? 0 : grant.kind === 'money' ? availableN : lot.liabilityCents
     if (!lot.remainingN && !amountCents) continue
     const ledgerLink = (id: string) => row.erased_at ? null : `/app/prepaid/${grant.subscription}/entries/${encodeURIComponent(id)}`
     const remainingQuantity = grant.kind === 'units' ? decimalText(BigInt(lot.remainingN)) : null
@@ -61,7 +63,8 @@ export async function prepaidFinancialSources(env: Bindings, date: string, custo
         liabilityCents: entry.liabilityCents, recognitionCents: entry.recognitionCents, href: ledgerLink(entry.id) })) }
     const components: ReportComponent[] = ledger.map(entry => ({ kind: `prepaid_${entry.kind}`, label: `${grant.kind === 'money' ? 'USD credit' : 'Unit consideration'} · ${entry.kind} · ${entry.serviceDate}`,
       amountCents: grant.kind === 'money' ? entry.amountN : entry.liabilityCents, ...(ledgerLink(entry.id) ? { href: ledgerLink(entry.id)! } : {}) }))
-    if (grant.kind === 'money' && expired && lot.remainingN) components.push({ kind: 'prepaid_unavailable', label: 'Expired credit unavailable; expiry settlement has not been recorded', amountCents: -lot.remainingN })
+    if(refundPending)components.push({kind:'prepaid_refund_reserved',label:'Unused paid credit reserved for its existing refund attempt',amountCents:-(grant.kind==='money'?lot.remainingN:lot.liabilityCents)})
+    if (!refundPending && grant.kind === 'money' && expired && lot.remainingN) components.push({ kind: 'prepaid_unavailable', label: 'Expired credit unavailable; expiry settlement has not been recorded', amountCents: -lot.remainingN })
     insist(components.reduce((sum, component) => sum + BigInt(component.amountCents), 0n) === BigInt(amountCents), 'prepaid_report_source_changed', 409)
     const id = `prepaid-${grant.id}`
     sources.set(id, { entry: { invoiceId: id, grantId: grant.id, number: `Prepaid ${grant.source} ${grant.kind}${grant.kind === 'units' ? ` · ${availableQuantity} ${row.unit_label ?? 'units'} available` : ''}`,

@@ -254,5 +254,6 @@
   "portal.topup.status.rejected": "Autorisation refusée",
   "portal.topup.status.revoked": "Autorisation révoquée",
   "portal.topup.status.card_changed": "Autorisation terminée : carte remplacée",
-  "portal.topup.status.expired": "Autorisation expirée"
+  "portal.topup.status.expired": "Autorisation expirée",
+  "correction.revenue.prepaidCredit": "Le crédit réduit le passif contractuel prépayé impayé de {amount} pour le mois commençant le {from} ; les revenus comptabilisés, les échéanciers originaux et la taxe restent inchangés."
 }

@@ -1,3 +1,4 @@
+import { prepaidRefundHolds } from './prepaid-refund-records'
 // Issue owns consumption. Every amount is the saved deterministic preview,
 // atomically fenced against all earlier grants, spending and funding changes.
 import type { Bindings } from '../auth.server'
@@ -68,7 +69,9 @@ async function prepaidSettlementEntries(env: Bindings, basis: PrepaidBasis, date
   const entries:PrepaidEntry[]=[]
   // Never expire funds before recorded, unissued earlier service is billed.
   const unbilled=await all(env,"SELECT occurred_at FROM nc_usage_events WHERE customer_id=? AND invoice_id IS NULL AND status='active' AND NOT EXISTS(SELECT 1 FROM nc_usage_voids v WHERE v.event_id=nc_usage_events.event_id)",basis.customer)
+  const held=new Set((await prepaidRefundHolds(env,basis.subscription)).map(hold=>hold.grantId))
   for(const lot of lotStates(basis)) {
+    if(held.has(lot.grant.id))continue
     const pending = boundaryEntries({...lot},date)
     if (!pending.length) continue
     const boundary = pending[0].serviceDate

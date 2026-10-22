@@ -254,5 +254,6 @@
   "portal.topup.status.rejected": "Autorización rechazada",
   "portal.topup.status.revoked": "Autorización revocada",
   "portal.topup.status.card_changed": "Autorización terminada: tarjeta reemplazada",
-  "portal.topup.status.expired": "Autorización vencida"
+  "portal.topup.status.expired": "Autorización vencida",
+  "correction.revenue.prepaidCredit": "El crédito reduce el pasivo contractual prepagado no pagado en {amount} en el mes que comienza el {from}; los ingresos reconocidos, los calendarios originales y los impuestos no cambian."
 }

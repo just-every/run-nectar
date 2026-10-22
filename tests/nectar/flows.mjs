@@ -45,6 +45,7 @@ await runIsolated('prepaid','prepaidPurchaseCreditFlow')
 await runIsolated('prepaid','prepaidErasureFlow')
 await runIsolated('portal-prepaid','portalPrepaidFlow')
 await runIsolated('prepaid-topup','prepaidTopupFlow')
+await runIsolated('prepaid-refunds','prepaidRefundFlow')
 await runIsolated('native-collection','nativeCollectionFlow')
 await runIsolated('retention','retentionIntervalFlow')
 await runIsolated('erasure','nativeIntervalErasureFlow')
@@ -407,7 +408,7 @@ try {
     await h.api('access.give', cookie.owner, { email: 'x@example.test', name: 'Nope', role: 'owner' }, 400)
     cookie.finance = await h.signIn('fran@example.test', { requested: true })
     cookie.accountant = await h.signIn('acct@example.test', { requested: true })
-    const ownerOnly = ['collection.customer.bind','collection.prepare','collection.confirm','collection.reconcile','prepaid.topup.prepare','prepaid.topup.revoke','prepaid.topup.run','prepaid.topup.reconcile','prepaid.prepare','prepaid.purchase.prepare','prepaid.funding.confirm','prepaid.consent.revoke','prepaid.settle','imported.collection.prepare','imported.collection.execute','imported.collection.reconcile','imported.collection.finalize','mfa.policy', 'mfa.reset', 'cadence.policy.prepare', 'lifecycle.policy', 'credit.policy', 'certificate.policy', 'business.configure', 'invoice.series','entity.create','entity.update','customer.entity','invoice.series.capture','invoice.series.capture-live', 'tax.declare', 'tax.review', 'access.give', 'access.end', 'credential.issue', 'credential.revoke', 'subscription.adopt']
+    const ownerOnly = ['prepaid.refund.prepare','collection.customer.bind','collection.prepare','collection.confirm','collection.reconcile','prepaid.topup.prepare','prepaid.topup.revoke','prepaid.topup.run','prepaid.topup.reconcile','prepaid.prepare','prepaid.purchase.prepare','prepaid.funding.confirm','prepaid.consent.revoke','prepaid.settle','imported.collection.prepare','imported.collection.execute','imported.collection.reconcile','imported.collection.finalize','mfa.policy', 'mfa.reset', 'cadence.policy.prepare', 'lifecycle.policy', 'credit.policy', 'certificate.policy', 'business.configure', 'invoice.series','entity.create','entity.update','customer.entity','invoice.series.capture','invoice.series.capture-live', 'tax.declare', 'tax.review', 'access.give', 'access.end', 'credential.issue', 'credential.revoke', 'subscription.adopt']
     const metricPreview = await h.api('meter.prepare', cookie.owner, { code:'role-preview', name:'Role preview', unit_label:'events', source_meter:ids.meter, definition:{ aggregation:'count' } })
     assert.ok(ACTIONS.length > 30)
     for (const name of ACTIONS) {

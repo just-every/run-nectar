@@ -1,3 +1,4 @@
+import { prepaidRefundHolds } from './prepaid-refund-records'
 // Subscription-readable financial summary. No grant, expiry, funding intent or
 // ledger entry is written while viewing an upcoming calculation.
 import type { Bindings } from '../auth.server'
@@ -24,6 +25,7 @@ export async function prepaidBalances(env: Bindings, actor: Actor, subscription:
   if (!recorded) return { subscription, asOf, revision: 0, balances: [] }
   const basis = { ...recorded, grants: recorded.grants.filter(grant => grant.effectiveDate <= asOf),
     entries: recorded.entries.filter(entry => entry.serviceDate <= asOf) }
+  const held=new Set((await prepaidRefundHolds(env,subscription)).map(hold=>hold.grantId))
   const groups = new Map<string, PrepaidBalance>()
   for (const lot of lotStates(basis)) {
     const { grant } = lot, key = `${grant.kind}:${grant.meterId ?? ''}`
@@ -31,7 +33,7 @@ export async function prepaidBalances(env: Bindings, actor: Actor, subscription:
       purchasedRemainingN: 0, promotionalRemainingN: 0, purchasedAvailableN: 0, promotionalAvailableN: 0 }
     // An expired, unsettled lot remains a recorded liability/quantity. It is
     // unavailable now; reading must not post its eventual expiry recognition.
-    const available = grant.expiresDate && grant.expiresDate <= asOf ? 0 : lot.remainingN
+    const available = held.has(grant.id) ? 0 : grant.expiresDate && grant.expiresDate <= asOf ? 0 : lot.remainingN
     row.remainingN += lot.remainingN; row.availableN += available; row.liabilityCents += lot.liabilityCents
     if (grant.source === 'purchase') { row.purchasedRemainingN += lot.remainingN; row.purchasedAvailableN += available }
     else { row.promotionalRemainingN += lot.remainingN; row.promotionalAvailableN += available }

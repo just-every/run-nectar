@@ -1,3 +1,4 @@
+import { prepaidRefundHolds } from './prepaid-refund-records'
 // Typed, source-linked ledger projections. Reads never grant, expire or charge.
 import type { Bindings } from '../auth.server'
 import { requireRead, requireCapability, can, type Actor } from './actor'
@@ -18,7 +19,8 @@ export async function prepaidState(env: Bindings, actor: Actor, subscription: st
   const basis={...recorded,entries:recorded.entries.filter(entry=>entry.serviceDate<=date)}
   // A future grant is not a negative balance; it has no effective grant entry.
   basis.grants=basis.grants.filter(grant=>grant.effectiveDate<=date)
-  const grants=lotStates(basis).map(lot=>({...lot.grant,remainingN:lot.remainingN,liabilityCents:lot.liabilityCents,availableN:lot.grant.expiresDate&&lot.grant.expiresDate<=date?0:lot.remainingN,expiryPending:!!lot.grant.expiresDate&&lot.grant.expiresDate<=date&&lot.remainingN>0}))
+  const held=new Set((await prepaidRefundHolds(env,subscription)).map(hold=>hold.grantId))
+  const grants=lotStates(basis).map(lot=>({...lot.grant,remainingN:lot.remainingN,liabilityCents:lot.liabilityCents,refundPending:held.has(lot.grant.id),availableN:held.has(lot.grant.id)?0:lot.grant.expiresDate&&lot.grant.expiresDate<=date?0:lot.remainingN,expiryPending:!!lot.grant.expiresDate&&lot.grant.expiresDate<=date&&lot.remainingN>0}))
   const balances=new Map<string,{kind:string;meterId:string|null;remainingN:number;availableN:number;liabilityCents:number}>()
   for(const grant of grants){const key=`${grant.kind}:${grant.meterId??''}`,row=balances.get(key)??{kind:grant.kind,meterId:grant.meterId,remainingN:0,availableN:0,liabilityCents:0};row.remainingN+=grant.remainingN;row.availableN+=grant.availableN;row.liabilityCents+=grant.liabilityCents;balances.set(key,row)}
   const requests=can(actor,'approve')?await all(env,'SELECT id,kind,status,payload_json,prepared_by,prepared_at,approval_mode FROM nc_prepaid_requests WHERE subscription_id=? ORDER BY prepared_at,id',subscription):[]

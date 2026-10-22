@@ -41,7 +41,7 @@ export async function portalPrepaidData(env: Bindings, session: CustomerSession)
     // Retain exhausted sources in the customer's ledger after their report
     // contribution reaches zero. Never substitute a conflicting live snapshot.
     insist(report ? report.remainingN === lot.remainingN && report.liabilityCents === lot.liabilityCents : lot.remainingN === 0 && lot.liabilityCents === 0, 'prepaid_balance_changed', 409)
-    const availableN = grant.expiresDate && grant.expiresDate <= date ? 0 : lot.remainingN
+    const availableN = report?.availableN ?? (grant.expiresDate && grant.expiresDate <= date ? 0 : lot.remainingN)
     const invoice = grant.purchaseInvoice ? invoices.find(invoice => invoice.id === grant.purchaseInvoice) : null
     insist(!grant.purchaseInvoice || invoice, 'not_found', 404)
     const meter = meters.find(meter => meter.id === grant.meterId)

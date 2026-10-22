@@ -1,3 +1,4 @@
+import { preparePrepaidRefund, decidePrepaidRefund, reconcilePrepaidRefund } from './prepaid-refund-actions'
 import { preparePrepaidTopupAuthorization, decidePrepaidTopupAuthorization, revokePrepaidTopupAuthorization } from './prepaid-topup-authorization'
 import { reconcilePrepaidTopup } from './prepaid-topup-charge'
 import { runPrepaidTopupFromDoor } from './prepaid-topup-actions'
@@ -75,6 +76,9 @@ export const actions: Record<string, Handler> = {
   'collection.prepare': prepareNativeCollection,
   'collection.confirm': confirmNativeCollection,
   'collection.reconcile': reconcileNativeCollection,
+  'prepaid.refund.prepare':preparePrepaidRefund,
+  'prepaid.refund.decide':decidePrepaidRefund,
+  'prepaid.refund.reconcile':reconcilePrepaidRefund,
   'prepaid.topup.prepare':preparePrepaidTopupAuthorization,
   'prepaid.topup.decide':decidePrepaidTopupAuthorization,
   'prepaid.topup.revoke':revokePrepaidTopupAuthorization,

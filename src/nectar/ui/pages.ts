@@ -1,3 +1,4 @@
+import { prepaidRefundSourcePage } from './prepaid-refunds'
 import { prepaidTopupSourcePage } from './prepaid-topups'
 import { prepaidPage, prepaidSourcePage } from './prepaid'
 import { prepaidCsv } from '../prepaid-reports'
@@ -43,6 +44,7 @@ import { reportPage, reportInvoicePage, reportLinePage } from './reports'
 type Page = (env: Bindings, actor: Actor, request: Request, url: URL, id: string) => Promise<Response>
 
 export const pages: Record<string, Page> = {
+  prepaidRefundSource:(env,actor,_r,url,id)=>prepaidRefundSourcePage(env,actor,id,url),
   prepaidTopupSource:(env,actor,_r,url,id)=>prepaidTopupSourcePage(env,actor,id,url),
   prepaid:(env,actor,_r,url,id)=>prepaidPage(env,actor,id,url),
   prepaidSource:(env,actor,_r,url,id)=>prepaidSourcePage(env,actor,id,url),
