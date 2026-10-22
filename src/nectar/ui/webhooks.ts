@@ -1,5 +1,5 @@
 import type { Bindings } from '../../auth.server'
-import type { Actor } from '../actor'
+import {can,type Actor} from '../actor'
 import { webhookList,webhookDetail } from '../webhooks'
 import { check,field,form,h,hidden,page,table } from './html'
 
@@ -18,6 +18,6 @@ export async function webhookDeliveryPage(env: Bindings, actor: Actor, id: strin
   const d=await webhookDetail(env,actor,id)
   return page('Webhook delivery',actor,h`<h1>Webhook delivery</h1><p>${d.type} · ${d.status}</p><p>Event <code>${d.event_id}</code></p>
   <section class="card"><h2>Attempts</h2>${table(['Attempt','Outcome','HTTP'],d.attempts.map(a=>[a.attempt,a.status,a.http_status??'No response']))}
-  ${actor.role==='owner'?form('webhook.replay',`/app/webhooks/${id}`,hidden('delivery',id),'Replay original event',{secondary:true}):''}</section>
-  ${actor.role==='owner'?h`<p><a href="/app/webhooks">All outbound webhooks</a></p>`:''}`,{url,current:'/app/more'})
+  ${can(actor,'credentials')?form('webhook.replay',`/app/webhooks/${id}`,hidden('delivery',id),'Replay original event',{secondary:true}):''}</section>
+  ${can(actor,'credentials')?h`<p><a href="/app/webhooks">All outbound webhooks</a></p>`:''}`,{url,current:'/app/more'})
 }

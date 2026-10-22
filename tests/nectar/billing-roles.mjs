@@ -38,8 +38,8 @@ const EXPECTED = {
     pages: ['prepaidRefundList', 'prepaidRefundSource', 'numberRegister', 'customers', 'customer', 'certificateFile', 'subscription', 'prepaid', 'prepaidSource', 'invoice', 'receivables', 'billingAnswers', 'reportLine', 'metadataList'],
   },
   developer: {
-    actions: ['credential.issue', 'credential.revoke', 'credential.version', 'answer.read', 'meter.preview', 'usage.correction.preview'],
-    api: READ_ALL_API, pages: READ_ALL_PAGES,
+    actions: ['credential.issue', 'credential.revoke', 'credential.version', 'webhook.register', 'webhook.rotate', 'webhook.disable', 'webhook.replay', 'webhook.dispatch', 'answer.read', 'meter.preview', 'usage.correction.preview'],
+    api: [...READ_ALL_API,'webhooks','webhookDelivery'], pages: [...READ_ALL_PAGES,'webhooks','webhookDelivery'],
   },
   analyst: {
     actions: ['report.schedule'],

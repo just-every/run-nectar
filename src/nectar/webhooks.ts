@@ -2,7 +2,7 @@ import { observeWebhookEntitlements } from './webhook-entitlements'
 // Outbound webhooks: explicit owner consent, immutable snapshots and durable
 // at-least-once delivery. A receiver must deduplicate the stable event id.
 import type { Bindings } from '../auth.server'
-import { actorLabel, requireOwner, type Actor } from './actor'
+import { actorLabel, can, requireMember, type Actor } from './actor'
 import { all, commit, guard, insist, newId, one, stmt } from './core'
 import { clockInstant } from './clock'
 import type { Input } from './input'
@@ -24,19 +24,19 @@ export function webhookUrl(value: string) {
 }
 const endpointSelect='id,url,enabled,overlap_until,created_by,created_at,revision'
 export async function webhookList(env: Bindings, actor: Actor) {
-  requireOwner(actor)
+  requireMember(actor,'credentials')
   return { endpoints:await all(env,`SELECT ${endpointSelect} FROM nc_webhook_endpoints ORDER BY created_at,id`), deliveries:await all(env,
     `SELECT d.*,e.type,e.subject FROM nc_webhook_deliveries d JOIN nc_webhook_events e ON e.id=d.event_id ORDER BY d.updated_at DESC,d.id LIMIT 100`) }
 }
 export async function webhookDetail(env: Bindings, actor: Actor, id: string) {
-  insist(actor.kind==='member'&&(actor.role==='owner'||actor.role==='finance'),'forbidden',403)
+  insist(actor.kind==='member'&&(can(actor,'credentials')||can(actor,'approve')),'forbidden',403)
   const delivery=await one(env,'SELECT * FROM nc_webhook_deliveries WHERE id=?',id)
   insist(delivery,'delivery_not_found',404)
-  if(actor.role!=='owner')return {id:delivery.id,event_id:delivery.event_id,status:delivery.status,type:(await one(env,'SELECT type FROM nc_webhook_events WHERE id=?',delivery.event_id))!.type,attempts:await all(env,'SELECT attempt,status,http_status,at FROM nc_webhook_attempts WHERE delivery_id=? ORDER BY attempt',id)}
+  if(!can(actor,'credentials'))return {id:delivery.id,event_id:delivery.event_id,status:delivery.status,type:(await one(env,'SELECT type FROM nc_webhook_events WHERE id=?',delivery.event_id))!.type,attempts:await all(env,'SELECT attempt,status,http_status,at FROM nc_webhook_attempts WHERE delivery_id=? ORDER BY attempt',id)}
   return { ...delivery,type:(await one(env,'SELECT type FROM nc_webhook_events WHERE id=?',delivery.event_id))!.type,event:await one(env,'SELECT id,type,subject,payload_json,created_at FROM nc_webhook_events WHERE id=?',delivery.event_id),attempts:await all(env,'SELECT attempt,status,http_status,at FROM nc_webhook_attempts WHERE delivery_id=? ORDER BY attempt',id) }
 }
 export async function registerWebhook(env: Bindings, actor: Actor, input: Input) {
-  requireOwner(actor);await requireFreshFactor(env,actor)
+  requireMember(actor,'credentials');await requireFreshFactor(env,actor)
   input.only(['url','consent','returnTo'])
   insist(input.flag('consent'),'webhook_consent_required')
   insist(env.MFA_KEY,'mfa_key_missing',409)
@@ -47,7 +47,7 @@ export async function registerWebhook(env: Bindings, actor: Actor, input: Input)
   return {id,url,secret}
 }
 export async function rotateWebhook(env: Bindings, actor: Actor, input: Input) {
-  requireOwner(actor);await requireFreshFactor(env,actor)
+  requireMember(actor,'credentials');await requireFreshFactor(env,actor)
   input.only(['endpoint','revision','overlap_seconds','returnTo'])
   insist(env.MFA_KEY,'mfa_key_missing',409)
   const id=input.text('endpoint'),revision=input.integer('revision',{min:1}),seconds=input.integer('overlap_seconds',{min:0,max:86400})!
@@ -58,14 +58,14 @@ export async function rotateWebhook(env: Bindings, actor: Actor, input: Input) {
   return {id,secret,overlap_until:at+seconds*1000}
 }
 export async function disableWebhook(env: Bindings, actor: Actor, input: Input) {
-  requireOwner(actor);await requireFreshFactor(env,actor)
+  requireMember(actor,'credentials');await requireFreshFactor(env,actor)
   input.only(['endpoint','returnTo'])
   const id=input.text('endpoint')
   await commit(env,[guard(env,'stale','EXISTS(SELECT 1 FROM nc_webhook_endpoints WHERE id=? AND enabled=1)',id),stmt(env,'UPDATE nc_webhook_endpoints SET enabled=0,revision=revision+1,previous_sealed=NULL,overlap_until=NULL WHERE id=?',id),stmt(env,"UPDATE nc_webhook_deliveries SET status='suppressed',claim=NULL WHERE endpoint_id=? AND status<>'delivered'",id)],{actor:actorLabel(actor),action:'webhook.disable',subject:id})
   return {id,enabled:false}
 }
 export async function replayWebhook(env: Bindings, actor: Actor, input: Input) {
-  requireOwner(actor);await requireFreshFactor(env,actor)
+  requireMember(actor,'credentials');await requireFreshFactor(env,actor)
   input.only(['delivery','returnTo'])
   const id=input.text('delivery'),at=clockInstant(env)
   await commit(env,[guard(env,'not_replayable',`EXISTS(SELECT 1 FROM nc_webhook_deliveries d JOIN nc_webhook_endpoints p ON p.id=d.endpoint_id LEFT JOIN nc_customers c ON c.id=d.customer_id WHERE d.id=? AND d.status<>'sending' AND p.enabled=1 AND c.erased_at IS NULL AND NOT EXISTS(SELECT 1 FROM nc_erased_records WHERE record_id=d.event_id))`,id),stmt(env,"UPDATE nc_webhook_deliveries SET status='pending',next_at=?,deadline=?,updated_at=? WHERE id=?",at,at+259200000,at,id)],{actor:actorLabel(actor),action:'webhook.replay',subject:id})
@@ -106,5 +106,5 @@ export async function dispatchWebhooks(env: Bindings) {
   return {processed:due.length}
 }
 export async function dispatchWebhookDoor(env: Bindings, actor: Actor, input: Input) {
-  requireOwner(actor);input.only(['returnTo']);return await dispatchWebhooks(env)
+  requireMember(actor,'credentials');input.only(['returnTo']);return await dispatchWebhooks(env)
 }

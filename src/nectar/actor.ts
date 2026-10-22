@@ -25,7 +25,7 @@ export const ROLE_LABELS: Record<Role, string> = {
   collections: 'Collections: customers, invoices and payments; allocations, reminders, follow-up tasks and notes',
   sales: 'Sales: customers, catalog and subscriptions; prepares plan changes, amendments and order setups for approval',
   support: "Support: a customer's whole record, notes and credits up to the support limit",
-  developer: 'Developer: reads billing and manages agent credentials; no financial actions',
+  developer: 'Developer: reads billing and manages agent credentials and outbound webhooks; no financial actions',
   custom: 'Custom: only the capabilities chosen for the role',
 }
 

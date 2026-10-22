@@ -34,7 +34,7 @@ export async function setNotificationPreferences(env: Bindings, actor: Actor, in
 // GOV-001/INT-003: an alert needs the member's current authority to read the
 // record and act on it, never a role name alone; opting in grants nothing.
 const ALERT_AUTHORITY: Record<AlertEvent, { read: Capability[]; act: Capability[] }> = {
-  webhook_failure: { read: ['settings'], act: ['settings'] },
+  webhook_failure: { read: ['read'], act: ['credentials','approve'] },
   payment_mismatch: { read: ['read', 'read.payments'], act: ['receivables'] },
   billrun_exceptions: { read: ['read', 'read.invoices'], act: ['approve'] },
   proposals: { read: ['read'], act: ['approve'] },
@@ -42,7 +42,6 @@ const ALERT_AUTHORITY: Record<AlertEvent, { read: Capability[]; act: Capability[
 const ALERT_SQL = (event: AlertEvent, member = '') => `SELECT m.id,m.email,m.role,r.capabilities AS custom FROM nc_members m JOIN nc_notification_preferences p ON p.member_id=m.id
     LEFT JOIN nc_roles r ON r.id=m.custom_role_id WHERE m.status='active' AND p.${event}=1${member}`
 const authorized = (event: AlertEvent, row: { role: Role; custom: string | null }) => {
-  if(event==='webhook_failure')return row.role==='owner'||row.role==='finance'
   const held = memberCapabilities(row.role, row.custom), need = ALERT_AUTHORITY[event]
   return need.read.some(c => held.has(c)) && need.act.some(c => held.has(c))
 }

@@ -51,7 +51,7 @@ export const NAV: { href: string; label: string; icon: IconName; show: (actor: A
 ]
 export const MORE: { href: string; label: string; about: string; icon: IconName; show: (actor: Actor) => boolean }[] = [
   { href: '/app/hierarchies', label: 'Customer hierarchies', icon: 'customers', about: 'Parent payers, division billing and shared commitment tracking.', show: actor => actor.kind === 'member' && actor.role === 'owner' },
-  { href: '/app/webhooks', label: 'Outbound webhooks', icon: 'access', about: 'Register receivers, rotate signing secrets and review delivery attempts.', show: actor => actor.kind === 'member' && actor.role === 'owner' },
+  { href: '/app/webhooks', label: 'Outbound webhooks', icon: 'access', about: 'Register receivers, rotate signing secrets and review delivery attempts.', show: actor => actor.kind === 'member' && can(actor, 'credentials') },
   { href: '/app/erasures', label: 'Privacy erasure', icon: 'customers', about: 'Verify requests, erase personal data and review financial retention receipts.', show: actor => actor.kind === 'member' && can(actor, 'read') },
   { href: '/app/cadences', label: 'Collections cadences', icon: 'receivables', about: 'Transfer reminders, promise holds, disputed amounts and owner escalation.', show: actor => can(actor, 'read') || can(actor, 'receivables') },
   { href: '/app/answers', label: 'Billing answers', icon: 'sparkle', about: 'Ask about saved invoice calculations, source events and billing terms.', show: actor => canRead(actor, 'customers') && canRead(actor, 'invoices') },
