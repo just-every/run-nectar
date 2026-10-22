@@ -46,5 +46,5 @@ export async function prepaidCsv(env: Bindings, actor: Actor, subscription: stri
  * discount lines cancel the service consideration; these valued entries earn
  * the purchased consideration once, including exact final-unit rounding. */
 export async function prepaidPurchaseRecognition(env: Bindings, invoice: string) {
-  return (await all(env,"SELECT id,grant_id,service_date,recognition_cents,invoice_id,purchase_line_id,kind FROM nc_prepaid_ledger WHERE purchase_invoice_id=? AND recognition_cents>0 ORDER BY service_date,id",invoice)).map(row=>({id:row.id,grantId:row.grant_id,date:row.service_date,period:row.service_date.slice(0,7),amountCents:row.recognition_cents,serviceInvoice:row.invoice_id,purchaseLine:row.purchase_line_id,kind:row.kind,source:`/app/prepaid/entries/${encodeURIComponent(row.id)}`}))
+  return (await all(env,"SELECT id,subscription_id,grant_id,service_date,recognition_cents,invoice_id,purchase_line_id,kind FROM nc_prepaid_ledger WHERE purchase_invoice_id=? AND recognition_cents>0 ORDER BY service_date,id",invoice)).map(row=>({id:row.id,grantId:row.grant_id,date:row.service_date,period:row.service_date.slice(0,7),amountCents:row.recognition_cents,serviceInvoice:row.invoice_id,purchaseLine:row.purchase_line_id,kind:row.kind,source:`/app/prepaid/${row.subscription_id}/entries/${encodeURIComponent(row.id)}`}))
 }

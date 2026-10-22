@@ -139,5 +139,29 @@ export async function prepaidFlow(h,owner,{fundPurchase,onState=async()=>{}}={})
   for(const who of [agent,reader])for(const action of ['prepaid.prepare','prepaid.purchase.prepare','prepaid.funding.confirm','prepaid.settle','prepaid.consent.revoke'])await h.api(action,who,{},403)
   await h.api(`prepaid/${units.subscription}`,undefined,undefined,401)
   assert.equal((await h.api(`prepaid/${units.subscription}`,reader)).balances[0].remainingN,unitState.balances[0].remainingN+1000000)
+  await onState({row,units,purchaseInvoice,topupInvoice,january,february,expired,unitState})
   console.log('CAT-004 prepaid foundation: governed money/units, real paid purchases, pure previews, priority, source tax, exact consumption, capped rollover, expiry and consent-bound pending topups passed')
+  return {row,units,purchaseInvoice,topupInvoice,january,february,expired,unitState}
+}
+
+// New customer-owned ledger families inherit withdrawal and financial custody.
+export async function prepaidErasureFlow(h,owner){
+  const {row,purchaseInvoice,topupInvoice}=await prepaidFlow(h,owner)
+  const api=(path,body,status)=>h.api(path,owner,body,status)
+  const before=await api(`revenue?from=2026-01&to=2026-12&customer=${row.customer}`)
+  const request=await api('erasure.request',{customer:row.customer})
+  const link=h.mails.at(-1).text.match(/https?:\/\/[^\s"<]+\/erase\/[a-f0-9]{64}/)[0]
+  assert.equal((await h.raw(new URL(link).pathname,{form:new URLSearchParams({confirm:'yes'})})).status,200)
+  const approved=await api('erasure.approve',{request:request.id,confirm:true})
+  for(const kind of ['nc_prepaid_requests','nc_prepaid_consents','nc_prepaid_funding_intents'])assert.ok(approved.receipt.changed.some(change=>change.kind===kind),kind)
+  await api(`prepaid/${row.subscription}`,undefined,410)
+  await api('prepaid.prepare',{subscription:row.subscription},410)
+  const after=await api(`revenue?from=2026-01&to=2026-12&customer=${row.customer}`)
+  assert.deepEqual(after.months,before.months,'Anonymous retained prepaid purchase and consumption schedules preserve every financial cent and date')
+  for(const invoice of [purchaseInvoice,topupInvoice]){
+    const source=await api(`revenue/${invoice.id}?from=2026-01&to=2026-12`)
+    for(const privateText of ['synthetic-nectar-310@example.test','Synthetic prepaid 310','synthetic-nectar-payment-'])assert.ok(!JSON.stringify(source).includes(privateText))
+  }
+  const audit=await api('audit')
+  assert.ok(!JSON.stringify(audit).includes('synthetic-nectar-310@example.test'))
 }

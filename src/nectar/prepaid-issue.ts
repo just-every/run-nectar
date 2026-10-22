@@ -57,7 +57,15 @@ export async function settlePrepaid(env: Bindings, actor: Actor, input: Input) {
   requireOwner(actor); await requireFreshFactor(env,actor)
   const subscription=input.text('subscription',{max:100}), basis=await prepaidSnapshot(env,subscription)
   insist(basis,'prepaid_account_not_found',404)
-  const date=today((await requireBusiness(env)).timezone,clockInstant(env)), entries:PrepaidEntry[]=[]
+  const date=today((await requireBusiness(env)).timezone,clockInstant(env)), entries=await prepaidSettlementEntries(env,basis,date)
+  await commit(env,[...prepaidLedgerStatements(env,basis,entries),...await prepaidTopupStatements(env,basis,entries)],{actor:actorLabel(actor),action:'prepaid.settle',subject:subscription,detail:{date,entries:entries.map(entry=>({id:entry.id,kind:entry.kind,amountN:entry.amountN,recognitionCents:entry.recognitionCents}))}})
+  return {subscription,date,entries}
+}
+
+/** Reusable cron work is limited to explicitly approved expiry/rollover terms;
+ * low-balance consent creates an intent only. It never calls a processor. */
+async function prepaidSettlementEntries(env: Bindings, basis: PrepaidBasis, date: string) {
+  const entries:PrepaidEntry[]=[]
   // Never expire funds before recorded, unissued earlier service is billed.
   const unbilled=await all(env,"SELECT occurred_at FROM nc_usage_events WHERE customer_id=? AND invoice_id IS NULL AND status='active' AND NOT EXISTS(SELECT 1 FROM nc_usage_voids v WHERE v.event_id=nc_usage_events.event_id)",basis.customer)
   for(const lot of lotStates(basis)) {
@@ -69,6 +77,23 @@ export async function settlePrepaid(env: Bindings, actor: Actor, input: Input) {
     insist(!unbilled.some(event=>localDate(event.occurred_at,zone)>=lot.grant.effectiveDate&&localDate(event.occurred_at,zone)<boundary),'prepaid_unbilled_service',409)
     entries.push(...boundaryEntries(lot,date))
   }
-  await commit(env,[...prepaidLedgerStatements(env,basis,entries),...await prepaidTopupStatements(env,basis,entries)],{actor:actorLabel(actor),action:'prepaid.settle',subject:subscription,detail:{date,entries:entries.map(entry=>({id:entry.id,kind:entry.kind,amountN:entry.amountN,recognitionCents:entry.recognitionCents}))}})
-  return {subscription,date,entries}
+  return entries
+}
+export async function settlePrepaidScheduled(env: Bindings, actor: Actor) {
+  requireOwner(actor)
+  const date=today((await requireBusiness(env)).timezone,clockInstant(env)), settled:string[]=[], deferred:{subscription:string;reason:string}[]=[]
+  const accounts=await all(env,'SELECT a.subscription_id FROM nc_prepaid_accounts a JOIN nc_customers c ON c.id=a.customer_id WHERE c.erased_at IS NULL ORDER BY a.subscription_id')
+  for(const account of accounts){
+    const basis=(await prepaidSnapshot(env,account.subscription_id))!
+    let entries:PrepaidEntry[]
+    try { entries=await prepaidSettlementEntries(env,basis,date) } catch(error) {
+      if(error instanceof Error && error.message==='prepaid_unbilled_service'){deferred.push({subscription:basis.subscription,reason:error.message});continue}
+      throw error
+    }
+    const funding=await prepaidTopupStatements(env,basis,entries)
+    if(!entries.length&&!funding.length)continue
+    await commit(env,[guard(env,'forbidden',"EXISTS(SELECT 1 FROM nc_members WHERE id=? AND role='owner' AND status='active')",actor.id),...prepaidLedgerStatements(env,basis,entries),...funding],{actor:actorLabel(actor),action:'prepaid.scheduled.settle',subject:basis.subscription,detail:{date,entries:entries.map(entry=>entry.id)}})
+    settled.push(basis.subscription)
+  }
+  return {date,settled,deferred}
 }
