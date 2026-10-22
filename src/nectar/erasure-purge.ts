@@ -14,11 +14,12 @@ export async function purgeErasure(env: Bindings, actor: Actor) {
   for(const request of await all(env,"SELECT * FROM nc_erasure_requests WHERE status='complete' AND purged_at IS NULL AND retain_until IS NOT NULL AND retain_until<=?",day)) {
     const tables=await all(env,"SELECT name FROM sqlite_master WHERE type='table' AND name GLOB 'nc_*' AND name NOT IN ('nc_erasure_requests','nc_erased_records','nc_erasure_financial','nc_privacy_context','nc_guard','nc_audit')")
     const ids=new Set((await all(env,'SELECT record_id FROM nc_erasure_financial WHERE request_id=?',request.id)).map(r=>r.record_id))
+    for(const authorization of await all(env,'SELECT id FROM nc_prepaid_topup_authorizations WHERE customer_id=?',request.customer_id))ids.add(authorization.id)
     const selected=new Map<string,{row:Row;keys:string[]}[]>(),foreign=new Map<string,string[]>()
     const contents=[]
     for(const {name} of tables){const columns=await all(env,`PRAGMA table_info(${q(name)})`);const keys=columns.filter(c=>c.pk).map(c=>c.name);foreign.set(name,(await all(env,`PRAGMA foreign_key_list(${q(name)})`)).map(f=>f.table));for(const row of await all(env,`SELECT * FROM ${q(name)}`))contents.push({name,row,keys})}
     const picked=new Set<Row>()
-    for(let changed=true;changed;){changed=false;for(const entry of contents){if(picked.has(entry.row))continue;if(ids.has(entry.row.id)||Object.entries(entry.row).some(([k,v])=>['invoice_id','payment_id','credit_id','record_id','note_id','correction_id','original_invoice_id','purchase_invoice_id','purchase_line_id','funding_id','grant_id','request_id','allocation_id'].includes(k)&&ids.has(v))){picked.add(entry.row);if(entry.row.id)ids.add(entry.row.id);selected.set(entry.name,[...(selected.get(entry.name)??[]),entry]);changed=true}}}
+    for(let changed=true;changed;){changed=false;for(const entry of contents){if(picked.has(entry.row))continue;if(ids.has(entry.row.id)||Object.entries(entry.row).some(([k,v])=>['invoice_id','payment_id','credit_id','record_id','note_id','correction_id','original_invoice_id','purchase_invoice_id','purchase_line_id','funding_id','grant_id','request_id','allocation_id','authorization_id'].includes(k)&&ids.has(v))){picked.add(entry.row);if(entry.row.id)ids.add(entry.row.id);selected.set(entry.name,[...(selected.get(entry.name)??[]),entry]);changed=true}}}
     const order:string[]=[],remaining=new Set(selected.keys())
     while(remaining.size){const leaves=[...remaining].filter(parent=>![...remaining].some(child=>child!==parent&&foreign.get(child)?.includes(parent)));insist(leaves.length,'financial_retention_dependency_cycle',409);leaves.forEach(t=>{order.push(t);remaining.delete(t)})}
     const receipt=parseJson<Row>(request.receipt_json,{})

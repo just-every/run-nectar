@@ -528,6 +528,28 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
   "prepaid.settle": {
     "subscription": "text"
   },
+  "prepaid.topup.decide": {
+    "authorization": "text",
+    "basis_hash": "text",
+    "confirm_single": "flag",
+    "decision": "text"
+  },
+  "prepaid.topup.prepare": {
+    "account_ref": "text",
+    "consent": "text",
+    "end_date": "text",
+    "period_cap": "text",
+    "start_date": "text"
+  },
+  "prepaid.topup.reconcile": {
+    "claim": "text"
+  },
+  "prepaid.topup.revoke": {
+    "authorization": "text"
+  },
+  "prepaid.topup.run": {
+    "authorization": "text"
+  },
   "price.create": {
     "*": "has",
     "billing_timing": "text",

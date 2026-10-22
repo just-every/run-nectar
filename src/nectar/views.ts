@@ -1,3 +1,4 @@
+import { readPrepaidTopupAuthorizations, readPrepaidTopupClaims } from './prepaid-topup-records'
 import { readNativeCollections } from './payments/collection'
 import { prepaidState, prepaidSource } from './prepaid-reports'
 import { billingEntities } from './billing-entities'
@@ -71,6 +72,8 @@ export async function customerView(env: Bindings, actor: Actor, id: string, url?
 }
 
 export const views: Record<string, View> = {
+  prepaidTopupAuthorizations:(env,actor,_r,_id,url)=>readPrepaidTopupAuthorizations(env,actor,url.searchParams.get('subscription')??undefined),
+  prepaidTopupClaims:(env,actor,_r,_id,url)=>readPrepaidTopupClaims(env,actor,url.searchParams.get('subscription')??undefined),
   nativeCollections:(env,actor,_r,_id,url)=>readNativeCollections(env,actor,url.searchParams.get('customer')??undefined),
   prepaid:(env,actor,_r,id,url)=>prepaidState(env,actor,id,url.searchParams.get('date')??undefined),
   prepaidSource:(env,actor,_r,id)=>{const [subscription,entry]=id.split('/entries/');return prepaidSource(env,actor,subscription,decodeURIComponent(entry))},

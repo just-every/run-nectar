@@ -127,7 +127,9 @@ export async function prepaidTopupFlow(h,owner,{onState=async()=>{}}={}){
   // A lost acknowledgement can settle on a later capture date. The original
   // purchase remains immutable while only the funded grant adopts that date.
   const delayed=rows[4];edge.losePayment()
-  const waiting=await api('prepaid.topup.run',{authorization:delayed.authorization.id})
+  const tick=await h.raw(`/cdn-cgi/local/scheduled?time=${Date.parse(instant)}&cron=${encodeURIComponent('0 14 * * *')}`)
+  assert.equal(tick.status,200,await tick.text())
+  const waiting=(await api(`prepaid/topup-claims?subscription=${delayed.subscription}`))[0]
   assert.equal(waiting.status,'uncertain')
   const delayedInvoice=await api(`invoices/${waiting.invoice_id}`),delayedOriginal=delayedInvoice.calculation
   assert.equal(delayedOriginal.inputs.prepaidPurchase.terms.effectiveDate,'2026-11-03')

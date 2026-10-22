@@ -3,6 +3,8 @@
 // each role, so a new door cannot be added without being checked.
 // Patterns are relative to /api/nectar/ (API) or absolute (pages).
 export const API_DOORS: [string, string][] = [
+  ['^prepaid/topup-authorizations$','prepaidTopupAuthorizations'],
+  ['^prepaid/topup-claims$','prepaidTopupClaims'],
   ['^native-collections$','nativeCollections'],
   ['^prepaid/([\\w-]+/entries/[^/]+)$','prepaidSource'],
   ['^prepaid/([\\w-]+)$','prepaid'],

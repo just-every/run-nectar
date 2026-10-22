@@ -1,3 +1,4 @@
+import { portalPrepaidTopupAuthorization, acceptPrepaidTopupAuthorization, revokePortalPrepaidTopupAuthorization } from './prepaid-topup-authorization'
 import { portalPrepaidData, portalPrepaidSource, portalPrepaidPage, portalPrepaidSourcePage, portalPrepaidCsv } from './portal-prepaid'
 import type { Bindings } from '../auth.server'
 import { NectarError } from './core'
@@ -23,13 +24,20 @@ export async function portalResponse(request: Request, env: Bindings): Promise<R
   let language: string | null = null
   // Public stylesheet for refusal pages has no customer or merchant data.
   if (url.pathname === '/portal/theme.css' && !url.search) return ['GET','HEAD'].includes(request.method) ? portalStyle() : new Response(null, { status: 405, headers: { ...headers, allow: 'GET, HEAD' } })
-  if (!['GET','HEAD'].includes(request.method) && !(['/portal/privacy','/portal/answer-proposal'].includes(url.pathname) && request.method === 'POST')) {
+  if (!['GET','HEAD'].includes(request.method) && !(['/portal/privacy','/portal/answer-proposal','/portal/prepaid-topup.accept','/portal/prepaid-topup.revoke'].includes(url.pathname) && request.method === 'POST')) {
     if (request.body) await request.arrayBuffer()
     return new Response(null, { status: 405, headers: { ...headers, allow: 'GET, HEAD' } })
   }
   try {
     const session = await customerSession(env, request)
     language = session.language
+    if(['/portal/prepaid-topup.accept','/portal/prepaid-topup.revoke'].includes(url.pathname)&&request.method==='POST'){
+      const input=await Input.from(request)
+      const result=url.pathname==='/portal/prepaid-topup.accept'?await acceptPrepaidTopupAuthorization(env,request,input):await revokePortalPrepaidTopupAuthorization(env,request,input)
+      return Response.json(result,{headers})
+    }
+    const topupAuthorization=url.pathname.match(/^\/portal\/prepaid-topups\/([\w-]+)$/)?.[1]
+    if(topupAuthorization)return Response.json(await portalPrepaidTopupAuthorization(env,request,topupAuthorization),{headers})
     if (url.pathname === '/portal/answer-proposal' && request.method === 'POST') {
       if (request.headers.get('origin') !== session.origin) throw new NectarError('forbidden',403)
       const result=await portalProposeCredit(env,session,await Input.from(request))
@@ -81,7 +89,7 @@ export async function portalResponse(request: Request, env: Bindings): Promise<R
     return new Response(request.method === 'HEAD' ? null : response.body, { headers: resultHeaders })
   } catch (error) {
     if (!(error instanceof NectarError)) throw error
-    if(url.pathname==='/portal/answer-proposal' && request.headers.get('content-type')?.startsWith('application/json')) return Response.json({error:error.code},{status:error.status,headers})
+    if(['/portal/answer-proposal','/portal/prepaid-topup.accept','/portal/prepaid-topup.revoke'].includes(url.pathname) && request.headers.get('content-type')?.startsWith('application/json')) return Response.json({error:error.code},{status:error.status,headers})
     const known = language !== null && ![401,403].includes(error.status)
     const L = customerText(known ? language : null)
     const title = L.t(known ? 'portal.request.unavailable' : 'portal.unavailable')
