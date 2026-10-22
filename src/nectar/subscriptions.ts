@@ -1,3 +1,4 @@
+import { planChangesFor } from './plan-changes'
 import { serviceEndSql } from './renewal-sql'
 import { termRecords } from './renewal-terms'
 // Flows 4 and 8: subscriptions with an explicit cycle anchor, optional trial
@@ -41,7 +42,7 @@ export async function subscriptionDetail(env: Bindings, actor: Actor, id: string
     all(env, "SELECT id, number, status, period_start, period_end, total_cents FROM nc_invoices WHERE subscription_id = ? AND status <> 'discarded' ORDER BY period_start DESC", id),
   ])
   const history = await lifecycleHistory(env, id)
-  return { ...sub, cancellations:await intervalCancellations(env,id),renewal:await termRecords(env,actor,id), contracts:await contractsFor(env,id),burnDown:await contractBurnDown(env,id), lifecyclePolicy: await lifecyclePolicy(env), lifecycle: history, intervals: lifecycleIntervals(history),...await metadataFor(env,'subscription',id), items, amendments, changes: changes.map(change => ({ ...change, preview: parseJson(change.preview_json, {}), preview_json: undefined })), invoices:await withMetadata(env,'invoice',invoices) }
+  return { ...sub,planChanges:await planChangesFor(env,actor,id), cancellations:await intervalCancellations(env,id),renewal:await termRecords(env,actor,id), contracts:await contractsFor(env,id),burnDown:await contractBurnDown(env,id), lifecyclePolicy: await lifecyclePolicy(env), lifecycle: history, intervals: lifecycleIntervals(history),...await metadataFor(env,'subscription',id), items, amendments, changes: changes.map(change => ({ ...change, preview: parseJson(change.preview_json, {}), preview_json: undefined })), invoices:await withMetadata(env,'invoice',invoices) }
 }
 
 // A subscription holds its meters while it is live on or after `from`: no end

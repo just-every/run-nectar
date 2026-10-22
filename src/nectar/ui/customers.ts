@@ -1,3 +1,4 @@
+import { planChangeSection } from './plan-changes'
 import { balanceSection } from './balance'
 import { clockInstant } from '../clock'
 import { requireBusiness } from '../business'
@@ -124,6 +125,7 @@ export async function subscriptionPage(env: Bindings, actor: Actor, id: string, 
         a.status === 'proposed' && approver ? h`<div class="actions">${a.kind === 'price_override' && (!a.prepared_by_id || a.prepared_by_id === actor.id) ? h`<p class="hint">${!a.prepared_by_id ? 'This older contract price has no saved preparer identity. Reject it and propose it again.' : 'Another approver must approve this contract price. You prepared it.'}</p>` : form('amendment.decide', `/app/subscriptions/${s.id}`, h`${hidden('amendment', a.id)}${hidden('decision', 'approved')}`, 'Approve')}${form('amendment.decide', `/app/subscriptions/${s.id}`, h`${hidden('amendment', a.id)}${hidden('decision', 'rejected')}`, 'Reject', { secondary: true })}</div>` : '']), { empty: 'No contract exceptions.' })}
       ${records ? form('amendment.propose', `/app/subscriptions/${s.id}`, h`${hidden('subscription', s.id)}${select('Kind', 'kind', [{ value: 'discount_percent', label: 'Discount (%) on fixed and seat charges' }, { value: 'fixed_credit', label: 'One-time credit ($)' }, { value: 'price_override', label: 'Contract price for one plan price' }], 'discount_percent')}
         ${select('Plan price (contract price only)', 'price', s.items.map((i: any) => ({ value: i.price_id, label: `${i.product_name} v${i.version}` })), '', { required: false, blank: '—' })}${field('Value', 'value')}${field('From', 'effective_from', { type: 'date' })}${field('Until (optional)', 'effective_to', { type: 'date', required: false })}${field('Note', 'note', { required: false })}${area('Contract clause', 'clause', '', false, 2)}`, 'Propose exception', { layout: 'columns', secondary: true }) : ''}</section>
+    ${planChangeSection(s,actor,open,prices)}
     <section class="card" aria-labelledby="changes"><h2 id="changes">Plan and quantity changes</h2>
       ${s.changes.length ? s.changes.map((c: any) => h`<article class="change"><h3>${c.status === 'draft' ? 'Prepared change' : c.status === 'approved' ? 'Approved change' : 'Discarded change'} effective ${formatDate(c.effective_date)} ${tag(c.status === 'draft' ? 'Draft' : c.status === 'approved' ? 'Approved' : 'Rejected')}</h3>
         <div class="compare"><div><h4>Period ${formatPeriod(c.preview.period?.start, c.preview.period?.end)}, as it is: ${cents(c.preview.before?.cents)}</h4>${previewTable(c.preview.before?.lines ?? [])}</div>

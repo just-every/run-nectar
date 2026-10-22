@@ -74,7 +74,8 @@ export async function ratingInputs(env: Bindings, business: Business, subscripti
     const original=priorIssued.find(i=>i.source_meter===event.meterId&&event.occurredAt>=zonedStart(i.period_start,i.timezone??business.timezone)&&event.occurredAt<zonedStart(i.period_end,i.timezone??business.timezone))
     return original?[{eventId:event.eventId,invoice:original.id,from:original.period_start,to:original.period_end}]:[]
   })
-  const adjustments=billing&&!billingServiceWindows(billing).some(window=>window.terms.timing==='arrears')?[]:await usageAdjustments(env,sub.id),credits=await carriedUsageCredits(env,sub.customer_id)
+  const pendingAdjustments=await usageAdjustments(env,sub.id)
+  const adjustments=billing&&!billingServiceWindows(billing).some(window=>window.terms.timing==='arrears')?pendingAdjustments.filter(a=>a.source==='plan-change'):pendingAdjustments,credits=await carriedUsageCredits(env,sub.customer_id)
   const pending=(await all(env,"SELECT id FROM nc_usage_corrections WHERE subscription_id=? AND status='pending'",sub.id)).map(row=>row.id)
   const term = billing ? await one(env, "SELECT end_date,auto_renew,cancelled_at FROM nc_renewal_terms WHERE subscription_id=? AND status='active' ORDER BY created_at DESC LIMIT 1", sub.id) : null
   const renewing = !!term?.auto_renew && !term.cancelled_at

@@ -78,7 +78,12 @@ export function recognitionForLine(line: Line, input: RevenueInput, lineId: stri
   const prepaid = prepaidRecognitionForLine(line, input, lineId)
   if (prepaid) return prepaid
   let entries: RevenueMonthEntry[], policy: string
-  if (line.kind==='usage_correction') {
+  if(line.kind==='plan_change'){
+    insist(typeof line.evidence.change==='string'&&typeof line.evidence.sourceInvoice==='string'&&Array.isArray(line.evidence.revenueEntries),'revenue_plan_change_evidence_required',409)
+    entries=line.evidence.revenueEntries as RevenueMonthEntry[];policy='issued-advance-plan-change'
+    insist(entries.every(e=>/^\d{4}-(0[1-9]|1[0-2])$/.test(e.period)&&safe(e.amountCents)&&object(e.basis)),'revenue_plan_change_evidence_required',409)
+  }
+  else if (line.kind==='usage_correction') {
     const saved=line.evidence.revenueEntries
     insist(typeof line.evidence.correction==='string' && Array.isArray(saved) && saved.length>0,'revenue_correction_evidence_required',409)
     entries=saved as RevenueMonthEntry[];policy='historical-usage-replay-delta'

@@ -431,6 +431,7 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
   },
   "lifecycle.policy": {
     "credit_unused": "flag",
+    "proration_policy": "text",
     "reactivation_days": "integer"
   },
   "metadata.write": {
@@ -531,6 +532,17 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "method": "text",
     "received_on": "text",
     "reference": "text"
+  },
+  "plan.change.decide": {
+    "change": "text",
+    "decision": "text"
+  },
+  "plan.change.prepare": {
+    "item": "text",
+    "mode": "text",
+    "price": "text",
+    "quantity": "integer",
+    "subscription": "text"
   },
   "policy.decide": {
     "confirm_single": "flag",

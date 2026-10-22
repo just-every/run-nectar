@@ -80,7 +80,7 @@ function expandServiceWindow(input: RatingInput, window: BillingWindow): RatingI
   if (window.terms.timing === 'advance') {
     expanded.events = []
     expanded.charges = []
-    expanded.usageAdjustments = []
+    expanded.usageAdjustments = (input.usageAdjustments??[]).filter(a=>a.source==='plan-change')
     if (expanded.contracts) expanded.contracts = { ...expanded.contracts, commitments: [] }
   }
   // A simultaneous invoice receives a contract credit once, on the first
@@ -122,7 +122,7 @@ export function rateBillingWindow(input: RatingInput, core: (input: RatingInput)
   // Tax is rounded once on the complete taxable consideration, never summed
   // from independently rounded service-window subtotals.
   const totals = invoiceTotals(input.tax, lines)
-  const adjustments = representative.terms.timing === 'arrears' ? input.usageAdjustments ?? [] : []
+  const adjustments = representative.terms.timing === 'arrears' ? input.usageAdjustments ?? [] : (input.usageAdjustments??[]).filter(a=>a.source==='plan-change')
   const correctionTax = adjustments.reduce((sum, adjustment) => sum + adjustment.taxCents, 0)
   totals.taxCents += correctionTax; totals.totalCents += correctionTax
   if (adjustments.length) totals.tax.historicalCorrectionTaxCents = correctionTax

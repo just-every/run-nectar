@@ -11,6 +11,7 @@ const quote = (name: string) => `"${name.replaceAll('"', '""')}"`
 const relation = new Set(['customer_id','subscription_id','invoice_id','payment_id','proposal_id','credit_id','record_id','subject','related_id','term_id','offer_id','contract_id','note_id','correction_id','original_invoice_id'])
 const keep = new Set(['purpose','correction_kind','intent_key','billing_key','interval_unit','billing_timing','numbering_mode','capture_kind','account_ref','custody','basis_hash','error_code','occurred_text','number','kind','document_kind','status','origin','language','currency','method','billing_mode','invoice_kind','calc_version','version','revision','quantity','unit_amount','value','tax_rate','tax_mode','tax_jurisdiction','anchor_day','billing_interval','access','scope','scopes','pricing_model','action','state','approval_mode','mail_status','verified_method','event','created_by_kind','prepared_by_kind','source','proposal_kind'])
 // The processor refund identifier is retained cash custody under ct batch11 I.
+const typedPlanField=(table:string,column:string)=>table==='nc_plan_changes'&&['mode','policy'].includes(column)
 const financialIdentifier=(table:string,column:string)=>table==='nc_prepaid_refunds'&&column==='refund_ref'
 const reserved = new Set(['nc_incumbent_revenue','nc_erased_records','nc_guard','nc_privacy_generation','nc_privacy_context','nc_erasure_requests','nc_erasure_financial','nc_business','nc_members','nc_agent_keys'])
 const keyed = (value: unknown, ids: Set<string>): boolean => typeof value === 'string' ? ids.has(value) : Array.isArray(value) ? value.some(v => keyed(v, ids)) : !!value && typeof value === 'object' && Object.values(value).some(v => keyed(v, ids))
@@ -42,7 +43,7 @@ export async function erasurePlan(env: Bindings, customer: Row): Promise<Erasure
     }
   }
   const memberIds=new Map((await all(env,'SELECT id,email FROM nc_members')).map(r=>[r.email,r.id]))
-  const privateText=images.filter(i=>i.scoped).flatMap(({table,row,key,foreignKeys})=>Object.entries(row).filter(([column,value])=>typeof value==='string' && value.length && !memberIds.has(value) && !/(?:_by|_by_kind)$/.test(column) && column!=='prepared_name' && !(column in key) && !foreignKeys.has(column) && !column.endsWith('_json') && column!=='detail' && !(column.endsWith('_id') && !['external_id','event_id'].includes(column)) && !keep.has(column) && !financialIdentifier(table,column) && !/(?:_at|_on|_date|_from|_to|_start|_end)$/.test(column)).map(([,value])=>value))
+  const privateText=images.filter(i=>i.scoped).flatMap(({table,row,key,foreignKeys})=>Object.entries(row).filter(([column,value])=>typeof value==='string' && value.length && !memberIds.has(value) && !/(?:_by|_by_kind)$/.test(column) && column!=='prepared_name' && !(column in key) && !foreignKeys.has(column) && !column.endsWith('_json') && column!=='detail' && !(column.endsWith('_id') && !['external_id','event_id'].includes(column)) && !keep.has(column) && !financialIdentifier(table,column) && !typedPlanField(table,column) && !/(?:_at|_on|_date|_from|_to|_start|_end)$/.test(column)).map(([,value])=>value))
   const personal = [...new Set([...privateText,customer.name,customer.billing_email,customer.address,customer.external_id,customer.provider_ref,customer.tax_exempt_ref, ...images.filter(i=>i.scoped && i.table==='nc_contacts').flatMap(i=>[i.row.name,i.row.email])].filter(v=>typeof v==='string' && v.length))]
   const mutations: ErasureMutation[] = [], changes = new Map<string,{kind:string;fields:Set<string>;records:number}>()
   for (const image of images) {
@@ -64,7 +65,7 @@ export async function erasurePlan(env: Bindings, customer: Row): Promise<Erasure
       if (column === 'csv') { updates[column] = affected ? '' : redactSnapshotCsv(String(value),personal); continue }
       if (!affected || typeof value !== 'string') continue
       if (column === 'token_hash') { updates[column] = null; continue }
-      if (foreignKeys.has(column) || (column.endsWith('_id') && !['external_id','event_id'].includes(column)) || column === 'id' || column === 'subject' || keep.has(column) || financialIdentifier(table,column) || /(?:_at|_on|_date|_from|_to|_start|_end)$/.test(column)) continue
+      if (foreignKeys.has(column) || (column.endsWith('_id') && !['external_id','event_id'].includes(column)) || column === 'id' || column === 'subject' || keep.has(column) || financialIdentifier(table,column) || typedPlanField(table,column) || /(?:_at|_on|_date|_from|_to|_start|_end)$/.test(column)) continue
       if (column === 'external_id' || column === 'event_id' || column === 'reference') updates[column] = `erased-${row.id ?? customer.id}`
       else if (column === 'name' && table === 'nc_customers') updates[column] = 'Erased customer'
       else if (['payment_intent_ref','charge_ref','payment_method_ref','refund_ref'].includes(column)) updates[column]=`erased-${row.id ?? customer.id}`

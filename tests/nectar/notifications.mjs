@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict'
 
-const choices = (enabled = []) => Object.fromEntries(['mentions', 'payment_mismatch', 'billrun_exceptions', 'proposals'].map(event => [event, enabled.includes(event)]))
+const choices = (enabled = []) => Object.fromEntries(['mentions', 'payment_mismatch', 'billrun_exceptions', 'proposals', 'webhook_failure'].map(event => [event, enabled.includes(event)]))
 const content = mail => `${mail.subject} ${mail.text ?? ''} ${mail.html ?? ''}`
 const recipients = mails => mails.flatMap(mail => [mail.to].flat()).sort()
 
 // INT-003: preferences, event delivery and custody through the real HTTP doors.
 export async function notificationsFlow(h, owner) {
   const initial = (await h.api('notifications', owner)).preferences
+  assert.equal(initial.webhook_failure,false,'new outbound-failure mail defaults off')
   const ownerPerson = { who: owner, email: (await h.api('me', owner)).email }
   const save = (who, enabled) => h.api('notification.preferences', who, choices(enabled))
   const invite = async (suffix, role) => {

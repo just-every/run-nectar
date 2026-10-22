@@ -33,6 +33,7 @@ const ACTIONS = [...(await readFile(new URL('../../src/nectar/actions.ts', impor
 if (!process.argv.includes('--core-only')) {
 await runIsolated('webhooks','webhooksFlow')
 await runIsolated('hierarchies','hierarchiesFlow')
+await runIsolated('plan-changes','planChangesFlow')
 await runIsolated('customer-search','customerSearchFlow')
 await runIsolated('upcoming','upcomingFlow')
 await runIsolated('write-offs','writeOffFlow')

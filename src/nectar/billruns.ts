@@ -1,3 +1,4 @@
+import { planChangeInvoiceFingerprint } from './plan-changes'
 import { consolidationCalculation,hierarchyPreIssue,hierarchyIssueStatements } from './hierarchies'
 import { writeOffsFor } from './write-offs'
 import { issueApplicationStatements } from './balance'
@@ -186,6 +187,7 @@ export async function invoiceRecord(env: Bindings, actor: Actor, id: string): Pr
 export async function currentFingerprint(env: Bindings, business: Business, invoice: Row) {
   if (invoice.invoice_kind === 'manual') {
     const saved = parseJson<Row>(invoice.calculation_json, {}).inputs
+    if(saved.planChange)return planChangeInvoiceFingerprint(env,invoice)
     if (saved.consolidation)return (await consolidationCalculation(env,saved.consolidation.parent,saved.consolidation.sections.map((s:Row)=>s.sourceInvoice))).fingerprint
     if (saved.prepaidPurchase) return (await prepaidPurchaseCalculation(env, business, invoice.customer_id, saved.prepaidPurchase.intent, saved.date)).fingerprint
     if(saved.usageCorrection){
@@ -259,7 +261,8 @@ export async function finalise(env: Bindings, actor: Actor, input: Input) {
     await cancellationApproval(env,actor,invoice)
     if (await currentFingerprint(env, business, invoice) !== invoice.approved_fingerprint) { refused.push({ invoice: invoice.id, reason: 'source_changed' }); continue }
     const calculation = parseJson<Row>(invoice.calculation_json, {})
-    const usageAdjustments=calculation.inputs?.usageAdjustments??[]
+    const allAdjustments:Row[]=calculation.inputs?.usageAdjustments??[]
+    const planAdjustments=allAdjustments.filter(a=>a.source==='plan-change'),usageAdjustments=allAdjustments.filter(a=>a.source!=='plan-change')
     const carried=usageCreditAllocations(calculation.inputs?.usageCredits??[],invoice.total_cents)
     insist(carried.every(c=>c.issuedAt<zonedStart(addDays(issueDate,1),business.timezone)),'credit_after_invoice_date',409)
     const consumed: string[] = calculation.consumedEvents ?? []
@@ -280,6 +283,8 @@ export async function finalise(env: Bindings, actor: Actor, input: Input) {
       guard(env, 'source_changed', 'EXISTS(SELECT 1 FROM nc_customers WHERE id=? AND revision=? AND invoice_settings_json=?)', invoice.customer_id, customer.revision, customer.invoice_settings_json),
       guard(env, 'stale', "EXISTS(SELECT 1 FROM nc_invoices WHERE id = ? AND status = 'approved' AND approved_fingerprint = ?)", invoice.id, invoice.approved_fingerprint),
       ...chunk(consumed, 90).map(ids => guard(env, 'already_billed', `NOT EXISTS(SELECT 1 FROM nc_usage_events WHERE event_id IN (${ids.map(() => '?').join(',')}) AND (invoice_id IS NOT NULL OR status <> 'active'))`, ...ids)),
+      ...planAdjustments.map((a:Row)=>guard(env,'plan_change_already_billed','EXISTS(SELECT 1 FROM nc_plan_change_adjustments WHERE id=? AND invoice_id IS NULL)',a.id)),
+      ...planAdjustments.map((a:Row)=>stmt(env,'UPDATE nc_plan_change_adjustments SET invoice_id=? WHERE id=? AND invoice_id IS NULL',invoice.id,a.id)),
       ...usageAdjustments.map((a:Row)=>guard(env,'correction_already_billed','EXISTS(SELECT 1 FROM nc_usage_adjustments WHERE id=? AND invoice_id IS NULL AND (target_invoice_id IS NULL OR target_invoice_id=?))',a.id,invoice.id)),
       ...usageAdjustments.map((a:Row)=>stmt(env,'UPDATE nc_usage_adjustments SET invoice_id=? WHERE id=? AND invoice_id IS NULL',invoice.id,a.id)),
       ...carried.flatMap(c=>[guard(env,'credit_balance_changed',`(SELECT amount_cents-applied_cents-COALESCE((SELECT SUM(amount_cents) FROM nc_usage_credit_applications WHERE credit_id=n.id),0) FROM nc_credit_notes n WHERE n.id=?)>=?`,c.id,c.amountCents),
