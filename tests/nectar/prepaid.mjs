@@ -121,10 +121,15 @@ export async function prepaidFlow(h,owner,{fundPurchase,onState=async()=>{}}={})
   await approve(unitPurchase.request);await purchase(unitPurchase.request,units,'2026-01-01')
   const freeUnits=await prepare(units,{kind:'units',amount:'1',meter:units.meter,priority:0});await approve(freeUnits.request)
   const rollover=await prepare(units,{kind:'units',amount:'10',meter:units.meter,expires_date:'2026-05-01',priority:1000,rollover_months:1,rollover_percent:50,rollover_cap:'3'});await approve(rollover.request)
-  await usage(units,340,'1.5','2026-01-15')
+  const dollarPriority=await prepare(units,{kind:'money',amount:'0.50',expires_date:'2026-05-01',priority:5});await approve(dollarPriority.request)
+  await usage(units,340,'1.75','2026-01-15')
   const unitJanuary=(await issue(units,'2026-01','2026-02-01'))[0]
-  assert.equal(unitJanuary.subtotal_cents,0);assert.equal(unitJanuary.tax_cents,10,'Only the two promotional dollars reduce tax; the purchased unit retains its original service tax')
-  assert.equal((await state(units.subscription)).entries.filter(entry=>entry.kind==='drawdown').reduce((sum,entry)=>sum+entry.recognitionCents,0),17)
+  assert.equal(unitJanuary.subtotal_cents,0);assert.equal(unitJanuary.tax_cents,10,'Promotional units and higher-priority promotional dollars reduce tax; purchased units retain the remaining service tax')
+  const unitJanuaryLedger=await state(units.subscription)
+  assert.equal(unitJanuaryLedger.entries.filter(entry=>entry.kind==='drawdown').reduce((sum,entry)=>sum+entry.recognitionCents,0),17)
+  assert.equal(unitJanuaryLedger.entries.filter(entry=>entry.grantId===dollarPriority.request&&entry.kind==='drawdown').reduce((sum,entry)=>sum+entry.amountN,0),-50,'A higher-priority dollar lot is drawn before lower-priority units')
+  assert.equal(unitJanuaryLedger.entries.filter(entry=>entry.purchaseInvoice&&entry.kind==='drawdown').reduce((sum,entry)=>sum+entry.amountN,0),-500000,'Exact native repricing prevents lower-priority units from redeeming the same consideration twice')
+  for(const grant of unitJanuaryLedger.grants.filter(grant=>grant.source==='promotion'))assert.equal(grant.liabilityCents,0,'Promotional grants never enter paid contract liability')
   await usage(units,341,'2.5','2026-02-15')
   const unitFebruary=(await issue(units,'2026-02','2026-03-01'))[0]
   assert.equal(unitFebruary.subtotal_cents,0);assert.equal(unitFebruary.tax_cents,50)
@@ -147,6 +152,11 @@ export async function prepaidFlow(h,owner,{fundPurchase,onState=async()=>{}}={})
   const valuedExpiry=paidExpiry.entries.find(entry=>entry.kind==='expiry'&&entry.purchaseInvoice===purchaseInvoice.id)
   assert.equal(valuedExpiry.amountN,-90000);assert.equal(valuedExpiry.recognitionCents,90000)
   assert.equal(paidExpiry.entries.filter(entry=>entry.purchaseInvoice===purchaseInvoice.id).reduce((sum,entry)=>sum+entry.recognitionCents,0),purchaseInvoice.total_cents,'Purchased consideration is recognized exactly once through actual consumption and approved expiry')
+  await usage(row,322,'6000','2026-04-15')
+  await h.advanceClock('2026-05-01T18:00:00Z')
+  const excess=(await issue(row,'2026-05','2026-05-01'))[0]
+  assert.equal(excess.subtotal_cents,100000);assert.equal(excess.tax_cents,60000);assert.equal(excess.total_cents,160000,'Usage beyond the funded balance bills its exact rated excess with original paid-redemption service tax')
+  assert.equal(moneyBalance(await state(row.subscription)),0,'Drawdown never creates a negative balance')
   console.log('CAT-004 prepaid foundation: governed money/units, real paid purchases, pure previews, priority, source tax, exact consumption, capped rollover, expiry and consent-bound pending topups passed')
   return {row,units,purchaseInvoice,topupInvoice,january,february,expired,unitState}
 }
@@ -240,4 +250,39 @@ export async function prepaidCorrectionFlow(h,owner){
   await api('usage.correction.decide',{correction:stale.id,decision:'rejected'})
   console.log('CAT-004 governed historical prepaid replay: exact tax, signed liability/recognition, immutable originals, repeated correction, source/CSV and stale refusal passed')
   return {subscription,customer,purchase,issued,first,second}
+}
+
+// An unpaid purchase credit reduces only its contract liability. Reduced
+// consideration never becomes a fully funded grant or an automatic charge.
+export async function prepaidPurchaseCreditFlow(h,owner){
+  const api=(path,body,status)=>h.api(path,owner,body,status)
+  await h.advanceClock('2026-01-01T18:00:00Z')
+  await api('access.give',{email:'synthetic-nectar-361@example.test',name:'Synthetic purchase credit finance',role:'finance'})
+  const finance=await h.signIn('synthetic-nectar-361@example.test',{requested:true})
+  const customer=(await api('customer.create',{external_id:'synthetic-nectar-362',name:'Synthetic credited prepaid purchase',billing_email:'synthetic-nectar-362@example.test'})).id
+  const product=(await api('product.create',{code:'synthetic-nectar-363',name:'Synthetic prepaid credit service'})).id
+  const price=(await api('price.create',{product,kind:'flat',unit_amount:'1',taxable:false})).id
+  const subscription=(await api('subscription.create',{customer,start_date:'2026-01-01',price:[price]})).id
+  const grant=await api('prepaid.prepare',{subscription,mode:'grant',kind:'money',source:'purchase',amount:'100',effective_date:'2026-01-01',expires_date:'2026-05-01',priority:0,expiry_consent:true})
+  await h.api('prepaid.decide',finance,{request:grant.request,decision:'approved'})
+  const invoice=(await api('prepaid.purchase.prepare',{intent:grant.request,issue_date:'2026-01-01'})).invoice
+  await api('invoice.approve',{invoice,acknowledge:true});await api('invoice.finalise',{invoice,issue_date:'2026-01-01'})
+  const original=await api(`invoices/${invoice}`),source=await api(`revenue/${invoice}`)
+  await api('credit.issue',{invoice,amount:'25',reason:'Synthetic unused unpaid purchase correction'})
+  assert.equal((await api(`invoices/${invoice}`)).balanceCents,7500)
+  await api('prepaid.funding.confirm',{intent:grant.request,confirm:true},409)
+  const payment=await api('payment.record',{customer,amount:'75',received_on:'2026-01-01',method:'bank_transfer',reference:'synthetic-nectar-364'})
+  await api('payment.allocate',{payment:payment.payment,invoice,amount:'75'})
+  assert.equal((await api(`invoices/${invoice}`)).balanceCents,0)
+  await api('prepaid.funding.confirm',{intent:grant.request,confirm:true},409)
+  const state=await api(`prepaid/${subscription}`)
+  assert.equal(state.grants.length,0);assert.equal(state.entries.length,0)
+  assert.equal(state.fundingIntents.find(intent=>intent.id===grant.request).status,'pending')
+  const report=await api(`revenue?period=2026-01&customer=${customer}`)
+  assert.deepEqual([report.netBillingsCents,report.recognizedCents,report.closingCents],[7500,0,7500])
+  assert.equal(report.months[0].deferredLiabilityCents,7500)
+  assert.deepEqual((await api(`invoices/${invoice}`)).calculation,original.calculation)
+  assert.deepEqual((await api(`revenue/${invoice}`)).schedules,source.schedules,'A credit preserves the original purchase schedule and appends only a liability reversal')
+  console.log('CAT-004 credited unpaid purchase: reduced liability without revenue, paid-reduced-consideration funding refusal and immutable source passed')
+  return {customer,subscription,invoice,intent:grant.request}
 }
