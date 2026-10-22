@@ -57,7 +57,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "de9b78dabb7c85c07dc3ecf76d624b464120fe5bb3409b373e0870f9eb7e9bef",
+      "sha256": "a3e7dbe68dba805a8a63fe9e690063def059c5c7a207ab200bb5d4eb25bbe1ec",
       "executable": false
     },
     "AGENTS.consumer.md": {
@@ -69,7 +69,7 @@
       "executable": false
     },
     "API.md": {
-      "sha256": "f89cce0d1390938b40c216179f4240744691309cc923be01c4efe6080d4acdfd",
+      "sha256": "4862fa31dbf590f34cf677eb65fc0aa92aaa1e99ade39d93e073993aaa92831a",
       "executable": false
     },
     "base-copies.json": {
@@ -77,7 +77,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "f8e1f4c0bff054510e77e50db42a2e4c5b10eefa4905a5be91aae8a98afb8f68",
+      "sha256": "3ec3e8cd4509d5a7b275f08003a24a5b8dd391e327e2f1f12818787ffd454d4b",
       "executable": false
     },
     "DEMO.md": {
@@ -3909,7 +3909,7 @@
       "executable": false
     },
     "tests/nectar/prepaid.mjs": {
-      "sha256": "b4dd0c66590640679bcfbb41eecdbfb8fbd8e855a394f38db2af041791e9e551",
+      "sha256": "3a70b3c452fc3aeb3f5bdef3cbef3f446badd2d1c1f599b91e84c2f43f3a8849",
       "executable": false
     },
     "tests/nectar/price-approvals.mjs": {
