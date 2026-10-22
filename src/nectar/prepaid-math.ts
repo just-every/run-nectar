@@ -13,6 +13,9 @@ export function lotStates(basis: PrepaidBasis) {
 }
 export function releaseValue(lot: PrepaidLotState, amount: number) {
   insist(Number.isSafeInteger(amount) && amount >= 0 && amount <= lot.remainingN, 'prepaid_balance_changed', 409)
+  // Cents recorded on completed refunds are fixed, never re-rounded, so the
+  // draw that exhausts a lot releases exactly the liability still carried.
+  if (amount && amount === lot.remainingN) return lot.liabilityCents
   const before = BigInt(lot.grant.amountN - lot.remainingN), after = before + BigInt(amount)
   return Number(roundHalfAway(BigInt(lot.grant.valueCents) * after, BigInt(lot.grant.amountN)) - roundHalfAway(BigInt(lot.grant.valueCents) * before, BigInt(lot.grant.amountN)))
 }

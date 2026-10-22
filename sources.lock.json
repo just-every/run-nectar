@@ -57,7 +57,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "0100f5ff2e9576ef045a92555af1bc16cbc0f27ce61fd3cbdedae0245a3777a7",
+      "sha256": "45b03acaf7827711e56a4db26296f9ab782886e7cff812f4644c659272ef6630",
       "executable": false
     },
     "AGENTS.consumer.md": {
@@ -77,7 +77,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "f2887039ca3b1435e123febe1644547f80631420bf7ab3e86f41761db87c7bce",
+      "sha256": "ba516ba12c5841e4270e1d389eedfca1eefee6646de25653cd3e166ed83a3eb7",
       "executable": false
     },
     "DEMO.md": {
@@ -3017,7 +3017,7 @@
       "executable": false
     },
     "src/nectar/prepaid-math.ts": {
-      "sha256": "f5c03005be0dbe50e86961eb77f630790478f387ebf38da5dbe247cd3ad3e345",
+      "sha256": "a117ccf678d14c2c26d88380d855f27c280752e15c560861a8294d711f1c3282",
       "executable": false
     },
     "src/nectar/prepaid-purchase.ts": {
@@ -3825,7 +3825,7 @@
       "executable": false
     },
     "tests/nectar/flows.mjs": {
-      "sha256": "1a51d17693395a983bbc5dd10c870f5e47e711cd1b9c1eab2d984e36e8458ddc",
+      "sha256": "ad8d3f0709cd1ed1c90137babc744f5847cfb18d1805d0292bb69ffc8cba1ccb",
       "executable": false
     },
     "tests/nectar/harness.mjs": {
@@ -4000,16 +4000,20 @@
       "sha256": "41d23f2863ab4dbd1161ab956a203b06a2b25f50a7b12ddaffbfdc061917c938",
       "executable": false
     },
+    "tests/nectar/prepaid-refresh.mjs": {
+      "sha256": "973746c87fffc99cfc867c53b5fcb0ed333e74456ad5bf4c8271ac4535e3d4ae",
+      "executable": false
+    },
     "tests/nectar/prepaid-refund-browser.mjs": {
       "sha256": "7ab8034b5c77539c29b95917d3140a0346b0d04c18463140ba08e6e00ddfb4e8",
       "executable": false
     },
     "tests/nectar/prepaid-refunds.mjs": {
-      "sha256": "d3638ec2d17f6b71fbf4bc1b3e7aa0ca60726f56bc213bdece2d2a46aa8a8d15",
+      "sha256": "5c690777fcebc92c34c01555d3044cc462c497d7a8aaf53e5b56c390559bae3a",
       "executable": false
     },
     "tests/nectar/prepaid-report-parity.mjs": {
-      "sha256": "904498021e0fbc0a6f47e5ca79098501ee530c7cd5216b1496c302050d42586e",
+      "sha256": "300c29efa81f62feaf2e1fdfd94045a232d9e81bbd20c49cd1be45ae721a3276",
       "executable": false
     },
     "tests/nectar/prepaid-topup-browser.mjs": {

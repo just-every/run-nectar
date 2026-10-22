@@ -287,7 +287,7 @@ export async function prepaidRefundCorrectionFlow(h,owner,{onState=async()=>{}}=
   for(const kind of ['money','units'])await refundCorrectionCase(h,owner,kind,onState)
 }
 async function refundCorrectionCase(h,owner,kind,onState) {
-  const n=kind==='money'?860:880,refundCents=kind==='money'?6000:83,excessCents=kind==='money'?4000:100
+  const n=kind==='money'?860:880,refundCents=kind==='money'?6000:83,excessCents=kind==='money'?6000:150
   const api=(path,body,status)=>h.api(path,owner,body,status)
   await h.advanceClock('2026-01-01T18:00:00Z');edge.at('2026-01-01T18:00:00Z')
   await api('business.configure',{...await api('business'),timezone:'UTC'})
@@ -319,8 +319,8 @@ async function refundCorrectionCase(h,owner,kind,onState) {
   const refund=await approval
   assert.equal(refund.status,'refunded');assert.equal(refund.cashAmountCents,-refundCents)
   const originals=await Promise.all([purchase,invoice.id].map(id=>api(`invoices/${id}`))),refunded=await state(),refundEntry=refunded.entries.find(entry=>entry.kind==='refund')
-  const beforePosts=edge.calls.filter(call=>call.method==='POST').length
-  for(const [id,voidId,quantity,expectedBalance,expectedLiability,expectedRecognition,expectedDelta] of (kind==='money'?[[n+6,n+5,'10',2000,2000,2000,0],[n+7,n+6,'40',0,0,4000,4000]]:[[n+6,n+5,'0.25',250000,8,9,0],[n+7,n+6,'1',0,0,17,100]])){
+  let cashRefunded=refundCents,creates=edge.calls.filter(call=>call.method==='POST').length
+  for(const [id,voidId,quantity,expectedBalance,expectedLiability,expectedRecognition,expectedDelta] of (kind==='money'?[[n+6,n+5,'10',2000,2000,2000,0],[n+7,n+6,'40',0,0,2000,6000]]:[[n+6,n+5,'0.25',250000,8,9,0],[n+7,n+6,'1',0,0,9,150]])){
     await usage(id,quantity)
     const before=await state(),body={subscription,from_period:'2026-01',through_period:'2026-01',void_event_ids:[`synthetic-nectar-${voidId}`],add_event_ids:[`synthetic-nectar-${id}`]}
     const preview=await api('usage.correction.preview',body)
@@ -334,19 +334,30 @@ async function refundCorrectionCase(h,owner,kind,onState) {
     const after=await state()
     assert.equal(after.balances[0].remainingN,expectedBalance);assert.equal(after.balances[0].liabilityCents,expectedLiability)
     assert.equal(after.entries.reduce((total,entry)=>total+entry.recognitionCents,0),expectedRecognition)
-    assert.deepEqual(after.entries.find(entry=>entry.kind==='refund'),refundEntry)
+    assert.deepEqual(after.entries.find(entry=>entry.id===refundEntry.id),refundEntry)
     for(const entry of refunded.entries)assert.deepEqual(after.entries.find(saved=>saved.id===entry.id),entry,'Every original financial statement survives correction')
     const facts=(await api(`prepaid/refunds?subscription=${subscription}`)).find(row=>row.id===refund.id)
     assert.equal(facts.status,'refunded');assert.equal(facts.credit,refund.credit);assert.equal(facts.cashAmountCents,-refundCents)
-    assert.equal((await api(`reports/refunds?period=2026-02&customer=${customer}`)).totalCents,-refundCents)
+    assert.equal((await api(`reports/refunds?period=2026-02&customer=${customer}`)).totalCents,-cashRefunded)
     const rows=csvRows(await(await h.raw(`/app/exports/prepaid/${subscription}.csv`,{cookie:owner})).text())
     assert.equal(rows.length,after.entries.length)
     for(const entry of after.entries.filter(row=>row.kind==='correction'))assert.equal((await api(`prepaid/${subscription}/entries/${entry.id}`)).entry.recognitionCents,entry.recognitionCents)
     const source=await api(`revenue/${purchase}?from=2026-01&to=2026-12`)
     assert.equal(source.schedules.flatMap(row=>row.entries).reduce((total,row)=>total+row.amountCents,0),expectedRecognition)
     for(const original of originals)assert.deepEqual((await api(`invoices/${original.id}`)).calculation,original.calculation)
-    assert.equal(edge.calls.filter(call=>call.method==='POST').length,beforePosts,'Corrections never retry or increase a cash refund')
+    assert.equal(edge.calls.filter(call=>call.method==='POST').length,creates,'Corrections never retry or increase a cash refund')
     await onState({label:`refund-correction-${kind}-${id}`,subscription,customer,purchase,invoice:invoice.id,correction:correction.id,refund:refund.id})
+    if(id===n+6){
+      // Credit the correction gave back is unused paid credit: only a NEW request refunds it in cash.
+      const lot=(await state()).grants[0],again=await api('prepaid.refund.prepare',{grant:lot.id,reason:'Synthetic credit restored by correction returned to original card'})
+      assert.notEqual(again.id,refund.id);assert.equal(again.quote.amountN,expectedBalance)
+      const second=await h.api('prepaid.refund.decide',finance,{refund:again.id,basis_hash:again.basis,decision:'approved'})
+      assert.equal(second.status,'refunded');assert.equal(second.cashAmountCents,-expectedLiability);cashRefunded+=expectedLiability
+      assert.equal(edge.calls.filter(call=>call.method==='POST').length,++creates,'The restored credit is refunded by exactly one new processor create')
+      const original=(await api(`prepaid/refunds?subscription=${subscription}`)).find(row=>row.id===refund.id)
+      assert.deepEqual([original.status,original.cashAmountCents,original.credit],[facts.status,facts.cashAmountCents,facts.credit],'The completed refund is unchanged')
+      assert.deepEqual((await state()).entries.find(entry=>entry.id===refundEntry.id),refundEntry)
+    }
   }
   const corrections=await api(`usage/corrections?subscription=${subscription}`)
   assert.ok(corrections.some(row=>row.plan.delta.totalCents===excessCents))
@@ -356,7 +367,7 @@ async function refundCorrectionCase(h,owner,kind,onState) {
   await api('invoice.approve',{invoice:next.id,acknowledge:true});await api('invoice.finalise',{invoice:next.id,issue_date:'2026-03-01'})
   assert.equal((await api(`invoices/${next.id}`)).total_cents,excessCents)
   assert.equal((await state()).balances[0].remainingN,0)
-  assert.equal((await api(`reports/refunds?period=2026-02&customer=${customer}`)).totalCents,-refundCents)
+  assert.equal((await api(`reports/refunds?period=2026-02&customer=${customer}`)).totalCents,-cashRefunded)
   await onState({label:`refund-correction-${kind}-issued-excess`,subscription,customer,purchase,invoice:next.id,refund:refund.id})
   return {subscription,customer,purchase}
 }
