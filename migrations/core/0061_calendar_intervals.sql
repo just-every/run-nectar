@@ -14,7 +14,7 @@ WHEN NEW.billing_timing='advance' AND EXISTS(SELECT 1 FROM nc_prices WHERE id=NE
 BEGIN SELECT RAISE(ABORT,'nectar_guard_metered_usage_requires_arrears'); END;
 
 ALTER TABLE nc_subscriptions ADD COLUMN billing_anchor_date TEXT;
-ALTER TABLE nc_subscriptions ADD COLUMN contract_term_months INTEGER CHECK(contract_term_months IS NULL OR contract_term_months IN (1,12,24,36));
+ALTER TABLE nc_subscriptions ADD COLUMN contract_term_months INTEGER CHECK(contract_term_months IS NULL OR contract_term_months BETWEEN 1 AND 119987);
 ALTER TABLE nc_subscriptions ADD COLUMN contract_end_date TEXT;
 ALTER TABLE nc_invoices ADD COLUMN billing_key TEXT NOT NULL DEFAULT 'legacy-monthly-arrears';
 DROP INDEX nc_invoices_once;
