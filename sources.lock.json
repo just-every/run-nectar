@@ -57,7 +57,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "a3e7dbe68dba805a8a63fe9e690063def059c5c7a207ab200bb5d4eb25bbe1ec",
+      "sha256": "5061044e44d37ee5436c4720c55aa86a34f48329a7c65a8ce4798135c4d3dfb6",
       "executable": false
     },
     "AGENTS.consumer.md": {
@@ -77,7 +77,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "ee4803f2e82a7560b9604b5345eed18b12ef293441d15c2e36679c05e3ef0cb1",
+      "sha256": "2224ccc7e231df372154582a7b8926a360818caf9bb19b08a7b19f4879c879c1",
       "executable": false
     },
     "DEMO.md": {
@@ -3988,8 +3988,12 @@
       "sha256": "41d23f2863ab4dbd1161ab956a203b06a2b25f50a7b12ddaffbfdc061917c938",
       "executable": false
     },
+    "tests/nectar/prepaid-refund-browser.mjs": {
+      "sha256": "2cf8cc9d7afabd9b34793b33eb824215bd1c483f30b084575fee8c7c5bc08d83",
+      "executable": false
+    },
     "tests/nectar/prepaid-refunds.mjs": {
-      "sha256": "da3df1b5449d417e763fd6807d278a1e9e316636d79e3315d8c4e87b4f94368a",
+      "sha256": "8f345d979800b665ec02294ff3f9382841d5b38d0d3731b0ada0d4c1993ea384",
       "executable": false
     },
     "tests/nectar/prepaid-report-parity.mjs": {

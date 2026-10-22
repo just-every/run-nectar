@@ -142,6 +142,23 @@ export async function prepaidRefundFlow(h,owner,{onState=async()=>{},approveRefu
   await h.api('prepaid.refund.decide',finance,{refund:stale.id,basis_hash:stale.basis,decision:'approved'},409)
   assert.equal(refundPosts(),afterFailed);await h.api('prepaid.refund.decide',finance,{refund:stale.id,decision:'rejected'})
   await onState({label:'refused',rows,refund:stale})
+  await h.advanceClock('2026-12-01T18:00:00Z')
+  await api('report.schedule',{enabled:true,day:1})
+  const scheduled=await h.raw(`/cdn-cgi/local/scheduled?time=${Date.parse('2026-12-01T20:00:00Z')}&cron=${encodeURIComponent('0 14 * * *')}`)
+  assert.equal(scheduled.status,200,await scheduled.text())
+  const deliveryId=(await api('report-schedule')).deliveries[0].id
+  const frozen=await api(`report-deliveries/${deliveryId}`)
+  assert.equal(frozen.status,'accepted')
+  const frozenRefunds=frozen.reports.find(report=>report.metric==='refunds')
+  assert.equal(frozenRefunds.totalCents,-6083)
+  for(const outcome of [refunded,recovered]){
+    const source=frozen.sourceEvidence.find(source=>source.metric==='refunds'&&source.sourceId===outcome.id)
+    assert.equal(source.detail.refund.cashAmountCents,outcome.cashAmountCents)
+    assert.equal(source.detail.refund.liability.recognitionCents,0)
+  }
+  const frozenCsv=csvRows(await(await h.raw(`/app/report-deliveries/${deliveryId}.csv`,{cookie:owner})).text())
+  assert.equal(Number(frozenCsv.find(row=>row.report==='refunds'&&row.source==='TOTAL').amount.replace(/^'/,'')),-60.83)
+  await h.advanceClock('2026-11-02T18:00:00Z')
   // Erasure withdraws request quotes and processor proof while retaining exact
   // cash, liability, numbered-credit and revenue facts for seven calendar years.
   const subject=rows[0],beforeErasure=await api(`invoices/${subject.invoice}`)
