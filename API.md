@@ -548,7 +548,7 @@ Requests contain JSON `{id, created_at, type, data, metadata}`. Verify **raw byt
 | Existing ENT-002 quota exhaustion | `usage.threshold_crossed` | Once per observed non-exhausted → exhausted quota period; independent usage/spend thresholds and threshold invoices remain USE-005 |
 | `credit_note.created` | `credit.created` | Numbered credit created; narrative excluded |
 
-DEV-001 remains PARTIAL: the mapped live Stripe shadow-event journey, provider payment-method lifecycle and complete imported subscription snapshots, independent paid-transition assertions for credit-only/carried/goodwill settlement, and policy approval remain unproved. Native subscription audit commits snapshot complete item metadata; native lifecycle events contain dates and typed access facts, never narrative. Entitlement observation scans up to 100 customers per dispatch, continues by cursor and does not promise a one-minute bound at arbitrary scale. This map states the current API; it does not claim a live sync or a completed replacement for unsupported event families.
+DEV-001 remains PARTIAL: the mapped live Stripe shadow-event journey, provider payment-method lifecycle and complete imported subscription snapshots, policy approval remain unproved. Native subscription audit commits snapshot complete item metadata; native lifecycle events contain dates and typed access facts, never narrative. Entitlement observation scans up to 100 customers per dispatch, continues by cursor and does not promise a one-minute bound at arbitrary scale. This map states the current API; it does not claim a live sync or a completed replacement for unsupported event families.
 
 ## Parent payers and division consolidation (CAT-009, partial)
 

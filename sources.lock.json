@@ -57,7 +57,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "a3256a8107be1973a0f127bd29135e80d596cedbda63c80a0fa3c88f622522b7",
+      "sha256": "ddd7883a734d427f8f1e95cc6846f7b74b637623633e0ed8d1bf19b02f9dc4c0",
       "executable": false
     },
     "AGENTS.consumer.md": {
@@ -69,7 +69,7 @@
       "executable": false
     },
     "API.md": {
-      "sha256": "6bca693759bf60d5387e83df78f6c20f6ab629d5f8099199b3e7a08aa4af0ec2",
+      "sha256": "9d4c77c61b63240f08e1db57f2de7b00793ec9cefc6a3f84d80214ab2a6ba94e",
       "executable": false
     },
     "base-copies.json": {
@@ -77,7 +77,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "01e5e16a341725db9238c26ca3d224753203c0f7e6d716fa5df85cd42e72fc05",
+      "sha256": "99db0d43ee40949ff9840b9133b4ae725d38f61edc1406fd1bc2dcc9b8c65851",
       "executable": false
     },
     "DEMO.md": {
@@ -474,6 +474,10 @@
     },
     "migrations/core/0075_webhook_lifecycle.sql": {
       "sha256": "760a64720e01c3f7fff2aa1a1962013ceba6b1709e0859c2cc965c9e05b406e8",
+      "executable": false
+    },
+    "migrations/core/0076_webhook_issue_settlement.sql": {
+      "sha256": "e6bc86d23cbc33b81e22e891f92a7c183c37b8e761523fe511580ae605f445af",
       "executable": false
     },
     "ONBOARDING.md": {
@@ -4273,7 +4277,7 @@
       "executable": false
     },
     "tests/nectar/webhooks.mjs": {
-      "sha256": "6ad8a188e659af3a54c6392e2b8d3b4a4524032d493c9897366959e4ca1b6694",
+      "sha256": "765d9a71e216d405448e0c2371eda9324f92cb45d9608f77ed6038cfe0140c39",
       "executable": false
     },
     "tests/nectar/write-off-browser.mjs": {

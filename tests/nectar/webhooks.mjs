@@ -201,6 +201,54 @@ export async function webhookLifecycleFlow(h,owner,{onState=async()=>{}}={}) {
     assert.equal(crossed[0].data.quota.eventIds,undefined,'threshold payload does not expose a raw event list')
     await dispatch();assert.equal(received.filter(e=>e.type==='usage.threshold_crossed'&&e.data.customer_id===qc).length,1)
     await onState({label:'quota-crossing',delivery:(await api('webhooks')).deliveries.find(d=>d.type==='usage.threshold_crossed').id})
+    // Settlement uses applied credit, not a claim that cash was charged.
+    const manual=async(amount,description)=>{
+      const charge=(await api('charge.add',{customer,amount,description,effective_date:date,taxable:false})).charge
+      const id=(await api('invoice.manual',{customer,charges:[charge],service_date:date})).id
+      await api('invoice.approve',{invoice:id,acknowledge:true});await api('invoice.finalise',{invoice:id,issue_date:date});return id
+    }
+    const creditOnly=await manual('20','Credit-only settlement')
+    await api('credit.issue',{invoice:creditOnly,amount:'20',reason:'Private full-credit narrative'})
+    await api('balance.goodwill',{customer,amount:'25',reason:'Private goodwill narrative'})
+    const goodwill=await manual('25','Goodwill settlement')
+    await api('balance.apply',{invoice:goodwill})
+    await dispatch()
+    for(const id of [creditOnly,goodwill]){
+      assert.equal((await api(`invoices/${id}`)).balanceCents,0)
+      const paid=received.filter(e=>e.type==='invoice.paid'&&e.data.invoice_id===id)
+      assert.equal(paid.length,1);assert.equal(paid[0].data.cash_allocated_cents,0)
+      assert.equal(paid[0].data.custody,'recorded-ledger-settlement')
+    }
+    const writtenOff=await manual('15','Written-off account')
+    await api('writeoff.issue',{invoice:writtenOff,amount:'15',reason:'Private bad-debt narrative'})
+    await dispatch();assert.equal(received.filter(e=>e.type==='invoice.paid'&&e.data.invoice_id===writtenOff).length,0,'a write-off is never advertised as paid')
+    // A carried credit is inserted before the new invoice becomes issued.
+    // Its settled event must be captured after issuance, with a full snapshot.
+    const carry=(await api('customer.create',{external_id:'synthetic-nectar-webhook-carried',name:'Carried account',billing_email:'carry@example.test'})).id
+    const annual=async(code,amount)=>{const product=(await api('product.create',{code,name:'Annual carried service'})).id;return(await api('price.create',{product,kind:'flat',unit_amount:amount,interval_unit:'year',billing_timing:'advance',taxable:false})).id}
+    const high=await annual('synthetic-nectar-webhook-high','1200'),low=await annual('synthetic-nectar-webhook-low','1')
+    const annualSub=(await api('subscription.create',{customer:carry,start_date:'2026-01-01',price:[high]})).id
+    const run=await api('billrun.prepare',{period:'2026-01'}),original=(await api(`runs/${run.id}`)).invoices.find(i=>i.customer_id===carry)
+    await api('invoice.approve',{invoice:original.id,acknowledge:true});await api('invoice.finalise',{invoice:original.id,issue_date:'2026-01-01'})
+    const funded=(await api('payment.record',{customer:carry,amount:'1200',received_on:'2026-01-02',method:'bank_transfer',reference:'synthetic-nectar-webhook-paid'})).payment
+    await api('payment.allocate',{payment:funded,invoice:original.id,amount:'1200'})
+    await applyPolicy(h,owner,'lifecycle.policy',{credit_unused:true,reactivation_days:30,proration_policy:'invoice_now'})
+    const item=(await api(`subscriptions/${annualSub}`)).items[0].id
+    const quote=await api('plan.change.prepare',{subscription:annualSub,item,price:low,mode:'immediate'})
+    await api('access.give',{email:'webhook-carry-finance@example.test',name:'Carry finance',role:'finance'})
+    const approver=await h.signIn('webhook-carry-finance@example.test',{requested:true})
+    await h.api('plan.change.decide',approver,{change:quote.change,decision:'approved'})
+    clock=Date.parse('2027-01-02T12:00:00Z');await h.advanceClock(new Date(clock).toISOString())
+    const next=await api('billrun.prepare',{period:'2027-01'}),future=(await api(`runs/${next.id}`)).invoices.find(i=>i.customer_id===carry)
+    await api('invoice.approve',{invoice:future.id,acknowledge:true});await api('invoice.finalise',{invoice:future.id,issue_date:'2027-01-01'})
+    assert.equal((await api(`invoices/${future.id}`)).balanceCents,0)
+    await dispatch();await dispatch()
+    const carried=received.filter(e=>e.type==='invoice.paid'&&e.data.invoice_id===future.id)
+    assert.equal(carried.length,1,'fully carried settlement emits once after the invoice is actually issued')
+    assert.equal(carried[0].data.cash_allocated_cents,0)
+    assert.ok(!JSON.stringify(received).includes('Private full-credit narrative'))
+    assert.ok(!JSON.stringify(received).includes('Private goodwill narrative'))
+    await onState({label:'credit-goodwill-and-carried-settlement'})
     console.log('webhookLifecycleFlow: complete native creation metadata, dated entitlements, quota crossings, observed cards, payment failure and once-only settlement passed')
   }finally{await rm(directory,{recursive:true,force:true})}
 }
