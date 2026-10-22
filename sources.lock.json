@@ -440,6 +440,10 @@
       "sha256": "f614e685eba8b2534df5c3abdcf6be028432586fb1ca785254a31d2e3b6fb3a1",
       "executable": false
     },
+    "migrations/core/0069_period_close.sql": {
+      "sha256": "7724930d69ba474ea287f37eda91541351865075e637759498ed0a13e41f2e77",
+      "executable": false
+    },
     "ONBOARDING.md": {
       "sha256": "95bb235abff28ac36979868486caf2cb73bfbe4ab63037f3e301d189bb9398d9",
       "executable": false
@@ -2948,6 +2952,14 @@
       "sha256": "d28ac914b5607ed0ac50c8228e3959b5a85da44f27b76d9a7514126784e774a4",
       "executable": false
     },
+    "src/nectar/period-close-keys.ts": {
+      "sha256": "680c4e5f9d9d1cc6d65ebf206751d56b5d7a7ca02220b53643ff0016c8ca0c0a",
+      "executable": false
+    },
+    "src/nectar/period-close.ts": {
+      "sha256": "ea8daa965ad835e6645206af9966e0a3cd56ed05943c12e74a721c3a9c16f5a0",
+      "executable": false
+    },
     "src/nectar/policy-changes.ts": {
       "sha256": "35b249703e4279ce332af5bf97a3040ea19f522363fc18a6c907fc75824efb28",
       "executable": false
@@ -3416,6 +3428,10 @@
       "sha256": "ac30a022b0bf40933ad9d4cd361f9b1c92b5d6f2daa9d08e8c537e593b37869c",
       "executable": false
     },
+    "src/nectar/ui/period-close.ts": {
+      "sha256": "4217bee2428825c05255ff4c881e298b4a1c24feb778a30c6e9a2ae5f3a940f6",
+      "executable": false
+    },
     "src/nectar/ui/policies.ts": {
       "sha256": "ec3c5bb7afb5bf8a58bc533965719a5b74674d052af98818d3608f2cfd198bc0",
       "executable": false
@@ -3465,7 +3481,7 @@
       "executable": false
     },
     "src/nectar/ui/revenue.ts": {
-      "sha256": "695a6e9cc4b0575216fae232d4e9cf2433b826fa0e16765563523e32c42b838e",
+      "sha256": "8566d83546db90d24f3d18e7c6ed4c5a31c0282f7f4acbf6c39747e3b1f86b2d",
       "executable": false
     },
     "src/nectar/ui/review.ts": {
@@ -3974,6 +3990,14 @@
     },
     "tests/nectar/openapi-client.mjs": {
       "sha256": "30e0fdcf9f4e88bea0c4968463b82bdbab1b0d03b328a8bd21efb3f97465ec30",
+      "executable": false
+    },
+    "tests/nectar/period-close-browser.mjs": {
+      "sha256": "9d8bb33033953f7cd66c5fe47fd8b4896e94c70167c10454d3c0dc21b4952586",
+      "executable": false
+    },
+    "tests/nectar/period-close.mjs": {
+      "sha256": "ae20120c6b0d30a48bc9fca1415d911a913a2124a1f8a88a809bb5c015dbae3b",
       "executable": false
     },
     "tests/nectar/policy-approvals.mjs": {
