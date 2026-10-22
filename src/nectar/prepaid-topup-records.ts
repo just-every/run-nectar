@@ -13,7 +13,7 @@ import { savedCard, stripeForAccount } from './payments/stripe'
 export interface TopupQuote {
   subscription:string; customer:string; consent:string; request:string; owner:string
   terms:PrepaidTerms; consentTermsJson:string; thresholdN:number; amountCents:number; periodCapCents:number; period:'business_calendar_month'
-  timezone:string; businessRevision:number; customerRevision:string
+  currency:'usd'; timezone:string; businessRevision:number; customerRevision:string
   startDate:string; endDate:string; bindingId:string; bindingRevision:string; accountRef:string; customerRef:string
   paymentMethodRef:string; livemode:boolean; card:{brand:string;last4:string;expMonth:number;expYear:number}
   content:InvoiceContent; revokePath:string; fundingEffective:'purchase-date'; capRule:'all claimed amounts, including unknown outcomes'
@@ -66,7 +66,7 @@ export async function endTopupAuthorization(env:Bindings,row:Row,status:'revoked
   await commit(env,[stmt(env,"UPDATE nc_prepaid_topup_authorizations SET status=?,ended_at=? WHERE id=? AND status IN ('active','awaiting_customer','pending')",status,clockInstant(env),row.id)],{actor,action:`prepaid.topup.${status}`,subject:row.id,detail:{customer:row.customer_id}})
 }
 export function publicTopupQuote(q:TopupQuote){
-  return {subscription:q.subscription,customer:q.customer,terms:q.terms,thresholdN:q.thresholdN,amountCents:q.amountCents,periodCapCents:q.periodCapCents,period:q.period,timezone:q.timezone,startDate:q.startDate,endDate:q.endDate,accountRef:q.accountRef,customerRef:q.customerRef,paymentMethodRef:q.paymentMethodRef,livemode:q.livemode,card:q.card,revokePath:q.revokePath,fundingEffective:q.fundingEffective,capRule:q.capRule,paymentTermsDays:q.content.paymentTermsDays}
+  return {subscription:q.subscription,customer:q.customer,terms:q.terms,thresholdN:q.thresholdN,amountCents:q.amountCents,periodCapCents:q.periodCapCents,period:q.period,currency:q.currency,timezone:q.timezone,startDate:q.startDate,endDate:q.endDate,accountRef:q.accountRef,customerRef:q.customerRef,paymentMethodRef:q.paymentMethodRef,livemode:q.livemode,card:q.card,revokePath:q.revokePath,fundingEffective:q.fundingEffective,capRule:q.capRule,paymentTermsDays:q.content.paymentTermsDays}
 }
 export async function readPrepaidTopupAuthorizations(env:Bindings,actor:Actor,subscription?:string){
   requireMember(actor,'approve')
