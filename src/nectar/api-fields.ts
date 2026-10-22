@@ -136,6 +136,27 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "subscription": "text",
     "taxable": "flag"
   },
+  "collection.confirm": {
+    "account_ref": "text",
+    "amount_cents": "integer",
+    "basis_hash": "text",
+    "confirm": "flag",
+    "payment_method_ref": "text",
+    "request": "text",
+    "stripe_customer_ref": "text"
+  },
+  "collection.customer.bind": {
+    "account_ref": "text",
+    "confirm": "flag",
+    "customer": "text",
+    "stripe_customer_ref": "text"
+  },
+  "collection.prepare": {
+    "invoice": "text"
+  },
+  "collection.reconcile": {
+    "request": "text"
+  },
   "contact.add": {
     "customer": "text",
     "email": "text",
@@ -471,6 +492,41 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
   },
   "portal.session.revoke": {
     "session": "text"
+  },
+  "prepaid.consent.revoke": {
+    "consent": "text"
+  },
+  "prepaid.decide": {
+    "confirm_single": "flag",
+    "decision": "text",
+    "request": "text"
+  },
+  "prepaid.funding.confirm": {
+    "confirm": "flag",
+    "intent": "text"
+  },
+  "prepaid.prepare": {
+    "*": "has",
+    "effective_date": "text",
+    "expires_date": "text",
+    "expiry_consent": "flag",
+    "funding_consent": "flag",
+    "kind": "text",
+    "meter": "text",
+    "mode": "text",
+    "priority": "integer",
+    "purchase_amount": "text",
+    "rollover_months": "integer",
+    "rollover_percent": "integer",
+    "source": "text",
+    "subscription": "text"
+  },
+  "prepaid.purchase.prepare": {
+    "intent": "text",
+    "issue_date": "text"
+  },
+  "prepaid.settle": {
+    "subscription": "text"
   },
   "price.create": {
     "*": "has",

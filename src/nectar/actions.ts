@@ -1,3 +1,8 @@
+import { bindNativeCollectionCustomer, prepareNativeCollection, confirmNativeCollection, reconcileNativeCollection } from './payments/collection'
+import { preparePrepaid, decidePrepaid, revokePrepaidConsent } from './prepaid-terms'
+import { preparePrepaidPurchase } from './prepaid-purchase'
+import { confirmPrepaidFunding } from './prepaid-funding'
+import { settlePrepaid } from './prepaid-issue'
 import { decideIntervalCancellation } from './interval-cancel'
 import { createBillingEntity,updateBillingEntity,assignCustomerEntity } from './billing-entities'
 import { captureNumberingSource,captureLiveCustomerNumberingSource } from './numbering-source'
@@ -63,6 +68,16 @@ import { prepareMetric,previewMetric,activateMetric } from './meter-definitions'
 type Handler = (env: Bindings, actor: Actor, input: Input, request: Request) => Promise<unknown>
 
 export const actions: Record<string, Handler> = {
+  'collection.customer.bind': bindNativeCollectionCustomer,
+  'collection.prepare': prepareNativeCollection,
+  'collection.confirm': confirmNativeCollection,
+  'collection.reconcile': reconcileNativeCollection,
+  'prepaid.prepare': preparePrepaid,
+  'prepaid.decide': decidePrepaid,
+  'prepaid.purchase.prepare': preparePrepaidPurchase,
+  'prepaid.funding.confirm': confirmPrepaidFunding,
+  'prepaid.consent.revoke': revokePrepaidConsent,
+  'prepaid.settle': settlePrepaid,
   'portal.configure': configurePortal,
   'portal.session.issue': issuePortalSession,
   'portal.session.revoke': revokePortalSession,

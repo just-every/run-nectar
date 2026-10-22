@@ -9,7 +9,7 @@ import { erasureMutationStatements, type ErasureMutation } from './erasure-sql'
 
 const quote = (name: string) => `"${name.replaceAll('"', '""')}"`
 const relation = new Set(['customer_id','subscription_id','invoice_id','payment_id','proposal_id','credit_id','record_id','subject','related_id','term_id','offer_id','contract_id','note_id','correction_id','original_invoice_id'])
-const keep = new Set(['billing_key','interval_unit','billing_timing','numbering_mode','capture_kind','account_ref','custody','basis_hash','error_code','occurred_text','number','kind','document_kind','status','origin','language','currency','method','billing_mode','invoice_kind','calc_version','version','revision','quantity','unit_amount','value','tax_rate','tax_mode','tax_jurisdiction','anchor_day','billing_interval','access','scope','scopes','pricing_model','action','state','approval_mode','mail_status','verified_method','event','created_by_kind','prepared_by_kind','source','proposal_kind'])
+const keep = new Set(['intent_key','billing_key','interval_unit','billing_timing','numbering_mode','capture_kind','account_ref','custody','basis_hash','error_code','occurred_text','number','kind','document_kind','status','origin','language','currency','method','billing_mode','invoice_kind','calc_version','version','revision','quantity','unit_amount','value','tax_rate','tax_mode','tax_jurisdiction','anchor_day','billing_interval','access','scope','scopes','pricing_model','action','state','approval_mode','mail_status','verified_method','event','created_by_kind','prepared_by_kind','source','proposal_kind'])
 const reserved = new Set(['nc_incumbent_revenue','nc_erased_records','nc_guard','nc_privacy_generation','nc_privacy_context','nc_erasure_requests','nc_erasure_financial','nc_business','nc_members','nc_agent_keys'])
 const keyed = (value: unknown, ids: Set<string>): boolean => typeof value === 'string' ? ids.has(value) : Array.isArray(value) ? value.some(v => keyed(v, ids)) : !!value && typeof value === 'object' && Object.values(value).some(v => keyed(v, ids))
 const json = (text: unknown) => { try { return JSON.parse(String(text)) } catch { return null } }
@@ -65,7 +65,7 @@ export async function erasurePlan(env: Bindings, customer: Row): Promise<Erasure
       if (foreignKeys.has(column) || (column.endsWith('_id') && !['external_id','event_id'].includes(column)) || column === 'id' || column === 'subject' || keep.has(column) || /(?:_at|_on|_date|_from|_to|_start|_end)$/.test(column)) continue
       if (column === 'external_id' || column === 'event_id' || column === 'reference') updates[column] = `erased-${row.id ?? customer.id}`
       else if (column === 'name' && table === 'nc_customers') updates[column] = 'Erased customer'
-      else if (column === 'provider_ref' || column === 'provider_schedule_ref') updates[column] = required.has(column) ? `erased-${row.id ?? customer.id}` : null
+      else if (column === 'provider_ref' || column === 'provider_schedule_ref' || column === 'stripe_customer_ref') updates[column] = required.has(column) ? `erased-${row.id ?? customer.id}` : null
       else updates[column] = column==='body' && table==='nc_notes' ? '[erased]' : ''
     }
     if(table==='nc_imported_collections'&&affected&&row.charge_ref)updates.history_payment_id=images.find(image=>image.table==='nc_incumbent_history'&&image.row.kind==='payment'&&image.row.status==='succeeded'&&image.row.provider_ref===row.charge_ref)?.row.id??row.history_payment_id
@@ -76,6 +76,7 @@ export async function erasurePlan(env: Bindings, customer: Row): Promise<Erasure
       if (table==='nc_notices') updates.status='discarded'
       if (table==='nc_tasks') updates.status='done'
       if (table==='nc_renewal_terms') {updates.auto_renew=0;updates.token_hash=null;updates.status='ended'}
+      if (table==='nc_prepaid_consents') updates.status='revoked'
       if (table==='nc_retention_offers') {updates.token_hash=null;updates.status='expired'}
     }
     if (table==='nc_audit' && affected) {updates.detail='{}'; updates.actor=memberIds.has(row.actor)?`member:${memberIds.get(row.actor)}`:/^(system:|customer:(erasure|renewal|winback))/.test(row.actor)?row.actor:'redacted-actor'}

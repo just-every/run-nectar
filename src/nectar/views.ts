@@ -1,3 +1,5 @@
+import { readNativeCollections } from './payments/collection'
+import { prepaidState, prepaidSource } from './prepaid-reports'
 import { billingEntities } from './billing-entities'
 import { collectionView } from './movein/collection-state'
 import { customerHistory } from './movein/history-reports'
@@ -69,6 +71,9 @@ export async function customerView(env: Bindings, actor: Actor, id: string, url?
 }
 
 export const views: Record<string, View> = {
+  nativeCollections:(env,actor,_r,_id,url)=>readNativeCollections(env,actor,url.searchParams.get('customer')??undefined),
+  prepaid:(env,actor,_r,id,url)=>prepaidState(env,actor,id,url.searchParams.get('date')??undefined),
+  prepaidSource:(env,actor,_r,id)=>{const [subscription,entry]=id.split('/entries/');return prepaidSource(env,actor,subscription,decodeURIComponent(entry))},
   usageCorrections:(env,actor,_r,_id,url)=>usageCorrections(env,actor,url.searchParams.get("subscription")??""),
   billingEntities:(env,actor)=>billingEntities(env,actor),
   numberRegister:(env,actor,_r,_id,url)=>numberRegister(env,actor,url),

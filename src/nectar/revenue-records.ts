@@ -1,3 +1,4 @@
+import { recognizedPrepaidPurchase } from './prepaid-revenue'
 // Schedules are written only alongside invoice/credit issue. Older invoices
 // project this version from immutable originals; reads never initialize rows.
 import type { Bindings } from '../auth.server'
@@ -62,7 +63,7 @@ export async function revenueCreditStatements(env: Bindings, credit: RevenueCred
 
 /** One invoice's persisted schedules or explicit historical read projection.
  * No catalogue, current usage or changed customer identity enters recognition. */
-function projectInvoice(invoice: Row, stored: Row[], entries: Row[], lines: Row[], creditNotes: Row[], creditRows: Row[], timezone: string): RevenueInvoiceRecord {
+function projectInvoice(invoice: Row, stored: Row[], entries: Row[], lines: Row[], creditNotes: Row[], creditRows: Row[], prepaidRows: Row[], timezone: string): RevenueInvoiceRecord {
   const id = invoice.id
   let custody: RevenueInvoiceRecord['custody'] = 'issue-snapshot'
   let schedules: RevenueSchedule[]
@@ -70,12 +71,13 @@ function projectInvoice(invoice: Row, stored: Row[], entries: Row[], lines: Row[
     insist(stored.length === lines.length && stored.every(row => (invoice.erased_at || row.policy_version === REVENUE_POLICY_VERSION) && lines.some(line => line.id === row.line_id)), 'revenue_snapshot_incomplete', 409)
     schedules = stored.map(row => ({ lineId: row.line_id, kind: row.kind, amountCents: row.amount_cents, serviceStart: row.service_start, serviceEnd: row.service_end, policy: row.policy || 'withdrawn-after-erasure',
       basis: parseJson<Row>(row.basis_json, {}), entries: entries.filter(entry => entry.schedule_id === row.id).map(entry => ({ period: entry.recognition_date.slice(0, 7), amountCents: entry.amount_cents, basis: parseJson<Row>(entry.basis_json, {}) })) }))
-    insist(schedules.every(schedule => schedule.entries.length && schedule.entries.reduce((sum, entry) => sum + BigInt(entry.amountCents), 0n) === BigInt(schedule.amountCents)), 'revenue_snapshot_incomplete', 409)
+    schedules = schedules.map(schedule => recognizedPrepaidPurchase(schedule, prepaidRows))
+    insist(schedules.every(schedule => schedule.kind === 'prepaid_purchase' || schedule.entries.length && schedule.entries.reduce((sum, entry) => sum + BigInt(entry.amountCents), 0n) === BigInt(schedule.amountCents)), 'revenue_snapshot_incomplete', 409)
     insist(schedules.reduce((sum, schedule) => sum + BigInt(schedule.amountCents), 0n) === BigInt(invoice.subtotal_cents), 'revenue_snapshot_incomplete', 409)
   } else {
     insist(!invoice.erased_at, 'revenue_originals_unavailable_after_erasure', 409, { invoice: id })
     custody = 'derived-saved-originals'
-    schedules = recognitionForSavedInvoice(invoice, lines, timezone)
+    schedules = recognitionForSavedInvoice(invoice, lines, timezone).map(schedule => recognizedPrepaidPurchase(schedule, prepaidRows))
   }
   const credits = creditNotes.map(note => {
     const saved = creditRows.find(row => row.credit_id === note.id)
@@ -98,14 +100,15 @@ async function loadRevenueInvoices(env: Bindings, invoice: string | null, custom
       ['nc_revenue_schedules', 'r.line_id'], ['nc_revenue_entries', 'r.recognition_date,r.id'],
       ['nc_invoice_lines', 'r.seq'], ['nc_credit_notes', 'r.issued_at,r.id'], ['nc_revenue_credits', 'r.id'],
     ].map(([table, order]) => stmt(env, `SELECT r.* FROM ${table} r JOIN nc_invoices i ON i.id=r.invoice_id WHERE ${condition} ORDER BY ${order}`, ...params)),
+    stmt(env, `SELECT r.id,r.grant_id,r.subscription_id,r.service_date,r.recognition_cents,r.invoice_id AS service_invoice_id,r.purchase_line_id,r.purchase_invoice_id AS invoice_id FROM nc_prepaid_ledger r JOIN nc_invoices i ON i.id=r.purchase_invoice_id WHERE ${condition} AND r.recognition_cents<>0 ORDER BY r.service_date,r.id`, ...params),
   ])
-  const [invoices, stored, entries, lines, creditNotes, creditRows] = results.map(result => result.results)
-  const grouped = [stored, entries, lines, creditNotes, creditRows].map(rows => {
+  const [invoices, stored, entries, lines, creditNotes, creditRows, prepaidRows] = results.map(result => result.results)
+  const grouped = [stored, entries, lines, creditNotes, creditRows, prepaidRows].map(rows => {
     const map = new Map<string, Row[]>()
     for (const row of rows) { const group = map.get(row.invoice_id) ?? []; group.push(row); map.set(row.invoice_id, group) }
     return map
   })
-  return invoices.map(row => projectInvoice(row, grouped[0].get(row.id) ?? [], grouped[1].get(row.id) ?? [], grouped[2].get(row.id) ?? [], grouped[3].get(row.id) ?? [], grouped[4].get(row.id) ?? [], business.timezone))
+  return invoices.map(row => projectInvoice(row, grouped[0].get(row.id) ?? [], grouped[1].get(row.id) ?? [], grouped[2].get(row.id) ?? [], grouped[3].get(row.id) ?? [], grouped[4].get(row.id) ?? [], grouped[5].get(row.id) ?? [], business.timezone))
 }
 
 export async function revenueInvoice(env: Bindings, id: string): Promise<RevenueInvoiceRecord> {

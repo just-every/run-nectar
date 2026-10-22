@@ -42,6 +42,7 @@ export interface Bindings {
  MAIL_FROM?: string
  /** Owner-authorized original Stripe invoice collection; runtime secret, never archived. */
  STRIPE_BILLING_SECRET?: string
+ STRIPE_SECONDARY_SECRET_KEY?: string
  MAIL_API_KEY?: string
  MAIL_ACCOUNT_ID?: string
 }

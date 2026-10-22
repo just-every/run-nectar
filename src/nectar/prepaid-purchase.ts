@@ -27,7 +27,7 @@ export async function preparePrepaidPurchase(env: Bindings, actor: Actor, input:
   const business = await requireBusiness(env), id = input.text('intent', { max: 100 })
   const intent = await one(env, "SELECT * FROM nc_prepaid_funding_intents WHERE id=? AND status='pending'", id)
   insist(intent && !intent.invoice_id, 'prepaid_purchase_already_prepared', 409)
-  const date = requireDate(input.text('issue_date', { max: 10, optional: true }) || today(business.timezone, clockInstant(env)))
+  const date = requireDate(input.text('issue_date', { max: 10, optional: true }) || today(business.timezone, clockInstant(env)), 'issue_date')
   insist(date <= today(business.timezone, clockInstant(env)), 'invalid_issue_date')
   const calculation = await prepaidPurchaseCalculation(env, business, intent.customer_id, id, date), run = newId(), invoice = newId(), at = now(), line = calculation.rating.lines[0]
   await commit(env, [guard(env, 'prepaid_purchase_already_prepared', "EXISTS(SELECT 1 FROM nc_prepaid_funding_intents WHERE id=? AND status='pending' AND invoice_id IS NULL)", id),

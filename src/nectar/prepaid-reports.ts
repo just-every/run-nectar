@@ -13,7 +13,7 @@ export async function prepaidState(env: Bindings, actor: Actor, subscription: st
   requireRead(actor,'subscriptions'); requireRead(actor,'invoices')
   const sub=await one(env,'SELECT s.id,c.erased_at FROM nc_subscriptions s JOIN nc_customers c ON c.id=s.customer_id WHERE s.id=?',subscription)
   insist(sub,'subscription_not_found',404); insist(!sub.erased_at,'customer_erased',410)
-  const date=requireDate(at || today((await requireBusiness(env)).timezone,clockInstant(env))), recorded=await prepaidSnapshot(env,subscription)
+  const date=requireDate(at || today((await requireBusiness(env)).timezone,clockInstant(env)), 'date'), recorded=await prepaidSnapshot(env,subscription)
   if (!recorded) return {subscription,date,revision:0,grants:[],entries:[],balances:[],requests:[],consents:[],fundingIntents:[]}
   const basis={...recorded,entries:recorded.entries.filter(entry=>entry.serviceDate<=date)}
   // A future grant is not a negative balance; it has no effective grant entry.

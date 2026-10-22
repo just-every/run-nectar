@@ -1,3 +1,4 @@
+import { prepaidRecognitionForLine } from './prepaid-revenue'
 // Pure, versioned recognition of the saved once-rounded invoice consideration.
 import { insist, type Row } from './core'
 import { addDays, addMonths, daysBetween, isDate, validTimeZone } from './dates'
@@ -74,6 +75,8 @@ function cancellationEntries(line: Line): RevenueMonthEntry[] {
 export function recognitionForLine(line: Line, input: RevenueInput, lineId: string): RevenueSchedule {
   validateLine(line)
   insist(typeof lineId === 'string' && lineId.length > 0 && validTimeZone(input.timezone), 'revenue_context_required', 409)
+  const prepaid = prepaidRecognitionForLine(line, input, lineId)
+  if (prepaid) return prepaid
   let entries: RevenueMonthEntry[], policy: string
   if (line.kind==='usage_correction') {
     const saved=line.evidence.revenueEntries

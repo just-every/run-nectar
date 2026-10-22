@@ -26,8 +26,8 @@ function readTerms(input: Input): PrepaidTerms {
   insist(amountN > 0, 'invalid_prepaid_amount')
   const valueCents = source === 'promotion' ? 0 : kind === 'money' ? amountN : cents(input.text('purchase_amount', { max: 24 }))
   insist(source === 'promotion' || valueCents > 0, 'prepaid_purchase_amount_required')
-  const effectiveDate = requireDate(input.text('effective_date', { max: 10 })), expiresDate = input.text('expires_date', { max: 10, optional: true }) || null
-  insist(!expiresDate || requireDate(expiresDate) > effectiveDate, 'invalid_prepaid_expiry')
+  const effectiveDate = requireDate(input.text('effective_date', { max: 10 }), 'effective_date'), expiresDate = input.text('expires_date', { max: 10, optional: true }) || null
+  insist(!expiresDate || requireDate(expiresDate, 'expires_date') > effectiveDate, 'invalid_prepaid_expiry')
   insist(input.flag('expiry_consent'), 'prepaid_expiry_consent_required')
   const rolloverMonths = input.integer('rollover_months', { min: 0, max: 120, optional: true }) ?? 0
   const rolloverPercent = input.integer('rollover_percent', { min: 0, max: 100, optional: true }) ?? 100

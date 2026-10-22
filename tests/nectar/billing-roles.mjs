@@ -14,11 +14,11 @@ const ACTIONS = [...(await readFile(new URL('../../src/nectar/actions.ts', impor
 // Every member manages their own factor and email choices (GOV-007, INT-003).
 const OWN = name => (name.startsWith('mfa.') && !['mfa.policy', 'mfa.reset'].includes(name)) || name === 'notification.preferences'
 // Probes name a record kind or metric where a door's pattern needs one, so the family check decides.
-const API_PROBE = { notes: 'notes/payment/none', metadata: 'metadata/price/none', metadataObjects: 'objects/customer', report: 'reports/billings', reportInvoice: 'reports/billings/none', reportLine: 'invoices/none/lines/none' }
+const API_PROBE = { notes: 'notes/payment/none', metadata: 'metadata/price/none', metadataObjects: 'objects/customer', report: 'reports/billings', reportInvoice: 'reports/billings/none', reportLine: 'invoices/none/lines/none', prepaid:'prepaid/none', prepaidSource:'prepaid/none/entries/none' }
 const PAGE_PROBE = { importOriginals:'/app/import/none/originals/'+ '0'.repeat(64), metadata: '/app/metadata/price/none', report: '/app/reports/billings', reportInvoice: '/app/reports/billings/none', reportCsv: '/app/exports/reports/billings.csv', metadataCsv: '/app/exports/objects/customer.csv', reportLine: '/app/invoices/none/lines/none' }
 const fill = pattern => pattern.replace(/^\^|\$$/g, '').replace(/\(\[[^)]*\]\+\)/g, 'none').replace(/\\\./g, '.')
 
-const READ_ALL_API = API_DOORS.map(([, name]) => name).filter(name => !['members', 'roles', 'imports', 'audit', 'reportSchedule', 'reportDelivery', 'noteMembers','billingEntities'].includes(name))
+const READ_ALL_API = API_DOORS.map(([, name]) => name).filter(name => !['members', 'roles', 'imports', 'audit', 'reportSchedule', 'reportDelivery', 'noteMembers','billingEntities','nativeCollections'].includes(name))
 const READ_ALL_PAGES = PAGE_DOORS.map(([, name]) => name).filter(name => !['revenueJournalCsv', 'numberRegisterCsv', 'erasureEvidence', 'revenueCsv', 'reportSchedule', 'reportDelivery', 'reportDeliveryCsv', 'reportCsv', 'metadataCsv', 'runFile', 'import', 'exports', 'customersFile', 'invoicesFile', 'usageFile', 'subscriptionsFile', 'audit', 'noticeFile','importOriginals'].includes(name))
 const COMMON = { api: ['openapi', 'me', 'notifications', 'mfa'], pages: ['home', 'more', 'security', 'passkeyScript'] }
 const EXPECTED = {
@@ -34,7 +34,7 @@ const EXPECTED = {
   },
   support: {
     actions: ['note.add', 'credit.issue', 'answer.read'],
-    api: ['numberRegister', 'customers', 'customer', 'invoices', 'invoice', 'ageing', 'payments', 'notes', 'noteMembers', 'entitlement', 'subscription', 'upcoming', 'reportLine', 'metadataObjects'],
+    api: ['numberRegister', 'customers', 'customer', 'invoices', 'invoice', 'ageing', 'payments', 'notes', 'noteMembers', 'entitlement', 'subscription', 'upcoming', 'reportLine', 'metadataObjects', 'prepaid', 'prepaidSource'],
     pages: ['numberRegister', 'customers', 'customer', 'certificateFile', 'subscription', 'invoice', 'receivables', 'billingAnswers', 'reportLine', 'metadataList'],
   },
   developer: {
