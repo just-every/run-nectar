@@ -29,10 +29,11 @@ export async function prepaidReportParity(h,owner,row,{snapshotActor,snapshots=[
     const deliveries=(await h.api('report-schedule',snapshotActor)).deliveries
     const delivery=await h.api(`report-deliveries/${deliveries[0].id}`,snapshotActor)
     assert.equal(delivery.status,'accepted')
+    const currentEntries=(await h.api(`reports/credit-balances?customer=${row.customer}`,owner)).entries.filter(entry=>entry.prepaid?.subscriptionId===row.subscription)
     const sources=delivery.sourceEvidence.filter(source=>source.metric==='credit-balances'&&source.detail.prepaid?.subscriptionId===row.subscription)
-    assert.equal(sources.length,entries.length)
+    assert.equal(sources.length,currentEntries.length)
     for(const source of sources){
-      const entry=entries.find(entry=>entry.invoiceId===source.sourceId)
+      const entry=currentEntries.find(entry=>entry.invoiceId===source.sourceId)
       assert.ok(entry)
       assert.deepEqual(source.detail.prepaid,entry.prepaid)
       assert.equal(source.detail.totalCents,entry.amountCents)
