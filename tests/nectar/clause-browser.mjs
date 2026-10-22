@@ -1,3 +1,5 @@
+import { prepaidBrowser } from './prepaid-browser.mjs'
+import { nativeCollectionFlow,harnessOptions as nativeOptions } from './native-collection.mjs'
 // Focused real-browser use of a clause's own public pages and native forms.
 import assert from 'node:assert/strict'
 import { chromium } from '@playwright/test'
@@ -12,10 +14,10 @@ import { contractEntitySetup } from './contract-setup.mjs'
 import { intervalCancellationFlow } from './interval-cancel.mjs'
 import { numberingEntitiesFlow } from './numbering-entities.mjs'
 const kind=process.argv[2],directory=process.env.NECTAR_EVIDENCE_DIR??`.evidence/${kind}`
-assert.ok(['erasure','history','collection','numbering','intervals','cancellation','entity-setup'].includes(kind))
+assert.ok(['erasure','history','collection','numbering','intervals','cancellation','entity-setup','prepaid','native-collection'].includes(kind))
 await mkdir(directory,{recursive:true})
 const captures=[]
-const h=await harness({assets:true,...(kind==='collection'?collectionOptions():{})});let browser
+const h=await harness({assets:true,...(kind==='collection'?collectionOptions():kind==='native-collection'?nativeOptions():{})});let browser
 try {
   await h.raw('/auth/bootstrap',{body:{token:h.vars.SETUP_TOKEN,displayName:'Nectar Owner'}})
   const owner=await h.signIn(h.vars.OWNER_EMAIL)
@@ -49,7 +51,9 @@ try {
     const url=new URL(page.url())
     assert.equal(url.searchParams.get('error'),null,`Native form submission ${url.pathname}: ${url.searchParams.get('error')}`)
   }
-  if(kind==='entity-setup')await contractEntitySetup(h,owner,{
+  if(kind==='prepaid')await prepaidBrowser({h,owner,page,context,both,form,submit})
+  else if(kind==='native-collection')await nativeCollectionFlow(h,owner,{confirm:async payload=>{await page.goto(h.origin+`/app/invoices/${(await h.api('native-collections',owner)).find(row=>row.id===payload.request).invoice_id}`);const consent=form('collection.confirm').filter({has:page.locator(`input[name="request"][value="${payload.request}"]`)}).filter({has:page.locator('button')});await consent.locator('input[name="confirm"]').check();await submit(consent);return (await h.api('native-collections',owner)).find(row=>row.id===payload.request)},onState:async state=>{await both(`native-${state.label}-${state.request?.id??state.invoice}`,`/app/invoices/${state.invoice}#collection`)}})
+  else if(kind==='entity-setup')await contractEntitySetup(h,owner,{
     decideSetup:async(payload,actor)=>{
       assert.equal(actor,owner)
       await page.goto(h.origin+`/app/proposals/${payload.proposal}`)

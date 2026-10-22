@@ -745,6 +745,7 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "correction": "text"
   },
   "usage.correction.decide": {
+    "confirm_single": "flag",
     "correction": "text",
     "decision": "text"
   },

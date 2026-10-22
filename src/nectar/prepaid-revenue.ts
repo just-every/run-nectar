@@ -26,6 +26,6 @@ export function recognizedPrepaidPurchase(schedule: RevenueSchedule, rows: Row[]
   const recognized = selected.reduce((sum, row) => sum + BigInt(row.recognition_cents), 0n)
   insist(recognized >= 0n && recognized <= BigInt(schedule.amountCents), 'revenue_prepaid_liability_overdrawn', 409)
   return {...schedule,entries:selected.map(row => ({period:row.service_date.slice(0,7),amountCents:row.recognition_cents,
-    basis:{method:'append-only-prepaid-purchase-recognition',entry:row.id,grant:row.grant_id,recognitionDate:row.service_date,serviceInvoice:row.service_invoice_id,
+    basis:{method:'append-only-prepaid-purchase-recognition',recognitionKind:row.kind==='expiry'||row.correction_kind==='expiry'?'prepaid-breakage':row.kind==='correction'?'prepaid-correction':'prepaid-consumption',entry:row.id,grant:row.grant_id,recognitionDate:row.service_date,serviceInvoice:row.service_invoice_id,
       source:`/app/prepaid/${row.subscription_id}/entries/${encodeURIComponent(row.id)}`}}))}
 }

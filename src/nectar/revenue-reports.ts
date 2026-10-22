@@ -25,6 +25,7 @@ export interface RevenueContribution {
   custody: string
   href: string
   source?: RevenueInvoiceRecord['source']
+  recognitionKind?: string
   entityId: string | null
   entityName: string | null
   entityCustody: RevenueEntity['custody']
@@ -104,7 +105,7 @@ function sourceContributions(record: RevenueInvoiceRecord, search = ''): Revenue
   for (const schedule of schedules) {
     const source = { ...common, lineId: schedule.lineId, creditId: null, policy: schedule.policy, href: `/app/revenue/${encodeURIComponent(invoice.id)}${search}#line-${encodeURIComponent(schedule.lineId)}` }
     rows.push({ ...source, period: invoice.issue_date.slice(0, 7), kind: 'billing', amountCents: schedule.amountCents })
-    rows.push(...schedule.entries.map(entry => ({ ...source, period: entry.period, kind: 'recognition' as const, amountCents: entry.amountCents })))
+    rows.push(...schedule.entries.map(entry => ({ ...source, period: entry.period, kind: 'recognition' as const, recognitionKind: entry.basis.recognitionKind, amountCents: entry.amountCents })))
   }
   for (const credit of credits) {
     const source = { ...common, custody: credit.basis.custody ?? common.custody, number: credit.number, lineId: null, creditId: credit.id, period: credit.period, amountCents: credit.amountCents, policy: credit.basis.method ?? 'invoice-level-contra-revenue', href: `/app/revenue/${invoice.id}${search}#credit-${credit.id}` }

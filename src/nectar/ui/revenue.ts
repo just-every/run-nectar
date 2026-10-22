@@ -24,7 +24,7 @@ export async function revenuePage(env: Bindings, actor: Actor, url: URL) {
     </section>
     <section class="card" id="contributions"><h2>Source journal contributions</h2>
       <p>Billing and recognition are separate journal movements. Add billing movements and subtract recognition movements to calculate the change in signed position.</p>
-      ${table(['Month', 'Movement', 'Document', 'Customer', 'Billing entity', 'Contribution$', 'Schedule custody'], report.contributions.map(row => [row.period, kind(row.kind), h`<a href="${row.href}">${row.source?`${row.source.provider} · `:''}${row.number || 'Retained document'}</a>`, h`<a href="/app/customers/${row.customerId}">${row.customerName}</a>`, row.entityCustody === 'imported-unassigned' ? 'Imported source — entity unassigned' : row.entityName ?? (row.entityId ? 'Issued entity — identity withdrawn' : 'Installation business'), cents(row.amountCents), custody(row.custody)]), { empty: 'No issued invoice lines or credit notes contribute in these months.' })}
+      ${table(['Month', 'Movement', 'Document', 'Customer', 'Billing entity', 'Contribution$', 'Schedule custody'], report.contributions.map(row => [row.period, row.recognitionKind?row.recognitionKind.replaceAll('-',' '):kind(row.kind), h`<a href="${row.href}">${row.source?`${row.source.provider} · `:''}${row.number || 'Retained document'}</a>`, h`<a href="/app/customers/${row.customerId}">${row.customerName}</a>`, row.entityCustody === 'imported-unassigned' ? 'Imported source — entity unassigned' : row.entityName ?? (row.entityId ? 'Issued entity — identity withdrawn' : 'Installation business'), cents(row.amountCents), custody(row.custody)]), { empty: 'No issued invoice lines or credit notes contribute in these months.' })}
     </section>`, { url, current: '/app/billing' })
 }
 
@@ -42,10 +42,10 @@ export async function revenueSourcePage(env: Bindings, actor: Actor, invoice: st
       ${table(['Recognition month', 'Signed revenue$'], schedule.entries.map(entry => [entry.period, cents(entry.amountCents)]))}
       ${details({ line: schedule.lineId, policyVersion: source.policyVersion, sourceFingerprint: source.invoice.sourceFingerprint, basis: schedule.basis, entries: schedule.entries }, 'Schedule basis and exact allocation')}
     </section>`)}
-    <section class="card"><h2>Credit-note contra-revenue</h2>
-      ${source.credits.length ? source.credits.map(credit => h`<article id="credit-${credit.id}"><h3>${credit.number || 'Retained credit note'}</h3><p>${cents(credit.amountCents)} recognized in ${credit.period}. The original invoice lines and tax remain unchanged.</p>${details(credit.basis, 'Credit journal basis')}</article>`) : h`<p>No issued credit notes.</p>`}
+    <section class="card"><h2>Credit-note billings and recognition</h2>
+      ${source.credits.length ? source.credits.map(credit => h`<article id="credit-${credit.id}"><h3>${credit.number || 'Retained credit note'}</h3><p>Billings ${cents(credit.amountCents)}; recognized ${cents(credit.recognitionCents??credit.amountCents)} in ${credit.period}. The original invoice lines and tax remain unchanged.</p>${details(credit.basis, 'Credit journal basis')}</article>`) : h`<p>No issued credit notes.</p>`}
     </section>
     <section class="card"><h2>Journal movements</h2>
-      ${table(['Month', 'Movement', 'Contribution$'], source.contributions.map(row => [row.period, kind(row.kind), cents(row.amountCents)]))}
+      ${table(['Month', 'Movement', 'Contribution$'], source.contributions.map(row => [row.period, row.recognitionKind?row.recognitionKind.replaceAll('-',' '):kind(row.kind), cents(row.amountCents)]))}
     </section>`, { url, current: '/app/billing' })
 }

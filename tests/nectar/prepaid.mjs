@@ -210,7 +210,7 @@ export async function prepaidCorrectionFlow(h,owner){
   for(const [period,quantity,id,date] of [['2026-01','40',356,'2026-02-01'],['2026-02','30',357,'2026-03-01']]){
     await submit(id,quantity,`${period}-15`)
     await h.advanceClock(`${date}T18:00:00Z`)
-    const run=await api('billrun.prepare',{period}),invoice=(await api(`runs/${run.id}`)).invoices.find(invoice=>invoice.subscription_id===subscription)
+    const run=await api('billrun.prepare',{period}),invoice=(await api(`runs/${run.id}`)).invoices.find(invoice=>invoice.customer_id===customer)
     await api('invoice.approve',{invoice:invoice.id,acknowledge:true});await api('invoice.finalise',{invoice:invoice.id,issue_date:date})
     issued.push(await api(`invoices/${invoice.id}`))
   }
