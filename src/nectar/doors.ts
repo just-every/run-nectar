@@ -33,6 +33,7 @@ export const API_DOORS: [string, string][] = [
 export const LIST_DOORS = ['usageCorrections', 'erasures', 'noteMembers', 'customers', 'batches', 'runs', 'payments', 'notices', 'tasks', 'policies', 'proposals', 'imports', 'shadow', 'members', 'roles', 'credentials', 'audit', 'metadataObjects', 'notes']
 
 export const PAGE_DOORS: [string, string][] = [
+  ['^/app/exports/prepaid/([\\w-]+)\\.csv$','prepaidCsv'],
   ['^/app/import/([\\w-]+/originals/[a-f0-9]{64})$','importOriginals'],
   ['^/app/numbering$','numberRegister'], ['^/app/exports/number-register\\.csv$','numberRegisterCsv'],
   ['^/app/usage/replay$', 'usageReplay'],

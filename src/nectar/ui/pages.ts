@@ -1,3 +1,4 @@
+import { prepaidCsv } from '../prepaid-reports'
 import { downloadImportOriginal } from '../import-originals'
 import { revenueJournalCsv } from '../revenue-journal'
 import { numberRegisterPage } from './number-register'
@@ -40,6 +41,7 @@ import { reportPage, reportInvoicePage, reportLinePage } from './reports'
 type Page = (env: Bindings, actor: Actor, request: Request, url: URL, id: string) => Promise<Response>
 
 export const pages: Record<string, Page> = {
+  prepaidCsv:(env,actor,_r,_url,id)=>prepaidCsv(env,actor,id),
   importOriginals:(env,actor,request,_url,id)=>downloadImportOriginal(env,actor,request,id.split('/originals/')),
   numberRegister:(env,actor,_r,url)=>numberRegisterPage(env,actor,url),
   numberRegisterCsv:(env,actor,_r,url)=>numberRegisterExport(env,actor,url),

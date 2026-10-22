@@ -39,6 +39,8 @@ await runIsolated('intervals','intervalsFlow')
 await runIsolated('interval-cancel','intervalCancellationFlow')
 await runIsolated('contract-setup','contractIntervalSetup')
 await runIsolated('contract-setup','contractEntitySetup')
+await runIsolated('prepaid','prepaidFlow')
+await runIsolated('native-collection','nativeCollectionFlow')
 await runIsolated('retention','retentionIntervalFlow')
 await runIsolated('erasure','nativeIntervalErasureFlow')
 await runIsolated('move-history','moveHistoryFlow')
@@ -400,7 +402,7 @@ try {
     await h.api('access.give', cookie.owner, { email: 'x@example.test', name: 'Nope', role: 'owner' }, 400)
     cookie.finance = await h.signIn('fran@example.test', { requested: true })
     cookie.accountant = await h.signIn('acct@example.test', { requested: true })
-    const ownerOnly = ['imported.collection.prepare','imported.collection.execute','imported.collection.reconcile','imported.collection.finalize','mfa.policy', 'mfa.reset', 'cadence.policy.prepare', 'lifecycle.policy', 'credit.policy', 'certificate.policy', 'business.configure', 'invoice.series','entity.create','entity.update','customer.entity','invoice.series.capture','invoice.series.capture-live', 'tax.declare', 'tax.review', 'access.give', 'access.end', 'credential.issue', 'credential.revoke', 'subscription.adopt']
+    const ownerOnly = ['collection.customer.bind','collection.prepare','collection.confirm','collection.reconcile','prepaid.prepare','prepaid.purchase.prepare','prepaid.funding.confirm','prepaid.consent.revoke','prepaid.settle','imported.collection.prepare','imported.collection.execute','imported.collection.reconcile','imported.collection.finalize','mfa.policy', 'mfa.reset', 'cadence.policy.prepare', 'lifecycle.policy', 'credit.policy', 'certificate.policy', 'business.configure', 'invoice.series','entity.create','entity.update','customer.entity','invoice.series.capture','invoice.series.capture-live', 'tax.declare', 'tax.review', 'access.give', 'access.end', 'credential.issue', 'credential.revoke', 'subscription.adopt']
     const metricPreview = await h.api('meter.prepare', cookie.owner, { code:'role-preview', name:'Role preview', unit_label:'events', source_meter:ids.meter, definition:{ aggregation:'count' } })
     assert.ok(ACTIONS.length > 30)
     for (const name of ACTIONS) {
