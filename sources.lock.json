@@ -57,7 +57,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "18f015366704b51ccadd8b6342a86c66093a9fe19015e039a6d995e1f934b84a",
+      "sha256": "6dba7514b542f24a3ac95b1440b563ba5a19cc788998a394b0acdb13009c4be8",
       "executable": false
     },
     "AGENTS.consumer.md": {
@@ -77,7 +77,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "49c0deece4f69d3b44cad4765ea648cab06aad3f02c6cd6ad4e9d91ccce9ce9c",
+      "sha256": "1c69b85c3c61ce49e66f8ef6a9af7976a34564ff04b6f9955eefac5b51cd268d",
       "executable": false
     },
     "DEMO.md": {
@@ -2729,7 +2729,7 @@
       "executable": false
     },
     "src/nectar/hierarchy-credits.ts": {
-      "sha256": "f4ab8e35f6955e9dc40457938e672aa4ba9f4c76c13135f6ccc549012443d15c",
+      "sha256": "1edc8fbf755cd60e7b8f7fbf4e80cbb0dcc1f294c19d5b84b84264569a388b9e",
       "executable": false
     },
     "src/nectar/http.ts": {
@@ -3385,7 +3385,7 @@
       "executable": false
     },
     "src/nectar/ui/balance.ts": {
-      "sha256": "5d7a3d66c8021620e36cc0edafd616058bfe6a76a6d0de43b33d6e428034fb3b",
+      "sha256": "98efa444f696a9637b3ccbbb36682aab2226ad90a6acb6f536b514b39cfc7dbe",
       "executable": false
     },
     "src/nectar/ui/billing-answers.ts": {
@@ -3441,7 +3441,7 @@
       "executable": false
     },
     "src/nectar/ui/hierarchy-credits.ts": {
-      "sha256": "b8642b5df806b26027eb02824a98097d783ab4e3fba610fa8cef333ec835de71",
+      "sha256": "823c793c56e2f9589858e581851fcd9c866c3a4108ef5ea0f850e57b209091ce",
       "executable": false
     },
     "src/nectar/ui/home.ts": {
@@ -3985,7 +3985,7 @@
       "executable": false
     },
     "tests/nectar/hierarchies.mjs": {
-      "sha256": "5ba155fef4bf498614a32545617a28709f29009091f6a6966ebfe641ac03af54",
+      "sha256": "c5cb90177294a78a1d696282532545394f5d3c27cb0151465337f4cd8e816458",
       "executable": false
     },
     "tests/nectar/import-originals.mjs": {
@@ -4289,7 +4289,7 @@
       "executable": false
     },
     "tests/nectar/webhook-restore.mjs": {
-      "sha256": "66ed5b6d850800e2c0d48b5b7a5cf19c58da7989be2536540802e7f90494d921",
+      "sha256": "ce0d966dd300c7d77af9bc6af58de5b005712499244359762c0085ea494d64cf",
       "executable": false
     },
     "tests/nectar/webhooks.mjs": {

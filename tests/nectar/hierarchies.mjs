@@ -144,6 +144,8 @@ export async function hierarchyCreditsFlow(h,owner,{onState=async()=>{},prepare,
  await api('hierarchy.credit.approve',{request,confirm:true},409)
  await h.api('hierarchy.credit.approve',finance,{request},400)
  assert.equal((await api(`invoices/${invoice}`)).balanceCents,150000)
+ assert.ok((await h.page(`/app/invoices/${invoice}`,owner)).includes('A different owner or finance approver must apply this request.'))
+ assert.ok((await h.page(`/app/invoices/${invoice}`,finance)).includes(`/app/customers/${parent}#balance-entry-${grant}`))
  await onState({label:'shared-credit-pending',invoice,parent,finance})
  if(approve)await execute({request,confirm:true},finance)
  else {const replies=await Promise.all([1,2].map(()=>h.raw('/api/nectar/hierarchy.credit.approve',{cookie:finance,body:{request,confirm:true}})));assert.deepEqual(replies.map(r=>r.status).sort(),[200,409],'a concurrent second approval cannot apply credit twice');assert.equal((await replies.find(r=>r.status===200).json()).appliedCents,150000)}

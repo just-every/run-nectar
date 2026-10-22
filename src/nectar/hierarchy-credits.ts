@@ -58,5 +58,5 @@ export async function hierarchyCreditModel(env:Bindings,actor:Actor,invoice:Row)
   if(actor.kind!=='member'||!can(actor,'approve')||invoice.status!=='issued')return null
   const payer=await one(env,'SELECT payer_id FROM nc_invoice_payers WHERE invoice_id=?',invoice.id);if(!payer)return null
   const parent=await one(env,'SELECT id,name FROM nc_customers WHERE id=? AND erased_at IS NULL',payer.payer_id);if(!parent)return null
-  return {parent,grants:actor.role==='owner'?(await balanceSources(env,parent.id)).grants:[],requests:await all(env,'SELECT * FROM nc_hierarchy_credit_shares WHERE invoice_id=? ORDER BY prepared_at,id',invoice.id)}
+  return {parent,policy:await creditPolicy(env),grants:actor.role==='owner'?(await balanceSources(env,parent.id)).grants:[],requests:await all(env,'SELECT * FROM nc_hierarchy_credit_shares WHERE invoice_id=? ORDER BY prepared_at,id',invoice.id)}
 }

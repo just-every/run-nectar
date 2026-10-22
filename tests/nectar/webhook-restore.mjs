@@ -45,6 +45,9 @@ try{
  await command(root,['export','--output',afterFile])
  assert.deepEqual(await items(afterFile),before,'all portable financial and metadata originals survive unchanged')
  h=await harness({persistence,databaseId,applyMigrations:false,webhookFetch:async()=>{throw new Error('restored installation must never call the old destination')}})
+ // Operator sessions/accounts are runtime custody; claim the empty restored
+ // identity store through the same public bootstrap before ordinary sign-in.
+ assert.equal((await h.raw('/auth/bootstrap',{body:{token:h.vars.SETUP_TOKEN,displayName:'Restored owner'}})).status,303)
  const restoredOwner=await h.signIn(h.vars.OWNER_EMAIL)
  assert.deepEqual(await h.api('webhooks',restoredOwner),{endpoints:[],deliveries:[]})
  assert.equal((await h.api('webhook.dispatch',restoredOwner,{})).processed,0)
