@@ -4,11 +4,11 @@ import { NectarError } from '../core'
 import { clockInstant } from '../clock'
 // USE-006 adds a read-only calculation card to the existing subscription screen.
 import type { Bindings } from '../../auth.server'
-import type { Actor } from '../actor'
+import { canRead, type Actor } from '../actor'
 import { requireBusiness } from '../business'
 import { insist, type Row } from '../core'
 import { isMonth, periodContaining, periodStartingIn, today, formatPeriod } from '../dates'
-import { quantityText } from '../decimal'
+import { decimalText, quantityText } from '../decimal'
 import { upcoming } from '../upcoming'
 import { cents, details, field, h, table, tag, when } from './html'
 
@@ -33,7 +33,10 @@ export async function upcomingSection(env: Bindings, actor: Actor, sub: Row, url
     ${selector}
     <h3>Period usage</h3>${table(['Meter','Quantity$','Events$','Earlier usage$'],view.meters.map(m=>[h`<span>${m.code}</span>${m.dimensions?h`<p>${Object.entries(m.dimensions).map(([k,v])=>`${k}: ${v}`).join(', ')}</p>`:''}`,`${quantityText(m.quantity)} ${m.unit_label}`,m.events,quantityText(m.lateQuantity)]),{empty:'No metered prices on this subscription.'})}
     <h3>Approved contract credits remaining: ${cents(view.remainingContractCreditCents)}</h3>
-    ${table(['Credit','Effective from','Amount$','This period'],view.credits.map(c=>[c.note || 'Approved contract credit',c.effective_from,cents(c.amountCents),c.appliesThisPeriod ? 'Applies' : 'Scheduled for another period']),{empty:'No approved unused one-time contract credits. Prepaid credit balances are not yet available.'})}
+    ${table(['Credit','Effective from','Amount$','This period'],view.credits.map(c=>[c.note || 'Approved contract credit',c.effective_from,cents(c.amountCents),c.appliesThisPeriod ? 'Applies' : 'Scheduled for another period']),{empty:'No approved unused one-time contract credits.'})}
+    <h3>Prepaid balances</h3><p class="hint">Current recorded balances as of ${view.prepaid.asOf}; separate from this invoice's saved calculation. Expired balances awaiting settlement are unavailable. Viewing does not spend or settle credits.</p>
+    ${table(['Kind / meter','Remaining$','Available$','Purchased remaining$','Promotional remaining$','Contract liability$'],view.prepaid.balances.map(balance=>{const amount=(n:number)=>balance.kind==='money'?cents(n):`${quantityText(decimalText(BigInt(n)))} units`;return [balance.kind==='money'?`Money · ${balance.meterId??'all meters'}`:`Units · ${balance.meterId}`,amount(balance.remainingN),amount(balance.availableN),amount(balance.purchasedRemainingN),amount(balance.promotionalRemainingN),cents(balance.liabilityCents)]}),{empty:'No funded or promotional prepaid balance.'})}
+    ${canRead(actor,'invoices')?h`<p><a href="/app/prepaid/${id}">Open prepaid ledger and sources</a></p>`:''}
     <h3>Calculation: ${cents(calc.totalCents)}</h3>${table(['Charge','Service from','Service until','Quantity$','Amount$'],calc.lines.map((l:any)=>[l.description,l.periodStart,l.periodEnd,l.quantity,cents(l.amountCents)]))}
     <p>Subtotal ${cents(calc.subtotalCents)} · Tax ${cents(calc.taxCents)} · Total ${cents(calc.totalCents)}</p>
     ${calc.exceptions.length ? h`<h3>Review before issue</h3><ul>${calc.exceptions.map((e:any)=>h`<li>${e.message}</li>`)}</ul>` : ''}

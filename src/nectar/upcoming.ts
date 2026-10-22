@@ -17,6 +17,7 @@ import { addRational,rational,type Rational } from './metric-plan'
 import { displayQuantity } from './metric-aggregate'
 import type { RatingInput } from './rating'
 import { requireSubscription } from './subscriptions'
+import { prepaidBalances } from './prepaid-balances'
 
 async function upcomingOne(env: Bindings, actor: Actor, subscriptionId: string, month?: string | null,window?:BillingWindow) {
   requireRead(actor, 'subscriptions')
@@ -77,10 +78,11 @@ export async function upcoming(env:Bindings,actor:Actor,subscriptionId:string,mo
   requireRead(actor,'subscriptions')
   insist(month===undefined||month===null||isMonth(month),'invalid_period')
   const sub=await requireSubscription(env,subscriptionId),calendar=await subscriptionCalendar(env,sub)
-  if(!calendar.enabled)return upcomingOne(env,actor,subscriptionId,month)
-  const business=await requireBusiness(env),selected=month??today(business.timezone,clockInstant(env)).slice(0,7),from=`${selected}-01`
+  const business=await requireBusiness(env),asOf=today(business.timezone,clockInstant(env)),prepaid=await prepaidBalances(env,actor,subscriptionId,asOf)
+  if(!calendar.enabled)return {...await upcomingOne(env,actor,subscriptionId,month),prepaid}
+  const selected=month??asOf.slice(0,7),from=`${selected}-01`
   const windows=composeBillingWindows(dueBillingWindows(calendar.basis,from,addMonths(from,1)))
   insist(windows.length,'billing_window_not_due',409)
-  const invoices=await Promise.all(windows.map(window=>upcomingOne(env,actor,subscriptionId,selected,window)))
+  const invoices=await Promise.all(windows.map(async window=>({...await upcomingOne(env,actor,subscriptionId,selected,window),prepaid})))
   return {...invoices[0],invoices}
 }

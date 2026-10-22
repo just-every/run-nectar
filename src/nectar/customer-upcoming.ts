@@ -27,13 +27,13 @@ export async function customerUpcoming(env: Bindings, actor: Actor, customer: st
       const view = await upcoming(env, actor, sub.id, period.start.slice(0, 7))
       return ('invoices' in view?view.invoices:[view]).map(current=>({ ...common,period:current.period,state:current.state,reason:null,invoiceId:current.invoiceId,
         subtotalCents:current.calculation.subtotalCents as number,taxCents:current.calculation.taxCents as number,totalCents:current.calculation.totalCents as number,
-        remainingContractCreditCents:current.remainingContractCreditCents,exceptions:current.calculation.exceptions as {code:string;message:string}[]}))
+        remainingContractCreditCents:current.remainingContractCreditCents,prepaid:current.prepaid,exceptions:current.calculation.exceptions as {code:string;message:string}[]}))
     } catch (error) {
       // Only these expected period boundaries are display states. Calculation,
       // authority and infrastructure failures must still fail the request.
       if (!(error instanceof NectarError) || !['subscription_not_in_period', 'previous_biller_period','billing_window_not_due'].includes(error.code)) throw error
       return { ...common, state: 'unavailable', reason: error.code, invoiceId: null,
-        subtotalCents: null, taxCents: null, totalCents: null, remainingContractCreditCents: null, exceptions: [] }
+        subtotalCents: null, taxCents: null, totalCents: null, remainingContractCreditCents: null, prepaid: null, exceptions: [] }
     }
   }))).flat()
 }

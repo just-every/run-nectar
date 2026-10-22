@@ -197,6 +197,7 @@ export async function upcomingFlow(h, owner, onReady = async () => {}) {
   assert.ok(customerHtml.includes(frozen.sourcePath.replaceAll('&', '&amp;')) && customerHtml.includes(fresh.sourcePath.replaceAll('&', '&amp;')), 'CUS-001 each figure opens its original calculation')
   await customerRows()
   assert.deepEqual({ audit: await h.api('audit', owner), runs: await h.api('runs', owner), invoices: await h.api('invoices', owner) }, beforeRead, 'CUS-001 preview reads prepare, approve and issue nothing')
+  await prepaidUpcomingBalances(h, owner, current.period.start.slice(0, 7), localDay)
   await onReady({ h, owner, customer, other, subscription, extra, future, customerPath, rows })
   console.log('CUS-001 customer upcoming composition, exact totals, current usage, issued custody, anchors and authority passed')
   await h.api('credential.revoke', owner, { key: prepareKey.id })
@@ -205,4 +206,71 @@ export async function upcomingFlow(h, owner, onReady = async () => {}) {
   await h.api('tax.review', owner, { revision: (await h.api('business', owner)).revision })
   console.log('USE-006 live usage, exact upcoming calculation, contract credits, timezone boundaries and frozen issued preview passed')
   return { subscription, customer, invoiceId, paths: [path, `/app/subscriptions/${subscription}`, '/app/usage?period=2026-01'] }
+}
+
+// Current prepaid balances are an independently dated ledger projection, even
+// beside a historical issued invoice. Every lot comes from governed public doors.
+async function prepaidUpcomingBalances(h, owner, month, asOf) {
+  const api=(path,body,status)=>h.api(path,owner,body,status)
+  const priorDate=new Date(`${month}-01T12:00:00Z`);priorDate.setUTCMonth(priorDate.getUTCMonth()-1)
+  const prior=priorDate.toISOString().slice(0,7),from=`${prior}-01`
+  const customer=(await api('customer.create',{external_id:'synthetic-upcoming-prepaid',name:'Upcoming prepaid research',billing_email:'prepaid-upcoming@example.test'})).id
+  const meters=[],prices=[]
+  for(const suffix of ['units','money']){
+    const meter=(await api('meter.create',{code:`upcoming-prepaid-${suffix}`,name:`Upcoming ${suffix}`,unit_label:'events'})).id
+    const product=(await api('product.create',{code:`upcoming-prepaid-${suffix}`,name:`Upcoming ${suffix}`})).id
+    meters.push(meter);prices.push((await api('price.create',{product,kind:'unit',meter,unit_amount:'2',taxable:true})).id)
+  }
+  const subscription=(await api('subscription.create',{customer,start_date:from,price:prices})).id
+  await api('access.give',{email:'upcoming-prepaid-finance@example.test',name:'Prepaid finance',role:'finance'})
+  const finance=await h.signIn('upcoming-prepaid-finance@example.test',{requested:true})
+  const grant=async(terms,fund=true)=>{
+    const request=await api('prepaid.prepare',{subscription,mode:'grant',kind:'money',source:'promotion',amount:'5',effective_date:from,expires_date:'2099-01-01',priority:0,expiry_consent:true,...terms})
+    const approved=await h.api('prepaid.decide',finance,{request:request.request,decision:'approved'})
+    if(terms.source==='purchase'&&fund){
+      const purchase=await api('prepaid.purchase.prepare',{intent:approved.fundingIntent,issue_date:from})
+      await api('invoice.approve',{invoice:purchase.invoice,acknowledge:true})
+      await api('invoice.finalise',{invoice:purchase.invoice,issue_date:from})
+      const invoice=await api(`invoices/${purchase.invoice}`)
+      const payment=await api('payment.record',{customer,amount:(invoice.total_cents/100).toFixed(2),received_on:from,method:'bank_transfer',reference:`synthetic-upcoming-${request.request}`})
+      await api('payment.allocate',{payment:payment.payment,invoice:invoice.id,amount:(invoice.total_cents/100).toFixed(2)})
+      await api('prepaid.funding.confirm',{intent:approved.fundingIntent,confirm:true})
+    }
+    return request
+  }
+  await grant({source:'purchase',amount:'100',meter:meters[1],priority:10})
+  await grant({amount:'5',meter:meters[1]})
+  await grant({kind:'units',source:'purchase',amount:'3',purchase_amount:'3',meter:meters[0],priority:10})
+  await grant({kind:'units',amount:'1',meter:meters[0]})
+  await grant({kind:'units',amount:'2',meter:meters[0],priority:100})
+  await api('usage.submit',{events:[{event_id:'synthetic-upcoming-units',customer:'synthetic-upcoming-prepaid',meter:'upcoming-prepaid-units',quantity:'2',occurred_at:`${prior}-15T12:00:00Z`},
+    {event_id:'synthetic-upcoming-money',customer:'synthetic-upcoming-prepaid',meter:'upcoming-prepaid-money',quantity:'4',occurred_at:`${prior}-15T12:00:00Z`}]})
+  const run=await api('billrun.prepare',{period:prior}),invoices=(await api(`runs/${run.id}`)).invoices.filter(row=>row.customer_id===customer)
+  assert.equal(invoices.length,1)
+  await api('invoice.approve',{invoice:invoices[0].id,acknowledge:true})
+  await api('invoice.finalise',{invoice:invoices[0].id,issue_date:`${month}-01`})
+  // A subsequently approved expired lot is held unavailable until an explicit
+  // settlement. Future and merely approved unpaid purchases are not funds.
+  await grant({amount:'2',meter:meters[1],expires_date:`${month}-01`,priority:1000})
+  await grant({amount:'11',meter:meters[1],effective_date:'2098-01-01'})
+  await grant({source:'purchase',amount:'30',meter:meters[1]},false)
+  const ledger=await api(`prepaid/${subscription}`),before={ledger,audit:await api('audit'),runs:await api('runs'),invoices:await api('invoices')}
+  const preview=await api(`subscriptions/${subscription}/upcoming?period=${prior}`)
+  assert.equal(preview.state,'issued')
+  assert.equal(preview.prepaid.asOf,asOf,'A historical issued calculation displays current prepaid balances')
+  const money=preview.prepaid.balances.find(row=>row.kind==='money'&&row.meterId===meters[1])
+  assert.deepEqual([money.remainingN,money.availableN,money.liabilityCents,money.purchasedRemainingN,money.promotionalRemainingN],[9900,9700,9700,9700,200])
+  const units=preview.prepaid.balances.find(row=>row.kind==='units'&&row.meterId===meters[0])
+  assert.deepEqual([units.remainingN,units.availableN,units.liabilityCents,units.purchasedRemainingN,units.promotionalRemainingN],[4000000,4000000,200,2000000,2000000])
+  const customerView=await api(`customers/${customer}?preview_period=${prior}`)
+  assert.deepEqual(customerView.upcoming[0].prepaid,preview.prepaid,'Customer composition carries the same typed current balance')
+  const html=await h.page(`/app/subscriptions/${subscription}?preview_period=${prior}`,owner)
+  assert.ok(html.includes('$99.00')&&html.includes('$97.00')&&html.includes(`/app/prepaid/${subscription}`),'Upcoming card renders actual recorded and available money with a financial source link')
+  const sales=await h.signIn('cus001-preview-sales@example.test')
+  const salesView=await h.api(`subscriptions/${subscription}/upcoming?period=${month}`,sales)
+  assert.deepEqual(salesView.prepaid,preview.prepaid,'Subscription readers can see balances without invoice-read authority')
+  await h.api(`prepaid/${subscription}`,sales,undefined,403)
+  const salesHtml=await h.page(`/app/subscriptions/${subscription}?preview_period=${month}`,sales)
+  assert.ok(salesHtml.includes('$97.00')&&!salesHtml.includes(`href="/app/prepaid/${subscription}"`),'Sales sees balances without a forbidden invoice-ledger source link')
+  assert.deepEqual({ledger:await api(`prepaid/${subscription}`),audit:await api('audit'),runs:await api('runs'),invoices:await api('invoices')},before,'Upcoming and customer reads never spend, expire, fund or settle prepaid balances')
 }
