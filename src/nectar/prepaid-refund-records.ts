@@ -8,6 +8,7 @@ import { all, canonical, fingerprint, guard, insist, one, parseJson, type Row } 
 import { today, localDate } from './dates'
 import { boundaryEntries, lotStates } from './prepaid-math'
 import { prepaidSnapshot } from './prepaid-records'
+import { canReadPrepaidRefundPrivate } from './prepaid-refund-access'
 import type { PrepaidBasis } from './prepaid-types'
 export interface PrepaidRefundQuote {
   grant:string; subscription:string; customer:string; revision:number; amountN:number; amountCents:number; kind:'money'|'units'
@@ -50,6 +51,34 @@ export async function storedPrepaidRefund(env:Bindings,id:string){const row=awai
 export const refundActorGuard=(env:Bindings,actor:Actor)=>{requireMember(actor,'approve');return guard(env,'forbidden',"EXISTS(SELECT 1 FROM nc_members m JOIN oa_operators o ON o.email=m.email WHERE m.id=? AND m.status='active' AND m.role IN ('owner','finance') AND o.status='active' AND (m.role<>'owner' OR o.role='owner'))",actor.id)}
 export function refundApprovalGuard(env:Bindings,row:Row){return guard(env,'prepaid_refund_approval_changed',`EXISTS(SELECT 1 FROM nc_prepaid_refunds r JOIN nc_members p ON p.id=r.prepared_by_id JOIN oa_operators o ON o.email=p.email JOIN nc_members a ON a.id=r.approved_by_id JOIN oa_operators ao ON ao.email=a.email
  WHERE r.id=? AND r.basis_hash=? AND r.status IN ('approved','claimed','uncertain') AND p.role='owner' AND p.status='active' AND o.role='owner' AND o.status='active' AND a.role IN ('owner','finance') AND a.status='active' AND ao.status='active' AND (a.role<>'owner' OR ao.role='owner'))`,row.id,row.basis_hash)}
-export function prepaidRefundView(row:Row){const q=refundQuote(row);return {id:row.id,status:row.status,basis:row.basis_hash,quote:q,reason:row.reason,preparedBy:row.prepared_by_id,approvedBy:row.approved_by_id,refundRef:row.refund_ref,credit:row.credit_id,cashAmountCents:row.status==='refunded'?-row.amount_cents:0,proof:parseJson(row.proof_json,null),source:`/app/prepaid/refunds/${row.id}`}}
-export async function readPrepaidRefunds(env:Bindings,actor:Actor,subscription?:string){requireMember(actor,'approve');requireRead(actor,'payments');requireRead(actor,'invoices');return (await all(env,`SELECT r.* FROM nc_prepaid_refunds r JOIN nc_customers c ON c.id=r.customer_id WHERE c.erased_at IS NULL ${subscription?'AND r.subscription_id=?':''} ORDER BY r.prepared_at,r.id`,...(subscription?[subscription]:[]))).map(prepaidRefundView)}
+/** Public facts come only from structured columns, including after erasure. */
+export function prepaidRefundTypedView(row:Row){
+  return {id:row.id,status:row.status,grant:row.grant_id,subscription:row.subscription_id,customer:row.customer_id,
+    invoice:row.purchase_invoice_id,purchaseNumber:row.purchase_number??null,purchaseLine:row.purchase_line_id??null,
+    payment:row.payment_id,receiptReference:row.receipt_reference??null,amountN:row.amount_n,amountCents:row.amount_cents,
+    kind:row.grant_kind??null,unitLabel:row.unit_label??null,refundRef:row.refund_ref??null,credit:row.credit_id??null,creditNumber:row.credit_number??null,
+    reasonCategory:'unused_paid_credit' as const,preparedBy:row.prepared_by_id,approvedBy:row.approved_by_id??null,approvalMode:row.approval_mode??null,
+    preparedAt:row.prepared_at,approvedAt:row.approved_at??null,claimedAt:row.claimed_at??null,refundedOn:row.refunded_on??null,
+    liabilityCents:row.refund_liability_cents??0,recognitionCents:row.refund_recognition_cents??0,
+    cashAmountCents:row.status==='refunded'?-row.amount_cents:0,source:`/app/prepaid/refunds/${row.id}`}
+}
+// Mutation responses are already approval-only. Processor bytes never enter JSON.
+export function prepaidRefundView(row:Row,privateFacts=true):ReturnType<typeof prepaidRefundTypedView>&{basis?:string;quote?:PrepaidRefundQuote;reason?:string}{
+  const typed=prepaidRefundTypedView(row)
+  if(!privateFacts||row.erased_at)return typed
+  return {...typed,basis:row.basis_hash,quote:refundQuote(row),reason:row.reason}
+}
+export async function readPrepaidRefunds(env:Bindings,actor:Actor,subscription?:string){
+  requireRead(actor,'payments');requireRead(actor,'invoices')
+  const privateFacts=await canReadPrepaidRefundPrivate(env,actor)
+  const rows=await all(env,`SELECT r.*,c.erased_at,g.kind AS grant_kind,g.purchase_line_id,m.unit_label,
+    i.number AS purchase_number,CASE WHEN c.erased_at IS NULL THEN p.reference ELSE p.id END AS receipt_reference,n.number AS credit_number,
+    l.liability_cents AS refund_liability_cents,l.recognition_cents AS refund_recognition_cents
+    FROM nc_prepaid_refunds r JOIN nc_customers c ON c.id=r.customer_id
+    JOIN nc_prepaid_grants g ON g.id=r.grant_id JOIN nc_invoices i ON i.id=r.purchase_invoice_id
+    JOIN nc_payments p ON p.id=r.payment_id LEFT JOIN nc_meters m ON m.id=g.meter_id
+    LEFT JOIN nc_credit_notes n ON n.id=r.credit_id LEFT JOIN nc_prepaid_ledger l ON l.id=r.ledger_id
+    ${subscription?'WHERE r.subscription_id=?':''} ORDER BY r.prepared_at,r.id`,...(subscription?[subscription]:[]))
+  return rows.map(row=>prepaidRefundView(row,privateFacts))
+}
 export async function prepaidRefundCashFacts(env:Bindings,invoice?:string){return (await all(env,`SELECT id,customer_id,subscription_id,purchase_invoice_id,payment_id,amount_cents,refunded_on,refund_ref,credit_id FROM nc_prepaid_refunds WHERE status='refunded' ${invoice?'AND purchase_invoice_id=?':''}`, ...(invoice?[invoice]:[]))).map(row=>({id:row.id,customer:row.customer_id,subscription:row.subscription_id,invoice:row.purchase_invoice_id,payment:row.payment_id,date:row.refunded_on,amountCents:-row.amount_cents,refundRef:row.refund_ref,credit:row.credit_id,source:`/app/prepaid/refunds/${row.id}`}))}
