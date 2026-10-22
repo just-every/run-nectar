@@ -32,6 +32,7 @@ const ACTIONS = [...(await readFile(new URL('../../src/nectar/actions.ts', impor
 // can select this sequence without rerunning unrelated isolated journeys.
 if (!process.argv.includes('--core-only')) {
 await runIsolated('webhooks','webhooksFlow')
+await runIsolated('hierarchies','hierarchiesFlow')
 await runIsolated('customer-search','customerSearchFlow')
 await runIsolated('upcoming','upcomingFlow')
 await runIsolated('write-offs','writeOffFlow')

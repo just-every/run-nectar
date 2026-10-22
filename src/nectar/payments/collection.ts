@@ -24,12 +24,12 @@ export async function prepareNativeCollection(env: Bindings, actor: Actor, input
   await prepaidFundingForInvoice(env, source.row.id)
   insist(!await one(env, 'SELECT 1 FROM nc_native_collection_claims WHERE invoice_id=?', source.row.id), 'native_collection_already_claimed', 409)
   const selected = await stripeForAccount(env, source.accountRef).catch(providerUnavailable)
-  const binding = await one(env, 'SELECT * FROM nc_stripe_customer_bindings WHERE customer_id=? AND account_ref=?', source.row.customer_id, selected.account)
+  const binding = await one(env, 'SELECT * FROM nc_stripe_customer_bindings WHERE customer_id=? AND account_ref=?', source.payerId, selected.account)
   insist(binding, 'native_customer_binding_required', 409)
   const card = await savedCard(selected.stripe, binding.stripe_customer_ref).catch(providerUnavailable)
   const basis: NativeCollectionBasis = { principal: actor.id, sourceHash: source.sourceHash, sourceFingerprint: source.row.source_fingerprint,
     customerRevision: source.row.customer_revision, bindingId: binding.id, bindingRevision: binding.revision,
-    invoiceId: source.row.id, invoiceNumber: source.row.number, customerId: source.row.customer_id, entityId: source.row.billing_entity_id,
+    payerCustomerId:source.payerId,payerRevision:source.payerRevision,invoiceId: source.row.id, invoiceNumber: source.row.number, customerId: source.row.customer_id, entityId: source.row.billing_entity_id,
     route: source.route, accountRef: selected.account, customerRef: card.customerRef, paymentMethodRef: card.paymentMethodRef,
     amountCents: source.row.balance_cents, currency: 'usd', livemode: card.livemode, card: card.card,
     key: await fingerprint(['nectar-native-collection-1', selected.account, source.row.id]) }

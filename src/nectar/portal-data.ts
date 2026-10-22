@@ -14,7 +14,7 @@ export async function portalData(env: Bindings, session: CustomerSession, invoic
   const invoices = await all(env, `SELECT i.id,i.number,i.issue_date,i.due_date,i.subtotal_cents,i.tax_cents,i.total_cents,${BALANCE_SQL} AS balance_cents,
     COALESCE((SELECT SUM(COALESCE(applied_cents,amount_cents)) FROM nc_credit_notes WHERE invoice_id=i.id),0) + COALESCE((SELECT SUM(amount_cents) FROM nc_usage_credit_applications WHERE invoice_id=i.id),0) + ${GOODWILL_APPLIED_SQL} AS credited_cents,
     COALESCE((SELECT SUM(amount_cents) FROM nc_allocations WHERE invoice_id=i.id),0) AS paid_cents
-    FROM nc_invoices i WHERE i.customer_id=? AND i.status='issued' ${invoiceId ? 'AND i.id=?' : ''} ORDER BY i.issue_date DESC,i.number DESC`, session.customer, ...(invoiceId ? [invoiceId] : []))
+    FROM nc_invoices i WHERE i.customer_id=? AND i.status='issued' AND NOT EXISTS(SELECT 1 FROM nc_hierarchy_sources hs WHERE hs.invoice_id=i.id) ${invoiceId ? 'AND i.id=?' : ''} ORDER BY i.issue_date DESC,i.number DESC`, session.customer, ...(invoiceId ? [invoiceId] : []))
   if (invoiceId) insist(invoices.length === 1, 'not_found', 404)
   const selected = invoiceId ? {
     lines: await all(env, 'SELECT description,quantity,unit_amount,amount_cents,period_start,period_end FROM nc_invoice_lines WHERE invoice_id=? ORDER BY seq', invoiceId),

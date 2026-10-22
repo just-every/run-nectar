@@ -336,6 +336,24 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "quota": "text",
     "quota_policy": "text"
   },
+  "hierarchy.commitment": {
+    "amount": "text",
+    "consent": "flag",
+    "from": "text",
+    "parent": "text",
+    "to": "text"
+  },
+  "hierarchy.configure": {
+    "billing_mode": "text",
+    "consent": "flag",
+    "customer": "text",
+    "parent": "text",
+    "revision": "integer"
+  },
+  "hierarchy.invoice.prepare": {
+    "invoices": "list",
+    "parent": "text"
+  },
   "import.apply": {
     "*": "has",
     "fingerprint": "text"

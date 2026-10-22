@@ -1,3 +1,4 @@
+import { hierarchiesPage } from './hierarchies'
 import { registerWebhook,rotateWebhook } from '../webhooks'
 import { webhooksPage,webhookDeliveryPage } from './webhooks'
 import { prepaidRefundCsv } from '../prepaid-refund-export'
@@ -48,6 +49,7 @@ import { reportPage, reportInvoicePage, reportLinePage } from './reports'
 type Page = (env: Bindings, actor: Actor, request: Request, url: URL, id: string) => Promise<Response>
 
 export const pages: Record<string, Page> = {
+  hierarchies:(env,actor,_r,url)=>hierarchiesPage(env,actor,url),
   webhooks:(env,actor,_r,url)=>webhooksPage(env,actor,url),
   webhookDelivery:(env,actor,_r,url,id)=>webhookDeliveryPage(env,actor,id,url),
   prepaidRefundList:(env,actor,_r,url)=>prepaidRefundListPage(env,actor,url),

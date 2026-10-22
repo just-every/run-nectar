@@ -5,6 +5,7 @@ import { nativeCollectionSource } from './source'
 import type { PaymentIdentity } from './stripe'
 
 export interface NativeCollectionBasis {
+  payerCustomerId?:string;payerRevision?:string;
   principal: string; sourceHash: string; sourceFingerprint: string; customerRevision: string; bindingId: string; bindingRevision: string
   invoiceId: string; invoiceNumber: string; customerId: string; entityId: string | null; route: Row
   accountRef: string; customerRef: string; paymentMethodRef: string; amountCents: number; currency: 'usd'; livemode: boolean
@@ -22,7 +23,7 @@ export async function nativeCustomerPresent(env: Bindings, id: string) {
 }
 export function bindingGuard(env: Bindings, basis: NativeCollectionBasis) {
   return guard(env, 'native_collection_binding_changed', 'EXISTS(SELECT 1 FROM nc_stripe_customer_bindings WHERE id=? AND customer_id=? AND account_ref=? AND stripe_customer_ref=? AND revision=?)',
-    basis.bindingId, basis.customerId, basis.accountRef, basis.customerRef, basis.bindingRevision)
+    basis.bindingId, basis.payerCustomerId??basis.customerId, basis.accountRef, basis.customerRef, basis.bindingRevision)
 }
 export async function currentNativeCollection(env: Bindings, actor: Actor, row: Row) {
   const source = await nativeCollectionSource(env, row.invoice_id), basis = parseJson<NativeCollectionBasis | null>(row.basis_json, null)
@@ -31,7 +32,7 @@ export async function currentNativeCollection(env: Bindings, actor: Actor, row: 
     && basis.sourceFingerprint === source.row.source_fingerprint && basis.customerRevision === source.row.customer_revision,
   'native_collection_basis_changed', 409)
   const binding = await one(env, 'SELECT * FROM nc_stripe_customer_bindings WHERE id=?', basis.bindingId)
-  insist(binding && binding.customer_id === source.row.customer_id && binding.revision === basis.bindingRevision
+  insist(binding && binding.customer_id === source.payerId && binding.revision === basis.bindingRevision
     && binding.account_ref === basis.accountRef && binding.stripe_customer_ref === basis.customerRef, 'native_collection_binding_changed', 409)
   return { source, basis }
 }

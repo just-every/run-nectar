@@ -1,0 +1,16 @@
+import type { Bindings } from '../../auth.server'
+import type { Actor } from '../actor'
+import { all,type Row } from '../core'
+import { hierarchyView } from '../hierarchies'
+import { cents,check,checks,field,form,h,hidden,page,select,table } from './html'
+export async function hierarchiesPage(env: Bindings, actor: Actor, url: URL) {
+  const {links,commitments}=await hierarchyView(env,actor,url.searchParams.get('parent')??undefined)
+  const customers=await all(env,"SELECT id,name FROM nc_customers WHERE erased_at IS NULL AND status='active' ORDER BY name"),choices=customers.map(c=>({value:c.id,label:c.name}))
+  const drafts=await all(env,"SELECT i.id,c.name,i.subtotal_cents FROM nc_invoices i JOIN nc_customers c ON c.id=i.customer_id JOIN nc_customer_hierarchies h ON h.customer_id=c.id WHERE i.status='draft' AND h.billing_mode='consolidated' ORDER BY c.name,i.id")
+  return page('Customer hierarchies',actor,h`<h1>Customer hierarchies</h1><p>Link divisions only when the parent has authorized payment. No automatic charges or customer portal access are enabled. One level, one currency and one billing entity are supported.</p>
+  <section class="card"><h2>Billing relationships</h2>${table(['Parent','Division','Billing','Revision'],links.map(l=>[l.parent_name,l.child_name,l.billing_mode,l.revision]))}
+  ${form('hierarchy.configure','/app/hierarchies',h`${select('Division','customer',choices)}${select('Parent payer','parent',choices)}${select('Billing arrangement','billing_mode',[{value:'consolidated',label:'Include in consolidated invoice'},{value:'separate',label:'Separate invoice, parent pays'}])}${field('Current relationship revision (0 for new)','revision',{type:'number',value:0})}${check('I confirm authority to link these accounts and the parent’s authorization to pay.','consent')}`,'Save billing relationship')}</section>
+  <section class="card"><h2>Consolidate draft invoices</h2><p>Prepare ordinary division bill-run drafts first. The new invoice keeps each division’s exact tax and source calculation. No financial facts change until ordinary invoice approval and issue.</p>${form('hierarchy.invoice.prepare','/app/invoices/{id}',h`${select('Parent account','parent',choices)}${checks('Division drafts','invoices',drafts.map(d=>({value:d.id,label:`${d.name} — ${d.subtotal_cents/100}`})),[])}`,'Prepare consolidated invoice')}</section>
+  <section class="card"><h2>Shared commitment tracking</h2><p>Tracks issued division spending against one agreed amount. This does not fund invoices, create a minimum true-up or share credits.</p>${commitments.map(w=>h`<article><h3>${customers.find(c=>c.id===w.parent_id)?.name}</h3>${table(['Commitment$','Drawn$','Remaining$','Overage$'],[[cents(w.amount_cents),cents(w.drawnCents),cents(w.remainingCents),cents(w.overageCents)]])}${table(['Division','Invoice','Drawn$'],w.drawdowns.map((d:Row)=>[customers.find(c=>c.id===d.customer)?.name,h`<a href="/app/invoices/${d.invoice}">${d.number}</a>`,cents(d.amountCents)]))}</article>`)}
+  ${form('hierarchy.commitment','/app/hierarchies',h`${select('Parent','parent',choices)}${field('Shared commitment amount','amount')}${field('From','from',{type:'date'})}${field('To (exclusive)','to',{type:'date'})}${check('I confirm these agreed tracking terms.','consent')}`,'Record shared commitment')}</section>`,{url,current:'/app/more'})
+}

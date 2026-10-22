@@ -135,7 +135,17 @@ export function recognitionForSavedInvoice(invoice: Row, lines: readonly Row[], 
   const input: RevenueInput = { timezone: typeof inputs.timezone === 'string' ? inputs.timezone : timezone,
     ...(inputs.events === undefined ? {} : { events: inputs.events }), ...(inputs.period === undefined ? {} : { period: inputs.period }) }
   insist(lines.every(line => typeof line.id === 'string' && (line.invoice_id === undefined || line.invoice_id === invoice.id)) && new Set(lines.map(line => line.id)).size === lines.length, 'revenue_saved_line_ownership_mismatch', 409)
-  const schedules = lines.map(row => recognitionForLine(savedRevenueLine(row), input, row.id))
+  const schedules = lines.map(row => {
+    const line=savedRevenueLine(row)
+    if(!inputs.consolidation)return recognitionForLine(line,input,row.id)
+    const provenance=line.evidence.hierarchy
+    insist(object(provenance),'revenue_division_source_required',409)
+    const section=inputs.consolidation.sections?.find((s:Row)=>s.sourceInvoice===provenance.sourceInvoice&&s.customer===provenance.child)
+    insist(section&&object(section.calculation?.inputs),'revenue_division_source_required',409)
+    const original=section.calculation.inputs
+    insist(typeof original.timezone==='string','revenue_saved_timezone_required',409)
+    return recognitionForLine(line,{timezone:original.timezone,...(original.events?{events:original.events}:{}),...(original.period?{period:original.period}:{})},row.id)
+  })
   insist(schedules.reduce((sum, schedule) => sum + BigInt(schedule.amountCents), 0n) === BigInt(invoice.subtotal_cents), 'revenue_invoice_does_not_reconcile', 409)
   return schedules
 }

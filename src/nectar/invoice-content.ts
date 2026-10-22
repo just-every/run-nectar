@@ -14,6 +14,7 @@ export interface InvoiceSettings {
   customFields: Record<string, string>
 }
 export interface InvoiceContent extends Omit<InvoiceSettings, 'paymentTermsDays'> {
+  hierarchyPayer?: {parent:string;revision:number;mode:string}
   paymentTermsDays: number
   businessFields: Record<string, string>
   customerFields: Record<string, string>
@@ -51,7 +52,8 @@ export async function invoiceContent(env: Bindings, business: Business, customer
   const row = await one(env, 'SELECT invoice_settings_json,billing_entity_id FROM nc_customers WHERE id=? AND erased_at IS NULL', customer)
   insist(row, 'customer_not_found', 404)
   const settings = invoiceSettings(parseJson(row.invoice_settings_json, {}))
-  const content = contentForSettings(business, settings)
+  const hierarchy=await one(env,'SELECT parent_id,revision,billing_mode FROM nc_customer_hierarchies WHERE customer_id=?',customer)
+  const content = {...contentForSettings(business, settings),...(hierarchy?{hierarchyPayer:{parent:hierarchy.parent_id,revision:hierarchy.revision,mode:hierarchy.billing_mode}}:{})}
   if (!row.billing_entity_id) return content
   const entity = await requireBillingEntity(env, row.billing_entity_id)
   return { ...content, paymentTermsDays: settings.paymentTermsDays ?? entity.payment_terms_days,

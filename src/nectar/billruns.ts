@@ -1,3 +1,4 @@
+import { consolidationCalculation,hierarchyPreIssue,hierarchyIssueStatements } from './hierarchies'
 import { writeOffsFor } from './write-offs'
 import { issueApplicationStatements } from './balance'
 import { sharedCreditNotes } from './shared-credit-custody'
@@ -104,6 +105,7 @@ export async function prepareRun(env: Bindings, actor: Actor, input: Input) {
       continue
     }
     const period = periodStartingIn(sub.anchor_day, month)
+    if(await one(env,'SELECT 1 FROM nc_hierarchy_consumed WHERE subscription_id=? AND period_start=?',sub.id,period.start)){skipped.push({subscription:sub.id,customer:sub.customer_name,reason:'already consolidated'});continue}
     if (sub.start_date >= period.end || (sub.end_date && sub.end_date <= period.start)) continue
     if (sub.cutover_start && period.end <= sub.cutover_start) { skipped.push({ subscription: sub.id, customer: sub.customer_name, reason: `billed by the previous biller before cutover on ${sub.cutover_start}` }); continue }
     if (await one(env, "SELECT 1 FROM nc_invoices WHERE subscription_id = ? AND invoice_kind = 'recurring' AND period_start = ? AND status = 'issued'", sub.id, period.start)) { skipped.push({ subscription: sub.id, customer: sub.customer_name, reason: 'already invoiced' }); continue }
@@ -181,9 +183,10 @@ export async function invoiceRecord(env: Bindings, actor: Actor, id: string): Pr
   }
 }
 
-async function currentFingerprint(env: Bindings, business: Business, invoice: Row) {
+export async function currentFingerprint(env: Bindings, business: Business, invoice: Row) {
   if (invoice.invoice_kind === 'manual') {
     const saved = parseJson<Row>(invoice.calculation_json, {}).inputs
+    if (saved.consolidation)return (await consolidationCalculation(env,saved.consolidation.parent,saved.consolidation.sections.map((s:Row)=>s.sourceInvoice))).fingerprint
     if (saved.prepaidPurchase) return (await prepaidPurchaseCalculation(env, business, invoice.customer_id, saved.prepaidPurchase.intent, saved.date)).fingerprint
     if(saved.usageCorrection){
       const approved=await one(env,"SELECT 1 FROM nc_usage_corrections WHERE id=? AND status='approved'",saved.usageCorrection)
@@ -200,6 +203,7 @@ async function currentFingerprint(env: Bindings, business: Business, invoice: Ro
 async function approveOne(env: Bindings, actor: Actor, business: Business, invoice: Row, acknowledged: boolean) {
   const customer = await one(env, 'SELECT revision FROM nc_customers WHERE id=?', invoice.customer_id)
   await cancellationApproval(env,actor,invoice)
+  insist(!await one(env,"SELECT 1 FROM nc_customer_hierarchies WHERE customer_id=? AND billing_mode='consolidated'",invoice.customer_id),'consolidation_required',409)
   insist(invoice.status === 'draft', invoice.status === 'shadow' ? 'shadow_invoice' : 'not_a_draft', 409)
   const exceptions = parseJson<Exception[]>(invoice.exceptions_json, [])
   insist(!exceptions.some(e => BLOCKING.has(e.code)), 'blocking_exception', 409, exceptions.filter(e => BLOCKING.has(e.code)))
@@ -270,6 +274,7 @@ export async function finalise(env: Bindings, actor: Actor, input: Input) {
     insist(!content?.poRequired || content.poNumber, 'po_required', 409)
     const due = addDays(issueDate, content?.paymentTermsDays ?? business.payment_terms_days)
     await commit(env, [
+      ...await hierarchyPreIssue(env,invoice),
       ...(approvedEntity ? [guard(env, 'source_changed', 'EXISTS(SELECT 1 FROM nc_billing_entities WHERE id=? AND revision=?)', approvedEntity.id, approvedEntity.revision)] : []),
       ...allocation.statements,
       guard(env, 'source_changed', 'EXISTS(SELECT 1 FROM nc_customers WHERE id=? AND revision=? AND invoice_settings_json=?)', invoice.customer_id, customer.revision, customer.invoice_settings_json),
@@ -283,6 +288,7 @@ export async function finalise(env: Bindings, actor: Actor, input: Input) {
       ...charges.map(id => stmt(env, 'UPDATE nc_charges SET invoice_id=? WHERE id=?', invoice.id, id)),
       ...chunk(consumed, 90).map(ids => stmt(env, `UPDATE nc_usage_events SET invoice_id = ? WHERE event_id IN (${ids.map(() => '?').join(',')})`, invoice.id, ...ids)),
       stmt(env, "UPDATE nc_invoices SET legal_name=(SELECT name FROM nc_customers WHERE id=nc_invoices.customer_id), status = 'issued', number = ?, issue_date = ?, due_date = ?, issued_by = ?, issued_at = ?,billing_entity_id=?,billing_route_json=? WHERE id = ?", number, issueDate, due, actorLabel(actor), now(),allocation.entityId,allocation.routeJson, invoice.id),
+      ...await hierarchyIssueStatements(env,invoice),
       ...prepaidPurchaseIssueStatements(env,invoice,calculation.inputs ?? {}),
       ...await issueApplicationStatements(env,invoice,carried.reduce((n,c)=>n+c.amountCents,0)),
       ...await prepaidIssueStatements(env,invoice,calculation,issueDate),

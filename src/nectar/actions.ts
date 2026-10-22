@@ -1,3 +1,4 @@
+import { setHierarchy,prepareConsolidation,recordHierarchyCommitment } from './hierarchies'
 import { registerWebhook,rotateWebhook,disableWebhook,replayWebhook,dispatchWebhookDoor } from './webhooks'
 import { issueWriteOff, prepareWriteOff, approveWriteOff, recoverWriteOff } from './write-offs'
 import { postPendingLedger } from './ledger-postings'
@@ -79,6 +80,9 @@ import { prepareMetric,previewMetric,activateMetric } from './meter-definitions'
 type Handler = (env: Bindings, actor: Actor, input: Input, request: Request) => Promise<unknown>
 
 export const actions: Record<string, Handler> = {
+  'hierarchy.configure': setHierarchy,
+  'hierarchy.invoice.prepare': prepareConsolidation,
+  'hierarchy.commitment': recordHierarchyCommitment,
   'webhook.register': registerWebhook,
   'webhook.rotate': rotateWebhook,
   'webhook.disable': disableWebhook,

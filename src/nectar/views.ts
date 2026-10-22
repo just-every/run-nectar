@@ -1,3 +1,4 @@
+import { hierarchyView } from './hierarchies'
 import { webhookList,webhookDetail } from './webhooks'
 import { writeOffList } from './write-offs'
 import { ledgerPostings } from './ledger-postings'
@@ -79,6 +80,7 @@ export async function customerView(env: Bindings, actor: Actor, id: string, url?
 }
 
 export const views: Record<string, View> = {
+  hierarchies:(env,actor,_r,_id,url)=>hierarchyView(env,actor,url.searchParams.get('parent')??undefined),
   webhooks:(env,actor)=>webhookList(env,actor),
   webhookDelivery:(env,actor,_r,id)=>webhookDetail(env,actor,id),
   prepaidRefunds:(env,actor,_r,_id,url)=>readPrepaidRefunds(env,actor,url.searchParams.get('subscription')??undefined),
