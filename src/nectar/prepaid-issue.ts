@@ -92,7 +92,7 @@ export async function settlePrepaidScheduled(env: Bindings, actor: Actor) {
     }
     const funding=await prepaidTopupStatements(env,basis,entries)
     if(!entries.length&&!funding.length)continue
-    await commit(env,[guard(env,'forbidden',"EXISTS(SELECT 1 FROM nc_members WHERE id=? AND role='owner' AND status='active')",actor.id),...prepaidLedgerStatements(env,basis,entries),...funding],{actor:actorLabel(actor),action:'prepaid.scheduled.settle',subject:basis.subscription,detail:{date,entries:entries.map(entry=>entry.id)}})
+    await commit(env,[guard(env,'forbidden',"EXISTS(SELECT 1 FROM nc_members m JOIN oa_operators o ON o.email=m.email WHERE m.id=? AND m.role='owner' AND m.status='active' AND o.role='owner' AND o.status='active')",actor.id),...prepaidLedgerStatements(env,basis,entries),...funding],{actor:actorLabel(actor),action:'prepaid.scheduled.settle',subject:basis.subscription,detail:{date,entries:entries.map(entry=>entry.id)}})
     settled.push(basis.subscription)
   }
   return {date,settled,deferred}

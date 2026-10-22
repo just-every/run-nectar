@@ -1,3 +1,4 @@
+import { replayPrepaidPeriods } from './prepaid-corrections'
 // USE-004: read-only historical correction evidence. Issued inputs always win
 // over current catalog, subscription, tax and raw-event records.
 import { effectiveReplay } from './usage-correction-records'
@@ -69,6 +70,8 @@ async function historicalReplay(env: Bindings, actor: Actor, input: Input, maxPe
     rerated.set(invoice.id, after.lines)
     periods.push({ invoice: invoice.id, number: invoice.number, period: saved.period, version: saved.version, source: `/app/invoices/${invoice.id}`, originalFingerprint: invoice.source_fingerprint, before, after, beforeInput: basis, afterInput, deltaSubtotalCents: after.subtotalCents-before.subtotalCents, deltaTaxCents: after.taxCents-before.taxCents, deltaTotalCents: after.totalCents-before.totalCents, eventIds: [...new Set([...saved.events.map(e => e.eventId), ...basis.events.map(e => e.eventId), ...afterInput.events.map(e => e.eventId)])], fingerprint: await fingerprint({ original: invoice.source_fingerprint, afterInput }) })
   }
+  const prepaid=replayPrepaidPeriodsIfPresent(periods)
+  for(const p of periods){const revised=prepaid.find(row=>row.invoice===p.invoice);if(!revised)continue;p.afterInput=revised.input;p.after=revised.rating;p.deltaSubtotalCents=p.after.subtotalCents-p.before.subtotalCents;p.deltaTaxCents=p.after.taxCents-p.before.taxCents;p.deltaTotalCents=p.after.totalCents-p.before.totalCents;p.fingerprint=await fingerprint({original:p.originalFingerprint,afterInput:p.afterInput})}
   insist(selected.every(id => found.has(id)), 'correction_event_outside_range', 409)
   const totals = { subtotalCents: 0, taxCents: 0, totalCents: 0 }
   for (const p of periods) {
@@ -82,3 +85,8 @@ async function historicalReplay(env: Bindings, actor: Actor, input: Input, maxPe
 // preparation must include all downstream issued windows, even beyond it.
 export const previewUsageCorrection=(env:Bindings,actor:Actor,input:Input)=>historicalReplay(env,actor,input,36)
 export const replayUsageDisposition=(env:Bindings,actor:Actor,input:Input)=>historicalReplay(env,actor,input,Infinity)
+
+function replayPrepaidPeriodsIfPresent(periods: Parameters<typeof replayPrepaidPeriods>[0]) {
+  const selected=periods.filter(period=>period.beforeInput.prepaid)
+  return selected.length?replayPrepaidPeriods(selected):[]
+}

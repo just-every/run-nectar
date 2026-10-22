@@ -208,5 +208,6 @@
   "usageCorrection.credit_note": "credit note / correcting debit",
   "renewal.save.discount_periods": "{percent}% off the selected fixed or seat price for {months} invoice periods",
   "return.offer.body_periods": "Resume this subscription with {percent}% off the selected fixed or seat price for {months} invoice periods, including the current unissued period. Usage is excluded. The discount ends automatically.",
-  "winback.body_periods": "Return to your subscription with {percent}% off the selected fixed or seat price for {months} invoice periods. Usage is excluded. Offer expires {date} in {zone}. Accept once: {link}"
+  "winback.body_periods": "Return to your subscription with {percent}% off the selected fixed or seat price for {months} invoice periods. Usage is excluded. Offer expires {date} in {zone}. Accept once: {link}",
+  "usageCorrection.prepaid": "Prepaid {kind}: {quantity} on {date}; contract liability {liability}; recognized revenue {revenue}. Source: {source}"
 }

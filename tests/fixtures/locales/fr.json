@@ -205,5 +205,6 @@
   "usageCorrection.footer": "Règle : {policy}. Les corrections négatives créent des avoirs numérotés. Les avoirs pour la prochaine facture sont reportés ; les autres réduisent le solde impayé de la facture originale, avec report de tout excédent. Aucun remboursement en espèces ni facture négative n’est créé. Les écarts positifs sont facturés à la période suivante ou sur une facture corrective distincte. Identifiants des événements originaux et détail des revenus : {receipt}.",
   "usageCorrection.next_invoice": "prochaine facture",
   "usageCorrection.correcting_invoice": "facture corrective",
-  "usageCorrection.credit_note": "avoir / débit correctif"
+  "usageCorrection.credit_note": "avoir / débit correctif",
+  "usageCorrection.prepaid": "Crédit prépayé {kind} : {quantity} le {date} ; passif contractuel {liability} ; revenu reconnu {revenue}. Source : {source}"
 }

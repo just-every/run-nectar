@@ -208,5 +208,6 @@
   "usageCorrection.credit_note": "nota de crédito / débito corrector",
   "renewal.save.discount_periods": "{percent} % de descuento en el precio fijo o por usuario seleccionado durante {months} períodos de facturación",
   "return.offer.body_periods": "Reanude esta suscripción con un {percent} % de descuento en el precio fijo o por usuario seleccionado durante {months} períodos de facturación, incluido el período actual sin emitir. El uso no tiene descuento. El descuento termina automáticamente.",
-  "winback.body_periods": "Regrese a su suscripción con un {percent} % de descuento en el precio fijo o por usuario seleccionado durante {months} períodos de facturación. El uso no tiene descuento. La oferta vence el {date} en {zone}. Acéptela una sola vez: {link}"
+  "winback.body_periods": "Regrese a su suscripción con un {percent} % de descuento en el precio fijo o por usuario seleccionado durante {months} períodos de facturación. El uso no tiene descuento. La oferta vence el {date} en {zone}. Acéptela una sola vez: {link}",
+  "usageCorrection.prepaid": "Prepago {kind}: {quantity} el {date}; pasivo contractual {liability}; ingresos reconocidos {revenue}. Fuente: {source}"
 }

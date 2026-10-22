@@ -107,8 +107,8 @@ function sourceContributions(record: RevenueInvoiceRecord, search = ''): Revenue
     rows.push(...schedule.entries.map(entry => ({ ...source, period: entry.period, kind: 'recognition' as const, amountCents: entry.amountCents })))
   }
   for (const credit of credits) {
-    const source = { ...common, custody: credit.basis.custody ?? common.custody, number: credit.number, lineId: null, creditId: credit.id, period: credit.period, amountCents: credit.amountCents, policy: 'invoice-level-contra-revenue', href: `/app/revenue/${invoice.id}${search}#credit-${credit.id}` }
-    rows.push({ ...source, kind: 'credit-billing' }, { ...source, kind: 'credit-recognition' })
+    const source = { ...common, custody: credit.basis.custody ?? common.custody, number: credit.number, lineId: null, creditId: credit.id, period: credit.period, amountCents: credit.amountCents, policy: credit.basis.method ?? 'invoice-level-contra-revenue', href: `/app/revenue/${invoice.id}${search}#credit-${credit.id}` }
+    rows.push({ ...source, kind: 'credit-billing' }, { ...source, kind: 'credit-recognition', amountCents: credit.recognitionCents ?? credit.amountCents })
   }
   return rows
 }

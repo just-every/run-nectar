@@ -1,3 +1,4 @@
+import { runPrepaidSettlement } from './nectar/prepaid-jobs'
 import { deliverPendingUsageCorrectionMail } from './nectar/usage-disposition-mail'
 import { portalResponse } from './nectar/portal-http'
 import { removeExpiredFinancialRecords } from './nectar/erasure-purge'
@@ -40,6 +41,7 @@ function noTransform(response: Response): Response {
 export default withDemo({
   async scheduled(controller, env) {
     await removeExpiredFinancialRecords(runtimeBindings(env))
+    await runPrepaidSettlement(runtimeBindings(env))
     await runCadences(runtimeBindings(env),controller.scheduledTime)
     await runRenewals(runtimeBindings(env),controller.scheduledTime)
     await runWinbacks(runtimeBindings(env),controller.scheduledTime)

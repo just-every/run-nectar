@@ -3,7 +3,7 @@ import { recognizedPrepaidPurchase } from './prepaid-revenue'
 // project this version from immutable originals; reads never initialize rows.
 import type { Bindings } from '../auth.server'
 import { requireBusiness } from './business'
-import { all, guard, insist, parseJson, stmt, type Row } from './core'
+import { all, guard, insist, one, parseJson, stmt, type Row } from './core'
 import { isDate, localDate } from './dates'
 import { REVENUE_POLICY_VERSION, recognitionForSavedInvoice, type RevenueSchedule } from './revenue-allocation'
 import { historicalRevenueInvoices } from './movein/history-revenue'
@@ -11,7 +11,7 @@ import { historicalRevenueInvoices } from './movein/history-revenue'
 export interface RevenueInvoiceRecord {
   invoice: Row
   schedules: RevenueSchedule[]
-  credits: { id: string; number: string; period: string; amountCents: number; basis: Row }[]
+  credits: { id: string; number: string; period: string; amountCents: number; recognitionCents?: number; basis: Row }[]
   custody: 'issue-snapshot' | 'derived-saved-originals' | 'derived-imported-originals'
   source?: { kind: 'imported'; provider: string; providerRef: string; href: string; policyVersion: string }
 }
@@ -54,10 +54,11 @@ export async function revenueCreditStatements(env: Bindings, credit: RevenueCred
   insist(Number.isSafeInteger(credit.amountCents) && credit.amountCents > 0 && Number.isSafeInteger(credit.issuedAt), 'revenue_invalid_credit', 409)
   const business = await requireBusiness(env)
   const period = localDate(credit.issuedAt, business.timezone).slice(0, 7)
+  const prepaid = !!await one(env,"SELECT 1 FROM nc_invoice_lines WHERE invoice_id=? AND kind='prepaid_purchase'",credit.invoice)
   return [
     guard(env, 'revenue_credit_changed', `EXISTS(SELECT 1 FROM nc_credit_notes n JOIN nc_invoices i ON i.id=n.invoice_id WHERE n.id=? AND n.invoice_id=? AND n.customer_id=? AND n.amount_cents=? AND n.issued_at=? AND i.status='issued' AND i.customer_id=n.customer_id)`, credit.id, credit.invoice, credit.customer, credit.amountCents, credit.issuedAt),
     stmt(env, `INSERT INTO nc_revenue_credits(id,credit_id,invoice_id,customer_id,recognition_date,amount_cents,policy_version,basis_json) VALUES(?,?,?,?,?,?,?,?)`, credit.id, credit.id, credit.invoice, credit.customer, `${period}-01`, -credit.amountCents, REVENUE_POLICY_VERSION,
-      JSON.stringify({ method: 'invoice-level-contra-revenue', creditId: credit.id, invoiceId: credit.invoice, issuedAt: credit.issuedAt, timezone: business.timezone, originalTaxUnchanged: true, lineAllocation: 'No attribution to original lines or tax is inferred.' })),
+      JSON.stringify({ method: prepaid ? 'unfunded-prepaid-liability-reversal' : 'invoice-level-contra-revenue', ...(prepaid?{recognitionCents:0}:{}), creditId: credit.id, invoiceId: credit.invoice, issuedAt: credit.issuedAt, timezone: business.timezone, originalTaxUnchanged: true, lineAllocation: 'No attribution to original lines or tax is inferred.' })),
   ]
 }
 
@@ -82,7 +83,10 @@ function projectInvoice(invoice: Row, stored: Row[], entries: Row[], lines: Row[
   const credits = creditNotes.map(note => {
     const saved = creditRows.find(row => row.credit_id === note.id)
     if (saved) insist(saved.amount_cents === -(note.subtotal_cents??note.amount_cents) && (invoice.erased_at || saved.policy_version === REVENUE_POLICY_VERSION), 'revenue_credit_snapshot_mismatch', 409)
-    return { id: note.id, number: note.number, period: saved?.recognition_date.slice(0, 7) ?? localDate(note.issued_at, timezone).slice(0, 7), amountCents: -(note.subtotal_cents??note.amount_cents),
+    const creditBasis=saved?parseJson<Row>(saved.basis_json,{}):{}
+    const prepaid=lines.some(line=>line.kind==='prepaid_purchase')
+    insist(!prepaid || !saved || creditBasis.recognitionCents===0,'revenue_prepaid_credit_basis_required',409)
+    return { id: note.id, number: note.number, ...(prepaid?{recognitionCents:0}:{}), period: saved?.recognition_date.slice(0, 7) ?? localDate(note.issued_at, timezone).slice(0, 7), amountCents: -(note.subtotal_cents??note.amount_cents),
       basis: saved ? parseJson<Row>(saved.basis_json, {}) : { version: REVENUE_POLICY_VERSION, method: 'invoice-level-contra-revenue', creditId: note.id, invoiceId: id, issuedAt: note.issued_at, timezone, custody: 'derived-saved-originals', originalTaxUnchanged: true } }
   })
   return { invoice, schedules, credits, custody }

@@ -1,3 +1,6 @@
+import { planPrepaidCorrection, prepaidCorrectionStatements } from './prepaid-corrections'
+import { prepaidSnapshot } from './prepaid-records'
+import { decimalText } from './decimal'
 import { customerText } from './locale'
 // A correction is reviewed against a complete, immutable issued chain. Only
 // approval appends an effective basis and settles/queues its exact signed delta.
@@ -77,10 +80,15 @@ async function plan(env: Bindings, actor: Actor, payload: Row) {
       subtotalCents:p.deltaSubtotalCents,taxCents:p.deltaTaxCents,totalCents:p.deltaTotalCents,
       beforeLines:p.before.lines.map(l=>({description:l.description,amountCents:l.amountCents})),afterLines:p.after.lines.map(l=>({description:l.description,amountCents:l.amountCents})),eventIds:p.eventIds,revenue,postingRevenue: p.deltaTotalCents<0?[{period:issueDate.slice(0,7),amountCents:p.deltaSubtotalCents,method:'credit-contra-issue-month'}]:revenue.filter(e=>e.deltaCents!==0).map(e=>({period:e.period,amountCents:e.deltaCents,method:'historical-usage-replay-delta'})),balanceCents:balance!.value,creditCents,appliedCents,carriedCents:creditCents-appliedCents})
   }
+  const prepaidPeriods=replay.periods.filter(period=>period.beforeInput.prepaid)
+  const prepaidCurrent=prepaidPeriods.length?await prepaidSnapshot(env,sub.id):null
+  insist(!prepaidPeriods.length || prepaidCurrent,'prepaid_account_not_found',409)
+  const prepaidPlan=prepaidCurrent?await planPrepaidCorrection(prepaidCurrent,prepaidPeriods,issueDate):null
+  const prepaid=prepaidPlan?{subscription:prepaidPlan.subscription,revision:prepaidPlan.revision,date:prepaidPlan.date,originals:prepaidPlan.originals,deltas:prepaidPlan.deltas,basis:prepaidPlan.basis}:null
   const availableCredits=await carriedUsageCredits(env,customer.id)
   const creditCents=periods.reduce((n,p)=>n+p.creditCents,0)
   const L=customerText(customer.language)
-  const summary={availableCredits,timezone:b.timezone,subscription:sub.id,customer:customer.id,recipient:customer.billing_email,language:customer.language,disposition:policy.disposition,policyRevision:policy.revision,
+  const summary={prepaid,availableCredits,timezone:b.timezone,subscription:sub.id,customer:customer.id,recipient:customer.billing_email,language:customer.language,disposition:policy.disposition,policyRevision:policy.revision,
     creditPolicyRevision:credit.revision,thresholdCents:credit.two_person_above_cents,issueDate,reason,explanation,periods,delta:replay.delta,
     creditCents,carriedCents:periods.reduce((n,p)=>n+p.carriedCents,0),needsSecondApprover:credit.two_person_above_cents!==null&&creditCents>credit.two_person_above_cents,
     // These are the exact authored words, followed by machine-calculated source
@@ -90,10 +98,11 @@ async function plan(env: Bindings, actor: Actor, payload: Row) {
       source:`/portal/invoices/${p.invoice}`,fingerprint:p.fingerprint,revenue:p.postingRevenue.map(r=>`${r.period}: ${L.money(r.amountCents)} (${L.t(r.method==='credit-contra-issue-month'?'usageCorrection.creditRevenue':'usageCorrection.replayRevenue')})`).join(', ')
     })).join('\n')+'\n'+L.t('usageCorrection.footer',{policy:L.t('usageCorrection.'+policy.disposition),receipt:`/portal/corrections/${payload.correction_id}`})}}
 
+  if(prepaidPlan)summary.message.body+='\n'+prepaidPlan.deltas.map((entry,index)=>{const grant=prepaidCurrent!.grants.find(grant=>grant.id===entry.grantId)!;return L.t('usageCorrection.prepaid',{quantity:grant.kind==='money'?L.money(entry.amountN):decimalText(BigInt(entry.amountN)),kind:grant.kind,liability:L.money(entry.liabilityCents),revenue:L.money(entry.recognitionCents),date:L.day(entry.serviceDate),source:`/app/prepaid/${sub.id}/entries/${payload.correction_id}-${index}`})}).join('\n')
   const basis=await fingerprint({summary,subRevision:sub.revision,customerRevision:customer.revision,invoiceSettings:customer.invoice_settings_json,
     credit,policy,replayFingerprint:replay.fingerprint})
   insist(await sequence(env)===seq,'correction_source_changed',409)
-  return {seq,normalized,summary,basis,replay,customer,business:b}
+  return {seq,normalized,summary,basis,replay,customer,business:b,prepaidPlan,prepaidPeriods}
 }
 
 export async function prepareUsageCorrection(env: Bindings, actor: Actor, input: Input) {
@@ -153,6 +162,8 @@ export async function decideUsageCorrection(env: Bindings, actor: Actor, input: 
   const statements=[sequenceGuard(env,p.seq),pending,
     ...(s.needsSecondApprover?[guard(env,'second_approver_required',"EXISTS(SELECT 1 FROM nc_members WHERE id=? AND status='active' AND role IN ('owner','finance'))",preparer)]:[]),
     stmt(env,"UPDATE nc_usage_corrections SET status='approved',decided_by=?,decided_at=? WHERE id=?",actorLabel(actor),now(),id)]
+  const prepaid=p.prepaidPlan?await prepaidCorrectionStatements(env,actor,id,preparer??'',p.prepaidPlan,p.prepaidPeriods,input.flag('confirm_single')):null
+  if(prepaid)statements.push(...prepaid.statements)
   for(const period of p.replay.periods) statements.push(stmt(env,'INSERT INTO nc_usage_replays(correction_id,invoice_id,customer_id,input_json,lines_json) VALUES(?,?,?,?,?)',id,period.invoice,s.customer,JSON.stringify(period.afterInput),JSON.stringify(period.after.lines)))
   // A bulk void is a set operation, not 10,000 D1 statements/subrequests.
   for(let n=0;n<p.normalized.void_event_ids.length;n+=1000)statements.push(stmt(env,'INSERT INTO nc_usage_voids(id,event_id,correction_id,customer_id) SELECT lower(hex(randomblob(16))),value,?,? FROM json_each(?)',id,s.customer,JSON.stringify(p.normalized.void_event_ids.slice(n,n+1000))))
@@ -198,7 +209,7 @@ export async function decideUsageCorrection(env: Bindings, actor: Actor, input: 
   }
   const body=s.message.body
   statements.push(stmt(env,'INSERT INTO nc_usage_correction_mail(correction_id,customer_id,recipient,subject,body,updated_at) VALUES(?,?,?,?,?,?)',id,s.customer,s.recipient,s.message.subject,body,now()))
-  await commit(env,statements,{actor:actorLabel(actor),action:'usage.correction.approve',subject:id,detail:{basis:row.basis,disposition:s.disposition,delta:s.delta,documents,carriedCents:s.carriedCents}})
+  await commit(env,statements,[{actor:actorLabel(actor),action:'usage.correction.approve',subject:id,detail:{basis:row.basis,disposition:s.disposition,delta:s.delta,documents,carriedCents:s.carriedCents}},...(prepaid?.audits??[])])
   await deliverUsageCorrectionMail(env,id)
   return {id,status:'approved',documents,invoice,carriedCents:s.carriedCents}
 }
