@@ -122,7 +122,7 @@ export async function revenueFlow(h, owner, { onState } = {}) {
     ['2026-04', 'accrued-contract-assets', '25.80', '0.00', 'USD'], ['2026-04', 'recognized-revenue', '0.00', '25.80', 'USD'],
     ['2026-05', 'pretax-billings-clearing', '60.70', '0.00', 'USD'], ['2026-05', 'accrued-contract-assets', '0.00', '60.70', 'USD'],
   ], 'journal excludes the independently checked $6.07 tax; clearing is pretax')
-  assert.ok(exportedJournal.every(row => /Tax, cash, collections/.test(row.basis) && /not a closed period or a ledger posting/.test(row.basis)))
+  assert.ok(exportedJournal.every(row => /Tax, cash, collections/.test(row.basis) && /Later records post to the open period/.test(row.basis)))
   for (const row of exportedJournal) {
     const link = new URL(row.source_path, h.origin)
     assert.equal(link.searchParams.get('customer'), customer)

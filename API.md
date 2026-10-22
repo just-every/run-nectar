@@ -17,7 +17,7 @@ role or credential scope itself.
 
 `me`, `business`, `customers`, `customers/ID`, `catalog`, `subscriptions/ID`,
 `usage/batches`, `usage/inspect?period=YYYY-MM`, `runs`, `runs/ID`,
-`invoices/ID`, `ageing`, `write-offs`, `ledger-postings`, `payments`, `notices`, `tasks`, `proposals`,
+`invoices/ID`, `ageing`, `write-offs`, `ledger-postings`, `period-closes`, `payments`, `notices`, `tasks`, `proposals`,
 `proposals/ID`, `entitlements/CUSTOMER` (all features held today) and
 `entitlements/CUSTOMER?feature=CODE&date=YYYY-MM-DD` (one decision, explained
 step by step; `CUSTOMER` may be the internal id or the external id), `imports`,
@@ -65,6 +65,7 @@ records their role does not read.
 | `writeoff.prepare` | a person with approval | `invoice`, `amount`, `reason`; returns `request` saved with the exact balance, amount, reason, accounting effect and policy revision |
 | `writeoff.approve` | a person with approval | `request`; above the threshold the approver must differ from its preparer; a changed balance or policy is refused (`write_off_stale`) |
 | `writeoff.recover` | a person with approval | `write_off`, `payment`, `amount`; allocates a recorded payment to the invoice and reverses that part of the bad debt |
+| `revenue.close` | a person with approval | `period` (`YYYY-MM`); closes that month, freezes its packet and posts its journals |
 | `ledger.post` | a person with approval | optional `posting`; retries pending QuickBooks postings once each and adopts an entry the ledger already holds |
 | `payment.record`, `payment.allocate` | owner, finance | `customer`, `amount`, `received_on`, `method`, `reference`, `evidence` / `payment`, `invoice`, `amount` |
 | `reminder.prepare`, `reminder.approve`, `reminder.discard`, `task.create`, `task.complete` | owner, finance (approve and complete: a person) | `customer` / `notice`, `recipient`, `subject`, `body` / `task`, `outcome` |
@@ -455,7 +456,7 @@ history or source evidence blocks strict undo. Existing pre-history imports keep
 their legacy journal snapshot shape until a new capture supplies source evidence.
 
 
-### Monthly revenue journal (REV-002, partial)
+### Monthly revenue journal and period close (REV-002)
 
 `GET /api/nectar/revenue-journal` accepts the revenue report's `period` or
 `from`/`to` (up to 120 months), and optional `customer` filter. Report readers
@@ -465,14 +466,29 @@ liabilities, and original `sources`.
 `GET /app/exports/revenue-journal.csv` requires report-read and export authority;
 the Revenue schedules page links to it with the current filters.
 
-These are read-only USD pretax staging journals: billings clearing, accrued
-contract assets, deferred revenue and recognized revenue. They exclude tax,
-cash, collections and processor settlement; billings clearing is not gross AR.
-Classify each invoice's asset/liability before aggregation, map the staging
-account names to ledger accounts, and review before posting. No close lock or
-external posting occurs. Signed decreases reverse debit/credit; zero rows are
-omitted. CSV source links retain period/customer scope. Later records may
-change open-period exports; closed evidence is not claimed.
+These are USD pretax journals: billings clearing, accrued contract assets,
+deferred revenue and recognized revenue. They exclude tax, cash, collections and
+processor settlement; billings clearing is not gross AR. Each invoice's
+asset/liability is classified before aggregation. Signed decreases reverse
+debit/credit; zero rows are omitted. CSV source links retain period/customer scope.
+
+`revenue.close` (a person with approval and a fresh factor; `period` `YYYY-MM`)
+closes the first past month, then each following month in order. A close saves,
+immutably, the month's contribution keys, roll-forward (opening + net billings -
+recognized = closing), the journals and the frozen billings and collections
+reports (opaque source ids and amounts only). It saves one summarized journal per
+ledger company (the installation business with `QUICKBOOKS_COMPANY_ID`, and each
+billing entity with its recorded company) and posts it to QuickBooks Online under
+the accounts Billings Clearing, Contract Assets, Deferred Revenue and Revenue;
+imported-source revenue is closed in the packet but has no issuer to post for. A
+failed post waits in the `ledger.post` retry queue. `GET /api/nectar/period-closes`
+(and `/period-closes/YYYY-MM`) return closed months, packets and postings.
+
+After a close, a saved contribution that was not in its month (a credit note, an
+invoice dated inside it, a late recognition) is reported in the earliest open month
+with `adjustedFrom` naming its original month; closed months, their journals and
+CSVs never change. AGENT-002 previews of corrections that touch a closed month show
+`postsIn`, the open month, and refuse approval if a close changed it.
 
 ### Collecting a retained open Stripe invoice
 

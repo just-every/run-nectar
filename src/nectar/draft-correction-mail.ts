@@ -1,4 +1,5 @@
 // Frozen, engine-derived customer explanations. Preparation never queues or sends.
+import { closedPeriods } from './period-close-keys'
 import type { Bindings } from '../auth.server'
 import { operatorMail } from '../mail.server.mjs'
 import { NectarError, all, canonical, commit, fingerprint, guard, insist, now, one, parseJson, stmt, type Row } from './core'
@@ -32,10 +33,10 @@ async function engineTotal(value: EngineTotal) {
     && canonical(value.revenue) === canonical(await revenuePreview(value.revenue.schedules))
     && value.revenue.periods.reduce((sum, entry) => sum + BigInt(entry.amountCents), 0n) === BigInt(value.subtotalCents), 'correction_revenue_calculation_required', 409)
 }
-async function validatePeriod(row: PeriodImpact) {
+async function validatePeriod(env: Bindings, row: PeriodImpact) {
   insist(row && row.period && isDate(row.period.start) && isDate(row.period.end) && row.period.start < row.period.end, 'invalid_correction_period')
   await Promise.all([engineTotal(row.before), engineTotal(row.after)])
-  insist(canonical(row.revenueDeltas) === canonical(revenuePeriodDeltas(row.before.revenue, row.after.revenue)), 'correction_revenue_delta_mismatch', 409)
+  insist(canonical(row.revenueDeltas) === canonical(revenuePeriodDeltas(row.before.revenue, row.after.revenue, await closedPeriods(env))), 'correction_revenue_delta_mismatch', 409)
 }
 
 async function usageSources(env: Bindings, payload: Row, rows: Row[]): Promise<UsageSource[]> {
@@ -100,7 +101,7 @@ export async function draftCorrectionPlan(env: Bindings, kind: DraftCorrectionKi
   if (kind === 'amendment') amendmentTerms(normalized, customerText(null))
   const groups = new Map<string, CustomerImpact>()
   for (const impact of impacts) {
-    await validatePeriod(impact)
+    await validatePeriod(env, impact)
     insist(identifier(impact.subscription), 'invalid_correction_subscription')
     const sub = await one(env, `SELECT s.id,s.customer_id,s.revision,c.name,c.billing_email,c.address,c.language,c.revision AS customer_revision
       FROM nc_subscriptions s JOIN nc_customers c ON c.id=s.customer_id WHERE s.id=?`, impact.subscription)

@@ -51,8 +51,9 @@ export async function postJournalEntry(env: Bindings, entry: JournalEntry): Prom
     insist(found.length === 1 && typeof found[0].Id === 'string', 'ledger_account_missing', 409)
     accounts.set(name, found[0].Id)
   }
-  const customers = await query(`select Id, DisplayName from Customer where DisplayName = ${quoted(entry.customerName)}`, 'Customer')
-  insist(customers.length === 1 && typeof customers[0].Id === 'string', 'ledger_customer_missing', 409)
+  const named = entry.lines.some(line => line.customer)
+  const customers = named ? await query(`select Id, DisplayName from Customer where DisplayName = ${quoted(entry.customerName)}`, 'Customer') : []
+  insist(!named || customers.length === 1 && typeof customers[0].Id === 'string', 'ledger_customer_missing', 409)
   const created = await call(`/journalentry?${new URLSearchParams({ minorversion: '75', requestid: entry.requestId })}`, {
     DocNumber: entry.docNumber, TxnDate: entry.date, PrivateNote: entry.memo,
     Line: entry.lines.map(line => ({

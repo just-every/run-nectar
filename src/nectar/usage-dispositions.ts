@@ -1,3 +1,4 @@
+import { closedPeriods } from './period-close-keys'
 import { planPrepaidCorrection, prepaidCorrectionStatements } from './prepaid-corrections'
 import { prepaidSnapshot } from './prepaid-records'
 import { decimalText } from './decimal'
@@ -71,7 +72,7 @@ async function plan(env: Bindings, actor: Actor, payload: Row) {
       revenuePreview(recognitionForRating(p.beforeInput,p.before)),revenuePreview(recognitionForRating(p.afterInput,p.after)),
       one(env,`SELECT ${BALANCE_SQL} AS value FROM nc_invoices i WHERE i.id=?`,p.invoice),
     ])
-    const revenue= revenuePeriodDeltas(beforeRevenue,afterRevenue)
+    const revenue= revenuePeriodDeltas(beforeRevenue,afterRevenue,await closedPeriods(env))
     insist(revenue.reduce((n,e)=>n+e.deltaCents,0)===p.deltaSubtotalCents,'correction_revenue_mismatch',409)
     const creditCents=Math.max(0,-p.deltaTotalCents),appliedCents=policy.disposition==='next_invoice'?0:Math.min(creditCents,Math.max(0,balance!.value))
     periods.push({invoice:p.invoice,number:p.number,period:p.period,version:p.version,originalFingerprint:p.originalFingerprint,fingerprint:p.fingerprint,

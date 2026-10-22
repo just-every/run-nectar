@@ -5,7 +5,7 @@
 import assert from 'node:assert/strict'
 
 export function quickbooksEdge({ company = 'synthetic-nectar-company', token = 'synthetic-nectar-qbo' } = {}) {
-  const accounts = new Map([['Bad Debts', '80'], ['Accounts Receivable (A/R)', '84']]), customers = new Map()
+  const accounts = new Map([['Bad Debts', '80'], ['Accounts Receivable (A/R)', '84'], ['Billings Clearing', '90'], ['Contract Assets', '91'], ['Deferred Revenue', '92'], ['Revenue', '93']]), customers = new Map()
   const entries = [], byRequest = new Map(), calls = []
   let outage = null
   const unquote = text => text.replace(/\\(['\\])/g, '$1')
@@ -33,7 +33,7 @@ export function quickbooksEdge({ company = 'synthetic-nectar-company', token = '
     assert.ok(sum('Debit') > 0 && sum('Debit') === sum('Credit'), 'the journal entry balances')
     for (const line of lines) {
       assert.ok([...accounts.values()].includes(line.JournalEntryLineDetail.AccountRef.value))
-      if (line.JournalEntryLineDetail.AccountRef.value === accounts.get('Accounts Receivable (A/R)')) assert.ok(line.JournalEntryLineDetail.Entity?.EntityRef?.value, 'the receivable line names its customer')
+      if (body.PrivateNote.includes('bad debt') && line.JournalEntryLineDetail.AccountRef.value === accounts.get('Accounts Receivable (A/R)')) assert.ok(line.JournalEntryLineDetail.Entity?.EntityRef?.value, 'the receivable line names its customer')
     }
     const entry = { Id: `synthetic-je-${entries.length + 1}`, DocNumber: body.DocNumber, TxnDate: body.TxnDate, PrivateNote: body.PrivateNote, Line: lines, requestId }
     entries.push(entry); byRequest.set(requestId, entry)

@@ -14,7 +14,7 @@ const ACTIONS = [...(await readFile(new URL('../../src/nectar/actions.ts', impor
 // Every member manages their own factor and email choices (GOV-007, INT-003).
 const OWN = name => (name.startsWith('mfa.') && !['mfa.policy', 'mfa.reset'].includes(name)) || name === 'notification.preferences'
 // Probes name a record kind or metric where a door's pattern needs one, so the family check decides.
-const API_PROBE = { notes: 'notes/payment/none', metadata: 'metadata/price/none', metadataObjects: 'objects/customer', report: 'reports/billings', reportInvoice: 'reports/billings/none', reportLine: 'invoices/none/lines/none', prepaid:'prepaid/none', prepaidSource:'prepaid/none/entries/none' }
+const API_PROBE = { periodCloses: 'period-closes', notes: 'notes/payment/none', metadata: 'metadata/price/none', metadataObjects: 'objects/customer', report: 'reports/billings', reportInvoice: 'reports/billings/none', reportLine: 'invoices/none/lines/none', prepaid:'prepaid/none', prepaidSource:'prepaid/none/entries/none' }
 const PAGE_PROBE = { prepaid:'/app/prepaid/none', prepaidSource:'/app/prepaid/none/entries/none', prepaidCsv:'/app/exports/prepaid/none.csv', importOriginals:'/app/import/none/originals/'+ '0'.repeat(64), metadata: '/app/metadata/price/none', report: '/app/reports/billings', reportInvoice: '/app/reports/billings/none', reportCsv: '/app/exports/reports/billings.csv', metadataCsv: '/app/exports/objects/customer.csv', reportLine: '/app/invoices/none/lines/none' }
 const fill = pattern => pattern.replace(/^\^|\$$/g, '').replace(/\(\[[^)]*\]\+\)/g, 'none').replace(/\\\./g, '.')
 
@@ -43,7 +43,7 @@ const EXPECTED = {
   },
   analyst: {
     actions: ['report.schedule'],
-    api: ['customers', 'customer', 'entitlement', 'metadataObjects', 'report', 'reportInvoice', 'reportLine', 'revenue', 'revenueJournal', 'revenueSource', 'reportSchedule', 'reportDelivery'],
+    api: ['customers', 'customer', 'entitlement', 'metadataObjects', 'report', 'reportInvoice', 'reportLine', 'periodCloses', 'revenue', 'revenueJournal', 'revenueSource', 'reportSchedule', 'reportDelivery'],
     pages: ['customers', 'customer', 'certificateFile', 'metadataList', 'metadataCsv', 'revenue', 'revenueSource', 'revenueCsv', 'revenueJournalCsv', 'reportSchedule', 'reportDelivery', 'reportDeliveryCsv', 'reportCsv', 'report', 'reportInvoice', 'reportLine', 'exports', 'customersFile'],
   },
 }

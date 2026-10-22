@@ -1,4 +1,5 @@
 // Read-only engine simulations for existing draft-correction proposal kinds.
+import { closedPeriods, type ClosedPeriods } from './period-close-keys'
 import type { Bindings } from '../auth.server'
 import type { Business } from './business'
 import { all, fingerprint, insist, one, type Row } from './core'
@@ -17,7 +18,8 @@ export interface RevenuePreview {
   periods: { period: string; amountCents: number }[]
   fingerprint: string
 }
-export interface RevenuePeriodDelta { period: string; beforeCents: number; afterCents: number; deltaCents: number }
+/** `postsIn` names the open month a change to an already closed month will be reported in (REV-002). */
+export interface RevenuePeriodDelta { period: string; beforeCents: number; afterCents: number; deltaCents: number; postsIn?: string }
 
 /** These are the same source schedules later persisted on invoice issue; a
  * draft correction never changes an issued schedule or books a preview. */
@@ -42,7 +44,7 @@ export async function revenuePreview(schedules: RevenueSchedule[]): Promise<Reve
   return { ...basis, fingerprint: await fingerprint(basis) }
 }
 
-export function revenuePeriodDeltas(before: RevenuePreview, after: RevenuePreview): RevenuePeriodDelta[] {
+export function revenuePeriodDeltas(before: RevenuePreview, after: RevenuePreview, closed?: ClosedPeriods): RevenuePeriodDelta[] {
   insist(before.policyVersion === REVENUE_POLICY_VERSION && after.policyVersion === REVENUE_POLICY_VERSION, 'correction_revenue_policy_changed', 409)
   const months = [...new Set([...before.periods, ...after.periods].map(row => row.period))].sort()
   return months.map(period => {
@@ -50,7 +52,7 @@ export function revenuePeriodDeltas(before: RevenuePreview, after: RevenuePrevie
     const afterCents = after.periods.find(row => row.period === period)?.amountCents ?? 0
     const deltaCents = afterCents - beforeCents
     insist([beforeCents, afterCents, deltaCents].every(Number.isSafeInteger), 'correction_revenue_amount_out_of_range', 409)
-    return { period, beforeCents, afterCents, deltaCents }
+    return { period, beforeCents, afterCents, deltaCents, ...(closed?.through && period <= closed.through && deltaCents !== 0 ? { postsIn: closed.open! } : {}) }
   })
 }
 
@@ -75,11 +77,11 @@ export async function amendmentPlan(env: Bindings, business: Business, payload: 
   if (priceId) insist(await one(env, 'SELECT 1 FROM nc_items WHERE subscription_id = ? AND price_id = ?', sub.id, priceId), 'override_price_not_on_subscription')
   insist(!await startsInIssuedPeriod(env, sub.id, payload.effective_from), 'period_already_invoiced', 409)
   const amendment: AmendmentIn = { id: 'proposed', kind: kind as AmendmentIn['kind'], value, priceId, from: payload.effective_from, to: payload.effective_to || null, note: String(payload.note ?? '').slice(0, 200) }
-  const impact = []
+  const impact = [], closed = await closedPeriods(env)
   for (const inputs of await amendmentCorrectionInputs(env,business,sub,amendment.from)) {
     const period=inputs.period
     const [before, after] = await Promise.all([total(inputs), total({ ...inputs, amendments: [...inputs.amendments, amendment] })])
-    impact.push({ period, ...(inputs.billing?{billingWindow:inputs.billing}:{}), before, after, revenueDeltas: revenuePeriodDeltas(before.revenue, after.revenue) })
+    impact.push({ period, ...(inputs.billing?{billingWindow:inputs.billing}:{}), before, after, revenueDeltas: revenuePeriodDeltas(before.revenue, after.revenue, closed) })
   }
   return { normalized: { ...payload, subscription: sub.id, kind, value, price: priceId, effective_to: payload.effective_to || null }, impact, basis: { subscription: [sub.id, sub.revision], revenuePolicy: REVENUE_POLICY_VERSION } }
 }
@@ -115,7 +117,7 @@ export async function correctionPlan(env: Bindings, business: Business, payload:
   const run = payload.run ? await one(env, "SELECT id, period FROM nc_bill_runs WHERE id = ? AND status = 'draft'", String(payload.run)) : null
   if (payload.run) insist(run, 'bill_run_not_found', 404)
   const voided = new Set(rows.filter(row => row.action === 'void').map(row => row.event))
-  const invoices: Row[] = []
+  const invoices: Row[] = [], closed = await closedPeriods(env)
   for (const sub of await all(env, `SELECT DISTINCT s.*, c.name AS customer_name FROM nc_subscriptions s JOIN nc_customers c ON c.id = s.customer_id JOIN nc_items i ON i.subscription_id = s.id JOIN nc_prices p ON p.id = i.price_id
     WHERE p.meter_id IS NOT NULL ORDER BY c.name, s.id`)) {
     const mine = touched.filter(event => event.customerId === sub.customer_id)
@@ -128,7 +130,7 @@ export async function correctionPlan(env: Bindings, business: Business, payload:
       const added = (screened?.accepted ?? []).filter(event => event.customerId === sub.customer_id && meters.has(event.meterId) && event.occurredAt < end && correctionEventInInput(inputs,{meterId:event.meterId,occurredAt:event.occurredAt}))
         .map(event => ({ eventId: event.eventId, meterId: event.meterId, quantity: event.quantity, occurredAt: event.occurredAt, ...(event.properties?{properties:event.properties}:{}) }))
       const [before, after] = await Promise.all([total(inputs), total({ ...inputs, events: [...inputs.events.filter(event => !voided.has(event.eventId)), ...added] })])
-      invoices.push({ subscription: sub.id, customer: sub.customer_name, period, ...(inputs.billing?{billingWindow:inputs.billing}:{}), before, after, revenueDeltas: revenuePeriodDeltas(before.revenue, after.revenue) })
+      invoices.push({ subscription: sub.id, customer: sub.customer_name, period, ...(inputs.billing?{billingWindow:inputs.billing}:{}), before, after, revenueDeltas: revenuePeriodDeltas(before.revenue, after.revenue, closed) })
     }
   }
   return { normalized: { void: voids.map((entry: Row) => ({ event_id: String(entry.event_id), reason: String(entry.reason).slice(0, 300) })), add: adds, run: run?.id ?? null, period: run?.period ?? null }, impact: { rows, invoices }, basis: { ...basis, revenuePolicy: REVENUE_POLICY_VERSION } }

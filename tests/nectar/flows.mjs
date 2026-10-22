@@ -34,6 +34,8 @@ if (!process.argv.includes('--core-only')) {
 await runIsolated('customer-search','customerSearchFlow')
 await runIsolated('upcoming','upcomingFlow')
 await runIsolated('write-offs','writeOffFlow')
+await runIsolated('period-close','periodCloseFlow')
+await runIsolated('period-close','periodCloseDeferredFlow')
 await runIsolated('numbering','numberingFlow')
 await runIsolated('numbering-entities','numberingEntitiesFlow')
 await runIsolated('intervals','intervalsFlow')

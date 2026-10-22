@@ -1,5 +1,5 @@
-// A read-only, pretax staging journal from the same saved source snapshot as
-// the roll-forward. It neither closes periods nor posts to a connected ledger.
+// A pretax monthly journal from the same saved source snapshot as the
+// roll-forward. Closing a period (period-close.ts) freezes and posts it.
 import type { Bindings } from '../auth.server'
 import { requireCapability, type Actor } from './actor'
 import { insist } from './core'
@@ -7,7 +7,7 @@ import { plainMoney } from './decimal'
 import { revenueReport } from './revenue-reports'
 import { csvResponse } from './report-csv'
 
-export const JOURNAL_DEFINITION = 'Read-only USD pretax monthly journal, not a closed period or a ledger posting. Debit billings clearing for net pretax billings; debit increases in accrued contract assets; credit increases in deferred revenue liabilities; credit recognized revenue. Negative movements reverse the debit or credit. Asset and liability positions are classified per invoice before aggregation. Tax, cash, collections and processor settlement entries are excluded; billings clearing is not the gross accounts-receivable balance. Map these staging account names to the business ledger before posting. Later records may change open-period exports.'
+export const JOURNAL_DEFINITION = 'USD pretax monthly journal; closing a period freezes it and posts it to the connected ledger. Debit billings clearing for net pretax billings; debit increases in accrued contract assets; credit increases in deferred revenue liabilities; credit recognized revenue. Negative movements reverse the debit or credit. Asset and liability positions are classified per invoice before aggregation. Tax, cash, collections and processor settlement entries are excluded; billings clearing is not the gross accounts-receivable balance. Map these staging account names to the business ledger before posting. Later records post to the open period and never change a closed one.'
 
 const safe = (value: bigint) => {
   insist(value >= BigInt(Number.MIN_SAFE_INTEGER) && value <= BigInt(Number.MAX_SAFE_INTEGER), 'revenue_total_out_of_range', 409)

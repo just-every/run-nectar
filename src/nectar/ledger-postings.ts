@@ -12,13 +12,13 @@ import { localDate } from './dates'
 import { defaultCompany, postJournalEntry, type JournalLine } from './ledger/quickbooks'
 import type { Input } from './input'
 
-export interface PostingSeed { id: string; kind: 'bad_debt' | 'bad_debt_recovery'; sourceId: string; writeOffId: string; invoiceId: string; customerId: string; entityId: string | null; companyRef: string | null; amountCents: number; lines: JournalLine[]; docNumber: string }
+export interface PostingSeed { id: string; kind: 'bad_debt' | 'bad_debt_recovery' | 'period_close'; sourceId: string; writeOffId?: string; invoiceId?: string; customerId?: string; period?: string; txnDate?: string; entityId: string | null; companyRef: string | null; amountCents: number; lines: JournalLine[]; docNumber: string }
 
 export const postingStatement = (env: Bindings, seed: PostingSeed) => stmt(env,
-  "INSERT INTO nc_ledger_postings(id,kind,source_id,write_off_id,invoice_id,customer_id,entity_id,company_ref,amount_cents,entries_json,doc_number,status,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,'pending',?)",
-  seed.id, seed.kind, seed.sourceId, seed.writeOffId, seed.invoiceId, seed.customerId, seed.entityId, seed.companyRef, seed.amountCents, JSON.stringify(seed.lines), seed.docNumber, clockInstant(env))
+  "INSERT INTO nc_ledger_postings(id,kind,source_id,write_off_id,invoice_id,customer_id,period,txn_date,entity_id,company_ref,amount_cents,entries_json,doc_number,status,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,'pending',?)",
+  seed.id, seed.kind, seed.sourceId, seed.writeOffId ?? null, seed.invoiceId ?? null, seed.customerId ?? null, seed.period ?? null, seed.txnDate ?? null, seed.entityId, seed.companyRef, seed.amountCents, JSON.stringify(seed.lines), seed.docNumber, clockInstant(env))
 
-export const ledgerPostingView = (row: Row) => ({ id: row.id, kind: row.kind, writeOff: row.write_off_id, invoice: row.invoice_id, customer: row.customer_id, entity: row.entity_id, companyRef: row.company_ref,
+export const ledgerPostingView = (row: Row) => ({ id: row.id, kind: row.kind, writeOff: row.write_off_id, invoice: row.invoice_id, customer: row.customer_id, period: row.period, entity: row.entity_id, companyRef: row.company_ref,
   amountCents: row.amount_cents, entries: parseJson<JournalLine[]>(row.entries_json, []), docNumber: row.doc_number, status: row.status, ledgerRef: row.external_ref, attempts: row.attempts, error: row.error_code, createdAt: row.created_at, postedAt: row.posted_at })
 export type LedgerPosting = ReturnType<typeof ledgerPostingView>
 
@@ -33,13 +33,13 @@ export async function postLedgerEntry(env: Bindings, actor: Actor, id: string): 
   insist(row, 'ledger_posting_not_found', 404)
   if (row.status === 'posted') return ledgerPostingView(row)
   const business = await requireBusiness(env)
-  const customer = await one(env, 'SELECT name FROM nc_customers WHERE id=?', row.customer_id)
+  const customer = row.customer_id ? await one(env, 'SELECT name FROM nc_customers WHERE id=?', row.customer_id) : null
   let outcome: { ref: string } | { error: string }
   try {
     const companyRef = row.company_ref ?? defaultCompany(env)
     insist(companyRef, 'ledger_company_missing', 409)
-    outcome = { ref: await postJournalEntry(env, { companyRef, docNumber: row.doc_number, requestId: row.id, date: localDate(row.created_at, business.timezone),
-      memo: `Nectar ${row.kind === 'bad_debt' ? 'bad debt write-off' : 'bad debt recovery'} ${row.doc_number}`, customerName: customer?.name ?? '', lines: parseJson<JournalLine[]>(row.entries_json, []) }) }
+    outcome = { ref: await postJournalEntry(env, { companyRef, docNumber: row.doc_number, requestId: row.id, date: row.txn_date ?? localDate(row.created_at, business.timezone),
+      memo: `Nectar ${({ bad_debt: 'bad debt write-off', bad_debt_recovery: 'bad debt recovery', period_close: 'period close' } as Record<string, string>)[row.kind]} ${row.doc_number}`, customerName: customer?.name ?? '', lines: parseJson<JournalLine[]>(row.entries_json, []) }) }
   } catch (error) {
     if (!(error instanceof NectarError)) throw error
     outcome = { error: error.code }

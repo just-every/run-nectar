@@ -8,8 +8,9 @@ import { plainMoney } from './decimal'
 import { REVENUE_POLICY_VERSION } from './revenue-allocation'
 import { revenueEntity, revenueInvoice, revenueInvoices, type RevenueEntity, type RevenueInvoiceRecord } from './revenue-records'
 import { csvResponse } from './report-csv'
+import { adjustForClosed, closedPeriods } from './period-close-keys'
 
-export const REVENUE_DEFINITION = 'Revenue excludes tax. Service fees, signed discounts and fixed service credits follow business-local service days; usage follows recorded consumption; one-time fees follow their service date; unused commitments follow settlement or expiry. Actual credit notes are invoice-level contra-revenue in their issue month without changing original tax or line schedules. Signed position equals cumulative net billings minus cumulative recognition: a negative balance is an accrued contract asset; a positive balance is deferred revenue. Opposite invoice positions are shown separately before netting. Native historical schedules are read-only policy-v1 projections from saved originals when no issue-time snapshot exists. Retained Stripe schedules use captured tax-exclusive service consideration: recurring month/year fees allocate equally over anchored service months, with calendar-day splits for partial months; other lines follow saved service days. Imported annual advance invoices therefore carry their original deferred revenue across cutover. Native interval invoices retain their exact service-month schedules. Prepaid purchases remain deferred on their original purchase source until append-only consumption or expiry earns their recorded purchase value. Promotional drawdown reduces service consideration and creates no purchased liability. Closing revenue periods and posting to an external ledger remain unavailable.'
+export const REVENUE_DEFINITION = 'Revenue excludes tax. Service fees, signed discounts and fixed service credits follow business-local service days; usage follows recorded consumption; one-time fees follow their service date; unused commitments follow settlement or expiry. Actual credit notes are invoice-level contra-revenue in their issue month without changing original tax or line schedules. Signed position equals cumulative net billings minus cumulative recognition: a negative balance is an accrued contract asset; a positive balance is deferred revenue. Opposite invoice positions are shown separately before netting. Native historical schedules are read-only policy-v1 projections from saved originals when no issue-time snapshot exists. Retained Stripe schedules use captured tax-exclusive service consideration: recurring month/year fees allocate equally over anchored service months, with calendar-day splits for partial months; other lines follow saved service days. Imported annual advance invoices therefore carry their original deferred revenue across cutover. Native interval invoices retain their exact service-month schedules. Prepaid purchases remain deferred on their original purchase source until append-only consumption or expiry earns their recorded purchase value. Promotional drawdown reduces service consideration and creates no purchased liability. Finance closes months: a closed month never changes its revenue, roll-forward or journal, and a record that arrives for it later is reported in the earliest open month with its original month shown.'
 
 export interface RevenueContribution {
   period: string
@@ -29,6 +30,8 @@ export interface RevenueContribution {
   entityId: string | null
   entityName: string | null
   entityCustody: RevenueEntity['custody']
+  /** The saved period of a contribution that arrived after its month closed and is reported in the open month. */
+  adjustedFrom?: string
 }
 export interface RevenueMonth {
   period: string
@@ -42,6 +45,7 @@ export interface RevenueMonth {
   closingCents: number
   accruedContractAssetCents: number
   deferredLiabilityCents: number
+  closed: boolean
 }
 export interface RevenueReport {
   policyVersion: string
@@ -134,9 +138,9 @@ export async function revenueReport(env: Bindings, actor: Actor, url: URL): Prom
   const { from, to, customer, entity } = filters(url, localDate(clockInstant(env), business.timezone).slice(0, 7))
   const entities = await entitySelection(env, entity)
   const search = `?${revenueQuery({ from, to, customerId: customer, entityId: entity })}`
-  const rows: RevenueContribution[] = []
+  const closed = await closedPeriods(env)
   const records = await revenueInvoices(env, customer, entity)
-  for (const record of records) rows.push(...sourceContributions(record, search))
+  const rows: RevenueContribution[] = adjustForClosed(records.flatMap(record => sourceContributions(record, search)), closed)
   const months: RevenueMonth[] = []
   for (let index = monthIndex(from); index <= monthIndex(to); index++) {
     const period = monthAt(index), before = position(rows, period), after = position(rows, monthAt(index + 1))
@@ -144,7 +148,7 @@ export async function revenueReport(env: Bindings, actor: Actor, url: URL): Prom
     const credits = total(rows, row => row.period === period && row.kind === 'credit-billing')
     const recognized = total(rows, row => row.period === period && !isBilling(row))
     insist(BigInt(before.signedCents) + BigInt(billings) + BigInt(credits) - BigInt(recognized) === BigInt(after.signedCents), 'revenue_rollforward_mismatch', 409)
-    months.push({ period, openingCents: before.signedCents, openingAccruedContractAssetCents: before.accruedContractAssetCents, openingDeferredLiabilityCents: before.deferredLiabilityCents, billingsCents: billings, creditsCents: credits, netBillingsCents: billings + credits, recognizedCents: recognized, closingCents: after.signedCents, accruedContractAssetCents: after.accruedContractAssetCents, deferredLiabilityCents: after.deferredLiabilityCents })
+    months.push({ period, openingCents: before.signedCents, openingAccruedContractAssetCents: before.accruedContractAssetCents, openingDeferredLiabilityCents: before.deferredLiabilityCents, billingsCents: billings, creditsCents: credits, netBillingsCents: billings + credits, recognizedCents: recognized, closingCents: after.signedCents, accruedContractAssetCents: after.accruedContractAssetCents, deferredLiabilityCents: after.deferredLiabilityCents , closed: !!closed.through && period <= closed.through })
   }
   const contributions = rows.filter(row => row.period >= from && row.period <= to).sort((a, b) => a.period.localeCompare(b.period) || a.invoiceId.localeCompare(b.invoiceId) || a.kind.localeCompare(b.kind) || (a.lineId ?? a.creditId ?? '').localeCompare(b.lineId ?? b.creditId ?? ''))
   const historicalPolicyVersion = records.find(record => record.source)?.source?.policyVersion
@@ -167,7 +171,7 @@ export async function revenueSource(env: Bindings, actor: Actor, invoiceId: stri
     entity: attribution, entityDefinition: REVENUE_ENTITY_DEFINITION,
     ...(record.source ? { source: record.source } : {}),
     invoice: { id: record.invoice.id, number: record.invoice.number, customerId: record.invoice.customer_id, customerName: record.invoice.customer_name, issueDate: record.invoice.issue_date, subtotalCents: record.invoice.subtotal_cents, taxCents: record.invoice.tax_cents, totalCents: record.invoice.total_cents, sourceFingerprint: record.invoice.source_fingerprint },
-    schedules: record.schedules, credits: record.credits, contributions: sourceContributions(record, search) }
+    schedules: record.schedules, credits: record.credits, contributions: adjustForClosed(sourceContributions(record, search), await closedPeriods(env)) }
 }
 
 const csvCell = (value: unknown) => {

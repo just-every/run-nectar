@@ -656,6 +656,9 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "winback_percent": "integer",
     "winback_price_id": "text"
   },
+  "revenue.close": {
+    "period": "text"
+  },
   "role.define": {
     "capabilities": "list",
     "name": "text"

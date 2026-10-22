@@ -2,7 +2,8 @@
 import type { Bindings } from '../../auth.server'
 import { can, type Actor } from '../actor'
 import { revenueReport, revenueSource } from '../revenue-reports'
-import { cents, details, h, hidden, page, select, table } from './html'
+import { periodCloseSection } from './period-close'
+import { cents, details, h, hidden, page, select, table, tag } from './html'
 
 const custody = (value: string) => value === 'issue-snapshot' ? 'Saved at issue' : value === 'derived-imported-originals' ? 'Read-only imported source' : 'Derived from saved originals; no records changed'
 const movements: Record<string, string> = { billing: 'Original line billed', recognition: 'Line revenue recognized', 'credit-billing': 'Credit note issued', 'credit-recognition': 'Contra-revenue recognized' }
@@ -12,14 +13,15 @@ export async function revenuePage(env: Bindings, actor: Actor, url: URL) {
   const report = await revenueReport(env, actor, url)
   return page('Revenue schedules', actor, h`<p class="crumbs"><a href="/app/billing">Billing</a> · <a href="/app/reports/billings">Billings report</a></p>
     <h1>Revenue schedules</h1><p class="lede">${report.from === report.to ? report.from : `${report.from} through ${report.to}`}</p>
-    ${can(actor, 'export') ? h`<p><a href="/app/exports/revenue.csv${url.search}">Download revenue CSV</a> · <a href="/app/exports/revenue-journal.csv${url.search}">Download monthly journal CSV</a></p><p class="hint">The journal is a read-only pretax export for ledger mapping. It excludes tax and cash entries; it does not close a period or post to a ledger.</p>` : ''}
+    ${can(actor, 'export') ? h`<p><a href="/app/exports/revenue.csv${url.search}">Download revenue CSV</a> · <a href="/app/exports/revenue-journal.csv${url.search}">Download monthly journal CSV</a></p><p class="hint">The journal is a pretax export that excludes tax and cash entries. Closing a month below freezes it and posts its summarized journal to the connected ledger.</p>` : ''}
     <section class="card"><h2>Report basis</h2><p>${report.definition}</p><p>${report.entityDefinition}</p>
       <form method="get">${report.customerId ? hidden('customer', report.customerId) : ''}<label>From month <input type="month" name="from" value="${report.from}" required></label><label>Through month <input type="month" name="to" value="${report.to}" required></label>${select('Billing entity', 'entity', [{ value: 'all', label: 'Consolidated — all sources' }, ...report.entities.map(entity => ({ value: entity.id, label: entity.name })), { value: 'business', label: 'Installation business — native without entity' }, { value: 'imported', label: 'Imported sources — entity unassigned' }], report.entityId ?? 'all')}<button type="submit">Show months</button></form>
       <p>Opening signed position ${cents(report.openingCents)} + net billings ${cents(report.netBillingsCents)} − recognized revenue ${cents(report.recognizedCents)} = closing signed position <strong>${cents(report.closingCents)}</strong>.</p>
       <p>At the end of ${report.to}: accrued contract assets <strong>${cents(report.accruedContractAssetCents)}</strong>; deferred revenue liabilities <strong>${cents(report.deferredLiabilityCents)}</strong>. These show each invoice’s position before netting.</p>
     </section>
+    ${await periodCloseSection(env, actor)}
     <section class="card"><h2>Monthly roll-forward</h2>
-      ${table(['Month', 'Opening$', 'Original billings$', 'Credits$', 'Net billings$', 'Recognized$', 'Closing$', 'Accrued assets$', 'Deferred liabilities$'], report.months.map(month => [month.period, cents(month.openingCents), cents(month.billingsCents), cents(month.creditsCents), cents(month.netBillingsCents), cents(month.recognizedCents), cents(month.closingCents), cents(month.accruedContractAssetCents), cents(month.deferredLiabilityCents)]))}
+      ${table(['Month', 'Opening$', 'Original billings$', 'Credits$', 'Net billings$', 'Recognized$', 'Closing$', 'Accrued assets$', 'Deferred liabilities$'], report.months.map(month => [month.closed ? h`${month.period} ${tag('Closed')}` : month.period, cents(month.openingCents), cents(month.billingsCents), cents(month.creditsCents), cents(month.netBillingsCents), cents(month.recognizedCents), cents(month.closingCents), cents(month.accruedContractAssetCents), cents(month.deferredLiabilityCents)]))}
       <p class="hint">A negative signed position is accrued service revenue awaiting billing. Monthly arrears do not create a deferred-revenue liability.</p>
     </section>
     <section class="card" id="contributions"><h2>Source journal contributions</h2>

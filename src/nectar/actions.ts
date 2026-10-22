@@ -1,5 +1,6 @@
 import { issueWriteOff, prepareWriteOff, approveWriteOff, recoverWriteOff } from './write-offs'
 import { postPendingLedger } from './ledger-postings'
+import { closePeriod } from './period-close'
 import { preparePrepaidRefund, decidePrepaidRefund, reconcilePrepaidRefund } from './prepaid-refund-actions'
 import { preparePrepaidTopupAuthorization, decidePrepaidTopupAuthorization, revokePrepaidTopupAuthorization } from './prepaid-topup-authorization'
 import { reconcilePrepaidTopup } from './prepaid-topup-charge'
@@ -206,6 +207,7 @@ export const actions: Record<string, Handler> = {
   'writeoff.approve': approveWriteOff,
   'writeoff.recover': recoverWriteOff,
   'ledger.post': postPendingLedger,
+  'revenue.close': closePeriod,
   'payment.record': recordPayment,
   'payment.allocate': allocate,
   'reminder.prepare': prepareReminder,
