@@ -3997,7 +3997,7 @@
       "executable": false
     },
     "tests/nectar/prepaid-refund-browser.mjs": {
-      "sha256": "cda75c7268918dc7d2dbea5efae2ce201c2a2c0d182d4973e477d1a4ee9c4580",
+      "sha256": "35b5516329db35a340be629cc685f68d56144d471cdb6375a0af7399aa7f9c79",
       "executable": false
     },
     "tests/nectar/prepaid-refunds.mjs": {

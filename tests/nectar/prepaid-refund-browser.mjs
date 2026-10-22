@@ -68,7 +68,7 @@ try {
       for(const {role,who} of readers){
         await asActor(readerContext,who)
         await both(readerPage,`${role}-${row.n}-${label}`,refund.source)
-        assert.equal(await readerPage.locator('form').count(),0)
+        assert.equal(await card(readerPage,refund).locator('form').count(),0)
         assert.equal(await readerPage.locator('a[download]').count(),0)
         assert.ok(!(await readerPage.locator('main').textContent()).includes('Synthetic unused paid service returned to its original card'))
       }
