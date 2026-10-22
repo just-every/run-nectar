@@ -169,6 +169,7 @@ export async function translationFiles() {
     const locale = join(root, 'src/nectar/locales/fr.json')
     const build = () => assert.equal(spawnSync(join(home, 'node_modules/.bin/vite'), ['build'], { cwd: root, encoding: 'utf8' }).status, 0, 'copy builds')
     await writeFile(locale, JSON.stringify(french, null, 2))
+    assert.equal(check(join(root, 'src/nectar/locales')).status, 0, 'The added French catalogue is complete')
     build()
     // Each built copy initializes its runtime in its own working directory.
     const journey = name => {

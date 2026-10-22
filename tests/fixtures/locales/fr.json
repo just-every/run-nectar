@@ -206,5 +206,8 @@
   "usageCorrection.next_invoice": "prochaine facture",
   "usageCorrection.correcting_invoice": "facture corrective",
   "usageCorrection.credit_note": "avoir / débit correctif",
-  "usageCorrection.prepaid": "Crédit prépayé {kind} : {quantity} le {date} ; passif contractuel {liability} ; revenu reconnu {revenue}. Source : {source}"
+  "usageCorrection.prepaid": "Crédit prépayé {kind} : {quantity} le {date} ; passif contractuel {liability} ; revenu reconnu {revenue}. Source : {source}",
+  "renewal.save.discount_periods": "{percent} % de réduction sur le prix fixe ou par utilisateur sélectionné pendant {months} périodes de facturation",
+  "return.offer.body_periods": "Reprenez cet abonnement avec {percent} % de réduction sur le prix fixe ou par utilisateur sélectionné pendant {months} périodes de facturation, y compris la période actuelle non facturée. L’utilisation est exclue. La réduction prend fin automatiquement.",
+  "winback.body_periods": "Reprenez votre abonnement avec {percent} % de réduction sur le prix fixe ou par utilisateur sélectionné pendant {months} périodes de facturation. L’utilisation est exclue. L’offre expire le {date} dans le fuseau {zone}. Acceptez une seule fois : {link}"
 }
