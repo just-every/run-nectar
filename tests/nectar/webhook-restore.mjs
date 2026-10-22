@@ -13,15 +13,16 @@ import {command} from './cli.mjs'
 import {applyPolicy} from './policy-helper.mjs'
 assert.equal(process.env.NECTAR_TEST_CHECKOUT,'1','Only an owned disposable checkout may be reset')
 const root=process.cwd(),scratch=await mkdtemp(join(tmpdir(),'nectar-webhook-restore-'))
-const persistence=resolve('.wrangler/state/v3/d1'),databaseId='local-nectar-only'
+const persistence=resolve('.wrangler/state/v3'),databaseId='local-nectar-only'
 const operational=new Set(['nc_webhook_endpoints','nc_webhook_events','nc_webhook_deliveries','nc_webhook_attempts','nc_webhook_entitlement_state','nc_webhook_observation_cursor','nc_webhook_subscription_revisions','nc_webhook_invoice_settlements'])
 const items=async path=>{const records=[];const bytes=await readFile(path);for await(const r of readArchive(new ReadableStream({start(c){c.enqueue(bytes);c.close()}})))if(r.kind==='part')records.push(...r.items.map(({index,...item})=>item));return records}
 let h
 try{
+ await command(root,['reset','--yes'])
  // Wrangler owns migration history in the same canonical state RER exports.
  await promisify(execFile)(process.execPath,['node_modules/wrangler/bin/wrangler.js','d1','migrations','apply','nectar','--local','--persist-to','.wrangler/state','--config','wrangler.jsonc'],{maxBuffer:16*1024**2,env:{...process.env,CI:'1',WRANGLER_SEND_METRICS:'false'}})
  h=await harness({...harnessOptions(),persistence,databaseId,applyMigrations:false})
- await h.raw('/auth/bootstrap',{body:{token:h.vars.SETUP_TOKEN,displayName:'Nectar Owner'}})
+ assert.equal((await h.raw('/auth/bootstrap',{body:{token:h.vars.SETUP_TOKEN,displayName:'Nectar Owner'}})).status,303)
  const owner=await h.signIn(h.vars.OWNER_EMAIL)
  await h.raw('/setup',{cookie:owner,form:new URLSearchParams({confirm:'yes'})})
  await h.api('business.configure',owner,{legal_name:'Synthetic restored webhook business',timezone:'UTC',invoice_prefix:'RESTORE',payment_terms_days:30})

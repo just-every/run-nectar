@@ -3981,7 +3981,7 @@
       "executable": false
     },
     "tests/nectar/harness.mjs": {
-      "sha256": "5ccb8688da16389ee2c6ab82bac97a3bf399f1b0302dd74cd5e71eab3f3c2e2c",
+      "sha256": "3419293cdf7ebf494dabb08d85930172b7f4e2e1e339844ec34ed759f0eebc22",
       "executable": false
     },
     "tests/nectar/hierarchies.mjs": {
@@ -4289,7 +4289,7 @@
       "executable": false
     },
     "tests/nectar/webhook-restore.mjs": {
-      "sha256": "3052bccf63c0aae73d797517b28921ac17a38b4210b4c473f6d6d8eea87a2fca",
+      "sha256": "66ed5b6d850800e2c0d48b5b7a5cf19c58da7989be2536540802e7f90494d921",
       "executable": false
     },
     "tests/nectar/webhooks.mjs": {
