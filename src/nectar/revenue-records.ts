@@ -102,7 +102,7 @@ async function loadRevenueInvoices(env: Bindings, invoice: string | null, custom
     stmt(env, `SELECT i.*,c.name AS customer_name,c.erased_at FROM nc_invoices i JOIN nc_customers c ON c.id=i.customer_id WHERE ${condition} ORDER BY i.issue_date,i.id`, ...params),
     ...[
       ['nc_revenue_schedules', 'r.line_id'], ['nc_revenue_entries', 'r.recognition_date,r.id'],
-      ['nc_invoice_lines', 'r.seq'], ['nc_credit_notes', 'r.issued_at,r.id'], ['nc_revenue_credits', 'r.id'],
+      ['nc_invoice_lines', 'r.seq'], ['nc_credit_notes', 'r.issued_at,r.number,r.id'], ['nc_revenue_credits', 'r.id'],
     ].map(([table, order]) => stmt(env, `SELECT r.* FROM ${table} r JOIN nc_invoices i ON i.id=r.invoice_id WHERE ${condition} ORDER BY ${order}`, ...params)),
     stmt(env, `SELECT r.id,r.kind,r.correction_kind,r.grant_id,r.subscription_id,r.service_date,r.recognition_cents,r.invoice_id AS service_invoice_id,r.purchase_line_id,r.purchase_invoice_id AS invoice_id FROM nc_prepaid_ledger r JOIN nc_invoices i ON i.id=r.purchase_invoice_id WHERE ${condition} AND r.recognition_cents<>0 ORDER BY r.service_date,r.id`, ...params),
   ])
