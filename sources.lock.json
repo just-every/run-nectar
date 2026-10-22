@@ -417,7 +417,7 @@
       "executable": false
     },
     "migrations/core/0064_prepaid.sql": {
-      "sha256": "7d063347c8d18973199dd80701bbcadc39862daa300d765f025851caa2c41efc",
+      "sha256": "e2bcef80831cb569a1786e29a95fa21925686f4d5181799c54fabf37216d0b0d",
       "executable": false
     },
     "migrations/core/0065_native_collection.sql": {
@@ -426,6 +426,10 @@
     },
     "migrations/core/0066_prepaid_topup.sql": {
       "sha256": "43dd5695bc8635cf48f2e796a8af5ba7084e7cf2bf4ab53b6f6a4d2452f71e1d",
+      "executable": false
+    },
+    "migrations/core/0067_prepaid_refunds.sql": {
+      "sha256": "5b024a6e304acafea46788ca33fbc237ede2e833c11e0b995c5636f98a285c88",
       "executable": false
     },
     "ONBOARDING.md": {
@@ -2417,7 +2421,7 @@
       "executable": false
     },
     "src/nectar/actions.ts": {
-      "sha256": "00a963e31c8142102379813fff3cde44a634d52a21d2c0ab9766b0ff04ae3e02",
+      "sha256": "029bc46c5b57cb90d9c247e7520b7697d4cecacaab405c225b8d992e38dd925c",
       "executable": false
     },
     "src/nectar/actor.ts": {
@@ -2433,7 +2437,7 @@
       "executable": false
     },
     "src/nectar/api-fields.ts": {
-      "sha256": "6df32da307bfb49dfd8007bd31783eeeef19e64010047de118f9d509bd385092",
+      "sha256": "45ac69a8188602322b941247cbafb6ce4ef062022b948a935213b4492136548d",
       "executable": false
     },
     "src/nectar/api-versions.ts": {
@@ -2581,7 +2585,7 @@
       "executable": false
     },
     "src/nectar/doors.ts": {
-      "sha256": "6168534cc21acef64eae73bcced098a89540a724554aff6ccb051a7d4cc0e497",
+      "sha256": "7bb4f2cdae5eb9fdb0020d8d18b3979fd532346d97194b36c54655d04bb2d619",
       "executable": false
     },
     "src/nectar/draft-correction-mail.ts": {
@@ -2609,11 +2613,11 @@
       "executable": false
     },
     "src/nectar/erasure-purge.ts": {
-      "sha256": "67f0c1da7c0c352815ac6c81f891761ca491395da9734fc88a0411f6b6916f9d",
+      "sha256": "141b6ecc22bcf30a04aa6c7c1359307de510a6398b08abf70f9298624f90348e",
       "executable": false
     },
     "src/nectar/erasure-records.ts": {
-      "sha256": "d5a92036c1138365f190076190229ecc73e65a11012f485f3bbce0de447ceeaa",
+      "sha256": "aa1fb3ac9865ae4f8b8d243c46735c0e675db62405023feedd648763db0535b6",
       "executable": false
     },
     "src/nectar/erasure-requests.ts": {
@@ -2641,11 +2645,15 @@
       "executable": false
     },
     "src/nectar/financial-prepaid.ts": {
-      "sha256": "7356192fe617df4d964f79122f23d06c870a28cbdfbebb45741cf3859bebcba0",
+      "sha256": "c3f789c936606f7938588a3326a9bc31e2164472c79c3f43342cea0ec6a5171d",
+      "executable": false
+    },
+    "src/nectar/financial-refunds.ts": {
+      "sha256": "6253b4fe72b05ea458e80955d74bb09afbf42587d94130d53b7e5ab55f89a892",
       "executable": false
     },
     "src/nectar/financial-reports.ts": {
-      "sha256": "c1847fc58b0ad11f9a65261ba8886d466489fc6697711250ff7a52d769975713",
+      "sha256": "9cf40003b824d279d9e98745da2d543100a46c9bc064363f6bd5027ed4a57308",
       "executable": false
     },
     "src/nectar/http.ts": {
@@ -2665,7 +2673,7 @@
       "executable": false
     },
     "src/nectar/inputs.ts": {
-      "sha256": "4cc0cc7b5845adf8a8d8bd3c7620e062a8a92095ab34e2dc3a086f6024d19955",
+      "sha256": "c1f11ff6a22beeb74f577587985fadec62de3a26f5179602d8bb99880d607985",
       "executable": false
     },
     "src/nectar/interval-cancel-plan.ts": {
@@ -2761,11 +2769,11 @@
       "executable": false
     },
     "src/nectar/locales/en.json": {
-      "sha256": "01825c23c905978b77ca750f4b62de4c5061209a303becc4be9dc2b96f886310",
+      "sha256": "03aaf241c5df0a0ebc67feb1f97efdd0541bc43367c81e7275c87cbebff4ffad",
       "executable": false
     },
     "src/nectar/locales/es-US.json": {
-      "sha256": "511e52b32516a975ba01585af6f505b46975b176f8389ad0b9b9e2e54580337f",
+      "sha256": "a183eaeda0e6ec894c2ac466d1464581d9c61ed7af87068a4c1441fa58431f10",
       "executable": false
     },
     "src/nectar/manual-invoices.ts": {
@@ -2961,7 +2969,7 @@
       "executable": false
     },
     "src/nectar/portal-prepaid.ts": {
-      "sha256": "42a812a62f8e621831f381de3b2a6089dfbbe657a9455f0c42fbf8330735856a",
+      "sha256": "cd05d8e867b764a46294013e577b0e5eb1df249f26a6dff5f19c0f43a4d416d6",
       "executable": false
     },
     "src/nectar/portal-privacy.ts": {
@@ -2977,7 +2985,7 @@
       "executable": false
     },
     "src/nectar/prepaid-balances.ts": {
-      "sha256": "d6149893e80ea3eca6a644a833997bc2bdb0e1f18a4fb69b9e48046bf3b72077",
+      "sha256": "6e26f9aa915e39cf2aa5570dc1b5577439f27e3cc3e9816024f7b72bcb6479ef",
       "executable": false
     },
     "src/nectar/prepaid-corrections.ts": {
@@ -2993,7 +3001,7 @@
       "executable": false
     },
     "src/nectar/prepaid-issue.ts": {
-      "sha256": "75ed52e9ba195ca471fb1c307f45070173bd6f8c4cf8361672f36e29f414a69c",
+      "sha256": "8fb0175720e80ea426c2fd88738f9061c2795b5708fe107ade93e1561d86debe",
       "executable": false
     },
     "src/nectar/prepaid-jobs.ts": {
@@ -3016,12 +3024,24 @@
       "sha256": "b3fae2d5bde8e37e36e55ff82fc569bc05938d7cefc0767249cde55318755a4c",
       "executable": false
     },
+    "src/nectar/prepaid-refund-actions.ts": {
+      "sha256": "1ccbd0696f487f09a81d8cfa957e55d8f5fbad51d72306d8ddc27664a2d30d47",
+      "executable": false
+    },
+    "src/nectar/prepaid-refund-processor.ts": {
+      "sha256": "8483a95603fddcd87aea12dd5edd655fd0d5f9246f6329443a047ff776d9faef",
+      "executable": false
+    },
+    "src/nectar/prepaid-refund-records.ts": {
+      "sha256": "d61f0e24d4026903289338c0fdce6c9a4489bbe6e86acb00c91827583b1ae01e",
+      "executable": false
+    },
     "src/nectar/prepaid-replay.ts": {
       "sha256": "c0a609fe6f1b94ec3a26b30872d591a876309c745622dddc508bd513c06ed2d8",
       "executable": false
     },
     "src/nectar/prepaid-reports.ts": {
-      "sha256": "71bfe776d903d674b13bfb7254d19929d78ff82788e770490d8aabcba0f54636",
+      "sha256": "4e817244efa7160aa0f9680eb37d0e4d84ec488f771bf23bb648ef85254b4c39",
       "executable": false
     },
     "src/nectar/prepaid-revenue.ts": {
@@ -3057,7 +3077,7 @@
       "executable": false
     },
     "src/nectar/prepaid-types.ts": {
-      "sha256": "5af47e92a9bc022ecf072609cb8813c98f7234dbd4ea314cdd63c10d75de03a6",
+      "sha256": "6b37144622c6186117abd607b519170d1cb587a53cc1a2dd721400ed4c118cc5",
       "executable": false
     },
     "src/nectar/prepaid-unit-value.ts": {
@@ -3145,7 +3165,7 @@
       "executable": false
     },
     "src/nectar/report-mail.ts": {
-      "sha256": "eb7dddd3ceea4cb4e736e7d229a548e8eb0557c4b6d609e1487668c6aabe7829",
+      "sha256": "6445bd32ddc43a689d1c268d30b2222b63833491c95a9d722c837462d294c192",
       "executable": false
     },
     "src/nectar/report-schedules.ts": {
@@ -3153,7 +3173,7 @@
       "executable": false
     },
     "src/nectar/reports.ts": {
-      "sha256": "c7c9277afca551d2474b5823597923942be570f496e14f1641ca2807740690dc",
+      "sha256": "10cf8f8b91594df14d883a32f59b6aa9558024bcf7622f4f3aa15b366823d33b",
       "executable": false
     },
     "src/nectar/retention-amendments.ts": {
@@ -3333,7 +3353,7 @@
       "executable": false
     },
     "src/nectar/ui/native-collection.ts": {
-      "sha256": "20f1cb7c0202481e1eb946b6464fb6f8ae764f274a3484243c6b6ef033f61c94",
+      "sha256": "39b5bb8bba48e5ec727f5c5337b3437856b7adec9c22686e6defd3d2ffdf281f",
       "executable": false
     },
     "src/nectar/ui/notes.ts": {
@@ -3357,11 +3377,15 @@
       "executable": false
     },
     "src/nectar/ui/pages.ts": {
-      "sha256": "234e83f9f6060a0fe64020f57ff4dd39717d8da4747425ed419b72bbe9c063bc",
+      "sha256": "509f5c9434ebc88ea0e378c5430a03d1e9224bc401bbdf925b0033534eae3e18",
       "executable": false
     },
     "src/nectar/ui/policies.ts": {
       "sha256": "e68d1dd30fa8b42c3f029c27fb47a446d893e6989140985a98cb0222a7b88a04",
+      "executable": false
+    },
+    "src/nectar/ui/prepaid-refunds.ts": {
+      "sha256": "c5763981f55afaa2998581ffeddd77769053e3236dbee21e128a5d752cb1290c",
       "executable": false
     },
     "src/nectar/ui/prepaid-topups.ts": {
@@ -3369,7 +3393,7 @@
       "executable": false
     },
     "src/nectar/ui/prepaid.ts": {
-      "sha256": "f22f26dfd9a0fabe4bf8ff79fb662b0d628f59f4e5bf9987c921a8cb0a4a30f0",
+      "sha256": "a93472f0e824fba6174c10f0f043dec512167f0c70f586098c081882b0d52135",
       "executable": false
     },
     "src/nectar/ui/price-approvals.ts": {
@@ -3397,7 +3421,7 @@
       "executable": false
     },
     "src/nectar/ui/reports.ts": {
-      "sha256": "a66f1b191836b78543e958506f41c9ee1580b6495b463ba4e1a0de36b0d72de4",
+      "sha256": "632bd7257f4d50ab38edb5179c734f89d8a2f046cfe73af21f598b7e4a88ad33",
       "executable": false
     },
     "src/nectar/ui/retention.ts": {
@@ -3441,7 +3465,7 @@
       "executable": false
     },
     "src/nectar/usage-correction-records.ts": {
-      "sha256": "30a0ba89250162ff4a486cf88ec5af801e995cf178b7fd183cbf2d119f78322b",
+      "sha256": "df187f417c7019edc72da8f875da0fbf175469b70ab323665eff0d21c93b5360",
       "executable": false
     },
     "src/nectar/usage-correction-refresh.ts": {
@@ -3465,7 +3489,7 @@
       "executable": false
     },
     "src/nectar/views.ts": {
-      "sha256": "567949d6ee3d0f722de32346a0e37bd7e3267114bd17c5d76f2b64ddfff96b9d",
+      "sha256": "731113e86926706b355609f1bd6508843905447fa320247b8b68bd644e1e1165",
       "executable": false
     },
     "src/nectar/webauthn.ts": {
@@ -3641,7 +3665,7 @@
       "executable": false
     },
     "tests/fixtures/locales/fr.json": {
-      "sha256": "59de9a6c478fb45a87f5f5cb7e3a9e0a26e3615a797ff1552d94b70acdb1fd03",
+      "sha256": "49572c60ddf2179f14771f7e55cb26989f98180ffec3bfce4fa1a076480aedd8",
       "executable": false
     },
     "tests/fixtures/stripe-collection-edge.mjs": {
@@ -3697,7 +3721,7 @@
       "executable": false
     },
     "tests/nectar/billing-roles.mjs": {
-      "sha256": "6895caa136a7e63df78dbff7176b9bb8fb89f6ee84fa3611e2cf88ad39710dae",
+      "sha256": "a91db56c02c977125be9b4dcdb7ca5c1cfbd7cddc4e2ee9e85c95f9f274ca22f",
       "executable": false
     },
     "tests/nectar/cadences.mjs": {
@@ -3781,7 +3805,7 @@
       "executable": false
     },
     "tests/nectar/flows.mjs": {
-      "sha256": "45034107512e4e6aecc6f9a6470337203eae4bdda731809a291c37e0ab12eea6",
+      "sha256": "872444fd38f0e17263e3ffc765ddf68f199c56ff5de1f0081f2459bcf8fb5543",
       "executable": false
     },
     "tests/nectar/harness.mjs": {
@@ -3932,8 +3956,12 @@
       "sha256": "4eaecb5af3b1c5684d26e24906cae62117fc02d5da0efad1f375a9b9043dc22a",
       "executable": false
     },
+    "tests/nectar/portal-prepaid-browser.mjs": {
+      "sha256": "0db1c692b1548120abdf3445ed26b7b3fe22dd866c480536112f4a884618475d",
+      "executable": false
+    },
     "tests/nectar/portal-prepaid.mjs": {
-      "sha256": "4acfc4e6fa918ce603fcc8f96ad0eccb119ef7fe0b6d9c74d427222652510578",
+      "sha256": "3e5d66481e5987d688d137d992738d5b4492b48a101a0abb0148f2a6871b929e",
       "executable": false
     },
     "tests/nectar/portal-privacy-retention.mjs": {
@@ -3948,12 +3976,24 @@
       "sha256": "41d23f2863ab4dbd1161ab956a203b06a2b25f50a7b12ddaffbfdc061917c938",
       "executable": false
     },
+    "tests/nectar/prepaid-refunds.mjs": {
+      "sha256": "79aa61dd3beadbec354f21eaaf839cc745eae415298c185e57c9433aebda1836",
+      "executable": false
+    },
     "tests/nectar/prepaid-report-parity.mjs": {
       "sha256": "72d75c616ccd50df251ab7069c2ed350c3a2d1a05dbf4257ad394cdf8ba21032",
       "executable": false
     },
+    "tests/nectar/prepaid-topup-browser.mjs": {
+      "sha256": "49052876cb25ede2feb1ceef2c29c0e994715e9e1d34baa281c4955bf968922d",
+      "executable": false
+    },
+    "tests/nectar/prepaid-topup-sandbox.mjs": {
+      "sha256": "1c66af08c4151059eda72f1e1a134f5b0ddfc21b4553788e7836411bdfb6112a",
+      "executable": false
+    },
     "tests/nectar/prepaid-topup.mjs": {
-      "sha256": "52960ac31225ac204d1403dcbfe9149ae254b78e005ed85ea981fb923908d807",
+      "sha256": "a3b7e10f64047057aec8392496dada308e7ee414bd1fa7a114589a21cf9b5a4a",
       "executable": false
     },
     "tests/nectar/prepaid.mjs": {
