@@ -405,7 +405,7 @@
       "executable": false
     },
     "migrations/core/0061_calendar_intervals.sql": {
-      "sha256": "40b282d20a6a3b1400ae6e5081c55b41bb826b11a58b8306d2fb7e6bb53d4311",
+      "sha256": "015cb2a9d841cd84b6e80baad00d7aac6366acc7b98b7103e18de3e973b13441",
       "executable": false
     },
     "migrations/core/0062_interval_cancel.sql": {
