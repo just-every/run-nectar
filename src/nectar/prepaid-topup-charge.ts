@@ -30,7 +30,7 @@ async function recordIntent(env:Bindings,actor:Actor,row:Row,stripe:StripeClient
   const source=await nativeCollectionSource(env,row.invoice_id)
   insist(source.row.customer_id===q.customer&&source.row.balance_cents===q.amountCents,'topup_purchase_changed',409)
   const financial=await collectedPaymentStatements(env,actor,{customerId:q.customer,invoiceId:row.invoice_id,amountCents:q.amountCents,receivedOn:proof.receivedOn,reference:`stripe:${proof.accountRef}:${proof.paymentIntentRef}`,evidence:canonical(proof)})
-  const funding=await prepaidFundingStatements(env,row.funding_id,{paymentId:financial.paymentId,invoiceId:row.invoice_id,amountCents:q.amountCents,providerRef:proof.paymentIntentRef})
+  const funding=await prepaidFundingStatements(env,row.funding_id,{paymentId:financial.paymentId,invoiceId:row.invoice_id,amountCents:q.amountCents,providerRef:proof.paymentIntentRef},proof.receivedOn)
   const wallet=await topupBalance(env,q)
   await commit(env,[topupRuntimeOwner(env,actor),claimGuard(env,row),nativeSourceGuard(env,source),prepaidRevisionGuard(env,q.subscription,wallet.basis.revision),...financial.statements,...funding,
     stmt(env,"UPDATE nc_prepaid_topup_claims SET status='collected',payment_id=?,allocation_id=?,error_code=NULL,observed_at=?,revision=? WHERE id=?",financial.paymentId,financial.allocationId,clockInstant(env),newId(),row.id),

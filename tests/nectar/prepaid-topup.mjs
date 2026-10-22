@@ -23,11 +23,12 @@ export async function prepaidTopupFlow(h,owner,{onState=async()=>{}}={}){
   const rows=[]
   const submit=(row,id,amount,date)=>api('usage.submit',{events:[{event_id:`synthetic-nectar-${id}`,customer:row.external,meter:'synthetic-nectar-503',quantity:amount,occurred_at:`${date}T12:00:00Z`}]})
   const issue=async row=>{
-    const run=await api('billrun.prepare',{period:'2026-11'}),invoices=(await api(`runs/${run.id}`)).invoices.filter(invoice=>invoice.subscription_id===row.subscription)
+    const run=await api('billrun.prepare',{period:'2026-11'}),invoices=(await api(`runs/${run.id}`)).invoices.filter(invoice=>invoice.subscription_id===row.subscription&&invoice.period_end<=instant.slice(0,10))
     assert.ok(invoices.length)
     for(const invoice of invoices){await api('invoice.approve',{invoice:invoice.id,acknowledge:true});await api('invoice.finalise',{invoice:invoice.id,issue_date:instant.slice(0,10)})}
   }
-  for(let n=1;n<=4;n++){
+  edge.customers.set('synthetic-nectar-native-customer-5',{account:1,method:'synthetic-nectar-native-card-5'})
+  for(let n=1;n<=5;n++){
     // Network-edge customer two belongs to the second configured account.
     const external=`synthetic-nectar-${510+n}`,customer=(await api('customer.create',{external_id:external,name:`Synthetic topup ${n}`,billing_email:`${external}@example.test`})).id
     const subscription=(await api('subscription.create',{customer,start_date:'2026-11-01',price:[price]})).id
@@ -74,7 +75,8 @@ export async function prepaidTopupFlow(h,owner,{onState=async()=>{}}={}){
   for(const who of [support,agent])await h.api(`prepaid/topup-authorizations?subscription=${rows[0].subscription}`,who,undefined,403)
   assert.equal(edge.calls.length,readsBefore,'Reviewing the exact approved financial/card quote performs no provider request')
   const first=rows[0],before=posts()
-  for(const action of ['prepaid.topup.run','prepaid.topup.reconcile'])await h.api(action,finance,{authorization:first.authorization.id,claim:'synthetic-nectar-absent'},403)
+  await h.api('prepaid.topup.run',finance,{authorization:first.authorization.id},403)
+  await h.api('prepaid.topup.reconcile',finance,{claim:'synthetic-nectar-absent'},403)
   const foreignOrigin=await h.raw(`/portal/prepaid-topup.revoke?session=${encodeURIComponent(first.portal.token)}`,{body:{authorization:first.authorization.id},headers:{origin:'https://foreign.example'}})
   assert.equal(foreignOrigin.status,403)
   assert.equal((await h.raw('/portal/prepaid-topup.accept?session=forged',{body:{authorization:first.authorization.id,basis_hash:first.authorization.basis,accept:true}})).status,401)
@@ -122,6 +124,26 @@ export async function prepaidTopupFlow(h,owner,{onState=async()=>{}}={}){
   assert.equal(authorizations[0].status,'card_changed')
   assert.deepEqual((await api(`invoices/${claim.invoice_id}`)).calculation,invoiceOriginal)
   await onState({label:'refusals',rows,claim,lost})
+  // A lost acknowledgement can settle on a later capture date. The original
+  // purchase remains immutable while only the funded grant adopts that date.
+  const delayed=rows[4];edge.losePayment()
+  const waiting=await api('prepaid.topup.run',{authorization:delayed.authorization.id})
+  assert.equal(waiting.status,'uncertain')
+  const delayedInvoice=await api(`invoices/${waiting.invoice_id}`),delayedOriginal=delayedInvoice.calculation
+  assert.equal(delayedOriginal.inputs.prepaidPurchase.terms.effectiveDate,'2026-11-03')
+  const proofIntent=[...edge.intents.values()].find(row=>row.value.customer==='synthetic-nectar-native-customer-5').value
+  const proofCharge=edge.charges.get(proofIntent.latest_charge).value
+  proofIntent.status='processing';proofIntent.amount_received=0
+  proofCharge.status='pending';proofCharge.paid=false;proofCharge.captured=false
+  instant='2026-11-04T18:00:00Z';await h.advanceClock(instant)
+  proofIntent.status='succeeded';proofIntent.amount_received=500000
+  Object.assign(proofCharge,{status:'succeeded',paid:true,captured:true,created:Math.floor(Date.parse(instant)/1000)})
+  const beforeRecovery=posts(),funded=await api('prepaid.topup.reconcile',{claim:waiting.id})
+  assert.equal(funded.status,'collected');assert.equal(posts(),beforeRecovery)
+  const delayedGrant=(await api(`prepaid/${delayed.subscription}`)).grants.find(grant=>grant.purchaseInvoice===waiting.invoice_id)
+  assert.equal(delayedGrant.effectiveDate,'2026-11-04');assert.equal(delayedGrant.expiresDate,'2027-02-01')
+  assert.deepEqual((await api(`invoices/${waiting.invoice_id}`)).calculation,delayedOriginal)
+  await api('mfa.verify',{code:totp(factor.secret,Date.parse(instant))})
   const erasure=await api('erasure.request',{customer:first.customer})
   const link=h.mails.at(-1).text.match(/https?:\/\/[^\s"<]+\/erase\/[a-f0-9]{64}/)[0]
   assert.equal((await h.raw(new URL(link).pathname,{form:new URLSearchParams({confirm:'yes'})})).status,200)
@@ -130,7 +152,7 @@ export async function prepaidTopupFlow(h,owner,{onState=async()=>{}}={}){
   await api('prepaid.topup.run',{authorization:first.authorization.id},404)
   assert.deepEqual(await api(`prepaid/topup-authorizations?subscription=${first.subscription}`),[])
   assert.deepEqual(await api(`prepaid/topup-claims?subscription=${first.subscription}`),[])
-  assert.equal(posts(),afterUnknown,'Erasure removes capability/source proof and cannot create another charge')
+  assert.equal(posts(),beforeRecovery,'Erasure removes capability/source proof and cannot create another charge')
   console.log('CAT-010 signed portal acceptance, independent approval, one crossing, exact funded purchase, monthly cap, GET-only uncertainty, revocation, card replacement and erasure passed')
   return {rows,claim,lost}
 }

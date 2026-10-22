@@ -16,7 +16,7 @@ export interface TopupQuote {
   currency:'usd'; timezone:string; businessRevision:number; customerRevision:string
   startDate:string; endDate:string; bindingId:string; bindingRevision:string; accountRef:string; customerRef:string
   paymentMethodRef:string; livemode:boolean; card:{brand:string;last4:string;expMonth:number;expYear:number}
-  content:InvoiceContent; revokePath:string; fundingEffective:'purchase-date'; capRule:'all claimed amounts, including unknown outcomes'
+  content:InvoiceContent; revokePath:string; fundingEffective:'captured-payment-date'; capRule:'all claimed amounts, including unknown outcomes'
 }
 export const topupQuote=(row:Row)=>parseJson<TopupQuote>(row.quote_json,null as never)
 export async function storedTopupAuthorization(env:Bindings,id:string){
