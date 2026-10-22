@@ -6,7 +6,7 @@ import { nativeCollectionEdge } from './native-collection.mjs'
 import { totp } from './mfa.mjs'
 const edge=nativeCollectionEdge()
 export const harnessOptions=()=>({stripeFetch:edge.fetch,stripeSecret:'synthetic-nectar-1',stripeSecondarySecret:'synthetic-nectar-2'})
-export async function prepaidTopupFlow(h,owner,{onState=async()=>{}}={}){
+export async function prepaidTopupFlow(h,owner,{onState=async()=>{},acceptAuthorization,approveAuthorization,revokeAuthorization}={}){
   const api=(path,body,status)=>h.api(path,owner,body,status),posts=()=>edge.calls.filter(call=>call.method==='POST'&&call.path==='/payment_intents').length
   let instant='2026-11-02T18:00:00Z'
   await h.advanceClock(instant);edge.capturedAt(instant)
@@ -64,9 +64,12 @@ export async function prepaidTopupFlow(h,owner,{onState=async()=>{}}={}){
     assert.deepEqual([viewed.quote.thresholdN,viewed.quote.amountCents,viewed.quote.periodCapCents],[100000,500000,500000])
     assert.equal(viewed.quote.period,'business_calendar_month');assert.equal(viewed.quote.timezone,'UTC')
     await portalPost('/portal/prepaid-topup.accept',row.portal,{authorization:row.authorization.id,basis_hash:'changed',accept:true},409)
-    await portalPost('/portal/prepaid-topup.accept',row.portal,{authorization:row.authorization.id,basis_hash:row.authorization.basis,accept:true})
+    if(acceptAuthorization)await acceptAuthorization({row,session:row.portal,owner,finance})
+    else await portalPost('/portal/prepaid-topup.accept',row.portal,{authorization:row.authorization.id,basis_hash:row.authorization.basis,accept:true})
     await api('prepaid.topup.decide',{authorization:row.authorization.id,basis_hash:row.authorization.basis,decision:'approved'},409)
-    await h.api('prepaid.topup.decide',finance,{authorization:row.authorization.id,basis_hash:row.authorization.basis,decision:'approved'})
+    if(approveAuthorization)await approveAuthorization({row,session:row.portal,owner,finance})
+    else await h.api('prepaid.topup.decide',finance,{authorization:row.authorization.id,basis_hash:row.authorization.basis,decision:'approved'})
+    await onState({label:'active',row,session:row.portal,owner,finance})
   }
   const readsBefore=edge.calls.length
   const financeQuotes=await h.api(`prepaid/topup-authorizations?subscription=${rows[0].subscription}`,finance)
@@ -95,7 +98,7 @@ export async function prepaidTopupFlow(h,owner,{onState=async()=>{}}={}){
   const post=edge.calls.filter(call=>call.method==='POST').at(-1)
   assert.equal(post.form.off_session,'true');assert.equal(post.form['payment_method_types[0]'],'card');assert.equal(post.form.receipt_email,undefined)
   await api('prepaid.topup.run',{authorization:first.authorization.id});assert.equal(posts(),before+1)
-  await onState({label:'funded',row:first,claim})
+  await onState({label:'funded',row:first,claim,owner,finance})
   instant='2026-11-03T18:00:00Z';await h.advanceClock(instant);edge.capturedAt(instant)
   const staleFactor=await api('prepaid.topup.prepare',{consent:first.consent,period_cap:'5000',start_date:'2026-11-03',end_date:'2027-01-01',account_ref:first.account},403)
   assert.equal(staleFactor.error,'mfa_step_up_required','A stale merchant factor cannot prepare new automatic charge authority')
@@ -111,9 +114,12 @@ export async function prepaidTopupFlow(h,owner,{onState=async()=>{}}={}){
   assert.equal(posts(),afterUnknown,'Unknown results never retry the provider write')
   assert.ok(edge.calls.slice(reads).some(call=>call.method==='GET'&&call.path==='/payment_intents/search'))
   assert.ok(edge.calls.slice(reads).some(call=>call.method==='GET'&&call.path==='/payment_intents'))
+  await onState({label:'uncertain',row:unknown,claim:lost,owner,finance})
   await api('mfa.verify',{code:totp(factor.secret,Date.parse(instant))})
   const revoked=rows[2],session=await portal(revoked)
-  await portalPost('/portal/prepaid-topup.revoke',session,{authorization:revoked.authorization.id})
+  if(revokeAuthorization)await revokeAuthorization({row:revoked,session,owner,finance})
+  else await portalPost('/portal/prepaid-topup.revoke',session,{authorization:revoked.authorization.id})
+  await onState({label:'revoked',row:revoked,session,owner,finance})
   await api('prepaid.topup.run',{authorization:revoked.authorization.id},409);assert.equal(posts(),afterUnknown)
   const replaced=rows[3],card=edge.customers.get('synthetic-nectar-native-customer-4'),originalMethod=card.method
   card.method='synthetic-nectar-native-replaced-card'
@@ -123,7 +129,7 @@ export async function prepaidTopupFlow(h,owner,{onState=async()=>{}}={}){
   const authorizations=await api(`prepaid/topup-authorizations?subscription=${replaced.subscription}`)
   assert.equal(authorizations[0].status,'card_changed')
   assert.deepEqual((await api(`invoices/${claim.invoice_id}`)).calculation,invoiceOriginal)
-  await onState({label:'refusals',rows,claim,lost})
+  await onState({label:'refusals',rows,claim,lost,owner,finance})
   // A lost acknowledgement can settle on a later capture date. The original
   // purchase remains immutable while only the funded grant adopts that date.
   const delayed=rows[4];edge.losePayment()
@@ -145,6 +151,7 @@ export async function prepaidTopupFlow(h,owner,{onState=async()=>{}}={}){
   const delayedGrant=(await api(`prepaid/${delayed.subscription}`)).grants.find(grant=>grant.purchaseInvoice===waiting.invoice_id)
   assert.equal(delayedGrant.effectiveDate,'2026-11-04');assert.equal(delayedGrant.expiresDate,'2027-02-01')
   assert.deepEqual((await api(`invoices/${waiting.invoice_id}`)).calculation,delayedOriginal)
+  await onState({label:'reconciled',row:delayed,claim:funded,owner,finance})
   await api('mfa.verify',{code:totp(factor.secret,Date.parse(instant))})
   const erasure=await api('erasure.request',{customer:first.customer})
   const link=h.mails.at(-1).text.match(/https?:\/\/[^\s"<]+\/erase\/[a-f0-9]{64}/)[0]
