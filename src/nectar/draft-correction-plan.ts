@@ -125,7 +125,7 @@ export async function correctionPlan(env: Bindings, business: Business, payload:
       const meters = new Set(Object.values(inputs.prices).flatMap(price => price.metric ? [price.metric.sourceId] : price.meterId ? [price.meterId] : []))
       if (!mine.some(event => meters.has(event.meterId))) continue
       const end = zonedStart(period.end, business.timezone)
-      const added = (screened?.accepted ?? []).filter(event => event.customerId === sub.customer_id && meters.has(event.meterId) && event.occurredAt < end && correctionEventInInput(inputs,event))
+      const added = (screened?.accepted ?? []).filter(event => event.customerId === sub.customer_id && meters.has(event.meterId) && event.occurredAt < end && correctionEventInInput(inputs,{meterId:event.meterId,occurredAt:event.occurredAt}))
         .map(event => ({ eventId: event.eventId, meterId: event.meterId, quantity: event.quantity, occurredAt: event.occurredAt, ...(event.properties?{properties:event.properties}:{}) }))
       const [before, after] = await Promise.all([total(inputs), total({ ...inputs, events: [...inputs.events.filter(event => !voided.has(event.eventId)), ...added] })])
       invoices.push({ subscription: sub.id, customer: sub.customer_name, period, ...(inputs.billing?{billingWindow:inputs.billing}:{}), before, after, revenueDeltas: revenuePeriodDeltas(before.revenue, after.revenue) })
