@@ -15,6 +15,8 @@ export async function prepaidTopupFlow(h,owner,{onState=async()=>{}}={}){
   await api('tax.review',{revision:(await api('business')).revision})
   await api('access.give',{email:'synthetic-nectar-501@example.test',name:'Synthetic independent finance',role:'finance'})
   const finance=await h.signIn('synthetic-nectar-501@example.test',{requested:true})
+  await api('access.give',{email:'synthetic-nectar-504@example.test',name:'Synthetic topup support',role:'support'})
+  const support=await h.signIn('synthetic-nectar-504@example.test',{requested:true}),agent={bearer:(await api('credential.issue',{name:'Synthetic topup observer',scopes:['prepare']})).key}
   const product=(await api('product.create',{code:'synthetic-nectar-502',name:'Synthetic daily service'})).id
   const meter=(await api('meter.create',{code:'synthetic-nectar-503',name:'Synthetic daily units',unit_label:'units'})).id
   const price=(await api('price.create',{product,meter,kind:'unit',unit_amount:'1',taxable:false,billing_interval:'daily',billing_timing:'arrears'})).id
@@ -65,6 +67,12 @@ export async function prepaidTopupFlow(h,owner,{onState=async()=>{}}={}){
     await api('prepaid.topup.decide',{authorization:row.authorization.id,basis_hash:row.authorization.basis,decision:'approved'},409)
     await h.api('prepaid.topup.decide',finance,{authorization:row.authorization.id,basis_hash:row.authorization.basis,decision:'approved'})
   }
+  const readsBefore=edge.calls.length
+  const financeQuotes=await h.api(`prepaid/topup-authorizations?subscription=${rows[0].subscription}`,finance)
+  assert.equal(financeQuotes[0].basis,rows[0].authorization.basis);assert.equal(financeQuotes[0].quote.amountCents,500000)
+  assert.equal(financeQuotes[0].acceptance.basis,rows[0].authorization.basis)
+  for(const who of [support,agent])await h.api(`prepaid/topup-authorizations?subscription=${rows[0].subscription}`,who,undefined,403)
+  assert.equal(edge.calls.length,readsBefore,'Reviewing the exact approved financial/card quote performs no provider request')
   const first=rows[0],before=posts()
   await portalPost('/portal/prepaid-topup.accept',rows[1].portal,{authorization:first.authorization.id,basis_hash:first.authorization.basis,accept:true},404)
   await h.api('prepaid.topup.prepare',finance,{consent:first.consent},403)

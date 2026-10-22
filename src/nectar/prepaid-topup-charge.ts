@@ -2,6 +2,7 @@
 // exact Stripe evidence only, even after authorization/card revocation.
 import type { Bindings } from '../auth.server'
 import { actorLabel, type Actor } from './actor'
+import type { Input } from './input'
 import { clockInstant } from './clock'
 import { canonical, commit, guard, insist, newId, one, stmt, type Row } from './core'
 import { prepaidFundingStatements } from './prepaid-funding'
@@ -68,7 +69,7 @@ export async function chargePrepaidTopup(env:Bindings,actor:Actor,id:string){
     return outcome(env,actor,row,{status:'uncertain',error_code:row.charge_ref?'topup_payment_record_pending':'topup_payment_unconfirmed'})
   }
 }
-export async function reconcilePrepaidTopup(env:Bindings,actor:Actor,input:{text:(name:string,options?:{max?:number})=>string}){
+export async function reconcilePrepaidTopup(env:Bindings,actor:Actor,input:Input){
   topupRuntimeOwner(env,actor)
   let row=await stored(env,input.text('claim',{max:100}));if(terminal(row))return row
   insist(['claimed','uncertain'].includes(row.status),'topup_not_reconcilable',409)

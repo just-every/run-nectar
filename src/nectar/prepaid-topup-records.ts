@@ -1,6 +1,6 @@
 // Stored customer authorization and one immutable attempt per balance crossing.
 import type { Bindings } from '../auth.server'
-import { requireOwner, type Actor } from './actor'
+import { requireMember, requireOwner, type Actor } from './actor'
 import { requireBusiness } from './business'
 import { clockInstant } from './clock'
 import { all, canonical, commit, fingerprint, guard, insist, newId, one, parseJson, stmt, type Row } from './core'
@@ -65,10 +65,13 @@ export async function endTopupAuthorization(env:Bindings,row:Row,status:'revoked
   if(!['active','awaiting_customer','pending'].includes(row.status))return
   await commit(env,[stmt(env,"UPDATE nc_prepaid_topup_authorizations SET status=?,ended_at=? WHERE id=? AND status IN ('active','awaiting_customer','pending')",status,clockInstant(env),row.id)],{actor,action:`prepaid.topup.${status}`,subject:row.id,detail:{customer:row.customer_id}})
 }
+export function publicTopupQuote(q:TopupQuote){
+  return {subscription:q.subscription,customer:q.customer,terms:q.terms,thresholdN:q.thresholdN,amountCents:q.amountCents,periodCapCents:q.periodCapCents,period:q.period,timezone:q.timezone,startDate:q.startDate,endDate:q.endDate,accountRef:q.accountRef,customerRef:q.customerRef,paymentMethodRef:q.paymentMethodRef,livemode:q.livemode,card:q.card,revokePath:q.revokePath,fundingEffective:q.fundingEffective,capRule:q.capRule,paymentTermsDays:q.content.paymentTermsDays}
+}
 export async function readPrepaidTopupAuthorizations(env:Bindings,actor:Actor,subscription?:string){
-  requireOwner(actor)
+  requireMember(actor,'approve')
   const rows=await all(env,`SELECT a.* FROM nc_prepaid_topup_authorizations a JOIN nc_customers c ON c.id=a.customer_id WHERE c.erased_at IS NULL ${subscription?'AND a.subscription_id=?':''} ORDER BY a.prepared_at,a.id`,...(subscription?[subscription]:[]))
-  return rows.map(row=>({id:row.id,status:row.status,basis:row.basis_hash,quote:topupQuote(row),acceptedAt:row.accepted_at,approvedAt:row.approved_at,source:row.customer_session_id?`/app/prepaid/topup-authorizations/${row.id}`:null}))
+  return rows.map(row=>({id:row.id,status:row.status,basis:row.basis_hash,quote:publicTopupQuote(topupQuote(row)),preparedBy:row.prepared_by_id,acceptedAt:row.accepted_at,approvedAt:row.approved_at,acceptance:row.customer_session_id?{kind:'authenticated-portal-acceptance',sourceId:row.customer_session_id,customer:row.customer_id,basis:row.accepted_basis_hash,acceptedAt:row.accepted_at}:null,source:row.customer_session_id?`/app/prepaid/topup-authorizations/${row.id}`:null}))
 }
 export async function readPrepaidTopupClaims(env:Bindings,actor:Actor,subscription?:string){
   requireOwner(actor)
