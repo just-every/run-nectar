@@ -20,7 +20,7 @@ async function freePort() {
   return port
 }
 
-export async function harness({ assets = false, localTime, hostname = '127.0.0.1', stripeFetch, stripeSecret, stripeSecondarySecret, quickbooksFetch, webhookFetch } = {}) {
+export async function harness({ assets = false, localTime, hostname = '127.0.0.1', stripeFetch, stripeSecret, stripeSecondarySecret, quickbooksFetch, webhookFetch, persistence, databaseId='nectar', applyMigrations=true } = {}) {
   const port = await freePort()
   // WebAuthn refuses IP-address relying parties, so the passkey journey names the loopback host.
   const origin = `http://${hostname}:${port}`
@@ -45,7 +45,7 @@ export async function harness({ assets = false, localTime, hostname = '127.0.0.1
   }
   const options = {
     unsafeTriggerHandlers: true, host: '127.0.0.1', port, modulesRoot: 'dist/server', modules: ['index.js', ...chunks].map(path => ({ type: 'ESModule', path: `dist/server/${path}` })), compatibilityDate: '2026-09-08', compatibilityFlags: ['nodejs_compat'],
-    d1Databases: { DB: 'nectar' }, bindings: vars, outboundService,
+    d1Databases: { DB: databaseId }, ...(persistence?{d1Persist:persistence}:{}), bindings: vars, outboundService,
     ...(assets ? { assets: { directory: 'dist/client', binding: 'ASSETS', run_worker_first: true, routerConfig: { has_user_worker: true, invoke_user_worker_ahead_of_assets: true } } } : {}),
   }
   const mf = new Miniflare(convertV4MiniflareOptions(options))
@@ -55,7 +55,7 @@ export async function harness({ assets = false, localTime, hostname = '127.0.0.1
     await mf.ready
     // Every committed migration, as `rer setup` leaves a database.
     const db = await mf.getD1Database('DB')
-    for (const name of (await readdir('migrations/core')).filter(name => name.endsWith('.sql')).sort()) {
+    for (const name of (applyMigrations?await readdir('migrations/core'):[]).filter(name => name.endsWith('.sql')).sort()) {
       setupPhase=`migration:${name}`
       await db.batch(wrangler.unstable_splitSqlQuery(await readFile(`migrations/core/${name}`, 'utf8')).map(query => db.prepare(query)))
     }
