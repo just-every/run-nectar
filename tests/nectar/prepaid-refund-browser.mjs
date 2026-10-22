@@ -19,7 +19,8 @@ try {
   // The independent finance navigation may wait at Stripe while the owner
   // inspects the reserved ledger in a separate ordinary signed-in context.
   const ownerContext=await browser.newContext(),financeContext=await browser.newContext()
-  const operator=await ownerContext.newPage(),financePage=await financeContext.newPage()
+  const customerContext=await browser.newContext()
+  const operator=await ownerContext.newPage(),financePage=await financeContext.newPage(),customerPage=await customerContext.newPage()
   const asActor=async(context,cookie)=>{
     await context.clearCookies()
     await context.addCookies(cookie.split('; ').map(value=>{const i=value.indexOf('=');return {name:value.slice(0,i),value:value.slice(i+1),url:h.origin}}))
@@ -39,7 +40,7 @@ try {
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`${label} fits ${width}`)
       const file=`${width}-${label}.png`
       await page.screenshot({path:`${directory}/${file}`,fullPage:true})
-      const url=new URL(page.url())
+      const url=new URL(page.url());if(url.searchParams.has('session'))url.searchParams.set('session','[redacted]')
       captures.push({label,width,path:url.pathname+url.search,file})
       console.log(`BROWSER ${width} ${label}`)
     }
@@ -88,7 +89,8 @@ try {
       await both(operator,`owner-${row.n}-checked-${expectedStatus}`)
       return saved
     },
-    onState:async({label,rows,refund})=>{
+    onState:async({label,rows,refund,portalSession,portalSource,language})=>{
+      if(label==='customer-refund'){await both(customerPage,`customer-${language}-refunded-ledger`,`/portal/prepaid?session=${encodeURIComponent(portalSession.token)}`);await both(customerPage,`customer-${language}-refunded-source`,`${portalSource}?session=${encodeURIComponent(portalSession.token)}`);return}
       const row=rows.find(row=>row.subscription===refund.quote.subscription)
       assert.ok(row)
       await both(operator,`owner-${row.n}-${label}-ledger`,`/app/prepaid/${row.subscription}`)

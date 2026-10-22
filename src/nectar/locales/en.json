@@ -255,5 +255,6 @@
   "portal.topup.status.revoked": "Authorization revoked",
   "portal.topup.status.card_changed": "Authorization ended: card replaced",
   "portal.topup.status.expired": "Authorization expired",
-  "correction.revenue.prepaidCredit": "The credit reduces unpaid prepaid contract liability by {amount} in the month beginning {from}; recognized revenue, original line schedules and tax stay unchanged."
+  "correction.revenue.prepaidCredit": "The credit reduces unpaid prepaid contract liability by {amount} in the month beginning {from}; recognized revenue, original line schedules and tax stay unchanged.",
+  "portal.prepaid.entry.refund": "Unused paid credit refunded"
 }
