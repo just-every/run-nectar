@@ -448,6 +448,10 @@
       "sha256": "4e413b54d4a71ac02d7cfc62b808d6bd7c15f60043b221df3567dc303f3a8422",
       "executable": false
     },
+    "migrations/core/0071_customer_balance.sql": {
+      "sha256": "4e68076953b988d1cada5aefab5f2c2868a09a34aee5023328d461c292329ac0",
+      "executable": false
+    },
     "ONBOARDING.md": {
       "sha256": "95bb235abff28ac36979868486caf2cb73bfbe4ab63037f3e301d189bb9398d9",
       "executable": false
@@ -2464,6 +2468,10 @@
       "sha256": "4994b38b9b85b16bd93bee3f223c2a3fc821308e8ca276fa630257acccd4564b",
       "executable": false
     },
+    "src/nectar/balance.ts": {
+      "sha256": "e2634cce2d7e4b2f0b61e2ab13d279f597b152c5e18580993e35c406940aaa15",
+      "executable": false
+    },
     "src/nectar/billing-answer-sources.ts": {
       "sha256": "40e17123b10d20aca71642e6db207cc8bb54a586ddc011d7b35f33a39db62cd0",
       "executable": false
@@ -2666,6 +2674,10 @@
     },
     "src/nectar/feature-policy.ts": {
       "sha256": "1a0af23c7f8059bd8cb7e42bb010ef02f25a0a36a35d654500b111f6d420821c",
+      "executable": false
+    },
+    "src/nectar/financial-balance.ts": {
+      "sha256": "a9aa22e0dd2b46d7eb84e9507112c9cd7ccd70b94b3bf6a18efe680482c11817",
       "executable": false
     },
     "src/nectar/financial-prepaid.ts": {
@@ -3324,6 +3336,10 @@
       "sha256": "a184706c2a01ef1da2069854dfd8a15ed5cfb53c70931671f4bea3d4263d8247",
       "executable": false
     },
+    "src/nectar/ui/balance.ts": {
+      "sha256": "5d7a3d66c8021620e36cc0edafd616058bfe6a76a6d0de43b33d6e428034fb3b",
+      "executable": false
+    },
     "src/nectar/ui/billing-answers.ts": {
       "sha256": "855b419877c9834dd31e3d1613cca1f5a4490a956674e5d8d9f7b2f1fb2207b1",
       "executable": false
@@ -3838,6 +3854,14 @@
     },
     "tests/nectar/credit-policy.mjs": {
       "sha256": "a1d546039dd3ba90bce3105ea60ce89b85118f3873900133b2fe4d6974791643",
+      "executable": false
+    },
+    "tests/nectar/customer-balance-browser.mjs": {
+      "sha256": "7228a7d3406b9ae3cb31ecaf822a259a1a2af2d50530e0e49483932e42da709c",
+      "executable": false
+    },
+    "tests/nectar/customer-balance.mjs": {
+      "sha256": "eebac712f5ffad381ad48ff00e72e700b997db6b041d31ca76feba1eabbf04c1",
       "executable": false
     },
     "tests/nectar/customer-language.mjs": {
