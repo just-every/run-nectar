@@ -7,7 +7,7 @@ import { NectarError } from '../core'
 import { money } from '../decimal'
 import { Input } from '../input'
 import { previewUsageCorrection } from '../usage-replay'
-import { field, form, h, hidden, page, select, table } from './html'
+import { check, field, form, h, hidden, page, select, table } from './html'
 
 export async function usageReplayPage(env: Bindings, actor: Actor, url: URL, input?: Input) {
   requireCapability(actor, 'read')
@@ -53,7 +53,7 @@ export async function usageReplayPage(env: Bindings, actor: Actor, url: URL, inp
         ${c.plan.periods.map((p:any)=>h`<h3>${p.number}</h3><p>Replay fingerprint <code style="overflow-wrap:anywhere">${p.fingerprint}</code></p><p>Original event IDs: <code style="overflow-wrap:anywhere">${p.eventIds.join(', ')}</code></p>${table(['Revenue month','Before','After','Delta'],p.revenue.map((r:any)=>[r.period,money(r.beforeCents),money(r.afterCents),money(r.deltaCents)]))}`)}</details>
       ${c.status==='pending'&&actor.kind==='member'&&can(actor,'approve')?h`<p>${c.plan.needsSecondApprover?'This credit exceeds the threshold. Another active owner or finance approver must approve the human-prepared correction. An agent-prepared correction first needs human credit authorization.':'A human approver must confirm the exact source-bound correction.'}</p>
         ${c.plan.needsSecondApprover&&c.needsCreditAuthorization&&!c.authorized_by_id?form('usage.correction.authorize',back,hidden('correction',c.id),'Prepare credit authorization',{secondary:true}):''}
-        ${form('usage.correction.decide',back,h`${hidden('correction',c.id)}${hidden('decision','approved')}`,'Approve correction and reserve message')}
+        ${form('usage.correction.decide',back,h`${hidden('correction',c.id)}${hidden('decision','approved')}${c.plan.prepaid&&actor.role==='owner'?check('I am the sole active owner/finance approver and explicitly confirm this prepaid correction.','confirm_single'):''}`,'Approve correction and reserve message')}
         ${form('usage.correction.decide',back,h`${hidden('correction',c.id)}${hidden('decision','rejected')}`,'Reject correction',{secondary:true})}`:''}
       ${c.mail?h`<p>Customer message: ${c.mail.status}. Provider acceptance does not confirm mailbox delivery; uncertain sends are not retried.</p>`:''}
     </section>`) }

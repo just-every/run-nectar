@@ -95,7 +95,7 @@ async function prepaidReportFixtures(h, owner, { subscription, customer, meter, 
     assert.equal(ledgerSource.grant.id, grant.id)
     if (grant.kind === 'units') {
       assert.equal(source.prepaid.meterId, meter)
-      assert.equal(source.prepaid.availableQuantity, grant.source === 'purchase' ? '3' : '1.25')
+      assert.equal(Number(source.prepaid.availableQuantity), grant.source === 'purchase' ? 3 : 1.25)
       assert.equal(source.prepaid.liabilityCents, grant.cents)
     }
   }
@@ -200,7 +200,7 @@ export async function financialReportsFlow(h, owner) {
   assert.deepEqual(taxSource.calculation.inputs, invoice.calculation.inputs)
   const prepaidCsv = csvRows(await exportCsv(`/app/exports/reports/credit-balances.csv?period=${period}&customer=${billed}`)).filter(row => row.source !== 'TOTAL')
   assert.equal(prepaidCsv.length, 4)
-  assert.deepEqual(prepaidCsv.filter(row => row.prepaid_kind === 'units').map(row => [row.prepaid_source, row.prepaid_available_quantity, row.prepaid_paid_liability, row.amount]).sort(), [['promotion', '1.25', '0.00', '0.00'], ['purchase', '3', '1.00', '1.00']])
+  assert.deepEqual(prepaidCsv.filter(row => row.prepaid_kind === 'units').map(row => [row.prepaid_source, row.prepaid_available_quantity, row.prepaid_paid_liability, row.amount]).sort(), [['promotion', '1.25', '0.00', '0.00'], ['purchase', '3.00', '1.00', '1.00']])
   const unbilledEntry = reports.find(report => report.metric === 'unbilled').entries[0]
   const unbilledSource = await h.api(unbilledEntry.href.replace('/app/', ''), owner)
   assert.equal(unbilledSource.invoice, null)

@@ -222,7 +222,7 @@ export async function nativeCollectionFlow(h,owner,{onState=async()=>{},confirm}
   assert.equal((await api('collection.prepare',{invoice:changed.id},403)).error,'mfa_step_up_required')
   assert.equal((await api('collection.confirm',factorReview.instructions.confirm,403)).error,'mfa_step_up_required')
   assert.equal((await api('collection.reconcile',{request:missing.id},403)).error,'mfa_step_up_required')
-  assert.ok(Array.isArray(await api('nativeCollections')),'Owner read access remains available without a fresh factor')
+  assert.ok(Array.isArray(await api('native-collections')),'Owner read access remains available without a fresh factor')
   assert.equal(edge.calls.length,beforeExpired,'Stale owner factor is refused before reading Stripe')
   await api('mfa.verify',{code:totp(secret,instant)})
   assert.equal((await api('collection.reconcile',{request:result.id})).status,'collected')
