@@ -69,7 +69,7 @@
       "executable": false
     },
     "API.md": {
-      "sha256": "4862fa31dbf590f34cf677eb65fc0aa92aaa1e99ade39d93e073993aaa92831a",
+      "sha256": "25a16db7c6311d3bbea59a097c86e33c032c2f03998770978a2681b40ea1c205",
       "executable": false
     },
     "base-copies.json": {
@@ -77,7 +77,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "3ec3e8cd4509d5a7b275f08003a24a5b8dd391e327e2f1f12818787ffd454d4b",
+      "sha256": "ee4803f2e82a7560b9604b5345eed18b12ef293441d15c2e36679c05e3ef0cb1",
       "executable": false
     },
     "DEMO.md": {
@@ -3969,7 +3969,7 @@
       "executable": false
     },
     "tests/nectar/portal-prepaid.mjs": {
-      "sha256": "3e5d66481e5987d688d137d992738d5b4492b48a101a0abb0148f2a6871b929e",
+      "sha256": "785061474da803461d5c86f720ec2af699c5966d4c58fa755c63b3799468e5da",
       "executable": false
     },
     "tests/nectar/portal-privacy-retention.mjs": {
