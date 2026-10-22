@@ -121,10 +121,12 @@ try {
       }
       if(state.claim?.invoice_id){
         await both(operator,`owner-${state.label}-purchase-invoice`,`/app/invoices/${state.claim.invoice_id}`)
-        const ledger=await h.api(`prepaid/${state.row.subscription}`,owner)
+        const sourceRow=state.row??state.rows.find(row=>row.subscription===state.claim.subscription_id)
+        assert.ok(sourceRow,'The purchase belongs to its exact subscription')
+        const ledger=await h.api(`prepaid/${sourceRow.subscription}`,owner)
         const lot=ledger.grants.find(grant=>grant.purchaseInvoice===state.claim.invoice_id)
         const entry=ledger.entries.find(entry=>entry.kind==='grant'&&entry.grantId===lot?.id)
-        if(entry)await both(operator,`owner-${state.label}-grant-source`,`/app/prepaid/${state.row.subscription}/entries/${encodeURIComponent(entry.id)}`)
+        if(entry)await both(operator,`owner-${state.label}-grant-source`,`/app/prepaid/${sourceRow.subscription}/entries/${encodeURIComponent(entry.id)}`)
       }
       if(state.label==='uncertain'){
         const form=operator.locator('form[action="/app/do/prepaid.topup.reconcile"]').filter({has:operator.locator(`input[name="claim"][value="${state.claim.id}"]`)})

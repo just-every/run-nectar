@@ -61,7 +61,7 @@ const DEFINITIONS: Record<Exclude<ReportMetric,'credits'|'tax'|'unbilled'|'credi
   },
   collections: {
     title: 'Collections',
-    definition: 'Recorded external payments received in the selected month up to today in the business billing timezone, by their received-on date. Includes allocated and unallocated receipts. Allocations show which invoices a receipt pays; Nectar does not collect or send money. Retained successful Stripe charges contribute their original gross received amount; refunds remain separate read-only source records.',
+    definition: 'Recorded external payments received in the selected month up to today in the business billing timezone, by their received-on date. Includes allocated and unallocated receipts. Allocations show which invoices a receipt pays. Owner-confirmed native card captures and authorized prepaid top-ups contribute their recorded captured amount; manually recorded receipts retain their external evidence custody. Retained successful Stripe charges contribute their original gross received amount. Verified prepaid refunds are separate negative cash outflows in the refund report; no bank settlement is inferred.',
   },
 }
 
