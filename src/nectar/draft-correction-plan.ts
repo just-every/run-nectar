@@ -3,8 +3,8 @@ import type { Bindings } from '../auth.server'
 import type { Business } from './business'
 import { all, fingerprint, insist, one, type Row } from './core'
 import { canonicalDecimal, micros } from './decimal'
-import { isDate, localDate, periodContaining, periodStartingIn, zonedStart } from './dates'
-import { ratingInputs } from './inputs'
+import { isDate, isMonth, zonedStart } from './dates'
+import { amendmentCorrectionInputs, correctionEventInInput, usageCorrectionInputs } from './draft-correction-windows'
 import { requirePrice } from './catalog'
 import { rate, type AmendmentIn, type RatingInput } from './rating'
 import { screen, type RawEvent } from './usage'
@@ -24,7 +24,13 @@ export interface RevenuePeriodDelta { period: string; beforeCents: number; after
 export async function revenuePreview(schedules: RevenueSchedule[]): Promise<RevenuePreview> {
   const totals = new Map<string, bigint>()
   for (const schedule of schedules) {
-    insist(schedule.entries.reduce((sum, entry) => sum + BigInt(entry.amountCents), 0n) === BigInt(schedule.amountCents), 'correction_revenue_does_not_reconcile', 409)
+    insist(Number.isSafeInteger(schedule.amountCents) && schedule.entries.every(entry=>isMonth(entry.period)&&Number.isSafeInteger(entry.amountCents)), 'correction_revenue_amount_out_of_range', 409)
+    const recognized=schedule.entries.reduce((sum,entry)=>sum+BigInt(entry.amountCents),0n)
+    const prepaid=schedule.kind==='prepaid_purchase'
+    // Purchases defer original consideration until actual ledger consumption.
+    // This exception never applies to an ordinary service or credit schedule.
+    if(prepaid)insist(schedule.policy==='prepaid-liability-purchase'&&schedule.amountCents>0&&schedule.basis?.version==='nectar-prepaid-revenue-1'&&typeof schedule.basis?.evidence?.prepaidPurchase==='string'&&schedule.basis?.evidence?.purpose==='prepaid-contract-liability'&&recognized>=0n&&recognized<=BigInt(schedule.amountCents),'correction_revenue_does_not_reconcile',409)
+    else insist(recognized===BigInt(schedule.amountCents), 'correction_revenue_does_not_reconcile', 409)
     for (const entry of schedule.entries) totals.set(entry.period, (totals.get(entry.period) ?? 0n) + BigInt(entry.amountCents))
   }
   const periods = [...totals].sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([period, value]) => {
@@ -70,11 +76,10 @@ export async function amendmentPlan(env: Bindings, business: Business, payload: 
   insist(!await startsInIssuedPeriod(env, sub.id, payload.effective_from), 'period_already_invoiced', 409)
   const amendment: AmendmentIn = { id: 'proposed', kind: kind as AmendmentIn['kind'], value, priceId, from: payload.effective_from, to: payload.effective_to || null, note: String(payload.note ?? '').slice(0, 200) }
   const impact = []
-  const first = periodContaining(sub.anchor_day, amendment.from)
-  for (const period of [first, periodContaining(sub.anchor_day, first.end)]) {
-    const inputs = await ratingInputs(env, business, sub.id, period)
+  for (const inputs of await amendmentCorrectionInputs(env,business,sub,amendment.from)) {
+    const period=inputs.period
     const [before, after] = await Promise.all([total(inputs), total({ ...inputs, amendments: [...inputs.amendments, amendment] })])
-    impact.push({ period, before, after, revenueDeltas: revenuePeriodDeltas(before.revenue, after.revenue) })
+    impact.push({ period, ...(inputs.billing?{billingWindow:inputs.billing}:{}), before, after, revenueDeltas: revenuePeriodDeltas(before.revenue, after.revenue) })
   }
   return { normalized: { ...payload, subscription: sub.id, kind, value, price: priceId, effective_to: payload.effective_to || null }, impact, basis: { subscription: [sub.id, sub.revision], revenuePolicy: REVENUE_POLICY_VERSION } }
 }
@@ -111,20 +116,20 @@ export async function correctionPlan(env: Bindings, business: Business, payload:
   if (payload.run) insist(run, 'bill_run_not_found', 404)
   const voided = new Set(rows.filter(row => row.action === 'void').map(row => row.event))
   const invoices: Row[] = []
-  for (const sub of await all(env, `SELECT DISTINCT s.id, s.anchor_day, s.customer_id, c.name AS customer_name FROM nc_subscriptions s JOIN nc_customers c ON c.id = s.customer_id JOIN nc_items i ON i.subscription_id = s.id JOIN nc_prices p ON p.id = i.price_id
+  for (const sub of await all(env, `SELECT DISTINCT s.*, c.name AS customer_name FROM nc_subscriptions s JOIN nc_customers c ON c.id = s.customer_id JOIN nc_items i ON i.subscription_id = s.id JOIN nc_prices p ON p.id = i.price_id
     WHERE p.meter_id IS NOT NULL ORDER BY c.name, s.id`)) {
     const mine = touched.filter(event => event.customerId === sub.customer_id)
     if (!mine.length) continue
-    const latest = localDate(Math.max(...mine.map(event => event.occurredAt)), business.timezone)
-    const period = run ? periodStartingIn(sub.anchor_day, run.period) : periodContaining(sub.anchor_day, latest)
-    const inputs = await ratingInputs(env, business, sub.id, period)
-    const meters = new Set(Object.values(inputs.prices).flatMap(price => price.metric ? [price.metric.sourceId] : price.meterId ? [price.meterId] : []))
-    if (!mine.some(event => meters.has(event.meterId))) continue
-    const end = zonedStart(period.end, business.timezone)
-    const added = (screened?.accepted ?? []).filter(event => event.customerId === sub.customer_id && meters.has(event.meterId) && event.occurredAt < end)
-      .map(event => ({ eventId: event.eventId, meterId: event.meterId, quantity: event.quantity, occurredAt: event.occurredAt, ...(event.properties?{properties:event.properties}:{}) }))
-    const [before, after] = await Promise.all([total(inputs), total({ ...inputs, events: [...inputs.events.filter(event => !voided.has(event.eventId)), ...added] })])
-    invoices.push({ subscription: sub.id, customer: sub.customer_name, period, before, after, revenueDeltas: revenuePeriodDeltas(before.revenue, after.revenue) })
+    for(const inputs of await usageCorrectionInputs(env,business,sub,mine,run)){
+      const period=inputs.period
+      const meters = new Set(Object.values(inputs.prices).flatMap(price => price.metric ? [price.metric.sourceId] : price.meterId ? [price.meterId] : []))
+      if (!mine.some(event => meters.has(event.meterId))) continue
+      const end = zonedStart(period.end, business.timezone)
+      const added = (screened?.accepted ?? []).filter(event => event.customerId === sub.customer_id && meters.has(event.meterId) && event.occurredAt < end && correctionEventInInput(inputs,event))
+        .map(event => ({ eventId: event.eventId, meterId: event.meterId, quantity: event.quantity, occurredAt: event.occurredAt, ...(event.properties?{properties:event.properties}:{}) }))
+      const [before, after] = await Promise.all([total(inputs), total({ ...inputs, events: [...inputs.events.filter(event => !voided.has(event.eventId)), ...added] })])
+      invoices.push({ subscription: sub.id, customer: sub.customer_name, period, ...(inputs.billing?{billingWindow:inputs.billing}:{}), before, after, revenueDeltas: revenuePeriodDeltas(before.revenue, after.revenue) })
+    }
   }
   return { normalized: { void: voids.map((entry: Row) => ({ event_id: String(entry.event_id), reason: String(entry.reason).slice(0, 300) })), add: adds, run: run?.id ?? null, period: run?.period ?? null }, impact: { rows, invoices }, basis: { ...basis, revenuePolicy: REVENUE_POLICY_VERSION } }
 }
