@@ -57,7 +57,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "f7503bebc5a962297275a5730efba615da56812e213202a8f04f23071d070b89",
+      "sha256": "e97515dc59f6795b0620fa67efe89f4a3f0efffa6d280e156c608831a3f77e32",
       "executable": false
     },
     "AGENTS.consumer.md": {
@@ -77,7 +77,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "f3bded95a655eaabb663c227b72c1e122ca461c9777f80d755f7c0f0feab8dbf",
+      "sha256": "1b453c19196889f87162e747f5b2ef1090c501420a3f7db05f592d296e768729",
       "executable": false
     },
     "DEMO.md": {
@@ -3965,7 +3965,7 @@
       "executable": false
     },
     "tests/nectar/flows.mjs": {
-      "sha256": "1cfd782064736fa14b01f704520e794b466a7b2b6fca9dad90905c8badde1dcb",
+      "sha256": "bb6c9c1e9e62284d1651ee625fde9b7f7dcfae5f031d24aa14e77d809b99e489",
       "executable": false
     },
     "tests/nectar/harness.mjs": {
@@ -3973,7 +3973,7 @@
       "executable": false
     },
     "tests/nectar/hierarchies.mjs": {
-      "sha256": "82d3bee0b77c416496a2415aa0500ca3815321eb5181796a7ce0f7def33fdf23",
+      "sha256": "50676c7ecd9686c5884a1e65bf561c7906b3bc9f3cc50ae95f55b688182c8d3c",
       "executable": false
     },
     "tests/nectar/import-originals.mjs": {

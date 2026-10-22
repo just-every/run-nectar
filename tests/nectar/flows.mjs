@@ -34,6 +34,7 @@ if (!process.argv.includes('--core-only')) {
 await runIsolated('webhooks','webhooksFlow')
 await runIsolated('webhooks','webhookLifecycleFlow')
 await runIsolated('hierarchies','hierarchiesFlow')
+await runIsolated('hierarchies','hierarchyTaxFlow')
 await runIsolated('plan-changes','planChangesFlow')
 await runIsolated('customer-search','customerSearchFlow')
 await runIsolated('upcoming','upcomingFlow')
