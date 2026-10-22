@@ -1,3 +1,4 @@
+import { prepaidReportParity } from './prepaid-report-parity.mjs'
 import assert from 'node:assert/strict'
 import { applyPolicy } from './policy-helper.mjs'
 import { csvRows } from './financial-reports.mjs'
@@ -54,6 +55,7 @@ export async function prepaidFlow(h,owner,{fundPurchase,onState=async()=>{}}={})
     return Promise.all(invoices.map(invoice=>api(`invoices/${invoice.id}`)))
   }
   const usage=(row,id,quantity,date)=>api('usage.submit',{events:[{event_id:`synthetic-nectar-${id}`,customer:row.external,meter:row.meterCode,quantity,occurred_at:`${date}T12:00:00Z`}]})
+  const snapshots=[]
   const moneyBalance=body=>body.balances.filter(balance=>balance.kind==='money').reduce((sum,balance)=>sum+balance.remainingN,0)
   const row=await make(310,'1',true)
   const annual=(await issue(row,'2026-01','2026-01-01'))[0]
@@ -72,6 +74,7 @@ export async function prepaidFlow(h,owner,{fundPurchase,onState=async()=>{}}={})
   await approve(consent.request)
   assert.equal(moneyBalance(await state(row.subscription)),1100000)
   assert.equal((await state(row.subscription)).fundingIntents.filter(intent=>intent.status==='pending').length,0)
+  await prepaidReportParity(h,owner,row,{snapshotActor:owner,snapshots})
   await usage(row,320,'6000','2026-01-15')
   const beforePreview=await state(row.subscription)
   for(let count=0;count<2;count++){
@@ -86,12 +89,14 @@ export async function prepaidFlow(h,owner,{fundPurchase,onState=async()=>{}}={})
   assert.equal(moneyBalance(await state(row.subscription)),500000)
   const firstLedger=await state(row.subscription)
   assert.equal(firstLedger.entries.filter(entry=>entry.kind==='drawdown').reduce((sum,entry)=>sum+entry.recognitionCents,0),500000)
+  await prepaidReportParity(h,owner,row,{snapshotActor:owner,snapshots})
   await usage(row,321,'4100','2026-02-15')
   await h.advanceClock('2026-03-01T18:00:00Z')
   const february=(await issue(row,'2026-03','2026-03-01'))[0]
   assert.equal(february.total_cents,41000)
   const low=await state(row.subscription)
   assert.equal(moneyBalance(low),90000)
+  await prepaidReportParity(h,owner,row,{snapshots})
   const topup=low.fundingIntents.filter(intent=>intent.status==='pending')
   assert.equal(topup.length,1);assert.equal(topup[0].amount_cents,500000)
   assert.equal(topup[0].payment_id,null,'A low-balance funding intent has no invented payment or provider receipt')
@@ -99,6 +104,7 @@ export async function prepaidFlow(h,owner,{fundPurchase,onState=async()=>{}}={})
   assert.equal((await state(row.subscription)).fundingIntents.filter(intent=>intent.status==='pending').length,1,'Repeated low-balance evaluation owns one pending funding intent')
   const topupInvoice=await purchase(topup[0].id,row,'2026-03-01')
   assert.equal(moneyBalance(await state(row.subscription)),590000)
+  await prepaidReportParity(h,owner,row,{snapshotActor:owner,snapshots})
   await api('prepaid.consent.revoke',{consent:consent.request})
   const expiring=await prepare(row,{amount:'200',effective_date:'2026-03-01',expires_date:'2026-03-15'})
   await approve(expiring.request)
@@ -106,6 +112,7 @@ export async function prepaidFlow(h,owner,{fundPurchase,onState=async()=>{}}={})
   await api('prepaid.settle',{subscription:row.subscription})
   const expired=await state(row.subscription)
   assert.equal(moneyBalance(expired),590000)
+  await prepaidReportParity(h,owner,row,{snapshotActor:reader,snapshots})
   assert.ok(expired.entries.some(entry=>entry.kind==='expiry'&&entry.amountN===-20000))
   assert.deepEqual((await api(`invoices/${annual.id}`)).calculation,annualOriginal)
   for(const original of [january,february,purchaseInvoice,topupInvoice])assert.deepEqual((await api(`invoices/${original.id}`)).calculation,original.calculation,'Later spending, funding and expiry preserve every issued original')
@@ -248,6 +255,16 @@ export async function prepaidCorrectionFlow(h,owner){
   await h.api('usage.correction.decide',finance,{correction:stale.id,decision:'approved'},409)
   assert.equal((await state()).balances[0].remainingN,8100,'A stale financial approval cannot consume or restore any prepaid balance')
   await api('usage.correction.decide',{correction:stale.id,decision:'rejected'})
+  const revenueBefore=await api(`revenue?from=2026-01&to=2026-12&customer=${customer}`)
+  const erase=await api('erasure.request',{customer})
+  const link=h.mails.at(-1).text.match(/https?:\/\/[^\s"<]+\/erase\/[a-f0-9]{64}/)[0]
+  assert.equal((await h.raw(new URL(link).pathname,{form:new URLSearchParams({confirm:'yes'})})).status,200)
+  const receipt=await api('erasure.approve',{request:erase.id,confirm:true})
+  assert.ok(receipt.receipt.changed.some(row=>row.kind==='nc_prepaid_corrections'))
+  assert.deepEqual((await api(`revenue?from=2026-01&to=2026-12&customer=${customer}`)).months,revenueBefore.months)
+  await h.advanceClock('2033-03-02T18:00:00Z')
+  assert.deepEqual((await api('erasure.purge')).removed,[erase.id])
+  assert.deepEqual((await api('erasure.purge')).removed,[])
   console.log('CAT-004 governed historical prepaid replay: exact tax, signed liability/recognition, immutable originals, repeated correction, source/CSV and stale refusal passed')
   return {subscription,customer,purchase,issued,first,second}
 }
