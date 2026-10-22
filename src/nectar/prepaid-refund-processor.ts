@@ -1,3 +1,4 @@
+import { REFUND_CREDIT_REASON } from './shared-credit-custody'
 // One fixed-account Stripe Refund create per durable claim. Unknown results
 // retain the reservation; recovery reads the same charge's refund history.
 import type { Bindings } from '../auth.server'
@@ -60,7 +61,7 @@ async function recordRefund(env:Bindings,actor:Actor,row:Row,stripe:StripeClient
   await commit(env,[refundActorGuard(env,actor),stateGuard(env,row),...allocation.statements,
     guard(env,'prepaid_refund_balance_changed','(SELECT COALESCE(SUM(amount_n),0) FROM nc_prepaid_ledger WHERE grant_id=?)=? AND (SELECT COALESCE(SUM(liability_cents),0) FROM nc_prepaid_ledger WHERE grant_id=?)=?',q.grant,q.amountN,q.grant,q.amountCents),
     guard(env,'prepaid_refund_source_changed',"EXISTS(SELECT 1 FROM nc_invoices i JOIN nc_payments p ON p.id=? JOIN nc_prepaid_funding_intents f ON f.id=? WHERE i.id=? AND i.status='issued' AND i.source_fingerprint=? AND f.invoice_id=i.id AND f.payment_id=p.id AND p.customer_id=? AND p.amount_cents=? AND p.method='card_external')",q.payment,q.funding,q.invoice,q.sourceFingerprint,q.customer,q.originalAmountCents),
-    stmt(env,'INSERT INTO nc_credit_notes(id,number,invoice_id,customer_id,amount_cents,reason,issued_by,issued_at,applied_cents,subtotal_cents,tax_cents,billing_entity_id,billing_route_json) VALUES(?,?,?,?,?,?,?,?,0,?,0,?,?)',credit,allocation.number,q.invoice,q.customer,q.amountCents,row.reason,actorLabel(actor),issuedAt,q.amountCents,allocation.entityId,allocation.routeJson),
+    stmt(env,'INSERT INTO nc_credit_notes(id,number,invoice_id,customer_id,amount_cents,reason,issued_by,issued_at,applied_cents,subtotal_cents,tax_cents,billing_entity_id,billing_route_json) VALUES(?,?,?,?,?,?,?,?,0,?,0,?,?)',credit,allocation.number,q.invoice,q.customer,q.amountCents,REFUND_CREDIT_REASON,actorLabel(actor),issuedAt,q.amountCents,allocation.entityId,allocation.routeJson),
     stmt(env,'INSERT INTO nc_prepaid_refund_credits(credit_id,refund_id,customer_id,purchase_invoice_id,purpose) VALUES(?,?,?,?,\'paid-liability-cash-refund\')',credit,row.id,q.customer,q.invoice),
     stmt(env,"INSERT INTO nc_prepaid_ledger(id,grant_id,customer_id,subscription_id,kind,amount_n,liability_cents,recognition_cents,service_date,purchase_invoice_id,purchase_line_id,created_at) VALUES(?,?,?,?,'refund',?,?,0,?,?,?,?)",ledger,q.grant,q.customer,q.subscription,-q.amountN,-q.amountCents,date,q.invoice,q.purchaseLine,clockInstant(env)),
     ...await revenueCreditStatements(env,{id:credit,invoice:q.invoice,customer:q.customer,amountCents:q.amountCents,issuedAt}),

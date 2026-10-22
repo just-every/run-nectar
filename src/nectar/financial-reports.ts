@@ -1,3 +1,4 @@
+import { sharedCreditNotes } from './shared-credit-custody'
 import { prepaidRefundFinancialSources, refundReportComponents, type PrepaidReportRefund } from './financial-refunds'
 import { historicalContributions, historicalReportSource } from './movein/history-reports'
 // Financial contributions use recorded ledger values or the real invoice engine.
@@ -206,7 +207,7 @@ export async function financialReportSource(env: Bindings, actor: Actor, metric:
       amountCents: line.amountCents, lineId: line.lineId, href: line.href }))
     return { ...base, totalCents: entry.amountCents, components, invoice: null, unbilled: evidence }
   }
-  const credit = entry.creditId ? await one(env, 'SELECT * FROM nc_credit_notes WHERE id = ? AND customer_id = ?', sourceId, entry.customerId) : null
+  const credit = entry.creditId ? (await sharedCreditNotes(env,'n.id=? AND n.customer_id=?',sourceId,entry.customerId))[0] : null
   insist(!entry.creditId || credit, 'report_invoice_not_found', 404)
   const invoiceId = credit ? credit.invoice_id : sourceId
   const invoice = await one(env, "SELECT * FROM nc_invoices WHERE id = ? AND customer_id = ? AND status = 'issued'", invoiceId, entry.customerId)

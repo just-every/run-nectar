@@ -1,3 +1,4 @@
+import { sharedCreditNotes } from './shared-credit-custody'
 import { prepaidIssueStatements } from './prepaid-issue'
 import { prepaidPurchaseCalculation, prepaidPurchaseIssueStatements } from './prepaid-purchase'
 import { billingWindowsForMonth,currentBillingWindow } from './billing-plan'
@@ -164,7 +165,7 @@ export async function invoiceRecord(env: Bindings, actor: Actor, id: string): Pr
   const invoice = await one(env, `SELECT i.*, c.name AS customer_name, c.external_id, c.billing_email, c.address AS customer_address, COALESCE(s.billing_mode,'live') AS billing_mode, i.invoice_kind FROM nc_invoices i JOIN nc_customers c ON c.id = i.customer_id LEFT JOIN nc_subscriptions s ON s.id = i.subscription_id WHERE i.id = ?`, id)
   insist(invoice, 'invoice_not_found', 404)
   const lines = await all(env, 'SELECT * FROM nc_invoice_lines WHERE invoice_id = ? ORDER BY seq', id)
-  const credits = await all(env, 'SELECT * FROM nc_credit_notes WHERE invoice_id = ? ORDER BY issued_at', id)
+  const credits = await sharedCreditNotes(env,'n.invoice_id=?',id)
   const allocations = await all(env, 'SELECT a.*, p.reference, p.received_on, p.method FROM nc_allocations a JOIN nc_payments p ON p.id = a.payment_id WHERE a.invoice_id = ? ORDER BY a.allocated_at', id)
   const carriedApplications=await all(env,'SELECT a.*,n.number,n.correction_id FROM nc_usage_credit_applications a JOIN nc_credit_notes n ON n.id=a.credit_id WHERE a.invoice_id=? ORDER BY a.applied_at,a.id',id)
   const credited = credits.reduce((sum, row) => sum + (row.applied_cents??row.amount_cents), 0)+carriedApplications.reduce((n,r)=>n+r.amount_cents,0), paid = allocations.reduce((sum, row) => sum + row.amount_cents, 0)

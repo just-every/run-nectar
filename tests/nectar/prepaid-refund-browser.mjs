@@ -64,6 +64,14 @@ try {
   }
   const readerContext=await browser.newContext(),readerPage=await readerContext.newPage()
   await prepaidRefundFlow(h,owner,{
+    onSharedState:async({row,refund,readers,sales})=>{
+      for(const {role,who} of [...readers,{role:'sales',who:sales}]){
+        await asActor(readerContext,who)
+        await both(readerPage,`${role}-shared-refund-customer`,`/app/customers/${row.customer}`)
+        if(role!=='sales')await both(readerPage,`${role}-shared-refund-invoice`,`/app/invoices/${row.invoice}`)
+        assert.ok(!(await readerPage.locator('main').textContent()).includes(refund.reason))
+      }
+    },
     onTypedState:async({label,row,refund,readers,finance})=>{
       for(const {role,who} of readers){
         await asActor(readerContext,who)
@@ -117,7 +125,7 @@ try {
       return saved
     },
     onState:async({label,rows,refund,portalSession,portalSource,language})=>{
-      if(label==='customer-refund'){await both(customerPage,`customer-${language}-refunded-ledger`,`/portal/prepaid?session=${encodeURIComponent(portalSession.token)}`);await both(customerPage,`customer-${language}-refunded-source`,`${portalSource}?session=${encodeURIComponent(portalSession.token)}`);return}
+      if(label==='customer-refund'){await both(customerPage,`customer-${language}-shared-refund-invoice`,`/portal/invoices/${rows[0].invoice}?session=${encodeURIComponent(portalSession.token)}`);await both(customerPage,`customer-${language}-refunded-ledger`,`/portal/prepaid?session=${encodeURIComponent(portalSession.token)}`);await both(customerPage,`customer-${language}-refunded-source`,`${portalSource}?session=${encodeURIComponent(portalSession.token)}`);return}
       const row=rows.find(row=>row.subscription===refund.quote.subscription)
       assert.ok(row)
       await both(operator,`owner-${row.n}-${label}-ledger`,`/app/prepaid/${row.subscription}`)

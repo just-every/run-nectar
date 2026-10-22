@@ -1,3 +1,4 @@
+import { sharedCreditNotes } from './shared-credit-custody'
 import { carriedUsageCredits } from './usage-correction-records'
 import { revenueCreditStatements } from './revenue-records'
 import { clockInstant } from './clock'
@@ -186,7 +187,7 @@ export async function customerLedger(env: Bindings, actor: Actor, customerId: st
     FROM nc_invoices i WHERE i.customer_id = ? AND i.status = 'issued' ORDER BY i.issue_date, i.number`, customerId)
   // The customer record includes its own payments, so customer readers see them here.
   const pays = await paymentRows(env, customerId)
-  const credits = await all(env, 'SELECT * FROM nc_credit_notes WHERE customer_id = ? ORDER BY issued_at', customerId)
+  const credits = await sharedCreditNotes(env,'n.customer_id=?',customerId)
   return {
     carriedUsageCredits:await carriedUsageCredits(env,customerId),
     invoices:await withMetadata(env,'invoice',invoices), payments: pays, credits:await withMetadata(env,'credit-note',credits),

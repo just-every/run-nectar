@@ -2477,7 +2477,7 @@
       "executable": false
     },
     "src/nectar/billruns.ts": {
-      "sha256": "f2e6f51f6d67b3bdec22e5bd230b2fd01da6dc1a5d4eadff8be25511645dbb1a",
+      "sha256": "9fc628d2bdfa5baf91da77b19566a671ad47d72530499aab02dca49cefc8cd61",
       "executable": false
     },
     "src/nectar/business.ts": {
@@ -2661,7 +2661,7 @@
       "executable": false
     },
     "src/nectar/financial-reports.ts": {
-      "sha256": "9cf40003b824d279d9e98745da2d543100a46c9bc064363f6bd5027ed4a57308",
+      "sha256": "38f8435745a09c81a8aeaae4dbef58a9248eae96a6c247a93f1478252c285e43",
       "executable": false
     },
     "src/nectar/http.ts": {
@@ -2957,11 +2957,11 @@
       "executable": false
     },
     "src/nectar/portal-data.ts": {
-      "sha256": "6c75d16ef566bf43fdad129371a2f0b40d7000e9c64e32535b1caf10de111069",
+      "sha256": "6b09af2fa20d918205ddd153a1001baaedde7bc9e1ac11c2f87b48f2401c1db8",
       "executable": false
     },
     "src/nectar/portal-http.ts": {
-      "sha256": "bdb8f0b7a8327c622eb7551e849cc3efb073629efd02e8addc93457f2cdc7bce",
+      "sha256": "c51567677114043f1e3bb213885b76d6261a9d599ab9661fa1779fcf7a17b758",
       "executable": false
     },
     "src/nectar/portal-page.ts": {
@@ -3045,7 +3045,7 @@
       "executable": false
     },
     "src/nectar/prepaid-refund-processor.ts": {
-      "sha256": "8483a95603fddcd87aea12dd5edd655fd0d5f9246f6329443a047ff776d9faef",
+      "sha256": "2ab89bd50b92e20cea1c5853fc0b0745b3597feaff8d77b657b664fe0cbf2209",
       "executable": false
     },
     "src/nectar/prepaid-refund-records.ts": {
@@ -3141,7 +3141,7 @@
       "executable": false
     },
     "src/nectar/receivables.ts": {
-      "sha256": "7ec48d4c93f1f577bbc5c2c8f246032e386d737775b6c13f6675099e946e407a",
+      "sha256": "5f3e18a435109f38d8d3cc6c0e66dcc81f335141d784a1eaba2a72051e79899a",
       "executable": false
     },
     "src/nectar/reconciliation.ts": {
@@ -3274,6 +3274,10 @@
     },
     "src/nectar/setup-source.ts": {
       "sha256": "7f65d587b40cab776e093db40724b72654e997f168442774a7110ee418320d0a",
+      "executable": false
+    },
+    "src/nectar/shared-credit-custody.ts": {
+      "sha256": "cbf766a030f00ba47a9e033270f63ee2b1363bdf2fe0b8ce266f9f44995fd23d",
       "executable": false
     },
     "src/nectar/subscriptions.ts": {
@@ -3997,7 +4001,7 @@
       "executable": false
     },
     "tests/nectar/prepaid-refund-browser.mjs": {
-      "sha256": "42416d85eed3f1293769357a0dc1131e086a36af504a06cd9cd8d922111c60a1",
+      "sha256": "7ab8034b5c77539c29b95917d3140a0346b0d04c18463140ba08e6e00ddfb4e8",
       "executable": false
     },
     "tests/nectar/prepaid-refunds.mjs": {
