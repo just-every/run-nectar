@@ -169,14 +169,19 @@ export async function prepaidFlow(h,owner,{fundPurchase,onState=async()=>{}}={})
 }
 
 // New customer-owned ledger families inherit withdrawal and financial custody.
-export async function prepaidErasureFlow(h,owner){
+export async function prepaidErasureFlow(h,owner,{scale=false}={}){
   const {row,purchaseInvoice,topupInvoice}=await prepaidFlow(h,owner)
   const api=(path,body,status)=>h.api(path,owner,body,status)
   const before=await api(`revenue?from=2026-01&to=2026-12&customer=${row.customer}`)
+  if(scale)for(let offset=0;offset<10000;offset+=5000){
+    const submitted=await api('usage.submit',{events:Array.from({length:5000},(_,index)=>({event_id:`synthetic-nectar-${100000+offset+index}`,customer:row.external,meter:row.meterCode,quantity:'1',occurred_at:'2026-03-15T12:00:00Z',properties:{note:'Synthetic private prepaid scale customer'}}))})
+    assert.deepEqual([submitted.accepted,submitted.rejected],[5000,0])
+  }
   const request=await api('erasure.request',{customer:row.customer})
   const link=h.mails.at(-1).text.match(/https?:\/\/[^\s"<]+\/erase\/[a-f0-9]{64}/)[0]
   assert.equal((await h.raw(new URL(link).pathname,{form:new URLSearchParams({confirm:'yes'})})).status,200)
   const approved=await api('erasure.approve',{request:request.id,confirm:true})
+  if(scale)assert.ok(approved.receipt.changed.some(change=>change.kind==='nc_usage_events'&&change.records>=10000),'The complete prepaid customer graph erases all 10000 additional events')
   for(const kind of ['nc_prepaid_requests','nc_prepaid_consents','nc_prepaid_funding_intents'])assert.ok(approved.receipt.changed.some(change=>change.kind===kind),kind)
   await api(`prepaid/${row.subscription}`,undefined,410)
   await api('prepaid.prepare',{subscription:row.subscription},410)
@@ -303,3 +308,6 @@ export async function prepaidPurchaseCreditFlow(h,owner){
   console.log('CAT-004 credited unpaid purchase: reduced liability without revenue, paid-reduced-consideration funding refusal and immutable source passed')
   return {customer,subscription,invoice,intent:grant.request}
 }
+
+// Outside push Verify: same financial custody journey with the larger graph.
+export async function prepaidScaleErasureFlow(h,owner){return prepaidErasureFlow(h,owner,{scale:true})}
