@@ -78,11 +78,12 @@ async function signature(secret: Uint8Array, timestamp: number, body: string) {
 const delays=[60000,300000,1800000,3600000,21600000,86400000]
 export async function dispatchWebhooks(env: Bindings) {
   await observeWebhookEntitlements(env)
-  const at=clockInstant(env)
-  await env.DB.prepare('UPDATE nc_webhook_endpoints SET previous_sealed=NULL,overlap_until=NULL WHERE overlap_until<=?').bind(at).run()
-  const due=await all(env,`SELECT d.*,p.url,p.secret_sealed,p.previous_sealed,p.overlap_until,e.payload_json,e.type FROM nc_webhook_deliveries d JOIN nc_webhook_endpoints p ON p.id=d.endpoint_id JOIN nc_webhook_events e ON e.id=d.event_id LEFT JOIN nc_customers c ON c.id=d.customer_id WHERE p.enabled=1 AND c.erased_at IS NULL AND ((d.status='pending' AND d.next_at<=?) OR (d.status='sending' AND d.next_at<=?)) ORDER BY d.next_at,d.id LIMIT 50`,at,at)
+  const dueAt=clockInstant(env)
+  await env.DB.prepare('UPDATE nc_webhook_endpoints SET previous_sealed=NULL,overlap_until=NULL WHERE overlap_until<=?').bind(dueAt).run()
+  const due=await all(env,`SELECT d.*,p.url,p.secret_sealed,p.previous_sealed,p.overlap_until,e.payload_json,e.type FROM nc_webhook_deliveries d JOIN nc_webhook_endpoints p ON p.id=d.endpoint_id JOIN nc_webhook_events e ON e.id=d.event_id LEFT JOIN nc_customers c ON c.id=d.customer_id WHERE p.enabled=1 AND c.erased_at IS NULL AND ((d.status='pending' AND d.next_at<=?) OR (d.status='sending' AND d.next_at<=?)) ORDER BY d.next_at,d.id LIMIT 50`,dueAt,dueAt)
   for(const d of due){
-    const claim=newId(),attempt=d.attempts+1
+    // A slow earlier receiver must not age this delivery’s signature or lease.
+    const at=clockInstant(env),claim=newId(),attempt=d.attempts+1
     const taken=await env.DB.prepare("UPDATE nc_webhook_deliveries SET status='sending',claim=?,attempts=attempts+1,next_at=?,updated_at=? WHERE id=? AND attempts=? AND next_at<=? AND status IN ('pending','sending') RETURNING id").bind(claim,at+300000,at,d.id,d.attempts,at).first()
     if(!taken)continue
     let code:number|null=null,outcome='uncertain',ok=false
