@@ -1,3 +1,4 @@
+import { portalPrepaidData, portalPrepaidSource, portalPrepaidPage, portalPrepaidSourcePage, portalPrepaidCsv } from './portal-prepaid'
 import type { Bindings } from '../auth.server'
 import { NectarError } from './core'
 import { customerSession } from './portal-session'
@@ -43,6 +44,10 @@ export async function portalResponse(request: Request, env: Bindings): Promise<R
       const brand = await one(env, 'SELECT brand_color FROM nc_portal_policy WHERE singleton=1')
       return portalStyle(brand?.brand_color)
     }
+    if(url.pathname==='/portal/prepaid/data')return Response.json(await portalPrepaidData(env,session),{headers})
+    if(url.pathname==='/portal/prepaid.csv')return new Response(await portalPrepaidCsv(env,session),{headers:{...headers,'content-type':'text/csv; charset=utf-8','content-disposition':'attachment; filename=prepaid.csv'}})
+    const prepaidSource=url.pathname.match(/^\/portal\/prepaid\/(prepaid-[\w-]+)$/)?.[1]
+    if(prepaidSource&&request.headers.get('accept')?.includes('application/json'))return Response.json(await portalPrepaidSource(env,session,prepaidSource),{headers})
     if(url.pathname==='/portal/usage.csv') return new Response(await portalUsageCsv(env,session,url),{headers:{...headers,'content-type':'text/csv; charset=utf-8','content-disposition':'attachment; filename=usage.csv'}})
     const upcoming=url.pathname.match(/^\/portal\/subscriptions\/([\w-]+)\/upcoming$/)
     if (upcoming) return Response.json(await portalUpcoming(env,session,upcoming[1],url.searchParams.get('period')),{headers})
@@ -54,12 +59,12 @@ export async function portalResponse(request: Request, env: Bindings): Promise<R
     if (url.pathname === '/portal/answer') return Response.json(await portalAnswer(env,session,input), { headers })
     const proposal = url.pathname.match(/^\/portal\/proposals\/([\w-]+)$/)?.[1]
     const invoice = url.pathname.match(/^\/portal\/invoices\/([\w-]+)$/)?.[1]
-    if (!['/portal','/portal/data','/portal/privacy','/portal/answers','/portal/upcoming','/portal/adjustments'].includes(url.pathname) && !invoice && !proposal) throw new NectarError('not_found', 404)
+    if (!['/portal','/portal/data','/portal/privacy','/portal/answers','/portal/upcoming','/portal/adjustments','/portal/prepaid'].includes(url.pathname) && !invoice && !proposal && !prepaidSource) throw new NectarError('not_found', 404)
     const data = await portalData(env, session, invoice), L = customerText(data.customer.language)
     if (url.pathname === '/portal/data') return Response.json(data, { headers: { ...headers, 'content-security-policy': "default-src 'none'; frame-ancestors 'none'" } })
     const token = url.searchParams.get('session')!
     const link = (path: string) => `${path}?session=${encodeURIComponent(token)}`
-    const body = url.pathname==='/portal/upcoming' ? await portalUpcomingPage(env,session,url,link) : url.pathname==='/portal/adjustments' ? await portalAdjustmentsPage(env,session,link) : proposal ? portalCreditProposalPage(session,await portalCreditProposal(env,session,proposal),link) : url.pathname === '/portal/answers' ? await portalAnswersPage(env,session,input,link) : url.pathname === '/portal/privacy' ? await portalPrivacy(env, session, link) : h`<header><h1>${L.t('portal.heading')}</h1><p>${data.customer.name}</p><p>${L.t('portal.readonly')}</p><a href="${link('/portal/privacy')}">${L.t('portal.privacy.heading')}</a> · <a href="${link('/portal/upcoming')}">${L.t('portal.upcoming.heading')}</a> · <a href="${link('/portal/adjustments')}">${L.t('portal.adjustments.heading')}</a></header>
+    const body = url.pathname==='/portal/prepaid'?await portalPrepaidPage(env,session,link):prepaidSource?await portalPrepaidSourcePage(env,session,prepaidSource,link):url.pathname==='/portal/upcoming' ? await portalUpcomingPage(env,session,url,link) : url.pathname==='/portal/adjustments' ? await portalAdjustmentsPage(env,session,link) : proposal ? portalCreditProposalPage(session,await portalCreditProposal(env,session,proposal),link) : url.pathname === '/portal/answers' ? await portalAnswersPage(env,session,input,link) : url.pathname === '/portal/privacy' ? await portalPrivacy(env, session, link) : h`<header><h1>${L.t('portal.heading')}</h1><p>${data.customer.name}</p><p>${L.t('portal.readonly')}</p><a href="${link('/portal/privacy')}">${L.t('portal.privacy.heading')}</a> · <a href="${link('/portal/upcoming')}">${L.t('portal.upcoming.heading')}</a> · <a href="${link('/portal/adjustments')}">${L.t('portal.adjustments.heading')}</a> · <a href="${link('/portal/prepaid')}">${L.t('portal.prepaid.heading')}</a></header>
       ${invoice ? h`<p><a href="${link('/portal')}">${L.t('portal.back')}</a></p>` : ''}
       ${data.invoices.length ? data.invoices.map(row => h`<section class="card"><h2>${invoice ? row.number : h`<a href="${link(`/portal/invoices/${row.id}`)}">${row.number}</a>`}</h2>
         <dl><dt>${L.t('portal.issued')}</dt><dd>${L.day(row.issue_date)}</dd><dt>${L.t('portal.due')}</dt><dd>${L.day(row.due_date)}</dd>
