@@ -1,3 +1,4 @@
+import { readAchPaymentEvidence } from './ach-payment-evidence'
 import { readCustomerPaymentMethods } from './customer-payment-methods'
 import { customerSubscriptionHistory,customerWriteOffHistory } from './customer-record-history'
 // CUS-001 composition of existing financial sources. Only closed projections
@@ -48,7 +49,7 @@ async function customerAuditEvents(env: Bindings, actor: Actor, customer: string
   if (canRead(actor, 'subscriptions')) sources.push('SELECT id FROM nc_subscriptions WHERE customer_id=?', 'SELECT id FROM nc_prepaid_requests WHERE customer_id=?', 'SELECT id FROM nc_prepaid_grants WHERE customer_id=?', 'SELECT id FROM nc_prepaid_ledger WHERE customer_id=?')
   if (canRead(actor, 'invoices')) sources.push('SELECT id FROM nc_invoices WHERE customer_id=?', 'SELECT id FROM nc_credit_notes WHERE customer_id=?', 'SELECT id FROM nc_write_offs WHERE customer_id=?', 'SELECT id FROM nc_write_off_recoveries WHERE customer_id=?', 'SELECT id FROM nc_charges WHERE customer_id=?')
   if (canRead(actor, 'payments')) sources.push('SELECT id FROM nc_payments WHERE customer_id=?', 'SELECT id FROM nc_balance_entries WHERE customer_id=?', 'SELECT id FROM nc_balance_requests WHERE customer_id=?')
-  if (canRead(actor, 'payments') && canRead(actor, 'invoices')) sources.push('SELECT id FROM nc_native_collections WHERE customer_id=?', 'SELECT id FROM nc_prepaid_refunds WHERE customer_id=?', 'SELECT id FROM nc_prepaid_refund_intakes WHERE customer_id=?', 'SELECT id FROM nc_allocations WHERE payment_id IN (SELECT id FROM nc_payments WHERE customer_id=?)')
+  if (canRead(actor, 'payments') && canRead(actor, 'invoices')) sources.push('SELECT id FROM nc_ach_payment_evidence WHERE customer_id=?', 'SELECT id FROM nc_native_collections WHERE customer_id=?', 'SELECT id FROM nc_prepaid_refunds WHERE customer_id=?', 'SELECT id FROM nc_prepaid_refund_intakes WHERE customer_id=?', 'SELECT id FROM nc_allocations WHERE payment_id IN (SELECT id FROM nc_payments WHERE customer_id=?)')
   sources.push("SELECT id FROM nc_notes WHERE customer_id=? AND kind='customer'")
   if (canRead(actor, 'invoices')) sources.push("SELECT id FROM nc_notes WHERE customer_id=? AND kind='invoice'")
   if (canRead(actor, 'payments')) sources.push("SELECT id FROM nc_notes WHERE customer_id=? AND kind='payment'")
@@ -60,13 +61,13 @@ export async function customerBillingRecord(env: Bindings, actor: Actor, custome
   requireRead(actor, 'customers')
   const row = await one(env, 'SELECT id,erased_at FROM nc_customers WHERE id=?', customer)
   insist(row, 'customer_not_found', 404)
-  const empty = { processorPayments: null, paymentMethods: null, prepaid: null, refunds: null, creditBalance: null, subscriptionHistory:null,writeOffs:null,savedPaymentMethods:null,auditEvents: [] }
+  const empty = { processorPayments: null, paymentMethods: null, prepaid: null, refunds: null, creditBalance: null, subscriptionHistory:null,writeOffs:null,savedPaymentMethods:null,achPaymentEvidence:null,auditEvents: [] }
   // Do not parse retained processor/narrative bytes after erasure.
   if (row.erased_at || await one(env, 'SELECT 1 FROM nc_erased_records WHERE record_id=?', customer)) return empty
   const payments = canRead(actor, 'payments'), invoices = canRead(actor, 'invoices'), subscriptions = canRead(actor, 'subscriptions')
   const subs = subscriptions || payments && invoices ? await all(env, 'SELECT id FROM nc_subscriptions WHERE customer_id=? ORDER BY created_at,id', customer) : []
   const date = subscriptions ? today((await requireBusiness(env)).timezone, clockInstant(env)) : null
-  const [processorPayments, prepaid, refunds, balance, auditEvents,subscriptionHistory,writeOffs,savedPaymentMethods] = await Promise.all([
+  const [processorPayments, prepaid, refunds, balance, auditEvents,subscriptionHistory,writeOffs,savedPaymentMethods,achPaymentEvidence] = await Promise.all([
     payments && invoices ? customerProcessorFacts(env, customer) : null,
     subscriptions ? Promise.all(subs.map(sub => prepaidBalances(env, actor, sub.id, date!))) : null,
     payments && invoices ? Promise.all(subs.map(sub => readPrepaidRefunds(env, actor, sub.id))) : null,
@@ -74,6 +75,7 @@ export async function customerBillingRecord(env: Bindings, actor: Actor, custome
     customerAuditEvents(env, actor, customer),
     customerSubscriptionHistory(env,actor,customer),customerWriteOffHistory(env,actor,customer),
     payments&&invoices?readCustomerPaymentMethods(env,actor,customer):null,
+    payments&&invoices?readAchPaymentEvidence(env,actor,customer):null,
   ])
   const creditBalance = balance ? { customer, cashCents: balance.cashCents, goodwillCents: balance.goodwillCents,
     carriedCents: balance.carriedCents, totalCents: balance.totalCents, entries: balance.entries,
@@ -81,5 +83,5 @@ export async function customerBillingRecord(env: Bindings, actor: Actor, custome
   return { processorPayments, paymentMethods: processorPayments?.filter(payment => payment.card).map(payment => ({
     collection: payment.id, invoice: payment.invoice, card: payment.card, verifiedAt: payment.verifiedAt })) ?? null,
     prepaid, refunds: refunds?.flat().filter(refund => refund.customer === customer).map(typedRefund) ?? null,
-    creditBalance, auditEvents,subscriptionHistory,writeOffs,savedPaymentMethods }
+    creditBalance, auditEvents,subscriptionHistory,writeOffs,savedPaymentMethods,achPaymentEvidence }
 }

@@ -1,3 +1,4 @@
+import { recordAchPaymentEvidence } from './ach-payment-evidence'
 import { refreshCustomerPaymentMethods } from './customer-payment-methods'
 import { recordDailyRate } from './currency-rates'
 import { prepareTrialCollection,confirmTrialCollection,approveTrialCollection,revokeTrialCollection } from './trial-collection'
@@ -101,6 +102,7 @@ export const actions: Record<string, Handler> = {
   'collection.prepare': prepareNativeCollection,
   'collection.confirm': confirmNativeCollection,
   'collection.reconcile': reconcileNativeCollection,
+  'payment.ach_evidence.record':recordAchPaymentEvidence,
   'customer.payment_methods.refresh':refreshCustomerPaymentMethods,
   'currency.rate.record':recordDailyRate,
   'trial.collection.prepare':prepareTrialCollection,

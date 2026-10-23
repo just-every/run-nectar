@@ -16,10 +16,13 @@ export async function customerEvidenceMatches(env: Bindings, search: string, act
   if (!actor || !canRead(actor, 'payments') || !canRead(actor, 'invoices')) return found
   const financial = await all(env, `SELECT r.customer_id FROM nc_prepaid_refunds r JOIN nc_customers c ON c.id=r.customer_id
       WHERE c.erased_at IS NULL AND instr(lower(r.refund_ref),?)>0
+    UNION SELECT e.customer_id FROM nc_ach_payment_evidence e JOIN nc_customers c ON c.id=e.customer_id
+      WHERE c.erased_at IS NULL AND NOT EXISTS(SELECT 1 FROM nc_erased_records WHERE record_id IN(e.id,e.customer_id,e.invoice_id))
+      AND (instr(lower(e.payment_intent_ref),?)>0 OR instr(lower(e.charge_ref),?)>0)
     UNION SELECT r.customer_id FROM nc_incumbent_history r JOIN nc_customers c ON c.id=r.customer_id
       WHERE c.erased_at IS NULL AND r.kind IN ('payment','refund','dispute') AND instr(lower(r.provider_ref),?)>0
     UNION SELECT r.customer_id FROM nc_imported_collections r JOIN nc_customers c ON c.id=r.customer_id
-      WHERE c.erased_at IS NULL AND (instr(lower(r.charge_ref),?)>0 OR instr(lower(r.payment_intent_ref),?)>0)`, text, text, text, text)
+      WHERE c.erased_at IS NULL AND (instr(lower(r.charge_ref),?)>0 OR instr(lower(r.payment_intent_ref),?)>0)`, text, text, text, text, text, text)
   for (const row of financial) found.add(row.customer_id)
   const savedCards=await all(env,`SELECT m.last4,m.brand,m.customer_id FROM nc_customer_payment_methods m
     JOIN nc_customer_payment_method_snapshots s ON s.id=m.snapshot_id AND s.customer_id=m.customer_id

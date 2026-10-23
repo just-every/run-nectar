@@ -37,7 +37,18 @@ try{
       assert.equal(new URL(page.url()).pathname,`/app/customers/${customer}`)
       await shot(`${kind??'billing'}-customer`,width)
     }
-  },{refreshMethods:async({customer})=>{
+  },{recordAch:async({customer,input})=>{
+    await page.goto(h.origin+`/app/customers/${customer}`)
+    for(const width of [1440,390]){await page.setViewportSize({width,height:950});await shot('ach-before-verification',width)}
+    const form=page.locator('form[action="/app/do/payment.ach_evidence.record"]')
+    await form.locator('[name=invoice]').selectOption(input.invoice)
+    await form.locator('[name=account_ref]').selectOption(input.account_ref)
+    await form.locator('[name=payment_intent_ref]').fill(input.payment_intent_ref)
+    await form.locator('[name=confirm]').check()
+    await Promise.all([page.waitForNavigation({waitUntil:'load'}),form.getByRole('button').click()])
+    assert.equal(new URL(page.url()).searchParams.get('error'),null)
+    return (await h.api(`customers/${customer}`,owner)).billingRecord.achPaymentEvidence.at(-1)
+  },refreshMethods:async({customer})=>{
     await page.goto(h.origin+`/app/customers/${customer}`)
     for(const width of [1440,390]){await page.setViewportSize({width,height:950});await shot('saved-methods-before-refresh',width)}
     const form=page.locator('form[action="/app/do/customer.payment_methods.refresh"]')

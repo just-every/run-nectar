@@ -1,3 +1,4 @@
+import { achPaymentEvidenceEdge,assertAchPaymentEvidence } from './ach-payment-evidence.mjs'
 import { customerPaymentMethodsEdge,assertCustomerPaymentMethods } from './customer-payment-methods.mjs'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
@@ -5,11 +6,12 @@ import { file } from './harness.mjs'
 import { nativeCollectionEdge } from './native-collection.mjs'
 import { totp } from './mfa.mjs'
 
-let edge,methodEdge
+let edge,methodEdge,achEdge
 export const harnessOptions = () => {
   edge = nativeCollectionEdge()
   methodEdge=customerPaymentMethodsEdge(edge.fetch)
-  return { stripeFetch: methodEdge.fetch, stripeSecret: 'synthetic-nectar-1', stripeSecondarySecret: 'synthetic-nectar-2' }
+  achEdge=achPaymentEvidenceEdge(methodEdge.fetch)
+  return { stripeFetch: achEdge.fetch, stripeSecret: 'synthetic-nectar-1', stripeSecondarySecret: 'synthetic-nectar-2' }
 }
 
 // CUS-001 current-source composition; the full clause remains partial.
@@ -106,8 +108,16 @@ export async function customerSearchFlow(h, owner, onReady = async () => {},inte
   await api('access.give',{email:'synthetic-nectar-114@example.test',name:'Synthetic customer finance',role:'finance'})
   const finance=await h.signIn('synthetic-nectar-114@example.test',{requested:true})
   await assertCustomerPaymentMethods(h,owner,{customer:nativeCustomer,other,finance,edge:methodEdge,refresh:interaction.refreshMethods})
+  const achCharge=await api('charge.add',{customer:nativeCustomer,amount:'7.25',description:'Settled bank payment workshop',effective_date:'2026-10-20',taxable:false})
+  const achInvoice=await api('invoice.manual',{customer:nativeCustomer,charges:[achCharge.charge],service_date:'2026-10-20'})
+  await api('invoice.approve',{invoice:achInvoice.id,acknowledge:true})
+  await api('invoice.finalise',{invoice:achInvoice.id,issue_date:'2026-10-20'})
+  const ach=await assertAchPaymentEvidence(h,owner,{customer:nativeCustomer,invoice:achInvoice.id,edge:achEdge,finance,other,record:interaction.recordAch})
+  for(const query of [ach.paymentIntentRef,ach.chargeRef])assert.deepEqual((await api(`customers?search=${encodeURIComponent(query)}`)).map(row=>row.id),[nativeCustomer])
+  await onReady({h,owner,customer:nativeCustomer,query:ach.chargeRef,kind:'ach'})
   const support=await h.signIn('lookup-support@example.test')
   assert.equal((await h.api(`customers/${nativeCustomer}`,support)).billingRecord.savedPaymentMethods[0].methods.length,3)
+  assert.equal((await h.api(`customers/${nativeCustomer}`,support)).billingRecord.achPaymentEvidence[0].id,ach.id)
   await h.api('customer.payment_methods.refresh',support,{customer:nativeCustomer},403)
   for(const query of ['1111','visa 1111'])assert.deepEqual((await api(`customers?search=${encodeURIComponent(query)}`)).map(row=>row.id),[nativeCustomer])
   const processorRecord = (await api(`customers/${nativeCustomer}`)).billingRecord
@@ -124,7 +134,7 @@ export async function customerSearchFlow(h, owner, onReady = async () => {},inte
   await api('access.give', { email: 'synthetic-nectar-4@example.test', name: 'synthetic-nectar-4', role: 'custom', custom_role: role.id })
   const customerReader = await h.signIn('synthetic-nectar-4@example.test', { requested: true })
   const restricted = (await h.api(`customers/${nativeCustomer}`, customerReader)).billingRecord
-  for (const family of ['processorPayments', 'paymentMethods', 'refunds', 'prepaid', 'creditBalance','subscriptionHistory','writeOffs','savedPaymentMethods']) assert.equal(restricted[family], null, 'Family-scoped customer readers receive no new financial source')
+  for (const family of ['processorPayments', 'paymentMethods', 'refunds', 'prepaid', 'creditBalance','subscriptionHistory','writeOffs','savedPaymentMethods','achPaymentEvidence']) assert.equal(restricted[family], null, 'Family-scoped customer readers receive no new financial source')
   assert.ok(restricted.auditEvents.every(event => event.subject === nativeCustomer), 'Audit respects family scope')
   assert.deepEqual(await h.api(`customers?search=${collected.charge_ref}`, customerReader), [])
   const snapshot = await api('audit')
@@ -152,7 +162,7 @@ export async function customerSearchFlow(h, owner, onReady = async () => {},inte
   await api('erasure.approve', { request: erasure.id, confirm: true })
   const erased = await api(`customers/${nativeCustomer}`)
   assert.ok(!erased.billingRecord || Object.entries(erased.billingRecord).every(([key, value]) => key === 'auditEvents' ? value.length === 0 : value === null), 'Erased customer composition never parses retained private sources')
-  for (const query of [collected.charge_ref, collected.payment_intent_ref, 'visa 4242']) assert.deepEqual(await api(`customers?search=${encodeURIComponent(query)}`), [], 'Retained processor identity is not searchable after erasure')
+  for (const query of [collected.charge_ref, collected.payment_intent_ref,ach.chargeRef,ach.paymentIntentRef, 'visa 4242']) assert.deepEqual(await api(`customers?search=${encodeURIComponent(query)}`), [], 'Retained processor identity is not searchable after erasure')
   console.log('CUS-001 customer lookup, literal searches, scoped billing evidence, totals and role custody passed')
   return { customer, other, invoice, credit }
 }

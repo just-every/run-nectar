@@ -108,7 +108,7 @@ function allocationFactStatements(env: Bindings, actor: Actor, paymentId: string
  * source guards. This helper never calls a provider or commits on its own. */
 export async function collectedPaymentStatements(env: Bindings, actor: Actor, fact: {
   customerId: string; invoiceId: string; amountCents: number; receivedOn: string
-  reference: string; evidence: string; currency?: string; paymentId?: string; allocationId?: string
+  reference: string; evidence: string; currency?: string; paymentId?: string; allocationId?: string; method?: 'card_external' | 'bank_transfer'
 }) {
   requireCapability(actor, 'receivables')
   insist(Number.isSafeInteger(fact.amountCents) && fact.amountCents > 0, 'invalid_amount')
@@ -128,10 +128,10 @@ export async function collectedPaymentStatements(env: Bindings, actor: Actor, fa
     guard(env, 'customer_erased', 'EXISTS(SELECT 1 FROM nc_customers WHERE id=? AND erased_at IS NULL)', customer.id),
     guard(env, 'payment_reference_exists', 'NOT EXISTS(SELECT 1 FROM nc_payments WHERE customer_id=? AND reference=?)', customer.id, fact.reference),
     guard(env, 'collection_balance_changed', `(SELECT ${BALANCE_SQL} FROM nc_invoices i WHERE i.id=? AND i.status='issued' AND i.customer_id=?)=?`, invoice.id, customer.id, fact.amountCents),
-    paymentFactStatement(env, actor, { paymentId, customerId: customer.id, amountCents: fact.amountCents, receivedOn: received, currency: invoice.currency, method: 'card_external', reference: fact.reference, evidence: fact.evidence }),
+    paymentFactStatement(env, actor, { paymentId, customerId: customer.id, amountCents: fact.amountCents, receivedOn: received, currency: invoice.currency, method: fact.method ?? 'card_external', reference: fact.reference, evidence: fact.evidence }),
     ...allocationFactStatements(env, actor, paymentId, invoice, fact.amountCents, allocationId),
   ], audits: [
-    { actor: actorLabel(actor), action: 'payment.record', subject: paymentId, detail: { customer: customer.id, amount: fact.amountCents, received, method: 'card_external', reference: fact.reference } },
+    { actor: actorLabel(actor), action: 'payment.record', subject: paymentId, detail: { customer: customer.id, amount: fact.amountCents, received, method: fact.method ?? 'card_external', reference: fact.reference } },
     { actor: actorLabel(actor), action: 'payment.allocate', subject: allocationId, detail: { payment: fact.reference, invoice: invoice.number, amount: fact.amountCents } },
   ] }
 }
