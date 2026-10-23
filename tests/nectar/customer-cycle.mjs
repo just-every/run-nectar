@@ -9,6 +9,9 @@ const sum = (rows, field) => rows.reduce((total, row) => total + row[field], 0)
 export async function assertCustomerFullCycle(h, owner, { customer, finance, edge, onReady = async () => {} }) {
   const api = (path, body, status) => h.api(path, owner, body, status)
   const date = '2026-10-22'
+  const contact=await api('contact.add',{customer,name:'Morgan Palmer',email:'morgan@observatory.example'})
+  const note=await api('note.add',{kind:'customer',record:customer,body:'Customer confirmed the workshop and unused-credit adjustment.'})
+  await api('metadata.write',{kind:'customer',record:customer,revision:0,metadata:{segment:'Observatory research'}})
   edge.at(`${date}T10:00:00Z`)
   const before = await api(`customers/${customer}`)
   assert.equal(before.external_id, stripeHistoryCapture().customers.data[0].id)
@@ -99,6 +102,11 @@ export async function assertCustomerFullCycle(h, owner, { customer, finance, edg
 
   const record = await api(`customers/${customer}`)
   const { ledger, billingRecord } = record
+  assert.ok(record.contacts.some(row=>row.email==='morgan@observatory.example'))
+  assert.ok(record.contacts.every(row=>row.customer_id===customer))
+  assert.ok(record.notes.some(row=>row.body==='Customer confirmed the workshop and unused-credit adjustment.'))
+  assert.ok(record.notes.every(row=>row.customer_id===customer))
+  assert.equal(record.metadata.segment,'Observatory research')
   assert.ok(billingRecord.subscriptionHistory.some(row => row.id === subscription))
   const upcoming=await api(`subscriptions/${subscription}/upcoming?period=2026-10`)
   assert.deepEqual(billingRecord.prepaid.find(row => row.subscription === subscription),upcoming.prepaid)
@@ -118,11 +126,11 @@ export async function assertCustomerFullCycle(h, owner, { customer, finance, edg
   assert.equal(ledger.creditedCents, sum(ledger.invoices, 'credited_cents'))
   assert.equal(ledger.balanceCents, sum(ledger.invoices, 'balance_cents'))
   assert.equal(ledger.invoicedCents, ledger.paidCents + ledger.creditedCents + ledger.writtenOffCents + ledger.balanceCents)
-  for (const action of ['collection.collected', 'payment.ach_evidence.record', 'prepaid.refund.complete', 'credit.issue']) {
+  for (const action of ['contact.add','note.add','metadata.write','collection.collected', 'payment.ach_evidence.record', 'prepaid.refund.complete', 'credit.issue']) {
     assert.ok(billingRecord.auditEvents.some(row => row.action === action), `Customer retains ${action}`)
   }
   const nativeCard = billingRecord.processorPayments.find(row => row.card)
-  const queries = [record.name, record.billing_email, record.external_id, original.number, credit.number, supportCredit.number,
+  const queries = [record.name, record.billing_email, record.external_id,'morgan@observatory.example','Observatory research', original.number, credit.number, supportCredit.number,
     nativeCard.chargeRef, nativeCard.paymentIntentRef, nativeCard.card.last4, `${nativeCard.card.brand} ${nativeCard.card.last4}`,
     refunded.refundRef, ...billingRecord.achPaymentEvidence.flatMap(row => [row.chargeRef, row.paymentIntentRef]),
     capture.invoices.data[0].number, capture.invoices.data[0].id, capture.payments.data[0].id, capture.refunds.data[0].id]
