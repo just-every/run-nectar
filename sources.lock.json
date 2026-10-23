@@ -4301,7 +4301,7 @@
       "executable": false
     },
     "tests/nectar/webhook-shadow-sandbox.mjs": {
-      "sha256": "9b9217e7f92aab631f8e37bc48a0d8f1a55e1810285a96c94c92223ebecd853a",
+      "sha256": "99087e7f12f38fcf86192dedce9893b6021c78f8de04e469b61bd6ad384f16b4",
       "executable": false
     },
     "tests/nectar/webhooks.mjs": {

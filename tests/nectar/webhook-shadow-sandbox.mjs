@@ -68,7 +68,7 @@ try{
   const failedInvoice=await stripe.request('POST','/v1/invoices',{customer:customer.id,auto_advance:false})
   await stripe.request('POST','/v1/invoiceitems',{customer:customer.id,invoice:failedInvoice.id,currency:'usd',amount:500})
   await stripe.request('POST',`/v1/invoices/${failedInvoice.id}/finalize`,{auto_advance:false})
-  const declined=await stripe.request('POST','/v1/payment_methods',{type:'card','card[token]':'tok_chargeDeclined'})
+  const declined=await stripe.request('POST','/v1/payment_methods',{type:'card','card[token]':'tok_chargeCustomerFail'})
   await stripe.request('POST',`/v1/payment_methods/${declined.id}/attach`,{customer:customer.id})
   try{await stripe.request('POST',`/v1/invoices/${failedInvoice.id}/pay`,{payment_method:declined.id});check(false,'failing_card_was_accepted')}
   catch(error){receipt.testDeclineAttempt=safeError(error);check(error.code==='card_declined','expected_test_card_decline')}
