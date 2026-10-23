@@ -180,6 +180,7 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "customer": "text",
     "stripe_customer_ref": "text"
   },
+  "customer.payment_methods.refresh": { "customer": "text" },
   "payment.ach_evidence.record": { "invoice": "text", "account_ref": "text", "payment_intent_ref": "text", "confirm": "flag" },
   "collection.prepare": {
     "invoice": "text"
