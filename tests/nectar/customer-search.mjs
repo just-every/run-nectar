@@ -166,7 +166,7 @@ export async function customerSearchFlow(h, owner, onReady = async () => {},inte
   assert.match(await h.page(`/app/customers/${moved.id}?preview_period=2026-08`, owner), /Previous biller owns this period/)
   const erasure = await api('erasure.request', { customer: nativeCustomer })
   await api('erasure.verify', { request: erasure.id, reason: 'synthetic-nectar-5', evidence: file('synthetic-nectar-5.txt', 'synthetic-nectar-5', 'text/plain') })
-  await api('erasure.approve', { request: erasure.id, confirm: true })
+  const erasedApproval=await api('erasure.approve', { request: erasure.id, confirm: true })
   const erased = await api(`customers/${nativeCustomer}`)
   assert.ok(!erased.billingRecord || Object.entries(erased.billingRecord).every(([key, value]) => key === 'auditEvents' ? value.length === 0 : value === null), 'Erased customer composition never parses retained private sources')
   for (const query of [collected.charge_ref, collected.payment_intent_ref,ach.chargeRef,ach.paymentIntentRef, 'visa 4242']) assert.deepEqual(await api(`customers?search=${encodeURIComponent(query)}`), [], 'Retained processor identity is not searchable after erasure')
@@ -181,6 +181,13 @@ export async function customerSearchFlow(h, owner, onReady = async () => {},inte
   achEdge.configureCaptured({invoice:replacementInvoice.id,amountCents:725,currency:'USD',date:'2026-10-22T00:00:00Z'})
   await api('payment.ach_evidence.record',{invoice:replacementInvoice.id,account_ref:'synthetic-nectar-native-account-1',payment_intent_ref:ach.paymentIntentRef,confirm:true},409)
   assert.deepEqual((await api(`customers/${replacement}`)).ledger.payments,[],'Erasure cannot free the same settled cash for another customer')
+  await h.advanceClock(`${erasedApproval.receipt.retained.until}T16:00:00Z`)
+  assert.ok((await api('erasure.purge',{})).removed.includes(nativeCustomer),'Receipt and ACH financial facts follow the owner-approved removal boundary')
+  for(const receipt of processorRecord.receipts)await api(`payments/${receipt.payment}/receipt`,undefined,404)
+  const laterPayment=await api('payment.record',{customer:replacement,amount:'0.01',received_on:erasedApproval.receipt.retained.until,method:'bank_transfer',reference:'synthetic-nectar-307'})
+  const laterReceipt=await api(`payments/${laterPayment.payment}/receipt`)
+  assert.ok(laterReceipt.sequence>Math.max(...processorRecord.receipts.map(row=>row.sequence)),'Financial removal never recycles an old customer receipt number')
+  for(const receipt of processorRecord.receipts)assert.deepEqual(await api(`customers?search=${receipt.number}`),[],'A removed customer receipt never resolves to another customer')
   console.log('CUS-001 customer lookup, literal searches, scoped billing evidence, totals and role custody passed')
   return { customer, other, invoice, credit }
 }

@@ -10,7 +10,7 @@ export async function paymentReceiptPage(env: Bindings, actor: Actor, payment: s
     <p>Recorded cash received. A manually recorded payment is not proof of bank settlement.</p>
     <p><a href="/app/customers/${receipt.customer}">Customer record</a></p>
     <section class="card"><h2>Payment</h2>
-      ${table(['Receipt', 'Received on', 'Method', 'Amount', 'Allocated', 'Returned', 'Unallocated'], [[receipt.number, receipt.receivedOn,
+      ${table(['Receipt', 'Received on', 'Method', 'Amount', 'Allocated', 'Cash-balance returns', 'Unallocated'], [[receipt.number, receipt.receivedOn,
         paymentMethodName(receipt.method), cents(receipt.amountCents, receipt.currency), cents(receipt.allocatedCents, receipt.currency), cents(receipt.returnedCents, receipt.currency), cents(receipt.unallocatedCents, receipt.currency)]])}
       ${receipt.erased ? h`<p>Personal data erased; retained financial facts.</p>` : ''}
     </section>
