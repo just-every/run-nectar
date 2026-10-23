@@ -1,3 +1,4 @@
+import { refreshCustomerPaymentMethods } from './customer-payment-methods'
 import { recordDailyRate } from './currency-rates'
 import { prepareTrialCollection,confirmTrialCollection,approveTrialCollection,revokeTrialCollection } from './trial-collection'
 import { configureRefundNotices } from './prepaid-refund-mail'
@@ -100,6 +101,7 @@ export const actions: Record<string, Handler> = {
   'collection.prepare': prepareNativeCollection,
   'collection.confirm': confirmNativeCollection,
   'collection.reconcile': reconcileNativeCollection,
+  'customer.payment_methods.refresh':refreshCustomerPaymentMethods,
   'currency.rate.record':recordDailyRate,
   'trial.collection.prepare':prepareTrialCollection,
   'trial.collection.confirm':confirmTrialCollection,

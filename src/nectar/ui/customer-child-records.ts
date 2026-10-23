@@ -31,6 +31,7 @@ export function customerChildRecordsSection(customer: Row, actor: Actor) {
         ${table(['Reference', 'Received', 'Amount', 'Unallocated'], ledger.payments.map((p: Row) => [p.reference, formatDate(p.received_on), amount(p.amount_cents), amount(p.unallocated_cents)]), { empty: 'No payments.' })}
         <h4>Credit notes</h4>
         ${table(['Credit note', 'Invoice', 'Amount', 'Reason'], ledger.credits.map((c: Row) => [c.number, invoice(c.invoice_id, ledger.invoices.find((i: Row) => i.id === c.invoice_id)?.number || c.invoice_id), amount(c.amount_cents), c.reason]), { empty: 'No credit notes.' })}
+        ${child.billingRecord?.savedPaymentMethods?.length?h`<h4>Saved payment methods</h4>${child.billingRecord.savedPaymentMethods.map((snapshot:Row)=>h`<p>Verified at ${new Date(snapshot.fetchedAt).toISOString()}. Historical observation; no debit authority.</p>${table(['Type','Institution','Last four','Expiry'],snapshot.methods.map((method:Row)=>[method.type,method.brand??method.bankName,method.last4,method.type==='card'?`${method.expMonth}/${method.expYear}`:'—']))}`)}`:''}
         ${customerBillingRecordSection(child, actor)}
         <h4>Billing contacts</h4>
         ${table(['Name', 'Email', 'Role'], child.contacts.map((c: Row) => [c.name, c.email, c.role]), { empty: 'No extra contacts.' })}

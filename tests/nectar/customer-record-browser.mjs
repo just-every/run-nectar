@@ -37,6 +37,13 @@ try{
       assert.equal(new URL(page.url()).pathname,`/app/customers/${customer}`)
       await shot(`${kind??'billing'}-customer`,width)
     }
-  })
+  },{refreshMethods:async({customer})=>{
+    await page.goto(h.origin+`/app/customers/${customer}`)
+    for(const width of [1440,390]){await page.setViewportSize({width,height:950});await shot('saved-methods-before-refresh',width)}
+    const form=page.locator('form[action="/app/do/customer.payment_methods.refresh"]')
+    await Promise.all([page.waitForNavigation({waitUntil:'load'}),form.getByRole('button').click()])
+    assert.equal(new URL(page.url()).searchParams.get('error'),null)
+    return (await h.api(`customers/${customer}`,owner)).billingRecord.savedPaymentMethods
+  }})
   await writeFile(`${directory}/screens.json`,JSON.stringify({journey:'CUS-001 current customer record',captures},null,2))
 }finally{await browser?.close();await h.close()}
