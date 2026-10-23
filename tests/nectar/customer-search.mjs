@@ -184,7 +184,7 @@ export async function customerSearchFlow(h, owner, onReady = async () => {},inte
   await api('payment.ach_evidence.record',{invoice:replacementInvoice.id,account_ref:'synthetic-nectar-native-account-1',payment_intent_ref:ach.paymentIntentRef,confirm:true},409)
   assert.deepEqual((await api(`customers/${replacement}`)).ledger.payments,[],'Erasure cannot free the same settled cash for another customer')
   await h.advanceClock(`${erasedApproval.receipt.retained.until}T16:00:00Z`)
-  assert.ok((await api('erasure.purge',{})).removed.includes(nativeCustomer),'Receipt and ACH financial facts follow the owner-approved removal boundary')
+  assert.ok((await api('erasure.purge',{})).removed.includes(erasure.id),'Receipt and ACH financial facts follow the owner-approved removal boundary')
   for(const receipt of processorRecord.receipts)await api(`payments/${receipt.payment}/receipt`,undefined,404)
   const laterPayment=await api('payment.record',{customer:replacement,amount:'0.01',received_on:erasedApproval.receipt.retained.until,method:'bank_transfer',reference:'synthetic-nectar-307'})
   const laterReceipt=await api(`payments/${laterPayment.payment}/receipt`)
