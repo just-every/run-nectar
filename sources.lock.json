@@ -2677,7 +2677,7 @@
       "executable": false
     },
     "src/nectar/currency.ts": {
-      "sha256": "1b9f59a29755a94879e2b277d709c82c83997b32d70673a38ffc71a39c792fb7",
+      "sha256": "a6ef7cafcfe47a352ee0eef5d79cceea5f3df8f3649aa1d2e536f7a8ce7e5271",
       "executable": false
     },
     "src/nectar/customer-billing-record.ts": {
@@ -4057,7 +4057,7 @@
       "executable": false
     },
     "tests/nectar/currency-aggregate-reports.mjs": {
-      "sha256": "86a5946643554ab05f69200019356baf2c861e083d798dced08e1c8a781ac9c9",
+      "sha256": "812d555017b1c5609060bb3b9088021674cc466bbdda68a88f95e3f052b32ddd",
       "executable": false
     },
     "tests/nectar/currency-browser.mjs": {
