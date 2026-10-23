@@ -4161,7 +4161,7 @@
       "executable": false
     },
     "tests/nectar/flows.mjs": {
-      "sha256": "c37c17e68c2fa89d31dba3fa4b71eb8e00187ea9c5fd8bd60778a632c1419150",
+      "sha256": "6a593a7f3fa4f09c4c41df2732f6af4b3f54206e18695630c18f05f796cf60d7",
       "executable": false
     },
     "tests/nectar/harness.mjs": {
@@ -4213,7 +4213,7 @@
       "executable": false
     },
     "tests/nectar/metadata.mjs": {
-      "sha256": "9ef6406c72e845ae8503cede4a8111e9731c6303806aafb08bc0a388f807127f",
+      "sha256": "ecc9fefd61a089cf75d2a5b9a2ffdfda38f8739e94d67571a1ad47106e8649c0",
       "executable": false
     },
     "tests/nectar/metric-changes.mjs": {
