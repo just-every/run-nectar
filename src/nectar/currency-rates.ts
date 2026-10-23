@@ -1,7 +1,8 @@
+import { requireFreshFactor } from './mfa'
 // Finance records a sourced daily USD value for one unit of transaction currency.
 // Rates are append-only, exact decimal text; missing days never inherit a rate.
 import type { Bindings } from '../auth.server'
-import { actorLabel, requireMember, requireRead, type Actor } from './actor'
+import { actorLabel, requireOwner, requireRead, type Actor } from './actor'
 import { all, commit, guard, insist, newId, now, one, type Row, stmt } from './core'
 import { canonicalDecimal, micros, roundHalfAway, SCALE } from './decimal'
 import { localDate, requireDate } from './dates'
@@ -10,7 +11,7 @@ import type { Input } from './input'
 import { billingCurrency } from './currency'
 
 export async function recordDailyRate(env: Bindings, actor: Actor, input: Input) {
-  requireMember(actor, 'approve')
+  requireOwner(actor);await requireFreshFactor(env,actor)
   const currency = billingCurrency(input.text('currency', { max: 3 })), date = requireDate(input.text('rate_date', { max: 10 }), 'rate_date')
   insist(currency !== 'USD', 'usd_rate_is_one')
   const rate = canonicalDecimal(input.text('usd_per_unit', { max: 24 }), 'usd_per_unit')

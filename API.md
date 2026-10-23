@@ -50,7 +50,7 @@ records their role does not read.
 | `trial.collection.confirm` | preparing owner with fresh factor | exact returned `instructions.confirm`; another active owner/finance approves, or explicit `confirm_single` if none exists |
 | `trial.collection.approve` | different owner/finance with fresh factor | `request`, `basis_hash`, `decision`; only the exact owner-confirmed terms |
 | `trial.collection.revoke` | owner with fresh factor | `request`; only before the durable payment claim |
-| `currency.rate.record` | member with approval | `currency` (CAD/EUR/GBP), `rate_date`, positive exact `usd_per_unit`, `source`; append-only, no carried-forward or invented rate |
+| `currency.rate.record` | owner with fresh factor | `currency` (CAD/EUR/GBP), `rate_date`, positive exact `usd_per_unit`, `source`; append-only, no carried-forward or invented rate |
 | `trial.resolve` | a person with approval | `subscription`; at or after the end date a trial with a payment method converts and one without ends unpaid (the daily job does this too) |
 | `amendment.propose` / `amendment.decide` | finance / a person with approval | `subscription`, `kind`, `value`, `effective_from`, `effective_to`, `price`, `note`, `clause` / `amendment`, `decision` |
 | `change.prepare` / `change.decide` | finance / a person with approval | `subscription`, `item`, `price`, `quantity`, `effective_date` / `change`, `decision` |

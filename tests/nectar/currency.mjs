@@ -38,15 +38,15 @@ export const harnessOptions = () => ({ stripeFetch: edge.fetch, stripeSecret: 's
 export async function currencyFlow(h, owner,{onState=async()=>{},confirmCollection,recordRate}={}) {
   const api = (path, body, status) => h.api(path, owner, body, status)
   await h.advanceClock('2026-10-23T10:00:00Z')
-  await api('business.configure', { ...await api('business'), timezone: 'UTC' })
+  await api('business.configure', { ...await api('business'), timezone: 'UTC',payment_terms_days:1 })
   await applyPolicy(h, owner, 'tax.declare', { tax_jurisdiction: 'CA', tax_mode: 'no_tax', tax_note: 'Synthetic multi-currency acceptance fixture' })
   await api('tax.review', { revision: (await api('business')).revision })
   const product = (await api('product.create', { code: 'synthetic-nectar-107', name: 'Synthetic CAD service' })).id
   const cad = (await api('price.create', { product, kind: 'flat', unit_amount: '10.00', currency: 'CAD', taxable: false })).id
   const usdRequest = await api('price.create', { product, kind: 'flat', unit_amount: '7.35', currency: 'USD', taxable: false })
   const saved = (await api('catalog')).priceRequests.find(row => row.id === usdRequest.request)
-  const finance = await reviewer(h, owner, saved.singleAllowed)
-  const usd = (await h.api('price.decide', finance, { request: usdRequest.request, decision: 'approved', confirm_single: saved.singleAllowed })).id
+  const priceApprover = await reviewer(h, owner, saved.singleAllowed)
+  const usd = (await h.api('price.decide', priceApprover, { request: usdRequest.request, decision: 'approved', confirm_single: saved.singleAllowed })).id
   const customer = (await api('customer.create', { external_id: 'synthetic-nectar-108', name: 'Synthetic Canadian customer', billing_email: 'synthetic-nectar-108@example.test', address: '1 Synthetic Way, Toronto, CA', currency: 'CAD' })).id
   const defaultCustomer = (await api('customer.create', { external_id: 'synthetic-nectar-109', name: 'Synthetic USD customer', billing_email: 'synthetic-nectar-109@example.test' })).id
   assert.equal((await api(`customers/${defaultCustomer}`)).currency, 'USD')
@@ -64,6 +64,10 @@ export async function currencyFlow(h, owner,{onState=async()=>{},confirmCollecti
   const original = await api(`invoices/${invoice.id}`)
   await api('reports/currency?from=2026-10-01&to=2026-10-23', undefined, 409)
   await onState({stage:'missing-rate',customer,invoice:invoice.id,run:run.id})
+  await api('access.give',{email:'synthetic-nectar-112@example.test',name:'Synthetic currency finance',role:'finance'})
+  const finance=await h.signIn('synthetic-nectar-112@example.test',{requested:true})
+  await h.api('currency.rate.record',finance,{},403)
+  assert.ok((await h.page('/app',owner)).includes('CAD 10.00'),'Outstanding work never labels CAD as USD')
   for (const rate_date of ['2026-10-01', '2026-10-23']){const payload={currency:'CAD',rate_date,usd_per_unit:'0.735055',source:'Synthetic finance worksheet synthetic-nectar-110; test-only rate'};if(recordRate)await recordRate(payload);else await api('currency.rate.record',payload)}
   await api('currency.rate.record', { currency: 'CAD', rate_date: '2026-10-01', usd_per_unit: '0.80', source: 'Synthetic duplicate rate' }, 409)
   await api('credit.issue', { invoice: invoice.id, amount: '1.01', currency: 'USD', reason: 'Synthetic mismatch refusal' }, 409)

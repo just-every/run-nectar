@@ -43,6 +43,7 @@ try{
     },
     onState:async({stage,customer,invoice,run})=>{
       if(stage==='missing-rate'){
+        await both('cad-overdue-work','/app')
         await both('cad-catalog-books','/app/catalog')
         await both('cad-missing-daily-rate','/app/reports/currency?from=2026-10-01&to=2026-10-23')
         await both('cad-bill-run',`/app/billing/${run}`)

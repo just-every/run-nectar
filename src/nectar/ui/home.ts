@@ -7,7 +7,7 @@ import { agentKeys, customRoles, members } from '../access'
 import { LATEST_VERSION, VERSIONS } from '../api-versions'
 import { canRead, CUSTOM_CAPABILITIES, ROLE_LABELS, ROLE_NAMES, SCOPES, can, type Actor, type Capability } from '../actor'
 import { US_STATES, business, taxReady } from '../business'
-import { one, parseJson } from '../core'
+import { all, one, parseJson } from '../core'
 import { money } from '../decimal'
 import { audit } from '../views'
 import { MORE, check, checks, details, emptyState, field, form, h, marker, hidden, page, select, table, tag, when } from './html'
@@ -35,13 +35,14 @@ export async function homePage(env: Bindings, actor: Actor, url: URL) {
   const pending = await count(env, "SELECT COUNT(*) AS n FROM nc_proposals WHERE status = 'pending'")
   const drafts = await count(env, "SELECT COUNT(*) AS n FROM nc_bill_runs WHERE status = 'draft'")
   const changes = await count(env, "SELECT COUNT(*) AS n FROM nc_changes WHERE status = 'draft'") + await count(env, "SELECT COUNT(*) AS n FROM nc_amendments WHERE status = 'proposed'")
-  const overdue = await one<{ n: number; total: number }>(env, `SELECT COUNT(*) AS n, COALESCE(SUM(${BALANCE_SQL}),0) AS total FROM nc_invoices i WHERE i.status='issued' AND i.due_date<date('now') AND ${BALANCE_SQL}>0`)
+  const overdueGroups=await all<{n:number;total:number;currency:string}>(env,`SELECT COUNT(*) AS n,COALESCE(SUM(${BALANCE_SQL}),0) AS total,i.currency FROM nc_invoices i WHERE i.status='issued' AND i.due_date<date('now') AND ${BALANCE_SQL}>0 GROUP BY i.currency ORDER BY i.currency`)
+  const overdue={n:overdueGroups.reduce((sum,row)=>sum+row.n,0),amounts:overdueGroups.map(row=>money(row.total,row.currency)).join(' + ')}
   const tasksOpen = await count(env, "SELECT COUNT(*) AS n FROM nc_tasks WHERE status = 'open'")
   const work = [
     pending && { label: `${pending} proposal${pending === 1 ? '' : 's'} waiting for a decision`, href: '/app/proposals' },
     drafts && { label: `${drafts} draft bill run${drafts === 1 ? '' : 's'} to review`, href: '/app/billing' },
     changes && { label: `${changes} contract exception${changes === 1 ? '' : 's'} or scheduled change${changes === 1 ? '' : 's'} awaiting approval`, href: '/app/customers' },
-    overdue?.n && { label: `${overdue.n} overdue invoice${overdue.n === 1 ? '' : 's'}, ${money(overdue.total)} outstanding`, href: '/app/receivables' },
+    overdue?.n && { label: `${overdue.n} overdue invoice${overdue.n === 1 ? '' : 's'}, ${overdue.amounts} outstanding`, href: '/app/receivables' },
     tasksOpen && { label: `${tasksOpen} open follow-up task${tasksOpen === 1 ? '' : 's'}`, href: '/app/receivables' },
   ].filter(Boolean).filter(item => opens(actor, (item as { href: string }).href)) as { label: string; href: string }[]
   const checklist = remaining.length ? h`<section class="card checklist" aria-labelledby="first-run"><h2 id="first-run">Finish your first billing cycle</h2><ol>${steps.map(step => h`<li class="${step.done ? 'done' : ''}">${marker(step.done ? 'done' : 'open')}${step.done ? h`<span>${step.label}</span><span class="sr"> (done)</span>` : h`<a href="${step.href}">${step.label}</a>`}</li>`)}</ol></section>` : ''

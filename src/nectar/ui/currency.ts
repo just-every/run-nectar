@@ -1,5 +1,5 @@
 import type { Bindings } from '../../auth.server'
-import { can,type Actor } from '../actor'
+import { type Actor } from '../actor'
 import { currencyReport,dailyRates } from '../currency-rates'
 import { NectarError } from '../core'
 import { cents,details,field,form,h,page,select,table } from './html'
@@ -12,5 +12,5 @@ export async function currencyPage(env:Bindings,actor:Actor,url:URL){
     <form method="get" action="/app/reports/currency">${field('From','from',{type:'date',value:url.searchParams.get('from')??'',required:false})}${field('To','to',{type:'date',value:url.searchParams.get('to')??'',required:false})}<button>Filter dates</button></form>
     <section class="card"><h2>USD report</h2>${report?h`${details(report.totals,'Totals in USD')}${table(['Kind','Source','Transaction amount','USD value','Rate','Rate date','Rate source'],report.transactions.map(row=>[row.kind,row.kind==='invoice'?h`<a href="/app/invoices/${row.id}">${row.number}</a>`:row.number??row.reference,cents(row.amount_cents,row.currency),cents(row.reporting.amountCents),row.reporting.rate,row.reporting.rateDate,row.reporting.source]))}`:h`<p>A sourced rate is required for a transaction date before this report can be calculated.</p>`}</section>
     <section class="card"><h2>Recorded daily rates</h2>${table(['Currency','Date','USD per unit','Source'],rates.map(row=>[row.currency,row.rate_date,row.usd_per_unit,row.source]),{empty:'No foreign-currency rates recorded.'})}
-    ${actor.kind==='member'&&can(actor,'approve')?form('currency.rate.record',url.pathname+url.search,h`${select('Currency','currency',['CAD','EUR','GBP'].map(value=>({value,label:value})))}${field('Rate date','rate_date',{type:'date'})}${field('USD per currency unit','usd_per_unit')}${field('Rate source','source',{hint:'Record the actual source and quote date. A saved daily rate cannot be overwritten.'})}`,'Record sourced daily rate',{layout:'columns',secondary:true}):''}</section>`,{url,current:'/app/reports/billings'})
+    ${actor.kind==='member'&&actor.role==='owner'?form('currency.rate.record',url.pathname+url.search,h`${select('Currency','currency',['CAD','EUR','GBP'].map(value=>({value,label:value})))}${field('Rate date','rate_date',{type:'date'})}${field('USD per currency unit','usd_per_unit')}${field('Rate source','source',{hint:'Record the actual source and quote date. A saved daily rate cannot be overwritten.'})}`,'Record sourced daily rate',{layout:'columns',secondary:true}):''}</section>`,{url,current:'/app/reports/billings'})
 }
