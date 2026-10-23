@@ -3529,7 +3529,7 @@
       "executable": false
     },
     "src/nectar/ui/customer-billing-record.ts": {
-      "sha256": "f19bdca14fb0ab63df87e4d943ea60b80027200dc9931797893a33e7e3c8fd75",
+      "sha256": "7a9507c195d2106ab29a85fe35b3a272fe81f94463e212f7ddeac39b7ca26596",
       "executable": false
     },
     "src/nectar/ui/customer-child-records.ts": {
@@ -3624,8 +3624,12 @@
       "sha256": "1bbb1d945fe89ac86b405c5ba028a00a1b2e8c0455e9aba63253538a561dee0a",
       "executable": false
     },
+    "src/nectar/ui/payment-method-name.ts": {
+      "sha256": "7de95676b868bf09c44e3383f3eb89235e96c63903ebdbbb69eb414b81cd013c",
+      "executable": false
+    },
     "src/nectar/ui/payment-receipts.ts": {
-      "sha256": "c2596aae5ce9693dbf5e6f755ba7cadc26bc0b9ee7538b430e91941e3a1135fd",
+      "sha256": "129061593cf97f2f54dab7ff789c1eff0b22d6a6047a6cefcee67f12c61d22e1",
       "executable": false
     },
     "src/nectar/ui/period-close.ts": {
