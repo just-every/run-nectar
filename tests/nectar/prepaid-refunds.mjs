@@ -76,6 +76,14 @@ export async function prepaidRefundFlow(h,owner,{onState=async()=>{},onTypedStat
         assert.ok(!page.includes('Synthetic unused paid service returned to its original card'))
         assert.doesNotMatch(page,/succeeded-refund-and-balance-debit|paymentMethodRef|chargeRef/)
       }
+      if(!erased){
+      const customerRecord=(await h.api(`customers/${row.customer}`,who)).billingRecord
+      const composed=customerRecord.refunds.find(r=>r.id===refund.id)
+      assert.ok(composed);for(const key of ['status','amountN','amountCents','refundRef','creditNumber','requestedBy','requestedByKind'])assert.equal(composed[key],facts[key],'CUS-001 typed refund composition equals the refund lifecycle')
+      assert.ok(customerRecord.refunds.every(r=>r.customer===row.customer),'Customer refund composition stays isolated')
+      for(const key of ['quote','reason','proof','basis'])assert.equal(Object.hasOwn(composed,key),false,'Customer composition never widens refund narratives')
+      if(customerRecord.prepaid){const summary=customerRecord.prepaid.find(s=>s.subscription===row.subscription);assert.ok(summary);assert.deepEqual(summary,(await h.api(`subscriptions/${row.subscription}/upcoming?period=2026-11`,who)).prepaid,'CUS-001 prepaid summary equals the existing engine preview')}
+      }
       results.push(facts)
     }
     assert.ok(results.every(facts=>JSON.stringify(facts)===JSON.stringify(results[0])),'All typed readers share one financial projection')

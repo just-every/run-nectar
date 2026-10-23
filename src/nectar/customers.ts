@@ -23,7 +23,7 @@ export async function customers(env: Bindings, actor: Actor,url?:URL) {
   const projected=await withMetadata(env,'customer',rows)
   if(!search)return projected
   const matches=await all(env,`SELECT m.kind,m.record_id,m.metadata_json FROM nc_metadata_revisions m WHERE m.revision=(SELECT MAX(x.revision) FROM nc_metadata_revisions x WHERE x.kind=m.kind AND x.record_id=m.record_id)`)
-  const found=await customerEvidenceMatches(env,search)
+  const found=await customerEvidenceMatches(env,search,actor)
   for(const m of matches){
     if(!Object.values(JSON.parse(m.metadata_json)).some(v=>String(v).toLowerCase().includes(search.toLowerCase())))continue
     if(m.kind==='customer')found.add(m.record_id)

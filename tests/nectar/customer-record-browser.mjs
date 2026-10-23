@@ -1,0 +1,42 @@
+// CUS-001 current customer composition, native customer lookup and exact scoped sources.
+import assert from 'node:assert/strict'
+import {mkdir,writeFile} from 'node:fs/promises'
+import {chromium} from '@playwright/test'
+import {harness} from './harness.mjs'
+import {applyPolicy} from './policy-helper.mjs'
+import {customerSearchFlow,harnessOptions} from './customer-search.mjs'
+const directory=process.env.NECTAR_EVIDENCE_DIR??'.evidence/customer-record'
+await mkdir(directory,{recursive:true})
+const h=await harness({assets:true,...harnessOptions()}),captures=[]
+let browser
+try{
+  await h.raw('/auth/bootstrap',{body:{token:h.vars.SETUP_TOKEN,displayName:'Nectar Owner'}})
+  const owner=await h.signIn(h.vars.OWNER_EMAIL)
+  await h.raw('/setup',{cookie:owner,form:new URLSearchParams({confirm:'yes'})})
+  await h.api('business.configure',owner,{legal_name:'Alder Research Software',timezone:'UTC',invoice_prefix:'ALDER',payment_terms_days:30})
+  await applyPolicy(h,owner,'tax.declare',{tax_jurisdiction:'CA',tax_mode:'no_tax',tax_note:'Reviewed customer record journey'})
+  await h.api('tax.review',owner,{revision:(await h.api('business',owner)).revision})
+  browser=await chromium.launch({headless:true,args:['--use-mock-keychain','--password-store=basic']})
+  const context=await browser.newContext(),page=await context.newPage()
+  await context.addCookies(owner.split('; ').map(value=>{const i=value.indexOf('=');return {name:value.slice(0,i),value:value.slice(i+1),url:h.origin}}))
+  const shot=async(label,width)=>{
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`${label} fits ${width}`)
+    const iconOnly=await page.locator('a,button,[role=button]').evaluateAll(nodes=>nodes.filter(n=>!n.textContent.trim()&&n.querySelector('svg,img')).map(n=>n.outerHTML));assert.deepEqual(iconOnly,[])
+    const file=`${width}-${label}.png`;await page.screenshot({path:`${directory}/${file}`,fullPage:true});captures.push({width,label,file});console.log('BROWSER',width,label)
+  }
+  await customerSearchFlow(h,owner,async({customer,query,kind})=>{
+    for(const width of [1440,390]){
+      await page.setViewportSize({width,height:950})
+      assert.equal((await page.goto(h.origin+'/app/customers')).status(),200)
+      const form=page.getByRole('search',{name:'Customer lookup'})
+      await form.locator('[name=search]').fill(query??'billing@marigold.example')
+      await Promise.all([page.waitForNavigation({waitUntil:'load'}),form.getByRole('button',{name:'Search',exact:true}).click()])
+      const link=page.locator(`a[href="/app/customers/${customer}"]`);assert.equal(await link.count(),1)
+      await shot(`${kind??'billing'}-search`,width)
+      await Promise.all([page.waitForNavigation({waitUntil:'load'}),link.click()])
+      assert.equal(new URL(page.url()).pathname,`/app/customers/${customer}`)
+      await shot(`${kind??'billing'}-customer`,width)
+    }
+  })
+  await writeFile(`${directory}/screens.json`,JSON.stringify({journey:'CUS-001 current customer record',captures},null,2))
+}finally{await browser?.close();await h.close()}
