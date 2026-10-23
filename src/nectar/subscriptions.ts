@@ -24,9 +24,10 @@ import type { Input } from './input'
 import type { ItemIn, Line } from './rating'
 import { intervalChangePreview } from './interval-changes'
 import { intervalCancellations } from './interval-cancel'
+import { assertSameCurrency, customerCurrencyGuard } from './currency'
 
 export async function requireSubscription(env: Bindings, id: string) {
-  const sub = await one(env, 'SELECT s.*, c.name AS customer_name, c.external_id AS customer_external_id, c.erased_at FROM nc_subscriptions s JOIN nc_customers c ON c.id = s.customer_id WHERE s.id = ?', id)
+  const sub = await one(env, 'SELECT s.*, c.name AS customer_name, c.external_id AS customer_external_id, c.currency, c.erased_at FROM nc_subscriptions s JOIN nc_customers c ON c.id = s.customer_id WHERE s.id = ?', id)
   insist(sub, 'subscription_not_found', 404)
   return sub
 }
@@ -36,10 +37,10 @@ export async function subscriptionDetail(env: Bindings, actor: Actor, id: string
   const sub = await requireSubscription(env, id)
   insist(!sub.erased_at,'customer_erased',410)
   const [items, amendments, changes, invoices] = await Promise.all([
-    all(env, 'SELECT i.*, p.kind, p.unit_amount, p.pricing_model, p.version, p.nickname,b.interval_unit,b.interval_count,b.billing_timing, pr.name AS product_name, m.code AS meter_code FROM nc_items i JOIN nc_prices p ON p.id = i.price_id LEFT JOIN nc_price_intervals b ON b.price_id=p.id JOIN nc_products pr ON pr.id = p.product_id LEFT JOIN nc_meters m ON m.id = p.meter_id WHERE i.subscription_id = ? ORDER BY i.effective_from, i.id', id),
+    all(env, 'SELECT i.*, p.kind, p.unit_amount, p.pricing_model, p.currency, p.version, p.nickname,b.interval_unit,b.interval_count,b.billing_timing, pr.name AS product_name, m.code AS meter_code FROM nc_items i JOIN nc_prices p ON p.id = i.price_id LEFT JOIN nc_price_intervals b ON b.price_id=p.id JOIN nc_products pr ON pr.id = p.product_id LEFT JOIN nc_meters m ON m.id = p.meter_id WHERE i.subscription_id = ? ORDER BY i.effective_from, i.id', id),
     all(env, 'SELECT * FROM nc_amendments WHERE subscription_id = ? ORDER BY created_at', id),
     all(env, 'SELECT * FROM nc_changes WHERE subscription_id = ? ORDER BY created_at DESC', id),
-    all(env, "SELECT id, number, status, period_start, period_end, total_cents FROM nc_invoices WHERE subscription_id = ? AND status <> 'discarded' ORDER BY period_start DESC", id),
+    all(env, "SELECT id, number, status, period_start, period_end, total_cents, currency FROM nc_invoices WHERE subscription_id = ? AND status <> 'discarded' ORDER BY period_start DESC", id),
   ])
   const history = await lifecycleHistory(env, id)
   return { ...sub,planChanges:await planChangesFor(env,actor,id), cancellations:await intervalCancellations(env,id),renewal:await termRecords(env,actor,id), contracts:await contractsFor(env,id),burnDown:await contractBurnDown(env,id), lifecyclePolicy: await lifecyclePolicy(env), lifecycle: history, intervals: lifecycleIntervals(history),...await metadataFor(env,'subscription',id), items, amendments, changes: changes.map(change => ({ ...change, preview: parseJson(change.preview_json, {}), preview_json: undefined })), invoices:await withMetadata(env,'invoice',invoices) }
@@ -93,6 +94,7 @@ export async function createSubscription(env: Bindings, actor: Actor, input: Inp
   for (const line of lines) {
     const price = await one(env, "SELECT p.*,b.interval_unit,b.interval_count,b.billing_timing FROM nc_prices p LEFT JOIN nc_price_intervals b ON b.price_id=p.id WHERE p.id = ? AND p.status = 'active'", line.price)
     insist(price, 'price_not_found', 404)
+    assertSameCurrency(customer.currency, price.currency)
     const quantity = price.kind === 'seat' ? Number(line.quantity) : 1
     insist(Number.isSafeInteger(quantity) && quantity >= (price.pricing_model === 'simple' ? 1 : 0) && quantity <= (price.pricing_model === 'simple' ? 1_000_000 : 1_000_000_000), 'invalid_quantity')
     items.push({ id: newId(), price, quantity })
@@ -117,6 +119,7 @@ export async function createSubscription(env: Bindings, actor: Actor, input: Inp
   }
   const promotion = input.text('promotion_code', { max: 40, optional: true }) ? await promotionRedemption(env, actor, { text: input.text('promotion_code', { max: 40 }), customer, subscription: id, start, trialEnd, items }) : null
   const statements = [
+    customerCurrencyGuard(env, customer.id, customer.currency),
     ...(meters.length ? [guard(env, 'meter_already_billed', `NOT EXISTS(${CLASH(meters.length)})`, customer.id, id, start, start, ...meters)] : []),
     stmt(env, "INSERT INTO nc_subscriptions (id, customer_id, external_id, anchor_day, start_date, trial_end,end_date,billing_anchor_date,contract_term_months,contract_end_date, billing_mode, origin, revision, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?,?,?,?,?,'live', 'native', ?, ?, ?, ?)", id, customer.id, externalId, anchor, start, trialEnd,contractEnd,billingAnchorDate,termMonths,contractEnd, newId(), by, at, at),
     ...items.map(item => stmt(env, "INSERT INTO nc_items (id, subscription_id, price_id, quantity, effective_from, origin, created_at) VALUES (?, ?, ?, ?, ?, 'native', ?)", item.id, id, item.price.id, item.quantity, start, at)),
@@ -185,6 +188,7 @@ export async function prepareChange(env: Bindings, actor: Actor, input: Input) {
   insist(!await one(env, "SELECT 1 FROM nc_invoices WHERE subscription_id = ? AND status = 'issued' AND period_end > ?", sub.id, date), 'period_already_invoiced', 409)
   const price = await one(env, "SELECT * FROM nc_prices WHERE id = ? AND status = 'active'", input.has('price') ? input.text('price', { max: 100 }) : item.price_id)
   insist(price, 'price_not_found', 404)
+  assertSameCurrency(sub.currency, price.currency)
   const old = await one(env, 'SELECT * FROM nc_prices WHERE id = ?', item.price_id)
   insist((price.meter_id ?? '') === (old!.meter_id ?? '') || price.kind !== 'unit', 'change_meter_separately')
   const quantity = price.kind === 'seat' ? input.integer('quantity', { min: price.pricing_model === 'simple' ? 1 : 0, max: price.pricing_model === 'simple' ? 1_000_000 : 1_000_000_000 })! : 1
@@ -227,6 +231,7 @@ export async function decideChange(env: Bindings, actor: Actor, input: Input) {
     return { id: sub.id, status: 'discarded' }
   }
   insist(sub.revision === change.subscription_revision, 'stale', 409)
+  assertSameCurrency(sub.currency, (await requirePrice(env, change.new_price_id)).currency)
   const item = await one(env, 'SELECT * FROM nc_items WHERE id = ?', change.item_id)
   if (item!.price_id !== change.new_price_id) {
     insist(change.prepared_by_id, 'price_switch_needs_preparation', 409)

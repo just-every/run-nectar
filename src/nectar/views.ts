@@ -1,3 +1,8 @@
+import { readPaymentReceipt } from './payment-receipts'
+import { dailyRates,currencyReport } from './currency-rates'
+import { readTrialCollections } from './trial-collection'
+import { customerBillingRecord } from './customer-billing-record'
+import { refundNoticeSettings } from './prepaid-refund-mail'
 import { hierarchyView } from './hierarchies'
 import { webhookList,webhookDetail } from './webhooks'
 import { writeOffList } from './write-offs'
@@ -64,7 +69,7 @@ export async function audit(env: Bindings, actor: Actor) {
   return await all(env, 'SELECT seq, at, actor, action, subject, detail FROM nc_audit ORDER BY seq DESC LIMIT 500')
 }
 
-export async function customerView(env: Bindings, actor: Actor, id: string, url?: URL): Promise<Row> {
+export async function customerView(env: Bindings, actor: Actor, id: string, url?: URL, includeChildren=true): Promise<Row> {
   requireRead(actor, 'customers')
   const customer = await requireCustomer(env, id)
   if(customer.erased_at) return {...customer,contacts:[],subscriptions:[],ledger:await customerLedger(env,actor,id),entitlements:[],incumbentInvoices:[],incumbentHistory:{documents:[],records:[]},charges:[],certificates:[],exemptionClaims:[],certificateReminders:[],notes:[],metadata:{},upcoming:null}
@@ -76,13 +81,20 @@ export async function customerView(env: Bindings, actor: Actor, id: string, url?
     all(env, "SELECT provider_ref, number, status, period_start, period_end, total_cents, paid_cents, remaining_cents FROM nc_incumbent_invoices WHERE document_kind='invoice' AND customer_id = ? ORDER BY period_start DESC", id),
   ])
   const upcoming = canRead(actor, 'subscriptions') && canRead(actor, 'invoices') ? await customerUpcoming(env, actor, id, url?.searchParams.get('preview_period') || null) : null
-  return { ...customer,upcoming,...await metadataFor(env,'customer',id), notes: await customerNotes(env, id), importedCollectionConfigured:actor.kind==='member'&&actor.role==='owner'&&!!env.STRIPE_BILLING_SECRET, importedCollections:actor.kind==='member'&&actor.role==='owner'?(await all(env,'SELECT * FROM nc_imported_collections WHERE customer_id=? ORDER BY prepared_at,id',id)).map(collectionView):await all(env,'SELECT id,invoice_id,number,status,amount_cents,currency,collected_on FROM nc_imported_collections WHERE customer_id=? ORDER BY prepared_at,id',id), incumbentHistory:await customerHistory(env,id), contacts, subscriptions:await withMetadata(env,'subscription',await Promise.all(subscriptions.map(async s=>({...s,intervals:lifecycleIntervals(await lifecycleHistory(env,s.id))})))), ledger, entitlements: features, incumbentInvoices: incumbent, charges: await all(env, 'SELECT * FROM nc_charges WHERE customer_id=? ORDER BY effective_date,id', id), certificatePolicy: await one(env, 'SELECT enabled,revision FROM nc_certificate_policy WHERE singleton=1'), certificates: await certificates(env, actor, id), exemptionClaims: await all(env, 'SELECT state FROM nc_exemption_claims WHERE customer_id=? ORDER BY state', id), certificateReminders: await all(env, 'SELECT state,kind,status,created_at FROM nc_certificate_reminders WHERE customer_id=? ORDER BY created_at DESC', id) }
+  const links=includeChildren?await all(env,'SELECT customer_id,billing_mode FROM nc_customer_hierarchies WHERE parent_id=? ORDER BY customer_id',id):[]
+  const childAccounts=await Promise.all(links.map(async link=>({relationship:{billingMode:link.billing_mode},record:await customerView(env,actor,link.customer_id,url,false)})))
+  return { ...customer,childAccounts,billingRecord:await customerBillingRecord(env,actor,id),upcoming,...await metadataFor(env,'customer',id), notes: await customerNotes(env, id), importedCollectionConfigured:actor.kind==='member'&&actor.role==='owner'&&!!env.STRIPE_BILLING_SECRET, importedCollections:actor.kind==='member'&&actor.role==='owner'?(await all(env,'SELECT * FROM nc_imported_collections WHERE customer_id=? ORDER BY prepared_at,id',id)).map(collectionView):await all(env,'SELECT id,invoice_id,number,status,amount_cents,currency,collected_on FROM nc_imported_collections WHERE customer_id=? ORDER BY prepared_at,id',id), incumbentHistory:await customerHistory(env,id), contacts, subscriptions:await withMetadata(env,'subscription',await Promise.all(subscriptions.map(async s=>({...s,intervals:lifecycleIntervals(await lifecycleHistory(env,s.id))})))), ledger, entitlements: features, incumbentInvoices: incumbent, charges: await all(env, 'SELECT * FROM nc_charges WHERE customer_id=? ORDER BY effective_date,id', id), certificatePolicy: await one(env, 'SELECT enabled,revision FROM nc_certificate_policy WHERE singleton=1'), certificates: await certificates(env, actor, id), exemptionClaims: await all(env, 'SELECT state FROM nc_exemption_claims WHERE customer_id=? ORDER BY state', id), certificateReminders: await all(env, 'SELECT state,kind,status,created_at FROM nc_certificate_reminders WHERE customer_id=? ORDER BY created_at DESC', id) }
 }
 
 export const views: Record<string, View> = {
+  paymentReceipt:(env,actor,_r,id)=>readPaymentReceipt(env,actor,id),
   hierarchies:(env,actor,_r,_id,url)=>hierarchyView(env,actor,url.searchParams.get('parent')??undefined),
   webhooks:(env,actor)=>webhookList(env,actor),
   webhookDelivery:(env,actor,_r,id)=>webhookDetail(env,actor,id),
+  currencyRates:(env,actor)=>dailyRates(env,actor),
+  currencyReport:(env,actor,_r,_id,url)=>currencyReport(env,actor,url),
+  trialCollections:(env,actor,_r,_id,url)=>readTrialCollections(env,actor,url.searchParams.get('subscription')??undefined),
+  prepaidRefundNotices:(env,actor)=>refundNoticeSettings(env,actor),
   prepaidRefunds:(env,actor,_r,_id,url)=>readPrepaidRefunds(env,actor,url.searchParams.get('subscription')??undefined),
   prepaidTopupAuthorizations:(env,actor,_r,_id,url)=>readPrepaidTopupAuthorizations(env,actor,url.searchParams.get('subscription')??undefined),
   prepaidTopupClaims:(env,actor,_r,_id,url)=>readPrepaidTopupClaims(env,actor,url.searchParams.get('subscription')??undefined),

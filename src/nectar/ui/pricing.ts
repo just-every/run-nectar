@@ -6,7 +6,7 @@ import { check, field, form, h, hidden, select, table } from './html'
 
 export function quantityPriceForm(product: string, meters: Row[], initial = false) {
   return h`<details><summary>${initial ? 'Add a tiered price version' : 'Prepare a tiered price version'}</summary><p class="hint">Enter bands in order. Leave the final band's upper quantity blank for no limit. Package pricing uses one band and a block size. Zero units have no charge; fees apply once per occupied band.</p>
-    ${form('price.create', '/app/catalog', h`${hidden('product', product)}${select('Kind', 'kind', [{ value: 'seat', label: 'Per seat' }, { value: 'unit', label: 'Metered usage' }])}
+    ${form('price.create', '/app/catalog', h`${hidden('product', product)}${select('Currency','currency',['USD','CAD','EUR','GBP'].map(value=>({value,label:value})),'USD')}${select('Kind', 'kind', [{ value: 'seat', label: 'Per seat' }, { value: 'unit', label: 'Metered usage' }])}
       ${select('Pricing model', 'pricing_model', [{ value: 'graduated', label: 'Graduated: each band at its rate' }, { value: 'volume', label: 'Volume: all units at the band reached' }, { value: 'package', label: 'Package: round up to whole blocks' }, { value: 'stair_step', label: 'Stair-step: flat fee for the band reached' }])}
       ${intervalFields()}${select('Meter (usage only)', 'meter', meters.map(m => ({ value: m.id, label: m.code })), '', { required: false, blank: '—' })}
       ${dimensionFields()}${field('Block size (package only)', 'package_size', { required: false })}${field('Name for this price', 'nickname', { required: false })}
@@ -26,5 +26,5 @@ export function linePricing(line: Row) {
 
 export function priceRate(price: Row) {
   if (price.pricing_model && price.pricing_model !== 'simple') return `${price.pricing_model.replace('_', '-')} pricing`
-  return `$${price.unit_amount}${price.kind === 'seat' ? ' per seat' : price.kind === 'unit' ? ` per ${price.unit_label ?? price.meter_code ?? 'unit'}` : ''}`
+  return `${price.currency&&price.currency!=='USD'?price.currency+' ':'$'}${price.unit_amount}${price.kind === 'seat' ? ' per seat' : price.kind === 'unit' ? ` per ${price.unit_label ?? price.meter_code ?? 'unit'}` : ''}`
 }

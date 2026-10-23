@@ -10,7 +10,8 @@ import { requireBusiness } from './business'
 import { clockInstant } from './clock'
 import { all, commit, guard, insist, newId, now, one, parseJson, stmt, type Row } from './core'
 import { addMonthsClamped, today } from './dates'
-import { canonicalDecimal, micros } from './decimal'
+import { canonicalDecimal, micros, cents } from './decimal'
+import type { Line } from './rating'
 import type { Input } from './input'
 
 const CODE = /^[A-Za-z0-9][A-Za-z0-9_-]{2,39}$/
@@ -22,13 +23,12 @@ export async function createCoupon(env: Bindings, actor: Actor, input: Input) {
   insist(kind === 'percent' || kind === 'amount', 'invalid_coupon_kind')
   const value = canonicalDecimal(input.text('value', { max: 24 }), 'coupon_value')
   insist(micros(value) > 0n && (kind === 'amount' ? micros(value) % 10_000n === 0n : micros(value) <= 100_000_000n), 'invalid_coupon_value')
+  if (kind === 'amount') cents(value, 'coupon_value')
   const duration = input.text('duration', { max: 10 })
   insist(['once', 'repeating', 'forever'].includes(duration), 'invalid_coupon_duration')
   const months = duration === 'repeating' ? input.integer('months', { min: 1, max: 36 })! : null
   const products = input.list('products', { keepEmpty: false })
   for (const product of products) insist(await one(env, 'SELECT 1 FROM nc_products WHERE id=?', product), 'product_not_found', 404)
-  // An amount coupon is a run of one-time contract credits, which are not product-scoped and cannot run forever.
-  insist(kind === 'percent' || (!products.length && duration !== 'forever'), 'amount_coupon_unsupported', 409)
   insist(!await one(env, 'SELECT 1 FROM nc_coupons WHERE name=?', name), 'coupon_name_in_use', 409)
   const id = newId()
   await commit(env, [stmt(env, "INSERT INTO nc_coupons(id,name,kind,value,duration,months,products_json,status,created_by,created_at) VALUES(?,?,?,?,?,?,?,'active',?,?)", id, name, kind, value, duration, months, JSON.stringify([...new Set(products)].sort()), actorLabel(actor), now())],
@@ -72,8 +72,8 @@ export async function promotionRedemption(env: Bindings, actor: Actor, request: 
   const paid = `EXISTS(SELECT 1 FROM nc_invoices i WHERE i.customer_id=? AND i.status='issued' AND i.total_cents>0 AND EXISTS(SELECT 1 FROM nc_allocations a WHERE a.invoice_id=i.id))`
   insist(!code.first_time_only || !await one(env, `SELECT 1 WHERE ${paid}`, request.customer.id), 'promotion_first_time_only', 409)
   const products = parseJson<string[]>(code.products_json, [])
-  const covered = request.items.filter(item => ['flat', 'seat'].includes(item.price.kind) && (!products.length || products.includes(item.price.product_id)))
-  insist(code.kind === 'amount' ? request.items.length : covered.length, 'promotion_not_applicable', 409)
+  const covered = request.items.filter(item => (code.kind === 'amount' || ['flat', 'seat'].includes(item.price.kind)) && (!products.length || products.includes(item.price.product_id)))
+  insist(covered.length, 'promotion_not_applicable', 409)
   const base = request.trialEnd ?? request.start, label = `Promotion ${code.code}`
   const id = newId(), at = now(), by = `promotion:${code.code}`, ids: string[] = []
   const amendment = (kind: string, value: string, from: string, to: string | null, scope: string | null) => {
@@ -87,11 +87,76 @@ export async function promotionRedemption(env: Bindings, actor: Actor, request: 
     const to = code.duration === 'forever' ? null : addMonthsClamped(base, code.duration === 'once' ? 1 : code.months)
     if (products.length) for (const item of covered) statements.push(...amendment('discount_percent', code.value, base, to, item.price.id))
     else statements.push(...amendment('discount_percent', code.value, base, to, null))
-  } else for (let month = 0; month < (code.duration === 'once' ? 1 : code.months); month++) statements.push(...amendment('fixed_credit', code.value, addMonthsClamped(base, month), null, null))
+  } else {
+    const termId = newId(); ids.push(termId)
+    statements.push(stmt(env, 'INSERT INTO nc_coupon_amount_terms(id,redemption_id,subscription_id,customer_id,value,duration,months,effective_from,price_ids_json,note) VALUES(?,?,?,?,?,?,?,?,?,?)',
+      termId, id, request.subscription, request.customer.id, code.value, code.duration, code.months, base, JSON.stringify(products.length ? [...new Set(covered.map(item => item.price.id))].sort() : []), label))
+  }
   return { id, code, statements: [
     guard(env, 'promotion_exhausted', 'COALESCE((SELECT max_redemptions FROM nc_promotion_codes WHERE id=?),1000000000)>(SELECT COUNT(*) FROM nc_promotion_redemptions WHERE code_id=?)', code.id, code.id),
     ...(code.first_time_only ? [guard(env, 'promotion_first_time_only', `NOT ${paid}`, request.customer.id)] : []),
     ...statements,
     stmt(env, 'INSERT INTO nc_promotion_redemptions(id,code_id,coupon_id,customer_id,subscription_id,redeemed_by,redeemed_at,amendments_json) VALUES(?,?,?,?,?,?,?,?)', id, code.id, code.coupon_id, request.customer.id, request.subscription, actorLabel(actor), at, JSON.stringify(ids)),
   ], detail: { code: code.code, coupon: code.coupon_name, redemption: id, amendments: ids.length } }
+}
+
+
+export interface AmountCouponIn {
+  id: string; value: string; duration: 'once' | 'repeating' | 'forever'; months: number | null
+  from: string; priceIds: string[]; note: string
+}
+
+/** Saved operands travel with issued invoices and all historical simulations. */
+export async function amountCouponInputs(env: Bindings, subscription: string): Promise<AmountCouponIn[]> {
+  return (await all(env, `SELECT t.*,(SELECT json_group_array(p.id) FROM nc_prices p WHERE p.product_id IN
+      (SELECT original.product_id FROM nc_prices original WHERE original.id IN (SELECT value FROM json_each(t.price_ids_json)))) AS current_prices_json
+      FROM nc_coupon_amount_terms t WHERE t.subscription_id=? ORDER BY t.effective_from,t.id`, subscription))
+    .map(row => ({ id: row.id, value: row.value, duration: row.duration, months: row.months, from: row.effective_from,
+      priceIds: parseJson<string[]>(row.price_ids_json, []).length ? parseJson<string[]>(row.current_prices_json, []).sort() : [], note: row.note }))
+}
+
+/** An amount applies once to an eligible invoice, capped at the remaining eligible
+ * charges. Allocate integer cents proportionally; mixed tax keeps each source's
+ * tax status. No amount can spill onto an uncovered product or create credit. */
+export function amountCouponLines(input: { amountCoupons?: AmountCouponIn[]; period: { start: string; end: string }; prices: Record<string, { sourcePriceId?: string }> }, source: Line[]): Line[] {
+  const result: Line[] = []
+  for (const coupon of input.amountCoupons ?? []) {
+    const monthIndex = (date: string) => Number(date.slice(0, 4)) * 12 + Number(date.slice(5, 7))
+    const first = Math.max(0, monthIndex(input.period.start) - monthIndex(coupon.from) - 1)
+    const end = monthIndex(input.period.end) - monthIndex(coupon.from) + 1
+    let count = 0
+    for (let index = first; index <= end; index++) {
+      if (coupon.duration === 'once' && index > 0 || coupon.duration === 'repeating' && index >= coupon.months!) break
+      const date = addMonthsClamped(coupon.from, index)
+      if (date >= input.period.start && date < input.period.end) count++
+    }
+    if (!count) continue
+    const covered = source.filter(line => line.priceId && line.amountCents > 0 && line.periodEnd > coupon.from
+      && (!coupon.priceIds.length || coupon.priceIds.includes(line.priceId) || coupon.priceIds.includes(input.prices[line.priceId]?.sourcePriceId ?? '')))
+      .map(line => {
+        // Percent discounts and earlier amount coupons are already calculated.
+        const discounts = [...source, ...result].filter(discount => discount.amountCents < 0).reduce((sum, discount) => {
+          if (discount.evidence.couponLine === line.description && discount.periodStart === line.periodStart && discount.periodEnd === line.periodEnd) return sum + discount.amountCents
+          const parts = discount.evidence.parts as { line: string; cents: number; from?: string; to?: string }[] | undefined
+          return sum + (parts ?? []).filter(part => part.line === line.description && (!part.from || part.from === line.periodStart) && (!part.to || part.to === line.periodEnd)).reduce((n, part) => n + part.cents, 0)
+        }, 0)
+        return { line, remaining: Math.max(0, line.amountCents + discounts) }
+      }).filter(entry => entry.remaining > 0)
+    const total = covered.reduce((sum, entry) => sum + BigInt(entry.remaining), 0n)
+    if (!total) continue
+    const requested = BigInt(cents(coupon.value)), amount = requested < total ? requested : total
+    let allocated = 0n
+    const parts = covered.map((entry, index) => {
+      const numerator = amount * BigInt(entry.remaining), value = numerator / total
+      allocated += value
+      return { ...entry, index, value, remainder: numerator % total }
+    })
+    const order = [...parts].sort((a, b) => a.remainder === b.remainder ? a.index - b.index : a.remainder > b.remainder ? -1 : 1)
+    for (let index = 0; allocated < amount; index++, allocated++) order[index].value++
+    for (const part of parts) if (part.value) result.push({ kind: 'discount', description: `Amount coupon (${coupon.note})`, quantity: '1', unitAmount: coupon.value,
+      amountCents: -Number(part.value), taxable: part.line.taxable, priceId: null, meterId: null, periodStart: part.line.periodStart, periodEnd: part.line.periodEnd,
+      evidence: { rule: 'one amount per invoice capped at eligible charges; proportional integer cents with largest remainder', coupon: coupon.id,
+        couponLine: part.line.description, sourcePrice: part.line.priceId, requestedCents: Number(requested), eligibleCents: Number(total) } })
+  }
+  return result
 }

@@ -1,3 +1,4 @@
+import { portalRefundSection } from './portal-prepaid-refunds'
 import { portalTopupLinks } from './portal-prepaid-topups'
 // Customer-session projections only. No operator Actor, request payload,
 // payment-provider reference or authorization narrative crosses this boundary.
@@ -67,7 +68,7 @@ export async function portalPrepaidSource(env: Bindings, session: CustomerSessio
 }
 
 function lotCard(session: CustomerSession, lot: PortalPrepaidLot, link: (path: string) => string) {
-  const L = customerText(session.language)
+  const L = customerText(session.language,session.currency)
   const quantity = (n: number) => lot.kind === 'money' ? L.money(n) : `${L.percent(decimalText(BigInt(n)))} ${lot.unitLabel ?? L.t('portal.prepaid.units')}`
   return h`<section class="card"><h2>${L.t(`portal.prepaid.${lot.source}`)} · ${L.t(`portal.prepaid.${lot.kind}`)}</h2>
     <p>${lot.meterCode ?? L.t('portal.prepaid.allMeters')}</p><dl>
@@ -81,16 +82,17 @@ function lotCard(session: CustomerSession, lot: PortalPrepaidLot, link: (path: s
 }
 
 export async function portalPrepaidPage(env: Bindings, session: CustomerSession, link: (path: string) => string) {
-  const L = customerText(session.language), data = await portalPrepaidData(env, session)
+  const L = customerText(session.language,session.currency), data = await portalPrepaidData(env, session)
   return h`<h1>${L.t('portal.prepaid.heading')}</h1><p><a href="${link('/portal')}">${L.t('portal.back')}</a></p>
     <p>${L.t('portal.prepaid.asOf', { date: L.day(data.date) })}</p>
     ${await portalTopupLinks(env,session,link)}
+    ${await portalRefundSection(env,session,data.lots,link)}
     ${data.lots.length ? data.lots.map(lot => lotCard(session, lot, link)) : h`<p>${L.t('portal.prepaid.empty')}</p>`}
     <p><a href="${link('/portal/prepaid.csv')}">${L.t('portal.prepaid.csv')}</a></p>`
 }
 
 export async function portalPrepaidSourcePage(env: Bindings, session: CustomerSession, id: string, link: (path: string) => string) {
-  const L = customerText(session.language), data = await portalPrepaidSource(env, session, id)
+  const L = customerText(session.language,session.currency), data = await portalPrepaidSource(env, session, id)
   const amount = (n: number) => data.lot.kind === 'money' ? L.money(n) : L.percent(decimalText(BigInt(n)))
   return h`<h1>${L.t('portal.prepaid.ledger')}</h1><p><a href="${link('/portal/prepaid')}">${L.t('portal.back')}</a></p>
     <p>${L.t('portal.prepaid.asOf', { date: L.day(data.date) })}</p>${lotCard(session, data.lot, link)}

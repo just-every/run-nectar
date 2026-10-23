@@ -7,7 +7,7 @@ import { customerText } from './locale'
 import { h } from './ui/html'
 
 export async function portalUpcomingPage(env:Bindings,session:CustomerSession,url:URL,link:(path:string)=>string){
-  const L=customerText(session.language),subscriptions=await portalUpcomingSubscriptions(env,session)
+  const L=customerText(session.language,session.currency),subscriptions=await portalUpcomingSubscriptions(env,session)
   const id=url.searchParams.get('subscription')||subscriptions[0]?.id
   const preview=id?await portalUpcoming(env,session,id,url.searchParams.get('period')):null
   return h`<h1>${L.t('portal.upcoming.heading')}</h1><p><a href="${link('/portal')}">${L.t('portal.back')}</a></p>
@@ -19,7 +19,7 @@ export async function portalUpcomingPage(env:Bindings,session:CustomerSession,ur
 }
 
 export async function portalAdjustmentsPage(env:Bindings,session:CustomerSession,link:(path:string)=>string){
-  const L=customerText(session.language),{corrections}=await portalCorrectionsData(env,session)
+  const L=customerText(session.language,session.currency),{corrections}=await portalCorrectionsData(env,session)
   return h`<h1>${L.t('portal.adjustments.heading')}</h1><p><a href="${link('/portal')}">${L.t('portal.back')}</a></p>${corrections.length?corrections.map(correction=>h`<section class="card"><h2>${correction.message.subject}</h2><p>${L.t('portal.adjustments.approved')}</p>${String(correction.message.body).split('\n').map(line=>h`<p>${line}</p>`)}${correction.periods.map((period:any)=>h`<p>${L.day(period.period.start)} – ${L.day(period.period.end)} · ${L.money(period.before.totalCents)} → ${L.money(period.after.totalCents)}</p>`)}<a href="${link(`/portal/corrections/${correction.id}`)}">${L.t('portal.answer.evidence')}</a></section>`):h`<p>${L.t('portal.adjustments.empty')}</p>`}`
 }
 

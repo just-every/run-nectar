@@ -22,7 +22,7 @@ export function languageInput(value: string) {
 }
 
 /** A customer language whose file was removed renders in English. */
-export function customerText(language: unknown) {
+export function customerText(language: unknown, billingCurrency='USD') {
   const tag = typeof language === 'string' && catalogues.has(language) ? language : DEFAULT_LANGUAGE
   const catalogue = catalogues.get(tag)!, intl = catalogue['language.intl']
   const t = (key: string, values: Record<string, unknown> = {}) => {
@@ -33,9 +33,9 @@ export function customerText(language: unknown) {
   // Plain text: Intl's no-break spaces become ordinary spaces in mail.
   const plain = (text: string) => text.replace(/[  ]/g, ' ')
   /** Exact cents in the invoice currency, with the locale's separators. */
-  const money = (cents: number, currency = 'USD') => plain(new Intl.NumberFormat(intl, { style: 'currency', currency, currencyDisplay: 'code' }).format(cents / 100))
+  const money = (cents: number, currency = billingCurrency) => plain(new Intl.NumberFormat(intl, { style: 'currency', currency, currencyDisplay: 'code' }).format(cents / 100))
   /** An exact decimal price (up to six places, e.g. a unit-price override) in the currency, never rounded to cents. */
-  const amount = (value: string, currency = 'USD') => plain(new Intl.NumberFormat(intl, { style: 'currency', currency, currencyDisplay: 'code', minimumFractionDigits: 2, maximumFractionDigits: 6 }).format(value as unknown as number))
+  const amount = (value: string, currency = billingCurrency) => plain(new Intl.NumberFormat(intl, { style: 'currency', currency, currencyDisplay: 'code', minimumFractionDigits: 2, maximumFractionDigits: 6 }).format(value as unknown as number))
   /** A business-local calendar day (YYYY-MM-DD) as the locale's long date, no zone shift. */
   const day = (ymd: string) => plain(new Intl.DateTimeFormat(intl, { dateStyle: 'long', timeZone: 'UTC' }).format(new Date(`${ymd}T00:00:00Z`)))
   const percent = (value: unknown) => plain(new Intl.NumberFormat(intl, { maximumFractionDigits: 6 }).format(String(value) as unknown as number))

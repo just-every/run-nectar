@@ -31,10 +31,25 @@ const shoot = async (h, owner, label, path, text) => {
     assert.ok((await page.content()).includes(text), `${label} shows ${text}`)
     assert.equal(await page.locator('main h1').count(), 1)
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, `${label} fits ${width}`)
+    const iconOnly=await page.locator('a,button,[role=button]').evaluateAll(nodes=>nodes.filter(n=>!n.textContent.trim()&&n.querySelector('svg,img')).map(n=>n.outerHTML));assert.deepEqual(iconOnly,[])
     await page.screenshot({ path: `${directory}/${width}-${label}.png`, fullPage: true })
     console.log(`BROWSER ${width} ${label}`)
   }
   await context.close()
+}
+async function trialForm(h,cookie,row,action) {
+  const context=await browser.newContext()
+  try {
+    await context.addCookies(cookie.split('; ').map(value=>{const i=value.indexOf('=');return {name:value.slice(0,i),value:value.slice(i+1),url:h.origin}}))
+    const page=await context.newPage()
+    await page.goto(h.origin+`/app/subscriptions/${row.subscription}`)
+    const form=page.locator(`form[action="/app/do/${action}"]`)
+    if(action==='trial.collection.confirm')await form.locator('[name=confirm]').check()
+    else await form.locator('[name=decision]').selectOption('approved')
+    await Promise.all([page.waitForNavigation({waitUntil:'load'}),form.getByRole('button').click()])
+    assert.equal(new URL(page.url()).searchParams.get('error'),null)
+    return (await h.api(`trial-collections?subscription=${row.subscription}`,cookie)).find(saved=>saved.id===row.authorization.id)
+  }finally{await context.close()}
 }
 try {
   browser = await chromium.launch({ headless: true, args: ['--use-mock-keychain', '--password-store=basic'] })
@@ -43,8 +58,9 @@ try {
   const second = await start()
   try {
     await trialsFlow(second.h, second.owner, async state => {
+      if(state.phase==='trial-collection')await shoot(second.h,second.owner,`trial-collection-${state.stage}`,`/app/subscriptions/${state.subscription}`,'First trial payment')
       if (state.phase === 'extended') await shoot(second.h, second.owner, 'subscription-trial-extended', `/app/subscriptions/${state.ext.sub}`, 'Extend trial')
       if (state.phase === 'billed') await shoot(second.h, second.owner, 'subscription-trial-ended', `/app/subscriptions/${state.none.sub}`, 'Ended unpaid')
-    })
+    },{confirmTrial:async({h,owner,row})=>{const result=await trialForm(h,owner,row,'trial.collection.confirm');await shoot(h,owner,'trial-awaiting-independent-approval',`/app/subscriptions/${row.subscription}`,'First trial payment');return result},approveTrial:async({h,finance,row})=>{await shoot(h,finance,'trial-finance-approval',`/app/subscriptions/${row.subscription}`,'First trial payment');return trialForm(h,finance,row,'trial.collection.approve')}})
   } finally { await second.h.close() }
 } finally { await browser?.close() }

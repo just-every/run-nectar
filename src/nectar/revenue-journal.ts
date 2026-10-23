@@ -1,3 +1,4 @@
+import { requireUsdReporting } from './currency'
 // A pretax monthly journal from the same saved source snapshot as the
 // roll-forward. Closing a period (period-close.ts) freezes and posts it.
 import type { Bindings } from '../auth.server'

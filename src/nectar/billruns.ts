@@ -1,3 +1,4 @@
+import { currencyRecord } from './currency-rates'
 import { planChangeInvoiceFingerprint } from './plan-changes'
 import { consolidationCalculation,hierarchyPreIssue,hierarchyIssueStatements } from './hierarchies'
 import { writeOffsFor } from './write-offs'
@@ -34,11 +35,11 @@ import { manualCalculation } from './manual-invoices'
 import { creditPolicy, creditRequests } from './credit-policy'
 import { reconciliationFor } from './reconciliation'
 import { RATING_VERSION, type Exception, type Rating } from './rating'
-import type { Input } from './input'
+import { Input } from './input'
 
 const BLOCKING = new Set(['historical_usage_correction','usage_correction_pending','po_required','tax_undeclared', 'exemption_certificate', 'negative_total', 'usage_reconciliation','commitment_prior_periods','metric_late_correction','metric_duplicate_selection','metric_negative_quantity'])
 
-interface Draft { sub: Row; period: { start: string; end: string }; rating: Rating; fingerprint: string; input: { version: string }; comparison: Row; exceptions: Exception[] }
+interface Draft { sub: Row; period: { start: string; end: string }; rating: Rating; fingerprint: string; input: { version: string;currency?:string }; comparison: Row; exceptions: Exception[] }
 
 async function incumbentComparison(env: Bindings, sub: Row, period: { start: string }, rating: Rating) {
   if (!sub.provider_ref) return null
@@ -117,9 +118,13 @@ export async function prepareRun(env: Bindings, actor: Actor, input: Input) {
   const totals = drafts.reduce((sum, draft) => ({ subtotal: sum.subtotal + draft.rating.subtotalCents, tax: sum.tax + draft.rating.taxCents, total: sum.total + draft.rating.totalCents }), { subtotal: 0, tax: 0, total: 0 })
   const exceptionCounts: Record<string, number> = {}
   for (const draft of drafts) for (const exception of draft.exceptions) exceptionCounts[exception.code] = (exceptionCounts[exception.code] ?? 0) + 1
+  const totalsByCurrency:Record<string,{subtotal:number;tax:number;total:number}>={}
+  for(const draft of drafts.filter(d=>d.sub.billing_mode==='live')){const currency=draft.input.currency??'USD',t=totalsByCurrency[currency]??{subtotal:0,tax:0,total:0};t.subtotal+=draft.rating.subtotalCents;t.tax+=draft.rating.taxCents;t.total+=draft.rating.totalCents;totalsByCurrency[currency]=t}
+  const currencies=Object.keys(totalsByCurrency),runCurrency=currencies.length>1?'mixed':currencies[0]??'USD'
   const summary = {
-    invoices: drafts.filter(d => d.sub.billing_mode === 'live').length, shadow: drafts.filter(d => d.sub.billing_mode === 'shadow').length, totals, exceptions: exceptionCounts, skipped, open,
-    previous: previousRun ? { run: previousRun.id, period: previousRun.period, totals: parseJson<Row>(previousRun.summary_json, {}).totals ?? null } : null,
+    ...(runCurrency==='USD'?{}:{currency:runCurrency,totalsByCurrency}),
+    invoices: drafts.filter(d => d.sub.billing_mode === 'live').length, shadow: drafts.filter(d => d.sub.billing_mode === 'shadow').length, totals:runCurrency==='mixed'?null:totals, exceptions: exceptionCounts, skipped, open,
+    previous: previousRun ? { run: previousRun.id, period: previousRun.period, ...(parseJson<Row>(previousRun.summary_json, {}).currency?{currency:parseJson<Row>(previousRun.summary_json, {}).currency}:{}), totals: parseJson<Row>(previousRun.summary_json, {}).totals ?? null } : null,
   }
   const runVersion = drafts.find(draft => draft.input.version !== RATING_VERSION)?.input.version ?? RATING_VERSION
   const runId = newId(), at = now(), statements: D1PreparedStatement[] = []
@@ -131,10 +136,10 @@ export async function prepareRun(env: Bindings, actor: Actor, input: Input) {
   statements.push(stmt(env, "INSERT INTO nc_bill_runs (id, period, cutoff_at, calc_version, status, summary_json, created_by, created_at) VALUES (?, ?, ?, ?, 'draft', ?, ?, ?)", runId, month, at, runVersion, JSON.stringify(summary), actorLabel(actor), at))
   for (const draft of drafts) {
     const invoiceId = newId()
-    statements.push(stmt(env, `INSERT INTO nc_invoices (id, bill_run_id, customer_id, subscription_id, period_start, period_end, status, subtotal_cents, tax_cents, total_cents, calc_version, source_fingerprint, calculation_json, comparison_json, exceptions_json, created_at,billing_key)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?)`, invoiceId, runId, draft.sub.customer_id, draft.sub.id, draft.period.start, draft.period.end, draft.sub.billing_mode === 'shadow' ? 'shadow' : 'draft',
+    statements.push(stmt(env, `INSERT INTO nc_invoices (id, bill_run_id, customer_id, subscription_id, period_start, period_end, status, subtotal_cents, tax_cents, total_cents, calc_version, source_fingerprint, calculation_json, comparison_json, exceptions_json, created_at,billing_key,currency)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?,?)`, invoiceId, runId, draft.sub.customer_id, draft.sub.id, draft.period.start, draft.period.end, draft.sub.billing_mode === 'shadow' ? 'shadow' : 'draft',
       draft.rating.subtotalCents, draft.rating.taxCents, draft.rating.totalCents, draft.input.version, draft.fingerprint,
-      JSON.stringify({ version: draft.input.version, fingerprint: draft.fingerprint, tax: draft.rating.tax, consumedEvents: draft.rating.consumedEvents, inputs: draft.input }), JSON.stringify(draft.comparison), JSON.stringify(draft.exceptions), at,(draft.input as any).billing?.key??'legacy-monthly-arrears'))
+      JSON.stringify({ version: draft.input.version, fingerprint: draft.fingerprint, tax: draft.rating.tax, consumedEvents: draft.rating.consumedEvents, inputs: draft.input }), JSON.stringify(draft.comparison), JSON.stringify(draft.exceptions), at,(draft.input as any).billing?.key??'legacy-monthly-arrears',draft.input.currency??'USD'))
     draft.rating.lines.forEach((line, index) => statements.push(stmt(env, `INSERT INTO nc_invoice_lines (id, invoice_id, seq, kind, description, quantity, unit_amount, amount_cents, taxable, price_id, meter_id, period_start, period_end, evidence_json)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, newId(), invoiceId, index + 1, line.kind, line.description, line.quantity, line.unitAmount, line.amountCents, line.taxable ? 1 : 0, line.priceId, line.meterId, line.periodStart, line.periodEnd, JSON.stringify(line.evidence))))
   }
@@ -155,7 +160,7 @@ export async function runDetail(env: Bindings, actor: Actor, id: string): Promis
   requireCapability(actor, 'read')
   const run = await one(env, 'SELECT * FROM nc_bill_runs WHERE id = ?', id)
   insist(run, 'bill_run_not_found', 404)
-  const invoices = await all(env, `SELECT i.id, i.subscription_id, i.status, i.number, i.period_start, i.period_end, i.subtotal_cents, i.tax_cents, i.total_cents, i.exceptions_json, i.comparison_json, i.approved_by, c.name AS customer_name, c.id AS customer_id, c.external_id, COALESCE(s.billing_mode,'live') AS billing_mode, i.invoice_kind FROM nc_invoices i JOIN nc_customers c ON c.id = i.customer_id LEFT JOIN nc_subscriptions s ON s.id = i.subscription_id WHERE i.bill_run_id = ? ORDER BY c.name`, id)
+  const invoices = await all(env, `SELECT i.id, i.subscription_id, i.status, i.number, i.currency, i.period_start, i.period_end, i.subtotal_cents, i.tax_cents, i.total_cents, i.exceptions_json, i.comparison_json, i.approved_by, c.name AS customer_name, c.id AS customer_id, c.external_id, COALESCE(s.billing_mode,'live') AS billing_mode, i.invoice_kind FROM nc_invoices i JOIN nc_customers c ON c.id = i.customer_id LEFT JOIN nc_subscriptions s ON s.id = i.subscription_id WHERE i.bill_run_id = ? ORDER BY c.name`, id)
   return { ...run, summary: parseJson(run.summary_json, {}), summary_json: undefined, invoices: invoices.map(row => ({ ...row, exceptions: parseJson(row.exceptions_json, []), comparison: parseJson(row.comparison_json, {}), exceptions_json: undefined, comparison_json: undefined })) }
 }
 
@@ -177,7 +182,7 @@ export async function invoiceRecord(env: Bindings, actor: Actor, id: string): Pr
   const balanceApplications = await all(env, "SELECT * FROM nc_balance_entries WHERE kind='application' AND grant_id IS NOT NULL AND invoice_id=? ORDER BY created_at,id", id)
   const credited = credits.reduce((sum, row) => sum + (row.applied_cents??row.amount_cents), 0)+carriedApplications.reduce((n,r)=>n+r.amount_cents,0)+balanceApplications.reduce((n,r)=>n+r.amount_cents,0), paid = allocations.reduce((sum, row) => sum + row.amount_cents, 0)
   return {
-    ...invoice,retainedFinancial:await one(env,"SELECT legal_name,document_date,retain_until,tax_json FROM nc_erasure_financial WHERE kind='invoice' AND record_id=?",id),...await metadataFor(env,'invoice',id), creditPolicy: await creditPolicy(env), creditRequests: canRead(actor, 'invoices') ? await creditRequests(env, actor, id) : [], calculation: parseJson(invoice.calculation_json, {}), comparison: parseJson(invoice.comparison_json, {}), exceptions: parseJson(invoice.exceptions_json, []),
+    ...await currencyRecord(env,invoice,invoice.total_cents,invoice.issue_date??invoice.period_start),retainedFinancial:await one(env,"SELECT legal_name,document_date,retain_until,tax_json FROM nc_erasure_financial WHERE kind='invoice' AND record_id=?",id),...await metadataFor(env,'invoice',id), creditPolicy: await creditPolicy(env), creditRequests: canRead(actor, 'invoices') ? await creditRequests(env, actor, id) : [], calculation: parseJson(invoice.calculation_json, {}), comparison: parseJson(invoice.comparison_json, {}), exceptions: parseJson(invoice.exceptions_json, []),
     calculation_json: undefined, comparison_json: undefined, exceptions_json: undefined,
     lines: lines.map(line => ({ ...line, evidence: parseJson(line.evidence_json, {}), evidence_json: undefined })),
     carriedApplications, credits:await withMetadata(env,'credit-note',credits), allocations, balanceApplications, writeOffs, writtenOffCents: writtenOff, creditedCents: credited, paidCents: paid, balanceCents: invoice.status === 'issued' ? invoice.total_cents - credited - paid - writtenOff : null,
@@ -243,6 +248,10 @@ export async function approve(env: Bindings, actor: Actor, input: Input) {
 /** Numbers and issues approved invoices. Each issue is atomic: number, usage consumption and status together. */
 export async function finalise(env: Bindings, actor: Actor, input: Input) {
   requireMember(actor, 'approve')
+  return finaliseCore(env, actor, input)
+}
+
+async function finaliseCore(env: Bindings, actor: Actor, input: Input, trialAuthorization?: Row) {
   let business = await requireBusiness(env)
   insist(taxReady(business), 'tax_not_reviewed', 409)
   const runId = input.has('run') ? input.text('run', { max: 100 }) : null
@@ -256,6 +265,12 @@ export async function finalise(env: Bindings, actor: Actor, input: Input) {
   insist(issueDate <= day && targets.every(invoice => issueDate >= (invoice.invoice_kind === 'manual' ? invoice.period_start : parseJson<Row>(invoice.calculation_json,{}).inputs?.billing?.dueDate??invoice.period_end)), 'invalid_issue_date')
   const issued: string[] = [], refused: Row[] = []
   for (const invoice of targets) {
+    const trial = trialAuthorization ? await import('./trial-collection-records') : null
+    if (trial && trialAuthorization) {
+      insist(trialAuthorization.status === 'active' && trialAuthorization.invoice_id === invoice.id, 'trial_collection_authority_changed', 409)
+      const { q } = await trial.currentTrialCollection(env, trialAuthorization, true)
+      insist(invoice.source_fingerprint === q.fingerprint && invoice.total_cents === q.amountCents && issueDate === q.chargeDate, 'trial_collection_terms_changed', 409)
+    }
     const customer = await one(env, 'SELECT * FROM nc_customers WHERE id=?', invoice.customer_id)
     insist(customer, 'customer_not_found', 404)
     await cancellationApproval(env,actor,invoice)
@@ -277,6 +292,7 @@ export async function finalise(env: Bindings, actor: Actor, input: Input) {
     insist(!content?.poRequired || content.poNumber, 'po_required', 409)
     const due = addDays(issueDate, content?.paymentTermsDays ?? business.payment_terms_days)
     await commit(env, [
+      ...(trial && trialAuthorization ? [trial.trialCollectionGuard(env, trialAuthorization)] : []),
       ...await hierarchyPreIssue(env,invoice),
       ...(approvedEntity ? [guard(env, 'source_changed', 'EXISTS(SELECT 1 FROM nc_billing_entities WHERE id=? AND revision=?)', approvedEntity.id, approvedEntity.revision)] : []),
       ...allocation.statements,
@@ -316,4 +332,38 @@ const chunk = <T>(list: T[], size: number) => Array.from({ length: Math.ceil(lis
 
 function canonicalAdjustments(rows:Row[],saved:Row[]) {
   return canonical(rows.map(r=>({id:r.id,line:parseJson(r.line_json,{}),taxCents:r.tax_cents})))===canonical([...saved].sort((a,b)=>a.id.localeCompare(b.id)).map(r=>({id:r.id,line:r.line,taxCents:r.taxCents})))
+}
+
+
+/** Execute only the saved exact-term trial policy. All normal approval, tax,
+ * source, numbering, component, revenue and issue obligations remain in force.
+ * This internal scheduler door never accepts a caller-supplied actor or quote. */
+export async function issueAuthorizedTrialInvoice(env: Bindings, authorization: string) {
+  const records = await import('./trial-collection-records'), { trialSystem } = await import('./trial-collection-invoice')
+  let row = await records.storedTrialCollection(env, authorization)
+  insist(row.status === 'active', 'trial_collection_inactive', 409)
+  const { q } = await records.currentTrialCollection(env, row, true), actor = trialSystem(row.id), at = clockInstant(env)
+  if (!row.invoice_id) {
+    const invoice = newId(), run = newId(), revision = newId()
+    const statements = [records.trialCollectionGuard(env, row),
+      stmt(env, "INSERT INTO nc_bill_runs(id,period,cutoff_at,calc_version,status,summary_json,created_by,created_at) VALUES(?,?,?,?,'draft',?,?,?)", run, q.trialEnd.slice(0,7), at, q.input.version, JSON.stringify({invoices:1,trialAuthorization:row.id}), actorLabel(actor), at),
+      stmt(env, `INSERT INTO nc_invoices(id,bill_run_id,customer_id,subscription_id,period_start,period_end,status,subtotal_cents,tax_cents,total_cents,calc_version,source_fingerprint,calculation_json,comparison_json,exceptions_json,created_at,billing_key,currency)
+        VALUES(?,?,?,?,?,?,'draft',?,?,?,?,?,?,'{}','[]',?,?,?)`, invoice, run, q.customer, q.subscription, q.window.period.start, q.window.period.end,
+        q.rating.subtotalCents, q.rating.taxCents, q.amountCents, q.input.version, q.fingerprint,
+        JSON.stringify({version:q.input.version,fingerprint:q.fingerprint,tax:q.rating.tax,consumedEvents:q.rating.consumedEvents,inputs:q.input}), at, q.window.key,q.input.currency??'USD'),
+      ...q.rating.lines.map((line,index)=>stmt(env, `INSERT INTO nc_invoice_lines(id,invoice_id,seq,kind,description,quantity,unit_amount,amount_cents,taxable,price_id,meter_id,period_start,period_end,evidence_json)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, newId(), invoice, index+1, line.kind, line.description, line.quantity, line.unitAmount, line.amountCents, line.taxable?1:0, line.priceId, line.meterId, line.periodStart, line.periodEnd, JSON.stringify(line.evidence))),
+      stmt(env,'UPDATE nc_trial_collections SET invoice_id=?,revision=? WHERE id=?',invoice,revision,row.id)]
+    await commit(env,statements,{actor:actorLabel(actor),action:'trial.collection.invoice.prepare',subject:invoice,detail:{authorization:row.id,basis:row.basis_hash,fingerprint:q.fingerprint,amountCents:q.amountCents}})
+    row = await records.storedTrialCollection(env, authorization)
+  }
+  const invoice = await one(env,'SELECT * FROM nc_invoices WHERE id=?',row.invoice_id)
+  insist(invoice,'invoice_not_found',404)
+  if(invoice.status==='draft'){
+    const business = await requireBusiness(env)
+    await commit(env,[records.trialCollectionGuard(env,row),...await approveOne(env,actor,business,invoice,false)],
+      {actor:actorLabel(actor),action:'invoice.approve',subject:invoice.id,detail:{authorization:row.id,basis:row.basis_hash,owner:row.prepared_by,approver:row.approved_by,fingerprint:q.fingerprint}})
+  }
+  if(invoice.status!=='issued')await finaliseCore(env,actor,Input.of({invoice:invoice.id,issue_date:q.chargeDate}),row)
+  return { invoice: invoice.id }
 }

@@ -3,12 +3,13 @@ import type { Actor } from '../actor'
 import { all, fingerprint, guard, insist, one, parseJson, type Row } from '../core'
 import { nativeCollectionSource } from './source'
 import type { PaymentIdentity } from './stripe'
+import { billingCurrency } from '../currency'
 
 export interface NativeCollectionBasis {
   payerCustomerId?:string;payerRevision?:string;
   principal: string; sourceHash: string; sourceFingerprint: string; customerRevision: string; bindingId: string; bindingRevision: string
   invoiceId: string; invoiceNumber: string; customerId: string; entityId: string | null; route: Row
-  accountRef: string; customerRef: string; paymentMethodRef: string; amountCents: number; currency: 'usd'; livemode: boolean
+  accountRef: string; customerRef: string; paymentMethodRef: string; amountCents: number; currency: string; livemode: boolean
   card: { brand: string; last4: string; expMonth: number; expYear: number }; key: string
 }
 export async function storedNativeCollection(env: Bindings, id: string) {
@@ -28,7 +29,7 @@ export function bindingGuard(env: Bindings, basis: NativeCollectionBasis) {
 export async function currentNativeCollection(env: Bindings, actor: Actor, row: Row) {
   const source = await nativeCollectionSource(env, row.invoice_id), basis = parseJson<NativeCollectionBasis | null>(row.basis_json, null)
   insist(basis && basis.principal === actor.id && row.prepared_by === actor.id && await fingerprint(basis) === row.basis_hash
-    && basis.sourceHash === source.sourceHash && basis.amountCents === source.row.balance_cents
+    && basis.sourceHash === source.sourceHash && billingCurrency(basis.currency) === billingCurrency(source.row.currency) && billingCurrency(row.currency) === billingCurrency(basis.currency) && basis.amountCents === source.row.balance_cents
     && basis.sourceFingerprint === source.row.source_fingerprint && basis.customerRevision === source.row.customer_revision,
   'native_collection_basis_changed', 409)
   const binding = await one(env, 'SELECT * FROM nc_stripe_customer_bindings WHERE id=?', basis.bindingId)
@@ -38,7 +39,7 @@ export async function currentNativeCollection(env: Bindings, actor: Actor, row: 
 }
 export function paymentIdentity(row: Row, basis: NativeCollectionBasis): PaymentIdentity {
   return { invoiceId: row.invoice_id, requestId: row.id, accountRef: basis.accountRef, customerRef: basis.customerRef,
-    paymentMethodRef: basis.paymentMethodRef, livemode: basis.livemode, key: basis.key, amountCents: row.amount_cents }
+    paymentMethodRef: basis.paymentMethodRef, livemode: basis.livemode, key: basis.key, amountCents: row.amount_cents, currency: basis.currency }
 }
 export function nativeCollectionView(row: Row): Row {
   const basis = parseJson<NativeCollectionBasis | null>(row.basis_json, null), { basis_json, proof_json, ...safe } = row

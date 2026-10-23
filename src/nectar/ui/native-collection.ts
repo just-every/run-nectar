@@ -2,10 +2,11 @@ import type { Bindings } from '../../auth.server'
 import type { Actor } from '../actor'
 import { readNativeCollections } from '../payments/collection'
 import { one, parseJson, type Row } from '../core'
-import { cents, check, field, form, h, hidden, type Html } from './html'
+import { cents as importedCents, check, field, form, h, hidden, type Html } from './html'
 
 export async function nativeCollectionSection(env: Bindings, actor: Actor, invoice: Row): Promise<Html | string> {
   if (actor.kind !== 'member' || actor.role !== 'owner' || invoice.status !== 'issued' || invoice.retainedFinancial) return ''
+  const cents=(value:number)=>importedCents(value,invoice.currency??'USD')
   const automatic = await one(env,'SELECT id,subscription_id,status FROM nc_prepaid_topup_claims WHERE invoice_id=?',invoice.id)
   if (automatic) return h`<section class="card" id="collection"><h2>Automatic prepaid purchase</h2><p>This invoice belongs to an authorized top-up crossing. Its existing payment outcome is ${automatic.status.replaceAll('_',' ')}.</p><p><a href="/app/prepaid/${automatic.subscription_id}">View the authorization and check its existing payment</a></p></section>`
   const rows = (await readNativeCollections(env, actor, invoice.customer_id)).filter(row => row.invoice_id === invoice.id)

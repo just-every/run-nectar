@@ -10,6 +10,7 @@ import { collectionAuthority, collectionOwner } from '../movein/collection-state
 import { collectedPaymentStatements } from '../receivables'
 import { prepaidFundingForInvoice } from '../prepaid-records'
 import { prepaidFundingStatements } from '../prepaid-funding'
+import { billingCurrency } from '../currency'
 import { nativeCollectionSource, nativeSourceGuard } from './source'
 import { bindingGuard, currentNativeCollection, nativeCollectionRows, nativeCollectionView, paymentIdentity, storedNativeCollection, type NativeCollectionBasis } from './state'
 import { NativeStripeError, refusedPayment, capturedPayment, providerUnavailable, readIntent, savedCard, stripeForAccount, verifyIntent } from './stripe'
@@ -31,14 +32,14 @@ export async function prepareNativeCollection(env: Bindings, actor: Actor, input
     customerRevision: source.row.customer_revision, bindingId: binding.id, bindingRevision: binding.revision,
     payerCustomerId:source.payerId,payerRevision:source.payerRevision,invoiceId: source.row.id, invoiceNumber: source.row.number, customerId: source.row.customer_id, entityId: source.row.billing_entity_id,
     route: source.route, accountRef: selected.account, customerRef: card.customerRef, paymentMethodRef: card.paymentMethodRef,
-    amountCents: source.row.balance_cents, currency: 'usd', livemode: card.livemode, card: card.card,
+    amountCents: source.row.balance_cents, currency: billingCurrency(source.row.currency).toLowerCase(), livemode: card.livemode, card: card.card,
     key: await fingerprint(['nectar-native-collection-1', selected.account, source.row.id]) }
   const id = newId(), hash = await fingerprint(basis), at = clockInstant(env)
   await commit(env, [collectionAuthority(env, actor), nativeSourceGuard(env, source), bindingGuard(env, basis),
     guard(env,'prepaid_topup_invoice_managed','NOT EXISTS(SELECT 1 FROM nc_prepaid_topup_claims WHERE invoice_id=?)',source.row.id),
     guard(env, 'native_collection_already_claimed', 'NOT EXISTS(SELECT 1 FROM nc_native_collection_claims WHERE invoice_id=?)', source.row.id),
     stmt(env, `INSERT INTO nc_native_collections(id,invoice_id,customer_id,account_ref,stripe_customer_ref,payment_method_ref,status,basis_json,basis_hash,amount_cents,currency,prepared_by,prepared_at,revision)
-      VALUES(?,?,?,?,?,?,'pending',?,?,?,'usd',?,?,?)`, id, source.row.id, source.row.customer_id, selected.account, card.customerRef, card.paymentMethodRef, canonical(basis), hash, basis.amountCents, actor.id, at, newId()),
+      VALUES(?,?,?,?,?,?,'pending',?,?,?,?,?,?,?)`, id, source.row.id, source.row.customer_id, selected.account, card.customerRef, card.paymentMethodRef, canonical(basis), hash, basis.amountCents, basis.currency, actor.id, at, newId()),
   ], { actor: actorLabel(actor), action: 'collection.prepare', subject: id, detail: { invoice: source.row.id, amountCents: basis.amountCents, accountRef: basis.accountRef, basisHash: hash } })
   return nativeCollectionView(await storedNativeCollection(env, id))
 }
@@ -60,7 +61,7 @@ async function recordCaptured(env: Bindings, actor: Actor, row: Row, proof: Capt
     charge_ref: proof.chargeRef, proof_json: canonical(proof), error_code: 'native_payment_record_pending' }, 'capture.record')
   const { source, basis } = await currentNativeCollection(env, actor, held)
   const financial = await collectedPaymentStatements(env, actor, { customerId: held.customer_id, invoiceId: held.invoice_id,
-    amountCents: held.amount_cents, receivedOn: proof.receivedOn, reference: `stripe:${proof.accountRef}:${proof.paymentIntentRef}`,
+    amountCents: held.amount_cents, currency: proof.currency, receivedOn: proof.receivedOn, reference: `stripe:${proof.accountRef}:${proof.paymentIntentRef}`,
     evidence: canonical({ accountRef: proof.accountRef, paymentIntentRef: proof.paymentIntentRef, chargeRef: proof.chargeRef,
       amountCents: proof.amountCents, currency: proof.currency, capturedAt: proof.capturedAt, proof: proof.proof }) })
   const funding = await prepaidFundingForInvoice(env, held.invoice_id)
@@ -114,7 +115,7 @@ export async function confirmNativeCollection(env: Bindings, actor: Actor, input
     insist(canonical(await savedCard(selected.stripe, basis.customerRef)) === canonical({ customerRef: basis.customerRef,
       paymentMethodRef: basis.paymentMethodRef, livemode: basis.livemode, card: basis.card }), 'native_collection_card_changed', 409)
     const identity = paymentIdentity(current, basis)
-    const intent = await selected.stripe('/payment_intents', new URLSearchParams({ amount: String(basis.amountCents), currency: 'usd', customer: basis.customerRef,
+    const intent = await selected.stripe('/payment_intents', new URLSearchParams({ amount: String(basis.amountCents), currency: basis.currency, customer: basis.customerRef,
       payment_method: basis.paymentMethodRef, 'payment_method_types[0]': 'card', confirm: 'true', off_session: 'true', error_on_requires_action: 'true',
       'metadata[nectar_native_collection_key]': basis.key, 'metadata[nectar_native_collection_request]': row.id,
       'metadata[nectar_native_invoice]': row.invoice_id }), `nectar-native-${basis.key}`)

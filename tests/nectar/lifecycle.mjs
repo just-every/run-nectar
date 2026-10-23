@@ -78,6 +78,9 @@ export async function lifecycleFlow(h, owner) {
     for(const action of ['subscription.pause','subscription.resume']) await h.api(action,actor,{},status)
   }
   assert.equal((await h.api(`subscriptions/${subscription}`,reader)).lifecycle.length,3)
+  const customerHistory=(await h.api(`customers/${customer}`,reader)).billingRecord.subscriptionHistory.find(row=>row.id===subscription)
+  assert.deepEqual(customerHistory.events,(await detail()).lifecycle,'Customer record composes the complete nonempty lifecycle source')
+  assert.deepEqual(customerHistory.record.items,(await detail()).items)
   assert.ok(!(await h.page(`/app/subscriptions/${subscription}`,reader)).includes('action="/app/do/subscription.pause"'))
   const audit=await h.api('audit',owner)
   assert.ok(audit.some(e=>e.subject===subscription && e.action==='subscription.pause'),'SUB-003 lifecycle changes are audited')
