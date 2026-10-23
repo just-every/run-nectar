@@ -69,7 +69,7 @@
       "executable": false
     },
     "API.md": {
-      "sha256": "94028ccb70a13ab003822744c5a5c94d44ef8045be1a3a95cb35eabf1e435c37",
+      "sha256": "daa406fecf2f5c16dfd8e1c355182e8cd74f88a8062c350d08093967849c7a52",
       "executable": false
     },
     "base-copies.json": {
@@ -2533,7 +2533,7 @@
       "executable": false
     },
     "src/nectar/api-fields.ts": {
-      "sha256": "ecbd48d02bc4d5e9bf62d63b3e9b605f0e2084e6a4e663a82ebcc615c425d712",
+      "sha256": "9c4a865e3e21c27d16ab0042f06da7dadaab7ccc07bf8e7d19e102b301cdc564",
       "executable": false
     },
     "src/nectar/api-versions.ts": {
