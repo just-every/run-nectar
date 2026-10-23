@@ -60,7 +60,7 @@ export async function consumeStripeWebhookEvent(env: Bindings, actor: Actor, inp
     data.status=object.status
   }
   for(const field of ['amount_paid','amount_due','total'])if(object[field]!==undefined){insist(Number.isSafeInteger(object[field])&&object[field]>=0,'stripe_event_amount_invalid',409);data[field+'_cents']=object[field]}
-  if(object.currency!==undefined){insist(/^[a-z]{3}$/.test(object.currency),'stripe_event_currency_invalid',409);data.currency=object.currency}
+  if(object.currency!==undefined&&object.currency!==null){insist(/^[a-z]{3}$/.test(object.currency),'stripe_event_currency_invalid',409);data.currency=object.currency}
   if(event.type.startsWith('payment_method.'))data.payment_method_ref=sourceId
   if(event.type.startsWith('customer.subscription.')){
     insist(object.items?.object==='list'&&object.items.has_more===false&&Array.isArray(object.items.data)&&object.items.data.length<=100,'stripe_event_items_incomplete',409)

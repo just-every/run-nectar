@@ -3657,7 +3657,7 @@
       "executable": false
     },
     "src/nectar/webhook-stripe.ts": {
-      "sha256": "d0c06d51c338046c0ace823308a76a467e73500577781b961226d98e059dd211",
+      "sha256": "b377751c20d12a28e2dba0e6573007a5e149f64fc26304f9e8280b45a71afe15",
       "executable": false
     },
     "src/nectar/webhooks.ts": {
@@ -4301,11 +4301,11 @@
       "executable": false
     },
     "tests/nectar/webhook-shadow-sandbox.mjs": {
-      "sha256": "3f1d7af6ee4004078aea561fa4ea0f37f8a8a10c277d5365eeadfe2bb404dd0e",
+      "sha256": "4ac20436bc87a7d384557ab1a4fddbcd93cb1c30aa234dbc700d674422328f39",
       "executable": false
     },
     "tests/nectar/webhooks.mjs": {
-      "sha256": "6b2d71467743cb933e1011a837997bbbfd08a05a1da827ecae6d03a20bd19682",
+      "sha256": "5c5f4e2c458601eec7a8523d3a9ca9284726ecc8491c9e6a1b932b28bc88710e",
       "executable": false
     },
     "tests/nectar/write-off-browser.mjs": {

@@ -105,7 +105,7 @@ try{
   await api('webhook.dispatch',{})
   for(const item of receipt.events)assert.equal(received.filter(e=>e.id===item.nectarEventId).length,1)
   receipt.mappedFamilies=[...found].sort();receipt.status='passed'
-}catch(error){receipt.status='failed';receipt.failure={phase,...safeError(error)};process.exitCode=1;console.error('SHADOW_SANDBOX_FAILED',JSON.stringify(receipt.failure))}
+}catch(error){receipt.status='failed';receipt.failure={phase,...safeError(error),assertion:error?.code==='ERR_ASSERTION'?String(error.message).replace(/(?:sk|rk)_(?:live|test)_[^\s]+/gi,'[credential]').slice(0,500):undefined};process.exitCode=1;console.error('SHADOW_SANDBOX_FAILED',JSON.stringify(receipt.failure))}
 finally{
   await h?.close()
   if(clock)try{const deleted=await stripe.request('DELETE',`/v1/test_helpers/test_clocks/${clock}`);check(deleted.deleted===true,'owned_clock_cleanup_failed');receipt.cleanup.clockDeleted=true}catch(error){receipt.status='failed';receipt.cleanup.error=safeError(error);process.exitCode=1}

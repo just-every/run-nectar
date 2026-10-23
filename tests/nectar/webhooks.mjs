@@ -317,7 +317,7 @@ export async function webhookLifecycleFlow(h,owner,{onState=async()=>{}}={}) {
     const updated={id:'sub_NcAtlas01',object:'subscription',customer:'cus_NcAtlasFreight01',status:'active',cancel_at_period_end:false,
       items:{object:'list',has_more:false,data:[{id:'synthetic-nectar-source-item',price:{id:'price_NcPlatform199'},quantity:2}]},description:'Private Stripe description excluded',metadata:{secret:'Private provider metadata excluded'}}
     const cases=[
-      ['customer.created','customer.created',{id:'cus_NcAtlasFreight01',object:'customer',email:'Private Stripe email excluded'}],
+      ['customer.created','customer.created',{id:'cus_NcAtlasFreight01',object:'customer',currency:null,email:'Private Stripe email excluded'}],
       ['customer.updated','customer.updated',{id:'cus_NcAtlasFreight01',object:'customer'}],
       ['customer.subscription.created','subscription.created',updated],
       ['customer.subscription.updated','subscription.updated',updated],
