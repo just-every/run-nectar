@@ -525,8 +525,8 @@ Round updates: `GOV-001` is done under ct’s 20 October 16:55Z matrix: collecti
 | Clauses | Done | Partial | Missing | Total |
 | --- | ---: | ---: | ---: | ---: |
 | Published | 16 | 0 | 0 | 16 |
-| Target and push further | 38 | 28 | 46 | 112 |
-| All | 54 | 28 | 46 | 128 |
+| Target and push further | 38 | 29 | 45 | 112 |
+| All | 54 | 29 | 45 | 128 |
 
 | Clause | Title | Kind | Status | Evidence | Gap |
 | --- | --- | --- | --- | --- | --- |
