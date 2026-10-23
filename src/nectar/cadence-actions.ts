@@ -1,3 +1,4 @@
+import { requireUsdCurrency } from './currency'
 import type { Bindings } from '../auth.server'
 import { requireAny, actorLabel, requireMember, type Actor } from './actor'
 import { all, commit, guard, insist, newId, now, one, stmt, type Row } from './core'
@@ -11,6 +12,7 @@ export async function enrollCadence(env: Bindings, actor: Actor, input: Input) {
   requireMember(actor,'receivables')
   const seq=await cadenceSourceSequence(env)
   const invoice=await collectibleInvoice(env,input.text('invoice',{max:100}))
+  await requireUsdCurrency(env,{invoiceId:invoice.id})
   insist(invoice.balance_cents>0,'nothing_owed',409)
   const segment=input.text('segment',{max:80}), terms=input.text('transfer_terms',{max:1000})
   await commit(env,[activeFinanceGuard(env,actor),cadenceSourceGuard(env,seq),

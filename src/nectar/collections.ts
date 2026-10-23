@@ -1,3 +1,4 @@
+import { requireUsdCurrency,requireUsdReporting } from './currency'
 // Flow 12: ageing of open balances, reminder drafts and follow-up tasks.
 // A reminder records the balances it states; it is approved by a person only
 // while those balances still hold, and approval exports it for the operator
@@ -20,6 +21,7 @@ const bucket = (overdue: number) => overdue <= 0 ? 'current' : overdue <= 30 ? '
 
 export async function ageing(env: Bindings, actor: Actor) {
   requireRead(actor, 'invoices')
+  await requireUsdReporting(env)
   const business = await requireBusiness(env)
   const day = today(business.timezone, clockInstant(env))
   const rows = (await openInvoices(env)).map((row): Row => ({ ...row, daysOverdue: Math.max(0, daysBetween(row.due_date, day)), bucket: bucket(daysBetween(row.due_date, day)) }))
@@ -39,6 +41,7 @@ export async function reminderBasis(env: Bindings, customerId: string) {
   const day = today(business.timezone, clockInstant(env))
   const customer = await one(env, 'SELECT id, name, billing_email FROM nc_customers WHERE id = ?', customerId)
   insist(customer, 'customer_not_found', 404)
+  await requireUsdCurrency(env,{customerId})
   const candidates = (await openInvoices(env, customerId)).filter(row => row.due_date < day)
   const overdue = (await Promise.all(candidates.map(async row => {
     const held = await collectionHold(env, row.id)

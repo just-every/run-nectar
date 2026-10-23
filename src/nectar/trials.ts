@@ -10,6 +10,7 @@ import { clockInstant } from './clock'
 import { all, commit, guard, insist, newId, now, one, stmt, type Row } from './core'
 import { addDays, today } from './dates'
 import type { Input } from './input'
+import { runTrialCollections } from './trial-collection-jobs'
 
 const running = async (env: Bindings, id: string) => {
   const sub = await one(env, "SELECT * FROM nc_subscriptions WHERE id=? AND billing_mode='live'", id)
@@ -31,6 +32,7 @@ export async function extendTrial(env: Bindings, actor: Actor, input: Input) {
     guard(env, 'stale', "EXISTS(SELECT 1 FROM nc_subscriptions WHERE id=? AND trial_end=? AND trial_outcome IS NULL)", sub.id, sub.trial_end),
     stmt(env, 'INSERT INTO nc_trial_extensions(id,subscription_id,customer_id,previous_end,new_end,days,extended_by,extended_at) VALUES(?,?,?,?,?,?,?,?)', id, sub.id, sub.customer_id, sub.trial_end, next, days, actorLabel(actor), at),
     stmt(env, 'UPDATE nc_subscriptions SET trial_end=?,revision=?,updated_at=? WHERE id=?', next, newId(), now(), sub.id),
+    stmt(env, "UPDATE nc_trial_collections SET status='invalidated',error_code='trial_end_changed',ended_at=?,revision=? WHERE subscription_id=? AND status IN ('pending_owner','pending_approval','active')", at, newId(), sub.id),
   ], { actor: actorLabel(actor), action: 'trial.extend', subject: sub.id, detail: { previousEnd: sub.trial_end, newEnd: next, days } })
   return { id: sub.id, trialEnd: next }
 }
@@ -60,6 +62,7 @@ export async function resolveTrial(env: Bindings, actor: Actor, input: Input) {
 export async function runTrials(env: Bindings, scheduledTime = clockInstant(env)) {
   const business = await requireBusiness(env).catch(() => null)
   if (!business) return
+  await runTrialCollections(env)
   const system: Actor = { id: 'system', kind: 'agent', name: 'trial-scheduler', email: '', role: null, sessionId: null, capabilities: new Set() }
   for (const sub of await all(env, "SELECT * FROM nc_subscriptions WHERE billing_mode='live' AND trial_end IS NOT NULL AND trial_outcome IS NULL AND trial_payment IS NOT NULL AND trial_end<=? ORDER BY trial_end,id", today(business.timezone, scheduledTime)))
     await resolveTrialRow(env, system, sub).catch(() => undefined)

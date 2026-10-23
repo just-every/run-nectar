@@ -9,7 +9,7 @@ import { applyPolicy } from './policy-helper.mjs'
 let edge
 export const harnessOptions = () => { edge = quickbooksEdge(); return { quickbooksFetch: edge.fetch, localTime: '2026-08-29T20:00:00Z' } }
 
-export async function writeOffFlow(h, owner) {
+export async function writeOffFlow(h, owner, {onRecord=async()=>{}}={}) {
   const people = {}
   for (const [key, role] of [['finance', 'finance'], ['accountant', 'accountant'], ['collections', 'collections']]) {
     await h.api('access.give', owner, { email: `writeoff-${key}@example.test`, name: `Wren ${key}`, role })
@@ -95,7 +95,14 @@ export async function writeOffFlow(h, owner) {
   assert.equal((await arReport()).totalCents, 0)
   assert.ok((await h.api('reports/collections?period=2026-08', owner)).entries.some(entry => entry.number === 'AR004-RECOVERY' && entry.amountCents === 50000), 'the recovered cash is a collection')
   assert.match(await h.page(`/app/invoices/${first}`, owner), /Bad debt write-offs[\s\S]*Customer dissolved/)
-  const customerLedger = (await h.api(`customers/${customer}`, owner)).ledger
+  const customerRecord=await h.api(`customers/${customer}`,owner)
+  const composed=customerRecord.billingRecord.writeOffs.find(row=>row.id===written.writeOff)
+  assert.equal(composed.amountCents,200000);assert.equal(composed.recoveredCents,50000)
+  assert.equal(composed.recoveries[0].payment,payment);assert.equal(composed.invoice,first)
+  assert.ok(!('reason' in composed)&&!('effect' in composed),'Customer write-off facts exclude approval narratives and ledger routing')
+  assert.ok((await h.page(`/app/customers/${customer}`,owner)).includes(firstNumber))
+  await onRecord({customer,invoice:first})
+  const customerLedger = customerRecord.ledger
   assert.equal(customerLedger.writtenOffCents, 150000); assert.equal(customerLedger.balanceCents, 0)
   const csv = await (await h.raw('/app/exports/invoices.csv', { cookie: owner })).text()
   assert.match(csv, /,0\.00,[^\n]*,1500\.00\r\n/, 'the invoice export shows the net write-off')

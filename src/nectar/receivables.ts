@@ -20,6 +20,9 @@ import { BALANCE_SQL, CARRIED_APPLICATION_SQL, GOODWILL_APPLIED_SQL, WRITE_OFF_N
 import { cents, plainMoney } from './decimal'
 import { addDays, daysBetween, requireDate, today } from './dates'
 import { Input } from './input'
+import { assertSameCurrency, billingCurrency, customerCurrencyGuard, requireUsdReporting } from './currency'
+import { currencyRecord } from './currency-rates'
+import { localDate } from './dates'
 
 export { BALANCE_SQL, CARRIED_APPLICATION_SQL, GOODWILL_APPLIED_SQL, WRITE_OFF_NET_SQL } from './balance-sql'
 const balanceOf = (id: string) => [`(SELECT ${BALANCE_SQL} FROM nc_invoices i WHERE i.id = ?)`, id] as const
@@ -38,6 +41,11 @@ export async function creditNoteStatements(env: Bindings, actor: Actor, input: I
   if (!can(actor, 'approve')) requireRead(actor, 'invoices')
   const business = await requireBusiness(env)
   const invoice = await issuedInvoice(env, input.text('invoice', { max: 100 }))
+  assertSameCurrency(invoice.currency, input.text('currency', { max: 3, optional: true }) || invoice.currency)
+  if (billingCurrency(invoice.currency) !== 'USD') {
+    requireMember(actor, 'approve')
+    insist(!await one(env, 'SELECT 1 FROM nc_credit_policy WHERE singleton=1 AND two_person_above_cents IS NOT NULL'), 'currency_credit_policy_not_supported', 409)
+  }
   const amount = cents(input.text('amount', { max: 20 }))
   insist(amount > 0, 'invalid_amount')
   insist(amount <= invoice.balance_cents, 'exceeds_balance', 409)
@@ -53,7 +61,7 @@ export async function creditNoteStatements(env: Bindings, actor: Actor, input: I
     ...authorization.guards,
     ...allocation.statements,
     guard(env, 'exceeds_balance', `${balanceSql} >= ?`, balanceParam, amount),
-    stmt(env, 'INSERT INTO nc_credit_notes (id, number, invoice_id, customer_id, amount_cents, reason, proposal_id, issued_by, issued_at,billing_entity_id,billing_route_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?,?,?)', id, number, invoice.id, invoice.customer_id, amount, reason, proposalId ?? null, actorLabel(actor), issuedAt,allocation.entityId,allocation.routeJson),
+    stmt(env, 'INSERT INTO nc_credit_notes (id, number, invoice_id, customer_id, amount_cents, currency, reason, proposal_id, issued_by, issued_at,billing_entity_id,billing_route_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?,?)', id, number, invoice.id, invoice.customer_id, amount, billingCurrency(invoice.currency), reason, proposalId ?? null, actorLabel(actor), issuedAt,allocation.entityId,allocation.routeJson),
     ...await revenueCreditStatements(env,{id,invoice:invoice.id,customer:invoice.customer_id,amountCents:amount,issuedAt}),
     ...(authorization.request ? [stmt(env, "UPDATE nc_credit_requests SET status='issued',approved_by=?,approved_at=?,credit_id=? WHERE id=?", actorLabel(actor), now(), id, authorization.request.id)] : []),
   ], audits: [{ actor: actorLabel(actor), action: 'credit.issue', subject: id, detail: { number, invoice: invoice.number, amount, reason, request: authorization.request?.id ?? null, preparedBy: authorization.request?.prepared_name ?? actorLabel(actor) } }], result: { id: invoice.id, credit: id, number } }
@@ -80,14 +88,15 @@ export async function approveCredit(env: Bindings, actor: Actor, input: Input) {
 
 interface PaymentFact {
   paymentId: string; customerId: string; amountCents: number; receivedOn: string
-  method: string; reference: string; evidence: string
+  method: string; reference: string; evidence: string; currency: string
 }
 function paymentFactStatement(env: Bindings, actor: Actor, fact: PaymentFact) {
-  return stmt(env, 'INSERT INTO nc_payments (id, customer_id, amount_cents, received_on, method, reference, evidence, recorded_by, recorded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', fact.paymentId, fact.customerId, fact.amountCents, fact.receivedOn, fact.method, fact.reference, fact.evidence, actorLabel(actor), now())
+  return stmt(env, 'INSERT INTO nc_payments (id, customer_id, amount_cents, currency, received_on, method, reference, evidence, recorded_by, recorded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', fact.paymentId, fact.customerId, fact.amountCents, billingCurrency(fact.currency), fact.receivedOn, fact.method, fact.reference, fact.evidence, actorLabel(actor), now())
 }
 function allocationFactStatements(env: Bindings, actor: Actor, paymentId: string, invoice: Row, amount: number, id: string) {
   const [balanceSql, balanceParam] = balanceOf(invoice.id)
   return [
+    guard(env, 'currency_mismatch', 'EXISTS(SELECT 1 FROM nc_payments p JOIN nc_invoices i ON i.id=? WHERE p.id=? AND p.currency=i.currency)', invoice.id, paymentId),
     guard(env, 'exceeds_payment', `(SELECT ${UNALLOCATED_SQL} FROM nc_payments p WHERE p.id = ?) >= ?`, paymentId, amount),
     guard(env, 'exceeds_balance', `${balanceSql} >= ?`, balanceParam, amount),
     stmt(env, 'INSERT INTO nc_allocations (id, payment_id, invoice_id, amount_cents, allocated_by, allocated_at) VALUES (?, ?, ?, ?, ?, ?)', id, paymentId, invoice.id, amount, actorLabel(actor), now()),
@@ -99,14 +108,16 @@ function allocationFactStatements(env: Bindings, actor: Actor, paymentId: string
  * source guards. This helper never calls a provider or commits on its own. */
 export async function collectedPaymentStatements(env: Bindings, actor: Actor, fact: {
   customerId: string; invoiceId: string; amountCents: number; receivedOn: string
-  reference: string; evidence: string; paymentId?: string; allocationId?: string
+  reference: string; evidence: string; currency?: string; paymentId?: string; allocationId?: string; method?: 'card_external' | 'bank_transfer'
 }) {
   requireCapability(actor, 'receivables')
   insist(Number.isSafeInteger(fact.amountCents) && fact.amountCents > 0, 'invalid_amount')
-  const customer = await one(env, 'SELECT id FROM nc_customers WHERE id=? AND erased_at IS NULL', fact.customerId)
+  const customer = await one(env, 'SELECT id,currency FROM nc_customers WHERE id=? AND erased_at IS NULL', fact.customerId)
   insist(customer, 'customer_not_found', 404)
   const invoice = await issuedInvoice(env, fact.invoiceId)
   insist(invoice.customer_id === customer.id, 'different_customer', 409)
+  assertSameCurrency(invoice.currency, fact.currency ?? invoice.currency)
+  assertSameCurrency(invoice.currency, customer.currency)
   insist(invoice.balance_cents === fact.amountCents, 'collection_balance_changed', 409)
   const received = requireDate(fact.receivedOn, 'received_on')
   insist(typeof fact.reference === 'string' && fact.reference.trim().length > 0 && fact.reference.length <= 120, 'invalid_reference')
@@ -117,18 +128,20 @@ export async function collectedPaymentStatements(env: Bindings, actor: Actor, fa
     guard(env, 'customer_erased', 'EXISTS(SELECT 1 FROM nc_customers WHERE id=? AND erased_at IS NULL)', customer.id),
     guard(env, 'payment_reference_exists', 'NOT EXISTS(SELECT 1 FROM nc_payments WHERE customer_id=? AND reference=?)', customer.id, fact.reference),
     guard(env, 'collection_balance_changed', `(SELECT ${BALANCE_SQL} FROM nc_invoices i WHERE i.id=? AND i.status='issued' AND i.customer_id=?)=?`, invoice.id, customer.id, fact.amountCents),
-    paymentFactStatement(env, actor, { paymentId, customerId: customer.id, amountCents: fact.amountCents, receivedOn: received, method: 'card_external', reference: fact.reference, evidence: fact.evidence }),
+    paymentFactStatement(env, actor, { paymentId, customerId: customer.id, amountCents: fact.amountCents, receivedOn: received, currency: invoice.currency, method: fact.method ?? 'card_external', reference: fact.reference, evidence: fact.evidence }),
     ...allocationFactStatements(env, actor, paymentId, invoice, fact.amountCents, allocationId),
   ], audits: [
-    { actor: actorLabel(actor), action: 'payment.record', subject: paymentId, detail: { customer: customer.id, amount: fact.amountCents, received, method: 'card_external', reference: fact.reference } },
+    { actor: actorLabel(actor), action: 'payment.record', subject: paymentId, detail: { customer: customer.id, amount: fact.amountCents, received, method: fact.method ?? 'card_external', reference: fact.reference } },
     { actor: actorLabel(actor), action: 'payment.allocate', subject: allocationId, detail: { payment: fact.reference, invoice: invoice.number, amount: fact.amountCents } },
   ] }
 }
 
 export async function recordPayment(env: Bindings, actor: Actor, input: Input) {
   requireCapability(actor, 'receivables')
-  const customer = await one(env, 'SELECT id FROM nc_customers WHERE id = ?', input.text('customer', { max: 100 }))
+  const customer = await one(env, 'SELECT id,currency FROM nc_customers WHERE id = ?', input.text('customer', { max: 100 }))
   insist(customer, 'customer_not_found', 404)
+  const currency = billingCurrency(input.text('currency', { max: 3, optional: true }), billingCurrency(customer.currency))
+  assertSameCurrency(currency, customer.currency)
   const amount = cents(input.text('amount', { max: 20 }))
   insist(amount > 0, 'invalid_amount')
   const received = requireDate(input.text('received_on', { max: 10 }), 'received_on')
@@ -141,7 +154,7 @@ export async function recordPayment(env: Bindings, actor: Actor, input: Input) {
   const owed = await all(env, `SELECT ${BALANCE_SQL} AS balance_cents FROM nc_invoices i WHERE i.customer_id=? AND i.status='issued'`,customer.id)
   const mismatch = owed.some(i=>i.balance_cents>0) && !owed.some(i=>i.balance_cents===amount)
   const alerts = mismatch ? await alertStatements(env,'payment_mismatch',id,`/app/customers/${customer.id}#payment-${id}`) : []
-  await commit(env, [...alerts,paymentFactStatement(env, actor, { paymentId: id, customerId: customer.id, amountCents: amount, receivedOn: received, method, reference, evidence })],
+  await commit(env, [customerCurrencyGuard(env, customer.id, currency),...alerts,paymentFactStatement(env, actor, { paymentId: id, customerId: customer.id, amountCents: amount, receivedOn: received, currency, method, reference, evidence })],
     { actor: actorLabel(actor), action: 'payment.record', subject: id, detail: { customer: customer.id, amount, received, method, reference } })
   if (mismatch) await deliverAlerts(env,'payment_mismatch',id,actorLabel(actor))
   return { id: customer.id, payment: id }
@@ -153,6 +166,7 @@ export async function allocate(env: Bindings, actor: Actor, input: Input) {
   insist(payment, 'payment_not_found', 404)
   const invoice = await issuedInvoice(env, input.text('invoice', { max: 100 }))
   insist(invoice.customer_id === payment.customer_id, 'different_customer', 409)
+  assertSameCurrency(payment.currency, invoice.currency)
   const amount = cents(input.text('amount', { max: 20 }))
   insist(amount > 0, 'invalid_amount')
   insist(amount <= payment.unallocated, 'exceeds_payment', 409)
@@ -170,27 +184,34 @@ export async function payments(env: Bindings, actor: Actor, customerId?: string,
 /** Callers authorize first: the payments door, or a customer record's own ledger (GOV-001). */
 async function paymentRows(env: Bindings, customerId?: string,url?:URL) {
   const filter=metadataPredicate('payment','p.id',url?metadataFilter(url):null)
-  return await withMetadata(env,'payment',await all(env, `SELECT p.*, c.name AS customer_name, ${UNALLOCATED_SQL} AS unallocated_cents FROM nc_payments p JOIN nc_customers c ON c.id = p.customer_id WHERE ${filter.sql} ${customerId ? 'AND p.customer_id = ?' : ''} ORDER BY p.received_on DESC, p.recorded_at DESC ${customerId ? '' : 'LIMIT 200'}`, ...filter.params,...(customerId ? [customerId] : [])))
+  const rows = await all(env, `SELECT p.*, c.name AS customer_name, ${UNALLOCATED_SQL} AS unallocated_cents FROM nc_payments p JOIN nc_customers c ON c.id = p.customer_id WHERE ${filter.sql} ${customerId ? 'AND p.customer_id = ?' : ''} ORDER BY p.received_on DESC, p.recorded_at DESC ${customerId ? '' : 'LIMIT 200'}`, ...filter.params,...(customerId ? [customerId] : []))
+  return withMetadata(env, 'payment', await Promise.all(rows.map(row => currencyRecord(env, row, row.amount_cents, row.received_on))))
 }
 
 /** Open (issued, unpaid) invoices with their balances. */
 export async function openInvoices(env: Bindings, customerId?: string) {
-  return await all(env, `SELECT i.id, i.number, i.customer_id, c.name AS customer_name, c.billing_email, i.issue_date, i.due_date, i.total_cents, ${BALANCE_SQL} AS balance_cents
+  return await all(env, `SELECT i.id, i.number, i.customer_id, c.name AS customer_name, c.billing_email, i.issue_date, i.due_date, i.currency, i.total_cents, ${BALANCE_SQL} AS balance_cents
     FROM nc_invoices i JOIN nc_customers c ON c.id = i.customer_id WHERE i.status = 'issued' ${customerId ? 'AND i.customer_id = ?' : ''} AND ${BALANCE_SQL} > 0 ORDER BY i.due_date, i.number`, ...(customerId ? [customerId] : []))
 }
 
 export async function customerLedger(env: Bindings, actor: Actor, customerId: string) {
   requireRead(actor, 'customers')
-  const invoices = await all(env, `SELECT i.id, i.number, i.issue_date, i.due_date, i.total_cents, ${BALANCE_SQL} AS balance_cents,
+  const invoices = await all(env, `SELECT i.id, i.number, i.issue_date, i.due_date, i.currency, i.total_cents, ${BALANCE_SQL} AS balance_cents,
     COALESCE((SELECT SUM(COALESCE(applied_cents,amount_cents)) FROM nc_credit_notes WHERE invoice_id = i.id), 0) + ${CARRIED_APPLICATION_SQL} + ${GOODWILL_APPLIED_SQL} AS credited_cents,
     COALESCE((SELECT SUM(amount_cents) FROM nc_allocations WHERE invoice_id = i.id), 0) AS paid_cents, ${WRITE_OFF_NET_SQL} AS written_off_cents
     FROM nc_invoices i WHERE i.customer_id = ? AND i.status = 'issued' ORDER BY i.issue_date, i.number`, customerId)
   // The customer record includes its own payments, so customer readers see them here.
   const pays = await paymentRows(env, customerId)
   const credits = await sharedCreditNotes(env,'n.customer_id=?',customerId)
+  const customer = await one(env, 'SELECT currency FROM nc_customers WHERE id=?', customerId)
+  const business = await requireBusiness(env)
+  const reportedInvoices = await Promise.all(invoices.map(row => currencyRecord(env, row, row.total_cents, row.issue_date)))
+  const reportedPayments = await Promise.all(pays.map(row => currencyRecord(env, row, row.amount_cents, row.received_on)))
+  const reportedCredits = await Promise.all(credits.map(row => currencyRecord(env, row, row.amount_cents, localDate(row.issued_at, business.timezone))))
   return {
+    currency: billingCurrency(customer?.currency),
     carriedUsageCredits:await carriedUsageCredits(env,customerId),
-    invoices:await withMetadata(env,'invoice',invoices), payments: pays, credits:await withMetadata(env,'credit-note',credits),
+    invoices:await withMetadata(env,'invoice',reportedInvoices), payments: reportedPayments, credits:await withMetadata(env,'credit-note',reportedCredits),
     invoicedCents: invoices.reduce((sum, row) => sum + row.total_cents, 0),
     creditedCents: invoices.reduce((sum, row) => sum + row.credited_cents, 0),
     paidCents: invoices.reduce((sum, row) => sum + row.paid_cents, 0),
@@ -205,9 +226,10 @@ export async function customerLedger(env: Bindings, actor: Actor, customerId: st
 export async function receivablesDesk(env: Bindings, actor: Actor) {
   requireRead(actor, 'invoices')
   requireRead(actor, 'payments')
+  await requireUsdReporting(env)
   const business = await requireBusiness(env)
   const day = today(business.timezone, clockInstant(env)), month = day.slice(0, 7)
-  const rows = await all(env, `SELECT i.id, i.number, i.customer_id, c.name AS customer_name, c.address, i.issue_date, i.due_date, i.total_cents, ${BALANCE_SQL} AS balance_cents,
+  const rows = await all(env, `SELECT i.id, i.number, i.customer_id, c.name AS customer_name, c.address, i.issue_date, i.due_date, i.currency, i.total_cents, ${BALANCE_SQL} AS balance_cents,
     COALESCE((SELECT SUM(amount_cents) FROM nc_allocations WHERE invoice_id = i.id), 0) AS paid_cents, ${WRITE_OFF_NET_SQL} AS written_off_cents,
     (SELECT MAX(p.received_on) FROM nc_allocations a JOIN nc_payments p ON p.id = a.payment_id WHERE a.invoice_id = i.id) AS paid_on,
     (SELECT p.method FROM nc_allocations a JOIN nc_payments p ON p.id = a.payment_id WHERE a.invoice_id = i.id ORDER BY p.received_on DESC LIMIT 1) AS method

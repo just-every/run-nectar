@@ -18,14 +18,14 @@ const API_PROBE = { periodCloses: 'period-closes', customerBalance: 'customers/n
 const PAGE_PROBE = { prepaid:'/app/prepaid/none', prepaidSource:'/app/prepaid/none/entries/none', prepaidCsv:'/app/exports/prepaid/none.csv', importOriginals:'/app/import/none/originals/'+ '0'.repeat(64), metadata: '/app/metadata/price/none', report: '/app/reports/billings', reportInvoice: '/app/reports/billings/none', reportCsv: '/app/exports/reports/billings.csv', metadataCsv: '/app/exports/objects/customer.csv', reportLine: '/app/invoices/none/lines/none' }
 const fill = pattern => pattern.replace(/^\^|\$$/g, '').replace(/\(\[[^)]*\]\+\)/g, 'none').replace(/\\\./g, '.')
 
-const READ_ALL_API = API_DOORS.map(([, name]) => name).filter(name => !['hierarchies','webhooks','webhookDelivery','members', 'roles', 'imports', 'audit', 'reportSchedule', 'reportDelivery', 'noteMembers','billingEntities','nativeCollections','prepaidTopupAuthorizations','prepaidTopupClaims'].includes(name))
+const READ_ALL_API = API_DOORS.map(([, name]) => name).filter(name => !['trialCollections','prepaidRefundNotices','hierarchies','webhooks','webhookDelivery','members', 'roles', 'imports', 'audit', 'reportSchedule', 'reportDelivery', 'noteMembers','billingEntities','nativeCollections','prepaidTopupAuthorizations','prepaidTopupClaims'].includes(name))
 const READ_ALL_PAGES = PAGE_DOORS.map(([, name]) => name).filter(name => !['hierarchies','webhooks','webhookDelivery','prepaidRefundProof','prepaidRefundCsv','prepaidTopupSource','prepaidCsv', 'revenueJournalCsv', 'numberRegisterCsv', 'erasureEvidence', 'revenueCsv', 'reportSchedule', 'reportDelivery', 'reportDeliveryCsv', 'reportCsv', 'metadataCsv', 'runFile', 'import', 'exports', 'customersFile', 'invoicesFile', 'usageFile', 'subscriptionsFile', 'audit', 'noticeFile','importOriginals'].includes(name))
 const COMMON = { api: ['openapi', 'me', 'notifications', 'mfa'], pages: ['home', 'more', 'security', 'passkeyScript'] }
 const EXPECTED = {
   collections: {
     actions: ['payment.record', 'payment.allocate', 'reminder.prepare', 'reminder.approve', 'reminder.discard', 'task.create', 'task.complete', 'cadence.enroll', 'cadence.promise', 'cadence.dispute', 'cadence.resolve', 'cadence.approve', 'cadence.run', 'note.add', 'answer.read'],
-    api: ['prepaidRefunds', 'numberRegister', 'customers', 'customer', 'invoices', 'invoice', 'ageing', 'writeOffs', 'ledgerPostings', 'customerBalance', 'payments', 'notices', 'tasks', 'notes', 'noteMembers', 'entitlement', 'reportLine', 'cadences', 'metadataObjects'],
-    pages: ['prepaidRefundList', 'prepaidRefundSource', 'numberRegister', 'customers', 'customer', 'certificateFile', 'invoice', 'receivables', 'noticeFile', 'cadences', 'billingAnswers', 'reportLine', 'metadataList'],
+    api: ['paymentReceipt','prepaidRefunds', 'numberRegister', 'customers', 'customer', 'invoices', 'invoice', 'ageing', 'writeOffs', 'ledgerPostings', 'customerBalance', 'payments', 'notices', 'tasks', 'notes', 'noteMembers', 'entitlement', 'reportLine', 'cadences', 'metadataObjects'],
+    pages: ['paymentReceipt','prepaidRefundList', 'prepaidRefundSource', 'numberRegister', 'customers', 'customer', 'certificateFile', 'invoice', 'receivables', 'noticeFile', 'cadences', 'billingAnswers', 'reportLine', 'metadataList'],
   },
   sales: {
     actions: ['change.prepare', 'plan.change.prepare', 'amendment.propose', 'contract.prepare'],
@@ -33,9 +33,9 @@ const EXPECTED = {
     pages: ['customers', 'customer', 'certificateFile', 'catalog', 'subscription', 'metadata', 'metadataList'],
   },
   support: {
-    actions: ['note.add', 'credit.issue', 'answer.read'],
-    api: ['prepaidRefunds', 'numberRegister', 'customers', 'customer', 'invoices', 'invoice', 'ageing', 'writeOffs', 'ledgerPostings', 'customerBalance', 'payments', 'notes', 'noteMembers', 'entitlement', 'subscription', 'upcoming', 'reportLine', 'metadataObjects', 'prepaid', 'prepaidSource'],
-    pages: ['prepaidRefundList', 'prepaidRefundSource', 'numberRegister', 'customers', 'customer', 'certificateFile', 'subscription', 'prepaid', 'prepaidSource', 'invoice', 'receivables', 'billingAnswers', 'reportLine', 'metadataList'],
+    actions: ['prepaid.refund.request', 'note.add', 'credit.issue', 'answer.read'],
+    api: ['paymentReceipt','prepaidRefunds', 'numberRegister', 'customers', 'customer', 'invoices', 'invoice', 'ageing', 'writeOffs', 'ledgerPostings', 'customerBalance', 'payments', 'notes', 'noteMembers', 'entitlement', 'subscription', 'upcoming', 'reportLine', 'metadataObjects', 'prepaid', 'prepaidSource'],
+    pages: ['paymentReceipt','prepaidRefundList', 'prepaidRefundSource', 'numberRegister', 'customers', 'customer', 'certificateFile', 'subscription', 'prepaid', 'prepaidSource', 'invoice', 'receivables', 'billingAnswers', 'reportLine', 'metadataList'],
   },
   developer: {
     actions: ['credential.issue', 'credential.revoke', 'credential.version', 'webhook.stripe.consume', 'webhook.register', 'webhook.rotate', 'webhook.disable', 'webhook.replay', 'webhook.dispatch', 'answer.read', 'meter.preview', 'usage.correction.preview'],
@@ -43,8 +43,8 @@ const EXPECTED = {
   },
   analyst: {
     actions: ['report.schedule'],
-    api: ['customers', 'customer', 'entitlement', 'metadataObjects', 'report', 'reportInvoice', 'reportLine', 'periodCloses', 'revenue', 'revenueJournal', 'revenueSource', 'reportSchedule', 'reportDelivery'],
-    pages: ['customers', 'customer', 'certificateFile', 'metadataList', 'metadataCsv', 'revenue', 'revenueSource', 'revenueCsv', 'revenueJournalCsv', 'reportSchedule', 'reportDelivery', 'reportDeliveryCsv', 'reportCsv', 'report', 'reportInvoice', 'reportLine', 'exports', 'customersFile'],
+    api: ['currencyRates','currencyReport','customers', 'customer', 'entitlement', 'metadataObjects', 'report', 'reportInvoice', 'reportLine', 'periodCloses', 'revenue', 'revenueJournal', 'revenueSource', 'reportSchedule', 'reportDelivery'],
+    pages: ['currencyReport','customers', 'customer', 'certificateFile', 'metadataList', 'metadataCsv', 'revenue', 'revenueSource', 'revenueCsv', 'revenueJournalCsv', 'reportSchedule', 'reportDelivery', 'reportDeliveryCsv', 'reportCsv', 'report', 'reportInvoice', 'reportLine', 'exports', 'customersFile'],
   },
 }
 

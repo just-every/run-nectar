@@ -52,7 +52,7 @@ export async function portalSessionsFlow(h, owner) {
   assert.equal(overview.headers.get('cache-control'), 'no-store')
   assert.equal(overview.headers.get('referrer-policy'), 'no-referrer')
   const data = await overview.json()
-  assert.deepEqual(data.customer, { name: 'Northwind Robotics', language: 'en' })
+  assert.deepEqual(data.customer, { name: 'Northwind Robotics', language: 'en', currency: 'USD' })
   assert.deepEqual(data.invoices.map(row => [row.id,row.total_cents,row.credited_cents,row.paid_cents,row.balance_cents]), [[invoice.id,30000,2500,10000,17500]], 'PORT-005 original total = credited + allocated + owed')
   const detail = await open(session, `/portal/invoices/${invoice.id}`)
   assert.equal(detail.status, 200)

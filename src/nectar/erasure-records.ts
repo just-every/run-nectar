@@ -9,7 +9,7 @@ import { erasureMutationStatements, type ErasureMutation } from './erasure-sql'
 
 const quote = (name: string) => `"${name.replaceAll('"', '""')}"`
 const relation = new Set(['customer_id','subscription_id','invoice_id','payment_id','proposal_id','credit_id','record_id','subject','related_id','term_id','offer_id','contract_id','note_id','correction_id','original_invoice_id'])
-const keep = new Set(['purpose','correction_kind','intent_key','billing_key','interval_unit','billing_timing','numbering_mode','capture_kind','account_ref','custody','basis_hash','error_code','occurred_text','number','kind','document_kind','status','origin','language','currency','method','billing_mode','invoice_kind','calc_version','version','revision','quantity','unit_amount','value','tax_rate','tax_mode','tax_jurisdiction','anchor_day','billing_interval','access','scope','scopes','pricing_model','action','state','approval_mode','mail_status','verified_method','event','created_by_kind','prepared_by_kind','source','proposal_kind'])
+const keep = new Set(['purpose','correction_kind','intent_key','billing_key','interval_unit','billing_timing','numbering_mode','capture_kind','account_ref','custody','basis_hash','error_code','occurred_text','number','kind','document_kind','status','origin','language','currency','method','billing_mode','invoice_kind','calc_version','version','revision','quantity','unit_amount','value','tax_rate','tax_mode','tax_jurisdiction','anchor_day','billing_interval','access','scope','scopes','pricing_model','action','state','approval_mode','mail_status','verified_method','event','created_by_kind','prepared_by_kind','requested_by_kind','source','proposal_kind'])
 // The processor refund identifier is retained cash custody under ct batch11 I.
 const typedPlanField=(table:string,column:string)=>table==='nc_plan_changes'&&['mode','policy'].includes(column)
 const financialIdentifier=(table:string,column:string)=>table==='nc_prepaid_refunds'&&column==='refund_ref'
@@ -82,6 +82,7 @@ export async function erasurePlan(env: Bindings, customer: Row): Promise<Erasure
       if (table==='nc_tasks') updates.status='done'
       if (table==='nc_renewal_terms') {updates.auto_renew=0;updates.token_hash=null;updates.status='ended'}
       if (table==='nc_prepaid_topup_authorizations') updates.status='revoked'
+      if (table==='nc_trial_collections') updates.status='revoked'
       if (table==='nc_prepaid_consents') updates.status='revoked'
       if (table==='nc_retention_offers') {updates.token_hash=null;updates.status='expired'}
     }

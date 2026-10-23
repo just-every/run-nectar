@@ -22,7 +22,7 @@ const portalLink = (value: string) => value.replace(/^\/api\/nectar\/invoices\//
 export async function portalAnswer(env: Bindings, session: CustomerSession, input: Input) {
   input.only(['invoice','question','topic','comparison_invoice'])
   const answer = await billingAnswer(env, session, Input.of({ ...Object.fromEntries(['invoice','question','topic','comparison_invoice'].filter(key=>input.has(key)).map(key=>[key,input.text(key,{optional:true,max:1000})])), customer: session.customer }))
-  const L = customerText(session.language)
+  const L = customerText(session.language,session.currency)
   const figures = answer.figures.map(figure => {
     const key = fixedLabels[figure.label]
     const label = figure.label.startsWith('Source event ') ? L.t('portal.answer.event',{id:figure.label.slice('Source event '.length)})
@@ -46,7 +46,7 @@ export async function portalAnswer(env: Bindings, session: CustomerSession, inpu
 }
 
 export async function portalAnswersPage(env: Bindings, session: CustomerSession, input: Input, link:(path:string)=>string) {
-  const L=customerText(session.language)
+  const L=customerText(session.language,session.currency)
   const invoices=(await portalData(env,session)).invoices
   const invoice=input.text('invoice',{optional:true,max:100})||invoices[0]?.id||''
   const question=input.text('question',{optional:true,max:1000})

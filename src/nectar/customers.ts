@@ -9,6 +9,7 @@ import type { Input } from './input'
 import { languageInput } from './locale'
 import { invoiceSettingsInput } from './invoice-content'
 import { customerEvidenceMatches } from './customer-search'
+import { billingCurrency } from './currency'
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const EXTERNAL_ID = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,79}$/
@@ -17,13 +18,13 @@ export async function customers(env: Bindings, actor: Actor,url?:URL) {
   requireRead(actor, 'customers')
   const filter=metadataPredicate('customer','c.id',url?metadataFilter(url):null)
   const search=(url?.searchParams.get('search')??'').trim()
-  const rows=await all(env, `SELECT c.id, c.external_id, c.name, c.billing_email, c.language, c.status, c.origin, c.tax_exempt,
+  const rows=await all(env, `SELECT c.id, c.external_id, c.name, c.billing_email, c.language, c.currency, c.status, c.origin, c.tax_exempt,
     (SELECT COUNT(*) FROM nc_subscriptions s WHERE s.customer_id = c.id) AS subscriptions
     FROM nc_customers c WHERE ${filter.sql} ORDER BY c.name COLLATE NOCASE`,...filter.params)
   const projected=await withMetadata(env,'customer',rows)
   if(!search)return projected
   const matches=await all(env,`SELECT m.kind,m.record_id,m.metadata_json FROM nc_metadata_revisions m WHERE m.revision=(SELECT MAX(x.revision) FROM nc_metadata_revisions x WHERE x.kind=m.kind AND x.record_id=m.record_id)`)
-  const found=await customerEvidenceMatches(env,search)
+  const found=await customerEvidenceMatches(env,search,actor)
   for(const m of matches){
     if(!Object.values(JSON.parse(m.metadata_json)).some(v=>String(v).toLowerCase().includes(search.toLowerCase())))continue
     if(m.kind==='customer')found.add(m.record_id)
@@ -54,10 +55,11 @@ export async function createCustomer(env: Bindings, actor: Actor, input: Input) 
   const language = languageInput(input.text('language', { max: 35, optional: true }))
   insist(!await one(env, 'SELECT 1 FROM nc_customers WHERE external_id = ?', externalId), 'external_id_in_use', 409)
   const settings = invoiceSettingsInput(input)
+  const currency = billingCurrency(input.text('currency', { max: 3, optional: true }))
   const id = newId()
-  await commit(env, [stmt(env, "INSERT INTO nc_customers (id, external_id, name, billing_email, address, tax_exempt, tax_exempt_ref, language, invoice_settings_json, origin, revision, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'native', ?, ?, ?)",
-    id, externalId, name, email, address, exempt ? 1 : 0, exempt ? exemptRef : '', language, settings, newId(), now(), now())],
-  { actor: actorLabel(actor), action: 'customer.create', subject: id, detail: { externalId, name, language } })
+  await commit(env, [stmt(env, "INSERT INTO nc_customers (id, external_id, name, billing_email, address, tax_exempt, tax_exempt_ref, language, currency, invoice_settings_json, origin, revision, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'native', ?, ?, ?)",
+    id, externalId, name, email, address, exempt ? 1 : 0, exempt ? exemptRef : '', language, currency, settings, newId(), now(), now())],
+  { actor: actorLabel(actor), action: 'customer.create', subject: id, detail: { externalId, name, language, currency } })
   return { id, external_id: externalId }
 }
 
@@ -75,10 +77,12 @@ export async function updateCustomer(env: Bindings, actor: Actor, input: Input) 
   // Omitted on an update keeps the customer's current language.
   const language = languageInput(input.text('language', { max: 35, optional: true }) || customer.language)
   const settings = invoiceSettingsInput(input, customer.invoice_settings_json)
+  const currency = billingCurrency(input.text('currency', { max: 3, optional: true }), billingCurrency(customer.currency))
+  insist(currency === customer.currency || !await one(env, 'SELECT 1 WHERE EXISTS(SELECT 1 FROM nc_subscriptions WHERE customer_id=?) OR EXISTS(SELECT 1 FROM nc_invoices WHERE customer_id=?) OR EXISTS(SELECT 1 FROM nc_payments WHERE customer_id=?) OR EXISTS(SELECT 1 FROM nc_charges WHERE customer_id=?) OR EXISTS(SELECT 1 FROM nc_balance_requests WHERE customer_id=?) OR EXISTS(SELECT 1 FROM nc_balance_entries WHERE customer_id=?)', customer.id, customer.id, customer.id, customer.id, customer.id, customer.id), 'customer_currency_fixed', 409)
   await commit(env, [
     guard(env, 'stale', 'EXISTS(SELECT 1 FROM nc_customers WHERE id = ? AND revision = ?)', customer.id, customer.revision),
-    stmt(env, "UPDATE nc_customers SET name = ?, billing_email = ?, address = ?, tax_exempt = ?, tax_exempt_ref = ?, language = ?, invoice_settings_json = ?, revision = ?, updated_at = ? WHERE id = ?", name, email, address, exempt ? 1 : 0, exempt ? exemptRef : '', language, settings, newId(), now(), customer.id),
-  ], { actor: actorLabel(actor), action: 'customer.update', subject: customer.id, detail: { name, email, exempt, language } })
+    stmt(env, "UPDATE nc_customers SET name = ?, billing_email = ?, address = ?, tax_exempt = ?, tax_exempt_ref = ?, language = ?, currency = ?, invoice_settings_json = ?, revision = ?, updated_at = ? WHERE id = ?", name, email, address, exempt ? 1 : 0, exempt ? exemptRef : '', language, currency, settings, newId(), now(), customer.id),
+  ], { actor: actorLabel(actor), action: 'customer.update', subject: customer.id, detail: { name, email, exempt, language, currency } })
   return { id: customer.id }
 }
 

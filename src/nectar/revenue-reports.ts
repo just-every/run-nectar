@@ -1,3 +1,4 @@
+import { requireUsdReporting } from './currency'
 import type { Bindings } from '../auth.server'
 import { requireRead, requireCapability, type Actor } from './actor'
 import { requireBusiness } from './business'
@@ -134,6 +135,7 @@ function position(rows: RevenueContribution[], before: string) {
 
 export async function revenueReport(env: Bindings, actor: Actor, url: URL): Promise<RevenueReport> {
   requireRead(actor, 'reports')
+  await requireUsdReporting(env)
   const business = await requireBusiness(env)
   const { from, to, customer, entity } = filters(url, localDate(clockInstant(env), business.timezone).slice(0, 7))
   const entities = await entitySelection(env, entity)
@@ -160,6 +162,7 @@ export async function revenueReport(env: Bindings, actor: Actor, url: URL): Prom
 
 export async function revenueSource(env: Bindings, actor: Actor, invoiceId: string, url: URL) {
   requireRead(actor, 'reports')
+  await requireUsdReporting(env)
   const record = await revenueInvoice(env, invoiceId)
   const { from, to, customer, entity } = filters(url, record.invoice.issue_date.slice(0, 7))
   await entitySelection(env, entity)
@@ -181,6 +184,7 @@ const csvCell = (value: unknown) => {
 export async function revenueCsv(env: Bindings, actor: Actor, url: URL) {
   requireCapability(actor, 'export')
   requireRead(actor, 'reports')
+  await requireUsdReporting(env)
   const report = await revenueReport(env, actor, url)
   const rows: unknown[][] = [['row_kind', 'period', 'invoice', 'customer', 'line_id', 'credit_id', 'policy', 'custody', 'opening', 'net_billings', 'recognized', 'closing', 'accrued_contract_assets', 'deferred_liabilities', 'signed_contribution', 'source_path','source_provider','source_reference','entity_id','entity_name','entity_custody']]
   for (const month of report.months) rows.push(['rollforward', month.period, '', '', '', '', REVENUE_POLICY_VERSION, '', ...[month.openingCents, month.netBillingsCents, month.recognizedCents, month.closingCents, month.accruedContractAssetCents, month.deferredLiabilityCents].map(plainMoney), '', '', '', '', report.entityId ?? 'all', '', ''])

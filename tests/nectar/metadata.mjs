@@ -133,7 +133,15 @@ export async function metadataFlow(h, owner) {
     const view = await read(kind), metadata = expectedMetadata[kind]
     assert.deepEqual(projected[kind].metadata, metadata, `${kind} original API projects its annotation`)
     assert.equal(projected[kind].metadata_revision, view.revision)
-    assert.deepEqual(originalFields(projected[kind]), originalFields(originals[kind]), `${kind} annotation preserves the original record, calculation, fingerprints and money`)
+    const currentRecord = originalFields(projected[kind]), originalRecord = originalFields(originals[kind])
+    if (kind === 'customer') {
+      const events = currentRecord.billingRecord.auditEvents, additions = events.slice(0, 7)
+      assert.deepEqual(additions.map(({ action, subject }) => ({ action, subject })), [customer, customer, credit, payment, invoice, subscription, customer].map(subject => ({ action: 'metadata.replace', subject })), 'Customer billing history includes each related metadata write')
+      assert.deepEqual(events.slice(7), originalRecord.billingRecord.auditEvents, 'Metadata writes retain every previous customer audit event unchanged')
+      assert.ok(additions.every(event => event.seq > Math.max(0, ...originalRecord.billingRecord.auditEvents.map(prior => prior.seq))))
+      currentRecord.billingRecord.auditEvents = originalRecord.billingRecord.auditEvents
+    }
+    assert.deepEqual(currentRecord, originalRecord, `${kind} annotation preserves the original record, calculation, fingerprints and money`)
     const filter = new URLSearchParams({ metadata_key: 'app_account_id', metadata_value: metadata.app_account_id })
     const listed = await h.api(`objects/${kind}?${filter}`, accountant.who)
     assert.deepEqual(listed.data.map(row => row.id), [id])

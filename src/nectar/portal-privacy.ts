@@ -18,7 +18,7 @@ export async function portalPrivacyRequest(request: Request, env: Bindings, sess
 }
 
 export async function portalPrivacy(env: Bindings, session: CustomerSession, link: (path: string) => string) {
-  const L = customerText(session.language)
+  const L = customerText(session.language,session.currency)
   // Never reuse the operator request projection: it contains other customers,
   // verification evidence, private recipients, tokens and approval identities.
   const requests = await all(env, 'SELECT status,mail_status FROM nc_erasure_requests WHERE customer_id=? ORDER BY requested_at DESC', session.customer)

@@ -1,5 +1,5 @@
 // PORT-005: a real HTTPS merchant application frames the built Nectar Worker.
-// Local TLS/DNS transport replaces hosting only; billing/auth/data remain real.
+// Local TLS and reserved loopback hostnames replace hosting only; billing, auth and data remain real.
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { createServer } from 'node:https'
@@ -72,7 +72,7 @@ export async function portalEmbeddingFlow(h, owner) {
   const evidence = process.env.NECTAR_EVIDENCE_DIR
   let server, browser, active, hosted, embedded
   try {
-    execFileSync('openssl',['req','-x509','-newkey','rsa:2048','-nodes','-keyout',join(scratch,'key.pem'),'-out',join(scratch,'cert.pem'),'-days','1','-subj','/CN=billing.example.com','-addext','subjectAltName=DNS:billing.example.com,DNS:app.example.com,DNS:other.example.com'],{stdio:'ignore'})
+    execFileSync('openssl',['req','-x509','-newkey','rsa:2048','-nodes','-keyout',join(scratch,'key.pem'),'-out',join(scratch,'cert.pem'),'-days','1','-subj','/CN=billing.localhost','-addext','subjectAltName=DNS:billing.localhost,DNS:app.localhost,DNS:other.localhost'],{stdio:'ignore'})
     let portalOrigin, appOrigin, app
     server = createServer({ key:await readFile(join(scratch,'key.pem')),cert:await readFile(join(scratch,'cert.pem')) },async (incoming,outgoing) => {
       try {
@@ -86,7 +86,7 @@ export async function portalEmbeddingFlow(h, owner) {
     })
     await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve))
     const port = server.address().port
-    portalOrigin = `https://billing.example.com:${port}`;appOrigin=`https://app.example.com:${port}`
+    portalOrigin = `https://billing.localhost:${port}`;appOrigin=`https://app.localhost:${port}`
     app = portalApp({ portalOrigin,sessionForRequest:async()=>active,name:'Fieldnote' })
     await h.advanceClock('2026-10-21T09:00:00Z')
     const { customers,invoice,invoices } = await seedPortalRecords(h,owner)
@@ -112,7 +112,7 @@ export async function portalEmbeddingFlow(h, owner) {
     assert.deepEqual(frozen.invoices.map(row=>row.calculation),preview.invoices.map(row=>row.calculation),'Ordinary issue preserves the customer calculation for each real window')
     await h.api('usage.submit',owner,{events:[{event_id:'synthetic-portal-calendar-late',customer:'PORT005-NW',meter:'portal-calendar-calls',quantity:'7',occurred_at:'2026-09-20T12:00:00Z'}]})
     assert.deepEqual((await portalIntervalProjection(h,owner,calendarSession,portalOrigin,intervals)).invoices,frozen.invoices,'Late ingestion cannot rewrite issued customer usage or annual charges')
-    browser = await chromium.launch({headless:true,args:['--use-mock-keychain','--password-store=basic','--no-proxy-server','--host-resolver-rules=MAP billing.example.com 127.0.0.1,MAP app.example.com 127.0.0.1,MAP other.example.com 127.0.0.1']})
+    browser = await chromium.launch({headless:true,args:['--use-mock-keychain','--password-store=basic']})
     const context = await browser.newContext({ignoreHTTPSErrors:true}),page=await context.newPage()
     const shot = async name => {
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`PORT-005 ${name} fits merchant app`)
@@ -139,7 +139,7 @@ export async function portalEmbeddingFlow(h, owner) {
       await shot('sample-app-privacy')
       const response=await page.goto(hosted.url)
       assert.equal(response.status(),200,'PORT-005 actual branded hostname reaches the Worker')
-      assert.equal(new URL(page.url()).hostname,'billing.example.com')
+      assert.equal(new URL(page.url()).hostname,'billing.localhost')
       assert.match(await page.title(),/Fieldnote Billing/)
       assert.equal(await page.locator('.merchant').innerText(),'Fieldnote Billing')
       assert.equal(await page.locator('.merchant').evaluate(node=>getComputedStyle(node).borderTopColor),'rgb(36, 92, 70)','PORT-005 merchant accent is rendered')

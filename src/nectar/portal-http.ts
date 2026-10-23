@@ -1,5 +1,6 @@
 import { customerLineFacts } from './customer-invoice'
 import { invoicePdf } from './invoice-pdf'
+import { requestPortalPrepaidRefund } from './prepaid-refund-intake'
 import { portalTopupPage } from './portal-prepaid-topups'
 import { portalPrepaidTopupAuthorization, acceptPrepaidTopupAuthorization, revokePortalPrepaidTopupAuthorization } from './prepaid-topup-authorization'
 import { portalPrepaidData, portalPrepaidSource, portalPrepaidPage, portalPrepaidSourcePage, portalPrepaidCsv } from './portal-prepaid'
@@ -27,7 +28,7 @@ export async function portalResponse(request: Request, env: Bindings): Promise<R
   let language: string | null = null
   // Public stylesheet for refusal pages has no customer or merchant data.
   if (url.pathname === '/portal/theme.css' && !url.search) return ['GET','HEAD'].includes(request.method) ? portalStyle() : new Response(null, { status: 405, headers: { ...headers, allow: 'GET, HEAD' } })
-  if (!['GET','HEAD'].includes(request.method) && !(['/portal/privacy','/portal/answer-proposal','/portal/prepaid-topup.accept','/portal/prepaid-topup.revoke'].includes(url.pathname) && request.method === 'POST')) {
+  if (!['GET','HEAD'].includes(request.method) && !(['/portal/prepaid-refund.request','/portal/privacy','/portal/answer-proposal','/portal/prepaid-topup.accept','/portal/prepaid-topup.revoke'].includes(url.pathname) && request.method === 'POST')) {
     if (request.body) await request.arrayBuffer()
     return new Response(null, { status: 405, headers: { ...headers, allow: 'GET, HEAD' } })
   }
@@ -39,6 +40,11 @@ export async function portalResponse(request: Request, env: Bindings): Promise<R
       const result=url.pathname==='/portal/prepaid-topup.accept'?await acceptPrepaidTopupAuthorization(env,request,input):await revokePortalPrepaidTopupAuthorization(env,request,input)
       if(request.headers.get('content-type')?.startsWith('application/json'))return Response.json(result,{headers})
       return new Response(null,{status:303,headers:{...headers,location:`/portal/prepaid-topups/${result.id}?session=${encodeURIComponent(url.searchParams.get('session')!)}`}})
+    }
+    if(url.pathname==='/portal/prepaid-refund.request'&&request.method==='POST'){
+      const result=await requestPortalPrepaidRefund(env,request,await Input.from(request))
+      if(request.headers.get('content-type')?.startsWith('application/json'))return Response.json(result,{headers})
+      return new Response(null,{status:303,headers:{...headers,location:`/portal/prepaid?session=${encodeURIComponent(url.searchParams.get('session')!)}`}})
     }
     const topupAuthorization=url.pathname.match(/^\/portal\/prepaid-topups\/([\w-]+)$/)?.[1]
     if(topupAuthorization&&!request.headers.get('accept')?.includes('text/html'))return Response.json(await portalPrepaidTopupAuthorization(env,request,topupAuthorization),{headers})
@@ -74,7 +80,7 @@ export async function portalResponse(request: Request, env: Bindings): Promise<R
     const proposal = url.pathname.match(/^\/portal\/proposals\/([\w-]+)$/)?.[1]
     const invoice = url.pathname.match(/^\/portal\/invoices\/([\w-]+)$/)?.[1]
     if (!['/portal','/portal/data','/portal/privacy','/portal/answers','/portal/upcoming','/portal/adjustments','/portal/prepaid'].includes(url.pathname) && !invoice && !proposal && !prepaidSource && !topupAuthorization) throw new NectarError('not_found', 404)
-    const data = await portalData(env, session, invoice), L = customerText(data.customer.language)
+    const data = await portalData(env, session, invoice), L = customerText(data.customer.language,data.customer.currency)
     if (url.pathname === '/portal/data') return Response.json(data, { headers: { ...headers, 'content-security-policy': "default-src 'none'; frame-ancestors 'none'" } })
     if(invoice&&url.searchParams.get('format')==='pdf')return new Response(request.method==='HEAD'?null:invoicePdf(data).buffer as ArrayBuffer,{headers:{...headers,'content-type':'application/pdf','content-disposition':'attachment; filename=invoice.pdf','content-security-policy':"default-src 'none'; frame-ancestors 'none'"}})
     if(invoice&&url.searchParams.get('format')==='logo')return new Response(request.method==='HEAD'?null:Uint8Array.from(atob(data.content!.branding.logo),c=>c.charCodeAt(0)),{headers:{...headers,'content-type':'image/jpeg'}})
@@ -92,12 +98,12 @@ export async function portalResponse(request: Request, env: Bindings): Promise<R
     Object.entries(headers).forEach(([key,value]) => resultHeaders.set(key,value))
     // Match the ordinary erasure confirmation page: origin-only referrers let
     // native POST forms supply Origin without ever disclosing the session URL.
-    if (topupAuthorization||['/portal/privacy','/portal/answers','/portal/upcoming','/portal/adjustments'].includes(url.pathname)) resultHeaders.set('referrer-policy', 'strict-origin')
+    if (topupAuthorization||['/portal/prepaid','/portal/privacy','/portal/answers','/portal/upcoming','/portal/adjustments'].includes(url.pathname)) resultHeaders.set('referrer-policy', 'strict-origin')
     resultHeaders.set('content-security-policy', `default-src 'none'; style-src 'self'; font-src 'self'; img-src 'self'; form-action 'self'; frame-ancestors ${session.audience === 'embedded' ? session.parent : "'none'"}; base-uri 'none'`)
     return new Response(request.method === 'HEAD' ? null : response.body, { headers: resultHeaders })
   } catch (error) {
     if (!(error instanceof NectarError)) throw error
-    if(['/portal/answer-proposal','/portal/prepaid-topup.accept','/portal/prepaid-topup.revoke'].includes(url.pathname) && request.headers.get('content-type')?.startsWith('application/json')) return Response.json({error:error.code},{status:error.status,headers})
+    if(['/portal/prepaid-refund.request','/portal/answer-proposal','/portal/prepaid-topup.accept','/portal/prepaid-topup.revoke'].includes(url.pathname) && request.headers.get('content-type')?.startsWith('application/json')) return Response.json({error:error.code},{status:error.status,headers})
     const known = language !== null && ![401,403].includes(error.status)
     const L = customerText(known ? language : null)
     const title = L.t(known ? 'portal.request.unavailable' : 'portal.unavailable')

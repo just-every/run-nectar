@@ -1,3 +1,4 @@
+import { requireUsdCurrency } from './currency'
 // Conservative pending-CT governance: exact owner consent and a second person.
 import type { Bindings } from '../auth.server'
 import { actorLabel, requireMember, requireOwner, type Actor } from './actor'
@@ -39,6 +40,7 @@ export async function preparePrepaid(env: Bindings, actor: Actor, input: Input) 
   requireOwner(actor); await requireFreshFactor(env, actor)
   const sub = await requireSubscription(env, input.text('subscription', { max: 100 }))
   insist(!sub.erased_at, 'customer_erased', 410)
+  await requireUsdCurrency(env,{subscriptionId:sub.id})
   const terms = readTerms(input), mode = input.text('mode', { max: 10, optional: true }) || 'grant'
   insist(mode === 'grant' || mode === 'consent', 'invalid_prepaid_mode')
   if (terms.meterId) insist(await one(env, 'SELECT id FROM nc_meters WHERE id=?', terms.meterId), 'meter_not_found', 404)

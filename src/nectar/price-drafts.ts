@@ -6,6 +6,7 @@ import { guard, insist, newId, now, one, stmt, canonical, parseJson, type Row } 
 import { canonicalDecimal, micros } from './decimal'
 import type { Input } from './input'
 import { readQuantityPrice } from './price-model'
+import { billingCurrency } from './currency'
 
 export async function readPriceDraft(env: Bindings, input: Input) {
   const product = await one(env, 'SELECT * FROM nc_products WHERE id = ?', input.text('product', { max: 100 }))
@@ -26,15 +27,15 @@ export async function readPriceDraft(env: Bindings, input: Input) {
   const taxable = input.has('taxable') ? input.flag('taxable') : true
   const nickname = input.text('nickname', { max: 80, optional: true })
   const version = ((await one<{ v: number }>(env, 'SELECT COALESCE(MAX(version),0) AS v FROM nc_prices WHERE product_id=?', product.id))!.v) + 1
-  return { product: product.id, productCode: product.code, version, kind, amount, meterId, taxable, nickname, pricing: pricing ?? null,dimensions,billing:readBillingTerms(input,kind) }
+  return { currency: billingCurrency(input.text('currency', { max: 3, optional: true })), product: product.id, productCode: product.code, version, kind, amount, meterId, taxable, nickname, pricing: pricing ?? null,dimensions,billing:readBillingTerms(input,kind) }
 }
 
 export function priceStatements(env: Bindings, actor: Actor, draft: Row, id: string) {
   return [
     guard(env, 'price_request_stale', 'COALESCE((SELECT MAX(version) FROM nc_prices WHERE product_id=?),0)=?', draft.product, draft.version - 1),
     guard(env, 'product_archived', "EXISTS(SELECT 1 FROM nc_products WHERE id=? AND status='active')", draft.product),
-    stmt(env, "INSERT INTO nc_prices (id,product_id,version,kind,unit_amount,meter_id,taxable,nickname,origin,revision,created_by,created_at,pricing_model,tiers_json,package_size,dimensions_json) VALUES (?,?,?,?,?,?,?,?,'native',?,?,?,?,?,?,?)",
-      id, draft.product, draft.version, draft.kind, draft.amount, draft.meterId, draft.taxable ? 1 : 0, draft.nickname, newId(), actorLabel(actor), now(), draft.pricing?.model ?? 'simple', draft.pricing ? JSON.stringify(draft.pricing.tiers) : null, draft.pricing?.packageSize ?? null,canonical(draft.dimensions??{})),
+    stmt(env, "INSERT INTO nc_prices (id,product_id,version,currency,kind,unit_amount,meter_id,taxable,nickname,origin,revision,created_by,created_at,pricing_model,tiers_json,package_size,dimensions_json) VALUES (?,?,?,?,?,?,?,?,?,'native',?,?,?,?,?,?,?)",
+      id, draft.product, draft.version, billingCurrency(draft.currency), draft.kind, draft.amount, draft.meterId, draft.taxable ? 1 : 0, draft.nickname, newId(), actorLabel(actor), now(), draft.pricing?.model ?? 'simple', draft.pricing ? JSON.stringify(draft.pricing.tiers) : null, draft.pricing?.packageSize ?? null,canonical(draft.dimensions??{})),
     ...billingTermsStatements(env,id,draft.billing??{unit:'month',count:1,timing:'arrears'}),
   ]
 }

@@ -1,4 +1,5 @@
 import { runInvoiceAutomation } from './nectar/invoice-automation'
+import { deliverPendingPrepaidRefundNotices } from './nectar/prepaid-refund-mail'
 import { dispatchWebhooks } from './nectar/webhooks'
 import { runTrials } from './nectar/trials'
 import { runPrepaidSettlement } from './nectar/prepaid-jobs'
@@ -58,6 +59,7 @@ export default withDemo({
     await deliverPendingCorrectionMail(runtimeBindings(env))
     await deliverPendingUsageCorrectionMail(runtimeBindings(env))
     await deliverPendingDraftCorrectionMail(runtimeBindings(env))
+    await deliverPendingPrepaidRefundNotices(runtimeBindings(env))
   },
   async fetch(request, env, execution) {
     const asset = await staticAssetResponse(request, env)

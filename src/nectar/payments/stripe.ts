@@ -3,6 +3,7 @@
 import type { Bindings } from '../../auth.server'
 import { canonical, insist, NectarError, type Row } from '../core'
 import { localDate } from '../dates'
+import { billingCurrency } from '../currency'
 
 type StripeBindings = Bindings & { STRIPE_SECONDARY_SECRET_KEY?: string }
 export class NativeStripeError extends Error {
@@ -57,10 +58,10 @@ export async function savedCard(stripe: StripeClient, customerRef: string) {
   return { customerRef, paymentMethodRef: methodRef, livemode: customer.livemode as boolean,
     card: { brand: method.card.brand as string, last4: method.card.last4 as string, expMonth: method.card.exp_month as number, expYear: method.card.exp_year as number } }
 }
-export interface PaymentIdentity { accountRef: string; customerRef: string; paymentMethodRef: string; livemode: boolean; invoiceId: string; requestId: string; key: string; amountCents: number }
+export interface PaymentIdentity { accountRef: string; customerRef: string; paymentMethodRef: string; livemode: boolean; invoiceId: string; requestId: string; key: string; amountCents: number; currency?: string }
 export function verifyIntent(intent: Row, identity: PaymentIdentity) {
   insist(intent.object === 'payment_intent' && ref(intent.customer) === identity.customerRef && (ref(intent.payment_method) === identity.paymentMethodRef || intent.status === 'requires_payment_method' && !ref(intent.payment_method) && ref(intent.last_payment_error?.payment_method) === identity.paymentMethodRef)
-    && intent.currency === 'usd' && intent.amount === identity.amountCents && intent.livemode === identity.livemode
+    && intent.currency === billingCurrency(identity.currency).toLowerCase() && intent.amount === identity.amountCents && intent.livemode === identity.livemode
     && intent.metadata?.nectar_native_collection_key === identity.key && intent.metadata?.nectar_native_invoice === identity.invoiceId
     && intent.metadata?.nectar_native_collection_request === identity.requestId, 'stripe_native_intent_mismatch', 409)
   return providerReference(intent.id)
@@ -128,12 +129,12 @@ export async function capturedPayment(stripe: StripeClient, intent: Row, identit
   insist(captured.length === 1, 'stripe_native_captured_charge_required', 409)
   const charge = captured[0]
   insist(charge.object === 'charge' && ref(charge.customer) === identity.customerRef && ref(charge.payment_intent) === intentRef
-    && ref(charge.payment_method) === identity.paymentMethodRef && ref(intent.latest_charge) === charge.id && charge.currency === 'usd'
+    && ref(charge.payment_method) === identity.paymentMethodRef && ref(intent.latest_charge) === charge.id && charge.currency === billingCurrency(identity.currency).toLowerCase()
     && charge.amount === identity.amountCents && charge.amount_captured === identity.amountCents && charge.amount_refunded === 0 && charge.refunded === false
     && charge.disputed === false && charge.livemode === identity.livemode && Number.isSafeInteger(charge.created) && charge.created > 0 && charge.created <= 253402300799,
   'stripe_native_charge_mismatch', 409)
   return { accountRef: identity.accountRef, customerRef: identity.customerRef, paymentMethodRef: identity.paymentMethodRef,
-    paymentIntentRef: intentRef, chargeRef: providerReference(charge.id), amountCents: identity.amountCents, currency: 'usd',
+    paymentIntentRef: intentRef, chargeRef: providerReference(charge.id), amountCents: identity.amountCents, currency: billingCurrency(identity.currency).toLowerCase(),
     capturedAt: charge.created * 1000 as number, receivedOn: localDate(charge.created * 1000, timezone), livemode: identity.livemode,
     proof: 'succeeded-payment-intent-and-captured-charge' as const }
 }

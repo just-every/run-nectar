@@ -8,7 +8,7 @@ import { BALANCE_SQL, GOODWILL_APPLIED_SQL } from './receivables'
 import type { CustomerSession } from './portal-session'
 
 export async function portalData(env: Bindings, session: CustomerSession, invoiceId?: string) {
-  const customer = await one(env, 'SELECT name,language FROM nc_customers WHERE id=? AND erased_at IS NULL', session.customer)
+  const customer = await one(env, 'SELECT name,language,currency FROM nc_customers WHERE id=? AND erased_at IS NULL', session.customer)
   insist(customer, 'invalid_customer_session', 401)
   const merchant = await one(env, 'SELECT legal_name,currency FROM nc_business WHERE singleton=1')
   const brand = await one(env, 'SELECT brand_name,brand_color FROM nc_portal_policy WHERE singleton=1')
