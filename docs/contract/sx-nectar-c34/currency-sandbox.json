@@ -1,0 +1,101 @@
+{
+  "version": 1,
+  "journey": "Canadian price, invoice, native Stripe capture, credit and sourced daily USD report",
+  "status": "passed",
+  "checks": {
+    "cadPriceInvoiceCreditAndPayment": true,
+    "realStripeCadCapture": true,
+    "exactUsdReportingWithSourceAndDate": true,
+    "issuedHistoryPreserved": true,
+    "oneCapture": true
+  },
+  "cleanup": [
+    {
+      "clock": "clock_1UTbc5Dg8BoejKxo4x4LoNgt",
+      "deleted": true
+    }
+  ],
+  "head": "bef6ba910cd6067b841f90db03c3f3b151b47215",
+  "provider": {
+    "account": "acct_1URgLjDg8BoejKxo",
+    "customer": "cus_VUan4odxfjrdep",
+    "method": "pm_1UTbc6Dg8BoejKxoZEZHPMdn",
+    "clock": "clock_1UTbc5Dg8BoejKxo4x4LoNgt",
+    "intent": "pi_3UTbcEDg8BoejKxo3zhV0PTt",
+    "charge": "ch_3UTbcEDg8BoejKxo3P4Br0zI"
+  },
+  "native": {
+    "customer": "41dc2c4f-0fe7-4e78-94c2-00fe91d09288",
+    "price": "92f73623-9ed3-4fed-9b6f-9f5c978ea9c0",
+    "invoice": "cf0e8d8e-d097-469d-bda4-43c46fcc15ec",
+    "collection": "ac4f19d6-feb2-4eb5-8555-e2e2cca71f01",
+    "payment": "1c3d20f8-a51f-483b-9957-2482b0c28778"
+  },
+  "originalHash": "307ddbe5e2a2943fea2377f7c43a9bb8ab64257ae0f230c12f7a3353bfd36a2c",
+  "reporting": {
+    "reportingCurrency": "USD",
+    "from": "2026-10-23",
+    "to": "2026-10-23",
+    "ratePolicy": "Transaction date; exact decimal USD per unit, rounded half away from zero per transaction.",
+    "transactions": [
+      {
+        "id": "cf0e8d8e-d097-469d-bda4-43c46fcc15ec",
+        "number": "FX-000001",
+        "customer_id": "41dc2c4f-0fe7-4e78-94c2-00fe91d09288",
+        "currency": "CAD",
+        "amount_cents": 1000,
+        "transaction_date": "2026-10-23",
+        "kind": "invoice",
+        "reporting": {
+          "currency": "USD",
+          "amountCents": 735,
+          "rate": "0.735055",
+          "source": "Controlled sandbox finance valuation synthetic-nectar-203; test-only, not a live market quote",
+          "rateDate": "2026-10-23",
+          "rateId": "cbdb1517-e4e8-4fb6-b782-5d438eff2360"
+        }
+      },
+      {
+        "id": "1c3d20f8-a51f-483b-9957-2482b0c28778",
+        "reference": "stripe:acct_1URgLjDg8BoejKxo:pi_3UTbcEDg8BoejKxo3zhV0PTt",
+        "customer_id": "41dc2c4f-0fe7-4e78-94c2-00fe91d09288",
+        "currency": "CAD",
+        "amount_cents": 899,
+        "transaction_date": "2026-10-23",
+        "kind": "payment",
+        "reporting": {
+          "currency": "USD",
+          "amountCents": 661,
+          "rate": "0.735055",
+          "source": "Controlled sandbox finance valuation synthetic-nectar-203; test-only, not a live market quote",
+          "rateDate": "2026-10-23",
+          "rateId": "cbdb1517-e4e8-4fb6-b782-5d438eff2360"
+        }
+      },
+      {
+        "id": "01cbba0f-8df7-4a5e-9ca2-bc85976ab533",
+        "number": "FX-CN-000001",
+        "customer_id": "41dc2c4f-0fe7-4e78-94c2-00fe91d09288",
+        "invoice_id": "cf0e8d8e-d097-469d-bda4-43c46fcc15ec",
+        "currency": "CAD",
+        "amount_cents": 101,
+        "issued_at": 1792735563430,
+        "transaction_date": "2026-10-23",
+        "kind": "credit",
+        "reporting": {
+          "currency": "USD",
+          "amountCents": 74,
+          "rate": "0.735055",
+          "source": "Controlled sandbox finance valuation synthetic-nectar-203; test-only, not a live market quote",
+          "rateDate": "2026-10-23",
+          "rateId": "cbdb1517-e4e8-4fb6-b782-5d438eff2360"
+        }
+      }
+    ],
+    "totals": {
+      "invoice": 735,
+      "payment": 661,
+      "credit": 74
+    }
+  }
+}
