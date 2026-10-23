@@ -82,6 +82,7 @@ export async function erasurePlan(env: Bindings, customer: Row): Promise<Erasure
       if (table==='nc_tasks') updates.status='done'
       if (table==='nc_renewal_terms') {updates.auto_renew=0;updates.token_hash=null;updates.status='ended'}
       if (table==='nc_prepaid_topup_authorizations') updates.status='revoked'
+      if (table==='nc_trial_collections') updates.status='revoked'
       if (table==='nc_prepaid_consents') updates.status='revoked'
       if (table==='nc_retention_offers') {updates.token_hash=null;updates.status='expired'}
     }

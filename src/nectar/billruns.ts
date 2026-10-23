@@ -160,7 +160,7 @@ export async function runDetail(env: Bindings, actor: Actor, id: string): Promis
   requireCapability(actor, 'read')
   const run = await one(env, 'SELECT * FROM nc_bill_runs WHERE id = ?', id)
   insist(run, 'bill_run_not_found', 404)
-  const invoices = await all(env, `SELECT i.id, i.subscription_id, i.status, i.number, i.period_start, i.period_end, i.subtotal_cents, i.tax_cents, i.total_cents, i.exceptions_json, i.comparison_json, i.approved_by, c.name AS customer_name, c.id AS customer_id, c.external_id, COALESCE(s.billing_mode,'live') AS billing_mode, i.invoice_kind FROM nc_invoices i JOIN nc_customers c ON c.id = i.customer_id LEFT JOIN nc_subscriptions s ON s.id = i.subscription_id WHERE i.bill_run_id = ? ORDER BY c.name`, id)
+  const invoices = await all(env, `SELECT i.id, i.subscription_id, i.status, i.number, i.currency, i.period_start, i.period_end, i.subtotal_cents, i.tax_cents, i.total_cents, i.exceptions_json, i.comparison_json, i.approved_by, c.name AS customer_name, c.id AS customer_id, c.external_id, COALESCE(s.billing_mode,'live') AS billing_mode, i.invoice_kind FROM nc_invoices i JOIN nc_customers c ON c.id = i.customer_id LEFT JOIN nc_subscriptions s ON s.id = i.subscription_id WHERE i.bill_run_id = ? ORDER BY c.name`, id)
   return { ...run, summary: parseJson(run.summary_json, {}), summary_json: undefined, invoices: invoices.map(row => ({ ...row, exceptions: parseJson(row.exceptions_json, []), comparison: parseJson(row.comparison_json, {}), exceptions_json: undefined, comparison_json: undefined })) }
 }
 

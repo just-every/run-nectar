@@ -38,3 +38,17 @@ CREATE TABLE nc_trial_collections (
 CREATE INDEX nc_trial_collection_due ON nc_trial_collections(status,trial_end,id);
 CREATE UNIQUE INDEX nc_trial_collection_active ON nc_trial_collections(subscription_id)
   WHERE status IN ('pending_owner','pending_approval','active','claimed','uncertain');
+
+-- New customer-scoped operands participate in the existing erasure race fence.
+CREATE TRIGGER nc_trial_collections_generation_insert AFTER INSERT ON nc_trial_collections
+BEGIN UPDATE nc_privacy_generation SET value=value+1 WHERE id=1; END;
+CREATE TRIGGER nc_trial_collections_generation_update AFTER UPDATE ON nc_trial_collections
+BEGIN UPDATE nc_privacy_generation SET value=value+1 WHERE id=1; END;
+CREATE TRIGGER nc_trial_collections_generation_delete AFTER DELETE ON nc_trial_collections
+BEGIN UPDATE nc_privacy_generation SET value=value+1 WHERE id=1; END;
+CREATE TRIGGER nc_coupon_amount_terms_generation_insert AFTER INSERT ON nc_coupon_amount_terms
+BEGIN UPDATE nc_privacy_generation SET value=value+1 WHERE id=1; END;
+CREATE TRIGGER nc_coupon_amount_terms_generation_update AFTER UPDATE ON nc_coupon_amount_terms
+BEGIN UPDATE nc_privacy_generation SET value=value+1 WHERE id=1; END;
+CREATE TRIGGER nc_coupon_amount_terms_generation_delete AFTER DELETE ON nc_coupon_amount_terms
+BEGIN UPDATE nc_privacy_generation SET value=value+1 WHERE id=1; END;
