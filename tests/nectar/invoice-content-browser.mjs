@@ -46,7 +46,7 @@ try {
         const text=execFileSync('pdftotext',[filename,'-'],{encoding:'utf8'})
         assert.match(text,/USD/)
         if(label==='branded-customer-invoice')for(const value of ['BUYER-42','Research West','Cedar Treasury','Thank you, Cedar'])assert.ok(text.includes(value),value)
-        if(label==='detailed-customer-invoice')for(const value of ['Tier 1:','Tier 2:','USD 250.00'])assert.ok(text.includes(value),value)
+        if(label==='detailed-customer-invoice')for(const value of ['Tier 1:','Tier 2:','USD 250.00','USD 125.00'])assert.ok(text.includes(value),value)
         if(label==='paid-customer-invoice')assert.match(text,/Balance owed:[\s\n]*USD 0.00/)
         if(label.startsWith('hidden-usage')){assert.match(text,/USD 250.00/);assert.equal((text.match(/API usage/g)??[]).length,1);assert.doesNotMatch(text,/synthetic-nectar-invoice-|150|tier|breakdown/)}
         console.log(`PDF parsed ${label}`)

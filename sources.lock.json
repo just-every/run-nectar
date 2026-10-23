@@ -2841,7 +2841,7 @@
       "executable": false
     },
     "src/nectar/invoice-pdf.ts": {
-      "sha256": "970f9318f7e3d4f10b6478f647a61368f610704fb7964f8d49d7d5c27c822a66",
+      "sha256": "a6d57175c6a2daa52995dccacea059ce46a43b014dbb72675b560e90b7ce273c",
       "executable": false
     },
     "src/nectar/invoice-tax.ts": {
@@ -4057,7 +4057,7 @@
       "executable": false
     },
     "tests/nectar/invoice-content-browser.mjs": {
-      "sha256": "3be52fb7f1937c929799ec2651113d24a6c53c0095ac7b8027c520d4df79500e",
+      "sha256": "44745bbd435a47db4445ee9af593f3f2f9cf5c6aa995c935642c003a382a811f",
       "executable": false
     },
     "tests/nectar/invoice-content.mjs": {

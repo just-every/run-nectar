@@ -17,7 +17,15 @@ export function invoicePdf(data: Row): Uint8Array {
     ...data.credits.map((credit:Row)=>`${credit.number}: ${money(credit.amount_cents)}`),
     ...data.payments.map((payment:Row)=>`${L.t('portal.payment')} ${L.day(payment.received_on)}: ${money(payment.amount_cents)}`),
     `${L.t('portal.credited')}: ${money(row.credited_cents)}`,`${L.t('portal.paid')}: ${money(row.paid_cents)}`,`${L.t('portal.owed')}: ${money(row.balance_cents)}`,brand.footer]
-  const lines=rows.filter(Boolean).flatMap(value=>String(value).split(/\r?\n/).flatMap(line=>line.match(/.{1,86}/gu)??['']))
+  const wrap=(line:string)=>{
+    const wrapped:string[]=[];let current=''
+    for(const word of line.split(/\s+/)){
+      if(current&&current.length+word.length+1>86){wrapped.push(current);current=''}
+      current+=(current?' ':'')+word
+    }
+    return [...wrapped,current]
+  }
+  const lines=rows.filter(Boolean).flatMap(value=>String(value).split(/\r?\n/).flatMap(wrap))
   const extra:Record<string,number>={'€':128,'‘':145,'’':146,'“':147,'”':148,'–':150,'—':151,'…':133,'™':153,'œ':156,'Œ':140,'Ÿ':159}
   const encode=(text:string)=>Array.from(text,c=>{const code=extra[c]??c.codePointAt(0)!;insist(code>=32&&code<=255,'invoice_pdf_character_unsupported',409);return code}).map(c=>c.toString(16).padStart(2,'0')).join('')
   const objects:string[]=[],add=(value:string)=>{objects.push(value);return objects.length}
