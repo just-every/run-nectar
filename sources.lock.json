@@ -4197,11 +4197,15 @@
       "executable": false
     },
     "tests/nectar/harness.mjs": {
-      "sha256": "3419293cdf7ebf494dabb08d85930172b7f4e2e1e339844ec34ed759f0eebc22",
+      "sha256": "3f481e5ff8051376518bb14071ba046d623daf5e44cd9abb6524066009d2489c",
       "executable": false
     },
     "tests/nectar/hierarchies.mjs": {
       "sha256": "04a694dceac3c5bccd105bf6eb4b7fb0e23df4ac5425ae1c437ac3c4b5bebe41",
+      "executable": false
+    },
+    "tests/nectar/http-listener.mjs": {
+      "sha256": "7afebcd9403710b87595fcce7e3d990210824fb54096a589210707929ab01c77",
       "executable": false
     },
     "tests/nectar/import-originals.mjs": {
