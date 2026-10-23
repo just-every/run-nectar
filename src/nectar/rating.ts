@@ -1,3 +1,4 @@
+import { amountCouponLines } from './promotions'
 import { usageCreditApplicationLines } from './usage-correction-records'
 import { renewalOperands, RENEWAL_RATING_VERSION, type RenewalRate } from './renewal-rating'
 import { metricUsage, METRIC_RATING_VERSION, type MetricPrice } from './metric-rating'
@@ -36,6 +37,8 @@ export interface AmendmentIn { id: string; kind: 'discount_percent' | 'fixed_cre
 export interface EventIn { eventId: string; meterId: string; quantity: string; occurredAt: number;properties?:Record<string,import('./metric-plan').PropertyValue>;invoiceId?:string|null }
 export interface RatingInput {
   version: string
+  currency?: string
+  amountCoupons?: import('./promotions').AmountCouponIn[]
   prepaid?: import('./prepaid-types').PrepaidBasis
   billing?: BillingWindow
   billingDueDate?: string
@@ -216,6 +219,7 @@ function rateCore(input: RatingInput, presentCancellationCredits = true): Rating
   if (trialDays > 0) lines.push({ kind: 'trial', description: `Trial: ${trialDays} day(s) not charged`, quantity: String(trialDays), unitAmount: '', amountCents: 0, taxable: false, priceId: null, meterId: null, periodStart: activeFrom, periodEnd: min(sub.trialEnd!, activeTo), evidence: { rule: 'fixed and seat charges start when the trial ends', trialEnd: sub.trialEnd } })
 
   if (input.charges) lines.push(...chargeLines(input.charges))
+  lines.push(...amountCouponLines(input,lines))
   const finalLines = presentCancellationCredits ? cancellationLines(input, lines, input => rateCore(input, false)) : lines
   const committed=commitmentLines(input,finalLines)
   const adjustments=input.usageAdjustments??[]

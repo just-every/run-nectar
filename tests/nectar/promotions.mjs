@@ -3,8 +3,14 @@
 // restriction on a mixed invoice, and trials with or without a payment method on
 // file that extend, convert or end unpaid.
 import assert from 'node:assert/strict'
+import { nativeCollectionEdge } from './native-collection.mjs'
+import { totp } from './mfa.mjs'
 
-export const harnessOptions = () => ({ localTime: '2026-08-20T20:00:00Z' })
+const trialEdge = nativeCollectionEdge()
+trialEdge.accounts.set(1, 'synthetic-nectar-600')
+trialEdge.accounts.set(2, 'synthetic-nectar-601')
+
+export const harnessOptions = () => ({ localTime: '2026-08-20T20:00:00Z', stripeFetch: trialEdge.fetch, stripeSecret: 'synthetic-nectar-1', stripeSecondarySecret: 'synthetic-nectar-2' })
 
 export async function promotionsFlow(h, owner) {
   const api = (path, body, status) => h.api(path, owner, body, status)
@@ -26,8 +32,6 @@ export async function promotionsFlow(h, owner) {
   await h.api('promotion.create', undefined, {}, 401)
   await api('coupon.create', { name: 'Spring 20', kind: 'percent', value: '5', duration: 'once' }, 409)
   await api('coupon.create', { name: 'Bad', kind: 'percent', value: '101', duration: 'once' }, 400)
-  await api('coupon.create', { name: 'Bad amount', kind: 'amount', value: '10', duration: 'forever' }, 409)
-  await api('coupon.create', { name: 'Bad restricted amount', kind: 'amount', value: '10', duration: 'once', products: [pro] }, 409)
   await code({ code: 'spring20', coupon: spring, max_redemptions: 2, expires_on: '2026-12-31' })
   await code({ code: 'SPRING20', coupon: spring }, 409)
   await code({ code: 'x', coupon: spring }, 400)
@@ -59,6 +63,23 @@ export async function promotionsFlow(h, owner) {
   await code({ code: 'FIFTEEN', coupon: fifteen })
   const f = await customer('F')
   await subscribe(f, 'FIFTEEN')
+  const fixedForever = await coupon({ name: 'Pro amount forever', kind: 'amount', value: '125.00', duration: 'forever', products: [pro] })
+  await code({ code: 'PROAMOUNT', coupon: fixedForever })
+  const g = await customer('synthetic-nectar-501')
+  await subscribe(g, 'PROAMOUNT', {}, 200, [proPrice, basicPrice])
+  assert.equal((await subscribe(await customer('synthetic-nectar-502'), 'PROAMOUNT', {}, 409, [basicPrice])).error, 'promotion_not_applicable')
+  const fixedThree = await coupon({ name: 'Amount three months', kind: 'amount', value: '10.00', duration: 'repeating', months: 3, products: [pro] })
+  await code({ code: 'AMOUNTTHREE', coupon: fixedThree })
+  const j = await customer('synthetic-nectar-503')
+  await subscribe(j, 'AMOUNTTHREE', {}, 200, [proPrice, basicPrice])
+  const monthlyProduct = (await api('product.create', { code: 'synthetic-nectar-504', name: 'Synthetic monthly component' })).id
+  const quarterlyProduct = (await api('product.create', { code: 'synthetic-nectar-505', name: 'Synthetic quarterly component' })).id
+  const monthlyPrice = (await api('price.create', { product: monthlyProduct, kind: 'flat', unit_amount: '100', taxable: false, billing_timing: 'advance' })).id
+  const quarterlyPrice = (await api('price.create', { product: quarterlyProduct, kind: 'flat', unit_amount: '300', taxable: false, billing_interval: 'quarterly', billing_timing: 'advance' })).id
+  const mixedCoupon = await coupon({ name: 'Synthetic mixed invoice amount', kind: 'amount', value: '10', duration: 'forever' })
+  await code({ code: 'MIXEDAMOUNT', coupon: mixedCoupon })
+  const mixedCustomer = await customer('synthetic-nectar-506')
+  await subscribe(mixedCustomer, 'MIXEDAMOUNT', {}, 200, [monthlyPrice, quarterlyPrice])
 
   await h.advanceClock('2027-01-05T20:00:00Z')
   const issueAll = async (period, date) => {
@@ -81,6 +102,18 @@ export async function promotionsFlow(h, owner) {
   assert.deepEqual(summary(months['2026-12'][e]), [9000, [-5000]], 'a forever coupon keeps applying')
   assert.deepEqual(summary(months['2026-09'][f]), [8500, [-1500]])
   assert.deepEqual(summary(months['2026-10'][f]), [10000, []], 'a one-time amount applies once')
+  for (const period of ['2026-09', '2026-10', '2026-11', '2026-12']) {
+    assert.deepEqual(summary(months[period][g]), [4000, [-10000]], 'a forever amount is capped at Pro and never discounts Basic')
+    assert.ok(months[period][g].lines.some(line => line.description.startsWith('Basic') && line.amount_cents === 4000))
+  }
+  for (const period of ['2026-09', '2026-10', '2026-11']) assert.deepEqual(summary(months[period][j]), [13000, [-1000]])
+  assert.deepEqual(summary(months['2026-12'][j]), [14000, []], 'the repeating amount stops after its third entitlement')
+  for (const period of ['2026-09', '2026-12']) {
+    const invoice = months[period][mixedCustomer]
+    assert.equal(invoice.total_cents, 39000, 'Monthly 100 + quarterly 300 receives exactly one 10 amount on the composed invoice')
+    assert.equal(invoice.lines.filter(line => line.kind === 'discount').reduce((sum, line) => sum + line.amount_cents, 0), -1000, 'The fixed amount is not repeated for each billing component or service month')
+  }
+  for (const period of ['2026-10', '2026-11']) assert.equal(months[period][mixedCustomer].total_cents, 9000, 'The intervening monthly invoice receives its own single amount')
   const proLine = months['2026-09'][e].lines.find(line => line.kind === 'discount')
   assert.match(proLine.description, /Promotion PROONLY/)
   assert.ok(months['2026-09'][e].lines.some(line => line.description.startsWith('Basic') && line.amount_cents === 4000))
@@ -160,5 +193,106 @@ export async function trialsFlow(h, owner, onState = async () => {}) {
   assert.deepEqual(lines[`2026-10:${ext.cust}`], [22258, [[22258, '2026-10-09']]], 'the first charge moves to the new end date')
   assert.deepEqual((await api(`customers/${ext.cust}`)).ledger.invoices.map(row => row.total_cents), [22258], 'the only charging invoice is the one after the new end date')
   await onState({ phase: 'billed', ext, none, card })
+  await automaticTrialFlow(h, owner, onState)
   console.log('CAT-005 trials passed')
+}
+
+
+async function automaticTrialFlow(h, owner, onState) {
+  const api = (path, body, status) => h.api(path, owner, body, status)
+  const posts = () => trialEdge.calls.filter(call => call.method === 'POST').length
+  const at = '2026-11-05T20:00:00Z'
+  await h.advanceClock(at)
+  await api('access.give', { email: 'synthetic-nectar-610@example.test', name: 'Synthetic trial finance', role: 'finance' })
+  const finance = await h.signIn('synthetic-nectar-610@example.test', { requested: true })
+  const agent = { bearer: (await api('credential.issue', { name: 'Synthetic trial observer', scopes: ['prepare'] })).key }
+  const product = (await api('product.create', { code: 'synthetic-nectar-611', name: 'Synthetic advance trial service' })).id
+  const price = (await api('price.create', { product, kind: 'flat', unit_amount: '300', taxable: false, billing_timing: 'advance' })).id
+  const factor = await api('mfa.totp.start', {})
+  await api('mfa.totp.confirm', { factor: factor.factor, code: totp(factor.secret, Date.parse(at)) })
+  await api('mfa.policy', { scope: 'roles', roles: ['owner'] })
+  const rows = []
+  for (let n = 0; n < 8; n++) {
+    const external = `synthetic-nectar-${620 + n}`
+    const customer = (await api('customer.create', { external_id: external, name: `Synthetic trial ${n}`, billing_email: `${external}@example.test` })).id
+    const trialEnd = n === 5 ? '2026-11-16' : n === 6 ? '2026-11-17' : '2026-11-15'
+    const subscription = (await api('subscription.create', { customer, start_date: '2026-11-01', anchor_day: '1', price: [price], trial_end: trialEnd, trial_payment: 'card' })).id
+    const customerRef = `synthetic-nectar-${640 + n}`, methodRef = `synthetic-nectar-${660 + n}`
+    trialEdge.customers.set(customerRef, { account: 1, method: methodRef })
+    const row = { customer, subscription, customerRef, methodRef, trialEnd }; rows.push(row)
+    if (n === 7) {
+      assert.equal((await api('trial.collection.prepare', { subscription }, 409)).error, 'native_customer_binding_required', 'A recorded card choice is never a verified saved method')
+      continue
+    }
+    await api('collection.customer.bind', { customer, account_ref: 'synthetic-nectar-600', stripe_customer_ref: customerRef, confirm: true })
+    row.authorization = await api('trial.collection.prepare', { subscription })
+    assert.equal(row.authorization.status, 'pending_owner')
+    if (n === 0) await onState({ phase: 'trial-collection', stage: 'quote', subscription, row })
+    assert.equal(posts(), 0, 'Preparation and processor card verification never charge')
+    if (n === 3) continue
+    const confirmation = row.authorization.instructions.confirm
+    await api('trial.collection.confirm', { ...confirmation, amount_cents: confirmation.amount_cents + 1 }, 409)
+    row.authorization = await api('trial.collection.confirm', confirmation)
+    assert.equal(row.authorization.status, 'pending_approval')
+    await api('trial.collection.approve', { request: row.authorization.id, basis_hash: row.authorization.basis, decision: 'approved' }, 409)
+    row.authorization = await h.api('trial.collection.approve', finance, { request: row.authorization.id, basis_hash: row.authorization.basis, decision: 'approved' })
+    assert.equal(row.authorization.status, 'active')
+    if (n === 0) await onState({ phase: 'trial-collection', stage: 'active', subscription, row })
+  }
+  for (const who of [finance, agent, undefined]) await h.api('trial.collection.prepare', who, {}, who ? 403 : 401)
+  await h.api('trial-collections', agent, undefined, 403)
+  const [first, extended, changed, unconfirmed, revoked, unknown, skipped, placeholder] = rows
+  const previous = extended.authorization
+  await api('trial.extend', { subscription: extended.subscription, days: 14 })
+  assert.equal((await api(`trial-collections?subscription=${extended.subscription}`))[0].status, 'invalidated')
+  await onState({ phase: 'trial-collection', stage: 'invalidated', subscription: extended.subscription, row: extended })
+  await api('trial.collection.confirm', previous.instructions.confirm ?? { request: previous.id }, 409)
+  extended.trialEnd = '2026-11-29'
+  const renewed = await api('trial.collection.prepare', { subscription: extended.subscription })
+  const consent = await api('trial.collection.confirm', renewed.instructions.confirm)
+  extended.authorization = await h.api('trial.collection.approve', finance, { request: consent.id, basis_hash: consent.basis, decision: 'approved' })
+  assert.equal(extended.authorization.quote.chargeDate, '2026-11-29')
+  await api('trial.collection.revoke', { request: revoked.authorization.id })
+  trialEdge.customers.get(changed.customerRef).method = 'synthetic-nectar-699'
+  await onState({ phase: 'trial-authorized', row: first, ext: extended })
+  const tick = async instant => {
+    await h.advanceClock(instant); trialEdge.capturedAt(instant)
+    assert.equal((await h.raw(`/cdn-cgi/local/scheduled?time=${Date.parse(instant)}&cron=${encodeURIComponent('0 14 * * *')}`)).status, 200)
+  }
+  const view = async row => (await api(`trial-collections?subscription=${row.subscription}`)).find(saved => saved.id === row.authorization.id)
+  await tick('2026-11-15T20:00:00Z')
+  const captured = await view(first)
+  assert.equal(captured.status, 'collected', 'The authorized saved card is captured on the trial end date despite expired interactive MFA freshness')
+  assert.equal(posts(), 1)
+  const invoice = await api(`invoices/${captured.invoice}`)
+  assert.equal(invoice.issue_date, '2026-11-15')
+  assert.equal(invoice.balanceCents, 0)
+  assert.equal(invoice.paidCents, captured.quote.amountCents)
+  assert.equal(invoice.lines.find(line => line.kind === 'flat').period_start, '2026-11-15')
+  const receipt = (await api('payments')).find(payment => payment.customer_id === first.customer)
+  assert.equal(receipt.received_on, '2026-11-15')
+  assert.equal((await view(changed)).status, 'invalidated')
+  assert.equal((await view(unconfirmed)).status, 'pending_owner')
+  assert.equal((await view(revoked)).status, 'revoked')
+  assert.equal((await api(`customers/${placeholder.customer}`)).ledger.invoices.length, 0)
+  assert.equal((await api(`customers/${extended.customer}`)).ledger.invoices.length, 0, 'There is no invoice at the previous end date after extension')
+  await tick('2026-11-15T21:00:00Z')
+  assert.equal(posts(), 1, 'Scheduled replay does not capture again')
+  await onState({ phase: 'trial-collected', row: first, captured, invoice })
+  await onState({ phase: 'trial-collection', stage: 'collected', subscription: first.subscription, row: first, captured, invoice })
+  trialEdge.losePayment()
+  await tick('2026-11-16T20:00:00Z')
+  const uncertain = await view(unknown)
+  assert.equal(uncertain.status, 'uncertain')
+  assert.equal((await api(`invoices/${uncertain.invoice}`)).paidCents, 0)
+  const claims = posts()
+  await tick('2026-11-18T20:00:00Z')
+  assert.equal((await view(skipped)).status, 'expired', 'Missing the approved exact date never permits a catch-up debit')
+  assert.equal(posts(), claims, 'Unknown results are never automatically retried')
+  await tick('2026-11-29T20:00:00Z')
+  const moved = await view(extended)
+  assert.equal(moved.status, 'collected')
+  assert.equal((await api(`invoices/${moved.invoice}`)).issue_date, '2026-11-29')
+  assert.equal((await api(`customers/${extended.customer}`)).ledger.invoices.length, 1)
+  assert.equal(posts(), claims + 1, 'Only explicit renewed approval charges at the extended date')
 }

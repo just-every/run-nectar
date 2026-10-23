@@ -3,6 +3,8 @@
 // each role, so a new door cannot be added without being checked.
 // Patterns are relative to /api/nectar/ (API) or absolute (pages).
 export const API_DOORS: [string, string][] = [
+  ['^currency/rates$','currencyRates'],
+  ['^reports/currency$','currencyReport'],
   ['^hierarchies$','hierarchies'],
   ['^webhooks$','webhooks'],
   ['^webhooks/([\\w-]+)$','webhookDelivery'],
@@ -11,6 +13,7 @@ export const API_DOORS: [string, string][] = [
   ['^promotions$','promotions'],
   ['^write-offs$','writeOffs'],
   ['^ledger-postings$','ledgerPostings'],
+  ['^trial-collections$','trialCollections'],
   ['^prepaid/refund-notices$','prepaidRefundNotices'],
   ['^prepaid/refunds$','prepaidRefunds'],
   ['^prepaid/topup-authorizations$','prepaidTopupAuthorizations'],
@@ -42,9 +45,10 @@ export const API_DOORS: [string, string][] = [
 ]
 
 /** API doors whose rows page by cursor (DEV-002, list-cursor.ts); `invoices` keeps its own issuance-journal snapshot. */
-export const LIST_DOORS = ['prepaidRefunds','prepaidTopupAuthorizations','prepaidTopupClaims','nativeCollections', 'usageCorrections', 'erasures', 'noteMembers', 'customers', 'batches', 'runs', 'payments', 'notices', 'tasks', 'policies', 'proposals', 'imports', 'shadow', 'members', 'roles', 'credentials', 'audit', 'metadataObjects', 'notes']
+export const LIST_DOORS = ['currencyRates','trialCollections','prepaidRefunds','prepaidTopupAuthorizations','prepaidTopupClaims','nativeCollections', 'usageCorrections', 'erasures', 'noteMembers', 'customers', 'batches', 'runs', 'payments', 'notices', 'tasks', 'policies', 'proposals', 'imports', 'shadow', 'members', 'roles', 'credentials', 'audit', 'metadataObjects', 'notes']
 
 export const PAGE_DOORS: [string, string][] = [
+  ['^/app/reports/currency$','currencyReport'],
   ['^/app/hierarchies$','hierarchies'],
   ['^/app/webhooks$','webhooks'],
   ['^/app/webhooks/([\\w-]+)$','webhookDelivery'],

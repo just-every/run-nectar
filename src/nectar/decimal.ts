@@ -54,12 +54,12 @@ export function cents(text: string, field = 'amount', { negative = false } = {})
   return Number(result)
 }
 
-export function money(cents: number | bigint): string {
+export function money(cents: number | bigint, currency = 'USD'): string {
   const value = BigInt(cents)
   const sign = value < 0n ? '−' : ''
   const absolute = value < 0n ? -value : value
   const whole = (absolute / 100n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',')
-  return `${sign}$${whole}.${(absolute % 100n).toString().padStart(2, '0')}`
+  return `${sign}${currency.toUpperCase()==='USD'?'$':currency.toUpperCase()+' '}${whole}.${(absolute % 100n).toString().padStart(2, '0')}`
 }
 
 export const plainMoney = (cents: number | bigint) => {

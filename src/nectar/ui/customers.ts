@@ -1,10 +1,11 @@
+import { money } from '../decimal'
 import { customerBillingRecordSection } from './customer-billing-record'
 import { planChangeSection } from './plan-changes'
 import { balanceSection } from './balance'
 import { clockInstant } from '../clock'
 import { requireBusiness } from '../business'
 import { localDate } from '../dates'
-import { trialSection } from './promotions'
+import { trialCollectionSection,trialSection } from './promotions'
 import { intervalLabel } from './intervals'
 import { importedCollectionsSection } from './imported-collections'
 import { customerInvoiceForm } from './invoice-content'
@@ -40,7 +41,7 @@ export async function customersPage(env: Bindings, actor: Actor, url: URL) {
   const rows = await customers(env, actor,url)
   const create = can(actor, 'records') ? h`<section class="card" aria-labelledby="new"><h2 id="new">Add a customer</h2>${form('customer.create', '/app/customers/{id}', h`
     ${field('Customer ID', 'external_id', { hint: 'The id your CRM or previous biller uses; usage files refer to customers by it.' })}${field('Name', 'name')}
-    ${field('Billing email', 'billing_email', { type: 'email' })}${field('Billing address', 'address', { required: false })}
+    ${select('Billing currency','currency',['USD','CAD','EUR','GBP'].map(value=>({value,label:value})),'USD')}${field('Billing email', 'billing_email', { type: 'email' })}${field('Billing address', 'address', { required: false })}
     ${check('Tax exempt', 'tax_exempt')}${field('Exemption certificate reference', 'tax_exempt_ref', { required: false })}${languageSelect('en')}`, 'Add customer', { layout: 'columns' })}</section>` : ''
   return page('Customers', actor, h`<h1>Customers</h1>
     <section class="card">${table(['Customer', 'Customer ID', 'Billing email', 'Subscriptions$', 'Source'], rows.map(r => [h`<a href="/app/customers/${r.id}">${r.name}</a>`, r.external_id, r.billing_email || '—', r.subscriptions, r.origin === 'import' ? 'Moved in' : 'Nectar']), { empty: url.searchParams.get('search')?.trim() ? 'No customers match this search.' : 'No customers yet. Add one below, or move in from Stripe under More.', lead: true })}</section>${create}`, { current: '/app/customers', url })
@@ -48,9 +49,10 @@ export async function customersPage(env: Bindings, actor: Actor, url: URL) {
 
 export async function customerPage(env: Bindings, actor: Actor, id: string, url: URL) {
   const c = await customerView(env, actor, id, url)
+  const cents=(value:number|null|undefined)=>value===null||value===undefined?'—':money(value,c.currency??'USD')
   if(c.erased_at) return page('Erased customer',actor,h`<h1>Erased customer</h1><section class="card"><p>Personal information has been erased. Required financial records remain until their retention date.</p><p><a href="/app/erasures">Erasure requests and receipts</a></p>${table(['Invoice','Total'],c.ledger.invoices.map((i:any)=>[h`<a href="/app/invoices/${i.id}">${i.number}</a>`,cents(i.total_cents)]))}</section>`,{url,current:'/app/customers'})
   const today = new Date().toISOString().slice(0, 10)
-  const named = await all(env, "SELECT p.id, pr.name, p.version, p.kind, p.unit_amount, p.pricing_model, p.nickname,b.interval_unit,b.interval_count,b.billing_timing, m.unit_label FROM nc_prices p JOIN nc_products pr ON pr.id = p.product_id LEFT JOIN nc_price_intervals b ON b.price_id=p.id LEFT JOIN nc_meters m ON m.id = p.meter_id WHERE p.status = 'active' ORDER BY pr.name, p.version DESC")
+  const named = await all(env, "SELECT p.id,p.currency, pr.name, p.version, p.kind, p.unit_amount, p.pricing_model, p.nickname,b.interval_unit,b.interval_count,b.billing_timing, m.unit_label FROM nc_prices p JOIN nc_products pr ON pr.id = p.product_id LEFT JOIN nc_price_intervals b ON b.price_id=p.id LEFT JOIN nc_meters m ON m.id = p.meter_id WHERE p.status = 'active' ORDER BY pr.name, p.version DESC")
   const label = (p: Record<string, any>) => `${p.name}${p.nickname ? ` — ${p.nickname}` : ''} v${p.version}: ${priceRate(p)} · ${intervalLabel(p)}`
   const newSubscription = can(actor, 'records') && named.length ? h`<section class="card" aria-labelledby="new-sub"><h2 id="new-sub">Start a subscription</h2>${form('subscription.create', '/app/subscriptions/{id}', h`${hidden('customer', c.id)}
     ${field('Start date', 'start_date', { type: 'date', value: today })}
@@ -65,7 +67,7 @@ export async function customerPage(env: Bindings, actor: Actor, id: string, url:
     ${field('Value', 'exception_value', { required: false })}${field('From', 'exception_effective_from', { type: 'date', required: false })}${field('Until (optional)', 'exception_effective_to', { type: 'date', required: false })}
     ${field('Note', 'exception_note', { required: false })}${area('Contract clause (quote it)', 'exception_clause', '', false, 2)}</fieldset>`, 'Start subscription', { layout: 'columns' })}</section>` : ''
   const ledger = c.ledger, hasHistory=c.incumbentHistory.documents.length>0||c.incumbentHistory.records.length>0
-  return page(c.name, actor, h`<p class="crumbs"><a href="/app/customers">Customers</a></p><h1>${c.name}</h1>${canRead(actor,'payments')&&canRead(actor,'invoices')?h`<p><a href="/app/prepaid/refunds?customer=${c.id}">Prepaid refund requests</a></p>`:''}<p>${metadataLink('customer',c.id)}</p>
+  return page(c.name, actor, h`<p class="crumbs"><a href="/app/customers">Customers</a></p><h1>${c.name}</h1><p>Billing currency: ${c.currency??'USD'}.</p>${canRead(actor,'payments')&&canRead(actor,'invoices')?h`<p><a href="/app/prepaid/refunds?customer=${c.id}">Prepaid refund requests</a></p>`:''}<p>${metadataLink('customer',c.id)}</p>
     <section class="card summary"><dl class="figures">
       <div><dt>Customer ID</dt><dd>${c.external_id}</dd></div><div class="wide"><dt>Billing email</dt><dd>${addresses(c.billing_email || '—')}</dd></div>
       <div><dt>${hasHistory?'Nectar invoiced':'Invoiced'}</dt><dd>${cents(ledger.invoicedCents)}</dd></div><div><dt>${hasHistory?'Nectar credited':'Credited'}</dt><dd>${cents(ledger.creditedCents)}</dd></div><div><dt>${hasHistory?'Paid on Nectar invoices':'Paid'}</dt><dd>${cents(ledger.paidCents)}</dd></div>
@@ -107,7 +109,7 @@ export async function subscriptionPage(env: Bindings, actor: Actor, id: string, 
   const approver = actor.kind === 'member' && can(actor, 'approve'), records = can(actor, 'records')
   const trialDay = localDate(clockInstant(env), (await requireBusiness(env)).timezone)
   const open = s.items.filter((i: any) => !i.effective_to)
-  const prices = records || can(actor,'draft')&&canRead(actor,'catalog') ? await all(env, "SELECT p.id, pr.name, p.version, p.kind, p.unit_amount, p.pricing_model, p.nickname,b.interval_unit,b.interval_count,b.billing_timing FROM nc_prices p JOIN nc_products pr ON pr.id = p.product_id LEFT JOIN nc_price_intervals b ON b.price_id=p.id WHERE p.status = 'active' AND p.kind <> 'unit' ORDER BY pr.name, p.version DESC") : []
+  const prices = records || can(actor,'draft')&&canRead(actor,'catalog') ? await all(env, "SELECT p.id,p.currency, pr.name, p.version, p.kind, p.unit_amount, p.pricing_model, p.nickname,b.interval_unit,b.interval_count,b.billing_timing FROM nc_prices p JOIN nc_products pr ON pr.id = p.product_id LEFT JOIN nc_price_intervals b ON b.price_id=p.id WHERE p.status = 'active' AND p.kind <> 'unit' ORDER BY pr.name, p.version DESC") : []
   return page('Subscription', actor, h`<p class="crumbs"><a href="/app/customers/${s.customer_id}">${s.customer_name}</a></p><h1>Subscription ${s.external_id ? h`<span>${s.external_id}</span>` : ''}</h1><p>${metadataLink('subscription',s.id)}${canRead(actor,'invoices')?h` · <a href="/app/prepaid/${s.id}">Prepaid credits</a>`:''}</p>
     <section class="card summary"><dl class="figures"><div><dt>Status</dt><dd>${tag(subscriptionState(s, today))}</dd></div><div><dt>Started</dt><dd>${formatDate(s.start_date)}</dd></div>
       <div><dt>Billing day</dt><dd>${s.anchor_day}</dd></div><div><dt>Trial ends</dt><dd>${formatDate(s.trial_end)}</dd></div><div><dt>Ends</dt><dd>${formatDate(s.end_date)}</dd></div><div><dt>Contract term</dt><dd>${s.contract_term_months?`${s.contract_term_months} months`:'Evergreen'}</dd></div><div><dt>Anniversary anchor</dt><dd>${formatDate(s.billing_anchor_date)}</dd></div>
@@ -115,6 +117,7 @@ export async function subscriptionPage(env: Bindings, actor: Actor, id: string, 
       ${s.billing_mode === 'shadow' ? h`<p class="hint">Moved in from Stripe. Nectar rates it in shadow for comparison and issues nothing until the owner adopts it under Move in.</p>` : ''}
       ${details({ 'Internal id': s.id, Revision: s.revision, 'Provider reference': s.provider_ref ?? '—', 'Provider schedule': s.provider_schedule_ref ?? '—', 'Provider collection': s.provider_collection ?? '—' })}</section>
     ${trialSection(s, actor, trialDay)}
+    ${await trialCollectionSection(env,actor,s)}
     <section class="card" aria-labelledby="items"><h2 id="items">Plan</h2>${table(['Price', 'Quantity$', 'From', 'Until'], s.items.map((i: any) => [`${i.product_name}${i.nickname ? ` — ${i.nickname}` : ''} v${i.version} (${priceRate(i)} · ${intervalLabel(i)})`, i.quantity, formatDate(i.effective_from), formatDate(i.effective_to)]))}</section>
     ${await upcomingSection(env,actor,s,url)}
     ${addonSection(s, prices, actor)}

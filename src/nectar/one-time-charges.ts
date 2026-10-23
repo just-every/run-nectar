@@ -8,6 +8,7 @@ import { requireDate } from './dates'
 import type { Input } from './input'
 import { rateQuantityPrice, storedQuantityPrice } from './price-model'
 import type { ChargeIn } from './charge-lines'
+import { assertSameCurrency, billingCurrency, customerCurrencyGuard } from './currency'
 
 export const chargeInput = (r: Row): ChargeIn => ({ id: r.id, description: r.description, quantity: r.quantity, unitAmount: r.unit_amount, amountCents: r.amount_cents, taxable: !!r.taxable, priceId: r.price_id, date: r.effective_date, evidence: parseJson(r.pricing_evidence_json, {}) })
 
@@ -19,6 +20,8 @@ export async function addCharge(env: Bindings, actor: Actor, input: Input) {
   requireCapability(actor, 'records')
   const customer = await one(env, "SELECT * FROM nc_customers WHERE id=? AND status='active'", input.text('customer', { max: 100 }))
   insist(customer, 'customer_not_found', 404)
+  const currency = billingCurrency(input.text('currency', { max: 3, optional: true }), billingCurrency(customer.currency))
+  assertSameCurrency(currency, customer.currency)
   const subscription = input.text('subscription', { max: 100, optional: true }) || null
   const date = requireDate(input.text('effective_date', { max: 10 }), 'effective_date')
   if (subscription) {
@@ -31,6 +34,7 @@ export async function addCharge(env: Bindings, actor: Actor, input: Input) {
   let description = input.text('description', { max: 300, optional: true }), quantity = '1.00', unit = '', amount: number, taxable: boolean, evidence: Row
   if (priceId) {
     const price = await requirePrice(env, priceId)
+    assertSameCurrency(currency, price.currency)
     insist(price.status === 'active', 'price_retired', 409)
     quantity = canonicalDecimal(input.text('quantity', { max: 24, optional: true }) || '1', 'quantity')
     const model = price.pricing_model === 'simple' ? null : rateQuantityPrice(storedQuantityPrice(price as any)!, micros(quantity))
@@ -45,7 +49,7 @@ export async function addCharge(env: Bindings, actor: Actor, input: Input) {
   }
   insist(Number.isSafeInteger(amount) && amount > 0 && amount <= 100_000_000_000, 'invalid_amount')
   const id = newId()
-  await commit(env, [stmt(env, 'INSERT INTO nc_charges (id,customer_id,subscription_id,price_id,description,quantity,unit_amount,amount_cents,taxable,effective_date,pricing_evidence_json,created_by,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)', id, customer.id, subscription, priceId, description, quantity, unit, amount, taxable ? 1 : 0, date, JSON.stringify(evidence), actorLabel(actor), now())],
-    { actor: actorLabel(actor), action: 'charge.add', subject: id, detail: { customer: customer.id, subscription, price: priceId, amount, date } })
+  await commit(env, [customerCurrencyGuard(env, customer.id, currency),stmt(env, 'INSERT INTO nc_charges (id,customer_id,subscription_id,price_id,description,quantity,unit_amount,amount_cents,currency,taxable,effective_date,pricing_evidence_json,created_by,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)', id, customer.id, subscription, priceId, description, quantity, unit, amount, currency, taxable ? 1 : 0, date, JSON.stringify(evidence), actorLabel(actor), now())],
+    { actor: actorLabel(actor), action: 'charge.add', subject: id, detail: { customer: customer.id, subscription, price: priceId, amount, currency, date } })
   return { id: customer.id, charge: id }
 }

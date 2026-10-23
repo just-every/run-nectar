@@ -1,3 +1,5 @@
+import { recordDailyRate } from './currency-rates'
+import { prepareTrialCollection,confirmTrialCollection,approveTrialCollection,revokeTrialCollection } from './trial-collection'
 import { configureRefundNotices } from './prepaid-refund-mail'
 import { requestSupportPrepaidRefund } from './prepaid-refund-intake'
 import { preparePlanChange,decidePlanChange,preparePlanChangeCredit } from './plan-changes'
@@ -98,6 +100,11 @@ export const actions: Record<string, Handler> = {
   'collection.prepare': prepareNativeCollection,
   'collection.confirm': confirmNativeCollection,
   'collection.reconcile': reconcileNativeCollection,
+  'currency.rate.record':recordDailyRate,
+  'trial.collection.prepare':prepareTrialCollection,
+  'trial.collection.confirm':confirmTrialCollection,
+  'trial.collection.approve':approveTrialCollection,
+  'trial.collection.revoke':revokeTrialCollection,
   'prepaid.refund.notice.configure':configureRefundNotices,
   'prepaid.refund.request':requestSupportPrepaidRefund,
   'prepaid.refund.prepare':preparePrepaidRefund,

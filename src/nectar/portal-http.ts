@@ -76,7 +76,7 @@ export async function portalResponse(request: Request, env: Bindings): Promise<R
     const proposal = url.pathname.match(/^\/portal\/proposals\/([\w-]+)$/)?.[1]
     const invoice = url.pathname.match(/^\/portal\/invoices\/([\w-]+)$/)?.[1]
     if (!['/portal','/portal/data','/portal/privacy','/portal/answers','/portal/upcoming','/portal/adjustments','/portal/prepaid'].includes(url.pathname) && !invoice && !proposal && !prepaidSource && !topupAuthorization) throw new NectarError('not_found', 404)
-    const data = await portalData(env, session, invoice), L = customerText(data.customer.language)
+    const data = await portalData(env, session, invoice), L = customerText(data.customer.language,data.customer.currency)
     if (url.pathname === '/portal/data') return Response.json(data, { headers: { ...headers, 'content-security-policy': "default-src 'none'; frame-ancestors 'none'" } })
     const token = url.searchParams.get('session')!
     const link = (path: string) => `${path}?session=${encodeURIComponent(token)}`

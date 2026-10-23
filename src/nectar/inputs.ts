@@ -1,3 +1,5 @@
+import { billingCurrency } from './currency'
+import { amountCouponInputs } from './promotions'
 import { prepaidRefundSpendableBasis } from './prepaid-refund-records'
 import { prepaidSnapshot } from './prepaid-records'
 import { billingServiceWindows } from './billing-composition'
@@ -80,9 +82,13 @@ export async function ratingInputs(env: Bindings, business: Business, subscripti
   const term = billing ? await one(env, "SELECT end_date,auto_renew,cancelled_at FROM nc_renewal_terms WHERE subscription_id=? AND status='active' ORDER BY created_at DESC LIMIT 1", sub.id) : null
   const renewing = !!term?.auto_renew && !term.cancelled_at
   const recordedPrepaid = await prepaidSnapshot(env, sub.id)
+  const currency=billingCurrency((await one(env,'SELECT currency FROM nc_customers WHERE id=?',sub.customer_id))?.currency)
+  const amountCoupons=await amountCouponInputs(env,sub.id)
   const prepaid = recordedPrepaid ? await prepaidRefundSpendableBasis(env,recordedPrepaid) : undefined
   return {
+    ...(currency==='USD'?{}:{currency}),
     ...(prepaid ? { prepaid } : {}),
+    ...(amountCoupons.length?{amountCoupons}:{}),
     ...(billing ? { billing } : {}),
     ...(unresolvedHistoricalUsage.length?{unresolvedHistoricalUsage}:{}),
     ...(adjustments.length?{usageAdjustments:adjustments}:{}),...(credits.length?{usageCredits:credits}:{}),...(pending.length?{usageCorrectionPending:pending}:{}),

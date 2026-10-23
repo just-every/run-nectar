@@ -8,12 +8,12 @@ import { h } from './ui/html'
 
 export async function portalTopupLinks(env: Bindings, session: CustomerSession, link: (path:string)=>string) {
   const rows=await all(env,"SELECT id FROM nc_prepaid_topup_authorizations WHERE customer_id=? AND status IN ('awaiting_customer','pending','active') ORDER BY prepared_at,id",session.customer)
-  const L=customerText(session.language)
+  const L=customerText(session.language,session.currency)
   return rows.length?h`<section class="card"><h2>${L.t('portal.topup.heading')}</h2>${rows.map(row=>h`<p><a href="${link(`/portal/prepaid-topups/${row.id}`)}">${L.t('portal.topup.review')}</a></p>`)}</section>`:''
 }
 
 export async function portalTopupPage(env: Bindings, request: Request, session: CustomerSession, id: string, link: (path:string)=>string) {
-  const source=await portalPrepaidTopupAuthorization(env,request,id),q=source.quote,L=customerText(session.language)
+  const source=await portalPrepaidTopupAuthorization(env,request,id),q=source.quote,L=customerText(session.language,session.currency)
   const quantity=(n:number)=>q.kind==='money'?L.money(n):`${L.percent(decimalText(BigInt(n)))} ${L.t('portal.prepaid.units')}`
   const token=new URL(request.url).searchParams.get('session')!
   return h`<h1>${L.t('portal.topup.heading')}</h1><p><a href="${link('/portal/prepaid')}">${L.t('portal.back')}</a></p>

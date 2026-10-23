@@ -1,3 +1,4 @@
+import { requireUsdReporting } from './currency'
 import { intervalRecurringEntries } from './interval-reports'
 import { historicalMrrSeries, type HistoricalMrrMonth } from './movein/history-metrics'
 import { historicalContributions, historicalReportSource } from './movein/history-reports'
@@ -85,6 +86,7 @@ function inBucket(due: string, day: string, selected: string | null) {
 /** Reads contributions without inventing recurring amounts or allocating AR to individual lines. */
 export async function report(env: Bindings, actor: Actor, metric: string, url: URL): Promise<Report> {
   requireRead(actor, 'reports')
+  await requireUsdReporting(env)
   if (['credits','tax','unbilled','credit-balances','refunds'].includes(metric)) return await financialReport(env,actor,metric,url)
   const selected = filters(metric, url)
   const day = today((await requireBusiness(env)).timezone, clockInstant(env))
@@ -134,6 +136,7 @@ export async function report(env: Bindings, actor: Actor, metric: string, url: U
 /** Original line and settlement components tie exactly to the selected invoice contribution. */
 export async function reportInvoice(env: Bindings, actor: Actor, metric: string, invoiceId: string, url: URL): Promise<ReportInvoice> {
   requireRead(actor, 'reports')
+  await requireUsdReporting(env)
   if (['credits','tax','unbilled','credit-balances','refunds'].includes(metric)) return await financialReportSource(env,actor,metric,invoiceId,url)
   const view = await report(env, actor, metric, url)
   const entry = view.entries.find(row => row.invoiceId === invoiceId)

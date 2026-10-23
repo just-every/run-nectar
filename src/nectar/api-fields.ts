@@ -156,6 +156,7 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
   },
   "charge.add": {
     "amount": "text",
+    "currency": "text",
     "customer": "text",
     "description": "text",
     "effective_date": "text",
@@ -229,6 +230,7 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
   },
   "credit.issue": {
     "amount": "text",
+    "currency": "text",
     "invoice": "text",
     "reason": "text",
     "request": "text"
@@ -243,9 +245,16 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "invoice": "text",
     "reason": "text"
   },
+  "currency.rate.record": {
+    "currency": "text",
+    "rate_date": "text",
+    "source": "text",
+    "usd_per_unit": "text"
+  },
   "customer.create": {
     "address": "text",
     "billing_email": "text",
+    "currency": "text",
     "external_id": "text",
     "invoice_edit": "flag",
     "invoice_field_name": "list",
@@ -269,6 +278,7 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
   "customer.update": {
     "address": "text",
     "billing_email": "text",
+    "currency": "text",
     "customer": "text",
     "invoice_edit": "flag",
     "invoice_field_name": "list",
@@ -527,6 +537,7 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
   },
   "payment.record": {
     "amount": "text",
+    "currency": "text",
     "customer": "text",
     "evidence": "text",
     "method": "text",
@@ -648,6 +659,7 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
   "price.create": {
     "*": "has",
     "billing_timing": "text",
+    "currency": "text",
     "dimension_property": "list",
     "dimension_value": "list",
     "dimensions": "json",
@@ -857,6 +869,28 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "subscription": "text",
     "term_start": "text",
     "uplift_percent": "text"
+  },
+  "trial.collection.approve": {
+    "basis_hash": "text",
+    "decision": "text",
+    "request": "text"
+  },
+  "trial.collection.confirm": {
+    "account_ref": "text",
+    "amount_cents": "integer",
+    "basis_hash": "text",
+    "confirm": "flag",
+    "confirm_single": "flag",
+    "payment_method_ref": "text",
+    "request": "text",
+    "stripe_customer_ref": "text",
+    "trial_end": "text"
+  },
+  "trial.collection.prepare": {
+    "subscription": "text"
+  },
+  "trial.collection.revoke": {
+    "request": "text"
   },
   "trial.extend": {
     "days": "integer",

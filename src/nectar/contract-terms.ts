@@ -1,3 +1,4 @@
+import { requireUsdCurrency } from './currency'
 import { effectiveReplay } from './usage-correction-records'
 // Immutable signed terms, with separate-human approval for every price ramp.
 import type { Bindings } from '../auth.server'
@@ -82,6 +83,7 @@ export async function prepareContract(env:Bindings,actor:Actor,input:Input) {
   requireAny(actor,['records','draft'])
   insist(actor.kind==='member','person_required',403)
   const sub=await requireSubscription(env,input.text('subscription',{max:100}));insist(sub.revision===input.text('revision',{max:100}),'stale',409)
+  await requireUsdCurrency(env,{subscriptionId:sub.id})
   const clause=input.text('clause',{max:10000}),terms=await normalized(env,sub,input.has('commitments')||input.has('included')||input.has('ramps')?input:formTerms(input)),id=newId()
   await commit(env,[guard(env,'stale','EXISTS(SELECT 1 FROM nc_subscriptions WHERE id=? AND revision=?)',sub.id,sub.revision),stmt(env,"INSERT INTO nc_contracts (id,subscription_id,subscription_revision,clause,terms_json,status,prepared_by_id,prepared_by,created_at) VALUES (?,?,?,?,?,'proposed',?,?,?)",id,sub.id,sub.revision,clause,JSON.stringify(terms),actor.id,actorLabel(actor),now())],{actor:actorLabel(actor),action:'contract.prepare',subject:id,detail:{subscription:sub.id,terms,clause}})
   return {id:sub.id,contract:id}

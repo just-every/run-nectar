@@ -1,3 +1,4 @@
+import { currencyPage } from './currency'
 import { hierarchiesPage } from './hierarchies'
 import { registerWebhook,rotateWebhook } from '../webhooks'
 import { webhooksPage,webhookDeliveryPage } from './webhooks'
@@ -49,6 +50,7 @@ import { reportPage, reportInvoicePage, reportLinePage } from './reports'
 type Page = (env: Bindings, actor: Actor, request: Request, url: URL, id: string) => Promise<Response>
 
 export const pages: Record<string, Page> = {
+  currencyReport:(env,actor,_r,url)=>currencyPage(env,actor,url),
   hierarchies:(env,actor,_r,url)=>hierarchiesPage(env,actor,url),
   webhooks:(env,actor,_r,url)=>webhooksPage(env,actor,url),
   webhookDelivery:(env,actor,_r,url,id)=>webhookDeliveryPage(env,actor,id,url),

@@ -1,3 +1,5 @@
+import { dailyRates,currencyReport } from './currency-rates'
+import { readTrialCollections } from './trial-collection'
 import { customerBillingRecord } from './customer-billing-record'
 import { refundNoticeSettings } from './prepaid-refund-mail'
 import { hierarchyView } from './hierarchies'
@@ -85,6 +87,9 @@ export const views: Record<string, View> = {
   hierarchies:(env,actor,_r,_id,url)=>hierarchyView(env,actor,url.searchParams.get('parent')??undefined),
   webhooks:(env,actor)=>webhookList(env,actor),
   webhookDelivery:(env,actor,_r,id)=>webhookDetail(env,actor,id),
+  currencyRates:(env,actor)=>dailyRates(env,actor),
+  currencyReport:(env,actor,_r,_id,url)=>currencyReport(env,actor,url),
+  trialCollections:(env,actor,_r,_id,url)=>readTrialCollections(env,actor,url.searchParams.get('subscription')??undefined),
   prepaidRefundNotices:(env,actor)=>refundNoticeSettings(env,actor),
   prepaidRefunds:(env,actor,_r,_id,url)=>readPrepaidRefunds(env,actor,url.searchParams.get('subscription')??undefined),
   prepaidTopupAuthorizations:(env,actor,_r,_id,url)=>readPrepaidTopupAuthorizations(env,actor,url.searchParams.get('subscription')??undefined),

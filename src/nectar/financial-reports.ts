@@ -1,3 +1,4 @@
+import { requireUsdReporting } from './currency'
 import { balanceFinancialSources, balanceSourceComponents } from './financial-balance'
 import { sharedCreditNotes } from './shared-credit-custody'
 import { prepaidRefundFinancialSources, refundReportComponents, type PrepaidReportRefund } from './financial-refunds'
@@ -182,12 +183,14 @@ async function contributions(env: Bindings, metric: string, url: URL) {
 /** Every contribution is sourced from actual ledger rows or exact rated usage lines. */
 export async function financialReport(env: Bindings, actor: Actor, metric: string, url: URL): Promise<FinancialReport> {
   requireRead(actor, 'reports')
+  await requireUsdReporting(env)
   return (await contributions(env, metric, url)).report
 }
 
 /** Source membership and its components are read together; filtered-out sources refuse. */
 export async function financialReportSource(env: Bindings, actor: Actor, metric: string, sourceId: string, url: URL): Promise<FinancialReportSource> {
   requireRead(actor, 'reports')
+  await requireUsdReporting(env)
   const { report, unbilled, prepaid, refunds, business } = await contributions(env, metric, url)
   const entry = report.entries.find(row => row.invoiceId === sourceId)
   insist(entry, 'report_invoice_not_found', 404)

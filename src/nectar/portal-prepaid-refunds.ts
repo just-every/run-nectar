@@ -7,7 +7,7 @@ import type { CustomerSession } from './portal-session'
 import { h } from './ui/html'
 
 export async function portalRefundSection(env:Bindings,session:CustomerSession,lots:PortalPrepaidLot[],link:(path:string)=>string){
-  const L=customerText(session.language)
+  const L=customerText(session.language,session.currency)
   const requests=await all(env,`SELECT t.id,t.grant_id,t.amount_n,t.amount_cents,t.kind,COALESCE(r.status,'pending') AS status FROM nc_prepaid_refund_intakes t LEFT JOIN nc_prepaid_refunds r ON r.id=t.id WHERE t.customer_id=? ORDER BY t.requested_at,t.id`,session.customer)
   const active=await all(env,"SELECT grant_id FROM nc_prepaid_refunds WHERE customer_id=? AND status IN ('pending','approved','claimed','uncertain') UNION SELECT grant_id FROM nc_prepaid_refund_intakes WHERE customer_id=? AND status='pending'",session.customer,session.customer)
   return h`<section class="card"><h2>${L.t('portal.refund.heading')}</h2><p>${L.t('portal.refund.body')}</p>

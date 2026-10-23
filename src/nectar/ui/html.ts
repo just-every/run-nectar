@@ -221,7 +221,7 @@ const TONES: Record<string, 'good' | 'pending' | 'alert'> = {
 /** A status chip, toned by its words; the words carry the meaning, the tone only supports them. */
 export const tag = (text: unknown) => { const tone = TONES[String(text ?? '').toLowerCase()]; return h`<span class="tag${tone ? ` tone-${tone}` : ''}">${text}</span>` }
 
-export const cents = (value: number | null | undefined) => value === null || value === undefined ? '—' : money(value)
+export const cents = (value: number | null | undefined,currency='USD') => value === null || value === undefined ? '—' : money(value,currency)
 
 /** Machine facts stay out of the work view, inside a keyboard-operable Details disclosure. */
 export const details = (facts: Record<string, unknown>, summary = 'Details') =>
