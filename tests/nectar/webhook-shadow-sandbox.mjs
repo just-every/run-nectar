@@ -64,18 +64,27 @@ try{
   await stripe.request('POST',`/v1/payment_methods/${extra.id}`,{'billing_details[name]':`Synthetic update ${stripe.run}`})
   await stripe.request('POST',`/v1/payment_methods/${extra.id}/detach`,{})
   await stripe.request('POST',`/v1/subscriptions/${subscription.id}`,{cancel_at_period_end:true})
+  phase='owned-provider-failure-and-credit'
+  const failedInvoice=await stripe.request('POST','/v1/invoices',{customer:customer.id,auto_advance:false})
+  await stripe.request('POST','/v1/invoiceitems',{customer:customer.id,invoice:failedInvoice.id,currency:'usd',amount:500})
+  await stripe.request('POST',`/v1/invoices/${failedInvoice.id}/finalize`,{auto_advance:false})
+  const declined=await stripe.request('POST','/v1/payment_methods',{type:'card','card[token]':'tok_chargeDeclined'})
+  try{await stripe.request('POST',`/v1/invoices/${failedInvoice.id}/pay`,{payment_method:declined.id});check(false,'failing_card_was_accepted')}
+  catch(error){check(error.code==='card_declined','expected_test_card_decline')}
+  await stripe.request('POST','/v1/credit_notes',{invoice:invoice.id,amount:invoice.total,out_of_band_amount:invoice.total})
+  await stripe.request('DELETE',`/v1/subscriptions/${subscription.id}`)
   // No provider cancellation or financial mutation is performed by Nectar.
   // The receiver observes the actual provider event, with explicit custody.
   phase='capture-and-deliver'
   const mapping={
     'customer.created':'customer.created','customer.updated':'customer.updated',
-    'customer.subscription.created':'subscription.created','customer.subscription.updated':'subscription.updated',
+    'customer.subscription.created':'subscription.created','customer.subscription.updated':'subscription.updated','customer.subscription.deleted':'subscription.updated',
     'invoice.created':'invoice.created','invoice.finalized':'invoice.issued','invoice.paid':'invoice.paid',
-    'invoice.payment_succeeded':'payment.recorded',
+    'invoice.payment_succeeded':'payment.recorded','invoice.payment_failed':'payment.failed','credit_note.created':'credit.created',
     'payment_method.attached':'payment_method.attached','payment_method.updated':'payment_method.updated','payment_method.detached':'payment_method.detached',
     'entitlements.active_entitlement_summary.updated':'entitlements.updated',
   }
-  const owned=new Set([customer.id,subscription.id,invoice.id,method.id,extra.id])
+  const owned=new Set([customer.id,subscription.id,invoice.id,failedInvoice.id,method.id,extra.id])
   const own=e=>owned.has(reference(e.data.object.id))||reference(e.data.object.customer)===customer.id||reference(e.data.previous_attributes?.customer)===customer.id
   const events=new Map(),deadline=Date.now()+90000
   do{
