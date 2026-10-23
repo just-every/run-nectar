@@ -521,7 +521,7 @@
       "executable": false
     },
     "migrations/core/0086_payment_receipts.sql": {
-      "sha256": "ed5597ea949d806c70794add05cc095a82a32c59985cf8f02e5c8521ae1f29ac",
+      "sha256": "f11bb3ccd1456e3ceb8031842e5d86b0e8a8d2fd2026f9500744f77c8e647f5d",
       "executable": false
     },
     "ONBOARDING.md": {
@@ -3629,7 +3629,7 @@
       "executable": false
     },
     "src/nectar/ui/payment-receipts.ts": {
-      "sha256": "129061593cf97f2f54dab7ff789c1eff0b22d6a6047a6cefcee67f12c61d22e1",
+      "sha256": "3143054322ffb4634286f73d9c9db4e2118f2726283fd91e511e8a6ff9a81aa8",
       "executable": false
     },
     "src/nectar/ui/period-close.ts": {
@@ -4101,7 +4101,7 @@
       "executable": false
     },
     "tests/nectar/customer-search.mjs": {
-      "sha256": "9e80219f2ff7866ae647a987d935ce4445c7d60c5fa166bb198bf819b6346795",
+      "sha256": "1e936040e3b9d0e8b2bcf84fc1822b7ae66bc24bb417ecb702d9a30af05c45f1",
       "executable": false
     },
     "tests/nectar/draft-corrections.mjs": {
