@@ -38,8 +38,9 @@ try{
   feature=await stripe.request('POST','/v1/entitlements/features',{name:`Synthetic access ${stripe.run}`,lookup_key:`synthetic-nectar-${stripe.run}`})
   await stripe.request('POST',`/v1/products/${product.id}/features`,{entitlement_feature:feature.id})
   price=await stripe.request('POST','/v1/prices',{product:product.id,currency:'usd',unit_amount:19900,'recurring[interval]':'month'})
-  let subscription=await stripe.request('POST','/v1/subscriptions',{customer:customer.id,'items[0][price]':price.id,collection_method:'send_invoice',days_until_due:30})
-  receipt.subscriptionId=subscription.id
+  phase='create-owned-subscription'
+  let subscription=await stripe.request('POST','/v1/subscriptions',{customer:customer.id,'items[0][price]':price.id,collection_method:'charge_automatically',payment_behavior:'error_if_incomplete'})
+  receipt.subscriptionId=subscription.id;receipt.featureId=feature.id
   const lists={customers:[customer],products:[product],prices:[price],subscriptions:[subscription]}
   const capture=Object.fromEntries(Object.entries(lists).map(([name,data])=>[name,{object:'list',url:`/v1/${name}`,has_more:false,data}]))
   const manifest={source:'stripe',captured_at:new Date().toISOString(),api_version:stripe.apiVersion,captured_by:'Owned DEV-001 Stripe test-clock journey',files:Object.fromEntries(Object.entries(lists).map(([name,data])=>[name,{endpoint:`/v1/${name}`,count:data.length,has_more:false}]))}
@@ -108,7 +109,7 @@ try{
 finally{
   await h?.close()
   if(clock)try{const deleted=await stripe.request('DELETE',`/v1/test_helpers/test_clocks/${clock}`);check(deleted.deleted===true,'owned_clock_cleanup_failed');receipt.cleanup.clockDeleted=true}catch(error){receipt.status='failed';receipt.cleanup.error=safeError(error);process.exitCode=1}
-  for(const [path,id]of [['prices',price?.id],['products',product?.id]])if(id)try{await stripe.request('POST',`/v1/${path}/${id}`,{active:false})}catch(error){receipt.status='failed';receipt.cleanup.error=safeError(error);process.exitCode=1}
+  for(const [path,id]of [['prices',price?.id],['products',product?.id],['entitlements/features',feature?.id]])if(id)try{await stripe.request('POST',`/v1/${path}/${id}`,{active:false})}catch(error){receipt.status='failed';receipt.cleanup.error=safeError(error);process.exitCode=1}
   await rm(directory,{recursive:true,force:true});receipt.completedAt=new Date().toISOString();receipt.requestCounts=stripe?.counts
   await mkdir(evidence,{recursive:true});await writeFile(join(evidence,'webhook-shadow-sandbox.json'),JSON.stringify(receipt,null,2)+'\n',{mode:0o600})
   console.log(`SHADOW_SANDBOX ${receipt.status} events=${receipt.events.length} clockDeleted=${receipt.cleanup.clockDeleted}`)
