@@ -4101,7 +4101,7 @@
       "executable": false
     },
     "tests/nectar/customer-search.mjs": {
-      "sha256": "1696e9ec50b4406d48da1ac2d283f92ed37a7e6246e574fceb3569a486e5a5c0",
+      "sha256": "e5fdabd53f490162765b0cf5b72e92fabe07e92e959d03678f7f17dd0743dd96",
       "executable": false
     },
     "tests/nectar/draft-corrections.mjs": {
