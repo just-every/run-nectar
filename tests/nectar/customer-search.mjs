@@ -170,6 +170,17 @@ export async function customerSearchFlow(h, owner, onReady = async () => {},inte
   const erased = await api(`customers/${nativeCustomer}`)
   assert.ok(!erased.billingRecord || Object.entries(erased.billingRecord).every(([key, value]) => key === 'auditEvents' ? value.length === 0 : value === null), 'Erased customer composition never parses retained private sources')
   for (const query of [collected.charge_ref, collected.payment_intent_ref,ach.chargeRef,ach.paymentIntentRef, 'visa 4242']) assert.deepEqual(await api(`customers?search=${encodeURIComponent(query)}`), [], 'Retained processor identity is not searchable after erasure')
+  // Minimal financial custody keeps the once-only attribution even after its
+  // private provider labels are erased and provider metadata later changes.
+  const replacement=await create('synthetic-nectar-306','Synthetic replacement customer','synthetic-nectar-306@example.test')
+  const replacementCharge=await api('charge.add',{customer:replacement,amount:'7.25',description:'Synthetic replacement service',effective_date:'2026-10-22',taxable:false})
+  const replacementInvoice=await api('invoice.manual',{customer:replacement,charges:[replacementCharge.charge],service_date:'2026-10-22'})
+  await api('invoice.approve',{invoice:replacementInvoice.id,acknowledge:true})
+  await api('invoice.finalise',{invoice:replacementInvoice.id,issue_date:'2026-10-22'})
+  await api('collection.customer.bind',{customer:replacement,account_ref:'synthetic-nectar-native-account-1',stripe_customer_ref:'synthetic-nectar-native-customer-1',confirm:true})
+  achEdge.configureCaptured({invoice:replacementInvoice.id,amountCents:725,currency:'USD',date:'2026-10-22T00:00:00Z'})
+  await api('payment.ach_evidence.record',{invoice:replacementInvoice.id,account_ref:'synthetic-nectar-native-account-1',payment_intent_ref:ach.paymentIntentRef,confirm:true},409)
+  assert.deepEqual((await api(`customers/${replacement}`)).ledger.payments,[],'Erasure cannot free the same settled cash for another customer')
   console.log('CUS-001 customer lookup, literal searches, scoped billing evidence, totals and role custody passed')
   return { customer, other, invoice, credit }
 }

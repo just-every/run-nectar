@@ -7,6 +7,8 @@ CREATE TABLE nc_ach_payment_evidence (
  payment_id TEXT NOT NULL UNIQUE REFERENCES nc_payments(id),
  allocation_id TEXT NOT NULL UNIQUE REFERENCES nc_allocations(id),
  account_ref TEXT NOT NULL,
+ intent_key TEXT NOT NULL UNIQUE CHECK(length(intent_key)=64 AND intent_key NOT GLOB '*[^0-9a-f]*'),
+ basis_hash TEXT NOT NULL UNIQUE CHECK(length(basis_hash)=64 AND basis_hash NOT GLOB '*[^0-9a-f]*'),
  stripe_customer_ref TEXT NOT NULL,
  payment_intent_ref TEXT NOT NULL,
  charge_ref TEXT NOT NULL,

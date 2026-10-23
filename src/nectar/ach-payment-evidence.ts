@@ -4,7 +4,7 @@ import type { Bindings } from '../auth.server'
 import { actorLabel, requireRead, type Actor } from './actor'
 import { requireBusiness } from './business'
 import { clockInstant } from './clock'
-import { all, canonical, commit, guard, insist, newId, one, stmt, type Row } from './core'
+import { all, canonical, commit, fingerprint, guard, insist, newId, one, stmt, type Row } from './core'
 import { localDate } from './dates'
 import type { Input } from './input'
 import { collectionAuthority, collectionOwner } from './movein/collection-state'
@@ -67,10 +67,11 @@ export async function recordAchPaymentEvidence(env: Bindings, actor: Actor, inpu
   // Parent-payer cash needs its own supported attribution flow.
   insist(source.payerId === source.row.customer_id, 'ach_invoice_customer_required', 409)
   insist(!await one(env, 'SELECT 1 FROM nc_prepaid_topup_claims WHERE invoice_id=?', invoiceId), 'prepaid_topup_invoice_managed', 409)
+  const intentKey=await fingerprint({account:accountRef,paymentIntent:intentRef})
   const noClaim = `NOT EXISTS(SELECT 1 FROM nc_native_collection_claims WHERE invoice_id=?)
     AND NOT EXISTS(SELECT 1 FROM nc_native_collections WHERE account_ref=? AND payment_intent_ref=?)
-    AND NOT EXISTS(SELECT 1 FROM nc_ach_payment_evidence WHERE account_ref=? AND payment_intent_ref=?)`
-  const claimArgs = [invoiceId, accountRef, intentRef, accountRef, intentRef]
+    AND NOT EXISTS(SELECT 1 FROM nc_ach_payment_evidence WHERE intent_key=?)`
+  const claimArgs = [invoiceId, accountRef, intentRef, intentKey]
   insist(await one(env, `SELECT 1 WHERE ${noClaim}`, ...claimArgs), 'ach_payment_already_claimed', 409)
   const binding = await one(env, 'SELECT * FROM nc_stripe_customer_bindings WHERE customer_id=? AND account_ref=?', source.row.customer_id, accountRef)
   insist(binding, 'native_customer_binding_required', 409)
@@ -80,6 +81,7 @@ export async function recordAchPaymentEvidence(env: Bindings, actor: Actor, inpu
   // Installation-owned invoices must also use the primary installation account.
   if (source.accountRef === null) insist((await stripeForAccount(env, null).catch(providerUnavailable)).account === accountRef, 'stripe_frozen_account_mismatch', 409)
   const now = clockInstant(env), proof = await capturedBankPayment(selected.stripe, intentRef, customerRef, source.row, now).catch(providerUnavailable)
+  const chargeKey=await fingerprint({account:accountRef,charge:proof.chargeRef})
   const currency = source.row.currency.toLowerCase(), reference = `stripe:${accountRef}:${intentRef}`
   const financial = await collectedPaymentStatements(env, actor, { customerId: source.row.customer_id, invoiceId, amountCents: source.row.balance_cents,
     currency, receivedOn: localDate(proof.settledAt, (await requireBusiness(env)).timezone), reference, method: 'bank_transfer',
@@ -87,14 +89,14 @@ export async function recordAchPaymentEvidence(env: Bindings, actor: Actor, inpu
   const id = newId()
   await commit(env, [collectionAuthority(env, actor), nativeSourceGuard(env, source),
     guard(env, 'ach_payment_already_claimed', `${noClaim} AND NOT EXISTS(SELECT 1 FROM nc_native_collections WHERE account_ref=? AND charge_ref=?)
-      AND NOT EXISTS(SELECT 1 FROM nc_ach_payment_evidence WHERE account_ref=? AND charge_ref=?)`, ...claimArgs, accountRef, proof.chargeRef, accountRef, proof.chargeRef),
+      AND NOT EXISTS(SELECT 1 FROM nc_ach_payment_evidence WHERE basis_hash=?)`, ...claimArgs, accountRef, proof.chargeRef, chargeKey),
     guard(env, 'prepaid_topup_invoice_managed', 'NOT EXISTS(SELECT 1 FROM nc_prepaid_topup_claims WHERE invoice_id=?)', invoiceId),
     guard(env, 'native_collection_binding_changed', `EXISTS(SELECT 1 FROM nc_stripe_customer_bindings WHERE id=? AND customer_id=? AND account_ref=? AND stripe_customer_ref=? AND revision=?)
       AND NOT EXISTS(SELECT 1 FROM nc_erased_records WHERE record_id=?)`, binding.id, source.row.customer_id, accountRef, customerRef, binding.revision, binding.id),
     ...financial.statements,
-    stmt(env, `INSERT INTO nc_ach_payment_evidence(id,customer_id,invoice_id,payment_id,allocation_id,account_ref,stripe_customer_ref,payment_intent_ref,charge_ref,payment_method_ref,settlement_ref,
-      amount_cents,currency,bank_name,last4,livemode,captured_at,settled_at,verified_at,verified_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-    id, source.row.customer_id, invoiceId, financial.paymentId, financial.allocationId, accountRef, customerRef, intentRef, proof.chargeRef, proof.methodRef, proof.settlementRef,
+    stmt(env, `INSERT INTO nc_ach_payment_evidence(id,customer_id,invoice_id,payment_id,allocation_id,account_ref,intent_key,basis_hash,stripe_customer_ref,payment_intent_ref,charge_ref,payment_method_ref,settlement_ref,
+      amount_cents,currency,bank_name,last4,livemode,captured_at,settled_at,verified_at,verified_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    id, source.row.customer_id, invoiceId, financial.paymentId, financial.allocationId, accountRef, intentKey, chargeKey, customerRef, intentRef, proof.chargeRef, proof.methodRef, proof.settlementRef,
     source.row.balance_cents, currency, proof.bankName, proof.last4, Number(proof.livemode), proof.capturedAt, proof.settledAt, now, actor.id),
   ], [...financial.audits, { actor: actorLabel(actor), action: 'payment.ach_evidence.record', subject: id,
     detail: { invoice: invoiceId, payment: financial.paymentId, allocation: financial.allocationId, accountRef, paymentIntentRef: intentRef, debitAuthority: false } }])
