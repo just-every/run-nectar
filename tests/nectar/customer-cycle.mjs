@@ -9,8 +9,8 @@ const sum = (rows, field) => rows.reduce((total, row) => total + row[field], 0)
 export async function assertCustomerFullCycle(h, owner, { customer, finance, edge, onReady = async () => {} }) {
   const api = (path, body, status) => h.api(path, owner, body, status)
   const date = '2026-10-22'
-  const contact=await api('contact.add',{customer,name:'Morgan Palmer',email:'morgan@observatory.example'})
-  const note=await api('note.add',{kind:'customer',record:customer,body:'Customer confirmed the workshop and unused-credit adjustment.'})
+  await api('contact.add',{customer,name:'Morgan Palmer',email:'morgan@observatory.example'})
+  await api('note.add',{kind:'customer',record:customer,body:'Customer confirmed the workshop and unused-credit adjustment.'})
   await api('metadata.write',{kind:'customer',record:customer,revision:0,metadata:{segment:'Observatory research'}})
   edge.at(`${date}T10:00:00Z`)
   const before = await api(`customers/${customer}`)
@@ -126,7 +126,7 @@ export async function assertCustomerFullCycle(h, owner, { customer, finance, edg
   assert.equal(ledger.creditedCents, sum(ledger.invoices, 'credited_cents'))
   assert.equal(ledger.balanceCents, sum(ledger.invoices, 'balance_cents'))
   assert.equal(ledger.invoicedCents, ledger.paidCents + ledger.creditedCents + ledger.writtenOffCents + ledger.balanceCents)
-  for (const action of ['contact.add','note.add','metadata.write','collection.collected', 'payment.ach_evidence.record', 'prepaid.refund.complete', 'credit.issue']) {
+  for (const action of ['contact.add','note.add','metadata.replace','collection.collected', 'payment.ach_evidence.record', 'prepaid.refund.complete', 'credit.issue']) {
     assert.ok(billingRecord.auditEvents.some(row => row.action === action), `Customer retains ${action}`)
   }
   const nativeCard = billingRecord.processorPayments.find(row => row.card)
