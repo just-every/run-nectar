@@ -4301,11 +4301,11 @@
       "executable": false
     },
     "tests/nectar/webhook-shadow-sandbox.mjs": {
-      "sha256": "99087e7f12f38fcf86192dedce9893b6021c78f8de04e469b61bd6ad384f16b4",
+      "sha256": "00af59e23bf2e310ccbaddd14b0bb8935579f1780f677ffdad39ff20253f9cd2",
       "executable": false
     },
     "tests/nectar/webhooks.mjs": {
-      "sha256": "5c5f4e2c458601eec7a8523d3a9ca9284726ecc8491c9e6a1b932b28bc88710e",
+      "sha256": "e50a5797a7ba61ad7a029edc96c42cbd828544717f02cfd515399731b28a9a35",
       "executable": false
     },
     "tests/nectar/write-off-browser.mjs": {

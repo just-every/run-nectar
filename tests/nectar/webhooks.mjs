@@ -7,12 +7,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { receiver,verify } from '../../examples/webhook-receiver/server.mjs'
 const lifecycleEdge=nativeCollectionEdge()
-let stripeEvents=new Map(),stripeEventRequests=[]
+let stripeEvents=new Map(),stripeEventRequests=[],stripeCustomerDeleted=false
 let receive,online=false,clock=Date.now(),secrets=[],requests=[],received=[],directory
 export const harnessOptions=()=>({stripeFetch:async request=>{
   const url=new URL(request.url)
   if(url.pathname.startsWith('/v1/events/')){stripeEventRequests.push({method:request.method,path:url.pathname});const event=stripeEvents.get(url.pathname.split('/').pop());return event?Response.json(event):Response.json({error:{code:'resource_missing'}},{status:404})}
-  if(url.pathname==='/v1/customers/cus_NcAtlasFreight01')return Response.json({id:'cus_NcAtlasFreight01',object:'customer',livemode:false})
+  if(url.pathname==='/v1/customers/cus_NcAtlasFreight01')return Response.json(stripeCustomerDeleted?{id:'cus_NcAtlasFreight01',object:'customer',deleted:true}:{id:'cus_NcAtlasFreight01',object:'customer',livemode:false})
   return lifecycleEdge.fetch(request)
 },stripeSecret:'synthetic-nectar-1',webhookFetch:async request=>{
   const body=await request.text();requests.push({body,header:request.headers.get('nectar-signature')})
@@ -330,10 +330,12 @@ export async function webhookLifecycleFlow(h,owner,{onState=async()=>{}}={}) {
       ...['attached','updated','automatically_updated','detached'].map(kind=>[`payment_method.${kind}`,kind==='automatically_updated'?'payment_method.updated':`payment_method.${kind}`,{id:'synthetic-nectar-source-card',object:'payment_method',customer:kind==='detached'?null:'cus_NcAtlasFreight01',billing_details:{name:'Private card name excluded'}}]),
       ['entitlements.active_entitlement_summary.updated','entitlements.updated',{object:'entitlements.active_entitlement_summary',customer:'cus_NcAtlasFreight01',entitlements:{object:'list',has_more:false,data:[{feature:'synthetic-nectar-source-feature',lookup_key:'api-access'}]}}],
       ['credit_note.created','credit.created',{id:'synthetic-nectar-source-credit',object:'credit_note',customer:'cus_NcAtlasFreight01',status:'issued'}],
+      ['customer.deleted','customer.deleted',{id:'cus_NcAtlasFreight01',object:'customer',deleted:true}],
     ]
-    stripeEvents=new Map();stripeEventRequests=[]
+    stripeEvents=new Map();stripeEventRequests=[];stripeCustomerDeleted=false
     await api('metadata.write',{kind:'subscription',record:shadow.id,revision:0,metadata:{app_account_id:'synthetic-nectar-shadow'}})
     for(const [index,[source,type,object]]of cases.entries()){
+      stripeCustomerDeleted=source==='customer.deleted'
       const event_ref=`synthetic-nectar-stripe-event-${index}`
       stripeEvents.set(event_ref,{id:event_ref,object:'event',type:source,livemode:false,created:Math.floor(Date.now()/1000),data:{object,previous_attributes:{customer:'cus_NcAtlasFreight01'}}})
       const results=await Promise.all([api('webhook.stripe.consume',{...body,event_ref}),api('webhook.stripe.consume',{...body,event_ref})])
@@ -348,6 +350,7 @@ export async function webhookLifecycleFlow(h,owner,{onState=async()=>{}}={}) {
       if(source==='payment_method.detached')assert.equal(snapshot.data.payment_method_ref,'synthetic-nectar-source-card')
       const retry=await api('webhook.stripe.consume',{...body,event_ref});assert.equal(retry.id,results[0].id);assert.equal(retry.replayed,true)
     }
+    stripeCustomerDeleted=false
     const calls=stripeEventRequests.length
     const agent={bearer:(await api('credential.issue',{name:'Shadow event reader',scopes:['prepare']})).key}
     await h.api('webhook.stripe.consume',agent,{},403)

@@ -114,6 +114,21 @@ try{
   }
   await api('webhook.dispatch',{})
   for(const item of receipt.events)assert.equal(received.filter(e=>e.id===item.nectarEventId).length,1)
+  phase='owned-customer-deletion'
+  await stripe.request('DELETE',`/v1/customers/${customer.id}`)
+  let deletion
+  for(let attempt=0;attempt<12&&!deletion;attempt++){
+    const listed=await stripe.list('/v1/events',{type:'customer.deleted','created[gte]':started})
+    deletion=listed.data.find(e=>e.data.object.id===customer.id)
+    if(!deletion)await delay(1000)
+  }
+  check(deletion,'owned_customer_deletion_event_missing')
+  const deleted=await api('webhook.stripe.consume',{customer:local.id,account_ref:account.id,event_ref:deletion.id,consent:true})
+  await api('webhook.dispatch',{});await api('webhook.dispatch',{})
+  const deletedMessages=received.filter(e=>e.data.source?.event_ref===deletion.id)
+  assert.equal(deletedMessages.length,1);assert.equal(deletedMessages[0].type,'customer.deleted');assert.equal(deletedMessages[0].id,deleted.id)
+  receipt.events.push({stripeType:'customer.deleted',stripeEventId:deletion.id,nectarType:'customer.deleted',nectarEventId:deleted.id,received:1})
+  found.add('customer.deleted')
   receipt.mappedFamilies=[...found].sort();receipt.status='passed'
 }catch(error){receipt.status='failed';receipt.failure={phase,...safeError(error),assertion:error?.code==='ERR_ASSERTION'?String(error.message).replace(/(?:sk|rk)_(?:live|test)_[^\s]+/gi,'[credential]').slice(0,500):undefined};process.exitCode=1;console.error('SHADOW_SANDBOX_FAILED',JSON.stringify(receipt.failure))}
 finally{
