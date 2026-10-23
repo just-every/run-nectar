@@ -69,8 +69,9 @@ try{
   await stripe.request('POST','/v1/invoiceitems',{customer:customer.id,invoice:failedInvoice.id,currency:'usd',amount:500})
   await stripe.request('POST',`/v1/invoices/${failedInvoice.id}/finalize`,{auto_advance:false})
   const declined=await stripe.request('POST','/v1/payment_methods',{type:'card','card[token]':'tok_chargeDeclined'})
+  await stripe.request('POST',`/v1/payment_methods/${declined.id}/attach`,{customer:customer.id})
   try{await stripe.request('POST',`/v1/invoices/${failedInvoice.id}/pay`,{payment_method:declined.id});check(false,'failing_card_was_accepted')}
-  catch(error){check(error.code==='card_declined','expected_test_card_decline')}
+  catch(error){receipt.testDeclineAttempt=safeError(error);check(error.code==='card_declined','expected_test_card_decline')}
   await stripe.request('POST','/v1/credit_notes',{invoice:invoice.id,amount:invoice.total,out_of_band_amount:invoice.total})
   await stripe.request('DELETE',`/v1/subscriptions/${subscription.id}`)
   // No provider cancellation or financial mutation is performed by Nectar.
