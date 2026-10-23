@@ -1,3 +1,4 @@
+import { consumeStripeWebhookEvent } from './webhook-stripe'
 import { preparePlanChange,decidePlanChange,preparePlanChangeCredit } from './plan-changes'
 import { setHierarchy,prepareConsolidation,recordHierarchyCommitment } from './hierarchies'
 import { registerWebhook,rotateWebhook,disableWebhook,replayWebhook,dispatchWebhookDoor } from './webhooks'
@@ -87,6 +88,7 @@ export const actions: Record<string, Handler> = {
   'hierarchy.configure': setHierarchy,
   'hierarchy.invoice.prepare': prepareConsolidation,
   'hierarchy.commitment': recordHierarchyCommitment,
+  'webhook.stripe.consume': consumeStripeWebhookEvent,
   'webhook.register': registerWebhook,
   'webhook.rotate': rotateWebhook,
   'webhook.disable': disableWebhook,

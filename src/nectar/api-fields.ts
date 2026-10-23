@@ -918,6 +918,12 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "overlap_seconds": "integer",
     "revision": "integer"
   },
+  "webhook.stripe.consume": {
+    "account_ref": "text",
+    "consent": "flag",
+    "customer": "text",
+    "event_ref": "text"
+  },
   "writeoff.approve": {
     "request": "text"
   },
