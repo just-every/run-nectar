@@ -103,7 +103,7 @@ async function scopedUpcoming(env: Bindings, session: CustomerSession, sub: Row,
     AND NOT EXISTS(SELECT 1 FROM nc_invoice_lines l JOIN nc_invoices i ON i.id=l.invoice_id
       WHERE i.subscription_id=a.subscription_id AND i.status='issued' AND l.kind='credit' AND json_extract(l.evidence_json,'$.amendment')=a.id)
     ORDER BY a.effective_from,a.id`, sub.id)
-  return { subscription: sub.id, period, timezone: business.timezone, state: issued ? 'issued' : 'preview', invoiceId: issued?.id ?? null,
+  return { subscription: sub.id, currency: session.currency, period, timezone: business.timezone, state: issued ? 'issued' : 'preview', invoiceId: issued?.id ?? null,
     billingDueDate: window?.dueDate ?? period.end, billingTerms: window?.mixed ? null : window?.terms ?? null,
     servicePeriods: window ? billingServiceWindows(window).map(part=>({period:part.period,terms:part.terms})) : [{period,terms:null}],
     meters, credits: credits.map(credit => ({ id: credit.id, amountCents: cents(credit.value), effective_from: credit.effective_from,
