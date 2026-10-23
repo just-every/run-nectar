@@ -492,6 +492,14 @@
       "sha256": "3be7ad4ba9a20bc502222953ba5edbb434842542101c6e522d6a9704e658aaf7",
       "executable": false
     },
+    "migrations/core/0080_prepaid_refund_intake.sql": {
+      "sha256": "c8d92c6543931fcec6f5715e26086e2793e5b00a148724bf0ee6effba0680fde",
+      "executable": false
+    },
+    "migrations/core/0081_prepaid_refund_mail.sql": {
+      "sha256": "6175bec307aea3b8df0da9d0a850f1cbefe62758b4bb166024a3e99df4ae3405",
+      "executable": false
+    },
     "ONBOARDING.md": {
       "sha256": "95bb235abff28ac36979868486caf2cb73bfbe4ab63037f3e301d189bb9398d9",
       "executable": false
@@ -3068,6 +3076,10 @@
       "sha256": "f091a4c6f7873b9db2f0776db9d1baa63fb189a32ec2bd7a8a672d562b697e3b",
       "executable": false
     },
+    "src/nectar/portal-prepaid-refunds.ts": {
+      "sha256": "29af4b2c1b9c81e27fb85010a8d5418f06da56835a72bbf406672e2d4b2c7c35",
+      "executable": false
+    },
     "src/nectar/portal-prepaid-topups.ts": {
       "sha256": "6bfa9f1e6afa80086f878b267fa46be2cdf16f868add1b3f1e3225c86ae03dec",
       "executable": false
@@ -3138,6 +3150,14 @@
     },
     "src/nectar/prepaid-refund-export.ts": {
       "sha256": "0150cf1b07852ff6eacccd74daa5206a2424f43fe01880c8a48c0192448811c9",
+      "executable": false
+    },
+    "src/nectar/prepaid-refund-intake.ts": {
+      "sha256": "aceef4f13897b8c78bcbf3e3634c0e7184ba8cf46938b0adfa5625bc082f799c",
+      "executable": false
+    },
+    "src/nectar/prepaid-refund-mail.ts": {
+      "sha256": "e71246190e8aef1191a1f425247e6124453d14c6741f5fa7c8abe042865d4cf7",
       "executable": false
     },
     "src/nectar/prepaid-refund-processor.ts": {
@@ -3522,6 +3542,10 @@
     },
     "src/nectar/ui/policies.ts": {
       "sha256": "d3bd54ec3bb7d31d51c079b17eb19bb71879f0498d55d23a98052ca443b12135",
+      "executable": false
+    },
+    "src/nectar/ui/prepaid-refund-mail.ts": {
+      "sha256": "4d4bb618976399ada4b155df08b8a91d51e3b3e33e41bf6fc0634bb86b27ed21",
       "executable": false
     },
     "src/nectar/ui/prepaid-refunds.ts": {
@@ -4176,8 +4200,12 @@
       "sha256": "7ab8034b5c77539c29b95917d3140a0346b0d04c18463140ba08e6e00ddfb4e8",
       "executable": false
     },
+    "tests/nectar/prepaid-refund-intake.mjs": {
+      "sha256": "b530c960c77bba0972c956beaedac689cbbbbd5b931c6b47052a98696968ad9f",
+      "executable": false
+    },
     "tests/nectar/prepaid-refunds.mjs": {
-      "sha256": "48e0826844a10ea18d59ad5d8a081f637abd1821c6584498ea1a0eaaeb38c92c",
+      "sha256": "441e25f9338ace770c78229eec7202cacd1bb76188b2ffb7bd4c550007b0e504",
       "executable": false
     },
     "tests/nectar/prepaid-report-parity.mjs": {

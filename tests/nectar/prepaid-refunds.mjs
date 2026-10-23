@@ -41,7 +41,7 @@ export function prepaidRefundEdge(){
 }
 let edge=prepaidRefundEdge()
 export const harnessOptions=()=>{edge=prepaidRefundEdge();return {stripeFetch:edge.fetch,stripeSecret:'synthetic-nectar-1',stripeSecondarySecret:'synthetic-nectar-2'}}
-export async function prepaidRefundFlow(h,owner,{onState=async()=>{},onTypedState=async()=>{},onSharedState=async()=>{},approveRefund,reconcileRefund,onIntakeState=async()=>{},requestIntake,requestPortalIntake,prepareIntake}={}){
+export async function prepaidRefundFlow(h,owner,{onState=async()=>{},onTypedState=async()=>{},onSharedState=async()=>{},approveRefund,reconcileRefund,onIntakeState=async()=>{},requestIntake,requestPortalIntake,prepareIntake,financePrepare}={}){
   const api=(path,body,status)=>h.api(path,owner,body,status),refundPosts=()=>edge.calls.filter(call=>call.method==='POST').length
   await h.advanceClock('2026-11-01T18:00:00Z');edge.at('2026-11-01T18:00:00Z')
   await api('business.configure',{...await api('business'),timezone:'UTC'})
@@ -233,7 +233,7 @@ export async function prepaidRefundFlow(h,owner,{onState=async()=>{},onTypedStat
   const rejected=await prepare(rows[2]);await h.api('prepaid.refund.decide',finance,{refund:rejected.id,decision:'rejected'})
   await typedRefund(rows[2],rejected,'rejected')
   assert.equal(refundPosts(),afterUnknown)
-  const failed=await h.api('prepaid.refund.prepare',finance,{grant:rows[2].grant,reason:'Synthetic unused paid service returned to its original card'});
+  const failed=financePrepare?await financePrepare({row:rows[2],finance}):await h.api('prepaid.refund.prepare',finance,{grant:rows[2].grant,reason:'Synthetic unused paid service returned to its original card'});
   await h.api('prepaid.refund.decide',finance,{refund:failed.id,basis_hash:failed.basis,decision:'approved'},409)
   await onIntakeState({label:'finance-prepared',row:rows[2],refund:failed,finance})
   edge.failNext()
