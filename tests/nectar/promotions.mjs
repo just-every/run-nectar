@@ -133,7 +133,7 @@ export async function promotionsFlow(h, owner) {
   console.log('CAT-005 coupons and promotion codes passed')
 }
 
-export async function trialsFlow(h, owner, onState = async () => {}) {
+export async function trialsFlow(h, owner, onState = async () => {}, interaction = {}) {
   const api = (path, body, status) => h.api(path, owner, body, status)
   await api('access.give', { email: 'trial-accountant@example.test', name: 'Trial accountant', role: 'accountant' })
   const accountant = await h.signIn('trial-accountant@example.test', { requested: true })
@@ -193,12 +193,12 @@ export async function trialsFlow(h, owner, onState = async () => {}) {
   assert.deepEqual(lines[`2026-10:${ext.cust}`], [22258, [[22258, '2026-10-09']]], 'the first charge moves to the new end date')
   assert.deepEqual((await api(`customers/${ext.cust}`)).ledger.invoices.map(row => row.total_cents), [22258], 'the only charging invoice is the one after the new end date')
   await onState({ phase: 'billed', ext, none, card })
-  await automaticTrialFlow(h, owner, onState)
+  await automaticTrialFlow(h, owner, onState, interaction)
   console.log('CAT-005 trials passed')
 }
 
 
-async function automaticTrialFlow(h, owner, onState) {
+async function automaticTrialFlow(h, owner, onState, interaction) {
   const api = (path, body, status) => h.api(path, owner, body, status)
   const posts = () => trialEdge.calls.filter(call => call.method === 'POST').length
   const at = '2026-11-05T20:00:00Z'
@@ -232,10 +232,10 @@ async function automaticTrialFlow(h, owner, onState) {
     if (n === 3) continue
     const confirmation = row.authorization.instructions.confirm
     await api('trial.collection.confirm', { ...confirmation, amount_cents: confirmation.amount_cents + 1 }, 409)
-    row.authorization = await api('trial.collection.confirm', confirmation)
+    row.authorization = n===0&&interaction.confirmTrial?await interaction.confirmTrial({h,owner,row,confirmation}):await api('trial.collection.confirm', confirmation)
     assert.equal(row.authorization.status, 'pending_approval')
     await api('trial.collection.approve', { request: row.authorization.id, basis_hash: row.authorization.basis, decision: 'approved' }, 409)
-    row.authorization = await h.api('trial.collection.approve', finance, { request: row.authorization.id, basis_hash: row.authorization.basis, decision: 'approved' })
+    row.authorization = n===0&&interaction.approveTrial?await interaction.approveTrial({h,finance,row}):await h.api('trial.collection.approve', finance, { request: row.authorization.id, basis_hash: row.authorization.basis, decision: 'approved' })
     assert.equal(row.authorization.status, 'active')
     if (n === 0) await onState({ phase: 'trial-collection', stage: 'active', subscription, row })
   }
