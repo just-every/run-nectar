@@ -1,3 +1,4 @@
+import { paymentMethodName } from './payment-method-name'
 import { canRead,type Actor } from '../actor'
 import type { Row } from '../core'
 import { decimalText } from '../decimal'
@@ -6,7 +7,7 @@ import { cents, h, table, when } from './html'
 export function customerBillingRecordSection(customer: Row,actor:Actor) {
   const record = customer.billingRecord
   if (!record) return ''
-  return h`${record.receipts ? h`<section class="card"><h2>Payment receipts</h2>${table(['Receipt','Received','Method','Amount','Allocated','Unallocated'],record.receipts.map((r:Row)=>[h`<a href="${r.sourcePath}">${r.number}</a>`,r.receivedOn,r.method,cents(r.amountCents,r.currency),cents(r.allocatedCents,r.currency),cents(r.unallocatedCents,r.currency)]),{empty:'No recorded payments.'})}</section>` : ''}
+  return h`${record.receipts ? h`<section class="card"><h2>Payment receipts</h2>${table(['Receipt','Received','Method','Amount','Allocated','Unallocated'],record.receipts.map((r:Row)=>[h`<a href="${r.sourcePath}">${r.number}</a>`,r.receivedOn,paymentMethodName(r.method),cents(r.amountCents,r.currency),cents(r.allocatedCents,r.currency),cents(r.unallocatedCents,r.currency)]),{empty:'No recorded payments.'})}</section>` : ''}
     ${record.processorPayments ? h`<section class="card"><h2>Processor payments</h2>${table(['Invoice', 'Status', 'Amount', 'Payment intent', 'Charge'], record.processorPayments.map((p: Row) => [h`<a href="/app/invoices/${p.invoice}">${p.invoice}</a>`, p.status, cents(p.amountCents,p.currency), p.paymentIntentRef, p.chargeRef]), { empty: 'No native processor collection records.' })}</section>` : ''}
     ${record.achPaymentEvidence?.length ? h`<section class="card"><h2>Verified external ACH payments</h2><p>Settled payments verified from the held processor account. Historical cash facts; no debit authority.</p>${table(['Invoice','Amount','Bank','Last four','Settled','Payment intent','Charge'],record.achPaymentEvidence.map((p:Row)=>[h`<a href="/app/invoices/${p.invoice}">${p.invoice}</a>`,cents(p.amountCents,p.currency),p.bankName,p.last4,new Date(p.settledAt).toISOString().slice(0,10),p.paymentIntentRef,p.chargeRef]))}</section>` : ''}
     ${record.paymentMethods ? h`<section class="card"><h2>Verified card history</h2><p>Card summaries verified when collection was prepared. These saved facts do not confirm the current default card.</p>${table(['Brand', 'Last four', 'Expiry'], record.paymentMethods.map((p: Row) => [p.card.brand, p.card.last4, `${p.card.expMonth}/${p.card.expYear}`]), { empty: 'No verified card summaries.' })}</section>` : ''}
