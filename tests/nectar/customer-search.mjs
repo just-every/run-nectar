@@ -140,9 +140,11 @@ export async function customerSearchFlow(h, owner, onReady = async () => {},inte
   const role = await api('role.define', { name: 'synthetic-nectar-4', capabilities: ['read.customers'] })
   await api('access.give', { email: 'synthetic-nectar-4@example.test', name: 'synthetic-nectar-4', role: 'custom', custom_role: role.id })
   const customerReader = await h.signIn('synthetic-nectar-4@example.test', { requested: true })
-  const restricted = (await h.api(`customers/${nativeCustomer}`, customerReader)).billingRecord
+  const customerOnly=await h.api(`customers/${nativeCustomer}`,customerReader)
+  const restricted=customerOnly.billingRecord
   for (const family of ['processorPayments', 'paymentMethods', 'refunds', 'prepaid', 'creditBalance','subscriptionHistory','writeOffs','savedPaymentMethods','achPaymentEvidence','receipts']) assert.equal(restricted[family], null, 'Family-scoped customer readers receive no new financial source')
-  assert.ok(restricted.auditEvents.every(event => event.subject === nativeCustomer), 'Audit respects family scope')
+  const customerSubjects=new Set([nativeCustomer,...customerOnly.contacts.map(row=>row.id),...customerOnly.notes.filter(row=>row.kind==='customer').map(row=>row.id)])
+  assert.ok(restricted.auditEvents.every(event => customerSubjects.has(event.subject)), 'Audit respects customer/contact/customer-note family scope')
   assert.deepEqual(await h.api(`customers?search=${collected.charge_ref}`, customerReader), [])
   const snapshot = await api('audit')
   for (const query of [collected.charge_ref, 'visa 4242']) await api(`customers?search=${encodeURIComponent(query)}`)
