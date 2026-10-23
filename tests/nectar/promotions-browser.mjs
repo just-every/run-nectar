@@ -31,6 +31,7 @@ const shoot = async (h, owner, label, path, text) => {
     assert.ok((await page.content()).includes(text), `${label} shows ${text}`)
     assert.equal(await page.locator('main h1').count(), 1)
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, `${label} fits ${width}`)
+    const iconOnly=await page.locator('a,button,[role=button]').evaluateAll(nodes=>nodes.filter(n=>!n.textContent.trim()&&n.querySelector('svg,img')).map(n=>n.outerHTML));assert.deepEqual(iconOnly,[])
     await page.screenshot({ path: `${directory}/${width}-${label}.png`, fullPage: true })
     console.log(`BROWSER ${width} ${label}`)
   }
@@ -43,6 +44,7 @@ try {
   const second = await start()
   try {
     await trialsFlow(second.h, second.owner, async state => {
+      if(state.phase==='trial-collection')await shoot(second.h,second.owner,`trial-collection-${state.stage}`,`/app/subscriptions/${state.subscription}`,'First trial payment')
       if (state.phase === 'extended') await shoot(second.h, second.owner, 'subscription-trial-extended', `/app/subscriptions/${state.ext.sub}`, 'Extend trial')
       if (state.phase === 'billed') await shoot(second.h, second.owner, 'subscription-trial-ended', `/app/subscriptions/${state.none.sub}`, 'Ended unpaid')
     })
