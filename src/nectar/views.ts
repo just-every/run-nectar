@@ -1,3 +1,4 @@
+import { readPaymentReceipt } from './payment-receipts'
 import { dailyRates,currencyReport } from './currency-rates'
 import { readTrialCollections } from './trial-collection'
 import { customerBillingRecord } from './customer-billing-record'
@@ -86,6 +87,7 @@ export async function customerView(env: Bindings, actor: Actor, id: string, url?
 }
 
 export const views: Record<string, View> = {
+  paymentReceipt:(env,actor,_r,id)=>readPaymentReceipt(env,actor,id),
   hierarchies:(env,actor,_r,_id,url)=>hierarchyView(env,actor,url.searchParams.get('parent')??undefined),
   webhooks:(env,actor)=>webhookList(env,actor),
   webhookDelivery:(env,actor,_r,id)=>webhookDetail(env,actor,id),

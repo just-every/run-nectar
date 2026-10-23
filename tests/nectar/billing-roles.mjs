@@ -24,8 +24,8 @@ const COMMON = { api: ['openapi', 'me', 'notifications', 'mfa'], pages: ['home',
 const EXPECTED = {
   collections: {
     actions: ['payment.record', 'payment.allocate', 'reminder.prepare', 'reminder.approve', 'reminder.discard', 'task.create', 'task.complete', 'cadence.enroll', 'cadence.promise', 'cadence.dispute', 'cadence.resolve', 'cadence.approve', 'cadence.run', 'note.add', 'answer.read'],
-    api: ['prepaidRefunds', 'numberRegister', 'customers', 'customer', 'invoices', 'invoice', 'ageing', 'writeOffs', 'ledgerPostings', 'customerBalance', 'payments', 'notices', 'tasks', 'notes', 'noteMembers', 'entitlement', 'reportLine', 'cadences', 'metadataObjects'],
-    pages: ['prepaidRefundList', 'prepaidRefundSource', 'numberRegister', 'customers', 'customer', 'certificateFile', 'invoice', 'receivables', 'noticeFile', 'cadences', 'billingAnswers', 'reportLine', 'metadataList'],
+    api: ['paymentReceipt','prepaidRefunds', 'numberRegister', 'customers', 'customer', 'invoices', 'invoice', 'ageing', 'writeOffs', 'ledgerPostings', 'customerBalance', 'payments', 'notices', 'tasks', 'notes', 'noteMembers', 'entitlement', 'reportLine', 'cadences', 'metadataObjects'],
+    pages: ['paymentReceipt','prepaidRefundList', 'prepaidRefundSource', 'numberRegister', 'customers', 'customer', 'certificateFile', 'invoice', 'receivables', 'noticeFile', 'cadences', 'billingAnswers', 'reportLine', 'metadataList'],
   },
   sales: {
     actions: ['change.prepare', 'plan.change.prepare', 'amendment.propose', 'contract.prepare'],
@@ -34,8 +34,8 @@ const EXPECTED = {
   },
   support: {
     actions: ['prepaid.refund.request', 'note.add', 'credit.issue', 'answer.read'],
-    api: ['prepaidRefunds', 'numberRegister', 'customers', 'customer', 'invoices', 'invoice', 'ageing', 'writeOffs', 'ledgerPostings', 'customerBalance', 'payments', 'notes', 'noteMembers', 'entitlement', 'subscription', 'upcoming', 'reportLine', 'metadataObjects', 'prepaid', 'prepaidSource'],
-    pages: ['prepaidRefundList', 'prepaidRefundSource', 'numberRegister', 'customers', 'customer', 'certificateFile', 'subscription', 'prepaid', 'prepaidSource', 'invoice', 'receivables', 'billingAnswers', 'reportLine', 'metadataList'],
+    api: ['paymentReceipt','prepaidRefunds', 'numberRegister', 'customers', 'customer', 'invoices', 'invoice', 'ageing', 'writeOffs', 'ledgerPostings', 'customerBalance', 'payments', 'notes', 'noteMembers', 'entitlement', 'subscription', 'upcoming', 'reportLine', 'metadataObjects', 'prepaid', 'prepaidSource'],
+    pages: ['paymentReceipt','prepaidRefundList', 'prepaidRefundSource', 'numberRegister', 'customers', 'customer', 'certificateFile', 'subscription', 'prepaid', 'prepaidSource', 'invoice', 'receivables', 'billingAnswers', 'reportLine', 'metadataList'],
   },
   developer: {
     actions: ['credential.issue', 'credential.revoke', 'credential.version', 'webhook.register', 'webhook.rotate', 'webhook.disable', 'webhook.replay', 'webhook.dispatch', 'answer.read', 'meter.preview', 'usage.correction.preview'],

@@ -1,14 +1,16 @@
+import { assertCustomerFullCycle } from './customer-cycle.mjs'
+import { assertPaymentReceipts } from './payment-receipts.mjs'
 import { achPaymentEvidenceEdge,assertAchPaymentEvidence } from './ach-payment-evidence.mjs'
 import { customerPaymentMethodsEdge,assertCustomerPaymentMethods } from './customer-payment-methods.mjs'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { file } from './harness.mjs'
-import { nativeCollectionEdge } from './native-collection.mjs'
+import { prepaidRefundEdge } from './prepaid-refunds.mjs'
 import { totp } from './mfa.mjs'
 
 let edge,methodEdge,achEdge
 export const harnessOptions = () => {
-  edge = nativeCollectionEdge()
+  edge = prepaidRefundEdge()
   methodEdge=customerPaymentMethodsEdge(edge.fetch)
   achEdge=achPaymentEvidenceEdge(methodEdge.fetch)
   return { stripeFetch: achEdge.fetch, stripeSecret: 'synthetic-nectar-1', stripeSecondarySecret: 'synthetic-nectar-2' }
@@ -92,11 +94,12 @@ export async function customerSearchFlow(h, owner, onReady = async () => {},inte
 
   // Verified processor source through the real native collection API; only
   // Stripe's network boundary is synthetic.
+  await assertPaymentReceipts(h,owner)
   const instant = Date.parse('2026-10-22T10:00:00Z')
   await h.advanceClock(new Date(instant).toISOString())
   const factor = await api('mfa.totp.start', {})
   await api('mfa.totp.confirm', { factor: factor.factor, code: totp(factor.secret, instant) })
-  const nativeCustomer = await create('synthetic-nectar-3', 'Cedar Observatory', 'synthetic-nectar-3@example.test')
+  const nativeCustomer = await create('synthetic-nectar-1', 'Cedar Observatory', 'synthetic-nectar-3@example.test')
   const nativeCharge = await api('charge.add', { customer: nativeCustomer, amount: '10', description: 'synthetic-nectar-3', effective_date: '2026-10-20', taxable: false })
   const nativeInvoice = await api('invoice.manual', { customer: nativeCustomer, charges: [nativeCharge.charge], service_date: '2026-10-20' })
   await api('invoice.approve', { invoice: nativeInvoice.id, acknowledge: true })
@@ -115,13 +118,17 @@ export async function customerSearchFlow(h, owner, onReady = async () => {},inte
   const ach=await assertAchPaymentEvidence(h,owner,{customer:nativeCustomer,invoice:achInvoice.id,edge:achEdge,finance,other,record:interaction.recordAch})
   for(const query of [ach.paymentIntentRef,ach.chargeRef])assert.deepEqual((await api(`customers?search=${encodeURIComponent(query)}`)).map(row=>row.id),[nativeCustomer])
   await onReady({h,owner,customer:nativeCustomer,query:ach.chargeRef,kind:'ach'})
+  await assertCustomerFullCycle(h,owner,{customer:nativeCustomer,finance,edge,onReady})
   const support=await h.signIn('lookup-support@example.test')
   assert.equal((await h.api(`customers/${nativeCustomer}`,support)).billingRecord.savedPaymentMethods[0].methods.length,3)
   assert.equal((await h.api(`customers/${nativeCustomer}`,support)).billingRecord.achPaymentEvidence[0].id,ach.id)
   await h.api('customer.payment_methods.refresh',support,{customer:nativeCustomer},403)
   for(const query of ['1111','visa 1111'])assert.deepEqual((await api(`customers?search=${encodeURIComponent(query)}`)).map(row=>row.id),[nativeCustomer])
+  const unified=(await api(`customers/${nativeCustomer}`)).billingRecord
+  for(const receipt of unified.receipts){assert.deepEqual(await api(`payments/${receipt.payment}/receipt`),receipt);assert.deepEqual((await api(`customers?search=${receipt.number}`)).map(row=>row.id),[nativeCustomer])}
   const processorRecord = (await api(`customers/${nativeCustomer}`)).billingRecord
-  assert.deepEqual(processorRecord.paymentMethods.map(method => method.card), [{ brand: 'visa', last4: '4242', expMonth: 12, expYear: 2035 }])
+  assert.ok(processorRecord.paymentMethods.length>=2)
+  for(const method of processorRecord.paymentMethods)assert.deepEqual(method.card,{ brand: 'visa', last4: '4242', expMonth: 12, expYear: 2035 })
   assert.equal(processorRecord.processorPayments[0].captured, true)
   for (const query of [collected.payment_intent_ref, collected.charge_ref, '4242', 'visa 4242', '4242 VISA']) {
     assert.deepEqual((await api(`customers?search=${encodeURIComponent(query)}`)).map(row => row.id), [nativeCustomer])
@@ -134,7 +141,7 @@ export async function customerSearchFlow(h, owner, onReady = async () => {},inte
   await api('access.give', { email: 'synthetic-nectar-4@example.test', name: 'synthetic-nectar-4', role: 'custom', custom_role: role.id })
   const customerReader = await h.signIn('synthetic-nectar-4@example.test', { requested: true })
   const restricted = (await h.api(`customers/${nativeCustomer}`, customerReader)).billingRecord
-  for (const family of ['processorPayments', 'paymentMethods', 'refunds', 'prepaid', 'creditBalance','subscriptionHistory','writeOffs','savedPaymentMethods','achPaymentEvidence']) assert.equal(restricted[family], null, 'Family-scoped customer readers receive no new financial source')
+  for (const family of ['processorPayments', 'paymentMethods', 'refunds', 'prepaid', 'creditBalance','subscriptionHistory','writeOffs','savedPaymentMethods','achPaymentEvidence','receipts']) assert.equal(restricted[family], null, 'Family-scoped customer readers receive no new financial source')
   assert.ok(restricted.auditEvents.every(event => event.subject === nativeCustomer), 'Audit respects family scope')
   assert.deepEqual(await h.api(`customers?search=${collected.charge_ref}`, customerReader), [])
   const snapshot = await api('audit')

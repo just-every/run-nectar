@@ -22,6 +22,8 @@ try{
   const shot=async(label,width)=>{
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`${label} fits ${width}`)
     const iconOnly=await page.locator('a,button,[role=button]').evaluateAll(nodes=>nodes.filter(n=>!n.textContent.trim()&&n.querySelector('svg,img')).map(n=>n.outerHTML));assert.deepEqual(iconOnly,[])
+    const focusNames=label==='ach-before-verification'?['Verify an external ACH payment']:label.endsWith('customer')?['Payment receipts','Verified external ACH payments','Refund lifecycle','Saved payment methods']:[]
+    for(const name of focusNames){const heading=page.getByRole('heading',{name,exact:true});if(await heading.count()===1)await heading.locator('..').screenshot({path:`${directory}/${width}-${label}-${name.toLowerCase().replaceAll(' ','-')}.png`})}
     const file=`${width}-${label}.png`;await page.screenshot({path:`${directory}/${file}`,fullPage:true});captures.push({width,label,file});console.log('BROWSER',width,label)
   }
   await customerSearchFlow(h,owner,async({customer,query,kind})=>{
@@ -36,6 +38,12 @@ try{
       await Promise.all([page.waitForNavigation({waitUntil:'load'}),link.click()])
       assert.equal(new URL(page.url()).pathname,`/app/customers/${customer}`)
       await shot(`${kind??'billing'}-customer`,width)
+      if(kind==='full-cycle'){
+        const receipt=page.locator('main a[href^="/app/payments/"][href$="/receipt"]').first()
+        await Promise.all([page.waitForNavigation({waitUntil:'load'}),receipt.click()])
+        assert.equal(new URL(page.url()).pathname.endsWith('/receipt'),true)
+        await shot('payment-receipt-source',width)
+      }
     }
   },{recordAch:async({customer,input})=>{
     await page.goto(h.origin+`/app/customers/${customer}`)

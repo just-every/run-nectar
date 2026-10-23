@@ -14,6 +14,10 @@ export async function customerEvidenceMatches(env: Bindings, search: string, act
     ...Array(6).fill(text))
   const found = new Set<string>(rows.map(row => row.customer_id))
   if (!actor || !canRead(actor, 'payments') || !canRead(actor, 'invoices')) return found
+  const receipts=await all(env,`SELECT p.customer_id FROM nc_payment_receipts r JOIN nc_payments p ON p.id=r.payment_id
+    JOIN nc_customers c ON c.id=p.customer_id WHERE c.erased_at IS NULL AND instr(lower(r.number),?)>0
+    AND NOT EXISTS(SELECT 1 FROM nc_erased_records WHERE record_id IN(p.id,c.id))`,text)
+  for(const receipt of receipts)found.add(receipt.customer_id)
   const financial = await all(env, `SELECT r.customer_id FROM nc_prepaid_refunds r JOIN nc_customers c ON c.id=r.customer_id
       WHERE c.erased_at IS NULL AND instr(lower(r.refund_ref),?)>0
     UNION SELECT e.customer_id FROM nc_ach_payment_evidence e JOIN nc_customers c ON c.id=e.customer_id
