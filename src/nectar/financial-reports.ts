@@ -1,4 +1,5 @@
 import { requireUsdReporting } from './currency'
+import { translateReportAmount, invoiceTaxReporting, creditTaxReporting, reportingTotal } from './currency-report-translation'
 import { balanceFinancialSources, balanceSourceComponents } from './financial-balance'
 import { sharedCreditNotes } from './shared-credit-custody'
 import { prepaidRefundFinancialSources, refundReportComponents, type PrepaidReportRefund } from './financial-refunds'
@@ -158,39 +159,42 @@ async function contributions(env: Bindings, metric: string, url: URL) {
   else {
     const credits = selected.metric === 'credits'
     const rows = credits
-      ? await all(env, `SELECT n.id, n.number, n.customer_id, n.amount_cents, c.name AS customer_name
+      ? await all(env, `SELECT n.id, n.number, n.customer_id, n.amount_cents, n.currency, n.issued_at, c.name AS customer_name
           FROM nc_credit_notes n JOIN nc_customers c ON c.id = n.customer_id
           JOIN nc_invoices i ON i.id = n.invoice_id AND i.status = 'issued'
           WHERE n.issued_at >= ? AND n.issued_at < ? AND NOT EXISTS(SELECT 1 FROM nc_prepaid_refund_credits x WHERE x.credit_id=n.id) ${customer ? 'AND n.customer_id = ?' : ''}
           ORDER BY n.issued_at, c.name, n.number`, zonedStart(`${month}-01`, business.timezone), zonedStart(addMonths(`${month}-01`, 1), business.timezone), ...(customer ? [customer] : []))
-      : await all(env, `SELECT i.id, i.number, i.customer_id, i.tax_cents AS amount_cents, c.name AS customer_name
+      : await all(env, `SELECT i.id, i.number, i.customer_id, i.tax_cents AS amount_cents, i.currency, i.issue_date, i.total_cents, i.tax_cents, c.name AS customer_name
           FROM nc_invoices i JOIN nc_customers c ON c.id = i.customer_id
           WHERE i.status = 'issued' AND substr(i.issue_date, 1, 7) = ? ${customer ? 'AND i.customer_id = ?' : ''}
           ORDER BY c.name, i.number`, month, ...(customer ? [customer] : []))
-    if(selected.metric==='tax')rows.push(...(await all(env,`SELECT n.id,n.number,n.customer_id,-n.tax_cents AS amount_cents,c.name AS customer_name FROM nc_credit_notes n JOIN nc_customers c ON c.id=n.customer_id WHERE (n.correction_id IS NOT NULL OR n.cancellation_id IS NOT NULL) AND n.tax_cents<>0 AND n.issued_at>=? AND n.issued_at<? ${customer?'AND n.customer_id=?':''} ORDER BY n.issued_at,n.id`,zonedStart(`${month}-01`,business.timezone),zonedStart(addMonths(`${month}-01`,1),business.timezone),...(customer?[customer]:[]))).map(r=>({...r,attributedCredit:true})))
-    entries = rows.map(row => ({ invoiceId: row.id, number: row.number, customerId: row.customer_id,
-      customerName: row.customer_name, amountCents: row.amount_cents,
+    if(selected.metric==='tax')rows.push(...(await all(env,`SELECT n.id,n.number,n.customer_id,-n.tax_cents AS amount_cents,n.currency,n.issued_at,n.amount_cents AS credit_amount_cents,n.tax_cents,c.name AS customer_name FROM nc_credit_notes n JOIN nc_customers c ON c.id=n.customer_id WHERE (n.correction_id IS NOT NULL OR n.cancellation_id IS NOT NULL) AND n.tax_cents<>0 AND n.issued_at>=? AND n.issued_at<? ${customer?'AND n.customer_id=?':''} ORDER BY n.issued_at,n.id`,zonedStart(`${month}-01`,business.timezone),zonedStart(addMonths(`${month}-01`,1),business.timezone),...(customer?[customer]:[]))).map(r=>({...r,attributedCredit:true})))
+    entries = await Promise.all(rows.map(async row => ({ invoiceId: row.id, number: row.number, customerId: row.customer_id,
+      customerName: row.customer_name, ...(credits
+        ? await translateReportAmount(env, row.currency, row.amount_cents, localDate(row.issued_at, business.timezone))
+        : row.attributedCredit ? await creditTaxReporting(env, { ...row, amount_cents: row.credit_amount_cents }, localDate(row.issued_at, business.timezone))
+        : await invoiceTaxReporting(env, row)),
       href: sourceHref(selected.metric, row.id, month, customer), sourceKind: credits||row.attributedCredit ? 'credit_note' : 'invoice',
-      ...(credits||row.attributedCredit ? { creditId: row.id } : {}) }))
+      ...(credits||row.attributedCredit ? { creditId: row.id } : {}) })))
   }
   const historical=selected.metric === 'refunds' ? [] : await historicalContributions(env,selected.metric,month,customer,today(business.timezone))
   entries.push(...historical.map(source=>source.entry as FinancialReportEntry))
   const report: FinancialReport = { metric: selected.metric, ...DEFINITIONS[selected.metric], period: month,
-    totalCents: entries.reduce((sum, entry) => sum + entry.amountCents, 0), entries }
+    totalCents: reportingTotal(entries), entries, ...(entries.some(entry => entry.reporting) ? { reportingCurrency: 'USD' as const } : {}) }
   return { report, unbilled, prepaid, refunds, business }
 }
 
 /** Every contribution is sourced from actual ledger rows or exact rated usage lines. */
 export async function financialReport(env: Bindings, actor: Actor, metric: string, url: URL): Promise<FinancialReport> {
   requireRead(actor, 'reports')
-  await requireUsdReporting(env)
+  if (metric === 'unbilled' || metric === 'credit-balances') await requireUsdReporting(env)
   return (await contributions(env, metric, url)).report
 }
 
 /** Source membership and its components are read together; filtered-out sources refuse. */
 export async function financialReportSource(env: Bindings, actor: Actor, metric: string, sourceId: string, url: URL): Promise<FinancialReportSource> {
   requireRead(actor, 'reports')
-  await requireUsdReporting(env)
+  if (metric === 'unbilled' || metric === 'credit-balances') await requireUsdReporting(env)
   const { report, unbilled, prepaid, refunds, business } = await contributions(env, metric, url)
   const entry = report.entries.find(row => row.invoiceId === sourceId)
   insist(entry, 'report_invoice_not_found', 404)
@@ -225,7 +229,7 @@ export async function financialReportSource(env: Bindings, actor: Actor, metric:
   const href = `/app/invoices/${encodeURIComponent(invoice.id)}`
   let components: ReportComponent[] = [{ kind: credit ? 'credit_note' : 'tax',
     label: credit ? `${credit.number}: ${credit.reason}` : `Original tax on invoice ${invoice.number}`,
-    amountCents: entry.amountCents, href: `${href}#${credit ? 'recv' : 'lines'}` }]
+    amountCents: entry.amountCents, ...(entry.reporting ? { nativeCurrency: entry.nativeCurrency, nativeAmountCents: entry.nativeAmountCents, reporting: entry.reporting } : {}), href: `${href}#${credit ? 'recv' : 'lines'}` }]
   if(report.metric==='credit-balances'&&credit){
     components=[{kind:'credit_note',label:`Full credit note ${credit.number}`,amountCents:credit.amount_cents,href:`${href}#credit-${credit.id}`},
       {kind:'original_credit_application',label:'Applied to the original invoice',amountCents:-credit.applied_cents,href:`${href}#recv`},

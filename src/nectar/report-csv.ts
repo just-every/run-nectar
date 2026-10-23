@@ -9,11 +9,14 @@ const cell = (value: unknown) => {
   return /[",\n\r]/.test(safe) ? `"${safe.replaceAll('"', '""')}"` : safe
 }
 export function reportsCsv(reports: Report[]) {
+  const translated = reports.some(report => report.entries.some(entry => entry.reporting))
+  const evidenceFields = ['reporting_currency','native_currency','native_amount','usd_per_unit','rate_source','rate_date','rate_record_id','native_transaction_amount','usd_transaction_amount']
   const rows: unknown[][] = [['report','period','definition','source','customer','amount','source_path','source_provider','source_reference','prepaid_grant_id','prepaid_kind','prepaid_source','prepaid_meter_id','prepaid_remaining_quantity','prepaid_available_quantity','prepaid_paid_liability','prepaid_as_of']]
+  if (translated) rows[0].push(...evidenceFields)
   for (const r of reports) {
-    rows.push([r.metric,r.period,r.definition,'TOTAL','',plainMoney(r.totalCents),'','','','','','','','','','',''])
+    rows.push([r.metric,r.period,r.definition,'TOTAL','',plainMoney(r.totalCents),'','','','','','','','','','','', ...(translated ? ['USD','','','','','','','',''] : [])])
     for (const e of r.entries) rows.push([r.metric,r.period,r.definition,e.number,e.customerName,plainMoney(e.amountCents),e.href,e.sourceProvider??'nectar',e.sourceReference??e.invoiceId,
-      e.prepaid?.grantId,e.prepaid?.kind,e.prepaid?.source,e.prepaid?.meterId,e.prepaid?.remainingQuantity,e.prepaid?.availableQuantity,e.prepaid?plainMoney(e.prepaid.liabilityCents):'',e.prepaid?.asOf])
+      e.prepaid?.grantId,e.prepaid?.kind,e.prepaid?.source,e.prepaid?.meterId,e.prepaid?.remainingQuantity,e.prepaid?.availableQuantity,e.prepaid?plainMoney(e.prepaid.liabilityCents):'',e.prepaid?.asOf, ...(translated ? ['USD',e.nativeCurrency ?? 'USD',plainMoney(e.nativeAmountCents ?? e.amountCents),e.reporting?.rate ?? '1.00',e.reporting?.source ?? 'USD reporting currency',e.reporting?.rateDate,e.reporting?.rateId,plainMoney(e.reporting?.transactionAmountCents ?? e.amountCents),plainMoney(e.reporting?.transactionReportingAmountCents ?? e.amountCents)] : [])])
   }
   return rows.map(row => row.map(cell).join(',')).join('\r\n') + '\r\n'
 }

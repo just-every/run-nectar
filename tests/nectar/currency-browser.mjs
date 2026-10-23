@@ -41,8 +41,15 @@ try{
       await form.locator('[name=confirm]').check();await submit(form)
       return (await h.api('native-collections',owner)).find(r=>r.id===prepared.id)
     },
-    onState:async({stage,customer,invoice,run})=>{
-      if(stage==='missing-rate'){
+    onState:async({stage,customer,invoice,run,aggregates})=>{
+      if(stage==='aggregate'){
+        for(const metric of ['billings','collections','credits','tax']){
+          await both(`cad-${metric}-usd-report`,`/app/reports/${metric}?period=2026-10&customer=${customer}`)
+          const entry=aggregates.reports[metric].entries.find(row=>row.nativeCurrency==='CAD')
+          assert.ok(entry)
+          await both(`cad-${metric}-usd-source`,entry.href)
+        }
+      }else if(stage==='missing-rate'){
         await both('cad-overdue-work','/app')
         await both('cad-catalog-books','/app/catalog')
         await both('cad-missing-daily-rate','/app/reports/currency?from=2026-10-01&to=2026-10-23')

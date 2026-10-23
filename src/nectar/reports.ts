@@ -1,4 +1,5 @@
 import { requireUsdReporting } from './currency'
+import { translateReportAmount, translateReportComponents, reportingTotal, type ReportCurrencyEvidence } from './currency-report-translation'
 import { intervalRecurringEntries } from './interval-reports'
 import { historicalMrrSeries, type HistoricalMrrMonth } from './movein/history-metrics'
 import { historicalContributions, historicalReportSource } from './movein/history-reports'
@@ -15,7 +16,7 @@ import { daysBetween, isMonth, today } from './dates'
 import { openInvoices } from './receivables'
 
 export type ReportMetric = 'mrr' | 'billings' | 'ar' | 'collections' | 'credits' | 'tax' | 'unbilled' | 'credit-balances' | 'refunds'
-export interface ReportEntry {
+export interface ReportEntry extends ReportCurrencyEvidence {
   // invoiceId is the report source id; collections use the payment id here
   // for the shared detail route and identify it explicitly with sourceKind.
   sourcePath?: string
@@ -26,12 +27,13 @@ export interface ReportEntry {
   refund?: import('./financial-refunds').PrepaidReportRefund
 }
 export interface Report {
+  reportingCurrency?: 'USD'
   metric: ReportMetric; title: string; definition: string; period: string; totalCents: number; entries: ReportEntry[]; series?:HistoricalMrrMonth[]
 }
-export interface ReportComponent { kind: string; label: string; amountCents: number; lineId?: string; href?: string }
+export interface ReportComponent extends ReportCurrencyEvidence { kind: string; label: string; amountCents: number; lineId?: string; href?: string }
 export interface ReportPayment {
   id: string; reference: string; number: string; receivedOn: string; method: string; evidence: string
-  customerId: string; customerName: string; amountCents: number; recordedAt: number; recordedBy: string
+  customerId: string; customerName: string; currency?: string; amountCents: number; recordedAt: number; recordedBy: string
 }
 export interface ReportInvoice extends ReportEntry {
   historical?: {provider:string;reference:string;href:string;original:Row}
@@ -86,8 +88,8 @@ function inBucket(due: string, day: string, selected: string | null) {
 /** Reads contributions without inventing recurring amounts or allocating AR to individual lines. */
 export async function report(env: Bindings, actor: Actor, metric: string, url: URL): Promise<Report> {
   requireRead(actor, 'reports')
-  await requireUsdReporting(env)
   if (['credits','tax','unbilled','credit-balances','refunds'].includes(metric)) return await financialReport(env,actor,metric,url)
+  if (metric === 'ar' || metric === 'mrr') await requireUsdReporting(env)
   const selected = filters(metric, url)
   const day = today((await requireBusiness(env)).timezone, clockInstant(env))
   const month = selected.period ?? day.slice(0, 7)
@@ -97,13 +99,13 @@ export async function report(env: Bindings, actor: Actor, metric: string, url: U
       .filter(row => inBucket(row.due_date, day, selected.bucket))
       .map(row => ({ ...row, amount_cents: row.balance_cents }))
   } else if (selected.metric === 'collections') {
-    rows = await all(env, `SELECT p.id, p.reference AS number, p.customer_id, c.name AS customer_name, p.amount_cents
+    rows = await all(env, `SELECT p.id, p.reference AS number, p.customer_id, c.name AS customer_name, p.amount_cents, p.currency, p.received_on
       FROM nc_payments p JOIN nc_customers c ON c.id = p.customer_id
       WHERE substr(p.received_on, 1, 7) = ? AND p.received_on <= ? ${selected.customer ? 'AND p.customer_id = ?' : ''}
       ORDER BY p.received_on, c.name, p.reference`, month, day, ...(selected.customer ? [selected.customer] : []))
   } else {
     const mrr = selected.metric === 'mrr'
-    rows = await all(env, `SELECT i.id, i.number, i.customer_id, c.name AS customer_name,
+    rows = await all(env, `SELECT i.id, i.number, i.customer_id, i.currency, i.issue_date, c.name AS customer_name,
       ${mrr ? 'SUM(l.amount_cents)' : 'COALESCE(SUM(l.amount_cents), 0) + i.tax_cents'} AS amount_cents
       FROM nc_invoices i JOIN nc_customers c ON c.id = i.customer_id
       ${mrr ? 'JOIN' : 'LEFT JOIN'} nc_invoice_lines l ON l.invoice_id = i.id
@@ -122,21 +124,22 @@ export async function report(env: Bindings, actor: Actor, metric: string, url: U
   const query = new URLSearchParams({ period: linkMonth })
   if (selected.customer) query.set('customer', selected.customer)
   if (selected.bucket) query.set('bucket', selected.bucket)
-  const entries: ReportEntry[] = rows.map(row => ({
+  const entries: ReportEntry[] = await Promise.all(rows.map(async row => ({
     invoiceId: row.id, number: row.number, customerId: row.customer_id, customerName: row.customer_name,
-    amountCents: row.amount_cents, href: `/app/reports/${selected.metric}/${encodeURIComponent(row.id)}?${query}`,
+    ...(selected.metric === 'billings' || selected.metric === 'collections'
+      ? await translateReportAmount(env, row.currency, row.amount_cents, selected.metric === 'billings' ? row.issue_date : row.received_on)
+      : { amountCents: row.amount_cents }), href: `/app/reports/${selected.metric}/${encodeURIComponent(row.id)}?${query}`,
     ...(selected.metric === 'collections' ? { sourceKind: 'payment' as const, paymentId: row.id } : {}),
-  }))
+  })))
   const historical=await historicalContributions(env,selected.metric,month,selected.customer,day,selected.bucket)
   entries.push(...historical.map(source=>source.entry))
   return { metric: selected.metric, ...DEFINITIONS[selected.metric as keyof typeof DEFINITIONS], period: selected.metric === 'ar' ? day : month,
-    totalCents: entries.reduce((sum, entry) => sum + entry.amountCents, 0), entries, ...(selected.metric==='mrr'?{series:await historicalMrrSeries(env,month,selected.customer)}:{}) }
+    totalCents: reportingTotal(entries), entries, ...(entries.some(entry => entry.reporting) ? { reportingCurrency: 'USD' as const } : {}), ...(selected.metric==='mrr'?{series:await historicalMrrSeries(env,month,selected.customer)}:{}) }
 }
 
 /** Original line and settlement components tie exactly to the selected invoice contribution. */
 export async function reportInvoice(env: Bindings, actor: Actor, metric: string, invoiceId: string, url: URL): Promise<ReportInvoice> {
   requireRead(actor, 'reports')
-  await requireUsdReporting(env)
   if (['credits','tax','unbilled','credit-balances','refunds'].includes(metric)) return await financialReportSource(env,actor,metric,invoiceId,url)
   const view = await report(env, actor, metric, url)
   const entry = view.entries.find(row => row.invoiceId === invoiceId)
@@ -150,18 +153,19 @@ export async function reportInvoice(env: Bindings, actor: Actor, metric: string,
         JOIN nc_invoices i ON i.id = a.invoice_id WHERE a.payment_id = ? ORDER BY a.allocated_at, a.id`, invoiceId),
     ])
     insist(payment, 'payment_not_found', 404)
-    const components: ReportComponent[] = allocations.map(allocation => ({
+    const nativeComponents: ReportComponent[] = allocations.map(allocation => ({
       kind: 'allocation', label: `Allocated to invoice ${allocation.number}`, amountCents: allocation.amount_cents,
       href: `/app/invoices/${encodeURIComponent(allocation.invoice_id)}#recv`,
     }))
-    const unallocated = payment.amount_cents - components.reduce((sum, component) => sum + component.amountCents, 0)
-    if (unallocated > 0) components.push({ kind: 'unallocated', label: 'Unallocated receipt', amountCents: unallocated,
+    const unallocated = payment.amount_cents - nativeComponents.reduce((sum, component) => sum + component.amountCents, 0)
+    if (unallocated > 0) nativeComponents.push({ kind: 'unallocated', label: 'Unallocated receipt', amountCents: unallocated,
       href: `${entry.href}#payment-evidence` })
+    const components = translateReportComponents(entry, nativeComponents)
     return { ...entry, metric: view.metric, title: view.title, definition: view.definition, period: view.period,
-      totalCents: components.reduce((sum, component) => sum + component.amountCents, 0), components, invoice: null,
+      totalCents: reportingTotal(components), components, invoice: null,
       payment: { id: payment.id, reference: payment.reference, number: payment.reference, receivedOn: payment.received_on,
         method: payment.method, evidence: payment.evidence, customerId: payment.customer_id, customerName: entry.customerName,
-        amountCents: payment.amount_cents, recordedAt: payment.recorded_at, recordedBy: payment.recorded_by } }
+        amountCents: payment.amount_cents, ...(entry.reporting ? { currency: payment.currency } : {}), recordedAt: payment.recorded_at, recordedBy: payment.recorded_by } }
   }
   const invoice = await invoiceRecord(env, actor, invoiceId)
   const intervalLines=metric==='mrr'&&invoice.billing_key!=='legacy-monthly-arrears'?await intervalRecurringEntries(env,view.period.slice(0,7),invoice.customer_id,invoiceId):null
@@ -180,11 +184,12 @@ export async function reportInvoice(env: Bindings, actor: Actor, metric: string,
     }
     for (const allocation of invoice.allocations as Row[]) components.push({ kind: 'allocation', label: `Payment ${allocation.reference} received ${allocation.received_on}`, amountCents: -allocation.amount_cents, href: `${sourceHref}#recv` })
   }
-  const totalCents = components.reduce((sum, component) => sum + component.amountCents, 0)
+  const translatedComponents = translateReportComponents(entry, components)
+  const totalCents = reportingTotal(translatedComponents)
   // A payment may have settled this invoice after the report membership read.
   insist(metric !== 'ar' || totalCents > 0, 'report_invoice_not_found', 404)
   return { ...entry, amountCents: totalCents, metric: view.metric, title: view.title, definition: view.definition, period: view.period,
-    totalCents, components,
+    totalCents, components: translatedComponents,
     invoice: { id: invoice.id, number: invoice.number, customerId: invoice.customer_id, customerName: invoice.customer_name,
       subscriptionId: invoice.subscription_id, issueDate: invoice.issue_date, dueDate: invoice.due_date,
       periodStart: invoice.period_start, periodEnd: invoice.period_end, currency: invoice.currency,

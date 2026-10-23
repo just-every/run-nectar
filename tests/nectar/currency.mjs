@@ -1,3 +1,4 @@
+import { assertCurrencyAggregateReports } from './currency-aggregate-reports.mjs'
 // Public Worker/auth/catalogue/invoice/payment/report doors; fake only Stripe.
 import assert from 'node:assert/strict'
 import { applyPolicy, reviewer } from './policy-helper.mjs'
@@ -95,9 +96,13 @@ export async function currencyFlow(h, owner,{onState=async()=>{},confirmCollecti
   const report = await api('reports/currency?from=2026-10-01&to=2026-10-23')
   assert.deepEqual(report.totals, { invoice: 735, payment: 661, credit: 74 })
   for (const row of report.transactions) { assert.equal(row.currency, 'CAD'); assert.equal(row.reporting.currency, 'USD'); assert.equal(row.reporting.rate, '0.735055'); assert.equal(row.reporting.rateDate, row.transaction_date); assert.match(row.reporting.source, /Synthetic finance worksheet/) }
-  await api('reports/financial', undefined, 409)
+  for(const metric of ['ar','mrr','unbilled','credit-balances'])await api(`reports/${metric}`,undefined,409)
   await h.page('/app/reports/currency',owner)
   await onState({stage:'collected',customer,invoice:invoice.id,run:run.id})
+  const financeFactor=await h.api('mfa.totp.start',finance,{})
+  await h.api('mfa.totp.confirm',finance,{factor:financeFactor.factor,code:totp(financeFactor.secret,Date.parse('2026-10-23T10:00:00Z'))})
+  const aggregates=await assertCurrencyAggregateReports(h,owner,{customer,invoice:invoice.id,usdCustomer:defaultCustomer,recordRate,finance})
+  await onState({stage:'aggregate',customer,invoice:invoice.id,run:run.id,aggregates})
   assert.equal((await api(`subscriptions/${sub.id}`)).currency, 'CAD')
   return { customer, invoice: invoice.id, collection: collection.id }
 }
