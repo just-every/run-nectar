@@ -20,5 +20,5 @@ export async function prepaidRefundMailSection(env:Bindings,actor:Actor,back='/a
       ${field('Failed subject','failed_subject',{value:state.templates[language].failed.subject})}
       ${area('Failed body','failed_body',state.templates[language].failed.body)}`,'Save refund notice settings',{secondary:true})):''}
     ${details({refundedSender:state.refundedSender,failedSender:state.failedSender,configuredBy:state.configuredBy,configuredAt:state.configuredAt},'Recorded owner configuration')}
-    ${details({deliveries:state.deliveries},'Private refund notice delivery log (owner and finance)')}</section>`
+    ${details({deliveries:state.deliveries},'Private notice delivery log')}</section>`
 }
