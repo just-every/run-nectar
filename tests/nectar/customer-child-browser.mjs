@@ -25,6 +25,8 @@ async function journey(file,run){
         assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`${label} fits ${width}`)
         const iconOnly=await page.locator('a,button,[role=button]').evaluateAll(nodes=>nodes.filter(n=>!n.textContent.trim()&&n.querySelector('svg,img')).map(n=>n.outerHTML));assert.deepEqual(iconOnly,[])
         await page.screenshot({path:`${directory}/${width}-${label}.png`,fullPage:true});console.log('BROWSER',width,label)
+        const focus=label.startsWith('child-')?page.locator('main article > dl.figures'):page.getByRole('heading',{name:label==='customer-writeoff-recovery'?'Write-offs and recoveries':'Subscription history',exact:true}).locator('..')
+        for(let index=0;index<await focus.count();index++)await focus.nth(index).screenshot({path:`${directory}/${width}-${label}-focus-${index}.png`})
       }
     }
     await run(module,h,owner,both)
