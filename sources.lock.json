@@ -4200,8 +4200,12 @@
       "sha256": "7ab8034b5c77539c29b95917d3140a0346b0d04c18463140ba08e6e00ddfb4e8",
       "executable": false
     },
+    "tests/nectar/prepaid-refund-intake-browser.mjs": {
+      "sha256": "809d0eb436d9592410df3d64ceb493766ad19e85bdc3a88c197c649a9f246f08",
+      "executable": false
+    },
     "tests/nectar/prepaid-refund-intake.mjs": {
-      "sha256": "b530c960c77bba0972c956beaedac689cbbbbd5b931c6b47052a98696968ad9f",
+      "sha256": "7d27b32534ee6c0c219463ee9eda5c654bd7751dee7bad702bbc438f5455c2ee",
       "executable": false
     },
     "tests/nectar/prepaid-refunds.mjs": {
