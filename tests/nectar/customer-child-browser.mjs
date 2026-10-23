@@ -8,7 +8,7 @@ const directory=process.env.NECTAR_EVIDENCE_DIR??'.evidence/customer-children'
 await mkdir(directory,{recursive:true})
 const browser=await chromium.launch({headless:true,args:['--use-mock-keychain','--password-store=basic']})
 async function journey(file,run){
-  const module=await import(`./${file}.mjs`),h=await harness({assets:true,...module.harnessOptions()})
+  const module=await import(`./${file}.mjs`),h=await harness({assets:true,...(module.harnessOptions?.()??{})})
   try{
     await h.raw('/auth/bootstrap',{body:{token:h.vars.SETUP_TOKEN,displayName:'Nectar Owner'}})
     const owner=await h.signIn(h.vars.OWNER_EMAIL)
@@ -36,5 +36,6 @@ try{
    const result=await m.hierarchiesFlow(h,owner,{onState:async state=>{if(state.label==='parent-card-collected')await both('child-ledgers-parent-card',state.parent)}})
    await both('child-erasure-retained-ledgers',result.parent)
  })
+ await journey('lifecycle',async(m,h,owner,both)=>{const result=await m.lifecycleFlow(h,owner);await both('customer-subscription-history',result.customer)})
  await journey('write-offs',async(m,h,owner,both)=>m.writeOffFlow(h,owner,{onRecord:async({customer})=>both('customer-writeoff-recovery',customer)}))
 }finally{await browser.close()}
