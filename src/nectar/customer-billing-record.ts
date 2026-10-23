@@ -5,7 +5,7 @@ import { canRead, requireRead, type Actor } from './actor'
 import { balanceView } from './balance'
 import { requireBusiness } from './business'
 import { clockInstant } from './clock'
-import { all, insist, one, parseJson, type Row } from './core'
+import { all, insist, one, parseJson, stmt, type Row } from './core'
 import { today } from './dates'
 import { nativeCollectionRows } from './payments/state'
 import { prepaidBalances } from './prepaid-balances'
@@ -50,7 +50,8 @@ async function customerAuditEvents(env: Bindings, actor: Actor, customer: string
   sources.push("SELECT id FROM nc_notes WHERE customer_id=? AND kind='customer'")
   if (canRead(actor, 'invoices')) sources.push("SELECT id FROM nc_notes WHERE customer_id=? AND kind='invoice'")
   if (canRead(actor, 'payments')) sources.push("SELECT id FROM nc_notes WHERE customer_id=? AND kind='payment'")
-  return all(env, `SELECT seq,at,action,subject FROM nc_audit WHERE subject IN (${sources.join(' UNION ')}) ORDER BY seq DESC`, ...sources.map(() => customer))
+  const batches=await env.DB.batch<Row>(sources.map(source=>stmt(env,`SELECT seq,at,action,subject FROM nc_audit WHERE subject IN (${source}) ORDER BY seq DESC`,customer)))
+  return [...new Map(batches.flatMap(batch=>batch.results).map(row=>[row.seq,row])).values()].sort((a,b)=>b.seq-a.seq)
 }
 
 export async function customerBillingRecord(env: Bindings, actor: Actor, customer: string) {
