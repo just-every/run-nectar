@@ -26,6 +26,7 @@ export async function requireUsdCurrency(env: Bindings, scope: { customerId?: st
   insist(row && billingCurrency(row.currency) === 'USD', 'currency_path_not_supported', 409)
 }
 export async function requireUsdReporting(env: Bindings, customer: string | null = null) {
+  customer=customer||null
   insist(!await one(env, `SELECT 1 FROM nc_invoices WHERE currency<>'USD' AND status<>'discarded' AND (? IS NULL OR customer_id=?)
     UNION ALL SELECT 1 FROM nc_payments WHERE currency<>'USD' AND (? IS NULL OR customer_id=?)
     UNION ALL SELECT 1 FROM nc_customers c JOIN nc_subscriptions s ON s.customer_id=c.id WHERE c.currency<>'USD' AND (? IS NULL OR c.id=?) LIMIT 1`,customer,customer,customer,customer,customer,customer), 'usd_report_requires_currency_report', 409)

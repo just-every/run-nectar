@@ -119,7 +119,10 @@ export async function assertCurrencyAggregateReports(h, owner, { customer, invoi
     if (metric === 'billings') assert.equal(all.entries.find(entry => entry.invoiceId === usdInvoice.id).amountCents, 123)
     if (metric === 'collections') assert.equal(all.entries.find(entry => entry.invoiceId === usdPayment.payment).amountCents, 7)
   }
-  for (const metric of ['ar', 'mrr', 'unbilled', 'credit-balances']) await api(`reports/${metric}?period=2026-10`, undefined, 409)
+  for (const metric of ['ar', 'mrr', 'unbilled', 'credit-balances']) {
+    await api(`reports/${metric}?period=2026-10`, undefined, 409)
+    await api(`reports/${metric}?period=2026-10&customer=`, undefined, 409)
+  }
   for(const metric of ['ar','mrr','unbilled','credit-balances']){
     const scoped=await api(`reports/${metric}?period=2026-10&customer=${usdCustomer}`)
     assert.equal(scoped.totalCents,sum(scoped.entries),'A USD scope retains its ordinary reports beside unrelated foreign records')
