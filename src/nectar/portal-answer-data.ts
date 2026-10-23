@@ -14,6 +14,7 @@ export async function customerAnswerInvoice(env: Bindings, session: CustomerSess
     FROM nc_invoices i WHERE i.id=? AND i.customer_id=? AND i.status='issued'`, id, session.customer)
   insist(row, 'invoice_not_found', 404)
   const calculation = parseJson<Row>(row.calculation_json, {}), inputs = calculation.inputs ?? {}
+  insist(!inputs.invoiceContent?.hideUsageDetail,'invoice_detail_hidden',403)
   const lines = await all(env, 'SELECT id,kind,price_id,meter_id,description,quantity,unit_amount,amount_cents,evidence_json FROM nc_invoice_lines WHERE invoice_id=? ORDER BY seq', id)
   const credits = await all(env, 'SELECT number,COALESCE(applied_cents,amount_cents) AS amount_cents FROM nc_credit_notes WHERE invoice_id=? AND customer_id=? ORDER BY issued_at', id, session.customer)
   const allocations = await all(env, 'SELECT a.amount_cents,p.received_on,p.method FROM nc_allocations a JOIN nc_payments p ON p.id=a.payment_id WHERE a.invoice_id=? AND p.customer_id=? ORDER BY a.allocated_at', id, session.customer)
@@ -35,6 +36,9 @@ export async function customerAnswerInvoice(env: Bindings, session: CustomerSess
 }
 
 export async function customerAnswerLine(env: Bindings, session: CustomerSession, invoice: string, line: string) {
+  const saved=await one(env,"SELECT calculation_json FROM nc_invoices WHERE id=? AND customer_id=? AND status='issued'",invoice,session.customer)
+  insist(saved,'invoice_not_found',404)
+  insist(!parseJson<Row>(saved.calculation_json,{}).inputs?.invoiceContent?.hideUsageDetail,'invoice_detail_hidden',403)
   const record = await customerReportLine(env, session, invoice, line)
   return { line: { id: record.line.id, description: record.line.description, quantity: record.line.quantity, amount_cents: record.line.amount_cents },
     events: record.events.map(event => ({ eventId: event.eventId, meterId: event.meterId, quantity: event.quantity, occurredAt: event.occurredAt })), quantity: record.quantity }

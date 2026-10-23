@@ -1,3 +1,4 @@
+import { prepareInvoiceAutomation,decideInvoiceAutomation,runInvoiceAutomationDoor } from './invoice-automation'
 import { prepareShadowAppChange,confirmShadowAppChange,reconcileShadowAppChange,shadowInvoicePreview,appInvoicePreview } from './shadow-app'
 import { consumeStripeWebhookEvent } from './webhook-stripe'
 import { preparePlanChange,decidePlanChange,preparePlanChangeCredit } from './plan-changes'
@@ -133,6 +134,9 @@ export const actions: Record<string, Handler> = {
   'cadence.resolve':resolveDispute,
   'cadence.approve':approveCadenceStage,
   'cadence.run':runCadencesManually,
+  'invoice.automation.prepare':prepareInvoiceAutomation,
+  'invoice.automation.decide':decideInvoiceAutomation,
+  'invoice.automation.run':runInvoiceAutomationDoor,
   'answer.read':billingAnswer,
   'answer.propose':proposeAnswerCredit,
   'retention.policy.prepare':prepareRetentionPolicy,

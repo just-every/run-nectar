@@ -1,3 +1,4 @@
+import { invoiceBranding } from './invoice-branding'
 // INV-004: presentation and payment terms join the same approved input image
 // as financial inputs. Issued invoices always read their saved image.
 import type { Bindings } from '../auth.server'
@@ -7,6 +8,7 @@ import { Input } from './input'
 import { billingRoute, requireBillingEntity } from './billing-entities'
 
 export interface InvoiceSettings {
+  hideUsageDetail?: boolean
   paymentTermsDays: number | null
   poRequired: boolean
   poNumber: string
@@ -16,6 +18,7 @@ export interface InvoiceSettings {
 export interface InvoiceContent extends Omit<InvoiceSettings, 'paymentTermsDays'> {
   hierarchyPayer?: {parent:string;revision:number;mode:string}
   paymentTermsDays: number
+  branding?: import('./invoice-branding').InvoiceBranding
   businessFields: Record<string, string>
   customerFields: Record<string, string>
   billingEntity?: { id: string; revision: string; route: ReturnType<typeof billingRoute> }
@@ -35,18 +38,19 @@ export function invoiceFields(value: unknown): Record<string, string> {
 export function invoiceSettings(value: unknown = {}): InvoiceSettings {
   insist(value && typeof value === 'object' && !Array.isArray(value), 'invalid_invoice_settings')
   const row = value as Row, input = Input.of(row)
-  insist(Object.keys(row).every(key => ['paymentTermsDays','poRequired','poNumber','memo','customFields'].includes(key)), 'unknown_invoice_setting')
+  insist(Object.keys(row).every(key => ['paymentTermsDays','poRequired','poNumber','memo','customFields','hideUsageDetail'].includes(key)), 'unknown_invoice_setting')
   const terms = row.paymentTermsDays ?? null
   insist(terms === null || [15,30,45,60].includes(terms), 'invalid_customer_payment_terms')
   insist(row.poRequired === undefined || typeof row.poRequired === 'boolean', 'invalid_po_required')
-  return { paymentTermsDays: terms, poRequired: row.poRequired ?? false,
+  insist(row.hideUsageDetail === undefined || typeof row.hideUsageDetail === 'boolean', 'invalid_usage_visibility')
+  return { ...(row.hideUsageDetail ? { hideUsageDetail: true } : {}), paymentTermsDays: terms, poRequired: row.poRequired ?? false,
     poNumber: input.text('poNumber', { max: 120, optional: true }), memo: input.text('memo', { max: 1000, optional: true }),
     customFields: invoiceFields(row.customFields ?? {}) }
 }
 export function contentForSettings(business: Business, settings: InvoiceSettings): InvoiceContent {
   const businessFields = invoiceFields(parseJson(business.invoice_fields_json, {}))
   return { ...settings, paymentTermsDays: settings.paymentTermsDays ?? business.payment_terms_days,
-    businessFields, customerFields: settings.customFields, customFields: { ...businessFields, ...settings.customFields } }
+    branding: invoiceBranding(parseJson(business.invoice_branding_json, {})), businessFields, customerFields: settings.customFields, customFields: { ...businessFields, ...settings.customFields } }
 }
 export async function invoiceContent(env: Bindings, business: Business, customer: string): Promise<InvoiceContent> {
   const row = await one(env, 'SELECT invoice_settings_json,billing_entity_id FROM nc_customers WHERE id=? AND erased_at IS NULL', customer)
@@ -76,6 +80,6 @@ export function invoiceSettingsInput(input: Input, saved: string = '{}'): string
   if (input.has('invoice_settings')) return JSON.stringify(invoiceSettings(input.json('invoice_settings')))
   if (!input.flag('invoice_edit')) return saved
   return JSON.stringify(invoiceSettings({ paymentTermsDays: input.integer('invoice_terms_days', { min: 15, max: 60, optional: true }),
-    poRequired: input.flag('invoice_po_required'), poNumber: input.text('invoice_po_number', { max: 120, optional: true }),
+    hideUsageDetail: input.flag('invoice_hide_usage'), poRequired: input.flag('invoice_po_required'), poNumber: input.text('invoice_po_number', { max: 120, optional: true }),
     memo: input.text('invoice_memo', { max: 1000, optional: true }), customFields: invoiceFieldInput(input) }))
 }

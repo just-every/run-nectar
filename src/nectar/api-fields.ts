@@ -79,11 +79,18 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "address": "text",
     "billing_email": "text",
     "currency": "text",
+    "invoice_branding": "json",
+    "invoice_branding_edit": "flag",
+    "invoice_color": "text",
     "invoice_field_name": "list",
     "invoice_field_value": "list",
     "invoice_fields": "json",
     "invoice_fields_edit": "flag",
+    "invoice_footer": "text",
+    "invoice_logo": "file",
+    "invoice_logo_remove": "flag",
     "invoice_prefix": "text",
+    "invoice_remit_to": "text",
     "legal_name": "text",
     "payment_terms_days": "integer",
     "revision": "integer",
@@ -255,6 +262,7 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "invoice_edit": "flag",
     "invoice_field_name": "list",
     "invoice_field_value": "list",
+    "invoice_hide_usage": "flag",
     "invoice_memo": "text",
     "invoice_po_number": "text",
     "invoice_po_required": "flag",
@@ -278,6 +286,7 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "invoice_edit": "flag",
     "invoice_field_name": "list",
     "invoice_field_value": "list",
+    "invoice_hide_usage": "flag",
     "invoice_memo": "text",
     "invoice_po_number": "text",
     "invoice_po_required": "flag",
@@ -391,6 +400,16 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "invoice": "text",
     "run": "text"
   },
+  "invoice.automation.decide": {
+    "confirm_single": "flag",
+    "decision": "text",
+    "request": "text"
+  },
+  "invoice.automation.prepare": {
+    "enabled": "flag",
+    "hour": "integer"
+  },
+  "invoice.automation.run": {},
   "invoice.correction.refresh": {
     "invoice": "text"
   },

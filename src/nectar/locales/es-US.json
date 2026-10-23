@@ -256,5 +256,15 @@
   "portal.topup.status.card_changed": "Autorización terminada: tarjeta reemplazada",
   "portal.topup.status.expired": "Autorización vencida",
   "correction.revenue.prepaidCredit": "El crédito reduce el pasivo contractual prepagado no pagado en {amount} en el mes que comienza el {from}; los ingresos reconocidos, los calendarios originales y los impuestos no cambian.",
-  "portal.prepaid.entry.refund": "Reembolso del crédito pagado no utilizado"
+  "portal.prepaid.entry.refund": "Reembolso del crédito pagado no utilizado",
+  "invoice.pdf": "Descargar PDF",
+  "invoice.terms": "Condiciones de pago",
+  "invoice.po": "Orden de compra",
+  "invoice.calculation": "Detalle del cálculo",
+  "invoice.quantity": "Cantidad",
+  "invoice.unit": "Precio unitario",
+  "invoice.fee": "Cargo fijo",
+  "invoice.exact": "Importe antes del redondeo",
+  "invoice.tier": "Tramo",
+  "invoice.days": "Prorrateo: {days} de {total} días"
 }

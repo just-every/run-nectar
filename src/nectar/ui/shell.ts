@@ -17,6 +17,7 @@ const people = new WeakMap<Actor, Map<string, string>>()
 export function personName(actor: Actor, label: unknown) {
   const text = String(label ?? '')
   if (!text) return '—'
+  if (text.startsWith('system:invoice-automation:')) return 'Automatic invoice policy'
   if (text.startsWith('agent:')) return `${text.slice(6)} (agent)`
   const name = people.get(actor)?.get(text.toLowerCase())?.trim()
   return name && name.toLowerCase() !== text.toLowerCase() ? name : text

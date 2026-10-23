@@ -256,5 +256,15 @@
   "portal.topup.status.card_changed": "Autorisation terminée : carte remplacée",
   "portal.topup.status.expired": "Autorisation expirée",
   "correction.revenue.prepaidCredit": "Le crédit réduit le passif contractuel prépayé impayé de {amount} pour le mois commençant le {from} ; les revenus comptabilisés, les échéanciers originaux et la taxe restent inchangés.",
-  "portal.prepaid.entry.refund": "Remboursement du crédit payé inutilisé"
+  "portal.prepaid.entry.refund": "Remboursement du crédit payé inutilisé",
+  "invoice.pdf": "Télécharger le PDF",
+  "invoice.terms": "Conditions de paiement",
+  "invoice.po": "Bon de commande",
+  "invoice.calculation": "Détail du calcul",
+  "invoice.quantity": "Quantité",
+  "invoice.unit": "Prix unitaire",
+  "invoice.fee": "Frais fixes",
+  "invoice.exact": "Montant avant arrondi",
+  "invoice.tier": "Tranche",
+  "invoice.days": "Prorata : {days} sur {total} jours"
 }

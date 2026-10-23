@@ -1,7 +1,7 @@
 import { BALANCE_SQL } from '../receivables'
 // Home (the first-run checklist and today's work), More, business and tax
 // settings, access and credentials, and the audit trail.
-import { invoiceFieldsForm } from './invoice-content'
+import { invoiceBrandingForm, invoiceFieldsForm } from './invoice-content'
 import type { Bindings } from '../../auth.server'
 import { agentKeys, customRoles, members } from '../access'
 import { LATEST_VERSION, VERSIONS } from '../api-versions'
@@ -67,7 +67,7 @@ export async function settingsPage(env: Bindings, actor: Actor, url: URL) {
       ${field('Invoice number prefix', 'invoice_prefix', { value: b?.invoice_prefix ?? 'INV', hint: 'Letters, digits and dashes. Manage continuation and digit width in the number register.' })}
       ${field('Payment terms (days)', 'payment_terms_days', { type: 'number', value: b?.payment_terms_days ?? 30 })}
       ${hidden('invoice_fields_edit','yes')}${invoiceFieldsForm(parseJson(b?.invoice_fields_json, {}))}
-      ${hidden('currency', 'USD')}<p class="hint">Currency: US dollars.</p>`, b ? 'Save business details' : 'Save and continue', { layout: 'columns' })
+      ${invoiceBrandingForm(b?.invoice_branding_json)}${hidden('currency', 'USD')}<p class="hint">Currency: US dollars.</p>`, b ? 'Save business details' : 'Save and continue', { layout: 'columns', multipart: true })
     : h`<p>Only the owner changes the business details.</p>`
   const tax = b ? h`<section class="card" aria-labelledby="tax"><div class="card-head"><h2 id="tax">Tax policy</h2>${b.tax_mode !== 'undeclared' ? tag(taxReady(b) ? 'Reviewed' : 'Not reviewed') : ''}</div>
     <p class="declared">Declared: ${b.tax_mode === 'undeclared' ? tag('Not declared') : h`<strong>${b.tax_mode === 'no_tax' ? 'No sales tax applies' : `Flat rate ${b.tax_rate}%`} in ${b.tax_jurisdiction}</strong>`}</p>

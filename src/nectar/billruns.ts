@@ -202,7 +202,7 @@ export async function currentFingerprint(env: Bindings, business: Business, invo
   return (await reconciledRating(env, business, invoice.subscription_id, { start: invoice.period_start, end: invoice.period_end },await currentBillingWindow(env,invoice))).fingerprint
 }
 
-async function approveOne(env: Bindings, actor: Actor, business: Business, invoice: Row, acknowledged: boolean) {
+async function approveOne(env: Bindings, actor: Actor, business: Business, invoice: Row, acknowledged: boolean, authority?: () => D1PreparedStatement) {
   const customer = await one(env, 'SELECT revision FROM nc_customers WHERE id=?', invoice.customer_id)
   await cancellationApproval(env,actor,invoice)
   insist(!await one(env,"SELECT 1 FROM nc_customer_hierarchies WHERE customer_id=? AND billing_mode='consolidated'",invoice.customer_id),'consolidation_required',409)
@@ -212,6 +212,7 @@ async function approveOne(env: Bindings, actor: Actor, business: Business, invoi
   insist(!exceptions.length || acknowledged, 'exceptions_not_acknowledged', 409, exceptions)
   insist(await currentFingerprint(env, business, invoice) === invoice.source_fingerprint, 'source_changed', 409)
   return [
+    ...(authority?[authority()]:[]),
     guard(env, 'source_changed', 'EXISTS(SELECT 1 FROM nc_business WHERE singleton=1 AND revision=?) AND EXISTS(SELECT 1 FROM nc_customers WHERE id=? AND revision=?)', business.revision, invoice.customer_id, customer?.revision ?? ''),
     guard(env, 'stale', "EXISTS(SELECT 1 FROM nc_invoices WHERE id = ? AND status = 'draft' AND source_fingerprint = ?)", invoice.id, invoice.source_fingerprint),
     stmt(env, "UPDATE nc_invoices SET status = 'approved', approved_fingerprint = source_fingerprint, approved_by = ?, approved_at = ? WHERE id = ?", actorLabel(actor), now(), invoice.id),
@@ -219,14 +220,14 @@ async function approveOne(env: Bindings, actor: Actor, business: Business, invoi
 }
 
 /** Approves one draft invoice, or every clean draft in a run, against the exact inputs shown. */
-export async function approve(env: Bindings, actor: Actor, input: Input) {
+export async function approveWithAuthority(env: Bindings, actor: Actor, input: Input, authority?: () => D1PreparedStatement) {
   requireMember(actor, 'approve')
   const business = await requireBusiness(env)
   const acknowledged = input.flag('acknowledge')
   if (input.has('invoice')) {
     const invoice = await one(env, 'SELECT * FROM nc_invoices WHERE id = ?', input.text('invoice', { max: 100 }))
     insist(invoice, 'invoice_not_found', 404)
-    await commit(env, await approveOne(env, actor, business, invoice, acknowledged), { actor: actorLabel(actor), action: 'invoice.approve', subject: invoice.id, detail: { fingerprint: invoice.source_fingerprint, acknowledged: parseJson<Exception[]>(invoice.exceptions_json, []).map(e => e.code) } })
+    await commit(env, await approveOne(env, actor, business, invoice, acknowledged, authority), { actor: actorLabel(actor), action: 'invoice.approve', subject: invoice.id, detail: { fingerprint: invoice.source_fingerprint, acknowledged: parseJson<Exception[]>(invoice.exceptions_json, []).map(e => e.code) } })
     return { id: invoice.id, status: 'approved' }
   }
   const run = await one(env, "SELECT * FROM nc_bill_runs WHERE id = ? AND status = 'draft'", input.text('run', { max: 100 }))
@@ -235,13 +236,13 @@ export async function approve(env: Bindings, actor: Actor, input: Input) {
   const clean = drafts.filter(invoice => !parseJson<Exception[]>(invoice.exceptions_json, []).length || acknowledged)
     .filter(invoice => !parseJson<Exception[]>(invoice.exceptions_json, []).some(e => BLOCKING.has(e.code)))
   insist(clean.length, 'nothing_to_approve', 409)
-  const statements = (await Promise.all(clean.map(invoice => approveOne(env, actor, business, invoice, acknowledged)))).flat()
+  const statements = (await Promise.all(clean.map(invoice => approveOne(env, actor, business, invoice, acknowledged, authority)))).flat()
   await commit(env, statements, clean.map(invoice => ({ actor: actorLabel(actor), action: 'invoice.approve', subject: invoice.id, detail: { run: run.id, fingerprint: invoice.source_fingerprint, acknowledged: parseJson<Exception[]>(invoice.exceptions_json, []).map(e => e.code) } })))
   return { id: run.id, approved: clean.length, remaining: drafts.length - clean.length }
 }
 
 /** Numbers and issues approved invoices. Each issue is atomic: number, usage consumption and status together. */
-export async function finalise(env: Bindings, actor: Actor, input: Input) {
+export async function finaliseWithAuthority(env: Bindings, actor: Actor, input: Input, authority?: () => D1PreparedStatement) {
   requireMember(actor, 'approve')
   let business = await requireBusiness(env)
   insist(taxReady(business), 'tax_not_reviewed', 409)
@@ -277,6 +278,7 @@ export async function finalise(env: Bindings, actor: Actor, input: Input) {
     insist(!content?.poRequired || content.poNumber, 'po_required', 409)
     const due = addDays(issueDate, content?.paymentTermsDays ?? business.payment_terms_days)
     await commit(env, [
+      ...(authority?[authority()]:[]),
       ...await hierarchyPreIssue(env,invoice),
       ...(approvedEntity ? [guard(env, 'source_changed', 'EXISTS(SELECT 1 FROM nc_billing_entities WHERE id=? AND revision=?)', approvedEntity.id, approvedEntity.revision)] : []),
       ...allocation.statements,
@@ -316,4 +318,11 @@ const chunk = <T>(list: T[], size: number) => Array.from({ length: Math.ceil(lis
 
 function canonicalAdjustments(rows:Row[],saved:Row[]) {
   return canonical(rows.map(r=>({id:r.id,line:parseJson(r.line_json,{}),taxCents:r.tax_cents})))===canonical([...saved].sort((a,b)=>a.id.localeCompare(b.id)).map(r=>({id:r.id,line:r.line,taxCents:r.taxCents})))
+}
+
+export async function approve(env: Bindings, actor: Actor, input: Input) {
+  return approveWithAuthority(env,actor,input)
+}
+export async function finalise(env: Bindings, actor: Actor, input: Input) {
+  return finaliseWithAuthority(env,actor,input)
 }

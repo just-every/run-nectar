@@ -1,3 +1,4 @@
+import { runInvoiceAutomation } from './nectar/invoice-automation'
 import { dispatchWebhooks } from './nectar/webhooks'
 import { runTrials } from './nectar/trials'
 import { runPrepaidSettlement } from './nectar/prepaid-jobs'
@@ -43,6 +44,7 @@ function noTransform(response: Response): Response {
 export default withDemo({
   async scheduled(controller, env) {
     await dispatchWebhooks(runtimeBindings(env))
+    await runInvoiceAutomation(runtimeBindings(env),controller.scheduledTime)
     if(controller.cron==='* * * * *')return
     await removeExpiredFinancialRecords(runtimeBindings(env))
     await runPrepaidSettlement(runtimeBindings(env))

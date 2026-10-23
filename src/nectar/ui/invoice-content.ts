@@ -1,7 +1,8 @@
+import { invoiceBranding } from '../invoice-branding'
 import type { Row } from '../core'
 import { parseJson } from '../core'
 import { invoiceSettings } from '../invoice-content'
-import { area, check, field, h, hidden, select } from './html'
+import { area, check, field, fileField, h, hidden, select } from './html'
 
 export function invoiceFieldsForm(fields: Record<string, string>) {
   const entries = Object.entries(fields)
@@ -14,6 +15,18 @@ export function customerInvoiceForm(customer: Row) {
     ${select('Customer payment terms', 'invoice_terms_days', [15,30,45,60].map(days => ({ value: String(days), label: `Net ${days}` })), settings.paymentTermsDays === null ? '' : String(settings.paymentTermsDays), { required: false, blank: 'Use business payment terms' })}
     ${check('Require a purchase order number before issuing', 'invoice_po_required', { checked: settings.poRequired })}
     ${field('Purchase order number', 'invoice_po_number', { value: settings.poNumber, required: false })}
+    ${check('Hide usage detail on customer invoices', 'invoice_hide_usage', { checked: !!settings.hideUsageDetail })}
     ${area('Invoice memo', 'invoice_memo', settings.memo, false, 3)}
     <p class="hint">Changes apply to new drafts. Prepare again after a change; issued invoices keep their saved terms.</p></fieldset>${invoiceFieldsForm(settings.customFields)}`
+}
+
+export function invoiceBrandingForm(saved='{}') {
+  const brand=invoiceBranding(parseJson(saved,{}))
+  return h`<fieldset><legend>Invoice branding</legend>${hidden('invoice_branding_edit','yes')}
+    ${fileField('Invoice logo (JPEG, up to 100 KB)','invoice_logo',{accept:'image/jpeg',hint:brand.logo?'A logo is saved. Upload a replacement or keep it.':'Choose an RGB JPEG logo.'})}
+    ${check('Remove saved logo','invoice_logo_remove')}
+    ${field('Invoice color','invoice_color',{type:'color',value:brand.color})}
+    ${area('Invoice footer','invoice_footer',brand.footer,false,3)}
+    ${area('Remit-to details','invoice_remit_to',brand.remitTo,false,3)}
+    <p class="hint">Saved on new drafts. Issued invoices retain their branding. Remit-to text is supplied by your business; processor funding instructions are not generated here.</p></fieldset>`
 }

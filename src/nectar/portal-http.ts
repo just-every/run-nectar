@@ -1,3 +1,5 @@
+import { customerLineFacts } from './customer-invoice'
+import { invoicePdf } from './invoice-pdf'
 import { portalTopupPage } from './portal-prepaid-topups'
 import { portalPrepaidTopupAuthorization, acceptPrepaidTopupAuthorization, revokePortalPrepaidTopupAuthorization } from './prepaid-topup-authorization'
 import { portalPrepaidData, portalPrepaidSource, portalPrepaidPage, portalPrepaidSourcePage, portalPrepaidCsv } from './portal-prepaid'
@@ -52,6 +54,8 @@ export async function portalResponse(request: Request, env: Bindings): Promise<R
     }
     if (url.pathname === '/portal/theme.css') {
       const brand = await one(env, 'SELECT brand_color FROM nc_portal_policy WHERE singleton=1')
+      const invoiceId=url.searchParams.get('invoice')
+      if(invoiceId){const saved=await portalData(env,session,invoiceId);return portalStyle(saved.content!.branding.color)}
       return portalStyle(brand?.brand_color)
     }
     if(url.pathname==='/portal/prepaid/data')return Response.json(await portalPrepaidData(env,session),{headers})
@@ -72,6 +76,8 @@ export async function portalResponse(request: Request, env: Bindings): Promise<R
     if (!['/portal','/portal/data','/portal/privacy','/portal/answers','/portal/upcoming','/portal/adjustments','/portal/prepaid'].includes(url.pathname) && !invoice && !proposal && !prepaidSource && !topupAuthorization) throw new NectarError('not_found', 404)
     const data = await portalData(env, session, invoice), L = customerText(data.customer.language)
     if (url.pathname === '/portal/data') return Response.json(data, { headers: { ...headers, 'content-security-policy': "default-src 'none'; frame-ancestors 'none'" } })
+    if(invoice&&url.searchParams.get('format')==='pdf')return new Response(request.method==='HEAD'?null:invoicePdf(data).buffer as ArrayBuffer,{headers:{...headers,'content-type':'application/pdf','content-disposition':'attachment; filename=invoice.pdf','content-security-policy':"default-src 'none'; frame-ancestors 'none'"}})
+    if(invoice&&url.searchParams.get('format')==='logo')return new Response(request.method==='HEAD'?null:Uint8Array.from(atob(data.content!.branding.logo),c=>c.charCodeAt(0)),{headers:{...headers,'content-type':'image/jpeg'}})
     const token = url.searchParams.get('session')!
     const link = (path: string) => `${path}?session=${encodeURIComponent(token)}`
     const body = topupAuthorization?await portalTopupPage(env,request,session,topupAuthorization,link):url.pathname==='/portal/prepaid'?await portalPrepaidPage(env,session,link):prepaidSource?await portalPrepaidSourcePage(env,session,prepaidSource,link):url.pathname==='/portal/upcoming' ? await portalUpcomingPage(env,session,url,link) : url.pathname==='/portal/adjustments' ? await portalAdjustmentsPage(env,session,link) : proposal ? portalCreditProposalPage(session,await portalCreditProposal(env,session,proposal),link) : url.pathname === '/portal/answers' ? await portalAnswersPage(env,session,input,link) : url.pathname === '/portal/privacy' ? await portalPrivacy(env, session, link) : h`<header><h1>${L.t('portal.heading')}</h1><p>${data.customer.name}</p><p>${L.t('portal.readonly')}</p><a href="${link('/portal/privacy')}">${L.t('portal.privacy.heading')}</a> · <a href="${link('/portal/upcoming')}">${L.t('portal.upcoming.heading')}</a> · <a href="${link('/portal/adjustments')}">${L.t('portal.adjustments.heading')}</a> · <a href="${link('/portal/prepaid')}">${L.t('portal.prepaid.heading')}</a></header>
@@ -79,9 +85,9 @@ export async function portalResponse(request: Request, env: Bindings): Promise<R
       ${data.invoices.length ? data.invoices.map(row => h`<section class="card"><h2>${invoice ? row.number : h`<a href="${link(`/portal/invoices/${row.id}`)}">${row.number}</a>`}</h2>
         <dl><dt>${L.t('portal.issued')}</dt><dd>${L.day(row.issue_date)}</dd><dt>${L.t('portal.due')}</dt><dd>${L.day(row.due_date)}</dd>
         <dt>${L.t('portal.total')}</dt><dd>${L.money(row.total_cents)}</dd><dt>${L.t('portal.credited')}</dt><dd>${L.money(row.credited_cents)}</dd><dt>${L.t('portal.paid')}</dt><dd>${L.money(row.paid_cents)}</dd><dt>${L.t('portal.owed')}</dt><dd>${L.money(row.balance_cents)}</dd></dl>
-        ${invoice ? h`<p><a href="${link('/portal/answers')}&amp;invoice=${row.id}">${L.t('portal.answer.heading')}</a></p><h3>${L.t('portal.lines')}</h3>${data.lines?.map(line => h`<p>${line.description} · ${L.money(line.amount_cents)}</p>`)}<p>${L.t('portal.subtotal')}: ${L.money(row.subtotal_cents)} · ${L.t('portal.tax')}: ${L.money(row.tax_cents)}</p>
-          ${data.credits?.map(credit => h`<p>${credit.number} · ${L.money(credit.amount_cents)} · ${credit.reason==='unused_paid_credit'?L.t('portal.prepaid.entry.refund'):credit.reason}</p>`)}${data.payments?.map(payment => h`<p>${L.t('portal.payment')} · ${L.day(payment.received_on)} · ${L.money(payment.amount_cents)}</p>`)}` : ''}</section>`) : h`<p>${L.t('portal.empty')}</p>`}`
-    const response = portalPage(L.t('portal.heading'), body, { lang: L.tag, name: data.brand?.brand_name || data.merchant?.legal_name || '', style: link('/portal/theme.css') })
+        ${invoice ? h`${data.content!.branding.logo?h`<img src="${link(`/portal/invoices/${row.id}`)}&amp;format=logo" alt="${data.merchant?.legal_name}" width="96">`:''}<p><a href="${link(`/portal/invoices/${row.id}`)}&amp;format=pdf">${L.t('invoice.pdf')}</a></p><dl><dt>${L.t('invoice.terms')}</dt><dd>Net ${data.content!.paymentTermsDays??''}</dd><dt>${L.t('invoice.po')}</dt><dd>${data.content!.poNumber}</dd>${Object.entries(data.content!.customFields).map(([key,value])=>h`<dt>${key}</dt><dd>${String(value)}</dd>`)}</dl><p>${data.content!.memo}</p><p>${data.content!.branding.remitTo}</p>${!data.content!.hideUsageDetail?h`<p><a href="${link('/portal/answers')}&amp;invoice=${row.id}">${L.t('portal.answer.heading')}</a></p>`:''}<h3>${L.t('portal.lines')}</h3>${data.lines?.map(line => h`<article><p>${line.description} · ${L.money(line.amount_cents,row.currency)}</p>${line.quantity!==undefined?h`<details><summary>${L.t('invoice.calculation')}</summary>${customerLineFacts(line,L,row.currency).map(fact=>h`<p>${fact}</p>`)}</details>`:''}</article>`)}<p>${L.t('portal.subtotal')}: ${L.money(row.subtotal_cents)} · ${L.t('portal.tax')}: ${L.money(row.tax_cents)}</p>
+          ${data.credits?.map(credit => h`<p>${credit.number} · ${L.money(credit.amount_cents)} · ${credit.reason==='unused_paid_credit'?L.t('portal.prepaid.entry.refund'):credit.reason}</p>`)}${data.payments?.map(payment => h`<p>${L.t('portal.payment')} · ${L.day(payment.received_on)} · ${L.money(payment.amount_cents)}</p>`)}<footer>${data.content!.branding.footer}</footer>` : ''}</section>`) : h`<p>${L.t('portal.empty')}</p>`}`
+    const response = portalPage(L.t('portal.heading'), body, { lang: L.tag, name: data.brand?.brand_name || data.merchant?.legal_name || '', style: link('/portal/theme.css')+(invoice?`&invoice=${invoice}`:'') })
     const resultHeaders = new Headers(response.headers)
     Object.entries(headers).forEach(([key,value]) => resultHeaders.set(key,value))
     // Match the ordinary erasure confirmation page: origin-only referrers let
