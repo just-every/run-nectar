@@ -1,3 +1,4 @@
+import { customerChildRecordsSection } from './customer-child-records'
 import { money } from '../decimal'
 import { customerBillingRecordSection } from './customer-billing-record'
 import { planChangeSection } from './plan-changes'
@@ -80,7 +81,7 @@ export async function customerPage(env: Bindings, actor: Actor, id: string, url:
       <form method="get" class="row-form">${field('Preview month', 'preview_period', { type: 'month', value: url.searchParams.get('preview_period') ?? '', required: false, hint: 'Leave empty to use each subscription’s current billing period.' })}<button class="secondary" type="submit">Show previews</button></form>
       ${table(['Subscription', 'Period', 'State', 'Subtotal$', 'Tax$', 'Total$', 'Review'], c.upcoming.map((row: any) => [h`<a href="${row.sourcePath}">${row.externalId || `Subscription from ${formatDate(row.startDate)}`}</a>`, formatPeriod(row.period.start, row.period.end), tag(row.state === 'unavailable' ? 'Unavailable' : row.state === 'issued' ? 'Issued' : row.state === 'shadow' ? 'Shadow' : 'Preview'), row.subtotalCents === null ? '—' : cents(row.subtotalCents), row.taxCents === null ? '—' : cents(row.taxCents), row.totalCents === null ? '—' : cents(row.totalCents), row.reason === 'previous_biller_period' ? 'Previous biller owns this period.' : row.reason === 'subscription_not_in_period' ? 'Outside service dates.' : row.exceptions.map((e: any) => e.message).join(' · ') || 'No calculation exceptions.']), { empty: 'No subscriptions to preview.' })}
     </section>` : ''}
-    ${customerBillingRecordSection(c,actor)}${newSubscription}
+    ${customerBillingRecordSection(c,actor)}${customerChildRecordsSection(c,actor)}${newSubscription}
     ${await notesSection(env,actor,c.id,'customer',c.id,`/app/customers/${c.id}#notes`)}
     ${certificateSection(c, actor)}
     ${chargeSection(c, named, actor, today)}

@@ -115,7 +115,7 @@ export async function customerSearchFlow(h, owner, onReady = async () => {}) {
   await api('access.give', { email: 'synthetic-nectar-4@example.test', name: 'synthetic-nectar-4', role: 'custom', custom_role: role.id })
   const customerReader = await h.signIn('synthetic-nectar-4@example.test', { requested: true })
   const restricted = (await h.api(`customers/${nativeCustomer}`, customerReader)).billingRecord
-  for (const family of ['processorPayments', 'paymentMethods', 'refunds', 'prepaid', 'creditBalance']) assert.equal(restricted[family], null, 'Family-scoped customer readers receive no new financial source')
+  for (const family of ['processorPayments', 'paymentMethods', 'refunds', 'prepaid', 'creditBalance','subscriptionHistory','writeOffs']) assert.equal(restricted[family], null, 'Family-scoped customer readers receive no new financial source')
   assert.ok(restricted.auditEvents.every(event => event.subject === nativeCustomer), 'Audit respects family scope')
   assert.deepEqual(await h.api(`customers?search=${collected.charge_ref}`, customerReader), [])
   const snapshot = await api('audit')

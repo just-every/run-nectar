@@ -69,6 +69,16 @@ export async function hierarchiesFlow(h,owner,{onState=async()=>{},configure,con
   assert.equal((await api(`customers/${parent}`)).ledger.payments.length,0,'the parent card does not invent a second parent receivable')
   const updated=(await api('hierarchies')).commitments[0]
   assert.equal(updated.drawnCents,47000);assert.equal(updated.remainingCents,53000)
+  const parentRecord=await api(`customers/${parent}`)
+  assert.deepEqual(parentRecord.childAccounts.map(row=>row.record.id).sort(),[...children].sort())
+  assert.equal(parentRecord.ledger.payments.length,0)
+  for(const {record} of parentRecord.childAccounts){
+    assert.deepEqual(record.ledger,(await api(`customers/${record.id}`)).ledger,'Each child retains its own exact ledger; parent payment is never counted twice')
+    assert.ok(record.billingRecord.subscriptionHistory.every(s=>s.record.customer_id===record.id))
+    assert.deepEqual(record.childAccounts,[])
+  }
+  assert.equal(parentRecord.childAccounts.find(row=>row.record.id===children[2]).record.ledger.paidCents,11000)
+  assert.ok((await h.page(`/app/customers/${parent}`,owner)).includes(separate.id))
   await onState({label:'parent-card-collected',parent,invoice:separate.id,children})
   // Erasing one division removes its personal source text without losing the
   // parent's or other divisions' financial facts and saved revenue schedules.
