@@ -39,7 +39,7 @@ try{
   await stripe.request('POST',`/v1/products/${product.id}/features`,{entitlement_feature:feature.id})
   price=await stripe.request('POST','/v1/prices',{product:product.id,currency:'usd',unit_amount:19900,'recurring[interval]':'month'})
   phase='create-owned-subscription'
-  let subscription=await stripe.request('POST','/v1/subscriptions',{customer:customer.id,'items[0][price]':price.id,collection_method:'charge_automatically',payment_behavior:'error_if_incomplete'})
+  let subscription=await stripe.request('POST','/v1/subscriptions',{customer:customer.id,'items[0][price]':price.id,'items[0][quantity]':2,collection_method:'charge_automatically',payment_behavior:'error_if_incomplete'})
   receipt.subscriptionId=subscription.id;receipt.featureId=feature.id
   const lists={customers:[customer],products:[product],prices:[price],subscriptions:[subscription]}
   const capture=Object.fromEntries(Object.entries(lists).map(([name,data])=>[name,{object:'list',url:`/v1/${name}`,has_more:false,data}]))
@@ -52,9 +52,39 @@ try{
   const localSub=(await api(`customers/${local.id}`)).subscriptions[0]
   await api('metadata.write',{kind:'customer',record:local.id,revision:0,metadata:{app_account_id:`synthetic-nectar-${stripe.run}`}})
   await api('metadata.write',{kind:'subscription',record:localSub.id,revision:0,metadata:{app_account_id:`synthetic-nectar-sub-${stripe.run}`}})
+  phase='dev006-public-shadow-app-write'
+  const localItem=(await api(`subscriptions/${localSub.id}`)).items[0]
+  const appChange=await api('shadow.app.prepare',{subscription:localSub.id,account_ref:account.id,item:localItem.id,quantity:3})
+  assert.equal((await api('shadow.app.confirm',{change:appChange.id,confirm:true})).status,'applied')
+  const observed=await stripe.request('GET',`/v1/subscriptions/${subscription.id}`)
+  assert.equal(observed.items.data[0].quantity,3)
+  const appQuote=await api('app.invoice.preview',{subscription:localSub.id,account_ref:account.id})
+  assert.equal(appQuote.source,'stripe-test-preview');assert.equal(appQuote.totalCents,59700)
+  receipt.dev006={stripeQuantity:3,shadowPreviewCents:appQuote.totalCents,confirmation:'explicit owner confirmation, no proration'}
+  // A second independent test product installation proves the same app call
+  // after adoption without ending the first installation's shadow-event run.
+  const adoptedHarness=await harness()
+  try{
+    await adoptedHarness.raw('/auth/bootstrap',{body:{token:adoptedHarness.vars.SETUP_TOKEN,displayName:'Synthetic adopted preview owner'}})
+    const adoptedOwner=await adoptedHarness.signIn(adoptedHarness.vars.OWNER_EMAIL)
+    await adoptedHarness.raw('/setup',{cookie:adoptedOwner,form:new URLSearchParams({confirm:'yes'})})
+    const native=(path,body)=>adoptedHarness.api(path,adoptedOwner,body)
+    await native('business.configure',{legal_name:'Synthetic adopted preview',timezone:'UTC',invoice_prefix:'ADOPTED',payment_terms_days:30})
+    await applyPolicy(adoptedHarness,adoptedOwner,'tax.declare',{tax_jurisdiction:'CA',tax_mode:'no_tax',tax_note:'Owned Stripe/Nectar preview parity'})
+    await native('tax.review',{revision:(await native('business')).revision})
+    const adoptedFiles={...files,subscriptions:file('subscriptions.json',JSON.stringify({object:'list',has_more:false,data:[observed]}),'application/json')}
+    const proposed=await native('import.preview',adoptedFiles);assert.deepEqual(proposed.rejected,[])
+    await native('import.apply',{...adoptedFiles,fingerprint:proposed.fingerprint})
+    const own=(await native('customers')).find(c=>c.external_id===customer.id),s=(await native(`customers/${own.id}`)).subscriptions[0]
+    const cutover=new Date((observed.current_period_end??observed.items.data[0].current_period_end)*1000).toISOString().slice(0,10)
+    await native('subscription.adopt',{subscription:s.id,cutover_start:cutover,acknowledge_unreconciled:true})
+    const nativeQuote=await native('app.invoice.preview',{subscription:s.id,account_ref:account.id})
+    assert.equal(nativeQuote.source,'nectar-preview');assert.equal(nativeQuote.totalCents,appQuote.totalCents)
+    receipt.dev006.adoptedPreviewCents=nativeQuote.totalCents;receipt.dev006.sameAppCall=true
+  }finally{await adoptedHarness.close()}
   phase='provider-lifecycle'
   await stripe.request('POST',`/v1/customers/${customer.id}`,{name:`Synthetic changed ${stripe.run}`})
-  subscription=await stripe.request('POST',`/v1/subscriptions/${subscription.id}`,{'items[0][id]':subscription.items.data[0].id,'items[0][quantity]':2,proration_behavior:'none'})
+  subscription=await stripe.request('GET',`/v1/subscriptions/${subscription.id}`)
   const invoiceId=reference(subscription.latest_invoice)
   let invoice=await stripe.request('GET',`/v1/invoices/${invoiceId}`)
   if(invoice.status==='draft')invoice=await stripe.request('POST',`/v1/invoices/${invoice.id}/finalize`,{auto_advance:false})

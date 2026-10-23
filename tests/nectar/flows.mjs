@@ -38,6 +38,7 @@ const ACTIONS = [...(await readFile(new URL('../../src/nectar/actions.ts', impor
 // Keep the default CI wall intact; local changes to the core billing cycle
 // can select this sequence without rerunning unrelated isolated journeys.
 if (!process.argv.includes('--core-only')) {
+await runIsolated('stripe-app','stripeAppFlow')
 await runIsolated('webhooks','webhooksFlow')
 await runIsolated('webhooks','webhookLifecycleFlow')
 await runIsolated('hierarchies','hierarchiesFlow')

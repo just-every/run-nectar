@@ -57,7 +57,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "9378eacd1af09f085a436a4fb64887d393604bde992403b668c0f6ff373a828a",
+      "sha256": "268de0bb80132961bfbf4a17edb25194a1d73fa07c6c8215bb69e24abee10b69",
       "executable": false
     },
     "AGENTS.consumer.md": {
@@ -69,7 +69,7 @@
       "executable": false
     },
     "API.md": {
-      "sha256": "181bb3d0e2f54c8946d0bf861018aa91dc89f0ccecf21d94b51fe944227adb55",
+      "sha256": "dd0391ef6ee46f9389f679516965e952506612dd7f9cf5a9a566071f5d3101d3",
       "executable": false
     },
     "base-copies.json": {
@@ -77,7 +77,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "b26a15efe2f04b06d7f6a63ed47e7fee885173043f1e2f01163ff8e4a6b0d66e",
+      "sha256": "be9e578726344cf374b33d3b4206acc5900c3d5e997095f822a2f3ca7d5ff55f",
       "executable": false
     },
     "DEMO.md": {
@@ -166,6 +166,14 @@
     },
     "examples/portal/server.mjs": {
       "sha256": "b97f5b1a6df1fdd62ba9063dfbf209fa32dba4b461d806a90e72b3e990cf62ad",
+      "executable": false
+    },
+    "examples/stripe-switch/nectar.mjs": {
+      "sha256": "8b5e31a0ba2a3d12ba11f26793eba458cc3484a32e038af0486f82f113f80040",
+      "executable": false
+    },
+    "examples/stripe-switch/README.md": {
+      "sha256": "e4c656615871b9247598174907e37e471edd3c2be66db304c6958d7cee384f8b",
       "executable": false
     },
     "examples/webhook-receiver/README.md": {
@@ -494,6 +502,10 @@
     },
     "migrations/core/0080_webhook_import_snapshot.sql": {
       "sha256": "e839974bcb49c7fb0809c68dfb54654d57c8cf21eba63ab4fc7036cb8aa10117",
+      "executable": false
+    },
+    "migrations/core/0081_shadow_app_changes.sql": {
+      "sha256": "e4bd2e9780173b5fed39f077869451d406675441a711d0dd710593c1a92a6bd2",
       "executable": false
     },
     "ONBOARDING.md": {
@@ -2485,7 +2497,7 @@
       "executable": false
     },
     "src/nectar/actions.ts": {
-      "sha256": "e6e8b5fff3147c0a77bfd5825311b7cba505c551ae146350da163a7253b1bbad",
+      "sha256": "65bf99c7d1fd35b1da7269ba0bbd1bb9072cb7ce00936031da00244a18186107",
       "executable": false
     },
     "src/nectar/actor.ts": {
@@ -2501,7 +2513,7 @@
       "executable": false
     },
     "src/nectar/api-fields.ts": {
-      "sha256": "64c165f99502c73e6fe56b73c9ebf248bc3cc74b9af1277dff1cda05864cdafe",
+      "sha256": "5228feb05da51935668c94c7a1bb19053bce4b74e1e9b26df635d33a43a16455",
       "executable": false
     },
     "src/nectar/api-versions.ts": {
@@ -3380,6 +3392,10 @@
       "sha256": "7f65d587b40cab776e093db40724b72654e997f168442774a7110ee418320d0a",
       "executable": false
     },
+    "src/nectar/shadow-app.ts": {
+      "sha256": "697b62a5d63bbbd5df2cef0f82f9342ccbc7b9d0e100b8dae44fb2ab3c59091e",
+      "executable": false
+    },
     "src/nectar/shared-credit-custody.ts": {
       "sha256": "cbf766a030f00ba47a9e033270f63ee2b1363bdf2fe0b8ce266f9f44995fd23d",
       "executable": false
@@ -3985,7 +4001,7 @@
       "executable": false
     },
     "tests/nectar/flows.mjs": {
-      "sha256": "a636b5bb0aa600986a17dbdff5d77ef9e3a9f1e6e45f5793bab20015cc1bc1c7",
+      "sha256": "bcb0dc03446e5818cc8de4fe0a5f95cd0fcdfb75316c89f682181a0e18d36c51",
       "executable": false
     },
     "tests/nectar/harness.mjs": {
@@ -4280,6 +4296,10 @@
       "sha256": "b72b297ccf819ba4ed3986b04cb03491df0731ab184892b36d21c1fb2e0c0024",
       "executable": false
     },
+    "tests/nectar/stripe-app.mjs": {
+      "sha256": "ce3ccba1eb7935490c4298437311802dcf1cf78612f05b73ba4e13133d97dffd",
+      "executable": false
+    },
     "tests/nectar/stripe-history-sandbox.mjs": {
       "sha256": "15147f5179f1c3711ae8d13a60f347a6d432c9587c195d05f859dfc2ea9c0c2b",
       "executable": false
@@ -4301,7 +4321,7 @@
       "executable": false
     },
     "tests/nectar/webhook-shadow-sandbox.mjs": {
-      "sha256": "00af59e23bf2e310ccbaddd14b0bb8935579f1780f677ffdad39ff20253f9cd2",
+      "sha256": "29eb0ca260de64915d2323b02a6247eea3743362427fb4d1ffb8338dba34fc37",
       "executable": false
     },
     "tests/nectar/webhooks.mjs": {

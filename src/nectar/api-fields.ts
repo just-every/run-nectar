@@ -39,6 +39,11 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "reason": "text",
     "topic": "text"
   },
+  "app.invoice.preview": {
+    "account_ref": "text",
+    "period": "text",
+    "subscription": "text"
+  },
   "balance.apply": {
     "invoice": "text"
   },
@@ -749,6 +754,24 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
   "setup.resolve": {
     "proposal": "text",
     "resolution": "list"
+  },
+  "shadow.app.confirm": {
+    "change": "text",
+    "confirm": "flag"
+  },
+  "shadow.app.prepare": {
+    "account_ref": "text",
+    "cancel_at_period_end": "json",
+    "item": "text",
+    "quantity": "integer",
+    "subscription": "text"
+  },
+  "shadow.app.preview": {
+    "account_ref": "text",
+    "subscription": "text"
+  },
+  "shadow.app.reconcile": {
+    "change": "text"
   },
   "subscription.addon": {
     "effective_date": "text",

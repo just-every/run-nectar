@@ -1,3 +1,4 @@
+import { prepareShadowAppChange,confirmShadowAppChange,reconcileShadowAppChange,shadowInvoicePreview,appInvoicePreview } from './shadow-app'
 import { consumeStripeWebhookEvent } from './webhook-stripe'
 import { preparePlanChange,decidePlanChange,preparePlanChangeCredit } from './plan-changes'
 import { setHierarchy,prepareConsolidation,recordHierarchyCommitment } from './hierarchies'
@@ -88,6 +89,11 @@ export const actions: Record<string, Handler> = {
   'hierarchy.configure': setHierarchy,
   'hierarchy.invoice.prepare': prepareConsolidation,
   'hierarchy.commitment': recordHierarchyCommitment,
+  'app.invoice.preview': appInvoicePreview,
+  'shadow.app.prepare': prepareShadowAppChange,
+  'shadow.app.confirm': confirmShadowAppChange,
+  'shadow.app.reconcile': reconcileShadowAppChange,
+  'shadow.app.preview': shadowInvoicePreview,
   'webhook.stripe.consume': consumeStripeWebhookEvent,
   'webhook.register': registerWebhook,
   'webhook.rotate': rotateWebhook,
