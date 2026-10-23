@@ -6,26 +6,15 @@ import assert from 'node:assert/strict'
 import { randomBytes } from 'node:crypto'
 import { readFile, readdir } from 'node:fs/promises'
 import { createRequire } from 'node:module'
-import { createServer } from 'node:net'
+import { httpListener } from './http-listener.mjs'
 
 // Wrangler's own Miniflare and SQL splitter, so the runtime matches `rer build`.
 const wrangler = createRequire(import.meta.url)('wrangler')
 const { Miniflare, convertV4MiniflareOptions } = createRequire(createRequire(import.meta.url).resolve('wrangler'))('miniflare')
 
-async function freePort() {
-  const socket = createServer()
-  await new Promise(resolve => socket.listen(0, '127.0.0.1', resolve))
-  const { port } = socket.address()
-  await new Promise(resolve => socket.close(resolve))
-  return port
-}
-
 export async function harness({ assets = false, localTime, hostname = '127.0.0.1', stripeFetch, stripeSecret, stripeSecondarySecret, quickbooksFetch, webhookFetch, persistence, databaseId='nectar', applyMigrations=true } = {}) {
-  const port = await freePort()
-  // WebAuthn refuses IP-address relying parties, so the passkey journey names the loopback host.
-  const origin = `http://${hostname}:${port}`
   const secret = () => randomBytes(32).toString('base64url')
-  const vars = { AUTH_LOCAL: 'true', AUTH_ORIGIN: origin, OWNER_EMAIL: 'owner@example.test', SESSION_SECRET: secret(), SETUP_TOKEN: secret(), MFA_KEY: secret(), PORTAL_KEY: secret(), MAIL_PROVIDER: 'resend', MAIL_API_KEY: 'test-only-resend-key', MAIL_FROM: 'auth@example.test' }
+  const vars = { AUTH_LOCAL: 'true', OWNER_EMAIL: 'owner@example.test', SESSION_SECRET: secret(), SETUP_TOKEN: secret(), MFA_KEY: secret(), PORTAL_KEY: secret(), MAIL_PROVIDER: 'resend', MAIL_API_KEY: 'test-only-resend-key', MAIL_FROM: 'auth@example.test' }
   if(localTime)vars.NECTAR_LOCAL_TIME=localTime
   if(stripeSecret)vars.STRIPE_BILLING_SECRET=stripeSecret
   if(stripeSecondarySecret)vars.STRIPE_SECONDARY_SECRET_KEY=stripeSecondarySecret
@@ -43,15 +32,21 @@ export async function harness({ assets = false, localTime, hostname = '127.0.0.1
     if (queued) return Response.json(queued.body, { status: queued.status })
     return Response.json({ id: `test-${mails.length}` })
   }
+  let mf
+  // WebAuthn refuses IP-address relying parties, so preserve the requested hostname.
+  const listener = await httpListener(() => mf.ready, hostname)
+  const { origin } = listener
+  vars.AUTH_ORIGIN = origin
   const options = {
-    unsafeTriggerHandlers: true, host: '127.0.0.1', port, modulesRoot: 'dist/server', modules: ['index.js', ...chunks].map(path => ({ type: 'ESModule', path: `dist/server/${path}` })), compatibilityDate: '2026-09-08', compatibilityFlags: ['nodejs_compat'],
+    // Omitting port lets workerd bind a fresh port 0 on every runtime start.
+    unsafeTriggerHandlers: true, host: '127.0.0.1', modulesRoot: 'dist/server', modules: ['index.js', ...chunks].map(path => ({ type: 'ESModule', path: `dist/server/${path}` })), compatibilityDate: '2026-09-08', compatibilityFlags: ['nodejs_compat'],
     d1Databases: { DB: databaseId }, ...(persistence?{resourcePersistencePath:persistence}:{}), bindings: vars, outboundService,
     ...(assets ? { assets: { directory: 'dist/client', binding: 'ASSETS', run_worker_first: true, routerConfig: { has_user_worker: true, invoke_user_worker_ahead_of_assets: true } } } : {}),
   }
-  const mf = new Miniflare(convertV4MiniflareOptions(options))
-  const close = () => mf.dispose()
+  const close = () => Promise.all([listener.close(), mf?.dispose()])
   let setupPhase='worker-ready'
   try {
+    mf = new Miniflare(convertV4MiniflareOptions(options))
     await mf.ready
     // Every committed migration, as `rer setup` leaves a database.
     const db = await mf.getD1Database('DB')
