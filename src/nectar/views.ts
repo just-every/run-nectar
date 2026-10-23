@@ -1,3 +1,4 @@
+import { refundNoticeSettings } from './prepaid-refund-mail'
 import { hierarchyView } from './hierarchies'
 import { webhookList,webhookDetail } from './webhooks'
 import { writeOffList } from './write-offs'
@@ -83,6 +84,7 @@ export const views: Record<string, View> = {
   hierarchies:(env,actor,_r,_id,url)=>hierarchyView(env,actor,url.searchParams.get('parent')??undefined),
   webhooks:(env,actor)=>webhookList(env,actor),
   webhookDelivery:(env,actor,_r,id)=>webhookDetail(env,actor,id),
+  prepaidRefundNotices:(env,actor)=>refundNoticeSettings(env,actor),
   prepaidRefunds:(env,actor,_r,_id,url)=>readPrepaidRefunds(env,actor,url.searchParams.get('subscription')??undefined),
   prepaidTopupAuthorizations:(env,actor,_r,_id,url)=>readPrepaidTopupAuthorizations(env,actor,url.searchParams.get('subscription')??undefined),
   prepaidTopupClaims:(env,actor,_r,_id,url)=>readPrepaidTopupClaims(env,actor,url.searchParams.get('subscription')??undefined),

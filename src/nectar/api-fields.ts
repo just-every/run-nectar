@@ -601,16 +601,24 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
   },
   "prepaid.refund.decide": {
     "basis_hash": "text",
-    "confirm_single": "flag",
     "decision": "text",
     "refund": "text"
   },
+  "prepaid.refund.notice.configure": {
+    "*": "has",
+    "language": "text",
+    "revision": "integer"
+  },
   "prepaid.refund.prepare": {
     "grant": "text",
-    "reason": "text"
+    "reason": "text",
+    "refund": "text"
   },
   "prepaid.refund.reconcile": {
     "refund": "text"
+  },
+  "prepaid.refund.request": {
+    "grant": "text"
   },
   "prepaid.settle": {
     "subscription": "text"

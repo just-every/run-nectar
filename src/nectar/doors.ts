@@ -11,6 +11,7 @@ export const API_DOORS: [string, string][] = [
   ['^promotions$','promotions'],
   ['^write-offs$','writeOffs'],
   ['^ledger-postings$','ledgerPostings'],
+  ['^prepaid/refund-notices$','prepaidRefundNotices'],
   ['^prepaid/refunds$','prepaidRefunds'],
   ['^prepaid/topup-authorizations$','prepaidTopupAuthorizations'],
   ['^prepaid/topup-claims$','prepaidTopupClaims'],

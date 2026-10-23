@@ -1,3 +1,5 @@
+import { configureRefundNotices } from './prepaid-refund-mail'
+import { requestSupportPrepaidRefund } from './prepaid-refund-intake'
 import { preparePlanChange,decidePlanChange,preparePlanChangeCredit } from './plan-changes'
 import { setHierarchy,prepareConsolidation,recordHierarchyCommitment } from './hierarchies'
 import { registerWebhook,rotateWebhook,disableWebhook,replayWebhook,dispatchWebhookDoor } from './webhooks'
@@ -96,6 +98,8 @@ export const actions: Record<string, Handler> = {
   'collection.prepare': prepareNativeCollection,
   'collection.confirm': confirmNativeCollection,
   'collection.reconcile': reconcileNativeCollection,
+  'prepaid.refund.notice.configure':configureRefundNotices,
+  'prepaid.refund.request':requestSupportPrepaidRefund,
   'prepaid.refund.prepare':preparePrepaidRefund,
   'prepaid.refund.decide':decidePrepaidRefund,
   'prepaid.refund.reconcile':reconcilePrepaidRefund,

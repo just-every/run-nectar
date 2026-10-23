@@ -1,3 +1,4 @@
+import { configureNotices, supportIntake, portalIntake, assertNotice } from './prepaid-refund-intake.mjs'
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { nativeCollectionEdge } from './native-collection.mjs'
@@ -40,7 +41,7 @@ export function prepaidRefundEdge(){
 }
 let edge=prepaidRefundEdge()
 export const harnessOptions=()=>{edge=prepaidRefundEdge();return {stripeFetch:edge.fetch,stripeSecret:'synthetic-nectar-1',stripeSecondarySecret:'synthetic-nectar-2'}}
-export async function prepaidRefundFlow(h,owner,{onState=async()=>{},onTypedState=async()=>{},onSharedState=async()=>{},approveRefund,reconcileRefund}={}){
+export async function prepaidRefundFlow(h,owner,{onState=async()=>{},onTypedState=async()=>{},onSharedState=async()=>{},approveRefund,reconcileRefund,onIntakeState=async()=>{},requestIntake,requestPortalIntake,prepareIntake}={}){
   const api=(path,body,status)=>h.api(path,owner,body,status),refundPosts=()=>edge.calls.filter(call=>call.method==='POST').length
   await h.advanceClock('2026-11-01T18:00:00Z');edge.at('2026-11-01T18:00:00Z')
   await api('business.configure',{...await api('business'),timezone:'UTC'})
@@ -113,9 +114,15 @@ export async function prepaidRefundFlow(h,owner,{onState=async()=>{},onTypedStat
   await h.advanceClock('2026-11-02T18:00:00Z');edge.at('2026-11-02T18:00:00Z')
   for(const row of rows){row.service=(await issue(row))[0];const state=await api(`prepaid/${row.subscription}`);row.grant=state.grants[0].id;row.before=state}
   await api('prepaid.refund.prepare',{grant:rows[3].grant,reason:'Unverified bank receipt cannot be a card refund'},409)
-  for(const who of [finance,support,agent])await h.api('prepaid.refund.prepare',who,{grant:rows[0].grant,reason:'Unauthorized'},403)
+  for(const who of [support,agent])await h.api('prepaid.refund.prepare',who,{grant:rows[0].grant,reason:'Unauthorized'},403)
   const prepare=row=>api('prepaid.refund.prepare',{grant:row.grant,reason:'Synthetic unused paid service returned to its original card'})
-  const first=await prepare(rows[0]);await onState({label:'prepared',rows,refund:first});assert.deepEqual([first.quote.amountN,first.quote.amountCents],[6000,6000])
+  const defaults=await api('prepaid/refund-notices');assert.deepEqual([defaults.refundedSender,defaults.failedSender],['off','off'])
+  for(const who of [support,agent])await h.api('prepaid/refund-notices',who,undefined,403)
+  await configureNotices(h,owner)
+  await api('portal.configure',{hosts:[h.origin],parents:[]})
+  const startPosts=refundPosts(),firstIntake=await supportIntake(h,owner,support,rows[0],{onIntakeState,requestIntake})
+  assert.equal(refundPosts(),startPosts,'Support intake never calls the processor refund endpoint')
+  const first=prepareIntake?await prepareIntake({row:rows[0],intake:firstIntake}):await api('prepaid.refund.prepare',{refund:firstIntake.id,reason:'Synthetic unused paid service returned to its original card'});assert.equal(first.id,firstIntake.id);await onState({label:'prepared',rows,refund:first});assert.deepEqual([first.quote.amountN,first.quote.amountCents],[6000,6000])
   await typedRefund(rows[0],first,'pending')
   const financePending=(await h.api(`prepaid/refunds?subscription=${rows[0].subscription}`,finance)).find(row=>row.id===first.id)
   assert.deepEqual(financePending.quote,first.quote);assert.equal(financePending.reason,first.reason);assert.equal(Object.hasOwn(financePending,'proof'),false)
@@ -134,6 +141,8 @@ export async function prepaidRefundFlow(h,owner,{onState=async()=>{},onTypedStat
   const refunded=await approval
   await onState({label:'refunded',rows,refund:refunded})
   await typedRefund(rows[0],first,'refunded')
+  await assertNotice(h,owner,first,'accepted')
+  await onIntakeState({label:'notice-accepted',row:rows[0],refund:refunded})
   for(const {role,who} of [...readers,{role:'agent',who:agent}]){
     const sharedInvoice=await h.api(`invoices/${rows[0].invoice}`,who)
     assert.equal(sharedInvoice.credits.find(credit=>credit.id===refunded.credit).reason,'unused_paid_credit',`${role} invoice credit has only a typed reason category`)
@@ -198,7 +207,9 @@ export async function prepaidRefundFlow(h,owner,{onState=async()=>{},onTypedStat
     const portalInvoice=await h.raw(`/portal/invoices/${rows[0].invoice}?session=${encodeURIComponent(session.token)}`);assert.equal(portalInvoice.status,200);assert.ok(!(await portalInvoice.text()).includes(first.reason))
     await onState({label:'customer-refund',rows,refund:refunded,portalSession:session,portalSource:lot.href,language})
   }
-  const unit=await prepare(rows[1]);assert.deepEqual([unit.quote.amountN,unit.quote.amountCents],[2500000,83])
+  const unitIntake=await portalIntake(h,owner,rows[1],rows[0],{onIntakeState,requestPortalIntake})
+  assert.equal(refundPosts(),1,'Portal intake never refunds cash')
+  const unit=await api('prepaid.refund.prepare',{refund:unitIntake.id,reason:'Synthetic unused paid service returned to its original card'});assert.equal(unit.id,unitIntake.id);assert.deepEqual([unit.quote.amountN,unit.quote.amountCents],[2500000,83])
   edge.loseNext();edge.visible(false)
   const unknown=approveRefund?await approveRefund({row:rows[1],refund:unit,finance}):await h.api('prepaid.refund.decide',finance,{refund:unit.id,basis_hash:unit.basis,decision:'approved'})
   await onState({label:'uncertain',rows,refund:unknown})
@@ -206,8 +217,12 @@ export async function prepaidRefundFlow(h,owner,{onState=async()=>{},onTypedStat
   assert.equal(unknown.status,'uncertain');const afterUnknown=refundPosts(),recoveryStart=edge.calls.length
   assert.equal((reconcileRefund?await reconcileRefund({row:rows[1],refund:unit,expectedStatus:'uncertain'}):await api('prepaid.refund.reconcile',{refund:unit.id})).status,'uncertain');assert.equal(refundPosts(),afterUnknown)
   edge.visible(true)
+  h.mailResponses.push({to:`${rows[1].external}@example.test`,status:503,body:{error:'synthetic-nectar-mail-uncertain'}})
   const recovered=reconcileRefund?await reconcileRefund({row:rows[1],refund:unit,expectedStatus:'refunded'}):await api('prepaid.refund.reconcile',{refund:unit.id})
   await onState({label:'reconciled',rows,refund:recovered})
+  await assertNotice(h,owner,unit,'uncertain',{language:'es-US'})
+  const sentAfterUnknown=h.mails.length;await api('prepaid.refund.reconcile',{refund:unit.id});assert.equal(h.mails.length,sentAfterUnknown,'Unknown mail is not retried')
+  await onIntakeState({label:'notice-uncertain',row:rows[1],refund:recovered})
   assert.equal(recovered.status,'refunded');assert.equal(recovered.cashAmountCents,-83);assert.equal(refundPosts(),afterUnknown)
   assert.ok(edge.calls.slice(recoveryStart).some(call=>call.path==='/refunds'&&call.method==='GET'),'Unknown recovery reads the original charge refund history')
   assert.ok(edge.calls.slice(recoveryStart).every(call=>call.method==='GET'),'Both native reconciliation attempts only read processor evidence')
@@ -218,14 +233,26 @@ export async function prepaidRefundFlow(h,owner,{onState=async()=>{},onTypedStat
   const rejected=await prepare(rows[2]);await h.api('prepaid.refund.decide',finance,{refund:rejected.id,decision:'rejected'})
   await typedRefund(rows[2],rejected,'rejected')
   assert.equal(refundPosts(),afterUnknown)
-  const failed=await prepare(rows[2]);edge.failNext()
-  assert.equal((await h.api('prepaid.refund.decide',finance,{refund:failed.id,basis_hash:failed.basis,decision:'approved'})).status,'failed')
+  const failed=await h.api('prepaid.refund.prepare',finance,{grant:rows[2].grant,reason:'Synthetic unused paid service returned to its original card'});
+  await h.api('prepaid.refund.decide',finance,{refund:failed.id,basis_hash:failed.basis,decision:'approved'},409)
+  await onIntakeState({label:'finance-prepared',row:rows[2],refund:failed,finance})
+  edge.failNext()
+  assert.equal((await h.api('prepaid.refund.decide',owner,{refund:failed.id,basis_hash:failed.basis,decision:'approved'})).status,'failed')
   await typedRefund(rows[2],failed,'failed')
+  await assertNotice(h,owner,failed,'accepted',{outcome:'failed'})
+  await onIntakeState({label:'notice-failed',row:rows[2],refund:failed})
   const afterFailed=refundPosts();assert.equal((await api(`prepaid/${rows[2].subscription}`)).balances[0].remainingN,6000)
   assert.equal((await api('prepaid.refund.reconcile',{refund:failed.id})).status,'failed');assert.equal(refundPosts(),afterFailed)
+  await configureNotices(h,owner,{refunded:'processor',failed:'processor'})
+  const processorRequest=await prepare(rows[2]);edge.failNext();const beforeProcessorMail=h.mails.length
+  await h.api('prepaid.refund.decide',finance,{refund:processorRequest.id,basis_hash:processorRequest.basis,decision:'approved'})
+  assert.equal(h.mails.length,beforeProcessorMail,'Processor-owned refund notices suppress Nectar')
+  await assertNotice(h,owner,processorRequest,'processor',{outcome:'failed'})
+  await onIntakeState({label:'processor-notices-off',row:rows[2],refund:processorRequest})
+  const afterProcessor=refundPosts()
   const stale=await prepare(rows[2]);await usage(rows[2],631,'1','2026-11-02')
   await h.api('prepaid.refund.decide',finance,{refund:stale.id,basis_hash:stale.basis,decision:'approved'},409)
-  assert.equal(refundPosts(),afterFailed);await h.api('prepaid.refund.decide',finance,{refund:stale.id,decision:'rejected'})
+  assert.equal(refundPosts(),afterProcessor);await h.api('prepaid.refund.decide',finance,{refund:stale.id,decision:'rejected'})
   await onState({label:'refused',rows,refund:stale})
   await h.advanceClock('2026-12-01T18:00:00Z')
   await api('report.schedule',{enabled:true,day:1})
@@ -267,7 +294,7 @@ export async function prepaidRefundFlow(h,owner,{onState=async()=>{},onTypedStat
   const retainedSource=await api(`reports/refunds/${refunded.id}?period=2026-11&customer=${subject.customer}`)
   assert.equal(retainedSource.refund.cashAmountCents,-6000);assert.equal(retainedSource.refund.liability.recognitionCents,0)
   for(const marker of [subject.external,`${subject.external}@example.test`,'synthetic-nectar-native-customer-1','synthetic-nectar-native-card-1'])assert.ok(!JSON.stringify([retainedSource,await api('audit')]).includes(marker),'Refund proof and personal source evidence are withdrawn')
-  assert.equal(refundPosts(),afterFailed)
+  assert.equal(refundPosts(),afterProcessor)
   assert.deepEqual((await api('erasure.purge',{})).removed,[])
   await h.advanceClock('2033-11-01T18:00:00Z');assert.deepEqual((await api('erasure.purge',{})).removed,[])
   await h.advanceClock('2033-11-02T18:00:00Z');assert.deepEqual((await api('erasure.purge',{})).removed,[erase.id])
@@ -275,7 +302,7 @@ export async function prepaidRefundFlow(h,owner,{onState=async()=>{},onTypedStat
   await api(`invoices/${subject.invoice}`,undefined,404)
   const removal=JSON.parse((await api('erasures')).find(row=>row.id===erase.id).receipt_json)
   for(const kind of ['nc_prepaid_refunds','nc_prepaid_refund_credits'])assert.ok(removal.removal.records.some(row=>row.kind===kind&&row.records>0),'Both new financial families expire only with the governed custody group')
-  assert.deepEqual((await api('erasure.purge',{})).removed,[]);assert.equal(refundPosts(),afterFailed)
+  assert.deepEqual((await api('erasure.purge',{})).removed,[]);assert.equal(refundPosts(),afterProcessor)
   console.log('CAT-004 unused paid money/units refunds: original capture, independent approval, exact zero-revenue liability/cash, reservation race, rejected/failed/stale and GET-only unknown recovery passed')
   return {rows,refunded,recovered}
 }

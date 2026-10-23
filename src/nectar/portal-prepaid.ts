@@ -1,3 +1,4 @@
+import { portalRefundSection } from './portal-prepaid-refunds'
 import { portalTopupLinks } from './portal-prepaid-topups'
 // Customer-session projections only. No operator Actor, request payload,
 // payment-provider reference or authorization narrative crosses this boundary.
@@ -85,6 +86,7 @@ export async function portalPrepaidPage(env: Bindings, session: CustomerSession,
   return h`<h1>${L.t('portal.prepaid.heading')}</h1><p><a href="${link('/portal')}">${L.t('portal.back')}</a></p>
     <p>${L.t('portal.prepaid.asOf', { date: L.day(data.date) })}</p>
     ${await portalTopupLinks(env,session,link)}
+    ${await portalRefundSection(env,session,data.lots,link)}
     ${data.lots.length ? data.lots.map(lot => lotCard(session, lot, link)) : h`<p>${L.t('portal.prepaid.empty')}</p>`}
     <p><a href="${link('/portal/prepaid.csv')}">${L.t('portal.prepaid.csv')}</a></p>`
 }
