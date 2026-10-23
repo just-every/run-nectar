@@ -54,7 +54,8 @@ export async function assertNotice(h,owner,refund,expectedStatus,{outcome='refun
     assert.equal(mails.length,1);assert.equal(mails[0].text,row.body)
     const expectedAmount=new Intl.NumberFormat(language==='en'?'en-US':'es-US',{style:'currency',currency:'USD',currencyDisplay:'code'}).format(refund.quote.amountCents/100).replace(/[  ]/g,' ')
     assert.ok(row.body.includes(expectedAmount),`The mail preserves its exact localized amount: ${expectedAmount}`)
-    assert.ok(row.body.includes(row.purchaseNumber));assert.ok(row.body.includes(outcome==='refunded'?row.creditNumber:'No numbered credit issued'))
+    assert.ok(row.body.includes(row.purchaseNumber));if(outcome==='refunded')assert.ok(row.body.includes(row.creditNumber));else assert.equal(row.creditNumber,null)
+    assert.doesNotMatch(row.body,/undefined|\{(?:amount|units|purchase|credit)\}/)
     if(refund.quote.kind==='units')assert.ok(row.body.includes('2.5'))
     assert.doesNotMatch(row.body,/Synthetic unused paid service|chargeRef|paymentMethodRef|succeeded-refund/)
   }
