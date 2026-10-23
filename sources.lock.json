@@ -73,7 +73,7 @@
       "executable": false
     },
     "base-copies.json": {
-      "sha256": "070979a2eb7cdfe52910ec2deeae067e37353dde5ad800bba3cdc53b84584d4c",
+      "sha256": "10f7f71a69c56bd011b95e708d0b1750851b42ba040fd3de6f12c54532c497dd",
       "executable": false
     },
     "CONTRACT.md": {
@@ -613,7 +613,7 @@
       "executable": false
     },
     "public/fonts/fonts.css": {
-      "sha256": "113a21cd06073a660371791194964833c52442dc380bb7986cb8ec87d2a0854f",
+      "sha256": "4258cc89ad8a7119866d06750f517a1208bba3a2aa425617b03d967f27336e85",
       "executable": false
     },
     "public/fonts/hanken-grotesk/hanken-grotesk-latin-ext-wght-normal.woff2": {
@@ -645,15 +645,15 @@
       "executable": false
     },
     "public/fonts/README.md": {
-      "sha256": "dba5463f8fc99ca391a4b2a39f0d930a2c759cf369803bb515f61e7b2e294452",
+      "sha256": "a120a0dbeac4969f5e84a9c2880ab4e92a996f8be73721452673a3d38430c53d",
       "executable": false
     },
     "public/nectar.css": {
-      "sha256": "47922ac5fae1c85fa6c2a803f61e04e4cdc4a9a90b34411bc11a88001168901e",
+      "sha256": "db3e8a2db606f5f6bf95908a6bb7c18185a85cc0232cfe99cf3f9c02d0778f7f",
       "executable": false
     },
     "public/rer-theme.css": {
-      "sha256": "32444d4e3221e2c64d2cbb2a9f83f0299207bb66ad44b7373ab7e3a56d62a4d7",
+      "sha256": "9e526653706e4722ed4b45a1bc546d91a7935ee91e314be0c3aead3f9cfc86ca",
       "executable": false
     },
     "public/site/closing-peach-300.avif": {
@@ -709,7 +709,7 @@
       "executable": false
     },
     "README.md": {
-      "sha256": "e6ac4993701a438e1ade4e252c991b4401c1f3987d4af959b1fd560e3c9b0937",
+      "sha256": "d999abcdd3e81f9d82c34a9e02b285bf84dbeb01da8c8d0a5e55d858810715fc",
       "executable": false
     },
     "RELEASE.json": {
@@ -3849,7 +3849,7 @@
       "executable": false
     },
     "src/server.dev.ts": {
-      "sha256": "4892545be3afaf55d1a45b99933f017baa43512d7152f56b21422010aa70b8a5",
+      "sha256": "79540e700d89d02af4df1297bd844c0e58f0a4758a647eda87d873a8b7109168",
       "executable": false
     },
     "src/server.ts": {
@@ -4001,7 +4001,7 @@
       "executable": false
     },
     "src/site/site.css": {
-      "sha256": "4c6ff5e24e8c46a5b7a103c8191652d87e2355a0c401dda5bd690c53f07afb16",
+      "sha256": "a9e81012f552644c16934a78be3a35590702d92e3b559bb808b0f713a0182673",
       "executable": false
     },
     "tests/fixtures/invoice-logo.jpg": {

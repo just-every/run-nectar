@@ -8,9 +8,11 @@ https://github.com/marcologous/hanken-grotesk.
 
 The app, Base's sign-in and setup documents and the run site link
 `/fonts/fonts.css` once and preload only the primary Latin file. Do not import
-this CSS from a component. Every body-font stack uses `--font-body`, including
-the local `Hanken Grotesk Fallback` before generic fallback fonts; controls
-inherit it.
+this CSS from a component. The faces are declared in `/rer-theme.css`, the one
+file rer's theme reader takes, so the installer serves them too; `fonts.css`
+holds the page font and the rest of Nectar's look. Every body-font stack uses
+`--font-body`, including the local `Hanken Grotesk Fallback` before generic
+fallback fonts; controls inherit it.
 
 Fallback scales use Hanken Grotesk/Arial advance-width ratios over A-Z, a-z and
 0-9 at weights 400, 500, 700 and 800 (Arial Bold for 700 and 800). Ascent,

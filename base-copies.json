@@ -1346,17 +1346,6 @@
       }
     },
     {
-      "path": "src/server.dev.ts",
-      "originPath": "foundation/template/src/server.dev.ts",
-      "revision": "b70dbba0f53353eb6f3cdd2713f3cca0712b341b",
-      "files": {
-        "src/server.dev.ts": "4892545be3afaf55d1a45b99933f017baa43512d7152f56b21422010aa70b8a5"
-      },
-      "modes": {
-        "src/server.dev.ts": "100644"
-      }
-    },
-    {
       "path": "tests/incremental-typecheck.test.mjs",
       "originPath": "foundation/template/tests/incremental-typecheck.test.mjs",
       "revision": "b70dbba0f53353eb6f3cdd2713f3cca0712b341b",

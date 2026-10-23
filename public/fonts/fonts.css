@@ -1,82 +1,186 @@
-/* Hanken Grotesk (SIL Open Font License 1.1), self-hosted from public/fonts/hanken-grotesk. The page makes no third-party request. */
-@font-face {
-  font-family: 'Hanken Grotesk';
-  font-style: normal;
-  font-weight: 100 900;
-  font-display: swap;
-  src: url('/fonts/hanken-grotesk/hanken-grotesk-latin-wght-normal.woff2') format('woff2');
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-}
-@font-face {
-  font-family: 'Hanken Grotesk';
-  font-style: normal;
-  font-weight: 100 900;
-  font-display: swap;
-  src: url('/fonts/hanken-grotesk/hanken-grotesk-latin-ext-wght-normal.woff2') format('woff2');
-  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
-}
-/* Match Hanken Grotesk's sampled advance widths and its 1000/-303/0 vertical
-   metrics. Divide each vertical override by size-adjust, which scales it again. */
-@font-face {
-  font-family: 'Hanken Grotesk Fallback';
-  font-style: normal;
-  font-weight: 100 450;
-  src: local('Arial'), local('ArialMT'), local('Liberation Sans'), local('LiberationSans');
-  size-adjust: 98.1524%;
-  ascent-override: 101.8824%;
-  descent-override: 30.8704%;
-  line-gap-override: 0%;
-}
-@font-face {
-  font-family: 'Hanken Grotesk Fallback';
-  font-style: normal;
-  font-weight: 451 549;
-  src: local('Arial'), local('ArialMT'), local('Liberation Sans'), local('LiberationSans');
-  size-adjust: 98.6314%;
-  ascent-override: 101.3876%;
-  descent-override: 30.7205%;
-  line-gap-override: 0%;
-}
-@font-face {
-  font-family: 'Hanken Grotesk Fallback';
-  font-style: normal;
-  font-weight: 550 749;
-  src: local('Arial Bold'), local('Arial-BoldMT'), local('Liberation Sans Bold'), local('LiberationSans-Bold');
-  size-adjust: 95.45%;
-  ascent-override: 104.7669%;
-  descent-override: 31.7444%;
-  line-gap-override: 0%;
-}
-@font-face {
-  font-family: 'Hanken Grotesk Fallback';
-  font-style: normal;
-  font-weight: 750 900;
-  src: local('Arial Bold'), local('Arial-BoldMT'), local('Liberation Sans Bold'), local('LiberationSans-Bold');
-  size-adjust: 95.9119%;
-  ascent-override: 104.2624%;
-  descent-override: 31.5915%;
-  line-gap-override: 0%;
-}
-
+/* Nectar's look beyond its theme. /rer-theme.css holds only what rer's theme reader takes (the --rer-* theme
+   tokens and the faces), so everything else Nectar's pages wear is here: the page font, Nectar's own --nc-*
+   tokens, Base's other --rer-* names and the rules that dress Base's sign-in, /setup, Lobby, Run and not-found
+   pages. The app (src/nectar/ui/html.ts), the root document and /setup (src/base/font-head.ts), the Lobby and
+   Base's Run, contract and not-found pages (the edition identity's fonts) and the run site (src/site/shell.ts)
+   link this file before the theme; the sign-in pages (src/auth.server.ts) and the development sign-in and
+   hand-off pages (src/server.dev.ts) add it after their own style. It declares no face (the theme does): rer's
+   demo host inlines this path and the theme into the hosted demo's gate, and no other file. */
 :root {
   --font-body: 'Hanken Grotesk', 'Hanken Grotesk Fallback', Arial, sans-serif;
   font-family: var(--font-body);
 }
 button, input, select, textarea { font-family: inherit; }
 
-/* The run site's hand face for the sticky notes and its code face, both SIL
-   Open Font License 1.1 (kalam/LICENSE.txt, jetbrains-mono/LICENSE.txt). */
-@font-face {
-  font-family: 'Kalam';
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url('/fonts/kalam/kalam-latin-400-normal.woff2') format('woff2');
+/* Nectar's tokens, defined once: the app (/nectar.css), the run site, the
+   Lobby, sign-in, /setup and the hosted demo's gate read them. The faces and
+   the --rer-* theme tokens (literal copies of these) are in /rer-theme.css. */
+:root {
+  /* Base's other --rer-* names, which Base's pages read beside the theme's
+     tokens: the dark code card, the button radius and the wordmark weight. */
+  --rer-code-background: #17191e;
+  --rer-code-text: #e7e9ee;
+  --rer-button-radius: var(--nc-radius-field);
+  --rer-wordmark-weight: 800;
+
+  /* The run site (homepage, docs, /run, 404) and Base's sign-in, setup and
+     Lobby frames: a crisp white page with a faint square grid, ink #14171b,
+     the coral-to-tangerine pair on the second line of every heading, white
+     hairline cards, mint for paid, soft red for failure, pale-yellow stickies
+     in a hand face, and one colour per collaborator cursor. */
+  --nc-page: #ffffff;
+  --nc-grid-line: rgba(20, 23, 27, .045);
+  --nc-grid: linear-gradient(var(--nc-grid-line) 1px, transparent 1px) 0 0 / 64px 64px, linear-gradient(90deg, var(--nc-grid-line) 1px, transparent 1px) 0 0 / 64px 64px, var(--nc-page);
+  --nc-ink: #14171b;
+  --nc-body: #4a5160;
+  --nc-muted: #6b7280;
+  --nc-faint: #9aa1ad;
+  --nc-line: #e9ebef;
+  --nc-rule: #3a3f48;
+  --nc-surface: #ffffff;
+  --nc-wash: #f4f5f7;
+  --nc-card-edge: rgba(20, 23, 27, .08);
+  --nc-card-shadow: 0 1px 2px rgba(20, 23, 27, .04), 0 12px 32px -8px rgba(20, 23, 27, .12);
+  --nc-coral: #fc5450;
+  --nc-tangerine: #fe961c;
+  --nc-orange: #fd7a1f;
+  --nc-gradient: linear-gradient(90deg, #fc5450 0%, #fd6f42 45%, #fe961c 100%);
+  --nc-icon-gradient: linear-gradient(135deg, #fc5450, #fd7a3a);
+  --nc-mint: #e2f7e9;
+  --nc-mint-ink: #157a3f;
+  --nc-green: #21b35b;
+  --nc-red-soft: #fde6e6;
+  --nc-red-ink: #d42c2c;
+  --nc-peach: #fff1e7;
+  --nc-peach-ink: #e4521d;
+  --nc-blue-soft: #e9effb;
+  --nc-blue-ink: #3d5a9e;
+  --nc-yellow-soft: #fff3cf;
+  --nc-yellow-ink: #e59a00;
+  --nc-pink-soft: #fde7e7;
+  --nc-sticky: #fdf2b5;
+  --nc-dana: #fb5455;
+  --nc-marcus: #fd7a1f;
+  --nc-leo: #12a59b;
+  --nc-code: #17191e;
+  --nc-code-text: #e7e9ee;
+  --nc-code-key: #f3f4f6;
+  --nc-code-string: #fd8f3a;
+  --nc-code-true: #4fd584;
+  --nc-font: 'Hanken Grotesk', 'Hanken Grotesk Fallback', Arial, sans-serif;
+  --nc-hand: 'Kalam', 'Comic Sans MS', 'Segoe Print', cursive;
+  --nc-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --nc-radius: 20px;
+
+  /* The app (the owner's pick, 18 Oct): white cards with hairline edges, quiet
+     1px fields, a coral wash and marker for the current place and the row in
+     focus, amber for due soon, and the gradient on one decision per screen. */
+  --nc-field: #d7dbe2;
+  --nc-field-hover: #a9b0bc;
+  --nc-head: #fafafb;
+  --nc-focus-wash: #fff0f2;
+  --nc-coral-ink: #e8323d;
+  --nc-amber-soft: #fff5e0;
+  --nc-amber-ink: #a35200;
+  --nc-focus-ring: 0 0 0 3px rgba(252, 84, 80, .22);
+  --nc-radius-card: 12px;
+  --nc-radius-panel: 15px;
+  --nc-radius-field: 10px;
 }
-@font-face {
-  font-family: 'JetBrains Mono';
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url('/fonts/jetbrains-mono/jetbrains-mono-latin-400-normal.woff2') format('woff2');
+
+/* Sign-in (operator-auth) and first-run /setup: Base's no-script frames wear
+   the app's look through these rules. A white hairline card on the faint grid,
+   the peach and the heavy wordmark above a heavy black heading, quiet 1px
+   fields with a coral focus ring, and an ink button. */
+html.rer-themed body {
+  min-height: 100vh;
+  background: var(--nc-grid);
+  color: var(--nc-ink);
+  font-family: var(--nc-font);
+  -webkit-font-smoothing: antialiased;
+  display: block;
+  padding: 48px 20px;
+}
+html.rer-themed body main { width: 100%; max-width: 520px; margin: 9vh auto 0; padding: 40px 44px 44px; background: var(--nc-surface); border: 1px solid var(--nc-card-edge); border-radius: var(--nc-radius-panel); box-shadow: var(--nc-card-shadow); }
+html.rer-themed body .brand,
+html.rer-themed body .rer-brand { justify-content: flex-start; gap: 10px; margin: 0 0 30px; color: #080808; font-size: 30px; font-weight: 900; letter-spacing: -.05em; line-height: 1; }
+html.rer-themed body .brand::before,
+html.rer-themed body .rer-brand::before { width: 34px; height: 34px; }
+html.rer-themed body h1 { margin: 0 0 10px; font-size: 38px; font-weight: 900; line-height: 1.1; letter-spacing: -.04em; text-align: left; color: var(--nc-ink); }
+html.rer-themed body h1 + p { text-align: left; font-size: 16px; margin: 0 0 24px; }
+html.rer-themed body p { color: var(--nc-muted); font-size: 15px; }
+html.rer-themed body h2 { font-size: 19px; font-weight: 800; letter-spacing: -.02em; }
+html.rer-themed body label { color: var(--nc-ink); font-size: 14px; font-weight: 600; margin: 20px 0 6px; }
+html.rer-themed body label:has(input[type=checkbox]) { align-items: center; gap: 12px; margin: 0; font-weight: 500; font-size: 15px; }
+html.rer-themed body input:not([type=checkbox]):not([type=hidden]) { min-height: 46px; margin: 0 0 16px; padding: 10px 14px; border: 1px solid var(--nc-field); border-radius: var(--nc-radius-field); background: var(--nc-surface); color: var(--nc-ink); font-size: 15px; box-shadow: none; }
+html.rer-themed body input:not([type=checkbox]):not([type=hidden]):hover { border-color: var(--nc-field-hover); }
+html.rer-themed body input:not([type=checkbox]):not([type=hidden]):focus-visible { outline: none; border-color: var(--nc-ink); box-shadow: var(--nc-focus-ring); }
+html.rer-themed body input[type=checkbox] { width: 20px; height: 20px; margin: 0; accent-color: var(--nc-coral); }
+html.rer-themed body button,
+html.rer-themed body .action { min-height: 48px; border: 1px solid #222; border-radius: var(--nc-radius-field); background: linear-gradient(#2a2c31, #15171b); color: #fff; font-size: 16px; font-weight: 600; box-shadow: 0 2px 5px rgba(20, 23, 27, .1); }
+html.rer-themed body button:hover,
+html.rer-themed body .action:hover { background: #33363d; box-shadow: none; }
+html.rer-themed body button.secondary { background: var(--nc-surface); color: var(--nc-ink); border: 1px solid #cbd0d8; box-shadow: none; }
+html.rer-themed body .notice { border: 0; border-radius: var(--nc-radius-field); background: var(--nc-peach); color: var(--nc-ink); padding: 12px 14px; }
+html.rer-themed body .secondary-link a { color: var(--nc-coral-ink); }
+html.rer-themed body :focus-visible { outline: 2px solid var(--nc-ink); outline-offset: 2px; }
+/* /setup: the owner as ruled rows, then the confirmation and the action. */
+html.rer-themed body dl { grid-template-columns: 130px minmax(0, 1fr); gap: 0; margin: 0 0 24px; border-top: 1px solid var(--nc-line); }
+html.rer-themed body dt,
+html.rer-themed body dd { padding: 12px 0; border-bottom: 1px solid var(--nc-line); font-size: 15px; }
+html.rer-themed body dt { color: var(--nc-muted); }
+html.rer-themed body form { gap: 20px; }
+html.rer-themed body form p { color: var(--nc-ink); font-size: 15px; }
+@media (max-width: 600px) {
+  html.rer-themed body { padding: 20px 16px; }
+  html.rer-themed body main { margin-top: 3vh; padding: 28px 20px 28px; }
+  html.rer-themed body .brand,
+  html.rer-themed body .rer-brand { font-size: 26px; margin-bottom: 22px; }
+  html.rer-themed body h1 { font-size: 32px; }
+  html.rer-themed body dl { grid-template-columns: 90px minmax(0, 1fr); }
+}
+
+/* The Lobby (Base's door at /) sits in the same white card as sign-in. */
+body:has(> main.door) { background: var(--nc-grid); }
+.door > .door-card { width: 100%; max-width: 560px; padding: 40px 44px 40px; background: var(--nc-surface); border: 1px solid var(--nc-card-edge); border-radius: var(--nc-radius-panel); box-shadow: var(--nc-card-shadow); }
+.door > .door-card .line { color: var(--nc-muted); }
+.door > .door-card h1 { font-weight: 900; letter-spacing: -.04em; }
+main.door { padding-top: 16vh; }
+@media (max-width: 640px) {
+  main.door { padding-top: 96px; }
+  .door > .door-card { padding: 40px 22px 36px; }
+}
+
+/* Base's /run and not-found pages wear the homepage's look: the grid page,
+   the header lockup, a heavy ink headline, white hairline step cards, coral
+   step numbers and ink code cards. */
+/* They keep the Base tokens they are live with on run-nectar.com; the app's
+   greys and 10px fields above are for the app, sign-in, setup and the Lobby. */
+body:has(> header.bar) { --rer-text: #1c1a17; --rer-muted: #5f5a52; --rer-border: #cfc6b6; --rer-accent: #1c1a17; --rer-accent-text: #fffcf5; --rer-focus: #1c1a17; --rer-radius: 18px; --rer-button-radius: 999px; }
+body:has(> header.bar) { background: var(--nc-grid); color: var(--nc-ink); }
+body > header.bar { max-width: 1440px; min-height: 94px; padding: 0 54px 0 62px; }
+body > header.bar .brand { gap: 13px; font-size: 47px; font-weight: 900; letter-spacing: -.04em; color: var(--nc-ink); }
+body > header.bar .brand img { width: 52px; height: 52px; }
+body > header.bar nav { gap: 36px; font-size: 19px; font-weight: 400; }
+body > header.bar nav a { color: #23272e; }
+body > header.bar nav a:hover { color: var(--nc-ink); text-decoration-thickness: 1.5px; text-underline-offset: 6px; }
+body > header.bar ~ main h1 { font-weight: 900; letter-spacing: -.045em; color: var(--nc-ink); }
+body > header.bar ~ main .intro h1 { font-size: 72px; line-height: 1; }
+body > header.bar ~ main .sub { color: var(--nc-body); }
+body > header.bar ~ main .step { background: var(--nc-surface); border-color: var(--nc-card-edge); border-radius: var(--nc-radius); box-shadow: var(--nc-card-shadow); backdrop-filter: none; }
+body > header.bar ~ main .num { background: var(--nc-icon-gradient); color: #fff; font-weight: 800; box-shadow: 0 6px 14px -6px rgba(252, 84, 80, .7); }
+body > header.bar ~ main .step h2 { font-weight: 800; letter-spacing: -.02em; }
+body > header.bar ~ main .code { border-radius: 14px; }
+body > header.bar ~ main .btn { background: var(--nc-ink); color: #fff; border-radius: 16px; }
+body > header.bar ~ main .link { color: var(--nc-ink); }
+@media (max-width: 900px) {
+  body > header.bar ~ main .code pre { padding: 46px 14px 14px; white-space: pre-wrap; overflow-wrap: anywhere; line-break: anywhere; }
+  body > header.bar ~ main .copy { top: 8px; right: 8px; transform: none; }
+}
+@media (max-width: 760px) {
+  body > header.bar { min-height: 68px; padding: 0 16px; }
+  body > header.bar .brand { gap: 8px; font-size: 28px; }
+  body > header.bar .brand img { width: 36px; height: 36px; }
+  body > header.bar nav { gap: 18px; font-size: 16px; }
+  body > header.bar ~ main .intro h1 { font-size: 42px; line-height: 1.05; }
 }

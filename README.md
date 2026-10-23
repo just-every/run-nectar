@@ -112,7 +112,7 @@ move-in (`src/modules/import-kit`). Nectar's own code is in `src/nectar`:
 domain modules (rating, bill runs, receivables, collections, proposals,
 move-in), the doors (`http.ts`, `actions.ts`, `views.ts`, `doors.ts`) and
 script-free server-rendered screens (`ui/`, styled by `public/nectar.css` on
-the theme in `public/rer-theme.css`). The schema is `migrations/core/0014_nectar.sql`.
+the tokens in `public/fonts/fonts.css`). The schema is `migrations/core/0014_nectar.sql`.
 
 `rer verify` builds, typechecks and runs the Worker checks and every
 acceptance flow (`tests/nectar/flows.mjs`). The browser journey and restore
