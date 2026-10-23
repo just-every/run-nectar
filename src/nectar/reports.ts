@@ -89,7 +89,7 @@ function inBucket(due: string, day: string, selected: string | null) {
 export async function report(env: Bindings, actor: Actor, metric: string, url: URL): Promise<Report> {
   requireRead(actor, 'reports')
   if (['credits','tax','unbilled','credit-balances','refunds'].includes(metric)) return await financialReport(env,actor,metric,url)
-  if (metric === 'ar' || metric === 'mrr') await requireUsdReporting(env)
+  if (metric === 'ar' || metric === 'mrr') await requireUsdReporting(env,url.searchParams.get('customer'))
   const selected = filters(metric, url)
   const day = today((await requireBusiness(env)).timezone, clockInstant(env))
   const month = selected.period ?? day.slice(0, 7)

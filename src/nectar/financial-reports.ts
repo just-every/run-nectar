@@ -187,14 +187,14 @@ async function contributions(env: Bindings, metric: string, url: URL) {
 /** Every contribution is sourced from actual ledger rows or exact rated usage lines. */
 export async function financialReport(env: Bindings, actor: Actor, metric: string, url: URL): Promise<FinancialReport> {
   requireRead(actor, 'reports')
-  if (metric === 'unbilled' || metric === 'credit-balances') await requireUsdReporting(env)
+  if (metric === 'unbilled' || metric === 'credit-balances') await requireUsdReporting(env,url.searchParams.get('customer'))
   return (await contributions(env, metric, url)).report
 }
 
 /** Source membership and its components are read together; filtered-out sources refuse. */
 export async function financialReportSource(env: Bindings, actor: Actor, metric: string, sourceId: string, url: URL): Promise<FinancialReportSource> {
   requireRead(actor, 'reports')
-  if (metric === 'unbilled' || metric === 'credit-balances') await requireUsdReporting(env)
+  if (metric === 'unbilled' || metric === 'credit-balances') await requireUsdReporting(env,url.searchParams.get('customer'))
   const { report, unbilled, prepaid, refunds, business } = await contributions(env, metric, url)
   const entry = report.entries.find(row => row.invoiceId === sourceId)
   insist(entry, 'report_invoice_not_found', 404)
