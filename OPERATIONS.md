@@ -63,3 +63,9 @@ instructions under `node_modules/@runeditrun/rer/modules/deploy-kit`; account sc
 resource ownership, migrations, receipt and health checks are defined there.
 Local validation does not prove hosted acceptance, provider delivery or remote
 health.
+
+## Hosted delivery
+
+The seed-owned `packaging.json` declares the existing Worker, D1 migrations, private configuration and recovery procedure. Build with `pnpm run build`, refresh the import projection with `pnpm delivery:spec`, and check its freshness with `pnpm check:deployment-spec`. Package with `node scripts/delivery/base/cli.mjs package --config packaging.json --output rer-package`. Generated delivery output stays outside source control.
+
+Managed mail uses the assigned relay URL and private installation credential. Assisted installs configure the chosen provider, sender and private API key; Cloudflare also needs its account ID. Provider acceptance does not prove mailbox delivery. Local development suppresses outbound mail.

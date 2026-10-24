@@ -1,0 +1,4 @@
+{
+  "version": "0.1.0",
+  "publicReleaseNotes": "First public release of Nectar: B2B subscription billing owned by the business, with customers, versioned prices and meters, subscriptions with approved contract exceptions, usage with stable ids, deterministic rating, approved and numbered invoices, credit notes, payment evidence, ageing and reminders, agent proposals that a person approves, and a Stripe Billing move-in kit."
+}

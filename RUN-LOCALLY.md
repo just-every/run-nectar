@@ -1,5 +1,18 @@
 # Run it locally
 
+To bring existing data into a seed, sign in as the owner and use its import
+screen. First step: open this path on the destination app:
+
+```text
+/app/import
+```
+
+Upload a supported source export, review the plan and its differences, then
+approve that exact plan to apply it. Reconcile the result against native data;
+use Undo from the same history when needed. Base's reference accepts people JSON
+here, not installation `.rer` archives. Editions adopt this same door
+with their own supported readers and native adapters.
+
 Start a published seed with one line:
 `npx -y @runeditrun/rer dev just-every/<repo>`, for example
 `npx -y @runeditrun/rer dev just-every/run-inkwell`. It clones the seed into
@@ -159,8 +172,9 @@ for example `{"OWNER_EMAIL":"owner@example.com"}`. Secret values stay in
 private inputs and never go in command arguments. A setup rerun with the saved
 owner and origin preserves existing owner/data and exact private settings.
 Conflicting saved identity or origin reports an actionable recovery path.
-Review reset's exact removal inventory before confirmation; export domain data
-first if it should be restored, and import only into an empty destination. Rows
+Review reset's exact removal inventory before confirmation. If data must be
+kept, back up this installation first; restore that archive
+only into an empty destination. Rows
 the app's own migrations insert, such as default settings, do not count: the
 archive's rows replace them. Any other row refuses the import, naming its table.
 
@@ -213,9 +227,13 @@ allow more. Machine load alone never refuses a start or holds heavy work; a
 fleet that wants a load guard sets `RER_SERVERS_LOAD_THRESHOLD=N` and
 `RER_JOBS_LOAD_THRESHOLD=N` (the 1-minute load) in its own environment.
 When `rer dev` or `rer setup` holds a step 20 minutes for that guard, it stops with `Not started: this computer is busy`, the measured load, the threshold and the next step (run the same command again, or raise `RER_JOBS_LOAD_THRESHOLD`); it is never reported as a failed migration.
-A start needs 15 GiB free on the checkout and temporary volumes;
-`RER_SERVERS_DISK_FLOOR_GIB=N` changes that floor. A CI runner on a small disk
-may set it lower (for example 4); people should not.
+A start measures installed `node_modules` and `.wrangler` (including local D1
+state) and requires twice those bytes plus 256 MiB, with a 1 GiB minimum. It
+checks the checkout, the selected temporary directory (`TMPDIR`, then
+`TMP`/`TEMP`, then the OS default), and the actual server registry directory
+(`RER_SERVERS_DIR` or `~/.rer/servers`). A refusal names the path and exact free
+and required bytes. `RER_SERVERS_DISK_FLOOR_GIB=N` explicitly replaces the
+estimate (GiB, decimals allowed, 0 disables the floor).
 
 A new server is refused only when available memory is below 1.5 GiB. An idle
 dev server holds about 0.5-1.3 GiB and a preview about 0.4-0.8 GiB. The message
@@ -223,16 +241,22 @@ gives the available memory, the floor and the running servers with their stop
 commands; start with `RER_SERVERS_MIN_MEMORY_BYTES=N` (bytes; 0 turns it off) to
 start anyway. Reusing a checkout's running server is never refused for memory.
 
-Use the following operations as needed. Reset is destructive local cleanup;
-export any data you need to keep before resetting. Export saves under
+## Back up and restore this installation
+
+Use `/app/import` above for owner move-in. The low-level `rer export` and
+`rer import` commands below back up and restore this installation. They do not
+use the shared door's reviewed plan, reconciliation or Undo, and their `.rer` archive cannot be uploaded to that screen.
+
+Reset is destructive local cleanup; preserve a backup of any data you need to
+keep before resetting. Archive export saves under
 `exports/`: normalized relative paths such as `exports/x.rer` and
 `./exports/x.rer`, and absolute paths inside this checkout's `exports/`, are
 accepted. An absolute path outside the checkout is also accepted. Export
 refuses other paths in the checkout, `..` segments, unsafe symlinks and any
-path served by the app. Import requires an empty destination and `--yes`
+path served by the app. Archive restore requires an empty destination and `--yes`
 confirms the restore.
 
-For a local save, reset and restore, run these in order from the same checkout:
+To back up and restore this installation locally, run these in order from the same checkout:
 
 ```sh
 rer dev --stop
@@ -262,7 +286,7 @@ Local export creates a private archive with an integrity receipt and explicit
 exclusions. Export, reset and import print only their own steps: Node's
 "SQLite is an experimental feature" notice and wrangler's local-only hints
 (such as "Use --remote if you want to access the remote instance") are left out.
-They are local operations; nothing remote is read or changed. Import validates the archive and restores into an empty destination.
+They are local operations; nothing remote is read or changed. Archive restore validates the archive and restores into an empty destination.
 A large install takes many minutes (about 30 for 1.2 GB on a busy machine), so export and import
 print a line every few seconds: the first says roughly how long an archive of that size takes, then
 parts done and bytes, and the time left once two samples exist. An export builds every part before it
@@ -283,6 +307,8 @@ import refuses before reading the archive or preparing data. Leaving out
 `--origin`, or supplying a matching local origin, keeps the usual local restore
 behavior. `--target remote` still refuses when the adapter does not support
 complete remote import, as in the maintained references.
+
+## Deployment and command inspection
 
 Real deployment uses the owner-account procedure and its private credentials.
 `rer deploy --dry-run` validates and builds locally, then reads the target

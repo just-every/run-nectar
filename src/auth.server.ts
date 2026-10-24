@@ -38,7 +38,7 @@ export interface Bindings {
  /** PORT-005: installation-held customer-session signer; excluded from archives. */
  PORTAL_KEY?: string
  SETUP_TOKEN?: string
- MAIL_PROVIDER?: 'development' | 'resend' | 'sendgrid' | 'cloudflare'
+ MAIL_PROVIDER?: 'development' | 'rer' | 'resend' | 'sendgrid' | 'cloudflare'
  MAIL_FROM?: string
  /** Owner-authorized original Stripe invoice collection; runtime secret, never archived. */
  STRIPE_BILLING_SECRET?: string
@@ -48,6 +48,7 @@ export interface Bindings {
  QUICKBOOKS_ENVIRONMENT?: 'sandbox' | 'production'
  QUICKBOOKS_COMPANY_ID?: string
  MAIL_API_KEY?: string
+ MAIL_RELAY_URL?: string
  MAIL_ACCOUNT_ID?: string
 }
 

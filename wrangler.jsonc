@@ -6,7 +6,12 @@
   "compatibility_flags": [
     "nodejs_compat"
   ],
-  "triggers": { "crons": ["* * * * *", "0 14 * * *"] },
+  "triggers": {
+    "crons": [
+      "* * * * *",
+      "0 14 * * *"
+    ]
+  },
   "d1_databases": [
     {
       "binding": "DB",
@@ -14,5 +19,13 @@
       "database_id": "local-nectar-only",
       "migrations_dir": "migrations/core"
     }
-  ]
+  ],
+  "vars": {
+    "AUTH_LOCAL": "false",
+    "AUTH_ORIGIN": "",
+    "MAIL_PROVIDER": "",
+    "MAIL_FROM": "",
+    "MAIL_RELAY_URL": "",
+    "MAIL_ACCOUNT_ID": ""
+  }
 }

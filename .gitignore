@@ -17,3 +17,6 @@ exports/
 .rer/demo-host/
 
 examples/webhook-receiver/webhook-receipts.json*
+
+rer-package/
+delivery-artifact/
