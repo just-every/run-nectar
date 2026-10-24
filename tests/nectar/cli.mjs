@@ -32,7 +32,7 @@ export async function serving(root, verb, port, extra = []) {
         output: () => output,
         open: () => output.match(/RER_OPEN (\S+)/)?.[1],
         async stop() {
-          await command(root, [verb, '--stop'])
+          if (child.exitCode === null) child.kill('SIGTERM')
           await new Promise(resolve => child.exitCode !== null ? resolve() : child.once('exit', resolve))
         },
       }

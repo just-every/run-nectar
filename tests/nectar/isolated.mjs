@@ -4,9 +4,9 @@ import assert from 'node:assert/strict'
 import { harness } from './harness.mjs'
 import { applyPolicy } from './policy-helper.mjs'
 
-export async function runIsolated(file, name) {
+export async function runIsolated(file, name, load) {
   console.log('JOURNEY',file,name)
-  const module=await import(`./${file}.mjs`)
+  const module=await load()
   const h=await harness(typeof module.harnessOptions==='function'?module.harnessOptions():{})
   try {
     console.log('JOURNEY READY',file)

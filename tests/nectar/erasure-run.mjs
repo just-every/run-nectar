@@ -1,2 +1,2 @@
 import { runIsolated } from './isolated.mjs'
-await runIsolated('erasure','erasureFlow')
+await runIsolated('erasure','erasureFlow',()=>import('./erasure.mjs'))
