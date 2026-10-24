@@ -41,7 +41,7 @@ async function shot(page, name) {
 
 const form = (page, action) => page.locator(`form[action="/app/do/${action}"]`)
 async function submit(page, locator, button) {
-  await Promise.all([page.waitForURL(url => url.searchParams.has('notice') || url.searchParams.has('error') || !url.pathname.startsWith('/app/do')), locator.getByRole('button', { name: button }).click()])
+  await Promise.all([page.waitForNavigation({ waitUntil: 'load' }), locator.getByRole('button', { name: button }).click()])
   const error = new URL(page.url()).searchParams.get('error')
   assert.equal(error, null, `${button}: ${error}`)
 }
@@ -107,13 +107,13 @@ async function cycle(page) {
     await subscription.getByLabel('Start date', { exact: true }).fill(exempt ? '2026-07-15' : '2026-07-01')
     if (exempt) {
       await subscription.getByLabel('Trial ends', { exact: true }).fill('2026-07-29')
-      await subscription.getByLabel('Price 1', { exact: true }).selectOption({ label: 'Core plan — Monthly v1: $499.00 monthly' })
+      await subscription.getByLabel('Price 1', { exact: true }).selectOption({ label: await subscription.getByLabel('Price 1', { exact: true }).locator('option').filter({ hasText: /^Core plan(?: — Monthly)? v1:/ }).textContent() })
     } else {
       await subscription.getByLabel('Billing day of the month (1–28)', { exact: true }).fill('1')
-      await subscription.getByLabel('Price 1', { exact: true }).selectOption({ label: 'Core plan — Monthly v1: $499.00 monthly' })
-      await subscription.getByLabel('Price 2', { exact: true }).selectOption({ label: 'Seats v1: $30.00 per seat monthly' })
+      await subscription.getByLabel('Price 1', { exact: true }).selectOption({ label: await subscription.getByLabel('Price 1', { exact: true }).locator('option').filter({ hasText: /^Core plan(?: — Monthly)? v1:/ }).textContent() })
+      await subscription.getByLabel('Price 2', { exact: true }).selectOption({ label: await subscription.getByLabel('Price 2', { exact: true }).locator('option').filter({ hasText: /^Seats(?: — Monthly)? v1:/ }).textContent() })
       await subscription.locator('.pair').nth(1).getByLabel('Seats (per-seat prices)', { exact: true }).fill('5')
-      await subscription.getByLabel('Price 3', { exact: true }).selectOption({ label: 'Event processing v1: $0.0004 per events monthly' })
+      await subscription.getByLabel('Price 3', { exact: true }).selectOption({ label: await subscription.getByLabel('Price 3', { exact: true }).locator('option').filter({ hasText: /^Event processing(?: — Monthly)? v1:/ }).textContent() })
       await subscription.getByLabel('Kind', { exact: true }).selectOption('discount_percent')
       await subscription.getByLabel('Value', { exact: true }).fill('10')
       await subscription.getByLabel('From', { exact: true }).fill('2026-07-01')
