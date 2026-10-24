@@ -81,6 +81,8 @@ async function cycle(page) {
     await product.getByLabel('Name', { exact: true }).fill(name)
     await submit(page, product, 'Add product')
   }
+  await shot(page, 'catalog-products')
+  console.log('Catalog products:', await page.locator('article.product h3').allTextContents())
   for (const [name, kind, amount, extra] of [['Core plan', 'flat', '499', 'Monthly'], ['Seats', 'seat', '30'], ['Event processing', 'unit', '0.0004']]) {
     const price = page.locator('article.product', { has: page.getByRole('heading', { name: new RegExp(`^${name}`) }) }).locator('form[action="/app/do/price.create"]')
     await price.getByLabel('Kind', { exact: true }).selectOption(kind)

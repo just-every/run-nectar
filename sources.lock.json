@@ -4574,7 +4574,7 @@
       "executable": false
     },
     "tests/nectar/journey.mjs": {
-      "sha256": "aabc4854a50591dbb2c6c104be42591ad9f95c938093c5663811686f50287ae2",
+      "sha256": "96b470c3b9e7ca9cd958e8dbfa590a5c5d11afd69b4b7043d1cb441c9d128701",
       "executable": false
     },
     "tests/nectar/lifecycle-cancel.mjs": {
