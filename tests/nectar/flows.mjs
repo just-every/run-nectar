@@ -90,6 +90,10 @@ try {
     const view = await h.api(`customers/${ids.northwind}`, cookie.owner)
     assert.equal(view.external_id, 'NW-1001'); assert.equal(view.contacts.length, 1)
     assert.match(await h.page('/app/customers', cookie.owner), /Northwind Robotics/)
+    const edit = { customer: ids.northwind, revision: view.revision, name: view.name, billing_email: view.billing_email, address: 'Updated billing address' }
+    await h.api('customer.update', cookie.owner, edit)
+    assert.equal((await h.api('customer.update', cookie.owner, { ...edit, address: 'Stale replacement' }, 409)).error, 'stale')
+    assert.equal((await h.api(`customers/${ids.northwind}`, cookie.owner)).address, edit.address)
   })
 
   await check('NEC-03 products, immutable price versions and meters', async () => {
@@ -109,6 +113,7 @@ try {
     assert.equal(v1.unit_amount, '30.00'); assert.equal(v1.version, 1)
     assert.equal(catalog.prices.find(price => price.id === ids.events).unit_amount, '0.0004')
     await h.api('price.retire', cookie.owner, { price: second.id })
+    assert.equal((await h.api('subscription.create', cookie.owner, { customer: ids.pinecrest, start_date: '2026-07-01', price: [second.id], quantity: ['1'] }, 404)).error, 'price_not_found')
     await h.api('feature.grant', cookie.owner, { product: ids.eventsProduct, feature: 'api_access' })
   })
 
@@ -212,6 +217,8 @@ try {
     const issued = await h.api('invoice.finalise', cookie.owner, { invoice: draft.id, issue_date: '2026-08-01' })
     assert.deepEqual(issued.issued, ['RB-000002'])
     ids.julyNorthwind = draft.id
+    assert.equal((await h.api('business.configure', cookie.owner, { legal_name: 'Riverbend Software Inc', timezone: 'UTC', invoice_prefix: 'RB', payment_terms_days: 30 }, 409)).error, 'timezone_fixed_after_first_invoice')
+    assert.equal((await h.api('business', cookie.owner)).timezone, 'America/Los_Angeles')
     const invoice = await h.api(`invoices/${draft.id}`, cookie.owner)
     assert.equal(invoice.status, 'issued'); assert.equal(invoice.due_date, '2026-08-31'); assert.equal(invoice.total_cents, 208144)
     assert.equal(invoice.approved_fingerprint, invoice.source_fingerprint)
