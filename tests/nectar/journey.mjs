@@ -82,9 +82,8 @@ async function cycle(page) {
     await submit(page, product, 'Add product')
   }
   await shot(page, 'catalog-products')
-  console.log('Catalog products:', await page.locator('article.product h3').allTextContents())
   for (const [name, kind, amount, extra] of [['Core plan', 'flat', '499', 'Monthly'], ['Seats', 'seat', '30'], ['Event processing', 'unit', '0.0004']]) {
-    const price = page.locator('article.product', { has: page.getByRole('heading', { name: new RegExp(`^${name}`) }) }).locator('form[action="/app/do/price.create"]')
+    const price = page.locator('article.product', { has: page.getByRole('heading', { name: new RegExp(`^${name}`) }) }).locator('form[action="/app/do/price.create"]').filter({ has: page.getByRole('button', { name: 'Add price version', exact: true }) })
     await price.getByLabel('Kind', { exact: true }).selectOption(kind)
     await price.getByLabel('Unit price ($)', { exact: true }).fill(amount)
     if (kind === 'unit') await price.getByLabel('Meter (per unit only)', { exact: true }).selectOption({ label: 'events (events)' })
