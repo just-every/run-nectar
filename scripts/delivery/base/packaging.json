@@ -42,7 +42,6 @@
         "MAIL_ACCOUNT_ID"
       ],
       "secretNames": [
-        "OWNER_EMAIL",
         "SESSION_SECRET",
         "SETUP_TOKEN",
         "MFA_KEY",
