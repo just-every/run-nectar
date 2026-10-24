@@ -217,7 +217,7 @@ try {
     const issued = await h.api('invoice.finalise', cookie.owner, { invoice: draft.id, issue_date: '2026-08-01' })
     assert.deepEqual(issued.issued, ['RB-000002'])
     ids.julyNorthwind = draft.id
-    assert.equal((await h.api('business.configure', cookie.owner, { legal_name: 'Riverbend Software Inc', timezone: 'UTC', invoice_prefix: 'RB', payment_terms_days: 30 }, 409)).error, 'timezone_fixed_after_first_invoice')
+    assert.equal((await h.api('business.configure', cookie.owner, { revision: (await h.api('business', cookie.owner)).revision, legal_name: 'Riverbend Software Inc', timezone: 'UTC', invoice_prefix: 'RB', payment_terms_days: 30 }, 409)).error, 'timezone_fixed_after_first_invoice')
     assert.equal((await h.api('business', cookie.owner)).timezone, 'America/Los_Angeles')
     const invoice = await h.api(`invoices/${draft.id}`, cookie.owner)
     assert.equal(invoice.status, 'issued'); assert.equal(invoice.due_date, '2026-08-31'); assert.equal(invoice.total_cents, 208144)
