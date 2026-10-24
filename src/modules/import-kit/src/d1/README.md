@@ -15,13 +15,13 @@ with their own supported readers and native adapters.
 
 For seed integration, follow [the door adoption guide](../door/ADOPTING.md)
 first. The D1 primitives below back that shared pipeline; do not mount separate
-job creation/apply routes beside it. Keep native readers and target adapters.
+job creation and apply routes beside it. Keep native readers and target adapters.
 
 Import `@runeditrun/rer/modules/import-kit/d1` from a supplying rer release
 after 0.2.77 in TypeScript Workers with `nodejs_compat` (or `src/d1/index.ts`
 when working in Base source). The package carries TypeScript source for the
 Worker bundler and includes the shared D1 transport. This entry point does
-not import `node:sqlite` or the optional file/API readers. Products that need the
+not import `node:sqlite` or the optional file or API readers. Products that need the
 readers can explicitly import `src/readers/index.ts`. The synchronous Node API and its guarantees remain
 unchanged. D1 uses the same reviewed plans, source identities, retained originals,
 provenance and inert-effect policy through an asynchronous native SQL port.
@@ -799,7 +799,7 @@ shared snapshot, `targets.ownedContent(row)`. The types are exported from
 original provenance and whether its retention is already durable. Return exactly
 one observation per effect, its complete current row or null, native entity
 labels, optional domain evidence, explicit dependencies, and nonempty scalar SQL
-predicates guarding the complete current native/dependency snapshot. These
+predicates guarding the complete current native and dependency snapshot. These
 predicates must cover values, revisions, ownership markers, related evidence,
 outside incoming dependencies, absent edges and cardinalities. The engine also
 guards each observation through `targets.matches`; an observation may supply an
@@ -900,17 +900,17 @@ conversion refuses rather than misreporting retained later work as reversed.
 | --- | --- |
 | Strict `completed` or `undoing`, current undo authority and binding, exact reviewed snapshot, complete fenceable adapter observations | Converts atomically to `preserve-conflicts`. |
 | Already converted | `IMPORT_CONVERSION_ALREADY_CONVERTED`; no new conversion. |
-| Any other state or an ineligible policy | `IMPORT_CONVERSION_UNAVAILABLE`, with the state/policy reason. |
+| Any other state or an ineligible policy | `IMPORT_CONVERSION_UNAVAILABLE`, with the state or policy reason. |
 | Superseded job | `IMPORT_CONVERSION_UNAVAILABLE`, with the superseded reason. |
 | Missing or incomplete adapter guards, an unfenceable later reversal, or a conversion that would release predecessor history | `IMPORT_CONVERSION_UNAVAILABLE`, with the unfenceable reason. |
 | The reviewed fingerprint no longer matches the complete snapshot | `IMPORT_CONVERSION_REVIEW_CHANGED`; obtain and review a fresh preview. |
-| Missing or revoked undo authority, or a different job binding | The ordinary authorization/binding refusal; conversion grants no additional authority. |
+| Missing or revoked undo authority, or a different job binding | The ordinary authorization or binding refusal; conversion grants no additional authority. |
 
 Conversion-specific refusals are typed `D1ReversalPolicyConversionError`; inspect
 its `code` and the reason distinguishing state, superseded and unfenceable jobs.
 An already preserved job cannot use this operation to obtain another conversion.
 
-Later preserved reversal rechecks the complete current native/dependency
+Later preserved reversal rechecks the complete current native and dependency
 snapshot in every batch. Converted jobs cannot release predecessor history to
 make reversal proceed. No later work, money or signed document may be detached
 or deleted to satisfy conversion. A seed implementing reviewed compensation

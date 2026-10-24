@@ -10,7 +10,7 @@ Upload a supported source export, review its plan, approve that fingerprint,
 apply, reconcile and undo through the shared door. Follow
 [src/door/ADOPTING.md](src/door/ADOPTING.md) for integration; the engine APIs
 below implement that door rather than a second product importer. Installation
-archive backup/restore is a separate recovery mechanism.
+archive backup and restore is a separate recovery mechanism.
 
 This is an inert data import engine. It cannot send, enqueue or activate access.
 The default adapter retains JSON rows and attachment originals in durable SQLite;
@@ -167,7 +167,7 @@ external side effects and makes no hosted capacity claim.
 ## Exact originals and attribution (additive v1 custody contract)
 
 Readers supply `SourceArtifact.original = { status: 'available', base64 }` for
-EVERY file/API page, using canonical base64 of its exact received bytes before
+EVERY file or API page, using canonical base64 of its exact received bytes before
 parsing. Artifact `sha256` and `size` describe those bytes; whitespace, wrappers
 and unsupported fields remain intact. Readers reject credential-bearing original
 content, including metadata their parser excludes; they never redact bytes and
@@ -283,7 +283,7 @@ Credential-key validation permits a JSON boolean (a common noncredential
 visibility flag such as `secret: true`), and null, an empty string or a mask
 (`****`, `[redacted]`, `[removed]` and similar) under any credential key: they sit
 where a credential would go but are not one. Every other value under a credential
-key and credential-bearing URLs remain forbidden, including in raw file/API
+key and credential-bearing URLs remain forbidden, including in raw file or API
 originals excluded by a parser. Accepted originals remain exact.
 
 `readFileSource` with `credentials: 'remove'` (the import door's choice) keeps a

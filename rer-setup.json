@@ -110,8 +110,12 @@
       "label": "Mail provider",
       "kind": "select",
       "required": true,
-      "default": "rer",
+      "default": "development",
       "options": [
+        {
+          "value": "development",
+          "label": "Local development (no mail)"
+        },
         {
           "value": "rer",
           "label": "RER managed mail"

@@ -12,13 +12,13 @@ an exported people JSON file, review, apply, reconcile and undo. The
 claim the local app. Installation `.rer` archive recovery is currently a
 separate developer-only mechanism; it is not accepted by this door.
 
-Installation backup/restore keeps its archive integrity and erasure fences. It
+Installation backup and restore keeps its archive integrity and erasure fences. It
 is separate from bringing records in; never claim an archive traverses the door.
 
 The seed's signed-in move-in screen, `rer` and Business must share **upload →
 plan → reviewed fingerprint → apply → reconcile → undo**. Keep source readers,
 mappings and native target adapters; delete the old importer routes, separate
-job creation/apply code and their callers. Do not leave a hidden second importer.
+job creation and apply code and their callers. Do not leave a hidden second importer.
 Owner history and undo must include jobs from either authority.
 
 ## Add to the seed
@@ -166,7 +166,7 @@ Owner history and undo must include jobs from either authority.
    grant for this screen. Use `readImportDoorHistory` with the current owner
    predicate and the door key for approval metadata; local approvals are
    labelled `approved by`, Business approvals `approved via Business by`.
-6. **Erasure.** Include retained uploads/chunks, plan snapshots/chunks, archive
+6. **Erasure.** Include retained uploads and chunks, plan snapshots and chunks, archive
    bytes (`ik_door_archive_chunks`, withdrawn whole) and headers, approvals,
    namespace lineage and destination bindings (`ik_door_scopes`), apply-failure
    facts (`ik_door_apply_failures`) and grant metadata in the seed's

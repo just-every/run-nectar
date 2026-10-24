@@ -705,5 +705,5 @@ The application-side dependency, owner-setting and logout protocol is documented
 
 OA accounts offer a bounded, hash-pinned scheduled policy door, separate from
 human sessions. Read [SCHEDULED-POLICY.md](SCHEDULED-POLICY.md) for the design,
-additive migration, declaration, owner approval/revocation flow and audit contract.
+additive migration, declaration, owner approval and revocation flow and audit contract.
 The reference `/app/policies` screen and Worker scheduled handler show adoption.

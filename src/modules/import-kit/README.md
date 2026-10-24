@@ -23,7 +23,7 @@ activate access, or run application lifecycle hooks.
 For a seed, start with [the complete door adoption guide](src/door/ADOPTING.md).
 The signed-in screen, RER and Business share upload, plan, reviewed fingerprint,
 apply, reconcile and undo. Keep product readers, mappings and native adapters;
-remove separate importer routes and their job creation/apply callers. Owner
+remove separate importer routes and their job creation and apply callers. Owner
 history and Undo include jobs from either authority.
 
 ## Engine primitives

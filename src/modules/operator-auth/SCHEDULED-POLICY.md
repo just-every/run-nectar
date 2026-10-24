@@ -10,7 +10,7 @@ adopting this door.
 
 ## Definition and approval
 
-A definition contains an id, job kind, JSON parameters, allowed actions/scopes,
+A definition contains an id, job kind, JSON parameters, allowed actions and scopes,
 and two required integer bounds: `maxActionsPerRun` (1–100) and
 `minIntervalMinutes` (1–525600). Supported actions are `operators:deactivate`
 and `operators:reactivate`. Scopes require non-owner roles and may restrict exact
@@ -29,13 +29,13 @@ Canonical JSON sorts object keys, preserves array order and rejects non-JSON
 values. The definition is snapshotted once; validation, action grants and SHA-256
 all use that same snapshot, including both bounds. The owner
 reviews that exact hash; approval rereads the definition and rejects stale hashes.
-Approval stores the definition, actions, hash, owner id/authority version, session
+Approval stores the definition, actions, hash, owner id and authority version, session
 kind, approval time and revocation details. Reapproval atomically revokes its
 predecessor. When the runner first observes a changed definition, it revokes the
 old approval with `superseded_by_change`; reverting the source cannot revive it.
 
 Standing approval requires a native, OIDC or password owner session and the
-existing `requireFreshProof` check, as well as origin/session transaction fences.
+existing `requireFreshProof` check, as well as origin and session transaction fences.
 Development and review sessions are refused outright: cron cannot repeat their
 request gate. The seed's `rolePolicy` must allow every declared action at approval.
 Approval survives sign-out and session expiry; it is an explicit delegation.
@@ -57,7 +57,7 @@ capability use and the transaction count enforce `maxActionsPerRun`; the referen
 selector also limits its candidates to that bound. Stale or overbroad selection
 does not widen the approved scope. Closed run capabilities cannot act again.
 Revocation stops subsequent writes at the transaction boundary; committed actions
-remain committed. Existing final-owner and invitation/version triggers still apply.
+remain committed. Existing final-owner and invitation and version triggers still apply.
 
 Admission is serialized per policy: another admitted run cannot overlap, and the
 minimum interval starts at the last admitted run's finish, including failed or
@@ -72,7 +72,7 @@ identical unadmitted refusals for the same policy/version/approval/outcome coale
 into one history row with `repeats` occurrences and `lastSeenAt`. Admitted runs
 retain separate rows and action history.
 
-Runs record outcome, timestamps and refusal/error codes. Action audits bind
+Runs record outcome, timestamps and refusal or error codes. Action audits bind
 `policy:<id>@<sha256>`, approving owner, approval id, unique run id, action and
 target. Refused target attempts also record the attempted action and error code.
 Other auth audit values may be opaque identifiers; policy queries and the run index only extract run ids from valid JSON. Partial failures retain earlier committed-action audits. The reference handler
@@ -100,8 +100,8 @@ Fresh OA schemas include the current tables and trigger.
 
 Declare definitions in trusted source, wire cron to `run`, select real candidates
 and call `run.execute` for each. The default reference starts unapproved at
-`/app/policies`. Its owner screen shows complete parameters/scopes, bounds, current
-hash, approving owner/session kind, approval history and revocation reasons. Run
+`/app/policies`. Its owner screen shows complete parameters and scopes, bounds, current
+hash, approving owner and session kind, approval history and revocation reasons. Run
 history exposes outcomes, tick occurrences, committed actions and refused targets,
 including target ids, actor, approving owner, approval id, run id and timestamps.
 Owners can navigate to older pages rather than losing history after a fixed cap.

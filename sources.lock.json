@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "parent": null,
   "edition": "just-every/run-nectar",
-  "manifest": "a2a5ac20711196f10b7f5efaa16b9fc67ff3e6e43fd878d509081e058f16dfda",
+  "manifest": "975e8f91d765de3189936dbdbb6a06787ee7d7aae3e70bd213fe1ae2b8fbac81",
   "toolchain": {
     "id": "runeditrun/edition-authoring",
     "version": "1.1.0",
@@ -17,9 +17,32 @@
           "src/modules/demo",
           "src/modules/operator-auth",
           "src/modules/owner-claim"
+        ],
+        "origin": {
+          "repository": "https://github.com/runeditrun/base.git",
+          "revision": "4280971d7c0295b8a88c3e1179048efcbbe14f30",
+          "path": ".",
+          "paths": [
+            "modules/operator-auth/README.md",
+            "modules/operator-auth/SCHEDULED-POLICY.md"
+          ]
+        },
+        "mappings": [
+          {
+            "path": "src/modules/operator-auth/README.md",
+            "originPath": "modules/operator-auth/README.md"
+          },
+          {
+            "path": "src/modules/operator-auth/SCHEDULED-POLICY.md",
+            "originPath": "modules/operator-auth/SCHEDULED-POLICY.md"
+          }
         ]
       },
-      "baseline": null
+      "baseline": {
+        "key": "45b148f9ec82e0b30b26fd7d945718464be82464a9edeabf2d6cdc870c606bb2",
+        "digest": "51fb7346e2f5f7c5a428379516bb02c58e93e31c359105113d2f2aadd957557f",
+        "sha256": "638187d916cf5485f235879f61fb4d429e5634e8abe5bca4670bc9b60978f59c"
+      }
     },
     {
       "id": "just-every/run-nectar",
@@ -60,6 +83,64 @@
         "key": "b6c5254ea6a442e5524e09de6f6508d634fd46ce29f5226ebd55278c70bad74f",
         "digest": "0460c51a8c4bb2c3aece54e396a6949cb5628b40a2522c88136431409de53958",
         "sha256": "71204eed28a0a583da4aae789022981919be9b54da28547015ac6fda1ddeb4ed"
+      }
+    },
+    {
+      "id": "just-every/nectar-foundation-documentation",
+      "source": {
+        "kind": "local",
+        "paths": [
+          "SEED-COMMAND-CONTRACT.md",
+          "src/modules/dependencies/README.md",
+          "src/modules/import-kit/CONTRACT.md",
+          "src/modules/import-kit/README.md",
+          "src/modules/import-kit/src/d1/README.md",
+          "src/modules/import-kit/src/door/ADOPTING.md"
+        ],
+        "origin": {
+          "repository": "https://github.com/runeditrun/base.git",
+          "revision": "4280971d7c0295b8a88c3e1179048efcbbe14f30",
+          "path": ".",
+          "paths": [
+            "default-seed/SEED-COMMAND-CONTRACT.md",
+            "modules/dependencies/README.md",
+            "modules/import-kit/CONTRACT.md",
+            "modules/import-kit/README.md",
+            "modules/import-kit/src/d1/README.md",
+            "modules/import-kit/src/door/ADOPTING.md"
+          ]
+        },
+        "mappings": [
+          {
+            "path": "SEED-COMMAND-CONTRACT.md",
+            "originPath": "default-seed/SEED-COMMAND-CONTRACT.md"
+          },
+          {
+            "path": "src/modules/dependencies/README.md",
+            "originPath": "modules/dependencies/README.md"
+          },
+          {
+            "path": "src/modules/import-kit/CONTRACT.md",
+            "originPath": "modules/import-kit/CONTRACT.md"
+          },
+          {
+            "path": "src/modules/import-kit/README.md",
+            "originPath": "modules/import-kit/README.md"
+          },
+          {
+            "path": "src/modules/import-kit/src/d1/README.md",
+            "originPath": "modules/import-kit/src/d1/README.md"
+          },
+          {
+            "path": "src/modules/import-kit/src/door/ADOPTING.md",
+            "originPath": "modules/import-kit/src/door/ADOPTING.md"
+          }
+        ]
+      },
+      "baseline": {
+        "key": "e6d47acd8e143cdf967ff57ee4e09bd2bf323f80948a0248026a6aa02eaa937d",
+        "digest": "677958fede8b0535908b5cb03ef4d8a80a28338539a6e3c95e88dd09dfebcaf3",
+        "sha256": "e009ed3a331855a6a105a464891ac812bfb5ba00cca6fe9d1e5c2f068a7e0983"
       }
     }
   ],
@@ -105,11 +186,11 @@
       "executable": false
     },
     "base-copies.json": {
-      "sha256": "a6aae11e2e542234f18966f3b292fdff225c398c7f21734fbfeb5c4df6a8be67",
+      "sha256": "1485fd5994893b6f20148ffe991c1c4f494b548ab1e29405593064a0535c5900",
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "3629fe4f7252a4ff07489a9be5d8b74ed62f8246ee3f9707e98800817f04bbe4",
+      "sha256": "1dfb3fa53739cf975fae55525862ae1a7da42f5c1a3d864f6313ec91940fc1a7",
       "executable": false
     },
     "DEMO.md": {
@@ -185,7 +266,7 @@
       "executable": false
     },
     "edition.json": {
-      "sha256": "a2a5ac20711196f10b7f5efaa16b9fc67ff3e6e43fd878d509081e058f16dfda",
+      "sha256": "975e8f91d765de3189936dbdbb6a06787ee7d7aae3e70bd213fe1ae2b8fbac81",
       "executable": false
     },
     "examples/portal/app.mjs": {
@@ -761,11 +842,11 @@
       "executable": false
     },
     "rer-project.json": {
-      "sha256": "2f82c52c12e4e46ade141ea322dd2aaf9ef093534ff1e5bab457bdfed77e6890",
+      "sha256": "0e70e06558657724327500217c11654a8c7e86f6d0fc53bd6c22d645ad1c114f",
       "executable": false
     },
     "rer-setup.json": {
-      "sha256": "56f552c3dce77bb80bd81eb0c8b4b8760fbc6aeb2ccee0d8759ecc9ecf728404",
+      "sha256": "bb8b724f68ece7a3005287fb53598baf0c338002f42c66554e61d73f5b1ac711",
       "executable": false
     },
     "RUN-LOCALLY.md": {
@@ -949,7 +1030,7 @@
       "executable": false
     },
     "SEED-COMMAND-CONTRACT.md": {
-      "sha256": "c3fe456bafe528e88cef89284fb943a99d4d103452fb02a81721c982cd931881",
+      "sha256": "8985a7fc291d872e3ec7c8d4c16838249aa4b66cb1e59eb9b161ad963f92dee4",
       "executable": false
     },
     "seed.json": {
@@ -1245,7 +1326,7 @@
       "executable": false
     },
     "src/modules/dependencies/README.md": {
-      "sha256": "79e0eef431e8211ed74a14198a39ba201ad67db3de5e03310ac297834c691d22",
+      "sha256": "70d0fe1c0f8067f4a111f4f1f1b36608741b6594808877a0e3954801c8faff92",
       "executable": false
     },
     "src/modules/dependencies/schema/approval-attempt.sql": {
@@ -1269,11 +1350,11 @@
       "executable": false
     },
     "src/modules/import-kit/CONTRACT.md": {
-      "sha256": "dc310d9c91e9b8eca857e5b1a3539694ecb43675ceadc44e8233078839d597ce",
+      "sha256": "000cbad0f108bc244a69c671d0fde8edb75f3058e43ce38e8f36e83a3a003512",
       "executable": false
     },
     "src/modules/import-kit/README.md": {
-      "sha256": "79a3860d86b171447fbbde3b281a344e61e26881661413e11e572893de869d35",
+      "sha256": "6cd875afca38eebd0345adf62b9bbedeb86fda8fdc47656000f2572120d01e18",
       "executable": false
     },
     "src/modules/import-kit/schema/importer-verification-receipt.schema.json": {
@@ -1589,7 +1670,7 @@
       "executable": false
     },
     "src/modules/import-kit/src/d1/README.md": {
-      "sha256": "96675ed28b4cd33f6169c3a8baa7b00b0818f0540ca05db177736dd7b3e0b166",
+      "sha256": "eecab43c81a27994ac41e227dbbf7d78b8c58da62060338286577a749dd33d4e",
       "executable": false
     },
     "src/modules/import-kit/src/d1/redacted-custody.ts": {
@@ -1821,7 +1902,7 @@
       "executable": false
     },
     "src/modules/import-kit/src/door/ADOPTING.md": {
-      "sha256": "7afe9806c8b878297e51f82210447c0d5369921606e458c3e2a558ee805b8ed6",
+      "sha256": "f4e87a9a30d5c1505bffef335ddb37bd71ba56f99fbe091588f3cc008500a80c",
       "executable": false
     },
     "src/modules/import-kit/src/door/archive.ts": {
@@ -2681,7 +2762,7 @@
       "executable": false
     },
     "src/modules/operator-auth/README.md": {
-      "sha256": "ce65e011c97d7c234c00e1363f1ac43a6137b88c00f8dcfcda6675db55a8310c",
+      "sha256": "92caf2ef770ff8c1c1e31d3849c6337d5a7b58601e8433c7d53ab631d075437e",
       "executable": false
     },
     "src/modules/operator-auth/rejected-response.mjs": {
@@ -2693,7 +2774,7 @@
       "executable": false
     },
     "src/modules/operator-auth/SCHEDULED-POLICY.md": {
-      "sha256": "59c8fb08ab84dbcb720086fce458ef07b94933737c5777e07b79909d95b27862",
+      "sha256": "cfb34b2065b063fa25523efb6e06ad06ec401e33411847dc7a27f15e47a85a18",
       "executable": false
     },
     "src/modules/operator-auth/scheduled/definition.mjs": {

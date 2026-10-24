@@ -58,7 +58,7 @@ keys and changed interface AAD fail closed with `installation_key_missing` or
 Rotate hosted custody with `rer deploy --rotate-secret INSTALLATION_KEY`:
 rer retains both values privately, publishes both bindings in one Worker version,
 re-seals every row, checks that every row opens with only the current key, then
-retires the previous Worker binding. Routine rotation uses only the current/previous
+retires the previous Worker binding. Routine rotation uses only the current and previous
 pair; older retired keys require explicit reopen. By default, every retired
 private value stays in the same 0600, Git-ignored file as `SESSION_SECRET`, in
 `INSTALLATION_KEY_RETIRED=<kid>:<value>[,<kid>:<value>...]`; none is routinely
@@ -81,7 +81,7 @@ verifies every row under the current key, then removes the previous binding.
 CLI-side reopen rekey uses every validated retired key in private custody, so a
 mid-rotation snapshot containing rows under multiple retired keys can be reopened
 with either retained ID. Only the selected pair is published to the Worker.
-Reopen/rekey reports the D1 `key_ids` tail and whether each history ID is in
+Reopen or rekey reports the D1 `key_ids` tail and whether each history ID is in
 custody before opening rows, including when the tail check refuses the restore.
 It retains retired custody and resumes the same pair after interruption. Missing
 retired custody refuses with `installation_key_unavailable`; recover the private
@@ -102,7 +102,7 @@ Session rotation never changes this key.
 
 This protects signing keys in a D1 dump or backup obtained without the Worker
 secret. It does not protect them from a compromised Worker or someone holding
-both the database and the installation secret. Sector/install identity survives re-link,
+both the database and the installation secret. Sector and install identity survives re-link,
 provider moves and export/import. Keys are isolated per interface.
 
 Provider origins and metadata endpoints require HTTPS. Under `rer dev` (the
@@ -158,7 +158,7 @@ interface versions; callback input cannot select an endpoint or change the pin.
    `/.well-known/rer-link/callback`. The app accepts only its configured/trusted
    issuer named by that fresh app-local approval. Every callback, including an
    unchanged link or a link after unlink, requires a new approval. The exact
-   attempt, owner/session authority and link snapshot are rechecked atomically
+   attempt, owner and session authority and link snapshot are rechecked atomically
    after redemption; replacing an approval invalidates in-flight callbacks. It never
    follows a callback URL supplied in the request.
 4. The app durably consumes the code digest and posts to the pinned `redeem`
