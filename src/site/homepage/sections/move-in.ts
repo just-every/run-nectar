@@ -6,7 +6,13 @@ import '../styles/move-in.css'
 import { connector, cursor, eyebrow, heading, spark, sticky, story, TICK } from '../parts'
 import run from '../../run.json'
 
-const start = run.clone.lastIndexOf(' ') + 1
+// The one start line every Run Edit Run page shows (the installer, then rer dev); the npx line is the alternative.
+const startLine = `curl -fsSL https://runeditrun.com/install.sh | sh -s -- ${run.clone.slice('npx -y @runeditrun/rer '.length)}`
+// Words stay whole when the line wraps, and the installer's `install.sh | sh` stays together.
+const words = (line: string) => line.split(/(\S*install\.sh \| sh|\S+)/).map(part => {
+  const pipe = /^(.*\/)(install\.sh \| sh)$/.exec(part)
+  return pipe ? `<span class="nw">${pipe[1]}</span><wbr><span class="nw">${pipe[2]}</span>` : part.trim() ? `<span class="nw">${part}</span>` : part
+}).join('')
 
 const step = (when: string, what: string, last = false) => `<li${last ? ' class="now"' : ''}><p class="when">${when}</p><p class="what">${what}</p></li>`
 
@@ -21,5 +27,5 @@ export const moveIn = () => story('moving-in', 's-move',
   + `<div class="copy at">${eyebrow('Moving in · August')}${heading('moving-in-title', 'Off Stripe Billing', 'in one shadow month.')}`
   + '<p class="body">Nectar reads your Stripe account, bills August in shadow beside it and takes over at the period boundary. Cards stay where they are.</p></div>'
   + connector('cn-move at', '0 0 100 110', 'M2 2C40 10 50 80 90 104', true)
-  + `<figure class="terminal at"><p class="dots" aria-hidden="true"><i></i><i></i><i></i></p><pre aria-label="Start Nectar"><code><span class="prompt" aria-hidden="true">$ </span>${run.clone.slice(0, start)}<span class="repo">${run.clone.slice(start)}</span>\n<span class="comment"># installs and starts Nectar on your computer</span></code></pre>${spark('sp-term')}</figure>`
+  + `<figure class="terminal at"><p class="dots" aria-hidden="true"><i></i><i></i><i></i></p><pre aria-label="Start Nectar"><code><span class="prompt" aria-hidden="true">$ </span>${words(startLine)}\n<span class="comment"># ${words(`Already have Node 22 or later? ${run.clone}`)}</span></code></pre>${spark('sp-term')}</figure>`
   + '<p class="also at">Also moves in from Chargebee, Recurly, Maxio, Orb and Metronome</p>')

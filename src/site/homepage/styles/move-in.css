@@ -27,12 +27,12 @@
 .s-move .terminal { --x: 943; --y: 582; --w: 520; margin: 0; padding: calc(20 * var(--u)) calc(20 * var(--u)) calc(26 * var(--u)); border-radius: calc(14 * var(--u)); background: var(--nc-code); color: var(--nc-code-text); box-shadow: 0 20px 40px -18px rgba(20, 23, 27, .6); }
 .s-move .terminal .dots { gap: calc(10 * var(--u)); padding-left: calc(2 * var(--u)); }
 .s-move .terminal .dots i { width: calc(17 * var(--u)); height: calc(17 * var(--u)); }
-.s-move .terminal pre { margin-top: calc(26 * var(--u)); font: calc(16 * var(--u)) / 2 var(--nc-mono); white-space: pre; }
+.s-move .terminal pre { margin-top: calc(26 * var(--u)); font: calc(16 * var(--u)) / 2 var(--nc-mono); white-space: pre-wrap; }
 .s-move .terminal .prompt { color: #9aa1ad; }
 .s-move .terminal .comment { color: #8d95a3; }
-.s-move .terminal .repo { white-space: nowrap; }
+.s-move .terminal .nw { white-space: nowrap; }
 .s-move .terminal .sp-term { --x: 490; --y: -40; --s: 46; --sr: 92; }
-.s-move .also { --x: 928; --y: 772; --w: 550; font-size: calc(17.5 * var(--u)); text-align: center; color: #4a5160; white-space: nowrap; }
+.s-move .also { --x: 928; --y: 856; --w: 550; font-size: calc(17.5 * var(--u)); text-align: center; color: #4a5160; white-space: nowrap; }
 
 @media (max-width: 1179px) {
   .s-move .terminal { order: 0; }

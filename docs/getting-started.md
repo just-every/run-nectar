@@ -1,4 +1,4 @@
-Nectar runs on your own computer with two lines. Your data stays in your
+Nectar runs on your own computer with one line. Your data stays in your
 installation.
 
 ## Run it
@@ -6,21 +6,22 @@ installation.
 Nectar runs on macOS, Linux or Windows with WSL2. It brings the Node and pnpm
 versions it needs.
 
-Install `rer`, the Run Edit Run command, then start Nectar:
+Copy this line into a terminal and press Enter:
 
 ```sh
-curl -fsSL https://runeditrun.com/install.sh | sh
-rer dev just-every/run-nectar
+curl -fsSL https://runeditrun.com/install.sh | sh -s -- dev just-every/run-nectar
 ```
 
-The first line installs `rer` for you alone, with its own Node if you have no
-Node 22 or later; it changes no shell settings, so if its last line puts `rer`
-on your PATH, run that line before the second. The second line gets Nectar,
-installs everything, sets up a local owner on a free port, starts the app and
-prints a link that opens Nectar signed in. Open that link on the same computer
-and treat it like a password: it signs the browser in as the owner. Already
-have Node 22 or later? `npx -y @runeditrun/rer dev just-every/run-nectar` does
-both in one line. To start it again later, run `cd run-nectar && rer dev`.
+Git is required; rer brings Node and pnpm. Already have Node 22 or later?
+`npx -y @runeditrun/rer dev just-every/run-nectar` does the same.
+
+The line installs `rer`, the Run Edit Run command, for you alone, then gets
+Nectar into `run-nectar`, installs everything, sets up a local owner on a free
+port, starts the app and prints a link that opens Nectar signed in. Open that
+link on the same computer and treat it like a password: it signs the browser in
+as the owner. If the installer prints a line that puts `rer` on your PATH, run
+that line too. To start it again later, run the same line from the same folder,
+or `cd run-nectar && rer dev`.
 
 To install for a real owner mailbox, run `npx -y @runeditrun/rer install just-every/run-nectar`, then from the checkout:
 

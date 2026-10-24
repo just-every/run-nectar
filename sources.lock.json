@@ -125,7 +125,7 @@
       "executable": false
     },
     "docs/getting-started.md": {
-      "sha256": "5e24ed9ab8da2f0250472dfb28793b087ee4e9e93c6193769a3fbf7eaf396bd1",
+      "sha256": "d60dd0e5a26004129862e48a23dc21e6d692f6de336ac45c5b441c26e755f268",
       "executable": false
     },
     "docs/limits.md": {
@@ -3921,7 +3921,7 @@
       "executable": false
     },
     "src/site/homepage/sections/move-in.ts": {
-      "sha256": "b9c2d98832317e986ed3aa50a5399d49fd3405ea25558263799100daab5c09bb",
+      "sha256": "89797c1ba43846c86c647f54da15dfb7a02918171474de472200ff83f13ff712",
       "executable": false
     },
     "src/site/homepage/sections/portal.ts": {
@@ -3969,7 +3969,7 @@
       "executable": false
     },
     "src/site/homepage/styles/move-in.css": {
-      "sha256": "60075666b64327f6b8ca4790f948e9b74d1588833b675a44a317d0f8d827a096",
+      "sha256": "652774f540eabcd4a1e78ccca79e64e58564fb280b76ec1b5620a59ac058a040",
       "executable": false
     },
     "src/site/homepage/styles/parts.css": {
