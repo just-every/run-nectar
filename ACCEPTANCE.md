@@ -5,9 +5,9 @@ every clause in [CONTRACT.md](CONTRACT.md), with the same status as its Status
 table, with the current clause-specific public-door proof cited below. Clause IDs
 are stable; a build round works down this list and records each result here.
 
-Status: **128 clauses: 52 done, 34 partial, 42 missing.**
-Fifteen first-release clauses are **LOCAL PROVEN** (15 of 16); of the
-104 target clauses 33 are proven, 30 partial and 41 missing; of the
+Status: **128 clauses: 54 done, 32 partial, 42 missing.**
+All sixteen first-release clauses are **LOCAL PROVEN** (16 of 16); of the
+104 target clauses 34 are proven, 29 partial and 41 missing; of the
 8 push-further agent clauses 4 are proven, 3 partial and 1 missing.
 
 Each first-release clause has one flow check in `tests/nectar/flows.mjs`
@@ -52,7 +52,7 @@ unproved acceptance point; the remaining gaps stay in the Status table.
 | NEC-10 | Approve and finalize numbered invoices bound to their inputs; source changes invalidate approval; nothing bills twice | `NEC-10 approval, source changes and numbered finalisation` | **LOCAL PROVEN** |
 | NEC-11 | Issue credit notes and allocate externally evidenced payments without breaking total = credited + paid + owed | `NEC-11 credit notes, payment evidence and allocations` | **LOCAL PROVEN** |
 | NEC-12 | See aging, approve a reminder's exact recipient and wording while balances hold, export it, close the follow-up | `NEC-12 ageing, reminder drafts and follow-up tasks` | **LOCAL PROVEN** |
-| NEC-13 | Export invoices, usage, subscriptions and bill runs with calculation evidence; restore the installation; explain entitlements | `NEC-13 exports and entitlement explanations`; restore round trip in `tests/nectar/journey.mjs` | **PARTIAL** |
+| NEC-13 | Export invoices, usage, subscriptions and bill runs with calculation evidence; restore the installation; explain entitlements | `NEC-13 exports and entitlement explanations`; restore round trip in `tests/nectar/journey.mjs` | **LOCAL PROVEN** |
 | NEC-14 | Let an agent prepare contract terms, price changes, usage corrections and reminders that only a person approves | `NEC-14 agent prepares, a person approves` | **LOCAL PROVEN** |
 | NEC-15 | Owner controls access; every handler enforces roles; signed-out and cross-site requests get nothing | `NEC-15 roles are enforced in every handler` (crawls every action and every GET door) | **LOCAL PROVEN** |
 | NEC-16 | Move in from Stripe Billing: dry run, journal, undo, shadow comparison, cutover without replaying billed periods | `NEC-16 Stripe Billing move-in with dry run, journal, undo and shadow cutover` | **LOCAL PROVEN** |
@@ -241,7 +241,7 @@ unproved acceptance point; the remaining gaps stay in the Status table.
 
 | # | What a person can do | Test target | Status |
 | --- | --- | --- | --- |
-| MOB-001 | Every operator screen works on a phone | `tests/nectar/journey.mjs`, after a full billing cycle at 1440 pixels, opens every main screen at 390 × 844 and fails if any scrolls sideways or lacks its heading, then records a payment through the receivables form at that width. | **PARTIAL** |
+| MOB-001 | Every operator screen works on a phone | `tests/nectar/journey.mjs`, after a full billing cycle at 1440 pixels, opens every main screen at 390 × 844 and fails if any scrolls sideways or lacks its heading, then records a payment through the receivables form at that width. | **LOCAL PROVEN** |
 | MOB-003 | Customer-facing pages and emails work on a phone | In a 390 × 844 touch browser against Stripe test mode, open an issued invoice's emailed link and pay it with a test card, open another and pay by test ACH; complete a checkout from a payment link; open a dunning email's update link and replace a failing card, which pays the invoice; in the portal, change plan with its proration preview and download a receipt. Every step completes, every page fails the test if `scrollWidth` exceeds the viewport, and each delivered email's HTML rendered at 390 pixels has no sideways scroll and a tappable primary button. Before it ships (PORT-006 inheritance): set a customer to Spanish and see this door's pages/messages in Spanish with the same figures as English, and a missing string fail the check. | **MISSING** |
 | MOB-002 | Nectar for iOS and Android | On iOS and Android test devices, receive a push for a failed payment and an exception draft, open each, approve the draft (refused for a role without approval) and see the audit name the person and device; the app's home glance shows MRR, this month's billings and collections, and AR by aging bucket, each equal to the web reports (`RPT-001`, `RPT-002`) for the same moment, and a customer looked up by invoice number opens the same record as `CUS-001`. | **MISSING** |
 | OPS-001 | Measured capacity and unattended jobs | Seed 10,000 subscriptions, run a billing day with the Worker restarted mid-run, and see every invoice issued and charged exactly once within 15 minutes, with the timing recorded in `seed.json` limits. | **MISSING** |
