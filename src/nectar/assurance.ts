@@ -8,6 +8,15 @@ import { isMonth } from './dates'
 import type { Input } from './input'
 import { controlTotals } from './reconciliation'
 import { RAMP_KIND, rampEvidence } from './assurance-ramps'
+import { TRUEUP_KIND, trueUpEvidence } from './assurance-commitments'
+import { CREDIT_KIND, creditEvidence } from './assurance-credits'
+import { ACCESS_KIND, accessEvidence } from './assurance-access'
+
+// Each detector compares signed terms with recorded facts and returns one evidence record per subject.
+// Built on use: the detector modules import doors that import this one.
+const detectors = (): Record<string, (env: Bindings) => Promise<Row[]>> => ({
+  [RAMP_KIND]: rampEvidence, [TRUEUP_KIND]: trueUpEvidence, [CREDIT_KIND]: creditEvidence, [ACCESS_KIND]: accessEvidence,
+})
 
 function investigator(actor: Actor) {
   requireCapability(actor, 'read')
@@ -34,8 +43,9 @@ function evidence(row: Row) {
 
 async function current(env: Bindings, actor: Actor, row: Row): Promise<Row> {
   insist(!await one(env,'SELECT 1 FROM nc_customers WHERE id=? AND erased_at IS NOT NULL',row.customer_id),'assurance_case_not_found',404)
-  if(row.kind===RAMP_KIND) {
-    const compared=(await rampEvidence(env)).find(c=>c.source===row.source_id)
+  const detector=detectors()[row.kind]
+  if(detector) {
+    const compared=(await detector(env)).find(c=>c.source===row.source_id)
     insist(compared,'assurance_source_unavailable',409)
     return compared
   }
@@ -74,7 +84,7 @@ export async function scanAssurance(env: Bindings, actor: Actor, input: Input) {
     if(await one(env,'SELECT 1 FROM nc_customers WHERE id=? AND erased_at IS NOT NULL',row.customer))continue
     proofs.push(evidence(row))
   }
-  proofs.push(...await rampEvidence(env))
+  for(const detect of Object.values(detectors()))proofs.push(...await detect(env))
   for(const proof of proofs) {
     const existing=await one(env,'SELECT * FROM nc_assurance_cases WHERE source_id=?',proof.source)
     if(existing) {
@@ -91,7 +101,7 @@ export async function scanAssurance(env: Bindings, actor: Actor, input: Input) {
     statements.push(stmt(env,"INSERT INTO nc_assurance_cases(id,customer_id,kind,source_id,owner_id,status,basis_hash,evidence_json,created_at,checked_at) VALUES(?,?,?,?,?,'open',?,?,?,?)",id,proof.customer,proof.kind,proof.source,owner,proof.basis,canonical(proof),at,at),
       stmt(env,"INSERT INTO nc_assurance_observations(id,customer_id,case_id,basis_hash,evidence_json,status,created_by,created_at) VALUES(?,?,?,?,?,'open',?,?)",newId(),proof.customer,id,proof.basis,canonical(proof),actorLabel(actor),at))
   }
-  const coverage=['usage_source_control',RAMP_KIND]
+  const coverage=['usage_source_control',...Object.keys(detectors())]
   await commit(env,statements,{actor:actorLabel(actor),action:'assurance.scan',subject:period,detail:{coverage,compared:proofs.length,opened,rechecked}})
   return {coverage,compared:proofs.length,opened,rechecked}
 }
@@ -174,6 +184,18 @@ export async function assuranceCharge(env: Bindings, actor: Actor, input: Input,
   insist(amountCents+pending!.cents<=proof.differenceCents,'assurance_fix_exceeds_difference',409)
   return {evidence:{assuranceCase:row.source_id,assurance:{case:row.id,owner:row.owner_id,proposer:actor.id,kind:actor.kind}},
     guards:[guard(env,'assurance_case_changed',"EXISTS(SELECT 1 FROM nc_assurance_cases WHERE id=? AND status='open' AND owner_id=?)",row.id,row.owner_id)]}
+}
+
+// A person runs an ordinary governed door and names the open case it corrects. The case must still show
+// the mismatch this execution addresses; the link is audited with the execution and never closes the case.
+export async function assuranceExecution(env: Bindings, actor: Actor, input: Input, kind: string, covers: (proof: Row) => boolean) {
+  if (!input.has('assurance_case')) return null
+  const row=await assuranceCase(env,actor,input.text('assurance_case',{max:100}))
+  insist(row.status==='open' && row.kind===kind,'assurance_fix_kind_unsupported',409)
+  await activeOwner(env,row.owner_id)
+  const proof=await current(env,actor,row)
+  insist(proof.mismatch && covers(proof),'assurance_fix_source_mismatch',409)
+  return {case:row.id,guards:[guard(env,'assurance_case_changed',"EXISTS(SELECT 1 FROM nc_assurance_cases WHERE id=? AND status='open' AND owner_id=?)",row.id,row.owner_id)]}
 }
 
 export async function assuranceProposalGuards(env: Bindings, link: Row | null) {

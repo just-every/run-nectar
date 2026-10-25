@@ -60,6 +60,7 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "period": "text"
   },
   "balance.apply": {
+    "assurance_case": "text",
     "invoice": "text"
   },
   "balance.approve": {
@@ -851,6 +852,7 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "subscription": "text"
   },
   "subscription.cancel": {
+    "assurance_case": "text",
     "effective_date": "text",
     "mode": "text",
     "reason": "text",

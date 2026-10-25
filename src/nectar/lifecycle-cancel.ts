@@ -3,7 +3,7 @@ import { serviceEndSql } from './renewal-sql'
 import type { Bindings } from '../auth.server'
 import { actorLabel, requireMember, type Actor } from './actor'
 import { requireBusiness } from './business'
-import { all, commit, guard, insist, newId, now, one, parseJson, stmt } from './core'
+import { all, commit, guard, insist, newId, now, one, parseJson, stmt, type Row } from './core'
 import { addDays, periodContaining, requireDate, today } from './dates'
 import type { Input } from './input'
 import { lifecyclePolicy } from './lifecycle-policy'
@@ -14,6 +14,8 @@ import { cancellationIssuedGuard, cancellationTransitionStatements, prepareInter
 import { billingPeriodContaining, MONTHLY_ARREARS, storedBillingTerms } from './billing-calendar'
 import { intervalReactivationStatements } from './interval-reactivate'
 import { clockInstant } from './clock'
+import { ACCESS_KIND } from './assurance-access'
+import { assuranceExecution } from './assurance'
 
 export async function cancelSubscription(env: Bindings, actor: Actor, input: Input) {
   requireMember(actor, 'approve')
@@ -38,13 +40,15 @@ export async function cancelSubscription(env: Bindings, actor: Actor, input: Inp
   const id = newId()
   const transition = { id, date, reason, mode, requested, policy }
   const plan = await cancellationPlan(env, sub.id, date, id, policy.creditUnused)
+  const linked = await assuranceExecution(env, actor, input, ACCESS_KIND, proof => proof.stillGranted.some((f: Row) => f.grantedBy.some((g: Row) => g.subscription === sub.id)))
   const prepared = await prepareIntervalCancellation(env, actor, sub, term, transition, plan)
-  if (prepared) return prepared
+  if (prepared) { insist(!linked, 'assurance_fix_kind_unsupported', 409); return prepared }
   await commit(env,[
+    ...(linked?.guards ?? []),
     guard(env, 'cancellation_pending', "NOT EXISTS(SELECT 1 FROM nc_interval_cancellations WHERE subscription_id=? AND status='pending')", sub.id),
     cancellationIssuedGuard(env, sub.id, date, plan.invoices),
     ...cancellationTransitionStatements(env, { id: actor.id, name: actorLabel(actor) }, sub, term, transition),
-  ],{actor:actorLabel(actor),action:'subscription.cancel',subject:sub.id,detail:{id,date,mode,reason,policy}})
+  ],{actor:actorLabel(actor),action:'subscription.cancel',subject:sub.id,detail:{id,date,mode,reason,policy,...(linked?{assuranceCase:linked.case}:{})}})
   return {id:sub.id,transition:id,endDate:date,policy}
 }
 

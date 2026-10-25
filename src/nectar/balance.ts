@@ -15,6 +15,8 @@ import { Input } from './input'
 import { requireFreshFactor } from './mfa'
 import { UNALLOCATED_SQL, issuedInvoice } from './receivables'
 import { carriedUsageCredits } from './usage-correction-records'
+import { CREDIT_KIND } from './assurance-credits'
+import { assuranceExecution } from './assurance'
 
 const GRANT_REMAINING_SQL = `g.amount_cents - COALESCE((SELECT SUM(a.amount_cents) FROM nc_balance_entries a WHERE a.grant_id=g.id),0)`
 
@@ -58,10 +60,12 @@ export async function applyBalance(env: Bindings, actor: Actor, input: Input) {
   const plan = applicationPlan(await balanceSources(env, invoice.customer_id), invoice.balance_cents)
   insist(plan.grants.length || plan.payments.length, 'no_balance_available', 409)
   const applied = [...plan.grants, ...plan.payments].reduce((n, row) => n + row.amount, 0)
+  const linked = await assuranceExecution(env, actor, input, CREDIT_KIND, proof => proof.customer === invoice.customer_id && proof.invoices.some((i: Row) => i.invoice === invoice.id))
   await commit(env, [
     guard(env, 'invoice_changed', `(SELECT ${BALANCE_SQL} FROM nc_invoices i WHERE i.id=?)=?`, invoice.id, invoice.balance_cents),
+    ...(linked?.guards ?? []),
     ...applicationStatements(env, plan, invoice as { id: string; customer_id: string }, actorLabel(actor), clockInstant(env)),
-  ], { actor: actorLabel(actor), action: 'balance.apply', subject: invoice.id, detail: { invoice: invoice.number, applied, goodwill: plan.grants.length, cash: plan.payments.length } })
+  ], { actor: actorLabel(actor), action: 'balance.apply', subject: invoice.id, detail: { invoice: invoice.number, applied, goodwill: plan.grants.length, cash: plan.payments.length, ...(linked ? { assuranceCase: linked.case } : {}) } })
   return { id: invoice.id, appliedCents: applied }
 }
 
