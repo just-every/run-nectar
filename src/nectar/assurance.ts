@@ -151,21 +151,18 @@ export async function recheckAssurance(env: Bindings, actor: Actor, input: Input
 }
 
 // Bind a proposed financial fix to the current investigation and its assignee.
-// Source-control cases accept ordinary amendment proposals; an over-billed seat or paid-without-access case
-// accepts an invoice credit against one of its own invoices. Catch-up charges bind through assuranceCharge.
+// Source-control cases accept ordinary amendment proposals; an over-billed seat case accepts an
+// invoice credit against one of its own invoices. Catch-up charges bind through assuranceCharge.
 export async function assuranceProposal(env: Bindings, actor: Actor, input: Input, kind: string, payload: Row) {
   if (!input.has('assurance_case')) return null
   investigator(actor)
   const row=await assuranceCase(env,actor,input.text('assurance_case',{max:100}))
   insist(row.status==='open','assurance_case_resolved',409)
   await activeOwner(env,row.owner_id)
-  if(row.kind===RAMP_KIND || row.kind===PAID_KIND) {
+  if(row.kind===RAMP_KIND) {
     insist(kind==='amendment' && payload.invoice_credit===true,'assurance_fix_kind_unsupported',409)
     const proof=await current(env,actor,row)
-    // The most one invoice credit may return: the over-billed amount, or the paid service past the end date.
-    const limit=row.kind===RAMP_KIND
-      ? proof.direction==='over_billed' && proof.billed.some((b:Row)=>b.invoice===payload.invoice) ? -proof.differenceCents : 0
-      : proof.invoices.find((i:Row)=>i.invoice===payload.invoice)?.remainingCents ?? 0
+    const limit=proof.direction==='over_billed' && proof.billed.some((b:Row)=>b.invoice===payload.invoice) ? -proof.differenceCents : 0
     insist(limit>0,'assurance_fix_source_mismatch',409)
     insist(cents(String(payload.amount))<=limit,'assurance_fix_exceeds_difference',409)
     return {case:row.id,owner:row.owner_id,proposer:actor.id,kind:actor.kind}

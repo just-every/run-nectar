@@ -28,8 +28,12 @@ export async function paidAccessEvidence(env: Bindings) {
       invoices.push({ invoice: credit.invoice, number: credit.number, paidCents, unusedCents: credit.amountCents, creditedCents: credited,
         remainingCents: paidCents > 0 ? Math.max(0, credit.amountCents - credited) : 0 })
     }
-    const remainingCents = invoices.reduce((n, i) => n + i.remainingCents, 0)
-    const proof = { kind: PAID_KIND, source: `paid:${sub.id}`, customer: sub.customer_id, subscription: sub.id, endedOn: sub.end_date, invoices, remainingCents, mismatch: remainingCents > 0 }
+    const source = `paid:${sub.id}`
+    // Goodwill grants a person made while naming this case also return paid service to the customer's balance.
+    const caseRow = (await all(env, 'SELECT id FROM nc_assurance_cases WHERE source_id=?', source))[0]
+    const grantedCents = caseRow ? (await all(env, `SELECT COALESCE(SUM(json_extract(detail,'$.amount')),0) AS cents FROM nc_audit WHERE action='balance.goodwill' AND json_extract(detail,'$.assuranceCase')=?`, caseRow.id))[0].cents as number : 0
+    const remainingCents = Math.max(0, invoices.reduce((n, i) => n + i.remainingCents, 0) - grantedCents)
+    const proof = { kind: PAID_KIND, source, customer: sub.customer_id, subscription: sub.id, endedOn: sub.end_date, invoices, grantedCents, remainingCents, mismatch: remainingCents > 0 }
     found.push({ ...proof, basis: await fingerprint(proof) })
   }
   return found

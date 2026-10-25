@@ -16,6 +16,7 @@ import { requireFreshFactor } from './mfa'
 import { UNALLOCATED_SQL, issuedInvoice } from './receivables'
 import { carriedUsageCredits } from './usage-correction-records'
 import { CREDIT_KIND } from './assurance-credits'
+import { PAID_KIND } from './assurance-paid-access'
 import { assuranceExecution } from './assurance'
 
 const GRANT_REMAINING_SQL = `g.amount_cents - COALESCE((SELECT SUM(a.amount_cents) FROM nc_balance_entries a WHERE a.grant_id=g.id),0)`
@@ -109,11 +110,14 @@ async function direct(env: Bindings, actor: Actor, input: Input, kind: Kind) {
   requireMember(actor, 'approve')
   const s = await source(env, actor, input, kind)
   insist(!above(s.policy, s.amount), 'second_approver_required', 409)
+  // Only a single-person goodwill grant can name an assurance case: paid service that ended is credited back to the balance.
+  insist(kind === 'goodwill' || !input.has('assurance_case'), 'assurance_fix_kind_unsupported', 409)
+  const linked = kind === 'goodwill' ? await assuranceExecution(env, actor, input, PAID_KIND, proof => proof.customer === s.customer.id && s.amount <= proof.remainingCents) : null
   const id = newId(), at = clockInstant(env), by = actorLabel(actor)
-  await commit(env, [policyGuard(env, s.policy), activeMember(env, actor.id), ...cashGuard(env, s),
+  await commit(env, [policyGuard(env, s.policy), activeMember(env, actor.id), ...cashGuard(env, s), ...(linked?.guards ?? []),
     stmt(env, "INSERT INTO nc_balance_requests(id,kind,customer_id,amount_cents,reason,payment_id,reference,basis,policy_revision,available_cents,prepared_by_id,prepared_name,prepared_at,status,approved_by_id,approved_name,approved_at,approval_mode) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,'executed',?,?,?,'single-person')",
       id, kind, s.customer.id, s.amount, s.reason, s.payment?.id ?? null, s.reference, s.basis, s.policy.revision, s.available, actor.id, by, at, actor.id, by, at),
-    entryStatement(env, s, id, by, at)], audit(actor, id, s, 'single-person', by))
+    entryStatement(env, s, id, by, at)], linked ? { ...audit(actor, id, s, 'single-person', by), detail: { ...audit(actor, id, s, 'single-person', by).detail, assuranceCase: linked.case } } : audit(actor, id, s, 'single-person', by))
   return { id: s.customer.id, request: id }
 }
 export const grantGoodwill = (env: Bindings, actor: Actor, input: Input) => direct(env, actor, input, 'goodwill')
@@ -121,6 +125,7 @@ export const returnBalance = (env: Bindings, actor: Actor, input: Input) => dire
 
 export async function prepareBalanceRequest(env: Bindings, actor: Actor, input: Input) {
   requireMember(actor, 'approve')
+  insist(!input.has('assurance_case'), 'assurance_fix_kind_unsupported', 409)
   const kind = input.text('kind', { max: 10 })
   insist(kind === 'goodwill' || kind === 'return', 'invalid_balance_kind')
   const s = await source(env, actor, input, kind)

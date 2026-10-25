@@ -134,13 +134,15 @@ export async function assuranceDetectorsFlow(h, owner) {
   assert.equal((await h.api(`assurance-cases/${overCase.id}`, agent)).status, 'open', 'approving the credit never closes the case')
   assert.equal((await close(overCase)).creditedCents, 20000)
 
-  // Payment without access: the paid year ended early, so only a credit against that invoice, up to the unused part, may be linked.
+  // Payment without access: the paid year ended early, so a person returns only the unused part to the customer's balance.
   const owedBack = cents => (cents / 100).toFixed(2)
-  await refuse(paidCase, creditProposal(annualInvoice, owedBack(paid.remainingCents + 1)), 'assurance_fix_exceeds_difference')
-  await refuse(paidCase, creditProposal(july[under.customer], '1.00'), 'assurance_fix_source_mismatch')
-  const refund = await link(paidCase, creditProposal(annualInvoice, owedBack(paid.remainingCents)))
-  await api('proposal.decide', { proposal: refund.id, decision: 'approved' })
-  assert.equal((await api(`invoices/${annualInvoice.id}`)).creditedCents, paid.remainingCents)
+  const grant = (who, fields, status = 200) => h.api('balance.goodwill', who, { customer: prepaid.customer, amount: owedBack(paid.remainingCents), reason: 'Paid service after the recorded end', assurance_case: paidCase.id, ...fields }, status)
+  await grant(agent, {}, 403)
+  assert.equal((await grant(owner, { amount: owedBack(paid.remainingCents + 1) }, 409)).error, 'assurance_fix_source_mismatch', 'a grant above the unused service is refused')
+  assert.equal((await grant(owner, { customer: credit.customer }, 409)).error, 'assurance_fix_source_mismatch', 'a grant to another customer is refused')
+  assert.equal((await h.api('balance.goodwill', owner, { customer: prepaid.customer, amount: '1.00', reason: 'Unlinked', assurance_case: overCase.id }, 409)).error, 'assurance_fix_kind_unsupported')
+  await grant(owner, {})
+  assert.equal((await api(`customers/${prepaid.customer}/balance`)).goodwillCents, paid.remainingCents, 'the unused service becomes customer balance')
   assert.equal((await close(paidCase)).remainingCents, 0)
 
   // Unbilled ramp step: a member prepares the catch-up charge, a person approves the invoice that bills it.
