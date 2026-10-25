@@ -302,5 +302,21 @@
   "portal.quota.heading": "Cuotas de uso actuales",
   "portal.quota.used": "Cantidad utilizada",
   "portal.quota.limit": "Cuota",
-  "portal.quota.remaining": "Cantidad restante"
+  "portal.quota.remaining": "Cantidad restante",
+  "checkout.heading": "Métodos de pago",
+  "checkout.explain": "Introduce tus datos de pago solo en Stripe. Guardar un método predeterminado no autoriza ningún cobro.",
+  "checkout.card": "Tarjeta",
+  "checkout.ach": "Cuenta bancaria de EE. UU.",
+  "checkout.ending": "Terminación {last4}",
+  "checkout.mandate": "Se verificó un mandato ACH activo con Stripe.",
+  "checkout.consent": "Quiero guardar un método de pago mediante Stripe.",
+  "checkout.default": "Usar el método verificado como predeterminado. Esto no autoriza ningún cobro.",
+  "checkout.continue": "Continuar a Stripe",
+  "checkout.finish": "Verificar y guardar",
+  "checkout.empty": "No hay un método de pago listo para configurar. Contacta con la empresa.",
+  "checkout.status.prepared": "Listo para introducir los datos de pago de forma segura.",
+  "checkout.status.creating": "La creación del pago está pendiente de confirmación. Contacta con la empresa; no vuelvas a empezar.",
+  "checkout.status.open": "Completa la configuración en Stripe y verifica aquí el método guardado.",
+  "checkout.status.updating": "La confirmación del método predeterminado está pendiente. Contacta con la empresa; no repitas la operación.",
+  "checkout.status.complete": "Se guardó tu método de pago predeterminado."
 }

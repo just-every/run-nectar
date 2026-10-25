@@ -1,19 +1,20 @@
 import { assertCustomerFullCycle } from './customer-cycle.mjs'
 import { assertPaymentReceipts } from './payment-receipts.mjs'
 import { achPaymentEvidenceEdge,assertAchPaymentEvidence } from './ach-payment-evidence.mjs'
-import { customerPaymentMethodsEdge,assertCustomerPaymentMethods } from './customer-payment-methods.mjs'
+import { customerPaymentMethodsEdge,assertCustomerPaymentMethods,hostedSetupEdge,assertHostedSetups } from './customer-payment-methods.mjs'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { file } from './harness.mjs'
 import { prepaidRefundEdge } from './prepaid-refunds.mjs'
 import { totp } from './mfa.mjs'
 
-let edge,methodEdge,achEdge
+let edge,methodEdge,achEdge,setupEdge
 export const harnessOptions = () => {
   edge = prepaidRefundEdge()
   methodEdge=customerPaymentMethodsEdge(edge.fetch)
   achEdge=achPaymentEvidenceEdge(methodEdge.fetch)
-  return { stripeFetch: achEdge.fetch, stripeSecret: 'synthetic-nectar-1', stripeSecondarySecret: 'synthetic-nectar-2' }
+  setupEdge=hostedSetupEdge(achEdge.fetch)
+  return { stripeFetch: setupEdge.fetch, stripeSecret: 'synthetic-nectar-1', stripeSecondarySecret: 'synthetic-nectar-2' }
 }
 
 // CUS-001 current-source composition; the full clause remains partial.
@@ -104,7 +105,7 @@ export async function customerSearchFlow(h, owner, onReady = async () => {},inte
   const nativeInvoice = await api('invoice.manual', { customer: nativeCustomer, charges: [nativeCharge.charge], service_date: '2026-10-20' })
   await api('invoice.approve', { invoice: nativeInvoice.id, acknowledge: true })
   await api('invoice.finalise', { invoice: nativeInvoice.id, issue_date: '2026-10-20' })
-  await api('collection.customer.bind', { customer: nativeCustomer, account_ref: 'synthetic-nectar-native-account-1', stripe_customer_ref: 'synthetic-nectar-native-customer-1', confirm: true })
+  const nativeBinding=await api('collection.customer.bind', { customer: nativeCustomer, account_ref: 'synthetic-nectar-native-account-1', stripe_customer_ref: 'synthetic-nectar-native-customer-1', confirm: true })
   const review = await api('collection.prepare', { invoice: nativeInvoice.id })
   const collected = await api('collection.confirm', review.instructions.confirm)
   assert.equal(collected.status, 'collected')
@@ -166,6 +167,7 @@ export async function customerSearchFlow(h, owner, onReady = async () => {},inte
   assert.equal(retained.reason, 'previous_biller_period')
   assert.equal(retained.totalCents, null, 'CUS-001 a period owned by the previous biller is not quoted as a Nectar charge')
   assert.match(await h.page(`/app/customers/${moved.id}?preview_period=2026-08`, owner), /Previous biller owns this period/)
+  await assertHostedSetups(h,owner,{customer:nativeCustomer,other,binding:nativeBinding.id,finance,edge:setupEdge,onState:interaction.hostedState,executeStart:interaction.startHosted,executeFinish:interaction.finishHosted,executePrepare:interaction.prepareHosted})
   const erasure = await api('erasure.request', { customer: nativeCustomer })
   await api('erasure.verify', { request: erasure.id, reason: 'synthetic-nectar-5', evidence: file('synthetic-nectar-5.txt', 'synthetic-nectar-5', 'text/plain') })
   const erasedApproval=await api('erasure.approve', { request: erasure.id, confirm: true })

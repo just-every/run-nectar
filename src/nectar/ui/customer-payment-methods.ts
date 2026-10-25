@@ -9,10 +9,11 @@ export async function customerPaymentMethodsSection(env: Bindings, actor: Actor,
     || await one(env, 'SELECT 1 FROM nc_erased_records WHERE record_id=?', customer.id)) return ''
   const snapshots = await readCustomerPaymentMethods(env, actor, customer.id)
   const bindings = actor.kind === 'member' && actor.role === 'owner' && customer.status === 'active'
-    ? await all(env, 'SELECT id FROM nc_stripe_customer_bindings WHERE customer_id=?', customer.id) : []
+    ? await all(env, 'SELECT id,account_ref FROM nc_stripe_customer_bindings WHERE customer_id=?', customer.id) : []
   if(!snapshots.length&&!bindings.length)return ''
   return h`<section class="card" id="saved-payment-methods"><h2>Saved payment methods</h2>
     <p>Historical provider snapshots, including restored copies. These observations do not authorize a debit, establish a mandate or confirm payer authorization.</p>
+    ${bindings.length ? h`<details><summary>Prepare test checkout</summary><p>The customer confirms capture and the default method in their hosted portal. No charge is made.</p>${form('checkout.setup.prepare', `/app/customers/${customer.id}`, h`${hidden('customer',customer.id)}<label>Processor account<select name="binding">${bindings.map(binding=>h`<option value="${binding.id}">${binding.account_ref}</option>`)}</select></label><label>Method<select name="method"><option value="card">Card</option><option value="us_bank_account">ACH</option></select></label><label><input type="checkbox" name="confirm" required> Prepare for this customer</label>`, 'Prepare checkout')}</details>` : ''}
     ${bindings.length ? form('customer.payment_methods.refresh', `/app/customers/${customer.id}`, hidden('customer', customer.id), 'Refresh saved methods', { secondary: true }) : ''}
     ${snapshots.length ? snapshots.map(snapshot => h`<article><h3>Verified at ${new Date(snapshot.fetchedAt).toISOString()}</h3>
       <p>Processor account ${snapshot.accountRef} · Customer ${snapshot.customerRef}</p>

@@ -18,6 +18,8 @@ try{
   await h.api('tax.review',owner,{revision:(await h.api('business',owner)).revision})
   browser=await chromium.launch({headless:true,args:['--use-mock-keychain','--password-store=basic']})
   const context=await browser.newContext(),page=await context.newPage()
+  const customerContext=await browser.newContext(),customerPage=await customerContext.newPage()
+  await customerPage.route('https://checkout.stripe.com/**',route=>route.abort())
   await context.addCookies(owner.split('; ').map(value=>{const i=value.indexOf('=');return {name:value.slice(0,i),value:value.slice(i+1),url:h.origin}}))
   const shot=async(label,width)=>{
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`${label} fits ${width}`)
@@ -45,7 +47,36 @@ try{
         await shot('payment-receipt-source',width)
       }
     }
-  },{recordAch:async({customer,input})=>{
+  },{prepareHosted:async({customer,binding,method})=>{
+    await page.goto(h.origin+`/app/customers/${customer}`)
+    const detail=page.locator('#saved-payment-methods details');await detail.locator('summary').click()
+    const form=detail.locator('form');await form.locator('[name=binding]').selectOption(binding);await form.locator('[name=method]').selectOption(method);await form.locator('[name=confirm]').check()
+    for(const width of [1440,390]){await page.setViewportSize({width,height:950});await shot(`hosted-${method}-prepare`,width)}
+    await Promise.all([page.waitForNavigation({waitUntil:'load'}),form.getByRole('button').click()])
+    assert.equal(new URL(page.url()).searchParams.get('error'),null)
+    return (await h.api(`customers/${customer}`,owner)).billingRecord.hostedSetups.at(-1)
+  },hostedState:async({session,customer,setup,state,method})=>{
+    for(const width of [1440,390]){
+      await customerPage.setViewportSize({width,height:950});assert.equal((await customerPage.goto(h.origin+`/portal/payment-methods?session=${encodeURIComponent(session.token)}`)).status(),200)
+      assert.equal(await customerPage.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false)
+      assert.equal(await customerPage.locator('a,button').evaluateAll(nodes=>nodes.filter(node=>!node.textContent.trim()).length),0,'All controls have visible labels')
+      const card=customerPage.locator('section').filter({has:customerPage.locator(`input[value="${setup}"]`)});if(state!=='complete')assert.equal(await card.count(),1)
+      await customerPage.screenshot({path:`${directory}/${width}-hosted-${method}-${state}.png`,fullPage:true})
+      console.log('BROWSER',width,'hosted',method,state)
+      await page.setViewportSize({width,height:950});await page.goto(h.origin+`/app/customers/${customer}`);await shot(`hosted-${method}-${state}-operator`,width)
+    }
+  },startHosted:async({session,setup})=>{
+    await customerPage.goto(h.origin+`/portal/payment-methods?session=${encodeURIComponent(session.token)}`)
+    const form=customerPage.locator('form').filter({has:customerPage.locator(`input[value="${setup}"]`)});await form.locator('[name=confirm]').check()
+    const response=customerPage.waitForResponse(r=>new URL(r.url()).pathname==='/portal/payment-methods.start');await form.getByRole('button').click({noWaitAfter:true});const result=await response
+    assert.equal(result.status(),303);const url=result.headers().location;assert.equal(new URL(url).hostname,'checkout.stripe.com')
+    const cookies=await customerContext.cookies();assert.ok(cookies.some(cookie=>cookie.name==='nectar_setup_session'&&cookie.httpOnly&&cookie.sameSite==='Lax'))
+    await customerPage.goto(h.origin+'/portal/payment-methods');return {status:'open',url}
+  },finishHosted:async({session,setup})=>{
+    await customerPage.goto(h.origin+`/portal/payment-methods?session=${encodeURIComponent(session.token)}`)
+    const form=customerPage.locator('form').filter({has:customerPage.locator(`input[value="${setup}"]`)});await form.locator('[name=confirm]').check()
+    await Promise.all([customerPage.waitForNavigation({waitUntil:'load'}),form.getByRole('button').click()]);assert.equal(new URL(customerPage.url()).pathname,'/portal/payment-methods');return {status:'complete'}
+  },recordAch:async({customer,input})=>{
     await page.goto(h.origin+`/app/customers/${customer}`)
     for(const width of [1440,390]){await page.setViewportSize({width,height:950});await shot('ach-before-verification',width)}
     const form=page.locator('form[action="/app/do/payment.ach_evidence.record"]')

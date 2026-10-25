@@ -197,6 +197,12 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "subscription": "text",
     "taxable": "flag"
   },
+  "checkout.setup.prepare": {
+    "binding": "text",
+    "confirm": "flag",
+    "customer": "text",
+    "method": "text"
+  },
   "collection.confirm": {
     "account_ref": "text",
     "amount_cents": "integer",

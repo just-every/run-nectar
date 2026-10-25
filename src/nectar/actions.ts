@@ -1,3 +1,4 @@
+import { prepareHostedSetup } from './hosted-setup'
 import { scanAssurance,assignAssurance,approveAssurance,recheckAssurance } from './assurance'
 import { prepareInvoiceAutomation,decideInvoiceAutomation,runInvoiceAutomationDoor } from './invoice-automation'
 import { prepareShadowAppChange,confirmShadowAppChange,reconcileShadowAppChange,shadowInvoicePreview,appInvoicePreview } from './shadow-app'
@@ -118,6 +119,7 @@ export const actions: Record<string, Handler> = {
   'collection.reconcile': reconcileNativeCollection,
   'payment.ach_evidence.record':recordAchPaymentEvidence,
   'customer.payment_methods.refresh':refreshCustomerPaymentMethods,
+  'checkout.setup.prepare':prepareHostedSetup,
   'currency.rate.record':recordDailyRate,
   'trial.collection.prepare':prepareTrialCollection,
   'trial.collection.confirm':confirmTrialCollection,

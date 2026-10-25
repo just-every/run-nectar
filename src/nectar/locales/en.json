@@ -302,5 +302,21 @@
   "portal.quota.heading": "Current usage quotas",
   "portal.quota.used": "Used quantity",
   "portal.quota.limit": "Quota",
-  "portal.quota.remaining": "Remaining quantity"
+  "portal.quota.remaining": "Remaining quantity",
+  "checkout.heading": "Payment methods",
+  "checkout.explain": "Enter your payment details only on Stripe. Saving a default method does not authorize a charge.",
+  "checkout.card": "Card",
+  "checkout.ach": "US bank account",
+  "checkout.ending": "Ending in {last4}",
+  "checkout.mandate": "An active ACH mandate was verified with Stripe.",
+  "checkout.consent": "I want to save a payment method through Stripe.",
+  "checkout.default": "Make the verified payment method my default. This does not authorize a charge.",
+  "checkout.continue": "Continue to Stripe",
+  "checkout.finish": "Verify and save default",
+  "checkout.empty": "No payment method setup is ready. Contact the business.",
+  "checkout.status.prepared": "Ready to enter payment details securely.",
+  "checkout.status.creating": "Checkout creation is awaiting confirmation. Contact the business; do not start again.",
+  "checkout.status.open": "Complete Stripe checkout, then verify your saved method here.",
+  "checkout.status.updating": "Default method confirmation is pending. Contact the business; do not repeat.",
+  "checkout.status.complete": "Your default payment method was saved."
 }
