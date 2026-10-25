@@ -48,8 +48,8 @@ export async function erasurePlan(env: Bindings, customer: Row): Promise<Erasure
   const mutations: ErasureMutation[] = [], changes = new Map<string,{kind:string;fields:Set<string>;records:number}>()
   for (const image of images) {
     const { table,row,key,required,foreignKeys } = image
-    // Customer capabilities are runtime custody, not retained financial facts.
-    if (table === 'nc_portal_sessions' && image.scoped) {
+    // Customer capabilities and investigations are operational custody, not retained financial facts.
+    if (['nc_portal_sessions','nc_assurance_cases','nc_assurance_observations'].includes(table) && image.scoped) {
       mutations.push({ table, row, key, updates: null })
       const entry = changes.get(table) ?? { kind: table, fields: new Set<string>(), records: 0 }
       Object.keys(row).forEach(field => entry.fields.add(field)); entry.records++; changes.set(table, entry)

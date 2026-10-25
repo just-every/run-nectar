@@ -1,3 +1,4 @@
+import { scanAssurance,assignAssurance,approveAssurance,recheckAssurance } from './assurance'
 import { prepareInvoiceAutomation,decideInvoiceAutomation,runInvoiceAutomationDoor } from './invoice-automation'
 import { prepareShadowAppChange,confirmShadowAppChange,reconcileShadowAppChange,shadowInvoicePreview,appInvoicePreview } from './shadow-app'
 import { consumeStripeWebhookEvent } from './webhook-stripe'
@@ -90,6 +91,10 @@ import { prepareMetric,previewMetric,activateMetric } from './meter-definitions'
 type Handler = (env: Bindings, actor: Actor, input: Input, request: Request) => Promise<unknown>
 
 export const actions: Record<string, Handler> = {
+  'assurance.scan': scanAssurance,
+  'assurance.assign': assignAssurance,
+  'assurance.approve': approveAssurance,
+  'assurance.recheck': recheckAssurance,
   'plan.change.credit.prepare': preparePlanChangeCredit,
   'plan.change.prepare': preparePlanChange,
   'plan.change.decide': decidePlanChange,

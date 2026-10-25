@@ -44,6 +44,21 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "period": "text",
     "subscription": "text"
   },
+  "assurance.approve": {
+    "basis": "text",
+    "case": "text"
+  },
+  "assurance.assign": {
+    "case": "text",
+    "owner": "text"
+  },
+  "assurance.recheck": {
+    "case": "text"
+  },
+  "assurance.scan": {
+    "owner": "text",
+    "period": "text"
+  },
   "balance.apply": {
     "invoice": "text"
   },

@@ -95,6 +95,11 @@ export async function erasureFlow(h, owner, onState = async () => {}) {
   })).id
   const customer = await makeCustomer('FORMER')
   const unrelated = await makeCustomer('OTHER')
+  await h.api('meter.create',owner,{code:'synthetic-nectar-assurance-erasure',name:'Synthetic assurance source',unit_label:'events'})
+  await h.api('usage.control',owner,{customer,meter:'synthetic-nectar-assurance-erasure',day:'2026-01-05',expected_count:1,expected_quantity:'1'})
+  const assurance=await h.api('assurance.scan',owner,{period:'2026-01',owner:(await h.api('me',owner)).id})
+  assert.equal(assurance.opened.length,1)
+
   const privateValues = ['former@gov005.example', 'Private address FORMER', 'GOV005-FORMER', 'Elena Contactprivate', 'elena.contactprivate@gov005.example', 'private-note-GOV005', 'private-meta-GOV005', 'private-payment-GOV005', 'private-charge-GOV005']
   await h.api('contact.add', owner, { customer, name: privateValues[3], email: privateValues[4], role: 'billing' })
   await h.api('note.add', owner, { kind: 'customer', record: customer, body: privateValues[5] })
@@ -168,6 +173,12 @@ export async function erasureFlow(h, owner, onState = async () => {}) {
   const decisions=await Promise.all([1,2].map(()=>h.raw('/api/nectar/erasure.approve',{cookie:owner,body:{request:request.id,confirm:true}})))
   assert.deepEqual(decisions.map(r=>r.status).sort(),[200,409],'GOV-005 concurrent owner approvals commit exactly one erasure and receipt')
   const approved=await decisions.find(r=>r.status===200).json()
+  assert.deepEqual(await h.api('assurance-cases',agent),[],'erasure removes operational assurance cases')
+  await h.api(`assurance-cases/${assurance.opened[0]}`,agent,undefined,404)
+  for(const kind of ['nc_assurance_cases','nc_assurance_observations'])assert.ok(approved.receipt.changed.some(row=>row.kind===kind&&row.records===1),'erasure receipt enumerates the withdrawn investigation and evidence')
+  await h.api('assurance.scan',agent,{period:'2026-01',owner:(await h.api('me',owner)).id})
+  assert.deepEqual(await h.api('assurance-cases',agent),[],'retained controls cannot recreate an erased investigation')
+
   await h.api('erasure.approve', owner, { request: request.id, confirm: true }, 409)
   assert.ok(approved.receipt.changed.some(row => row.kind === 'nc_customers' && row.fields.includes('billing_email') && row.records === 1))
   assert.ok(approved.receipt.changed.some(row => row.kind === 'nc_customers' && row.fields.includes('invoice_settings_json')), 'INV-004 GOV-005 erases PO, memo and customer fields as well as saved invoice inputs')
