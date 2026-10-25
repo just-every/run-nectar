@@ -245,6 +245,7 @@ export async function nativeCollectionFlow(h,owner,{onState=async()=>{},confirm}
   const full=await api('cadence.dispute',{invoice:fullyDisputed.id,line:fullyDisputed.lines[0].id,amount_cents:10000,reason:'Customer disputes the whole source charge'})
   const disputeReview=await api('collection.prepare',{invoice:partlyDisputed.id})
   assert.equal(disputeReview.amount_cents,7000,'Only the undisputed amount is collectible')
+  await onState({label:'review',customer:customers[0],invoice:partlyDisputed.id,request:disputeReview})
   const beforeFull=postsNow()
   assert.equal((await api('collection.prepare',{invoice:fullyDisputed.id},409)).error,'native_collection_paused_for_dispute')
   const reviewed=await api('collection.prepare',{invoice:lateDispute.id})
