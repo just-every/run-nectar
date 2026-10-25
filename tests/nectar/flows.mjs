@@ -122,6 +122,278 @@ async function auditAutomatedPolicyWrites(h,owner) {
   console.log(`GOV-004 auditAutomatedPolicyWrites passed: ${observed} exact policy-attributed events`)
 }
 
+// Extend the same public-door matrix to commercial terms and lifecycle writes.
+// Each expected subject and detail is reconciled with the resulting subscription.
+async function auditSubscriptionWrites(h,owner,door,write,customer,external,price) {
+  const created=await write(door,'subscription.create',{customer,external_id:external,start_date:'2026-01-01',anchor_day:1,price:[price],quantity:['1']},r=>({subject:r.id,detail:{customer:external,start:'2026-01-01',anchor:1,trialEnd:null,items:[{price,quantity:1}],exception:null}}))
+  const subscription=created.result.id
+  const read=()=>h.api(`subscriptions/${subscription}`,owner)
+  assert.equal((await read()).external_id,external)
+  assert.equal((await read()).items[0].price_id,price)
+  for(const decision of ['approved','rejected']) {
+    const fields={subscription,kind:'fixed_credit',value:'2',effective_from:'2026-02-01',note:`Synthetic ${decision} amendment`}
+    const prepared=await write(door,'amendment.propose',fields,async()=>{
+      const row=(await read()).amendments.find(r=>r.note===fields.note)
+      assert.equal(row.status,'proposed')
+      assert.equal(row.value,'2.00');assert.equal(row.effective_from,fields.effective_from)
+      return {subject:row.id,detail:{subscription,kind:'fixed_credit',value:'2.00',from:fields.effective_from,to:null,note:fields.note,clause:''}}
+    })
+    await write(door,'amendment.decide',{amendment:prepared.event.subject,decision},async()=>{
+      const row=(await read()).amendments.find(r=>r.id===prepared.event.subject)
+      assert.equal(row.status,decision);assert.equal(row.decided_by,'owner@example.test')
+      return {action:decision==='approved'?'amendment.approve':'amendment.reject',subject:row.id,detail:{subscription,kind:'fixed_credit',value:'2.00'}}
+    })
+  }
+  // A seat item permits a quantity change without a second price revision.
+  const seatProduct=await h.api('product.create',owner,{code:`${external}-seats`,name:'Synthetic audit seats'})
+  const seat=await h.api('price.create',owner,{product:seatProduct.id,kind:'seat',unit_amount:'3',taxable:false})
+  const seatSub=await write(door,'subscription.create',{customer,start_date:'2026-01-01',anchor_day:1,price:[seat.id],quantity:['1']},r=>({subject:r.id,detail:{customer:external,start:'2026-01-01',items:[{price:seat.id,quantity:1}]}}))
+  const seatRead=()=>h.api(`subscriptions/${seatSub.result.id}`,owner)
+  for(const [decision,quantity,date] of [['discarded',2,'2026-02-01'],['approved',3,'2026-03-01']]) {
+    const before=await seatRead(),item=before.items.find(r=>r.effective_to===null)
+    const prepared=await write(door,'change.prepare',{subscription:before.id,item:item.id,quantity,effective_date:date},async()=>{
+      const row=(await seatRead()).changes.find(r=>r.new_quantity===quantity)
+      assert.equal(row.status,'draft');assert.equal(row.effective_date,date)
+      return {subject:row.id,detail:{subscription:before.id,item:item.id,price:seat.id,quantity,date}}
+    })
+    await write(door,'change.decide',{change:prepared.event.subject,decision},async()=>{
+      const after=await seatRead(),row=after.changes.find(r=>r.id===prepared.event.subject)
+      assert.equal(row.status,decision)
+      if(decision==='discarded')assert.deepEqual(after.items,before.items)
+      else {
+        assert.equal(after.items.find(r=>r.effective_from===date).quantity,quantity)
+        assert.equal(after.items.find(r=>r.id===item.id).effective_to,date)
+      }
+      return {action:decision==='approved'?'change.approve':'change.discard',subject:row.id,detail:decision==='approved'?{subscription:before.id,effective:date,preview:row.preview}:{}}
+    })
+  }
+  // A distinct current finance member approves the exact saved signed terms.
+  const email=`audit-finance-${door}@example.test`
+  await h.api('access.give',owner,{email,name:'Synthetic Audit Finance',role:'finance'})
+  const finance=await h.signIn(email,{requested:true})
+  for(const [decision,year] of [['rejected',2027],['approved',2028]]) {
+    const terms={commitments:[{from:`${year}-01-01`,to:`${year+1}-01-01`,minimum:'120.00',taxable:false}],included:[],ramps:[]}
+    const clause=`Synthetic ${decision} signed commitment`
+    const fields={subscription,revision:(await read()).revision,clause,...(door==='api'?terms:{commitment_from:[terms.commitments[0].from],commitment_to:[terms.commitments[0].to],commitment_minimum:['120'],commitment_taxable:['false']})}
+    const prepared=await write(door,'contract.prepare',fields,async()=>{
+      const row=(await read()).contracts.find(r=>r.clause===clause)
+      assert.equal(row.status,'proposed');assert.deepEqual(row.terms,terms)
+      return {subject:row.id,detail:{subscription,terms,clause}}
+    })
+    const before=await read(),trail=await h.api('audit',owner)
+    if(decision==='approved') {
+      await h.api('contract.decide',owner,{contract:prepared.event.subject,decision},409)
+      assert.deepEqual(await h.api('audit',owner),trail,'self approval commits neither audit nor contract')
+      assert.deepEqual(await read(),before)
+    }
+    await write(door,'contract.decide',{contract:prepared.event.subject,decision},async()=>{
+      const row=(await read()).contracts.find(r=>r.id===prepared.event.subject)
+      assert.equal(row.status,decision);assert.equal(row.decided_by,email)
+      assert.deepEqual(row.terms,terms)
+      return {action:`contract.${decision}`,subject:row.id,detail:{subscription,preparedBy:'owner@example.test',terms}}
+    },finance,email)
+  }
+  for(const decision of ['rejected','approved']) {
+    const title=`Synthetic audit ${door} ${decision} price proposal`
+    const payload={product:seatProduct.id,kind:'seat',unit_amount:'4',taxable:false,effective_date:'2026-09-01',subscriptions:[seatSub.result.id]}
+    const before=await seatRead()
+    const prepared=await write(door,'proposal.create',{kind:'price_change',title,payload:door==='api'?payload:JSON.stringify(payload)},async r=>{
+      const row=await h.api(`proposals/${r.id}`,owner)
+      assert.equal(row.status,'pending');assert.equal(row.title,title);assert.equal(row.payload.unit_amount,'4.00')
+      assert.deepEqual(row.impact[0].periods.map(p=>[p.before.totalCents,p.after.totalCents]),[[900,1200],[900,1200]])
+      assert.deepEqual((await seatRead()).items,before.items)
+      return {subject:r.id,detail:{kind:'price_change',title}}
+    })
+    const note='Synthetic audited proposal decision'
+    await write(door,'proposal.decide',{proposal:prepared.event.subject,decision,note},async()=>{
+      const row=await h.api(`proposals/${prepared.event.subject}`,owner),after=await seatRead()
+      assert.equal(row.status,decision);assert.equal(row.decided_by,email);assert.equal(row.decision_note,note)
+      if(decision==='rejected')assert.deepEqual(after.items,before.items)
+      else {
+        const item=after.items.find(r=>r.effective_from===payload.effective_date)
+        assert.equal(item.quantity,3);assert.equal(item.price_id,row.result.price)
+        const price=(await h.api('catalog',owner)).prices.find(p=>p.id===item.price_id)
+        assert.equal(price.unit_amount,'4.00');assert.equal(price.product_id,seatProduct.id)
+      }
+      return {action:decision==='approved'?'proposal.approve':'proposal.reject',subject:row.id,detail:decision==='approved'?{kind:'price_change',note}:{note}}
+    },finance,email)
+    const closed=await h.api(`proposals/${prepared.event.subject}`,owner),trail=await h.api('audit',owner)
+    await h.api('proposal.decide',finance,{proposal:prepared.event.subject,decision,note},409)
+    assert.deepEqual(await h.api(`proposals/${prepared.event.subject}`,owner),closed)
+    assert.deepEqual(await h.api('audit',owner),trail,'replayed proposal decision appends nothing')
+  }
+  const lifecycle=[
+    ['subscription.pause',{effective_date:'2026-04-01',resume_date:'2026-06-01',access:'suspend',reason:'Synthetic seasonal pause'},'pause'],
+    ['subscription.resume',{effective_date:'2026-05-01',reason:'Synthetic early return'},'resume'],
+    ['subscription.cancel',{mode:'immediate',effective_date:'2026-07-01',reason:'Synthetic cancellation'},'cancel'],
+    ['subscription.reactivate',{effective_date:'2026-07-02',reason:'Synthetic reactivation'},'reactivate'],
+  ]
+  let pause,canceled
+  for(const [action,fields,kind] of lifecycle) {
+    const before=await read(),revision=before.revision
+    const submitted={subscription,revision,...fields,...(kind==='resume'?{pause}:{})}
+    const priorAudit=await h.api('audit',owner)
+    await h.rejectAudit(action)
+    try {
+      if(door==='api')await h.api(action,owner,submitted,500)
+      else assert.equal((await h.raw(`/app/do/${action}`,{cookie:owner,form:new URLSearchParams(submitted)})).status,500)
+      assert.deepEqual(await read(),before,`${action}: refused audit rolls back every commercial field`)
+      assert.deepEqual(await h.api('audit',owner),priorAudit,`${action}: refused audit leaves the prior trail unchanged`)
+    } finally {await h.rejectAudit()}
+    const written=await write(door,action,submitted,async()=>{
+      const after=await read(),row=after.lifecycle.find(r=>r.kind===kind)
+      assert.notEqual(after.revision,revision)
+      assert.equal(row.reason,fields.reason);assert.equal(row.author,'owner@example.test')
+      assert.equal(row.effective_date,fields.effective_date)
+      let detail={id:row.id,reason:fields.reason}
+      if(kind==='pause')detail={...detail,from:fields.effective_date,until:fields.resume_date,access:fields.access}
+      if(kind==='resume'){assert.equal(row.related_id,pause);detail={...detail,pause,date:fields.effective_date}}
+      if(kind==='cancel'){assert.equal(after.end_date,fields.effective_date);detail={...detail,date:fields.effective_date,mode:fields.mode,policy:before.lifecyclePolicy}}
+      if(kind==='reactivate'){assert.equal(after.end_date,null);assert.equal(row.related_id,canceled);detail={...detail,date:fields.effective_date,canceled,restoredItems:[],renewal:null}}
+      return {subject:subscription,detail}
+    })
+    if(kind==='pause')pause=written.detail.id
+    if(kind==='cancel')canceled=written.detail.id
+    const after=await read(),trail=await h.api('audit',owner)
+    await h.api(action,owner,submitted,409)
+    assert.deepEqual(await read(),after,`${action}: stale request leaves commercial records unchanged`)
+    assert.deepEqual(await h.api('audit',owner),trail,`${action}: stale request appends no audit`)
+  }
+  for(const decision of ['rejected','approved']) {
+    const nickname=`Synthetic audit ${decision} revision`
+    const product=(await h.api('catalog',owner)).prices.find(r=>r.id===price).product_id
+    const prepared=await write(door,'price.create',{product,kind:'flat',unit_amount:'12',taxable:false,nickname},async()=>{
+      const row=(await h.api('catalog',owner)).priceRequests.find(r=>r.payload.nickname===nickname)
+      assert.equal(row.status,'pending');assert.equal(row.version,2)
+      return {action:'price.prepare',subject:row.id,detail:{product,productCode:external,kind:'flat',amount:'12.00',version:2,taxable:false,nickname}}
+    })
+    const oldPrices=(await h.api('catalog',owner)).prices
+    await write(door,'price.decide',{request:prepared.event.subject,decision},async()=>{
+      const catalog=await h.api('catalog',owner),row=catalog.priceRequests.find(r=>r.id===prepared.event.subject)
+      assert.equal(row.status,decision==='approved'?'published':'rejected')
+      assert.equal(row.decided_by,email)
+      assert.deepEqual(catalog.prices.filter(r=>oldPrices.some(old=>old.id===r.id)),oldPrices)
+      if(decision==='approved') {
+        const published=catalog.prices.find(r=>r.id===row.price_id)
+        assert.equal(published.product_id,product);assert.equal(published.unit_amount,'12.00');assert.equal(published.version,2)
+        return {action:'price.publish',subject:row.id,detail:{product,productCode:external,kind:'flat',amount:'12.00',version:2,taxable:false,nickname,price:published.id,preparedBy:'owner@example.test',mode:'two-person'},extra:{action:'price.create',subject:published.id,detail:{request:row.id,version:2,mode:'two-person'}}}
+      }
+      return {action:'price.reject',subject:row.id,detail:{}}
+    },finance,email)
+  }
+  for(const decision of ['rejected','approved']) {
+    const before=await read(),payload={creditUnused:true,reactivationDays:60,prorationPolicy:before.lifecyclePolicy.prorationPolicy}
+    const policies=await h.api('policies',owner)
+    const prepared=await write(door,'lifecycle.policy',{credit_unused:true,reactivation_days:60},async()=>{
+      const rows=(await h.api('policies',owner)).filter(r=>!policies.some(old=>old.id===r.id))
+      assert.equal(rows.length,1);assert.equal(rows[0].kind,'lifecycle');assert.equal(rows[0].status,'pending')
+      assert.deepEqual(rows[0].payload,payload)
+      assert.deepEqual((await read()).lifecyclePolicy,before.lifecyclePolicy)
+      return {action:'policy.prepare',subject:rows[0].id,detail:{kind:'lifecycle',payload,revision:before.lifecyclePolicy.revision}}
+    })
+    await write(door,'policy.decide',{request:prepared.event.subject,decision},async()=>{
+      const row=(await h.api('policies',owner)).find(r=>r.id===prepared.event.subject)
+      assert.equal(row.status,decision==='approved'?'applied':'rejected');assert.equal(row.decided_by,email)
+      assert.deepEqual((await read()).lifecyclePolicy,decision==='approved'?{...payload,revision:before.lifecyclePolicy.revision+1}:before.lifecyclePolicy)
+      return {action:decision==='approved'?'policy.apply':'policy.reject',subject:row.id,detail:decision==='approved'?{kind:'lifecycle',payload,preparedBy:'owner@example.test',mode:'two-person'}:{kind:'lifecycle'}}
+    },finance,email)
+  }
+  const before=await read(),trail=await h.api('audit',owner),started=Date.now()
+  const fields={subscription,revision:before.revision,mode:'immediate',effective_date:'2026-08-01',reason:'Synthetic competing cancellation'}
+  const attempts=await Promise.all([1,2].map(()=>h.raw(door==='api'?'/api/nectar/subscription.cancel':'/app/do/subscription.cancel',{
+    cookie:owner,...(door==='api'?{body:fields}:{form:new URLSearchParams(fields)})
+  })))
+  const outcomes=door==='api'?attempts.map(r=>r.status):attempts.map(r=>new URL(r.headers.get('location'),h.origin).searchParams.has('error')?409:200)
+  assert.deepEqual(outcomes.sort(),[200,409],`${door}: one competing cancellation commits`)
+  const after=await read(),audit=await h.api('audit',owner),added=audit.filter(r=>!trail.some(old=>old.seq===r.seq))
+  assert.equal(added.length,1,'the losing transaction contributes no audit entry')
+  const transition=after.lifecycle.find(r=>r.reason===fields.reason)
+  assert.equal(after.lifecycle.length,before.lifecycle.length+1)
+  assert.equal(after.end_date,fields.effective_date)
+  assert.deepEqual({...added[0],seq:undefined,at:undefined},{seq:undefined,at:undefined,actor:'owner@example.test',action:'subscription.cancel',subject:subscription,
+    detail:JSON.stringify({id:transition.id,date:fields.effective_date,mode:fields.mode,reason:fields.reason,policy:before.lifecyclePolicy})})
+  assert.ok(added[0].at>=started&&added[0].at<=Date.now())
+  assert.deepEqual(audit.filter(r=>r.seq<=trail[0].seq),trail)
+}
+
+// Real import and undo, including storage failure at the audit insert boundary.
+async function auditImportWrites(h,owner) {
+  const files=await stripeFiles(),baseline=await h.api('customers',owner)
+  const expected={meter:1,product:4,price:3,customer:3,subscription:2,invoice:3}
+  const preview=await h.api('import.preview',owner,files)
+  assert.deepEqual(preview.create,expected)
+  const original=await h.api('audit',owner)
+  await h.rejectAudit('import.record.write')
+  try {
+    const response=await h.raw('/api/nectar/import.apply',{cookie:owner,body:{...files,fingerprint:preview.fingerprint}})
+    assert.ok(response.status>=400,'audit storage failure refuses native import publication')
+    assert.deepEqual(await h.api('customers',owner),baseline,'failed audit leaves imported customer records absent')
+    const catalog=await h.api('catalog',owner)
+    for(const key of ['products','meters','prices'])assert.equal(catalog[key].filter(r=>r.origin==='import').length,0)
+    assert.deepEqual(await h.api('shadow',owner),[])
+    assert.deepEqual(await h.api('audit',owner),original,'failed batch publishes neither records nor audit')
+  } finally {await h.rejectAudit()}
+  for(const door of ['api','form']) {
+    const before=await h.api('audit',owner),started=Date.now()
+    if(door==='api')await h.api('import.apply',owner,{...files,fingerprint:preview.fingerprint})
+    else {
+      const upload=Object.fromEntries(Object.entries(files).flatMap(([key,value])=>[[`${key}_b64`,value.base64],[`${key}_name`,value.filename]]))
+      const saved=await h.submit('import.apply',owner,{...upload,fingerprint:preview.fingerprint},'/app/import')
+      assert.equal(saved.searchParams.get('error'),null)
+    }
+    const ended=Date.now(),after=await h.api('audit',owner),added=after.filter(r=>!before.some(old=>old.seq===r.seq))
+    const records=added.filter(r=>r.action==='import.record.write'),summary=added.find(r=>r.action==='import.apply')
+    assert.equal(records.length,16);assert.equal(added.length,17);assert.ok(summary)
+    const byKind=Object.fromEntries(Object.keys(expected).map(kind=>[kind,records.filter(r=>JSON.parse(r.detail).kind===kind).length]))
+    assert.deepEqual(byKind,expected)
+    const customers=(await h.api('customers',owner)).filter(r=>r.origin==='import'),catalog=await h.api('catalog',owner)
+    const subjects=new Map([...customers.map(r=>[r.id,{kind:'customer',revision:r.revision}]),
+      ...['products','meters','prices'].flatMap(key=>catalog[key].filter(r=>r.origin==='import').map(r=>[r.id,{kind:{products:'product',meters:'meter',prices:'price'}[key],revision:r.revision}]))])
+    for(const customer of customers) {
+      const detail=await h.api(`customers/${customer.id}`,owner)
+      for(const row of detail.subscriptions)subjects.set(row.id,{kind:'subscription',revision:row.revision})
+      for(const row of detail.incumbentHistory.documents)subjects.set(row.id,{kind:'invoice',revision:row.revision})
+    }
+    for(const event of added) {
+      assert.equal(event.actor,'owner@example.test');assert.ok(event.at>=started&&event.at<=ended)
+      if(event===summary)continue
+      const record=subjects.get(event.subject);assert.ok(record,`${door}: audit subject is a public imported record`)
+      const detail=JSON.parse(event.detail)
+      assert.equal(detail.destination,'billing');assert.equal(detail.kind,record.kind)
+      assert.ok(typeof detail.revision==='string'&&detail.revision.length>0)
+      if(record.revision)assert.equal(detail.revision,record.revision)
+      assert.deepEqual(Object.keys(detail).sort(),['destination','kind','revision'],'native audit carries typed custody only')
+    }
+    assert.deepEqual(JSON.parse(summary.detail),{kit:'stripe',fingerprint:preview.fingerprint,counts:preview.counts})
+    assert.deepEqual(after.filter(r=>r.seq<=before[0].seq),before)
+    await h.api('import.apply',owner,{...files,fingerprint:preview.fingerprint})
+    const repeated=await h.api('audit',owner)
+    assert.equal(repeated.filter(r=>r.action==='import.record.write').length,after.filter(r=>r.action==='import.record.write').length,'repeat import publishes no duplicate native mutation')
+    const importedCustomers=await h.api('customers',owner)
+    await h.rejectAudit('import.record.remove')
+    try {
+      const refused=await h.raw('/api/nectar/import.job',{cookie:owner,body:{job:summary.subject,action:'undo'}})
+      assert.ok(refused.status>=400,'audit storage failure refuses native removal')
+      assert.deepEqual(await h.api('customers',owner),importedCustomers)
+      assert.deepEqual(await h.api('audit',owner),repeated)
+    } finally {await h.rejectAudit()}
+    const undoStart=Date.now()
+    if(door==='api')await h.api('import.job',owner,{job:summary.subject,action:'undo'})
+    else assert.equal((await h.submit('import.job',owner,{job:summary.subject,action:'undo'},'/app/import')).searchParams.get('error'),null)
+    const undone=await h.api('audit',owner),removed=undone.filter(r=>r.seq>repeated[0].seq)
+    assert.equal(removed.length,17)
+    for(const event of removed) {
+      assert.equal(event.actor,'owner@example.test');assert.ok(event.at>=undoStart&&event.at<=Date.now())
+      if(event.action==='import.undo'){assert.equal(event.subject,summary.subject);assert.deepEqual(JSON.parse(event.detail),{state:'undone'});continue}
+      assert.equal(event.action,'import.record.remove')
+      assert.deepEqual(JSON.parse(event.detail),{destination:'billing',kind:subjects.get(event.subject).kind})
+    }
+    assert.deepEqual(await h.api('customers',owner),baseline)
+    assert.deepEqual(undone.filter(r=>r.seq<=repeated[0].seq),repeated,'undo retains prior audit entries')
+  }
+  console.log('GOV-004 auditImportWrites passed: API and form import and undo, 16 typed targets each, atomic audit-storage refusal')
+}
+
 // Observe the audit through its public read door immediately around each write.
 // Expected facts come from the submitted operation and returned business record.
 async function auditBillingWrites(h, owner) {
@@ -138,10 +410,14 @@ async function auditBillingWrites(h, owner) {
     const end = Date.now(), after = await h.api('audit', owner)
     const added = after.filter(row => !before.some(old => old.seq === row.seq))
     const facts = await expected(result)
-    assert.equal(added.length, action === 'invoice.finalise' ? 2 : 1, `${door} ${action}: complete committed events`)
+    assert.equal(added.length, facts.extra || action === 'invoice.finalise' ? 2 : 1, `${door} ${action}: complete committed events`)
     for (const row of added) {
       assert.equal(row.actor,label)
       assert.ok(row.at>=start&&row.at<=end)
+    }
+    if(facts.extra) {
+      const extra=added.find(row=>row.action===facts.extra.action)
+      assert.ok(extra);assert.equal(extra.subject,facts.extra.subject);assert.deepEqual(JSON.parse(extra.detail),facts.extra.detail)
     }
     const event = added.find(row=>row.action===(facts.action??action))
     assert.ok(event,`${action}: expected event`)
@@ -158,7 +434,7 @@ async function auditBillingWrites(h, owner) {
     const detail = JSON.parse(event.detail)
     for (const [key,value] of Object.entries(facts.detail ?? {})) assert.deepEqual(detail[key], value, `${action}: ${key}`)
     assert.deepEqual(after.filter(row => row.seq <= before[0]?.seq), before, `${action}: prior trail unchanged`)
-    coverage.add(`${door} ${action}`)
+    coverage.add(`${door} ${event.action}`)
     return {result,event,detail}
   }
   for (const door of ['api','form']) {
@@ -178,6 +454,7 @@ async function auditBillingWrites(h, owner) {
     await write(door,'meter.create',{code:external,name:external,unit_label:'events'},r=>({subject:r.id,detail:{code:external,name:external,unit:'events'}}))
     const price = await write(door,'price.create',{product:product.result.id,kind:'flat',unit_amount:'10',taxable:false},r=>({subject:r.id,detail:{product:product.result.id,productCode:external,kind:'flat',amount:'10.00',version:1,taxable:false}}))
     await write(door,'feature.grant',{product:product.result.id,feature:'synthetic_feature'},()=>({subject:product.result.id,detail:{feature:'synthetic_feature'}}))
+    await auditSubscriptionWrites(h,owner,door,write,customer,external,price.result.id)
     await write(door,'price.retire',{price:price.result.id},()=>({subject:price.result.id,detail:{product:external,version:1}}))
     assert.equal((await h.api('catalog',owner)).prices.find(p=>p.id===price.result.id).status,'retired')
     const credential = await write('api','credential.issue',{name:external,scopes:['usage']},r=>({subject:r.id,detail:{name:external,scopes:['usage']}}))
@@ -218,6 +495,7 @@ async function auditBillingWrites(h, owner) {
       assert.deepEqual(events.find(r=>r.action===action),{at:expected.at,actor:expected.actor,action,detail:JSON.parse(expected.detail)})
     }
   }
+  await auditImportWrites(h,owner)
   await h.api('access.give',owner,{email:'audit-accountant@example.test',name:'Audit Accountant',role:'accountant'})
   const accountant = await h.signIn('audit-accountant@example.test',{requested:true})
   const trail = await h.api('audit',owner)

@@ -174,7 +174,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "1a0f415a2e7ea2e003b633b7adf79f705a9a0fc3408a588ec147337b6afa7fc6",
+      "sha256": "0b5c35a3ea13c9bf410b71f72905ff9fe83549fd4f08b56bda391810ed8588cc",
       "executable": false
     },
     "AGENTS.consumer.md": {
@@ -194,7 +194,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "d1bc30f5d567e4882279e1a098a1a1a5d36feaf4618e1a301de5454e67ffe53d",
+      "sha256": "dd2d027e4ce6bccd36f25b3fdb59c5d0dc421b967af7ea639e9427c5d78b575d",
       "executable": false
     },
     "DEMO.md": {
@@ -3382,11 +3382,11 @@
       "executable": false
     },
     "src/nectar/movein/stripe.ts": {
-      "sha256": "feb1f62c68bb61151c25832eba18eff5225baf817a244d969421496be72de197",
+      "sha256": "b31ab7550e92645a88a7779aeb941d803e4ab9e00f80f4420e6cd66db268720c",
       "executable": false
     },
     "src/nectar/movein/target.ts": {
-      "sha256": "001f3528691382ebcd5bc40f8a86b4893307c4cdbe106480e254f00368e138bc",
+      "sha256": "d8de75ef823b923ad0eb70b404e45ea8a9efc6a7e0dca9d60b36a5f71d27a11d",
       "executable": false
     },
     "src/nectar/note-records.ts": {
@@ -4522,11 +4522,11 @@
       "executable": false
     },
     "tests/nectar/flows.mjs": {
-      "sha256": "2f02e3c8040342655bf85c842d16a32482aee02862bf109f28c63d3583722362",
+      "sha256": "2175b4dae5e12e9bf2a4db80571df1118c25b068c70fa3538281cdda6bd117dc",
       "executable": false
     },
     "tests/nectar/harness.mjs": {
-      "sha256": "3f481e5ff8051376518bb14071ba046d623daf5e44cd9abb6524066009d2489c",
+      "sha256": "a48a619703084e4661e1ee7acec04b978f817bd9d0abd6020d0119be3cb19124",
       "executable": false
     },
     "tests/nectar/hierarchies.mjs": {
@@ -4570,7 +4570,7 @@
       "executable": false
     },
     "tests/nectar/journey.mjs": {
-      "sha256": "04347a95c9dc7569bd4f6ae0b300d4cf4b5c6a34db48ceb296c31f1ed048cebf",
+      "sha256": "0e01e69a554f84b0d9ae0a08d253f5b1420fdc28b488f52fce17fd4c81f406db",
       "executable": false
     },
     "tests/nectar/lifecycle-cancel.mjs": {

@@ -32,7 +32,7 @@ export async function harness({ assets = false, localTime, hostname = '127.0.0.1
     if (queued) return Response.json(queued.body, { status: queued.status })
     return Response.json({ id: `test-${mails.length}` })
   }
-  let mf
+  let mf, db
   // WebAuthn refuses IP-address relying parties, so preserve the requested hostname.
   const listener = await httpListener(() => mf.ready, hostname)
   const { origin } = listener
@@ -49,7 +49,7 @@ export async function harness({ assets = false, localTime, hostname = '127.0.0.1
     mf = new Miniflare(convertV4MiniflareOptions(options))
     await mf.ready
     // Every committed migration, as `rer setup` leaves a database.
-    const db = await mf.getD1Database('DB')
+    db = await mf.getD1Database('DB')
     for (const name of (applyMigrations?await readdir('migrations/core'):[]).filter(name => name.endsWith('.sql')).sort()) {
       setupPhase=`migration:${name}`
       await db.batch(wrangler.unstable_splitSqlQuery(await readFile(`migrations/core/${name}`, 'utf8')).map(query => db.prepare(query)))
@@ -105,8 +105,17 @@ export async function harness({ assets = false, localTime, hostname = '127.0.0.1
     throw new Error(`no sign-in message for ${email}`)
   }
 
+  // Storage fault injection only: business records still use public HTTP doors.
+  async function rejectAudit(action) {
+    await db.prepare('DROP TRIGGER IF EXISTS synthetic_nectar_audit_failure').run()
+    if (action) {
+      assert.match(action,/^[a-z.]+$/)
+      await db.prepare(`CREATE TRIGGER synthetic_nectar_audit_failure BEFORE INSERT ON nc_audit WHEN NEW.action='${action}' BEGIN SELECT RAISE(ABORT,'synthetic-nectar-audit-unavailable'); END`).run()
+    }
+  }
+
   async function advanceClock(instant){assert.ok(Number.isFinite(Date.parse(instant)));vars.NECTAR_LOCAL_TIME=instant;await mf.setOptions(convertV4MiniflareOptions({...options,bindings:{...vars}}));await mf.ready}
-  return { origin, vars, raw, api, submit, page, signIn, close, mails, mailResponses,advanceClock, dispatch: async request => mf.dispatchFetch(request.url, { redirect: 'manual', method: request.method, headers: Object.fromEntries(request.headers), ...(!['GET','HEAD'].includes(request.method) ? { body: await request.arrayBuffer() } : {}) }) }
+  return { origin, vars, raw, api, submit, page, signIn, close, mails, mailResponses,advanceClock,rejectAudit, dispatch: async request => mf.dispatchFetch(request.url, { redirect: 'manual', method: request.method, headers: Object.fromEntries(request.headers), ...(!['GET','HEAD'].includes(request.method) ? { body: await request.arrayBuffer() } : {}) }) }
 }
 
 export const file = (filename, content, type = 'application/octet-stream') => ({ filename, base64: Buffer.from(content).toString('base64'), type })

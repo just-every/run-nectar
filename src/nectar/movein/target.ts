@@ -238,3 +238,20 @@ export const nectarTargets: D1TargetAdapter = {
     return sql(`(${Object.values(KINDS).map(kind => kind.count).join(' + ')}) = ?`, count)
   },
 }
+
+/** Audit each native import mutation inside the kit's guarded target batch.
+ * Keep only typed custody facts here; captured narratives stay in originals. */
+export function auditedNectarTargets(actor: string): D1TargetAdapter {
+  const event = (action: string, destination: string, kind: string, id: string, revision?: string) =>
+    sql('INSERT INTO nc_audit (at,actor,action,subject,detail) VALUES (?,?,?,?,?)', at(), actor, action, id,
+      JSON.stringify({ destination, kind, ...(revision === undefined ? {} : { revision }) }))
+  return {
+    ...nectarTargets,
+    write(row) {
+      return [...nectarTargets.write(row), event('import.record.write', row.destination, row.targetKind, row.targetId, row.revision)]
+    },
+    remove(destination, kind, id) {
+      return [...nectarTargets.remove(destination, kind, id), event('import.record.remove', destination, kind, id)]
+    },
+  }
+}

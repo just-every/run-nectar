@@ -18,7 +18,7 @@ import { NectarError, all, commit, guard, insist, newId, now, one, parseJson, st
 import { decimalText, micros } from '../decimal'
 import { isDate, localDate, periodContaining } from '../dates'
 import type { Input } from '../input'
-import { KINDS, nectarTargets } from './target'
+import { KINDS, auditedNectarTargets } from './target'
 import { HISTORY_FILES, duplicateStripeSource, stripeCreditEvidence, stripeHistoryValue, stripeInvoiceEvidence, type HistorySourceKind } from './history'
 
 const namespace = 'stripe', mappingVersion = 'stripe-billing-1', destination = 'billing'
@@ -322,7 +322,7 @@ async function build(env: Bindings, actor: Actor, input: Input) {
 function importContext(env: Bindings, actor: Actor): D1ImportContext {
   const predicate = () => ({ sql: `EXISTS(SELECT 1 FROM oa_sessions s JOIN oa_operators o ON o.id = s.operator_id WHERE s.id = ? AND s.revoked_at IS NULL AND s.expires_at > CAST(strftime('%s','now') AS INTEGER) * 1000 AND o.version = s.operator_version AND o.status = 'active'
     AND EXISTS(SELECT 1 FROM nc_members m WHERE m.id = ? AND lower(o.email) = m.email AND m.status = 'active' AND (o.role = 'owner' OR m.role = 'finance')))`, params: [actor.sessionId, actor.id] })
-  return { destination, namespace, mappingVersion, storage: { database: env.DB as never, targets: nectarTargets }, authorization: { principalId: actor.id, predicate }, batchSize: 25 }
+  return { destination, namespace, mappingVersion, storage: { database: env.DB as never, targets: auditedNectarTargets(actorLabel(actor)) }, authorization: { principalId: actor.id, predicate }, batchSize: 25 }
 }
 
 export async function previewImport(env: Bindings, actor: Actor, input: Input) {
