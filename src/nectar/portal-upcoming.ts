@@ -1,3 +1,5 @@
+import { featureDecision } from './feature-policy'
+import { contractBurnDown } from './contract-terms'
 import { composeBillingWindows,billingServiceWindows } from './billing-composition'
 import { upcomingMeterPeriod } from './upcoming-meter-periods'
 // Customer-scoped projections of the ordinary rating engine. Saved inputs,
@@ -28,16 +30,27 @@ export async function portalUpcoming(env: Bindings, session: CustomerSession, su
   insist(sub, 'not_found', 404)
   insist(month === undefined || month === null || isMonth(month), 'invalid_period')
   const business = await requireBusiness(env)
+  const commitments = (await contractBurnDown(env, sub.id)).map(window => ({
+    ...window, invoices: window.invoices.map(({corrections, ...invoice}) => ({...invoice, href: `/portal/invoices/${invoice.id}`})),
+  }))
+  const quotaDate=today(business.timezone,clockInstant(env))
+  const policies=await all(env,`SELECT DISTINCT f.product_id,f.feature FROM nc_features f JOIN nc_feature_policies p ON p.product_id=f.product_id AND p.feature=f.feature
+    JOIN nc_prices price ON price.product_id=f.product_id JOIN nc_items item ON item.price_id=price.id
+    WHERE item.subscription_id=? AND item.effective_from<=? AND (item.effective_to IS NULL OR item.effective_to>?) AND p.meter_id IS NOT NULL`,sub.id,quotaDate,quotaDate)
+  const quotas = (await Promise.all(policies.map(async policy=>{
+    const {quota}=await featureDecision(env,sub,policy.product_id,policy.feature,quotaDate,business.timezone)
+    return quota ? {feature:policy.feature,meter:quota.meter,used:quota.used,limit:quota.limit,remaining:quota.remaining,period:quota.period} : null
+  }))).filter((quota):quota is NonNullable<typeof quota>=>quota!==null)
   const calendar = await subscriptionCalendar(env, sub)
   if (!calendar.enabled) {
     const invoice = await scopedUpcoming(env, session, sub, business, month)
-    return { ...invoice, billingMonth: invoice.period.start.slice(0, 7), invoices: [invoice] }
+    return { ...invoice, billingMonth: invoice.period.start.slice(0, 7), commitments, quotaDate, quotas, invoices: [invoice] }
   }
   const selected = month ?? today(business.timezone, clockInstant(env)).slice(0, 7)
   const from = `${selected}-01`, windows = composeBillingWindows(dueBillingWindows(calendar.basis, from, addMonths(from, 1)))
   insist(windows.length, 'billing_window_not_due', 409)
   const invoices = await Promise.all(windows.map(window => scopedUpcoming(env, session, sub, business, selected, window)))
-  return { ...invoices[0], billingMonth: selected, invoices }
+  return { ...invoices[0], billingMonth: selected, commitments, quotaDate, quotas, invoices }
 }
 
 // Only called after the session-owned subscription query above. The same engine

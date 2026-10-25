@@ -288,5 +288,19 @@
   "portal.refund.status.uncertain": "Resultado del procesador incierto",
   "portal.refund.status.refunded": "Reembolsada",
   "portal.refund.status.failed": "Error de reembolso",
-  "portal.refund.status.stopped": "Detenida"
+  "portal.refund.status.stopped": "Detenida",
+  "portal.commitment.heading": "Compromiso mínimo",
+  "portal.commitment.basis": "Antes de impuestos. Los cargos únicos y los créditos fijos no reducen este mínimo. Las correcciones de uso aprobadas se muestran por separado de los importes originales emitidos.",
+  "portal.commitment.nominal": "Mínimo firmado",
+  "portal.commitment.active": "Mínimo activo",
+  "portal.commitment.earned": "Cargos elegibles",
+  "portal.commitment.trueup": "Regularización",
+  "portal.commitment.remaining": "Compromiso restante",
+  "portal.commitment.invoices": "Aportaciones de facturas emitidas",
+  "portal.commitment.original": "Aportación original emitida",
+  "portal.commitment.replay": "Corrección aprobada",
+  "portal.quota.heading": "Cuotas de uso actuales",
+  "portal.quota.used": "Cantidad utilizada",
+  "portal.quota.limit": "Cuota",
+  "portal.quota.remaining": "Cantidad restante"
 }

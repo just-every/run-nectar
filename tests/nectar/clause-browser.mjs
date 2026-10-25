@@ -1,3 +1,8 @@
+import { commitments } from './commitments.mjs'
+import { seedPortalRecords } from './portal-sessions.mjs'
+import { portalCorrections } from './portal-corrections.mjs'
+import { entitlementQuotasFlow } from './entitlement-quotas.mjs'
+import { portalAnswersFlow } from './portal-answers.mjs'
 import { prepaidBrowser } from './prepaid-browser.mjs'
 import { nativeCollectionFlow,harnessOptions as nativeOptions } from './native-collection.mjs'
 // Focused real-browser use of a clause's own public pages and native forms.
@@ -14,7 +19,7 @@ import { contractEntitySetup } from './contract-setup.mjs'
 import { intervalCancellationFlow } from './interval-cancel.mjs'
 import { numberingEntitiesFlow } from './numbering-entities.mjs'
 const kind=process.argv[2],directory=process.env.NECTAR_EVIDENCE_DIR??`.evidence/${kind}`
-assert.ok(['erasure','history','collection','numbering','intervals','cancellation','entity-setup','prepaid','native-collection'].includes(kind))
+assert.ok(['portal-usage','erasure','history','collection','numbering','intervals','cancellation','entity-setup','prepaid','native-collection'].includes(kind))
 await mkdir(directory,{recursive:true})
 const captures=[]
 const h=await harness({assets:true,...(kind==='collection'?collectionOptions():kind==='native-collection'?nativeOptions():{})});let browser
@@ -34,7 +39,7 @@ try {
     assert.ok(await page.locator('main h1').count(),label)
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`${label} fits at ${page.viewportSize().width}`)
     await page.screenshot({path:`${directory}/${page.viewportSize().width}-${label}.png`,fullPage:true})
-    captures.push({label,width:page.viewportSize().width,path:new URL(page.url()).pathname+new URL(page.url()).search,file:`${page.viewportSize().width}-${label}.png`})
+    captures.push({label,width:page.viewportSize().width,path:new URL(page.url()).pathname+new URL(page.url()).search.replace(/session=[^&]+/g,'session=[redacted]'),file:`${page.viewportSize().width}-${label}.png`})
     console.log(`BROWSER ${page.viewportSize().width} ${label}`)
   }
   const both = async (label,path,prepare) => {
@@ -51,7 +56,48 @@ try {
     const url=new URL(page.url())
     assert.equal(url.searchParams.get('error'),null,`Native form submission ${url.pathname}: ${url.searchParams.get('error')}`)
   }
-  if(kind==='prepaid')await prepaidBrowser({h,owner,page,context,both,form,submit})
+  if(kind==='portal-usage'){
+    await context.clearCookies()
+    const number=async text=>{
+      const language=await page.locator('html').getAttribute('lang')
+      const parts=new Intl.NumberFormat(language==='es-US'?'es-US':'en-US').formatToParts(1234.5)
+      const group=parts.find(part=>part.type==='group')?.value,decimal=parts.find(part=>part.type==='decimal')?.value??'.'
+      return Number((group?text.replaceAll(group,''):text).replace(decimal,'.').replace(/[^0-9.-]/g,''))
+    }
+    const customerPath=state=>`/portal/upcoming?session=${encodeURIComponent(state.session.token)}&subscription=${state.subscription}&period=${state.period}`
+    await entitlementQuotasFlow(h,owner,{onState:async state=>{
+      await both(`quota-${state.code}-${state.used}`,customerPath(state))
+    }})
+    await commitments(h,owner,{onState:async state=>{
+      await both(`commitment-${state.label}`,customerPath(state),async()=>{
+        await Promise.all([page.waitForNavigation(),page.getByRole('button').click()])
+        assert.ok(await page.locator('section.card').count())
+        const cards=page.locator('section.card').filter({has:page.locator('h2').filter({hasText:/^(Minimum commitment|Compromiso mínimo)$/})})
+        assert.equal(await cards.count(),state.commitments.length)
+        for(const [index,window] of state.commitments.entries()){
+          const values=await cards.nth(index).locator('dd').allTextContents()
+          for(const [field,key] of ['nominalMinimumCents','minimumCents','earnedCents','trueUpCents','remainingCents'].entries())assert.equal(Math.round(await number(values[field])*100),window[key],'Rendered English and Spanish commitment figures equal exact customer facts')
+        }
+        assert.equal(await page.locator('button:not(:has-text("Refresh")):not(:has-text("Actualizar"))').count(),0,'Every control has a visible label')
+      })
+      if(state.commitments.some(window=>window.invoices.length)){
+        await both(`commitment-${state.label}-invoice`,customerPath(state),async()=>{
+          await page.locator('a[href^="/portal/invoices/"]').first().click()
+          assert.equal(await page.locator('a[href^="/app/"]').count(),0)
+        })
+      }
+    }})
+    const records=await seedPortalRecords(h,owner)
+    const session=await h.api('portal.session.issue',owner,{customer:records.customers[0],origin:h.origin,audience:'hosted'})
+    await portalCorrections(h,owner,session,records.invoice.id,async state=>{
+      await both(`correction-${state.kind}-${state.state}`,customerPath(state))
+      if(state.state==='issued')await both(`explanation-${state.kind}`,`/portal/adjustments?session=${encodeURIComponent(state.session.token)}`)
+    })
+    await portalAnswersFlow(h,owner,async state=>{
+      await both(`answer-${state.topic}`,`/portal/answers?${new URLSearchParams({session:state.session.token,invoice:state.invoice,question:state.question})}`)
+    })
+  }
+  else if(kind==='prepaid')await prepaidBrowser({h,owner,page,context,both,form,submit})
   else if(kind==='native-collection')await nativeCollectionFlow(h,owner,{confirm:async payload=>{await page.goto(h.origin+`/app/invoices/${(await h.api('native-collections',owner)).find(row=>row.id===payload.request).invoice_id}`);const consent=form('collection.confirm').filter({has:page.locator(`input[name="request"][value="${payload.request}"]`)}).filter({has:page.locator('button')});await consent.locator('input[name="confirm"]').check();await submit(consent);return (await h.api('native-collections',owner)).find(row=>row.id===payload.request)},onState:async state=>{await both(`native-${state.label}-${state.request?.id??state.invoice}`,`/app/invoices/${state.invoice}#collection`)}})
   else if(kind==='entity-setup')await contractEntitySetup(h,owner,{
     decideSetup:async(payload,actor)=>{

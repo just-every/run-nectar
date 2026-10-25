@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { performance } from 'node:perf_hooks'
 import { applyPolicy, reviewer } from './policy-helper.mjs'
 
 // PORT-005 / AGENT-002: the same live customer session sees only committed
@@ -86,15 +87,19 @@ async function nextInvoiceCorrections(h, owner, foreignSession, issuedOriginal,o
     const session=await api('portal.session.issue',{customer,origin:h.origin,audience:'hosted'})
     const event=(event_id,quantity,billable=true)=>({event_id,quantity,customer:external,meter:code,occurred_at:'2026-09-10T12:00:00-07:00',
       ...(kind==='metric'?{properties:{billable,internal_note:'PRIVATE-METRIC-PROPERTY'}}:{})})
-    if (price) await api('usage.submit',{events:[event(`${kind}-portal-original`,'1000'),...(kind==='metric'?[event('metric-portal-excluded','99999',false)]:[])]})
-    fixtures.push({kind,customer,subscription,session,event,email})
+    fixtures.push({kind,customer,subscription,session,event,email,price})
   }
   const period='2026-09'
   for (const fixture of fixtures) {
     const {kind,subscription,session,event,customer}=fixture
+    const ingestedAt=performance.now()
+    if(fixture.price)await api('usage.submit',{events:[event(`${kind}-portal-original`,'1000'),...(kind==='metric'?[event('metric-portal-excluded','99999',false)]:[])]})
     const path=`/portal/subscriptions/${subscription}/upcoming?period=${period}`
     const read=()=>portalJson(h,session,path)
     const before=await read(),operator=await api(`subscriptions/${subscription}/upcoming?period=${period}`)
+    assert.deepEqual(before.meters.map(m=>[m.quantity,m.eventIds]),operator.meters.map(m=>[m.quantity,m.eventIds]))
+    assert.equal(before.remainingContractCreditCents,operator.remainingContractCreditCents)
+    assert.ok(performance.now()-ingestedAt<60000,'Ingested ordinary and derived usage reaches both public views within one minute')
     assert.deepEqual(totals(before.calculation),totals(operator.calculation),'PORT-005 customer upcoming cents equal operator engine cents')
     assert.deepEqual(totals(before.calculation),['usage','metric'].includes(kind)?[11000,1100,12100]:[10000,1000,11000])
     assert.ok(!Object.hasOwn(before.calculation,'inputs'),'PORT-005 live view does not expose raw calculation inputs')
@@ -119,6 +124,7 @@ async function nextInvoiceCorrections(h, owner, foreignSession, issuedOriginal,o
     await api('proposal.decide',{proposal:rejected.id,decision:'rejected'})
     assert.deepEqual(await read(),before,'PORT-005 rejected correction changes no upcoming figure or source')
     await portalJson(h,session,`/portal/corrections/${rejected.id}`,404)
+    const approvedAt=performance.now()
     const approver=await reviewer(h,owner,saved.singleAllowed)
     await h.api('proposal.decide',approver,{proposal:proposed.id,decision:'approved'})
     const approved=await api(`proposals/${proposed.id}`)
@@ -142,6 +148,13 @@ async function nextInvoiceCorrections(h, owner, foreignSession, issuedOriginal,o
     const upcomingPage=await h.raw(`/portal/upcoming?session=${session.token}&subscription=${subscription}&period=${period}`)
     assert.equal(upcomingPage.status,200,'PORT-005 native customer upcoming page resolves its own subscriptions')
     const after=await read()
+    console.log(`PORT-002 ${kind} approved refresh ms=${Math.round(performance.now()-approvedAt)}`)
+    assert.ok(performance.now()-approvedAt<60000,'Approved corrected quantities, credits and preview refresh within one minute')
+    const refreshedOperator=await api(`subscriptions/${subscription}/upcoming?period=${period}`)
+    assert.deepEqual(after.meters.map(m=>[m.quantity,m.eventIds]),refreshedOperator.meters.map(m=>[m.quantity,m.eventIds]))
+    assert.equal(after.remainingContractCreditCents,refreshedOperator.remainingContractCreditCents)
+    const operatorHtml=await h.page(`/app/subscriptions/${subscription}?preview_period=${period}`,owner)
+    assert.ok(operatorHtml.includes((expected[2]/100).toFixed(2)),'Operator screen shows exact corrected total')
     assert.deepEqual(totals(after.calculation),expected,'PORT-005 approved correction immediately reaches the customer next-invoice engine')
     assert.deepEqual(totals(after.calculation),totals((await api(`subscriptions/${subscription}/upcoming?period=${period}`)).calculation))
     if (['usage','metric'].includes(kind)) {
@@ -150,6 +163,9 @@ async function nextInvoiceCorrections(h, owner, foreignSession, issuedOriginal,o
       assert.equal(csv.status,200);assert.equal(csv.headers.get('cache-control'),'no-store')
       const rows=(await csv.text()).trim().split('\r\n').slice(1).map(line=>line.split(',').map(cell=>cell.slice(1,-1)))
       assert.equal(rows.length,1,'PORT-005 usage CSV has one exact meter-period contribution')
+      const sums=new Map()
+      for(const row of rows){const key=row.slice(0,3).join(':');sums.set(key,(sums.get(key)??0)+Number(row[3]))}
+      for(const meter of after.meters)assert.equal(sums.get([meter.code,meter.periodStart,meter.periodEnd].join(':')),Number(meter.quantity),'Independently summed downloaded quantities equal each displayed meter and service period')
       assert.equal(rows[0][3].replace(/\.0+$/,''),'500','PORT-005 independently counted corrected quantity equals CSV and screen')
       assert.deepEqual(after.meters[0].eventIds,[`${kind}-portal-replacement`])
       assert.deepEqual(view.events.map(row=>[row.eventId,row.quantity.replace(/\.0+$/,''),row.action]),[[`${kind}-portal-original`,'1000','void'],[`${kind}-portal-replacement`,'500','add']])
@@ -167,6 +183,8 @@ async function nextInvoiceCorrections(h, owner, foreignSession, issuedOriginal,o
     assert.equal(final.state,'issued')
     await onState({kind,session,subscription,period,state:'issued'})
     assert.equal(final.invoiceId,invoice.id)
+    assert.equal(final.calculation.fingerprint,after.calculation.fingerprint,'Unchanged customer preview inputs issue identically')
+    assert.deepEqual(final.calculation.lines,after.calculation.lines,'Issued customer lines equal the refreshed preview')
     assert.deepEqual(totals(final.calculation),expected,'PORT-005 actual issued invoice equals approved correction and customer upcoming cents')
     assert.deepEqual([issued.subtotal_cents,issued.tax_cents,issued.total_cents],expected)
     const customerInvoices=await portalJson(h,session,'/portal/data')

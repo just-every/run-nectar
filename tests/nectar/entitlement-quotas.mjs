@@ -4,7 +4,7 @@ import { publishPrice } from './price-helper.mjs'
 
 // ENT-002: real subscriptions, usage, issued invoices and manual allocations,
 // driven only through the built Worker's ordinary HTTP doors.
-export async function entitlementQuotasFlow(h, owner) {
+export async function entitlementQuotasFlow(h, owner, {onState=async()=>{}}={}) {
   const api = (path, body, status) => h.api(path, owner, body, status)
   await api('business.configure', { ...(await api('business')), timezone: 'UTC', payment_terms_days: 0 })
   await h.advanceClock('2026-09-02T12:00:00Z')
@@ -29,6 +29,7 @@ export async function entitlementQuotasFlow(h, owner) {
     const result = await api('usage.submit', { events: [{ event_id: `ent002-${fixture.code}-${suffix}`, customer: fixture.external, meter: meter.code, quantity, occurred_at }] })
     assert.equal(result.accepted, 1, 'ENT-002 usage is accepted independently of access policy')
   }
+  await api('portal.configure',{hosts:[h.origin],parents:[]})
   const policies = []
   for (const policy of ['soft', 'hard', 'overage']) {
     const product = (await api('product.create', { code: `ent002-${policy}`, name: `Requests with ${policy} quota` })).id
@@ -56,6 +57,12 @@ export async function entitlementQuotasFlow(h, owner) {
     if (fixture.policy === 'soft' && exhausted) assert.equal(path.warning, true, 'ENT-002 a soft quota warns while preserving access')
     assert.equal(path.payment.restricted, false)
     assert.equal(path.payment.graceDays, 3)
+    const session=await api('portal.session.issue',{customer:fixture.customer,origin:h.origin,audience:'hosted'})
+    const response=await h.raw(`/portal/subscriptions/${fixture.subscription}/upcoming?period=2026-09&session=${session.token}`)
+    assert.equal(response.status,200)
+    const customerQuota=(await response.json()).quotas.find(row=>row.feature===feature)
+    assert.deepEqual(customerQuota,{feature,meter:meter.id,used,limit:path.quota.limit,remaining,period:path.quota.period},'Customer quota quantities match the exact operator decision at every boundary')
+    await onState({...fixture,session,period:'2026-09',used})
     return result
   }
   for (const fixture of policies) {

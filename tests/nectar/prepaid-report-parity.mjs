@@ -64,7 +64,19 @@ export async function prepaidRefreshParity(h,owner,row) {
     assert.ok(text.includes(money(balance.liabilityCents)))
   }
   assert.deepEqual(await h.api(`prepaid/${row.subscription}`,owner),state,'Refreshing the operator/API doors never consumes or settles prepaid credits')
+  await h.api('portal.configure',owner,{hosts:[h.origin],parents:[]})
+  const session=await h.api('portal.session.issue',owner,{customer:row.customer,origin:h.origin,audience:'hosted'})
+  const response=await h.raw(`/portal/prepaid/data?session=${session.token}`)
+  assert.equal(response.status,200)
+  const portal=await response.json(),own=portal.lots.filter(lot=>lot.subscription===row.subscription)
+  for(const grant of state.grants){
+    const lot=own.find(lot=>lot.id===`prepaid-${grant.id}`)
+    assert.ok(lot,'Every granted, consumed or expired credit retains its customer ledger')
+    assert.deepEqual([lot.remainingN,lot.availableN,lot.liabilityCents],[grant.remainingN,grant.availableN,grant.liabilityCents],'Portal grant, drawdown, expiry and top-up quantities equal the ledger')
+  }
+  assert.deepEqual(await h.api(`prepaid/${row.subscription}`,owner),state,'Portal balance refresh never draws credit')
   const elapsedMs=performance.now()-started
+  console.log(`PORT-002 prepaid refresh ms=${Math.round(elapsedMs)}`)
   assert.ok(elapsedMs<=60000,`Public operator/API refresh took ${elapsedMs} ms`)
   return {revision:state.revision,entryKinds:[...new Set(state.entries.map(entry=>entry.kind))],elapsedMs}
 }

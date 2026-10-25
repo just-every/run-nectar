@@ -16,7 +16,8 @@ function csvRows(text) {
 }
 
 // CAT-003: signed terms, usage and issued bills through public HTTP only.
-export async function commitments(h, owner) {
+export async function commitments(h, owner, {onState=async()=>{}}={}) {
+  await h.advanceClock('2026-10-25T12:00:00Z')
   await h.api('access.give', owner, { email: 'cat003-finance@example.test', name: 'Commitment Finance', role: 'finance' })
   const finance = await h.signIn('cat003-finance@example.test', { requested: true })
   await h.api('access.give', owner, { email: 'cat003-accountant@example.test', name: 'Commitment Accountant', role: 'accountant' })
@@ -100,6 +101,28 @@ export async function commitments(h, owner) {
     await api('invoice.finalise', { invoice: invoice.id, issue_date: invoice.period_end })
     return api(`invoices/${invoice.id}`)
   }
+  await api('portal.configure',{hosts:[h.origin],parents:[]})
+  const session=await api('portal.session.issue',{customer,origin:h.origin,audience:'hosted'})
+  const foreignCustomer=await customerFor('PORTAL-FOREIGN')
+  const foreign=await api('portal.session.issue',{customer:foreignCustomer,origin:h.origin,audience:'hosted'})
+  const portalParity=async(period,label)=>{
+    const path=`/portal/subscriptions/${subscription}/upcoming?period=${period}`
+    assert.equal((await h.raw(`${path}&session=${foreign.token}`)).status,404,'Foreign customers cannot read commitment windows or invoices')
+    const before=await read(subscription),audit=await api('audit')
+    const response=await h.raw(`${path}&session=${session.token}`)
+    assert.equal(response.status,200)
+    const projected=(await response.json()).commitments
+    assert.deepEqual(projected,before.burnDown.map(window=>({...window,invoices:window.invoices.map(({corrections,...invoice})=>({...invoice,href:`/portal/invoices/${invoice.id}`}))})),'Customer commitment amounts equal every operator window and immutable invoice contribution')
+    assert.doesNotMatch(JSON.stringify(projected),/clause|prepared_by|decided_by|terms_json|corrections|@example|\/app\//)
+    for(const window of projected)for(const invoice of window.invoices){
+      const source=await h.raw(`${invoice.href}?session=${session.token}`)
+      assert.equal(source.status,200,'Every contribution links to a permitted issued customer invoice')
+    }
+    assert.deepEqual(await read(subscription),before,'Commitment reads never consume or change money')
+    assert.deepEqual(await api('audit'),audit,'Customer commitment reads write no audit event')
+    await onState({label,session,subscription,period,commitments:projected})
+  }
+  await portalParity('2020-01','unbilled')
   const earnedKinds = new Set(['flat', 'seat', 'usage', 'late_usage', 'overage', 'discount', 'cancellation_credit', 'usage_correction'])
   const earned = invoice => invoice.lines.filter(row => earnedKinds.has(row.kind)).reduce((sum, row) => sum + row.amount_cents, 0)
   const trueUp = invoice => invoice.lines.filter(row => row.kind === 'commitment_trueup').reduce((sum, row) => sum + row.amount_cents, 0)
@@ -108,6 +131,7 @@ export async function commitments(h, owner) {
     const period = `${year}-${String(month).padStart(2, '0')}`
     const invoice = await issue(await draftFor(period))
     invoices.push(invoice)
+    if([1,12].includes(month))await portalParity(period,`${year}-${month}`)
     const expectedEarned = year === 2020 ? 190000 + (month === 2 ? 2000 : 0) : year === 2021 ? 550000 : 900000
     const expectedTrueUp = year === 2020 && month === 12 ? 2718000 : 0
     assert.equal(invoice.status, 'issued', `CAT-003 ${period} reaches the issued ledger`)
@@ -163,6 +187,13 @@ export async function commitments(h, owner) {
     }
   }
   assert.deepEqual((await api(`invoices/${invoices[11].id}`)).calculation, frozen, 'CAT-003 later ramps and true-ups preserve year-one issued calculation evidence')
+  const customerRecord=await api(`customers/${customer}`)
+  await api('customer.update',{customer,revision:customerRecord.revision,name:customerRecord.name,billing_email:customerRecord.billing_email,language:'es-US'})
+  await portalParity('2022-12','spanish')
+  const spanish=await (await h.raw(`/portal/upcoming?session=${session.token}&subscription=${subscription}&period=2022-12`)).text()
+  assert.match(spanish,/Compromiso mínimo/)
+  assert.doesNotMatch(spanish,/portal\.commitment\.|Signed minimum|Eligible charges/)
+  await api('customer.update',{customer,revision:(await api(`customers/${customer}`)).revision,name:customerRecord.name,billing_email:customerRecord.billing_email,language:'en'})
   const operatorHtml = await h.page(`/app/subscriptions/${subscription}`, accountant)
   assert.ok(operatorHtml.includes(invoices[11].number), 'CAT-003 accountant subscription view exposes issued-invoice burn-down drilldown')
   const quantityOnly = await api('contract.prepare', { subscription, revision: state.revision, clause: 'CAT-003 proposed fourth seat from January 2023.', commitments: [], included: [], ramps: [{ item: state.items.find(row => row.price_id === seats[2]).id, effective_date: '2023-01-01', price: seats[2], quantity: 4 }] })
@@ -203,6 +234,12 @@ export async function commitments(h, owner) {
     assert.equal(trueUp(invoice), entry.activeDays * 900, `CAT-003 ${entry.kind} true-up excludes inactive-day minimum`)
     assert.equal(invoice.subtotal_cents, entry.activeDays * 1000, `CAT-003 ${entry.kind} monthly minimum is prorated before tax`)
     const window = (await read(entry.id)).burnDown.find(row => row.contract === entry.contract)
+    const activeSession=await api('portal.session.issue',{customer:entry.customer,origin:h.origin,audience:'hosted'})
+    const response=await h.raw(`/portal/subscriptions/${entry.id}/upcoming?period=2023-10&session=${activeSession.token}`)
+    assert.equal(response.status,200)
+    const activeWindow=(await response.json()).commitments.find(row=>row.contract===entry.contract)
+    for(const key of ['minimumCents','nominalMinimumCents','earnedCents','trueUpCents','remainingCents'])assert.equal(activeWindow[key],window[key],'Customer active-day minimum and issued earnings match operator facts')
+    await onState({label:entry.kind,session:activeSession,subscription:entry.id,period:'2023-10',commitments:[activeWindow]})
     assert.equal(window.minimumCents, entry.activeDays * 1000, `CAT-003 ${entry.kind} burn-down shows the same reduced minimum as the invoice`)
   }
   await api('credential.revoke', { key: credential.id })

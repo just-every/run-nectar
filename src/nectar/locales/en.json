@@ -288,5 +288,19 @@
   "portal.refund.status.uncertain": "Processor outcome uncertain",
   "portal.refund.status.refunded": "Refunded",
   "portal.refund.status.failed": "Refund failed",
-  "portal.refund.status.stopped": "Stopped"
+  "portal.refund.status.stopped": "Stopped",
+  "portal.commitment.heading": "Minimum commitment",
+  "portal.commitment.basis": "Before tax. One-time fees and fixed credits do not reduce this minimum. Approved usage corrections are shown separately from the original issued amounts.",
+  "portal.commitment.nominal": "Signed minimum",
+  "portal.commitment.active": "Active minimum",
+  "portal.commitment.earned": "Eligible charges",
+  "portal.commitment.trueup": "True-up",
+  "portal.commitment.remaining": "Remaining commitment",
+  "portal.commitment.invoices": "Issued invoice contributions",
+  "portal.commitment.original": "Original issued contribution",
+  "portal.commitment.replay": "Approved correction",
+  "portal.quota.heading": "Current usage quotas",
+  "portal.quota.used": "Used quantity",
+  "portal.quota.limit": "Quota",
+  "portal.quota.remaining": "Remaining quantity"
 }
