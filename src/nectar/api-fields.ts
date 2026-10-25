@@ -68,6 +68,7 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
   },
   "balance.goodwill": {
     "amount": "text",
+    "assurance_case": "text",
     "customer": "text",
     "payment": "text",
     "reason": "text",
@@ -75,6 +76,7 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
   },
   "balance.prepare": {
     "amount": "text",
+    "assurance_case": "has",
     "customer": "text",
     "kind": "text",
     "payment": "text",
@@ -83,6 +85,7 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
   },
   "balance.return": {
     "amount": "text",
+    "assurance_case": "text",
     "customer": "text",
     "payment": "text",
     "reason": "text",
