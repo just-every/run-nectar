@@ -4550,7 +4550,7 @@
       "executable": false
     },
     "tests/nectar/customer-record-browser.mjs": {
-      "sha256": "3f9a8c4bb02688b668b7f4f712713db46bd67eb1fd8d7373de0184258f37c3b6",
+      "sha256": "d37305db082e516aa9c6fa3ad50ec2144669ae4f8b703accabeff2b1a5e4586b",
       "executable": false
     },
     "tests/nectar/customer-search.mjs": {

@@ -6,6 +6,7 @@ import {harness} from './harness.mjs'
 import {applyPolicy} from './policy-helper.mjs'
 import {customerSearchFlow,harnessOptions} from './customer-search.mjs'
 const directory=process.env.NECTAR_EVIDENCE_DIR??'.evidence/customer-record'
+const hostedFocus=process.env.NECTAR_BROWSER_FOCUS==='hosted'
 await mkdir(directory,{recursive:true})
 const h=await harness({assets:true,...harnessOptions()}),captures=[]
 let browser
@@ -24,9 +25,11 @@ try{
   const shot=async(label,width)=>{
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`${label} fits ${width}`)
     const iconOnly=await page.locator('a,button,[role=button]').evaluateAll(nodes=>nodes.filter(n=>!n.textContent.trim()&&n.querySelector('svg,img')).map(n=>n.outerHTML));assert.deepEqual(iconOnly,[])
+    if(hostedFocus&&!label.startsWith('hosted-'))return
+    if(hostedFocus){const target=label.endsWith('-operator')?page.getByRole('heading',{name:'Hosted payment setup',exact:true}):page.locator('#saved-payment-methods');await target.scrollIntoViewIfNeeded()}
     const focusNames=label==='ach-before-verification'?['Verify an external ACH payment']:label.endsWith('customer')?['Payment receipts','Verified external ACH payments','Refund lifecycle','Saved payment methods']:[]
     for(const name of focusNames){const heading=page.getByRole('heading',{name,exact:true});if(await heading.count()===1)await heading.locator('..').screenshot({path:`${directory}/${width}-${label}-${name.toLowerCase().replaceAll(' ','-')}.png`})}
-    const file=`${width}-${label}.png`;await page.screenshot({path:`${directory}/${file}`,fullPage:true});captures.push({width,label,file});console.log('BROWSER',width,label)
+    const file=`${width}-${label}.png`;await page.screenshot({path:`${directory}/${file}`,fullPage:!hostedFocus});captures.push({width,label,file});console.log('BROWSER',width,label)
   }
   await customerSearchFlow(h,owner,async({customer,query,kind})=>{
     for(const width of [1440,390]){
@@ -54,7 +57,7 @@ try{
     for(const width of [1440,390]){await page.setViewportSize({width,height:950});await shot(`hosted-${method}-prepare`,width)}
     await Promise.all([page.waitForNavigation({waitUntil:'load'}),form.getByRole('button').click()])
     assert.equal(new URL(page.url()).searchParams.get('error'),null)
-    return (await h.api(`customers/${customer}`,owner)).billingRecord.hostedSetups.at(-1)
+    return (await h.api(`customers/${customer}`,owner)).billingRecord.hostedSetups.find(row=>row.status==='prepared'&&row.method===method)
   },hostedState:async({session,customer,setup,state,method})=>{
     for(const width of [1440,390]){
       await customerPage.setViewportSize({width,height:950});assert.equal((await customerPage.goto(h.origin+`/portal/payment-methods?session=${encodeURIComponent(session.token)}`)).status(),200)
