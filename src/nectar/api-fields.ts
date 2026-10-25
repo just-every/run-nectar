@@ -359,6 +359,7 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "feature": "text",
     "grace_days": "integer",
     "meter": "text",
+    "numeric_limit": "text",
     "product": "text",
     "quota": "text",
     "quota_policy": "text"
