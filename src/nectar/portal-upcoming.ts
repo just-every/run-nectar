@@ -31,7 +31,11 @@ export async function portalUpcoming(env: Bindings, session: CustomerSession, su
   insist(month === undefined || month === null || isMonth(month), 'invalid_period')
   const business = await requireBusiness(env)
   const commitments = (await contractBurnDown(env, sub.id)).map(window => ({
-    ...window, invoices: window.invoices.map(({corrections, ...invoice}) => ({...invoice, href: `/portal/invoices/${invoice.id}`})),
+    contract:window.contract,from:window.from,to:window.to,minimumCents:window.minimumCents,nominalMinimumCents:window.nominalMinimumCents,
+    earnedCents:window.earnedCents,trueUpCents:window.trueUpCents,billedCents:window.billedCents,remainingCents:window.remainingCents,
+    invoices:window.invoices.map(invoice=>({id:invoice.id,number:invoice.number,earnedCents:invoice.earnedCents,trueUpCents:invoice.trueUpCents,
+      ...(invoice.originalEarnedCents!==undefined?{originalEarnedCents:invoice.originalEarnedCents,originalTrueUpCents:invoice.originalTrueUpCents,
+        replayEarnedCents:invoice.replayEarnedCents,replayTrueUpCents:invoice.replayTrueUpCents}:{}),href:`/portal/invoices/${invoice.id}`})),
   }))
   const quotaDate=today(business.timezone,clockInstant(env))
   const policies=await all(env,`SELECT DISTINCT f.product_id,f.feature FROM nc_features f JOIN nc_feature_policies p ON p.product_id=f.product_id AND p.feature=f.feature
