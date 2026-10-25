@@ -174,7 +174,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "b39548c7ccdb2017911e919fb1cae653cb16a3aa43233db632c53568473f34f5",
+      "sha256": "230f0d7f310cfa4079481f8578c1872676bd567b78ff210ee8904e3be2f94f29",
       "executable": false
     },
     "AGENTS.consumer.md": {
@@ -4546,7 +4546,7 @@
       "executable": false
     },
     "tests/nectar/customer-payment-methods.mjs": {
-      "sha256": "db8d97eec6883815e2ed5dca9d6ec4ed22f1e088baec64f3586205892a10cd1a",
+      "sha256": "81004723b884bd633dcdaad68e1d8680094bfded95b90206a49fca499afe9732",
       "executable": false
     },
     "tests/nectar/customer-record-browser.mjs": {

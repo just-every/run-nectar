@@ -57,7 +57,7 @@ export async function assertCustomerPaymentMethods(h, owner, { customer, other, 
   return refreshed
 }
 
-// Processor fixtures only: every transition under test still uses real HTTP/D1.
+// Processor fixtures only: every transition under test still uses real HTTP and D1.
 export function hostedSetupEdge(baseFetch) {
   const sessions = new Map(), calls = [], defaults = new Map()
   const customers=new Set(['synthetic-nectar-native-customer-1','synthetic-nectar-native-customer-3'])
