@@ -527,8 +527,8 @@ Round updates: `GOV-001` is done under ct’s 20 October 16:55Z matrix: collecti
 | Clauses | Done | Partial | Missing | Total |
 | --- | ---: | ---: | ---: | ---: |
 | Published | 16 | 0 | 0 | 16 |
-| Target and push further | 40 | 31 | 43 | 114 |
-| All | 56 | 31 | 43 | 130 |
+| Target and push further | 41 | 31 | 42 | 114 |
+| All | 57 | 31 | 42 | 130 |
 
 | Clause | Title | Kind | Status | Evidence | Gap |
 | --- | --- | --- | --- | --- | --- |
@@ -661,4 +661,4 @@ Round updates: `GOV-001` is done under ct’s 20 October 16:55Z matrix: collecti
 | `AGENT-007` | Cited billing answers for staff and customers | push-further | done | `src/nectar/billing-answers.ts`; `src/nectar/billing-answer-sources.ts`; `src/nectar/answer-proposals.ts`; `src/nectar/ui/billing-answers.ts`; `tests/nectar/billing-answers.mjs` | Current-door completion approved by ct 19 October 18:06Z; PORT-001/PORT-002/GOV-001 retain customer and scoped-role acceptance before shipping. |
 | `AGENT-008` | Month-end close tie-out | push-further | missing |  | No close tie-out. |
 | `AGENT-009` | Agent-assisted case resolution with approval beyond proposals | push-further | missing |  | No agent-assisted resolution beyond proposals; no automatic financial or outbound action authorized. |
-| `AGENT-010` | Scheduled assurance comparisons and disputed-item collection pauses | push-further | missing | No implementation or passing journey established for this transferred scope. | Complete scheduled AGENT-001 comparisons and case follow-through, interruption-safe unattended execution, and disputed-item collection enforcement with inherited case custody, approvals, audit and existing broader dispute stops remain required. |
+| `AGENT-010` | Scheduled assurance comparisons and disputed-item collection pauses | push-further | done | `tests/nectar/assurance-detectors.mjs` — assuranceScheduleFlow plants the same mismatches, then drives the real scheduled Worker entry point: a tick that fails at its commit opens no partial case and is recorded as failed with its error code, the next tick recovers and opens one case per mismatch, repeat ticks open none, a tick whose outcome was never written stays visible as running and does not overlap a second tick, after ten minutes the next tick marks it interrupted and restarts with the same cases, ticks prepare no bill run and apply no payment, issue no invoice and send no message, and an ordinary fix is rechecked on the next tick but closed only after a person confirms its exact basis. `tests/nectar/native-collection.mjs` — nativeCollectionFlow records a partial and a whole-invoice dispute: the partly disputed invoice freezes and charges only its undisputed remainder at the provider, the wholly disputed invoice is refused before any provider call, a dispute recorded after review refuses the pending charge, issued invoice evidence, debt and tax stay unchanged, and resolving a dispute restores the full owed balance only where the once-only native claim does not still stop it. `tests/nectar/cadences.mjs` keeps proving AR-001's line-amount holds for reminders and the scheduled cadence. |  |

@@ -5,7 +5,7 @@ import { actorLabel, requireCapability, type Actor } from './actor'
 import { business } from './business'
 import { clockInstant } from './clock'
 import { all, commit, NectarError, newId, one, stmt } from './core'
-import { addMonths, localDate } from './dates'
+import { localDate } from './dates'
 import { scanCases } from './assurance'
 
 // A tick that never wrote its outcome is treated as interrupted once this much time has passed.
@@ -34,7 +34,9 @@ export async function runAssurance(env: Bindings, scheduledTime = clockInstant(e
     // Cases belong to the installation's first active owner until a person reassigns them.
     owner = (await one(env, "SELECT id FROM nc_members WHERE status='active' AND role='owner' ORDER BY created_at,id LIMIT 1"))?.id
     if (!owner) throw new NectarError('assurance_owner_unavailable', 409)
-    const result = await scanCases(env, scheduler, [addMonths(`${day.slice(0, 7)}-01`, -1).slice(0, 7), day.slice(0, 7)], owner, 'scheduled')
+    // Every month that holds a recorded source control is compared, so an old case is rechecked as well as a new one.
+    const months = (await all(env, 'SELECT DISTINCT substr(day,1,7) AS month FROM nc_usage_controls ORDER BY month')).map(row => row.month as string)
+    const result = await scanCases(env, scheduler, months, owner, 'scheduled')
     await finish('completed', { owner, compared: result.compared, opened: result.opened.length, rechecked: result.rechecked.length })
     return { id, status: 'completed', ...result }
   } catch (error) {
