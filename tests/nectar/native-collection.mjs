@@ -257,7 +257,7 @@ export async function nativeCollectionFlow(h,owner,{onState=async()=>{},confirm}
   const settledPartial=await api(`invoices/${partlyDisputed.id}`)
   assert.deepEqual([settledPartial.paidCents,settledPartial.balanceCents],[7000,3000],'The disputed amount stays owed')
   for(const [before,after] of [[partlyDisputed,settledPartial],[fullyDisputed,await api(`invoices/${fullyDisputed.id}`)]])assert.deepEqual([after.calculation,after.lines,after.subtotal_cents,after.tax_cents,after.total_cents],[before.calculation,before.lines,before.subtotal_cents,before.tax_cents,before.total_cents],'A dispute changes no issued evidence, debt or tax')
-  assert.equal((await api('collection.prepare',{invoice:partlyDisputed.id},409)).error,'native_collection_already_claimed','The once-only native claim remains a stricter stop')
+  assert.equal((await api('collection.prepare',{invoice:partlyDisputed.id},409)).error,'native_collection_paused_for_dispute','The remaining disputed amount stays paused')
   await api('cadence.resolve',{dispute:partial.dispute,outcome:'Customer paid the disputed part through another method'})
   await api('cadence.resolve',{dispute:full.dispute,outcome:'Charge confirmed correct after review'})
   const resumed=await api('collection.prepare',{invoice:fullyDisputed.id})
