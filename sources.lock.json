@@ -4690,7 +4690,7 @@
       "executable": false
     },
     "tests/nectar/native-collection.mjs": {
-      "sha256": "d305f1a4d6b4821d1283c3727185285250c30ea89fd44bed0283ccc87add5dc9",
+      "sha256": "0ac0ba0ff04792b3453e7c949c8389217951a970ce93db5f9c53e76a65216e32",
       "executable": false
     },
     "tests/nectar/notes.mjs": {
