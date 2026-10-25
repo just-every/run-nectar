@@ -23,7 +23,13 @@ export async function trueUpEvidence(env: Bindings) {
       const proof = { kind: TRUEUP_KIND, source, customer: sub.customer_id, subscription: sub.id, contract: window.contract,
         window: { from: window.from, to: window.to, end }, minimumCents: window.minimumCents, nominalMinimumCents: window.nominalMinimumCents,
         earnedCents: window.earnedCents, trueUpCents: window.trueUpCents, remainingCents: window.remainingCents,
-        invoices: window.invoices.map((i: Row) => ({ invoice: i.id, number: i.number, earnedCents: i.earnedCents, trueUpCents: i.trueUpCents })),
+        issuedThrough: (await all(env, 'SELECT MAX(period_end) AS day FROM nc_invoices WHERE id IN (' + window.invoices.map(() => '?').join(',') + ')', ...window.invoices.map((i: Row) => i.id)))[0].day as string,
+        invoices: await Promise.all(window.invoices.map(async (i: Row) => {
+          // The issuing person is the human-approved execution of the fix when a true-up line appears.
+          const saved = (await all(env, 'SELECT issue_date,approved_by,issued_by FROM nc_invoices WHERE id=?', i.id))[0]
+          return { invoice: i.id, number: i.number, earnedCents: i.earnedCents, trueUpCents: i.trueUpCents, issueDate: saved?.issue_date ?? null,
+            ...(i.trueUpCents ? { approvedBy: saved?.approved_by ?? null, issuedBy: saved?.issued_by ?? null } : {}) }
+        })),
         mismatch: window.remainingCents > 0 }
       found.push({ ...proof, basis: await fingerprint(proof) })
     }

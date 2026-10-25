@@ -4,6 +4,7 @@ import type { Bindings } from '../auth.server'
 import { all, fingerprint, one, parseJson, type Row } from './core'
 import { SCALE, lineCents, micros, roundHalfAway } from './decimal'
 import { daysBetween } from './dates'
+import { rateQuantityPrice, storedQuantityPrice } from './price-model'
 
 export const RAMP_KIND = 'seat_ramp'
 const FAR = '9999-12-31'
@@ -32,15 +33,15 @@ export async function rampEvidence(env: Bindings) {
     const ramps = parseJson<{ ramps?: Ramp[] }>(contract.terms_json, {}).ramps ?? []
     for (const ramp of ramps) {
       const item = await one(env, 'SELECT price_id FROM nc_items WHERE id=? AND subscription_id=?', ramp.item, contract.subscription)
-      const price = await one(env, 'SELECT unit_amount,pricing_model FROM nc_prices WHERE id=?', ramp.price)
-      // Tiered, volume and metric prices have no single signed unit to compare.
-      if (!item || !price || price.pricing_model !== 'simple') continue
+      const price = await one(env, 'SELECT unit_amount,pricing_model,tiers_json,package_size FROM nc_prices WHERE id=?', ramp.price)
+      if (!item || !price) continue
+      const model = storedQuantityPrice(price as { pricing_model: string; tiers_json: string; package_size: string | null })
       const next = ramps.filter(r => r.item === ramp.item && r.effective_date > ramp.effective_date).map(r => r.effective_date).sort()[0] ?? FAR
       const lines = await all(env, `SELECT l.id,l.invoice_id,i.number,l.price_id,l.quantity,l.unit_amount,l.amount_cents,l.period_start,l.period_end,l.evidence_json
         FROM nc_invoice_lines l JOIN nc_invoices i ON i.id=l.invoice_id
         WHERE i.subscription_id=? AND i.status='issued' AND i.invoice_kind='recurring' AND l.kind IN ('seat','flat') AND l.price_id IN (?,?)
         AND l.period_end>? AND l.period_start<? ORDER BY l.period_start,i.number,l.seq`, contract.subscription, item.price_id, ramp.price, ramp.effective_date, next)
-      const signedUnit = micros(price.unit_amount), signedQuantity = BigInt(ramp.quantity) * SCALE
+      const signedUnit = model ? 0n : micros(price.unit_amount), signedQuantity = BigInt(ramp.quantity) * SCALE
       const billed: Row[] = []
       let billedCents = 0, expectedCents = 0
       for (const line of lines) {
@@ -51,7 +52,7 @@ export async function rampEvidence(env: Bindings) {
         const overlapDays = daysBetween(later(line.period_start, ramp.effective_date), earlier(line.period_end, next))
         const periodDays = Number(saved.periodDays ?? lineDays)
         const billedPart = overlapDays === lineDays ? line.amount_cents : Number(roundHalfAway(BigInt(line.amount_cents) * BigInt(overlapDays), BigInt(lineDays)))
-        const expectedPart = Number(lineCents(signedUnit, signedQuantity, BigInt(overlapDays), BigInt(periodDays)))
+        const expectedPart = model ? rateQuantityPrice(model, signedQuantity, BigInt(overlapDays), BigInt(periodDays)).amountCents : Number(lineCents(signedUnit, signedQuantity, BigInt(overlapDays), BigInt(periodDays)))
         billedCents += billedPart; expectedCents += expectedPart
         billed.push({ invoice: line.invoice_id, number: line.number, line: line.id, price: line.price_id, unit: line.unit_amount, quantity: line.quantity,
           from: line.period_start, to: line.period_end, overlapDays, billedCents: billedPart, expectedCents: expectedPart })

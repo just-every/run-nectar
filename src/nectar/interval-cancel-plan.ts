@@ -28,7 +28,7 @@ function revenueDeltas(before: Line[], after: Line[], input: RatingInput) {
   return [...amounts].sort(([a], [b]) => a.localeCompare(b)).map(([period, deltaCents]) => ({ period, deltaCents }))
 }
 
-export async function cancellationPlan(env: Bindings, subscription: string, date: string, transition: string, creditUnused: boolean) {
+export async function cancellationPlan(env: Bindings, subscription: string, date: string, transition: string, creditUnused: boolean, { allowAdjusted = false } = {}) {
   const invoices = await all(env, `SELECT i.*,${BALANCE_SQL} AS balance_cents FROM nc_invoices i WHERE i.subscription_id=? AND i.status='issued' AND i.period_end>? ORDER BY i.period_start,i.id`, subscription, date)
   const credits = []
   for (const invoice of invoices) {
@@ -43,7 +43,7 @@ export async function cancellationPlan(env: Bindings, subscription: string, date
     const before = rate(input)
     insist(before.subtotalCents === invoice.subtotal_cents && before.taxCents === invoice.tax_cents && before.totalCents === invoice.total_cents, 'cancellation_source_mismatch', 409)
     if (!creditUnused) continue
-    insist(!(await all(env, 'SELECT id FROM nc_credit_notes WHERE invoice_id=?', invoice.id)).length, 'cancellation_source_already_adjusted', 409)
+    insist(allowAdjusted || !(await all(env, 'SELECT id FROM nc_credit_notes WHERE invoice_id=?', invoice.id)).length, 'cancellation_source_already_adjusted', 409)
     const keys = new Set(future.map(window => window.key))
     const affected = (line: Line) => recurring(line) && keys.has((line.evidence.calendar as Row | undefined)?.windowKey)
     const original = before.lines.filter(affected)
