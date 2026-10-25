@@ -61,7 +61,7 @@ async function recordCaptured(env: Bindings, actor: Actor, row: Row, proof: Capt
     charge_ref: proof.chargeRef, proof_json: canonical(proof), error_code: 'native_payment_record_pending' }, 'capture.record')
   const { source, basis } = await currentNativeCollection(env, actor, held)
   const financial = await collectedPaymentStatements(env, actor, { customerId: held.customer_id, invoiceId: held.invoice_id,
-    amountCents: held.amount_cents, currency: proof.currency, receivedOn: proof.receivedOn, reference: `stripe:${proof.accountRef}:${proof.paymentIntentRef}`,
+    amountCents: held.amount_cents, balanceCents: source.row.balance_cents, currency: proof.currency, receivedOn: proof.receivedOn, reference: `stripe:${proof.accountRef}:${proof.paymentIntentRef}`,
     evidence: canonical({ accountRef: proof.accountRef, paymentIntentRef: proof.paymentIntentRef, chargeRef: proof.chargeRef,
       amountCents: proof.amountCents, currency: proof.currency, capturedAt: proof.capturedAt, proof: proof.proof }) })
   const funding = await prepaidFundingForInvoice(env, held.invoice_id)

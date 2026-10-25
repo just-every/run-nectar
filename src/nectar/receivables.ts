@@ -109,6 +109,8 @@ function allocationFactStatements(env: Bindings, actor: Actor, paymentId: string
 export async function collectedPaymentStatements(env: Bindings, actor: Actor, fact: {
   customerId: string; invoiceId: string; amountCents: number; receivedOn: string
   reference: string; evidence: string; currency?: string; paymentId?: string; allocationId?: string; method?: 'card_external' | 'bank_transfer'
+  /** The whole owed balance when a dispute limits the collected amount below it; otherwise the amount itself. */
+  balanceCents?: number
 }) {
   requireCapability(actor, 'receivables')
   insist(Number.isSafeInteger(fact.amountCents) && fact.amountCents > 0, 'invalid_amount')
@@ -118,7 +120,8 @@ export async function collectedPaymentStatements(env: Bindings, actor: Actor, fa
   insist(invoice.customer_id === customer.id, 'different_customer', 409)
   assertSameCurrency(invoice.currency, fact.currency ?? invoice.currency)
   assertSameCurrency(invoice.currency, customer.currency)
-  insist(invoice.balance_cents === fact.amountCents, 'collection_balance_changed', 409)
+  const expectedBalance = fact.balanceCents ?? fact.amountCents
+  insist(invoice.balance_cents === expectedBalance && fact.amountCents <= expectedBalance, 'collection_balance_changed', 409)
   const received = requireDate(fact.receivedOn, 'received_on')
   insist(typeof fact.reference === 'string' && fact.reference.trim().length > 0 && fact.reference.length <= 120, 'invalid_reference')
   insist(typeof fact.evidence === 'string' && fact.evidence.length <= 1000, 'invalid_evidence')
@@ -127,7 +130,7 @@ export async function collectedPaymentStatements(env: Bindings, actor: Actor, fa
   return { paymentId, allocationId, statements: [
     guard(env, 'customer_erased', 'EXISTS(SELECT 1 FROM nc_customers WHERE id=? AND erased_at IS NULL)', customer.id),
     guard(env, 'payment_reference_exists', 'NOT EXISTS(SELECT 1 FROM nc_payments WHERE customer_id=? AND reference=?)', customer.id, fact.reference),
-    guard(env, 'collection_balance_changed', `(SELECT ${BALANCE_SQL} FROM nc_invoices i WHERE i.id=? AND i.status='issued' AND i.customer_id=?)=?`, invoice.id, customer.id, fact.amountCents),
+    guard(env, 'collection_balance_changed', `(SELECT ${BALANCE_SQL} FROM nc_invoices i WHERE i.id=? AND i.status='issued' AND i.customer_id=?)=?`, invoice.id, customer.id, expectedBalance),
     paymentFactStatement(env, actor, { paymentId, customerId: customer.id, amountCents: fact.amountCents, receivedOn: received, currency: invoice.currency, method: fact.method ?? 'card_external', reference: fact.reference, evidence: fact.evidence }),
     ...allocationFactStatements(env, actor, paymentId, invoice, fact.amountCents, allocationId),
   ], audits: [
