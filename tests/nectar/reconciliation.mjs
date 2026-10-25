@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 
 export async function reconciliationFlow(h, owner) {
+  await h.advanceClock('2026-10-25T12:00:00Z')
   const customer = (await h.api('customer.create', owner, { external_id: 'source-control', name: 'Cedar Source Systems', billing_email: 'ap@cedar.example' })).id
   const product = (await h.api('product.create', owner, { code: 'source-product', name: 'Source processing' })).id
   await h.api('meter.create', owner, { code: 'source-events', name: 'Source events', unit_label: 'events' })

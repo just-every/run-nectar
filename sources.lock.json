@@ -174,7 +174,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "b01646ce887403ee6b51f02556c41182f44c51040bf63af24c1db23223498384",
+      "sha256": "ada83d0827e7e3a4847c7edfefdca70326cbd3ed66342acb915aeb90f5333df4",
       "executable": false
     },
     "AGENTS.consumer.md": {
@@ -4542,7 +4542,7 @@
       "executable": false
     },
     "tests/nectar/harness.mjs": {
-      "sha256": "a48a619703084e4661e1ee7acec04b978f817bd9d0abd6020d0119be3cb19124",
+      "sha256": "5461cc43488a25f66560f4afcacae84f8f1be046da80d8273d6ade22526d4104",
       "executable": false
     },
     "tests/nectar/hierarchies.mjs": {
@@ -4826,7 +4826,7 @@
       "executable": false
     },
     "tests/nectar/reconciliation.mjs": {
-      "sha256": "d35558139d4e8e7acc40b70dafcb47376ddb42c6be7dab485ca0e1ba8a879c27",
+      "sha256": "6124a6ea9a08eb80d6f2f6741f4f7d525a20ddf1d7d0f37007e49cd86331842a",
       "executable": false
     },
     "tests/nectar/renewal-pricing.mjs": {
