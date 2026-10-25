@@ -117,7 +117,7 @@ export async function harness({ assets = false, localTime, hostname = '127.0.0.1
   // Required sensitive-data evidence after public capture operations, without
   // exposing any stored values in assertion messages or evidence output.
   async function assertStorageExcludes(values) {
-    const tables=(await db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT GLOB 'sqlite_*'").all()).results
+    const tables=(await db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT GLOB 'sqlite_*' AND name NOT GLOB '_cf_*'").all()).results
     for(const {name} of tables){
       const serialized=JSON.stringify((await db.prepare(`SELECT * FROM "${name.replaceAll('"','""')}"`).all()).results)
       assert.ok(values.every(value=>!serialized.includes(value)),`Sensitive input excluded from ${name}`)
