@@ -4,7 +4,7 @@ import { publishPrice } from './price-helper.mjs'
 
 // ENT-002: real subscriptions, usage, issued invoices and manual allocations,
 // driven only through the built Worker's ordinary HTTP doors.
-export async function entitlementQuotasFlow(h, owner, {onState=async()=>{}}={}) {
+export async function entitlementQuotasFlow(h, owner, {onState=async()=>{},measure=false}={}) {
   const api = (path, body, status) => h.api(path, owner, body, status)
   await api('business.configure', { ...(await api('business')), timezone: 'UTC', payment_terms_days: 0 })
   await h.advanceClock('2026-09-02T12:00:00Z')
@@ -106,6 +106,7 @@ export async function entitlementQuotasFlow(h, owner, {onState=async()=>{}}={}) 
     const path = pathOf(result, fixture)
     assert.equal(result.allowed, false, 'ENT-002 unpaid service is restricted at the exact grace boundary')
     assert.equal(path.payment.restricted, true)
+    assert.equal(path.state.payment.status, 'past_due', 'Native payment state is derived from the issued unpaid invoice')
     assert.deepEqual(path.payment.invoices.map(({ id, number, dueDate, balanceCents }) => ({ id, number, dueDate, balanceCents })), [{ id: fixture.invoice.id, number: fixture.invoice.number, dueDate: fixture.invoice.due_date, balanceCents: 20 }], 'ENT-002 payment restriction cites the real issued invoice and its outstanding cents')
     assert.equal(path.quota.used, '10012.5', 'ENT-002 payment restriction does not erase quota evidence')
   }
@@ -117,6 +118,8 @@ export async function entitlementQuotasFlow(h, owner, {onState=async()=>{}}={}) 
     const result = await entitlement(fixture)
     assert.equal(result.allowed, fixture === soft || fixture === overage, 'ENT-002 allocation restores only access permitted by quota and lifecycle')
     if (policies.includes(fixture)) assert.equal(pathOf(result, fixture).payment.restricted, false)
+    assert.equal(pathOf(result, fixture).state.payment.status, 'current', 'Allocated settlement clears the financial input without changing the lifecycle')
+    assert.equal(pathOf(result, fixture).state.lifecycle, fixture === paused ? 'paused' : fixture === cancelled ? 'ended' : 'active')
     assert.equal((await api(`invoices/${fixture.invoice.id}`)).balanceCents, 0)
     assert.deepEqual(await detail(fixture), states.get(fixture.subscription), 'ENT-002 payment restriction and restoration never rewrite pause, cancel or subscription state')
   }
@@ -128,7 +131,7 @@ export async function entitlementQuotasFlow(h, owner, {onState=async()=>{}}={}) 
   const before = await entitlement(soft)
   for (const who of [accountant, agent]) {
     await h.api('feature.policy', who, changed, 403)
-    assert.deepEqual(await h.api(`entitlements/${soft.customer}?feature=${feature}`, who), before, 'ENT-002 read authority exposes the same explanation without granting policy-write authority')
+    assert.deepEqual(await h.api(`entitlements/${soft.customer}?feature=${feature}`, who), { ...before, paths: before.paths.map(path => ({ ...path, state: { ...path.state, payment: { status: path.state.payment.status } } })) }, 'ENT-002 read authority preserves the decision and explanation while new financial source facts stay owner-only')
   }
   await h.api('feature.policy', undefined, changed, 401)
 
@@ -160,6 +163,7 @@ export async function entitlementQuotasFlow(h, owner, {onState=async()=>{}}={}) 
   assert.equal(issued.total_cents, 20025, 'ENT-002 overage keeps ordinary metered pricing: 10,012.5 requests at $0.02, with no invented free monetary allowance')
   assert.equal(issued.lines.filter(line => line.price_id === overage.price).reduce((sum, line) => sum + line.amount_cents, 0), 20025)
   await intervalQuotas(h, owner, meter)
+  await numericLimits(h, owner, finance, onState, measure)
   console.log('ENT-002 exact quotas, soft warning, hard restriction, priced overage, issued-invoice grace, manual settlement, lifecycle preservation and authority passed')
   return { customer: overage.customer, subscription: overage.subscription, invoice: issued.id }
 }
@@ -242,4 +246,83 @@ async function intervalQuotas(h, owner, meter) {
   await usage(weekly, 'next-week', '1', '2026-11-23T00:00:00Z')
   await quota(weekly, undefined, { start: '2026-11-23', end: '2026-11-30' }, '1', true)
   await issue(weekly, '2026-11-16', '2026-11-23', 3000, '2026-11-23')
+}
+
+// Governed numeric capacity follows the actual effective price and lifecycle.
+async function numericLimits(h, owner, finance, onState, measure) {
+  const api = (path, body, status) => h.api(path, owner, body, status)
+  await h.advanceClock('2026-12-04T12:00:00Z')
+  const feature = 'synthetic-nectar-capacity', external = 'synthetic-nectar-capacity', products = [], prices = []
+  for (const [index, limit] of ['10.125001', '100', '0'].entries()) {
+    const product = (await api('product.create', { code: `synthetic-nectar-capacity-${index}`, name: `Capacity ${limit}` })).id
+    products.push(product)
+    prices.push((await api('price.create', { product, kind: 'flat', unit_amount: '10', taxable: false })).id)
+    await api('feature.grant', { product, feature })
+    await applyPolicy(h, owner, 'feature.policy', { product, feature, quota_policy: 'soft', numeric_limit: limit })
+  }
+  const customer = (await api('customer.create', { external_id: external, name: 'Capacity research', billing_email: 'capacity@example.test' })).id
+  const subscription = (await api('subscription.create', { customer, price: [prices[0]], start_date: '2026-12-01', anchor_day: 1 })).id
+  const read = () => api(`entitlements/${customer}?feature=${feature}`)
+  const observe = async (label, limit, price, allowed = true, changedAt) => {
+    const result = await read(), path = result.paths.find(row => row.subscription === subscription)
+    assert.equal(result.allowed, allowed)
+    if (allowed) {
+      assert.equal(path.numericLimit, limit)
+      assert.ok(path.steps.some(step => step.includes(price)), 'Explanation names the exact immutable price')
+    }
+    assert.equal(path.subscription, subscription)
+    if(changedAt!==undefined)assert.ok(performance.now()-changedAt<5000,'Native entitlement changes become visible within five seconds')
+    await onState({ label: `numeric-${label}`, customer, subscription, product: products[prices.indexOf(price)], limit, allowed })
+    return result
+  }
+  await observe('initial', '10.125001', prices[0])
+  if(measure) {
+    const product={bearer:(await api('credential.issue',{name:'Synthetic product entitlement reader',scopes:['prepare']})).key}
+    const latencies=[]
+    for(let index=0;index<100;index++) {
+      const start=performance.now(),answer=await h.api(`entitlements/${customer}?feature=${feature}`,product)
+      latencies.push(performance.now()-start)
+      assert.equal(answer.paths[0].numericLimit,'10.125001')
+      assert.ok(answer.paths[0].steps.some(step=>step.includes(prices[0])))
+    }
+    latencies.sort((a,b)=>a-b)
+    console.log('NATIVE_ENTITLEMENT_TIMING',JSON.stringify({samples:latencies.length,p95Ms:latencies[Math.ceil(latencies.length*.95)-1],location:'local Workerd; deployed edge measurement still pending'}))
+  }
+  const change = async (price, date, expected) => {
+    const sub = await api(`subscriptions/${subscription}`)
+    const item = sub.items.find(item => item.effective_to === null)
+    const pending = await api('change.prepare', { subscription, item: item.id, price, effective_date: date })
+    const start = performance.now()
+    await h.api('change.decide', finance, { change: pending.change, decision: 'approved' })
+    const result = await observe(date, expected, price, true, start)
+    assert.deepEqual(await api(`entitlements/${external}`), [result], 'External customer IDs have list and single-feature parity')
+  }
+  await change(prices[1], '2026-12-02', '100.00')
+  await change(prices[0], '2026-12-03', '10.125001')
+  await change(prices[2], '2026-12-04', '0.00')
+  const payload = { product: products[2], feature, quota_policy: 'soft' }
+  const before = await read()
+  const pending = await api('feature.policy', { ...payload, numeric_limit: '7.125001' })
+  assert.deepEqual(await read(), before, 'A pending numeric capacity policy has no access effect')
+  await api('policy.decide', { request: pending.request, decision: 'approved' }, 409)
+  await h.api('policy.decide', finance, { request: pending.request, decision: 'approved' })
+  await observe('approved', '7.125001', prices[2])
+  const audit = (await api('audit')).find(row => row.action === 'policy.apply' && row.subject === pending.request)
+  assert.equal(JSON.parse(audit.detail).payload.numericLimit, '7.125001', 'The exact approved numeric limit is audited')
+  await api('feature.policy', { ...payload, numeric_limit: '-1' }, 400)
+  const agent = { bearer: (await api('credential.issue', { name: 'Capacity reader', scopes: ['prepare'] })).key }
+  await h.api('feature.policy', agent, { ...payload, numeric_limit: '999' }, 403)
+  const sub = await api(`subscriptions/${subscription}`), start = performance.now()
+  await api('subscription.pause', { subscription, revision: sub.revision, effective_date: '2026-12-04', resume_date: '2026-12-10', access: 'suspend', reason: 'Capacity pause' })
+  const paused = await observe('paused', null, prices[2], false, start)
+  assert.equal(paused.paths[0].state.lifecycle, 'paused')
+  await api('access.give', { email: 'synthetic-nectar-sales@example.test', name: 'Capacity Sales', role: 'sales' })
+  const sales = await h.signIn('synthetic-nectar-sales@example.test', { requested: true })
+  const limited = await h.api(`entitlements/${customer}?feature=${feature}`, sales)
+  assert.equal(limited.paths[0].state.payment, undefined, 'A sales reader receives no new financial state facts')
+}
+
+// Dedicated native timing receipt; deliberately outside the push Verify list.
+export async function entitlementTimingFlow(h,owner) {
+  await entitlementQuotasFlow(h,owner,{measure:true})
 }

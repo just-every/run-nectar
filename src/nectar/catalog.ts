@@ -21,7 +21,7 @@ export async function catalog(env: Bindings, actor: Actor,url?:URL) {
     all(env, 'SELECT * FROM nc_products ORDER BY status, name COLLATE NOCASE'),
     all(env, `SELECT p.*,b.interval_unit,b.interval_count,b.billing_timing,m.code AS meter_code, m.unit_label FROM nc_prices p LEFT JOIN nc_price_intervals b ON b.price_id=p.id LEFT JOIN nc_meters m ON m.id = p.meter_id WHERE ${filter.sql} ORDER BY p.product_id, p.version DESC`,...filter.params),
     all(env, 'SELECT * FROM nc_meters ORDER BY code'),
-    all(env, 'SELECT f.*,p.meter_id,p.quota,p.quota_policy,p.grace_days FROM nc_features f LEFT JOIN nc_feature_policies p ON p.product_id=f.product_id AND p.feature=f.feature ORDER BY f.product_id,f.feature'),
+    all(env, 'SELECT f.*,p.meter_id,p.quota,p.quota_policy,p.grace_days,p.numeric_limit FROM nc_features f LEFT JOIN nc_feature_policies p ON p.product_id=f.product_id AND p.feature=f.feature ORDER BY f.product_id,f.feature'),
   ])
   return { products, metricRequests:await metricRequests(env,actor), priceRequests: await priceRequests(env, actor), prices: await withMetadata(env,'price',prices.map(price => ({ ...price, ...(storedBillingTerms(price) ? { billing: storedBillingTerms(price) } : {}), ...(price.pricing_model === 'simple' ? {} : { pricing: storedQuantityPrice(price as any) }) }))), meters, features }
 }

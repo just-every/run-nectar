@@ -19,7 +19,7 @@ import { contractEntitySetup } from './contract-setup.mjs'
 import { intervalCancellationFlow } from './interval-cancel.mjs'
 import { numberingEntitiesFlow } from './numbering-entities.mjs'
 const kind=process.argv[2],directory=process.env.NECTAR_EVIDENCE_DIR??`.evidence/${kind}`
-assert.ok(['portal-usage','erasure','history','collection','numbering','intervals','cancellation','entity-setup','prepaid','native-collection'].includes(kind))
+assert.ok(['entitlements','portal-usage','erasure','history','collection','numbering','intervals','cancellation','entity-setup','prepaid','native-collection'].includes(kind))
 await mkdir(directory,{recursive:true})
 const captures=[]
 const h=await harness({assets:true,...(kind==='collection'?collectionOptions():kind==='native-collection'?nativeOptions():{})});let browser
@@ -56,7 +56,28 @@ try {
     const url=new URL(page.url())
     assert.equal(url.searchParams.get('error'),null,`Native form submission ${url.pathname}: ${url.searchParams.get('error')}`)
   }
-  if(kind==='portal-usage'){
+  if(kind==='entitlements') {
+    await entitlementQuotasFlow(h,owner,{onState:async state=>{
+      if(!state.label?.startsWith('numeric-'))return
+      await both(state.label,`/app/customers/${state.customer}#ents`,async()=>{
+        await page.reload()
+        const section=page.locator('section[aria-labelledby="ents"]')
+        const text=await section.innerText()
+        assert.ok(text.includes(state.allowed ? `Numeric limit: ${state.limit}.` : 'Denied'),'The rendered entitlement matches the current API decision')
+        await section.scrollIntoViewIfNeeded()
+        await page.screenshot({path:`${directory}/${page.viewportSize().width}-${state.label}-detail.png`})
+      })
+      if(state.label==='numeric-approved')await both('numeric-policy','/app/catalog',async()=>{
+        const policy=form('feature.policy').filter({has:page.locator(`input[name="product"][value="${state.product}"]`)})
+        assert.equal(await policy.locator('input[name="numeric_limit"]').inputValue(),state.limit)
+        await policy.scrollIntoViewIfNeeded()
+        await page.screenshot({path:`${directory}/${page.viewportSize().width}-numeric-policy-detail.png`})
+        // Every catalog control has a visible text label; there are no icon-only controls.
+        assert.equal(await page.locator('button').evaluateAll(nodes=>nodes.filter(node=>!node.textContent.trim()).length),0)
+      })
+    }})
+  }
+  else if(kind==='portal-usage'){
     await context.clearCookies()
     const number=async text=>{
       const language=await page.locator('html').getAttribute('lang')

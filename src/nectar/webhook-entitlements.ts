@@ -22,7 +22,7 @@ export async function observeWebhookEntitlements(env: Bindings) {
   for(const customer of customers){
     const generation=(await one(env,'SELECT value FROM nc_privacy_generation WHERE id=1'))!.value
     const decisions=await entitlements(env,reader,customer.id)
-    const state=decisions.map(f=>({feature:f.feature,allowed:f.allowed,paths:f.paths.map((p:Row)=>({subscription:p.subscription,granted:p.granted,warning:p.warning??false,quota:p.quota?{meter:p.quota.meter,limit:p.quota.limit,policy:p.quota.policy,exhausted:p.quota.exhausted,period:p.quota.period}:null,paymentRestricted:p.payment?.restricted??false}))}))
+    const state=decisions.map(f=>({feature:f.feature,allowed:f.allowed,paths:f.paths.map((p:Row)=>({subscription:p.subscription,granted:p.granted,numericLimit:p.numericLimit??null,lifecycle:p.state?.lifecycle??null,paymentState:p.state?.payment?.status??null,warning:p.warning??false,quota:p.quota?{meter:p.quota.meter,limit:p.quota.limit,policy:p.quota.policy,exhausted:p.quota.exhausted,period:p.quota.period}:null,paymentRestricted:p.payment?.restricted??false}))}))
     const basis=await fingerprint(state),old=await one(env,'SELECT basis,state_json FROM nc_webhook_entitlement_state WHERE customer_id=?',customer.id)
     if(old?.basis===basis)continue
     const previous=parseJson<Row[]>(old?.state_json,[]),at=clockInstant(env),metadata=await eventMetadata(env,customer.id,state)
@@ -35,11 +35,18 @@ export async function observeWebhookEntitlements(env: Bindings) {
       if(path.quota?.exhausted&&before?.quota&&!before.quota.exhausted&&before.quota.period.start===path.quota.period.start){
         const source=decisions.find(f=>f.feature===feature.feature)?.paths.find(p=>p.subscription===path.subscription) as Row|undefined
         const q=source?.quota
-        events.push(add('usage.threshold_crossed',{customer_id:customer.id,subscription_id:path.subscription,feature:feature.feature,quota:q?{meter:q.meter,used:q.used,limit:q.limit,remaining:q.remaining,policy:q.policy,exhausted:q.exhausted,period:q.period}:null}))
+        // A recorded crossing survives policy revisions and a later decrease.
+        // This is the existing quota event, once per subscription, feature,
+        // meter and actual billing period; no historical event is sent.
+        const crossed=q&&await one(env,`SELECT id FROM nc_webhook_events WHERE type='usage.threshold_crossed' AND customer_id=?
+          AND json_extract(payload_json,'$.data.subscription_id')=? AND json_extract(payload_json,'$.data.feature')=?
+          AND json_extract(payload_json,'$.data.quota.meter')=? AND json_extract(payload_json,'$.data.quota.period.start')=? LIMIT 1`,
+          customer.id,path.subscription,feature.feature,q.meter,q.period.start)
+        if(q&&!crossed)events.push(add('usage.threshold_crossed',{customer_id:customer.id,subscription_id:path.subscription,feature:feature.feature,quota:{meter:q.meter,used:q.used,limit:q.limit,remaining:q.remaining,policy:q.policy,exhausted:q.exhausted,period:q.period}}))
       }
     }
     try{
-      await commit(env,[guard(env,'stale','(SELECT value FROM nc_privacy_generation WHERE id=1)=?',generation),...events,stmt(env,'INSERT INTO nc_webhook_entitlement_state(customer_id,basis,state_json,updated_at) VALUES(?,?,?,?) ON CONFLICT(customer_id) DO UPDATE SET basis=excluded.basis,state_json=excluded.state_json,updated_at=excluded.updated_at',customer.id,basis,JSON.stringify(state),at)],{actor:'system:webhooks',action:'webhook.entitlement.observe',subject:customer.id,detail:{events:events.length}})
+      await commit(env,[guard(env,'stale','(SELECT value FROM nc_privacy_generation WHERE id=1)=?',generation),guard(env,'stale','(SELECT basis FROM nc_webhook_entitlement_state WHERE customer_id=?) IS ?',customer.id,old?.basis??null),...events,stmt(env,'INSERT INTO nc_webhook_entitlement_state(customer_id,basis,state_json,updated_at) VALUES(?,?,?,?) ON CONFLICT(customer_id) DO UPDATE SET basis=excluded.basis,state_json=excluded.state_json,updated_at=excluded.updated_at',customer.id,basis,JSON.stringify(state),at)],{actor:'system:webhooks',action:'webhook.entitlement.observe',subject:customer.id,detail:{events:events.length}})
     }catch(error){if(!(error instanceof NectarError&&error.status===409))throw error}
   }
   await env.DB.prepare('UPDATE nc_webhook_observation_cursor SET customer_id=? WHERE singleton=1').bind(customers.length===100?customers.at(-1)!.id:'').run()

@@ -46,14 +46,19 @@ export async function configureFeaturePolicy(env: Bindings, actor: Actor, input:
   insist(!quota || micros(quota) > 0n, 'invalid_quota')
   const policy = input.text('quota_policy', { max: 20 })
   insist(['soft','hard','overage'].includes(policy), 'invalid_quota_policy')
+  const numericText = input.text('numeric_limit', { max: 30, optional: true })
+  const numericLimit = numericText ? canonicalDecimal(numericText, 'numeric_limit') : null
+  insist(numericLimit === null || micros(numericLimit) >= 0n, 'invalid_numeric_limit')
   const grace = input.integer('grace_days', { min: 0, max: 365, optional: true })
-  return await preparePolicyChange(env, actor, 'feature', { product, productName: grant.name, feature, meter: meter?.id ?? null, meterName: meter?.name ?? null, quota, policy, graceDays: grace })
+  return await preparePolicyChange(env, actor, 'feature', { product, productName: grant.name, feature, meter: meter?.id ?? null, meterName: meter?.name ?? null, quota, policy, graceDays: grace, numericLimit })
 }
 
 export async function featureDecision(env: Bindings, sub: Row, product: string, feature: string, day: string, timezone: string) {
   const policy = await one(env, 'SELECT * FROM nc_feature_policies WHERE product_id=? AND feature=?', product, feature)
   const steps: string[] = [], invoices: Row[] = []
   let quota: Row | null = null, denied = false, warning = false
+  const numericLimit = policy?.numeric_limit ?? null
+  if (numericLimit !== null) steps.push(`Numeric limit: ${numericLimit}.`)
   if (policy?.meter_id) {
     const meter = await one(env, 'SELECT * FROM nc_meters WHERE id=?', policy.meter_id)
     insist(meter, 'meter_not_found', 404)
@@ -82,6 +87,6 @@ export async function featureDecision(env: Bindings, sub: Row, product: string, 
     }
     if (invoices.length) steps.push(`Unpaid after ${policy.grace_days} calendar days from the due date: ${invoices.map(i => i.number).join(', ')}; access restricted until settled.`)
   }
-  return { allowed: !denied && invoices.length === 0, warning, quota,
+  return { allowed: !denied && invoices.length === 0, warning, quota, numericLimit,
     payment: { restricted: invoices.length > 0, graceDays: policy?.grace_days ?? null, invoices }, steps }
 }

@@ -81,10 +81,10 @@ export async function decidePolicyChange(env: Bindings, actor: Actor, input: Inp
   if (kind === 'lifecycle') statements.push(stmt(env, 'INSERT INTO nc_lifecycle_policy (singleton,credit_unused,reactivation_days,proration_policy,revision,changed_by,changed_at) VALUES (1,?,?,?,1,?,?) ON CONFLICT(singleton) DO UPDATE SET credit_unused=excluded.credit_unused,reactivation_days=excluded.reactivation_days,proration_policy=excluded.proration_policy,revision=revision+1,changed_by=excluded.changed_by,changed_at=excluded.changed_at', payload.creditUnused ? 1 : 0, payload.reactivationDays,payload.prorationPolicy??(await one(env,'SELECT proration_policy FROM nc_lifecycle_policy WHERE singleton=1'))?.proration_policy??null,row.prepared_by, at))
   if (kind === 'feature') {
     await requireFreshFactor(env, actor)
-    statements.push(stmt(env, `INSERT INTO nc_feature_policies(product_id,feature,meter_id,quota,quota_policy,grace_days,updated_at)
-      VALUES(?,?,?,?,?,?,?) ON CONFLICT(product_id,feature) DO UPDATE SET meter_id=excluded.meter_id,quota=excluded.quota,
-      quota_policy=excluded.quota_policy,grace_days=excluded.grace_days,revision=revision+1,updated_at=excluded.updated_at`,
-      payload.product,payload.feature,payload.meter,payload.quota,payload.policy,payload.graceDays,at),
+    statements.push(stmt(env, `INSERT INTO nc_feature_policies(product_id,feature,meter_id,quota,quota_policy,grace_days,updated_at,numeric_limit)
+      VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(product_id,feature) DO UPDATE SET meter_id=excluded.meter_id,quota=excluded.quota,
+      quota_policy=excluded.quota_policy,grace_days=excluded.grace_days,numeric_limit=excluded.numeric_limit,revision=revision+1,updated_at=excluded.updated_at`,
+      payload.product,payload.feature,payload.meter,payload.quota,payload.policy,payload.graceDays,at,payload.numericLimit ?? null),
       stmt(env, 'UPDATE nc_feature_policy_revision SET revision=revision+1 WHERE singleton=1'))
   }
   if (kind === 'usage') statements.push(stmt(env, 'UPDATE nc_usage_policy SET disposition=?,revision=revision+1 WHERE singleton=1', payload.disposition))

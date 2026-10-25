@@ -193,6 +193,39 @@ export async function nativeCollectionFlow(h,owner,{onState=async()=>{},confirm}
     assert.equal(edge.intents.size,beforeIntents+1)
     assert.equal(edge.calls.filter(call=>call.method==='POST').length,beforePosts+1,'Definitive refusal replay never creates a second PaymentIntent')
   }
+  // Native failure and financial recovery feed the same entitlement answer.
+  const feature='synthetic-nectar-native-access'
+  const product=(await api('product.create',{code:feature,name:'Native payment access'})).id
+  const price=(await api('price.create',{product,kind:'flat',unit_amount:'10',taxable:false})).id
+  await api('feature.grant',{product,feature})
+  const preparedPolicy=await api('feature.policy',{product,feature,quota_policy:'soft',numeric_limit:'25',grace_days:0})
+  const financeFactor=await h.api('mfa.totp.start',finance,{})
+  await h.api('mfa.totp.confirm',finance,{factor:financeFactor.factor,code:totp(financeFactor.secret,instant)})
+  await h.api('policy.decide',finance,{request:preparedPolicy.request,decision:'approved'})
+  const subscription=(await api('subscription.create',{customer:customers[0],price:[price],start_date:'2026-09-01',anchor_day:1})).id
+  const run=await api('billrun.prepare',{period:'2026-09'})
+  const service=(await api(`runs/${run.id}`)).invoices.find(row=>row.subscription_id===subscription)
+  assert.ok(service)
+  await api('invoice.approve',{invoice:service.id,acknowledge:true})
+  await api('invoice.finalise',{invoice:service.id,issue_date:'2026-10-01'})
+  const access=()=>api(`entitlements/${customers[0]}?feature=${feature}`)
+  assert.equal((await access()).paths[0].state.payment.status,'current')
+  const review=await api('collection.prepare',{invoice:service.id})
+  edge.refuseNext('card_declined')
+  const failureStart=performance.now()
+  assert.equal((await confirmReview(review.instructions.confirm)).status,'declined')
+  const failed=await access(),failurePath=failed.paths.find(row=>row.subscription===subscription)
+  assert.equal(failurePath.state.payment.status,'past_due')
+  assert.ok(failurePath.state.payment.failures.some(row=>row.invoice===service.id&&row.status==='declined'))
+  assert.ok(performance.now()-failureStart<5000,'A recorded native failure is visible within five seconds')
+  assert.equal(failed.allowed,true,'A failure cannot bypass the independently approved invoice grace boundary')
+  const recovery=await api('payment.record',{customer:customers[0],amount:'10',received_on:'2026-10-22',method:'bank_transfer',reference:'synthetic-nectar-native-recovery'})
+  assert.equal((await access()).paths[0].state.payment.status,'past_due','Unallocated money does not clear the payment state')
+  await api('payment.allocate',{payment:recovery.payment,invoice:service.id,amount:'10'})
+  const restored=await access()
+  assert.equal(restored.paths[0].state.payment.status,'current')
+  assert.deepEqual(restored.paths[0].state.payment.failures,[])
+  assert.equal(restored.paths[0].numericLimit,'25.00')
   const missingInvoice=await invoice(customers[0]),missingReview=await api('collection.prepare',{invoice:missingInvoice.id})
   const beforeMissingIntents=edge.intents.size
   edge.loseBeforePayment()

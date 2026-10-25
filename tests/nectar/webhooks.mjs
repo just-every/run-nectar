@@ -235,6 +235,13 @@ export async function webhookLifecycleFlow(h,owner,{onState=async()=>{}}={}) {
     assert.equal(crossed.length,1);assert.equal(crossed[0].data.quota.limit,'10.00');assert.equal(crossed[0].data.quota.used,'10')
     assert.equal(crossed[0].data.quota.eventIds,undefined,'threshold payload does not expose a raw event list')
     await dispatch();assert.equal(received.filter(e=>e.type==='usage.threshold_crossed'&&e.data.customer_id===qc).length,1)
+    await applyPolicy(h,owner,'feature.policy',{product:qp,feature:'quota-api',meter,quota:'20',quota_policy:'hard'})
+    await dispatch()
+    assert.equal((await api(`entitlements/${qc}?feature=quota-api`)).allowed,true)
+    await applyPolicy(h,owner,'feature.policy',{product:qp,feature:'quota-api',meter,quota:'10',quota_policy:'hard'})
+    await Promise.all([dispatch(),dispatch()])
+    assert.equal((await api(`entitlements/${qc}?feature=quota-api`)).allowed,false)
+    assert.equal(received.filter(e=>e.type==='usage.threshold_crossed'&&e.data.customer_id===qc).length,1,'A same-period policy change and concurrent observers cannot emit the quota crossing twice')
     await onState({label:'quota-crossing',delivery:(await api('webhooks')).deliveries.find(d=>d.type==='usage.threshold_crossed').id})
     // Settlement uses applied credit, not a claim that cash was charged.
     const manual=async(amount,description)=>{
