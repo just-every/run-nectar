@@ -1,3 +1,4 @@
+import { reconciliationFlow } from './reconciliation.mjs'
 import { commitments } from './commitments.mjs'
 import { seedPortalRecords } from './portal-sessions.mjs'
 import { portalCorrections } from './portal-corrections.mjs'
@@ -19,7 +20,7 @@ import { contractEntitySetup } from './contract-setup.mjs'
 import { intervalCancellationFlow } from './interval-cancel.mjs'
 import { numberingEntitiesFlow } from './numbering-entities.mjs'
 const kind=process.argv[2],directory=process.env.NECTAR_EVIDENCE_DIR??`.evidence/${kind}`
-assert.ok(['entitlements','portal-usage','erasure','history','collection','numbering','intervals','cancellation','entity-setup','prepaid','native-collection'].includes(kind))
+assert.ok(['assurance','entitlements','portal-usage','erasure','history','collection','numbering','intervals','cancellation','entity-setup','prepaid','native-collection'].includes(kind))
 await mkdir(directory,{recursive:true})
 const captures=[]
 const h=await harness({assets:true,...(kind==='collection'?collectionOptions():kind==='native-collection'?nativeOptions():{})});let browser
@@ -56,7 +57,21 @@ try {
     const url=new URL(page.url())
     assert.equal(url.searchParams.get('error'),null,`Native form submission ${url.pathname}: ${url.searchParams.get('error')}`)
   }
-  if(kind==='entitlements') {
+  if(kind==='assurance') {
+    await reconciliationFlow(h,owner,async state=>{
+      await both(`assurance-${state.label}`,state.path,async()=>{
+        if(state.label==='assignee-demoted') {
+          const approve=page.locator('form[action="/app/do/proposal.decide"]').filter({has:page.locator('input[name="decision"][value="approved"]')})
+          await Promise.all([page.waitForNavigation({waitUntil:'load'}),approve.getByRole('button',{name:'Approve',exact:true}).click()])
+          assert.equal(new URL(page.url()).searchParams.get('error'),'assurance_owner_unavailable')
+          assert.match(await page.locator('[role="alert"]').innerText(),/assurance owner unavailable/)
+        }
+        const iconOnly=await page.locator('button,a,[role="button"]').evaluateAll(nodes=>nodes.filter(n=>getComputedStyle(n).display!=='none'&&!n.textContent.trim()&&n.querySelector('svg,img')).map(n=>n.getAttribute('aria-label')||n.getAttribute('title')||''))
+        assert.deepEqual(iconOnly,[],'proposal screens contain no icon-only controls requiring a tooltip')
+      })
+    })
+  }
+  else if(kind==='entitlements') {
     await entitlementQuotasFlow(h,owner,{onState:async state=>{
       if(!state.label?.startsWith('numeric-'))return
       await both(state.label,`/app/customers/${state.customer}#ents`,async()=>{
