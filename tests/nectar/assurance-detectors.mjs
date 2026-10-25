@@ -203,5 +203,17 @@ export async function assuranceDetectorsFlow(h, owner) {
   assert.deepEqual((await scan()).rechecked, [creditCase.id])
   const reopened = await h.api(`assurance-cases/${creditCase.id}`, agent)
   assert.deepEqual([reopened.status, reopened.approved_basis, reopened.evidence.availableCents], ['open', null, 95000], 'the regression reopens the same case')
+  // Approved erasure deletes the operational investigation and never the retained invoice facts; a scan cannot recreate it.
+  const requested = h.mails.length
+  await api('erasure.request', { customer: credit.customer })
+  const link = h.mails.slice(requested).find(mail => [mail.to].flat().includes('ap@ramp-credit.example.test'))
+  const path = new URL(`${link.text ?? ''} ${link.html ?? ''}`.match(/https?:\/\/[^\s"<]+\/erase\/[a-f0-9]{64}/)[0]).pathname
+  assert.equal((await h.raw(path, { form: new URLSearchParams({ confirm: 'yes' }) })).status, 200)
+  const erasure = (await api('erasures')).find(row => row.customer_id === credit.customer)
+  await api('erasure.approve', { request: erasure.id, confirm: true })
+  assert.equal((await h.api('assurance-cases', agent)).some(x => x.customer_id === credit.customer), false, 'erasure removes the customer\'s investigations')
+  await h.api(`assurance-cases/${creditCase.id}`, agent, undefined, 404)
+  assert.deepEqual((await scan()).opened, [], 'retained records cannot recreate an erased investigation')
+  assert.equal((await api(`invoices/${june[credit.customer].id}`)).total_cents, 95000, 'the retained issued invoice keeps its exact figures')
   console.log('AGENT-001 five planted mismatches, linked fixes and human-confirmed closure passed')
 }
