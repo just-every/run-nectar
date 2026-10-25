@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict'
 
-export async function reconciliationFlow(h, owner) {
+export async function reconciliationFlow(h, owner, onState=async()=>{}) {
   await h.advanceClock('2026-10-25T12:00:00Z')
   const customer = (await h.api('customer.create', owner, { external_id: 'source-control', name: 'Cedar Source Systems', billing_email: 'ap@cedar.example' })).id
   const product = (await h.api('product.create', owner, { code: 'source-product', name: 'Source processing' })).id
   await h.api('meter.create', owner, { code: 'source-events', name: 'Source events', unit_label: 'events' })
   const price = (await h.api('price.create', owner, { product, kind: 'unit', meter: 'source-events', unit_amount: '2' })).id
-  await h.api('subscription.create', owner, { customer, start_date: '2026-06-01', price: [price], quantity: [''] })
+  const subscription=(await h.api('subscription.create', owner, { customer, start_date: '2026-06-01', price: [price], quantity: [''] })).id
   const send = async events => {
     const result = await h.api('usage.submit', owner, { events: events.map(([event_id, quantity, day]) => ({ event_id, quantity, occurred_at: `${day}T12:00:00-07:00`, customer: 'source-control', meter: 'source-events' })) })
     assert.equal(result.accepted, events.length)
@@ -44,6 +44,60 @@ export async function reconciliationFlow(h, owner) {
   await h.api('assurance.scan',agent,{period:'2026-06',owner:'synthetic-nectar-absent'},409)
   assert.deepEqual(await h.api('runs',owner),runsBefore,'investigation prepares no bill run')
   assert.equal(await (await h.raw('/app/exports/usage.csv',{cookie:owner})).text(),sourcesBefore,'investigation leaves raw events unchanged')
+
+  // Acceptance rechecks both parties through ordinary case-linked proposals.
+  const proposerEmail='synthetic-nectar-proposer@example.test'
+  const assigneeEmail='synthetic-nectar-assignee@example.test'
+  const give=async(email,role)=>h.api('access.give',owner,{email,name:'Synthetic case participant',role})
+  const proposerId=(await give(proposerEmail,'finance')).id
+  const proposer=await h.signIn(proposerEmail,{requested:true})
+  const assigneeId=(await give(assigneeEmail,'finance')).id
+  const assign=who=>h.api('assurance.assign',owner,{case:sourceCase.id,owner:who})
+  await assign(assigneeId)
+  const fix=who=>h.api('proposal.create',who,{assurance_case:sourceCase.id,kind:'amendment',title:'Synthetic reviewed case fix',payload:{subscription,kind:'fixed_credit',value:'1',effective_from:'2027-06-01',note:'Synthetic reviewed adjustment'},evidence:{clauses:[{quote:'Synthetic executed agreement permits a one dollar adjustment'}]}})
+  const accept=(id,status=200)=>h.api('proposal.decide',owner,{proposal:id,decision:'approved'},status)
+  const unchanged=async(id,code)=>{
+    const before=await h.api(`subscriptions/${subscription}`,owner),mails=h.mails.length
+    assert.equal((await accept(id,409)).error,code)
+    assert.deepEqual(await h.api(`subscriptions/${subscription}`,owner),before,'refused acceptance changes no signed or financial records')
+    assert.equal((await h.api(`proposals/${id}`,owner)).status,'pending')
+    assert.equal(h.mails.length,mails,'refused acceptance sends no message')
+  }
+  const pending=await fix(proposer)
+  await h.api('access.end',owner,{member:proposerId})
+  await unchanged(pending.id,'assurance_proposer_unavailable')
+  await give(proposerEmail,'accountant')
+  await unchanged(pending.id,'assurance_proposer_unavailable')
+  await h.api('access.end',owner,{member:proposerId})
+  await give(proposerEmail,'finance')
+  await h.api('access.end',owner,{member:assigneeId})
+  await unchanged(pending.id,'assurance_owner_unavailable')
+  await give(assigneeEmail,'accountant')
+  await unchanged(pending.id,'assurance_owner_unavailable')
+  const refused=await h.submit('proposal.decide',owner,{proposal:pending.id,decision:'approved'},`/app/proposals/${pending.id}`)
+  assert.equal(refused.searchParams.get('error'),'assurance_owner_unavailable')
+  await onState({label:'assignee-demoted',path:refused.pathname+refused.search})
+  await h.api('access.end',owner,{member:assigneeId})
+  await give(assigneeEmail,'finance')
+  await assign(ownerId)
+  await unchanged(pending.id,'assurance_case_changed')
+  await assign(assigneeId)
+  const linked=await h.api(`proposals/${pending.id}`,owner)
+  assert.deepEqual(linked.evidence.assurance,{case:sourceCase.id,owner:assigneeId,proposer:proposerId,kind:'member'})
+  await onState({label:'authorized-fix',path:`/app/proposals/${pending.id}`})
+  await accept(pending.id)
+  assert.equal((await h.api(`proposals/${pending.id}`,owner)).status,'approved')
+  assert.equal((await h.api(`assurance-cases/${sourceCase.id}`,owner)).status,'open','approval of a financial proposal never closes an investigation')
+  await accept(pending.id,409)
+  const revokedKey=await h.api('credential.issue',owner,{name:'Synthetic revoked case proposer',scopes:['prepare']})
+  const revokedProposal=await fix({bearer:revokedKey.key})
+  await h.api('credential.revoke',owner,{key:revokedKey.id})
+  await unchanged(revokedProposal.id,'assurance_proposer_unavailable')
+  // A proposal cannot attach itself to another customer's investigation.
+  const other=(await h.api('customer.create',owner,{external_id:'synthetic-nectar-case-peer',name:'Synthetic peer',billing_email:'peer@example.test'})).id
+  const peerSub=(await h.api('subscription.create',owner,{customer:other,start_date:'2026-06-01',price:[price],quantity:['']})).id
+  await h.api('proposal.create',agent,{assurance_case:sourceCase.id,kind:'amendment',title:'Synthetic foreign fix',payload:{subscription:peerSub,kind:'fixed_credit',value:'1',effective_from:'2027-06-01'},evidence:{clauses:[{quote:'Synthetic foreign terms'}]}},409)
+  await assign(ownerId)
 
   const prepare = async () => {
     const run = await h.api('billrun.prepare', owner, { period: '2026-06' })

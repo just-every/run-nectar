@@ -1,3 +1,4 @@
+import { assuranceProposal, assuranceProposalGuards } from './assurance'
 import { amendmentPlan, correctionPlan } from './draft-correction-plan'
 import { planInvoiceCredit, invoiceCreditStatements } from './credit-correction'
 import { deliverCorrectionMail } from './credit-correction-mail'
@@ -83,6 +84,9 @@ export async function proposeDraft(env: Bindings, actor: Actor, input: Input) {
     if(actor.kind==='member')requireMember(actor,'records')
     if(Array.isArray(payload.ambiguities)&&payload.ambiguities.some((a:Row)=>a?.resolution))requireMember(actor,'records')
   }
+  insist(!Object.hasOwn(evidence,'assurance'),'assurance_evidence_reserved')
+  const assurance=await assuranceProposal(env,actor,input,kind,payload)
+  if(assurance)evidence.assurance=assurance
   const prepared = await plan(env, kind, payload)
   if(kind==='amendment'&&payload.setup===true&&payload.revises){
     requireMember(actor,'records')
@@ -95,7 +99,7 @@ export async function proposeDraft(env: Bindings, actor: Actor, input: Input) {
   }
   if(payload.setup===true)insist(new TextEncoder().encode(JSON.stringify([prepared.normalized,prepared.impact,prepared.basis])).length<=1500000,'setup_proposal_too_large')
   const id = newId()
-  await commit(env, [...(collectionSeq === null ? [] : [cadenceSourceGuard(env,collectionSeq)]),...await alertStatements(env,'proposals',id,`/app/proposals/${id}`),stmt(env, "INSERT INTO nc_proposals (id, kind, title, payload_json, evidence_json, impact_json, basis_json, status, created_by, created_by_kind, created_at, prepared_by_id) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?)",
+  await commit(env, [...assuranceProposalGuards(env,assurance),...(collectionSeq === null ? [] : [cadenceSourceGuard(env,collectionSeq)]),...await alertStatements(env,'proposals',id,`/app/proposals/${id}`),stmt(env, "INSERT INTO nc_proposals (id, kind, title, payload_json, evidence_json, impact_json, basis_json, status, created_by, created_by_kind, created_at, prepared_by_id) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?)",
     id, kind, title, JSON.stringify(prepared.normalized), JSON.stringify(evidence), JSON.stringify(prepared.impact), JSON.stringify(prepared.basis), actorLabel(actor), actor.kind, now(), actor.id)],
   { actor: actorLabel(actor), action: 'proposal.create', subject: id, detail: { kind, title } })
   await deliverAlerts(env,'proposals',id,actorLabel(actor))
@@ -156,7 +160,9 @@ export async function decide(env: Bindings, actor: Actor, input: Input) {
   insist(canonical(basis) === canonical(parseJson(row.basis_json, {})), 'proposal_stale', 409)
   if(payload.setup===true)insist(!(parseJson<Row>(row.impact_json,{}).unresolvedAmbiguities??[]).length,'setup_ambiguities_unresolved',409)
   const audit = { actor: by, action: 'proposal.approve', subject: row.id, detail: { kind: row.kind, note } }
+  const authorityGuards=assuranceProposalGuards(env,parseJson<Row>(row.evidence_json,{}).assurance??null)
   const basisGuards = payload.setup===true || payload.invoice_credit===true ? [] : await basisGuardStatements(env, row.kind, parseJson<Row>(row.basis_json, {}))
+  basisGuards.push(...authorityGuards)
   if(simulationSeq!==null) basisGuards.push(guard(env,'proposal_stale','(SELECT COALESCE(MAX(seq),0) FROM nc_audit)=?',simulationSeq))
 
   if(payload.invoice_credit===true){

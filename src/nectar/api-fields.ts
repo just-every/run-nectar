@@ -748,6 +748,7 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "max_redemptions": "integer"
   },
   "proposal.create": {
+    "assurance_case": "text",
     "evidence": "json",
     "kind": "text",
     "payload": "json",

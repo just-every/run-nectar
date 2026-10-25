@@ -126,3 +126,27 @@ export async function recheckAssurance(env: Bindings, actor: Actor, input: Input
     {actor:actorLabel(actor),action:'assurance.recheck',subject:id,detail:{basis:proof.basis,mismatch:proof.mismatch,status}})
   return {id,status,evidence:proof}
 }
+
+// Bind a proposed financial fix to the current investigation and its assignee.
+// This door currently supports ordinary amendment and issued-credit proposals.
+export async function assuranceProposal(env: Bindings, actor: Actor, input: Input, kind: string, payload: Row) {
+  if (!input.has('assurance_case')) return null
+  investigator(actor)
+  insist(kind==='amendment' && payload.setup!==true,'assurance_fix_kind_unsupported',409)
+  const row=await assuranceCase(env,actor,input.text('assurance_case',{max:100}))
+  insist(row.status==='open','assurance_case_resolved',409)
+  await activeOwner(env,row.owner_id)
+  const target=payload.invoice_credit===true
+    ? await one(env,'SELECT customer_id FROM nc_invoices WHERE id=?',payload.invoice)
+    : await one(env,'SELECT customer_id FROM nc_subscriptions WHERE id=?',payload.subscription)
+  insist(target?.customer_id===row.customer_id,'assurance_fix_customer_mismatch',409)
+  return {case:row.id,owner:row.owner_id,proposer:actor.id,kind:actor.kind}
+}
+
+export function assuranceProposalGuards(env: Bindings, link: Row | null) {
+  if (!link) return []
+  const authority=link.kind==='member'
+    ? guard(env,'assurance_proposer_unavailable',"EXISTS(SELECT 1 FROM nc_members WHERE id=? AND status='active' AND role IN ('owner','finance'))",link.proposer)
+    : guard(env,'assurance_proposer_unavailable',"EXISTS(SELECT 1 FROM nc_agent_keys WHERE id=? AND revoked_at IS NULL AND instr(' '||scopes||' ',' prepare ')>0)",link.proposer)
+  return [authority,ownerGuard(env,link.owner),guard(env,'assurance_case_changed',"EXISTS(SELECT 1 FROM nc_assurance_cases a JOIN nc_customers c ON c.id=a.customer_id WHERE a.id=? AND a.owner_id=? AND a.status='open' AND c.erased_at IS NULL)",link.case,link.owner)]
+}

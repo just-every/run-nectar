@@ -189,6 +189,7 @@ export async function erasureFlow(h, owner, onState = async () => {}) {
   assert.equal(approved.receipt.verification.method, 'billing-email')
   assert.equal(approved.receipt.retained.until, '2033-01-20', 'GOV-005 latest payment controls the seven-calendar-year financial retention')
   assert.equal((await h.api('erasures',owner)).find(r=>r.id===request.id).claimed_email,'','GOV-005 request source address is withdrawn too')
+  assert.deepEqual(await h.api('assurance-cases',agent),[],'retained invoice and erased investigation coexist')
   const retainedInvoice = await h.api(`invoices/${invoice}`, owner)
   assert.equal(retainedInvoice.status, 'issued')
   for (const key of ['number', 'issue_date', 'subtotal_cents', 'tax_cents', 'total_cents', 'paidCents', 'balanceCents']) assert.equal(retainedInvoice[key], originalInvoice[key], `GOV-005 retains issued financial fact ${key}`)
