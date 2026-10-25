@@ -114,8 +114,18 @@ export async function harness({ assets = false, localTime, hostname = '127.0.0.1
     }
   }
 
+  // Required sensitive-data evidence after public capture operations, without
+  // exposing any stored values in assertion messages or evidence output.
+  async function assertStorageExcludes(values) {
+    const tables=(await db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT GLOB 'sqlite_*'").all()).results
+    for(const {name} of tables){
+      const serialized=JSON.stringify((await db.prepare(`SELECT * FROM "${name.replaceAll('"','""')}"`).all()).results)
+      assert.ok(values.every(value=>!serialized.includes(value)),`Sensitive input excluded from ${name}`)
+    }
+  }
+
   async function advanceClock(instant){assert.ok(Number.isFinite(Date.parse(instant)));vars.NECTAR_LOCAL_TIME=instant;await mf.setOptions(convertV4MiniflareOptions({...options,bindings:{...vars}}));await mf.ready;db=await mf.getD1Database('DB')}
-  return { origin, vars, raw, api, submit, page, signIn, close, mails, mailResponses,advanceClock,rejectAudit, dispatch: async request => mf.dispatchFetch(request.url, { redirect: 'manual', method: request.method, headers: Object.fromEntries(request.headers), ...(!['GET','HEAD'].includes(request.method) ? { body: await request.arrayBuffer() } : {}) }) }
+  return { origin, vars, raw, api, submit, page, signIn, close, mails, mailResponses,advanceClock,rejectAudit,assertStorageExcludes, dispatch: async request => mf.dispatchFetch(request.url, { redirect: 'manual', method: request.method, headers: Object.fromEntries(request.headers), ...(!['GET','HEAD'].includes(request.method) ? { body: await request.arrayBuffer() } : {}) }) }
 }
 
 export const file = (filename, content, type = 'application/octet-stream') => ({ filename, base64: Buffer.from(content).toString('base64'), type })

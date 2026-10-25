@@ -178,6 +178,17 @@ export async function assertHostedSetups(h, owner, { customer, other, binding, f
     }
     for(const privateValue of ['synthetic-nectar-810','110000000','routing_number','ip_address','user_agent','4242424242424242','123456789012'])assert.ok(!safe.includes(privateValue),'Customer projection contains no financial input or private acceptance payload')
   }
+  await h.assertStorageExcludes(['4242424242424242','123456789012','synthetic-nectar-810'])
+  const exported=await h.page('/app/exports/customers.csv',owner)
+  for(const value of ['4242424242424242','123456789012','synthetic-nectar-810'])assert.ok(!exported.includes(value),'Customer export excludes financial input and provider secrets')
+  const currentMethods=(await h.api(`customers/${customer}`,owner)).billingRecord.hostedSetups
+  for(const language of ['en','es-US']){
+    await updateLanguage(language)
+    const translated=await h.raw(`/portal/payment-methods?session=${encodeURIComponent((await issue(customer)).token)}`)
+    const html=await translated.text();assert.equal(translated.status,200)
+    assert.match(html,new RegExp(`lang="${language}"`));assert.ok(html.includes('4242')&&html.includes('6789'))
+    assert.deepEqual((await h.api(`customers/${customer}`,owner)).billingRecord.hostedSetups,currentMethods,'Translation preserves the identical capture facts')
+  }
   await updateLanguage('en')
   const session=await issue(customer)
   const isolatedCustomer=(await h.api('customer.create',owner,{external_id:'synthetic-nectar-809',name:'Synthetic hosted uncertainty',billing_email:'synthetic-nectar-809@example.test'})).id

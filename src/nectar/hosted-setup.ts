@@ -1,12 +1,12 @@
 // Customer-confirmed capture is separate from historical method observations.
 import type { Bindings } from '../auth.server'
 import { actorLabel, type Actor } from './actor'
-import { all, commit, guard, insist, newId, one, stmt, type Row } from './core'
+import { all, commit, guard, insist, newId, one, parseJson, stmt, type Row } from './core'
 import { clockInstant } from './clock'
 import type { Input } from './input'
 import { collectionAuthority, collectionOwner } from './movein/collection-state'
 import type { CustomerSession } from './portal-session'
-import { providerUnavailable, stripeForAccount } from './payments/stripe'
+import { providerReference, providerUnavailable, stripeForAccount } from './payments/stripe'
 import { createHostedSetup, readHostedSetup, setHostedDefault } from './payments/hosted-setup'
 
 export async function prepareHostedSetup(env: Bindings, actor: Actor, input: Input) {
@@ -34,10 +34,28 @@ export async function prepareHostedSetup(env: Bindings, actor: Actor, input: Inp
 }
 
 export async function customerHostedSetups(env: Bindings, customer: string) {
-  return all(env, `SELECT s.id,s.method,s.status,s.method_json,s.completed_at FROM nc_hosted_setups s JOIN nc_customers c ON c.id=s.customer_id
+  const rows=await all(env, `SELECT s.id,s.method,s.status,s.method_json,s.completed_at FROM nc_hosted_setups s JOIN nc_customers c ON c.id=s.customer_id
     JOIN nc_stripe_customer_bindings b ON b.id=s.binding_id AND b.revision=s.binding_revision
     WHERE s.customer_id=? AND c.erased_at IS NULL AND c.status='active'
     AND NOT EXISTS(SELECT 1 FROM nc_erased_records WHERE record_id IN (s.id,c.id,b.id)) ORDER BY s.created_at,s.id`, customer)
+  return rows.map(row=>{
+    insist(['card','us_bank_account'].includes(row.method)&&['prepared','creating','open','updating','complete'].includes(row.status),'hosted_setup_evidence_invalid',409)
+    let paymentMethod=null
+    if(row.method_json){
+      const value=parseJson<Row>(row.method_json,{})
+      insist(value.kind===row.method&&typeof value.last4==='string'&&/^\d{4}$/.test(value.last4),'hosted_setup_evidence_invalid',409)
+      const methodRef=providerReference(value.methodRef)
+      if(row.method==='card'){
+        insist(['amex','cartes_bancaires','diners','discover','eftpos_au','interac','jcb','link','mastercard','unionpay','visa','unknown'].includes(value.brand)
+          &&Number.isSafeInteger(value.expMonth)&&value.expMonth>=1&&value.expMonth<=12&&Number.isSafeInteger(value.expYear)&&value.expYear>=2000&&value.expYear<=9999,'hosted_setup_evidence_invalid',409)
+        paymentMethod={methodRef,kind:'card',brand:value.brand,last4:value.last4,expMonth:value.expMonth,expYear:value.expYear,bankName:null,accountType:null,mandateRef:null,mandateText:null}
+      }else{
+        insist(typeof value.bankName==='string'&&value.bankName.trim().length>0&&value.bankName.length<=100&&!/[\u0000-\u001f\u007f]|\d{12}/.test(value.bankName)&&['checking','savings'].includes(value.accountType),'hosted_setup_evidence_invalid',409)
+        paymentMethod={methodRef,kind:'us_bank_account',brand:null,last4:value.last4,expMonth:null,expYear:null,bankName:value.bankName,accountType:value.accountType,mandateRef:providerReference(value.mandateRef),mandateText:null}
+      }
+    }
+    return {id:row.id,method:row.method,status:row.status,paymentMethod,completedAt:row.completed_at}
+  })
 }
 function sessionFence(env: Bindings, session: CustomerSession, row: Row, status: string) {
   return guard(env, 'hosted_setup_source_changed', `EXISTS(SELECT 1 FROM nc_hosted_setups s JOIN nc_customers c ON c.id=s.customer_id

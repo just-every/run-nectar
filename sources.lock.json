@@ -3086,7 +3086,7 @@
       "executable": false
     },
     "src/nectar/customer-billing-record.ts": {
-      "sha256": "27b0dd44fbc3184fb9b07d9d9161f2ab2dffc5a5a427c8bb7e84b94c42e257ce",
+      "sha256": "fb33cba5c6b7387e6fdfe237975da8b0f3de1755fabaaa1e106f7c477ec6ea28",
       "executable": false
     },
     "src/nectar/customer-invoice.ts": {
@@ -3210,11 +3210,11 @@
       "executable": false
     },
     "src/nectar/hosted-setup-page.ts": {
-      "sha256": "181abc59aa6448aed1e1d78293a42dcfd9afdcbee412b9f56f5d7939fbb6f19e",
+      "sha256": "ec318cb48775d94578db7d2ce48861de1e49737174fd6cf8b58d7136fd8d7e8c",
       "executable": false
     },
     "src/nectar/hosted-setup.ts": {
-      "sha256": "a1d626d376e7fb58c3f379f70a064923ddddfa0681b5747376b3413a31d6a7b2",
+      "sha256": "1ed40ff28c60ee62a1589a611aee00dafc4a541987fa04410c3865356cb36010",
       "executable": false
     },
     "src/nectar/http.ts": {
@@ -4546,7 +4546,7 @@
       "executable": false
     },
     "tests/nectar/customer-payment-methods.mjs": {
-      "sha256": "8f239527148bf3da9dafe3398c1ac0256d5ad227ec3feeb7c2cde73e34260625",
+      "sha256": "db8d97eec6883815e2ed5dca9d6ec4ed22f1e088baec64f3586205892a10cd1a",
       "executable": false
     },
     "tests/nectar/customer-record-browser.mjs": {
@@ -4594,7 +4594,7 @@
       "executable": false
     },
     "tests/nectar/harness.mjs": {
-      "sha256": "5461cc43488a25f66560f4afcacae84f8f1be046da80d8273d6ade22526d4104",
+      "sha256": "0d98fc53c12b542646c57e530315e9c9386c62f6ce2a5852d9de0eb063954840",
       "executable": false
     },
     "tests/nectar/hierarchies.mjs": {

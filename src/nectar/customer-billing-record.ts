@@ -79,7 +79,7 @@ export async function customerBillingRecord(env: Bindings, actor: Actor, custome
     payments&&invoices?readCustomerPaymentMethods(env,actor,customer):null,
     payments&&invoices?readAchPaymentEvidence(env,actor,customer):null,
     payments&&invoices?readPaymentReceipts(env,actor,customer):null,
-    payments&&invoices?(await customerHostedSetups(env,customer)).map(row=>({id:row.id,method:row.method,status:row.status,paymentMethod:parseJson(row.method_json,null),completedAt:row.completed_at})):null,
+    payments&&invoices?customerHostedSetups(env,customer):null,
   ])
   const creditBalance = balance ? { customer, cashCents: balance.cashCents, goodwillCents: balance.goodwillCents,
     carriedCents: balance.carriedCents, totalCents: balance.totalCents, entries: balance.entries,
