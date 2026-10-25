@@ -4530,7 +4530,7 @@
       "executable": false
     },
     "tests/nectar/erasure.mjs": {
-      "sha256": "6ac85dff846f59638ecdff8c14f0befcb16d635cb03242e6162bb8d85806cd68",
+      "sha256": "a4ae37135acb503e342425ebb7427e7433826d77e9b52fba1365fad370605c8c",
       "executable": false
     },
     "tests/nectar/financial-reports.mjs": {
