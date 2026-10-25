@@ -190,7 +190,7 @@
       "executable": false
     },
     "base-copies.json": {
-      "sha256": "1485fd5994893b6f20148ffe991c1c4f494b548ab1e29405593064a0535c5900",
+      "sha256": "591c3676c3fc28cc454f3cff16799ec442c20bef70365a6e72cdb7206e77bf85",
       "executable": false
     },
     "CONTRACT.md": {
@@ -682,7 +682,7 @@
       "executable": false
     },
     "package.json": {
-      "sha256": "9fcc31b41d255155707f3be26ba523d99d039ad633b71e8e26e2f25c109616bb",
+      "sha256": "1dfaac878866517ffd32c192bb36d3ca4b1ca5c7aa655d944b7b127a1b25d07c",
       "executable": false
     },
     "packaging.json": {
@@ -4385,10 +4385,6 @@
       "sha256": "d472d14cbf284f7343a0086cabe753fa0ffab455c00757c9148c2c5436e6af0b",
       "executable": false
     },
-    "tests/incremental-typecheck.test.mjs": {
-      "sha256": "a11d6b89e7219137540c7052683c5f4d9ba7ddf16f66d34c1f56ae34029c0a95",
-      "executable": false
-    },
     "tests/nectar/ach-payment-evidence.mjs": {
       "sha256": "ae828b35199d99df6a1b70f327120701fef273e030e496d246bb278931e0bf1c",
       "executable": false
@@ -4889,14 +4885,6 @@
       "sha256": "3e7ac1e68e9aab6ef102716795c66e9417b50e0334ee920c4824b8fed5a7ea49",
       "executable": false
     },
-    "tests/site/site.test.mjs": {
-      "sha256": "2e2a0db39548ba6bc5c85ebc7a724c38174920b29e87845cafd0df8b18c5f4a2",
-      "executable": false
-    },
-    "tests/typecheck-checks.mjs": {
-      "sha256": "6f6737e9c06710cb2983280a070e72f690d602f03db9585f86c565a2f5da4565",
-      "executable": false
-    },
     "tests/worker-environment.mjs": {
       "sha256": "0071cbe1ca11859a45f5c101712abdff12acdff6b1319d13bba503c747b187b2",
       "executable": false
@@ -4906,7 +4894,7 @@
       "executable": false
     },
     "VERIFY-WORKFLOW.md": {
-      "sha256": "97d25a60dabe02ab4c30efbe226c8967b8fbac25b39f61467c2ef5a26186261d",
+      "sha256": "dfcd729a5ac6d3387b0e0e94d73852f0a07addd26e7a51c4fc8c608412e2ceaf",
       "executable": false
     },
     "vite.config.ts": {

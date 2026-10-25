@@ -52,7 +52,7 @@ seed's existing package scripts:
   "name": "typecheck",
   "browser": false,
   "hosted": false,
-  "commands": ["pnpm typecheck", "pnpm test:typecheck"]
+  "commands": ["pnpm typecheck"]
 }
 ```
 

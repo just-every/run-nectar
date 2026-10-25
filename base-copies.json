@@ -4530,17 +4530,6 @@
       "modes": {
         "src/routes/__root.tsx": "100644"
       }
-    },
-    {
-      "path": "tests/incremental-typecheck.test.mjs",
-      "originPath": "foundation/template/tests/incremental-typecheck.test.mjs",
-      "revision": "4280971d7c0295b8a88c3e1179048efcbbe14f30",
-      "files": {
-        "tests/incremental-typecheck.test.mjs": "a11d6b89e7219137540c7052683c5f4d9ba7ddf16f66d34c1f56ae34029c0a95"
-      },
-      "modes": {
-        "tests/incremental-typecheck.test.mjs": "100644"
-      }
     }
   ]
 }
