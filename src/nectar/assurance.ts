@@ -75,8 +75,14 @@ export async function scanAssurance(env: Bindings, actor: Actor, input: Input) {
   investigator(actor)
   const period=input.text('period',{max:7}),owner=input.text('owner',{max:100})
   insist(isMonth(period),'invalid_period')
+  return await scanCases(env,actor,[period],owner,period)
+}
+
+/** One comparison pass over every detector. The scheduled run and the explicit door share it, so a repeated
+ * pass is idempotent: an existing subject is rechecked in place and a new mismatch opens exactly one case. */
+export async function scanCases(env: Bindings, actor: Actor, periods: string[], owner: string, subject: string) {
   await activeOwner(env,owner)
-  const seq=await sequence(env), controls=await controlTotals(env,actor,period)
+  const seq=await sequence(env), controls=(await Promise.all(periods.map(period=>controlTotals(env,actor,period)))).flat()
   const statements:D1PreparedStatement[]=[unchanged(env,seq),ownerGuard(env,owner)]
   const opened:string[]=[],rechecked:string[]=[]
   const proofs:Row[]=[]
@@ -103,7 +109,7 @@ export async function scanAssurance(env: Bindings, actor: Actor, input: Input) {
       stmt(env,"INSERT INTO nc_assurance_observations(id,customer_id,case_id,basis_hash,evidence_json,status,created_by,created_at) VALUES(?,?,?,?,?,'open',?,?)",newId(),proof.customer,id,proof.basis,canonical(proof),actorLabel(actor),at))
   }
   const coverage=['usage_source_control',...Object.keys(detectors())]
-  await commit(env,statements,{actor:actorLabel(actor),action:'assurance.scan',subject:period,detail:{coverage,compared:proofs.length,opened,rechecked}})
+  await commit(env,statements,{actor:actorLabel(actor),action:'assurance.scan',subject,detail:{coverage,compared:proofs.length,opened,rechecked}})
   return {coverage,compared:proofs.length,opened,rechecked}
 }
 

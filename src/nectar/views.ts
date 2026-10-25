@@ -1,4 +1,5 @@
 import { assuranceCases,assuranceCase } from './assurance'
+import { assuranceRuns } from './assurance-schedule'
 import { readPaymentReceipt } from './payment-receipts'
 import { dailyRates,currencyReport } from './currency-rates'
 import { readTrialCollections } from './trial-collection'
@@ -89,6 +90,7 @@ export async function customerView(env: Bindings, actor: Actor, id: string, url?
 
 export const views: Record<string, View> = {
   assuranceCases: (env,actor)=>assuranceCases(env,actor),
+  assuranceRuns: (env,actor)=>assuranceRuns(env,actor),
   assuranceCase: (env,actor,_r,id)=>assuranceCase(env,actor,id),
   paymentReceipt:(env,actor,_r,id)=>readPaymentReceipt(env,actor,id),
   hierarchies:(env,actor,_r,_id,url)=>hierarchyView(env,actor,url.searchParams.get('parent')??undefined),

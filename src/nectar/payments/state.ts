@@ -29,7 +29,7 @@ export function bindingGuard(env: Bindings, basis: NativeCollectionBasis) {
 export async function currentNativeCollection(env: Bindings, actor: Actor, row: Row) {
   const source = await nativeCollectionSource(env, row.invoice_id), basis = parseJson<NativeCollectionBasis | null>(row.basis_json, null)
   insist(basis && basis.principal === actor.id && row.prepared_by === actor.id && await fingerprint(basis) === row.basis_hash
-    && basis.sourceHash === source.sourceHash && billingCurrency(basis.currency) === billingCurrency(source.row.currency) && billingCurrency(row.currency) === billingCurrency(basis.currency) && basis.amountCents === source.row.balance_cents
+    && basis.sourceHash === source.sourceHash && billingCurrency(basis.currency) === billingCurrency(source.row.currency) && billingCurrency(row.currency) === billingCurrency(basis.currency) && basis.amountCents === source.collectibleCents
     && basis.sourceFingerprint === source.row.source_fingerprint && basis.customerRevision === source.row.customer_revision,
   'native_collection_basis_changed', 409)
   const binding = await one(env, 'SELECT * FROM nc_stripe_customer_bindings WHERE id=?', basis.bindingId)

@@ -5,6 +5,7 @@
 export const API_DOORS: [string, string][] = [
   ['^assurance-cases$','assuranceCases'],
   ['^assurance-cases/([\\w-]+)$','assuranceCase'],
+  ['^assurance-runs$','assuranceRuns'],
   ['^payments/([\\w-]+)/receipt$','paymentReceipt'],
   ['^currency/rates$','currencyRates'],
   ['^reports/currency$','currencyReport'],
@@ -48,7 +49,7 @@ export const API_DOORS: [string, string][] = [
 ]
 
 /** API doors whose rows page by cursor (DEV-002, list-cursor.ts); `invoices` keeps its own issuance-journal snapshot. */
-export const LIST_DOORS = ['assuranceCases','currencyRates','trialCollections','prepaidRefunds','prepaidTopupAuthorizations','prepaidTopupClaims','nativeCollections', 'usageCorrections', 'erasures', 'noteMembers', 'customers', 'batches', 'runs', 'payments', 'notices', 'tasks', 'policies', 'proposals', 'imports', 'shadow', 'members', 'roles', 'credentials', 'audit', 'metadataObjects', 'notes']
+export const LIST_DOORS = ['assuranceCases','assuranceRuns','currencyRates','trialCollections','prepaidRefunds','prepaidTopupAuthorizations','prepaidTopupClaims','nativeCollections', 'usageCorrections', 'erasures', 'noteMembers', 'customers', 'batches', 'runs', 'payments', 'notices', 'tasks', 'policies', 'proposals', 'imports', 'shadow', 'members', 'roles', 'credentials', 'audit', 'metadataObjects', 'notes']
 
 export const PAGE_DOORS: [string, string][] = [
   ['^/app/payments/([\\w-]+)/receipt$','paymentReceipt'],

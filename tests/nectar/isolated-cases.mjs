@@ -71,4 +71,5 @@ export const isolatedJourneys = [
   { file: 'usage-replay', name: 'usageReplayFlow', load: () => import('./usage-replay.mjs') },
   { file: 'reconciliation', name: 'reconciliationFlow', load: () => import('./reconciliation.mjs') },
   { file: 'assurance-detectors', name: 'assuranceDetectorsFlow', load: () => import('./assurance-detectors.mjs') },
+  { file: 'assurance-detectors', name: 'assuranceScheduleFlow', load: () => import('./assurance-detectors.mjs') },
 ]

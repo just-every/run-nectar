@@ -32,7 +32,7 @@ export async function prepareNativeCollection(env: Bindings, actor: Actor, input
     customerRevision: source.row.customer_revision, bindingId: binding.id, bindingRevision: binding.revision,
     payerCustomerId:source.payerId,payerRevision:source.payerRevision,invoiceId: source.row.id, invoiceNumber: source.row.number, customerId: source.row.customer_id, entityId: source.row.billing_entity_id,
     route: source.route, accountRef: selected.account, customerRef: card.customerRef, paymentMethodRef: card.paymentMethodRef,
-    amountCents: source.row.balance_cents, currency: billingCurrency(source.row.currency).toLowerCase(), livemode: card.livemode, card: card.card,
+    amountCents: source.collectibleCents, currency: billingCurrency(source.row.currency).toLowerCase(), livemode: card.livemode, card: card.card,
     key: await fingerprint(['nectar-native-collection-1', selected.account, source.row.id]) }
   const id = newId(), hash = await fingerprint(basis), at = clockInstant(env)
   await commit(env, [collectionAuthority(env, actor), nativeSourceGuard(env, source), bindingGuard(env, basis),

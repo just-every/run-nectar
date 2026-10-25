@@ -4,7 +4,8 @@ import { applyPolicy } from './policy-helper.mjs'
 
 // AGENT-001: five planted mismatches, found by comparing signed terms with issued invoices, payments and
 // access, then corrected only through ordinary human-approved doors and closed only after a confirmed recheck.
-export async function assuranceDetectorsFlow(h, owner) {
+// Plants one mismatch of each kind, beside one correctly applied ramp, through ordinary public doors.
+async function plant(h, owner) {
   await h.advanceClock('2026-10-25T12:00:00Z')
   const api = (path, body, status) => h.api(path, owner, body, status)
   const ownerId = (await api('me')).id
@@ -76,6 +77,11 @@ export async function assuranceDetectorsFlow(h, owner) {
   const cancelled = await api('subscription.cancel', { subscription: access.subscription, revision: access.revision, mode: 'immediate', effective_date: '2026-08-01', reason: 'Customer cancelled' })
   assert.equal(cancelled.endDate, '2026-08-01')
 
+  return { api, ownerId, finance, agent, under, over, agreed, trueup, credit, prepaid, access, duplicate, june, july, p95, p120 }
+}
+
+export async function assuranceDetectorsFlow(h, owner) {
+  const { api, ownerId, finance, agent, under, over, agreed, trueup, credit, prepaid, access, duplicate, june, july, p95, p120 } = await plant(h, owner)
   const runsBefore = await api('runs'), subscriptionBefore = await api(`subscriptions/${under.subscription}`), paymentsBefore = await api('payments')
   const scan = () => h.api('assurance.scan', agent, { period: '2026-07', owner: ownerId })
   const opened = await scan()
@@ -221,4 +227,63 @@ export async function assuranceDetectorsFlow(h, owner) {
   assert.deepEqual((await scan()).opened, [], 'retained records cannot recreate an erased investigation')
   assert.equal((await api(`invoices/${june[credit.customer].id}`)).total_cents, 95000, 'the retained issued invoice keeps its exact figures')
   console.log('AGENT-001 five planted mismatches, linked fixes and human-confirmed closure passed')
+}
+
+// AGENT-010: the same comparisons on the real scheduled entry point, with failure, interruption and recovery visible.
+export async function assuranceScheduleFlow(h, owner) {
+  const { api, agent, credit, june } = await plant(h, owner)
+  const tick = async (time, status = 200) => {
+    const response = await h.raw(`/cdn-cgi/local/scheduled?time=${Date.parse(time)}&cron=${encodeURIComponent('0 14 * * *')}`)
+    assert.equal(response.status, status, `real scheduled entry point: ${(await response.text()).slice(0, 200)}`)
+  }
+  const runs = () => h.api('assurance-runs', agent), cases = () => h.api('assurance-cases', agent)
+  const world = async () => JSON.stringify([await api('runs'), await api('payments'), (await api('invoices')).length, h.mails.length])
+  assert.deepEqual(await cases(), [], 'nothing opens before a scheduled tick')
+  const before = await world()
+
+  // A failing tick leaves no partial case and is recorded; the next tick recovers from the records alone.
+  await h.rejectAudit('assurance.scan')
+  await tick('2026-10-25T14:00:00Z')
+  assert.deepEqual(await cases(), [], 'a failed tick opens no partial work')
+  let [failed] = await runs()
+  assert.deepEqual([failed.status, failed.error_code, failed.business_day], ['failed', 'unexpected_error', '2026-10-25'])
+  await h.rejectAudit(null)
+  await tick('2026-10-25T14:01:00Z')
+  const [recovered] = await runs()
+  assert.deepEqual([recovered.status, recovered.opened, recovered.error_code], ['completed', 6, null])
+  assert.deepEqual((await cases()).map(c => c.kind).sort(), ['cancellation_access', 'commitment_trueup', 'paid_without_access', 'seat_ramp', 'seat_ramp', 'unapplied_credit'])
+  const opened = await cases()
+  assert.ok(opened.every(c => c.status === 'open' && c.owner_id === recovered.owner_id), 'one open case per mismatch, owned by an active owner')
+
+  // Repeat ticks continue the same cases.
+  await tick('2026-10-25T14:02:00Z')
+  const [repeated] = await runs()
+  assert.deepEqual([repeated.status, repeated.opened, repeated.rechecked], ['completed', 0, 0])
+  assert.deepEqual((await cases()).map(c => c.id).sort(), opened.map(c => c.id).sort(), 'repeat ticks open no second case')
+
+  // An interrupted tick never wrote its outcome: while it may still be running a tick waits, once stale it restarts.
+  await h.rejectAudit('assurance.run.finish')
+  await tick('2026-10-25T14:03:00Z', 500)
+  await h.rejectAudit(null)
+  assert.equal((await runs())[0].status, 'running', 'the unwritten outcome stays visible')
+  const count = (await runs()).length
+  await tick('2026-10-25T14:04:00Z')
+  assert.equal((await runs()).length, count, 'a tick does not overlap a running one')
+  await tick('2026-10-25T14:20:00Z')
+  const history = await runs()
+  assert.deepEqual([history[0].status, history.some(r => r.status === 'interrupted'), history.filter(r => r.status === 'failed').length], ['completed', true, 1])
+  assert.deepEqual((await cases()).map(c => c.id).sort(), opened.map(c => c.id).sort(), 'interruption and restart keep one continuing case per mismatch')
+
+  // Scheduled recheck follows an ordinary fix, and closes a case only after the human confirmation.
+  assert.equal(await world(), before, 'ticks prepare no bill run, apply no payment, issue no invoice and send no message')
+  const creditCase = opened.find(c => c.customer_id === credit.customer)
+  await api('balance.apply', { invoice: june[credit.customer].id })
+  await tick('2026-10-25T14:30:00Z')
+  const rechecked = await h.api(`assurance-cases/${creditCase.id}`, agent)
+  assert.deepEqual([rechecked.status, rechecked.evidence.mismatch], ['open', false], 'agreement alone leaves the case open for a person')
+  await api('assurance.approve', { case: creditCase.id, basis: rechecked.basis_hash })
+  await tick('2026-10-25T14:40:00Z')
+  assert.equal((await h.api(`assurance-cases/${creditCase.id}`, agent)).status, 'resolved')
+  assert.equal((await h.raw('/api/nectar/assurance-runs', {})).status, 401, 'run history needs authority')
+  console.log('AGENT-010 scheduled comparisons, idempotent ticks, interruption, recovery and visible failures passed')
 }

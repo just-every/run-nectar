@@ -3,6 +3,8 @@ import { fingerprint, guard, insist, one, parseJson, type Row } from '../core'
 import { BALANCE_SQL } from '../receivables'
 import { billingCurrency, assertSameCurrency } from '../currency'
 
+const DISPUTED_SQL = 'SELECT COALESCE(SUM(amount_cents),0) AS cents FROM nc_cadence_disputes WHERE invoice_id=? AND resolved_at IS NULL'
+
 export async function nativeCollectionSource(env: Bindings, invoiceId: string) {
   const row = await one(env, `SELECT i.*,${BALANCE_SQL} AS balance_cents,c.revision AS customer_revision,c.erased_at,c.status AS customer_status,
     c.currency AS customer_currency,c.billing_entity_id AS customer_entity_id FROM nc_invoices i JOIN nc_customers c ON c.id=i.customer_id WHERE i.id=?`, invoiceId)
@@ -10,6 +12,9 @@ export async function nativeCollectionSource(env: Bindings, invoiceId: string) {
     && !await one(env, 'SELECT 1 FROM nc_erased_records WHERE record_id IN (?,?)', invoiceId, row.customer_id), 'native_issued_invoice_required', 409)
   assertSameCurrency(row.currency, row.customer_currency)
   insist(Number.isSafeInteger(row.balance_cents) && row.balance_cents >= 50 && row.balance_cents <= 99999999, 'native_collectible_balance_required', 409)
+  // A recorded dispute pauses collection of exactly its disputed line amounts; the undisputed remainder stays collectible.
+  const disputedCents = (await one<{ cents: number }>(env, DISPUTED_SQL, invoiceId))!.cents, collectibleCents = Math.max(0, row.balance_cents - disputedCents)
+  insist(collectibleCents >= 50, disputedCents ? 'native_collection_paused_for_dispute' : 'native_collectible_balance_required', 409)
   const route = parseJson<Row>(row.billing_route_json, {}), calculation = parseJson<Row>(row.calculation_json, {})
   insist(calculation.inputs && row.source_fingerprint && route.entityId === row.billing_entity_id
     && (row.customer_entity_id ?? null) === (row.billing_entity_id ?? null), 'native_invoice_route_invalid', 409)
@@ -21,9 +26,9 @@ export async function nativeCollectionSource(env: Bindings, invoiceId: string) {
   if (payer) assertSameCurrency(row.currency, payer.currency)
   const payerId=payer?.payer_id??row.customer_id,payerRevision=payer?.revision??row.customer_revision
   const sourceHash = await fingerprint({...(payer?{payerId,payerRevision}:{}), invoice: row.id, number: row.number, customer: row.customer_id, status: row.status, total: row.total_cents,
-    balance: row.balance_cents, issuedAt: row.issued_at, sourceFingerprint: row.source_fingerprint, calculation: row.calculation_json,
+    balance: row.balance_cents, disputed: disputedCents, issuedAt: row.issued_at, sourceFingerprint: row.source_fingerprint, calculation: row.calculation_json,
     route: row.billing_route_json, entity: row.billing_entity_id, currency: billingCurrency(row.currency).toLowerCase(), customerRevision: row.customer_revision })
-  return { row, route, payerId,payerRevision,accountRef: accountRef as string | null, sourceHash }
+  return { row, route, payerId,payerRevision,accountRef: accountRef as string | null, sourceHash, disputedCents, collectibleCents }
 }
 export function nativeSourceGuard(env: Bindings, source: Awaited<ReturnType<typeof nativeCollectionSource>>) {
   const { row,payerId,payerRevision } = source
@@ -31,8 +36,9 @@ export function nativeSourceGuard(env: Bindings, source: Awaited<ReturnType<type
     WHERE i.id=? AND i.customer_id=? AND i.status='issued' AND i.total_cents=? AND i.source_fingerprint=? AND i.calculation_json=?
       AND i.billing_route_json=? AND i.billing_entity_id IS ? AND i.currency=? AND c.currency=i.currency AND ${BALANCE_SQL}=?
       AND c.revision=? AND c.status='active' AND c.erased_at IS NULL AND c.billing_entity_id IS ?)
+    AND (${DISPUTED_SQL.replace('SELECT ', 'SELECT (').replace(' AS cents', ')')})=?
     AND EXISTS(SELECT 1 FROM nc_customers payer WHERE payer.id=? AND payer.revision=? AND payer.status='active' AND payer.erased_at IS NULL AND payer.billing_entity_id IS ? AND payer.currency=?)
     AND NOT EXISTS(SELECT 1 FROM nc_erased_records WHERE record_id IN (?,?))`, row.id, row.customer_id, row.total_cents,
     row.source_fingerprint, row.calculation_json, row.billing_route_json, row.billing_entity_id, billingCurrency(row.currency), row.balance_cents,
-    row.customer_revision, row.billing_entity_id,payerId,payerRevision,row.billing_entity_id,billingCurrency(row.currency),row.id,row.customer_id)
+    row.customer_revision, row.billing_entity_id,row.id,source.disputedCents,payerId,payerRevision,row.billing_entity_id,billingCurrency(row.currency),row.id,row.customer_id)
 }

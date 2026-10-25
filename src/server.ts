@@ -8,6 +8,7 @@ import { portalResponse } from './nectar/portal-http'
 import { removeExpiredFinancialRecords } from './nectar/erasure-purge'
 import { erasurePublic } from './nectar/erasure-public'
 import { runCadences } from './nectar/cadence-scheduler'
+import { runAssurance } from './nectar/assurance-schedule'
 import { runWinbacks } from './nectar/retention-winback'
 import { retentionPublic } from './nectar/retention-public'
 import { runRenewals } from './nectar/renewal-jobs'
@@ -60,6 +61,7 @@ export default withDemo({
     await deliverPendingUsageCorrectionMail(runtimeBindings(env))
     await deliverPendingDraftCorrectionMail(runtimeBindings(env))
     await deliverPendingPrepaidRefundNotices(runtimeBindings(env))
+    await runAssurance(runtimeBindings(env),controller.scheduledTime)
   },
   async fetch(request, env, execution) {
     const asset = await staticAssetResponse(request, env)
