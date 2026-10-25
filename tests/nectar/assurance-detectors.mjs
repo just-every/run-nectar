@@ -127,6 +127,19 @@ export async function assuranceDetectorsFlow(h, owner) {
   await refuse(underCase, creditProposal(july[under.customer], '10.00'), 'assurance_fix_source_mismatch')
   await refuse(overCase, creditProposal(july[under.customer], '10.00'), 'assurance_fix_source_mismatch')
   await refuse(overCase, creditProposal(overInvoice, '200.01'), 'assurance_fix_exceeds_difference')
+  // Rejected and unauthorized linked proposals adjust nothing: the proposer's authority is rechecked on acceptance.
+  await api('access.give', { email: 'synthetic-nectar-ramp-proposer@example.test', name: 'Synthetic ramp proposer', role: 'finance' })
+  const proposer = await h.signIn('synthetic-nectar-ramp-proposer@example.test', { requested: true })
+  const proposerId = (await h.api('members', owner)).find(m => m.email === 'synthetic-nectar-ramp-proposer@example.test').id
+  const unchanged = async () => assert.equal((await api(`invoices/${overInvoice.id}`)).creditedCents, 0, 'refused or rejected proposals credit nothing')
+  const demoted = await h.api('proposal.create', proposer, { assurance_case: overCase.id, kind: 'amendment', title: 'Seat reduction credit', payload: creditProposal(overInvoice, '1.00') })
+  await api('access.end', { member: proposerId })
+  await api('access.give', { email: 'synthetic-nectar-ramp-proposer@example.test', name: 'Synthetic ramp proposer', role: 'accountant' })
+  assert.equal((await api('proposal.decide', { proposal: demoted.id, decision: 'approved' }, 409)).error, 'assurance_proposer_unavailable')
+  await unchanged()
+  await api('proposal.decide', { proposal: demoted.id, decision: 'rejected' })
+  assert.equal((await api(`proposals/${demoted.id}`)).status, 'rejected')
+  await unchanged()
   const proposal = await link(overCase, creditProposal(overInvoice, '200.00'))
   assert.equal((await api(`proposals/${proposal.id}`)).evidence.assurance.case, overCase.id)
   await api('proposal.decide', { proposal: proposal.id, decision: 'approved' })
@@ -184,6 +197,11 @@ export async function assuranceDetectorsFlow(h, owner) {
   const revoked = await close(accessCase)
   assert.deepEqual(revoked.stillGranted, [])
   assert.deepEqual((await scan()).opened, [], 'resolved cases are not reopened while records agree')
-  assert.ok((await h.api('assurance-cases', agent)).every(x => x.status === 'resolved'), 'all five cases closed only after a human-confirmed recheck')
+  assert.ok((await h.api('assurance-cases', agent)).every(x => x.status === 'resolved'), 'every planted case closed only after a human-confirmed recheck')
+  // A later regression reopens the same case and withdraws the old confirmation.
+  await api('payment.record', { customer: credit.customer, amount: '950.00', received_on: '2026-10-20', method: 'bank_transfer', reference: 'synthetic-nectar-wire-3' })
+  assert.deepEqual((await scan()).rechecked, [creditCase.id])
+  const reopened = await h.api(`assurance-cases/${creditCase.id}`, agent)
+  assert.deepEqual([reopened.status, reopened.approved_basis, reopened.evidence.availableCents], ['open', null, 95000], 'the regression reopens the same case')
   console.log('AGENT-001 five planted mismatches, linked fixes and human-confirmed closure passed')
 }
