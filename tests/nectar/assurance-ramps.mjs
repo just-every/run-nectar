@@ -92,7 +92,7 @@ export async function assuranceRampsFlow(h, owner) {
     effective_date: '2026-07-31', assurance_case: c.id, ...fields }, status)
   await charge(agent, underCase, {}, 403)
   assert.equal((await charge(finance, underCase, { amount: '250.01' }, 409)).error, 'assurance_fix_exceeds_difference')
-  assert.equal((await charge(finance, overCase, {}, 409)).error, 'assurance_fix_source_mismatch')
+  assert.equal((await charge(finance, overCase, {}, 409)).error, 'assurance_fix_kind_unsupported', 'a resolved case accepts no further fix')
   assert.equal((await charge(finance, underCase, { customer: over.customer, subscription: over.subscription }, 409)).error, 'assurance_fix_source_mismatch')
   const catchUp = await charge(finance, underCase, {})
   assert.deepEqual((await h.api('assurance.recheck', agent, { case: underCase.id })).evidence.differenceCents, 25000, 'an unbilled charge corrects nothing')

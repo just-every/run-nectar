@@ -32,7 +32,7 @@ function evidence(row: Row) {
     mismatch:row.mismatch, basis:row.basis }
 }
 
-async function current(env: Bindings, actor: Actor, row: Row) {
+async function current(env: Bindings, actor: Actor, row: Row): Promise<Row> {
   insist(!await one(env,'SELECT 1 FROM nc_customers WHERE id=? AND erased_at IS NOT NULL',row.customer_id),'assurance_case_not_found',404)
   if(row.kind===RAMP_KIND) {
     const compared=(await rampEvidence(env)).find(c=>c.source===row.source_id)
