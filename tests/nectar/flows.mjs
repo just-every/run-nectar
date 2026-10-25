@@ -16,7 +16,6 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { API_DOORS, PAGE_DOORS } from '../../src/nectar/doors.ts'
 import { file, harness } from './harness.mjs'
-import { reconciliationFlow } from './reconciliation.mjs'
 import { oneTimeBilling } from './one-time.mjs'
 import { invoicePaginationFlow } from './invoice-pagination.mjs'
 import { notesFlow } from './notes.mjs'
@@ -983,7 +982,6 @@ try {
     await h.api('subscription.create', cookie.owner, { customer: ids.northwind, start_date: '2027-03-01', price: [ids.events], quantity: [''] })
   })
 
-  await reconciliationFlow(h, cookie.owner)
   await check('CAT-002 graduated, volume, package and stair-step seats and usage', () => pricingModels(h, cookie.owner))
 
   await exemptionCertificates(h, cookie.owner)

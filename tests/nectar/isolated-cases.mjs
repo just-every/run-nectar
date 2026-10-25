@@ -69,4 +69,5 @@ export const isolatedJourneys = [
   { file: 'metrics', name: 'metricsFlow', load: () => import('./metrics.mjs') },
   { file: 'metric-zones', name: 'metricZones', load: () => import('./metric-zones.mjs') },
   { file: 'usage-replay', name: 'usageReplayFlow', load: () => import('./usage-replay.mjs') },
+  { file: 'reconciliation', name: 'reconciliationFlow', load: () => import('./reconciliation.mjs') },
 ]
