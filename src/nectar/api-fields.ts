@@ -183,6 +183,7 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
   },
   "charge.add": {
     "amount": "text",
+    "assurance_case": "text",
     "currency": "text",
     "customer": "text",
     "description": "text",

@@ -9,6 +9,7 @@ import type { Input } from './input'
 import { rateQuantityPrice, storedQuantityPrice } from './price-model'
 import type { ChargeIn } from './charge-lines'
 import { assertSameCurrency, billingCurrency, customerCurrencyGuard } from './currency'
+import { assuranceCharge } from './assurance'
 
 export const chargeInput = (r: Row): ChargeIn => ({ id: r.id, description: r.description, quantity: r.quantity, unitAmount: r.unit_amount, amountCents: r.amount_cents, taxable: !!r.taxable, priceId: r.price_id, date: r.effective_date, evidence: parseJson(r.pricing_evidence_json, {}) })
 
@@ -48,8 +49,10 @@ export async function addCharge(env: Bindings, actor: Actor, input: Input) {
     unit = plainMoney(amount); taxable = input.flag('taxable'); evidence = { customAmountCents: amount, preparedBy: actorLabel(actor), approval: 'requires invoice approval before issue' }
   }
   insist(Number.isSafeInteger(amount) && amount > 0 && amount <= 100_000_000_000, 'invalid_amount')
+  const linked = await assuranceCharge(env, actor, input, customer.id, subscription, amount)
+  if (linked) { insist(!priceId, 'assurance_fix_custom_amount_only'); Object.assign(evidence, linked.evidence) }
   const id = newId()
-  await commit(env, [customerCurrencyGuard(env, customer.id, currency),stmt(env, 'INSERT INTO nc_charges (id,customer_id,subscription_id,price_id,description,quantity,unit_amount,amount_cents,currency,taxable,effective_date,pricing_evidence_json,created_by,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)', id, customer.id, subscription, priceId, description, quantity, unit, amount, currency, taxable ? 1 : 0, date, JSON.stringify(evidence), actorLabel(actor), now())],
+  await commit(env, [customerCurrencyGuard(env, customer.id, currency),...(linked?.guards ?? []),stmt(env, 'INSERT INTO nc_charges (id,customer_id,subscription_id,price_id,description,quantity,unit_amount,amount_cents,currency,taxable,effective_date,pricing_evidence_json,created_by,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)', id, customer.id, subscription, priceId, description, quantity, unit, amount, currency, taxable ? 1 : 0, date, JSON.stringify(evidence), actorLabel(actor), now())],
     { actor: actorLabel(actor), action: 'charge.add', subject: id, detail: { customer: customer.id, subscription, price: priceId, amount, currency, date } })
   return { id: customer.id, charge: id }
 }

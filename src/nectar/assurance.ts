@@ -1,11 +1,13 @@
-// Current assurance coverage: recorded source controls versus ingested usage.
-// A scan owns only case records. Financial fixes keep their existing approvals.
+// Current assurance coverage: recorded source controls versus ingested usage, and signed seat and ramp
+// steps versus issued invoices. A scan owns only case records. Financial fixes keep their existing approvals.
 import type { Bindings } from '../auth.server'
 import { actorLabel, requireCapability, requireMember, type Actor } from './actor'
 import { all, canonical, commit, guard, insist, newId, now, one, parseJson, stmt, type Row } from './core'
+import { cents } from './decimal'
 import { isMonth } from './dates'
 import type { Input } from './input'
 import { controlTotals } from './reconciliation'
+import { RAMP_KIND, rampEvidence } from './assurance-ramps'
 
 function investigator(actor: Actor) {
   requireCapability(actor, 'read')
@@ -32,6 +34,11 @@ function evidence(row: Row) {
 
 async function current(env: Bindings, actor: Actor, row: Row) {
   insist(!await one(env,'SELECT 1 FROM nc_customers WHERE id=? AND erased_at IS NOT NULL',row.customer_id),'assurance_case_not_found',404)
+  if(row.kind===RAMP_KIND) {
+    const compared=(await rampEvidence(env)).find(c=>c.source===row.source_id)
+    insist(compared,'assurance_source_unavailable',409)
+    return compared
+  }
   const control=await one(env,'SELECT day FROM nc_usage_controls WHERE id=?',row.source_id)
   insist(control,'assurance_source_unavailable',409)
   const compared=(await controlTotals(env,actor,control.day.slice(0,7))).find(c=>c.id===row.source_id)
@@ -61,11 +68,15 @@ export async function scanAssurance(env: Bindings, actor: Actor, input: Input) {
   const seq=await sequence(env), controls=await controlTotals(env,actor,period)
   const statements:D1PreparedStatement[]=[unchanged(env,seq),ownerGuard(env,owner)]
   const opened:string[]=[],rechecked:string[]=[]
+  const proofs:Row[]=[]
   for(const row of controls) {
     // An erased customer's source controls are retained financial facts only.
     if(await one(env,'SELECT 1 FROM nc_customers WHERE id=? AND erased_at IS NOT NULL',row.customer))continue
-    const existing=await one(env,'SELECT * FROM nc_assurance_cases WHERE source_id=?',row.id)
-    const proof=evidence(row)
+    proofs.push(evidence(row))
+  }
+  proofs.push(...await rampEvidence(env))
+  for(const proof of proofs) {
+    const existing=await one(env,'SELECT * FROM nc_assurance_cases WHERE source_id=?',proof.source)
     if(existing) {
       const status=!proof.mismatch && existing.approved_basis===proof.basis?'resolved':'open'
       if(existing.basis_hash!==proof.basis || existing.status!==status) {
@@ -74,14 +85,15 @@ export async function scanAssurance(env: Bindings, actor: Actor, input: Input) {
       }
       continue
     }
-    if(!row.mismatch)continue
+    if(!proof.mismatch)continue
     const id=newId(),at=now()
     opened.push(id)
-    statements.push(stmt(env,"INSERT INTO nc_assurance_cases(id,customer_id,source_id,owner_id,status,basis_hash,evidence_json,created_at,checked_at) VALUES(?,?,?,?,'open',?,?,?,?)",id,row.customer,row.id,owner,row.basis,canonical(proof),at,at),
-      stmt(env,"INSERT INTO nc_assurance_observations(id,customer_id,case_id,basis_hash,evidence_json,status,created_by,created_at) VALUES(?,?,?,?,?,'open',?,?)",newId(),row.customer,id,row.basis,canonical(proof),actorLabel(actor),at))
+    statements.push(stmt(env,"INSERT INTO nc_assurance_cases(id,customer_id,kind,source_id,owner_id,status,basis_hash,evidence_json,created_at,checked_at) VALUES(?,?,?,?,?,'open',?,?,?,?)",id,proof.customer,proof.kind,proof.source,owner,proof.basis,canonical(proof),at,at),
+      stmt(env,"INSERT INTO nc_assurance_observations(id,customer_id,case_id,basis_hash,evidence_json,status,created_by,created_at) VALUES(?,?,?,?,?,'open',?,?)",newId(),proof.customer,id,proof.basis,canonical(proof),actorLabel(actor),at))
   }
-  await commit(env,statements,{actor:actorLabel(actor),action:'assurance.scan',subject:period,detail:{coverage:'usage_source_control',compared:controls.length,opened,rechecked}})
-  return {coverage:['usage_source_control'],compared:controls.length,opened,rechecked}
+  const coverage=['usage_source_control',RAMP_KIND]
+  await commit(env,statements,{actor:actorLabel(actor),action:'assurance.scan',subject:period,detail:{coverage,compared:proofs.length,opened,rechecked}})
+  return {coverage,compared:proofs.length,opened,rechecked}
 }
 
 export async function assignAssurance(env: Bindings, actor: Actor, input: Input) {
@@ -128,17 +140,40 @@ export async function recheckAssurance(env: Bindings, actor: Actor, input: Input
 }
 
 // Bind a proposed financial fix to the current investigation and its assignee.
-// This door currently supports ordinary amendment proposals.
+// Source-control cases accept ordinary amendment proposals; an over-billed seat case accepts an
+// invoice credit against one of its own invoices. Catch-up charges bind through assuranceCharge.
 export async function assuranceProposal(env: Bindings, actor: Actor, input: Input, kind: string, payload: Row) {
   if (!input.has('assurance_case')) return null
   investigator(actor)
-  insist(kind==='amendment' && payload.setup!==true && payload.invoice_credit!==true,'assurance_fix_kind_unsupported',409)
   const row=await assuranceCase(env,actor,input.text('assurance_case',{max:100}))
   insist(row.status==='open','assurance_case_resolved',409)
   await activeOwner(env,row.owner_id)
+  if(row.kind===RAMP_KIND) {
+    insist(kind==='amendment' && payload.invoice_credit===true,'assurance_fix_kind_unsupported',409)
+    const proof=await current(env,actor,row)
+    insist(proof.direction==='over_billed' && proof.billed.some((b:Row)=>b.invoice===payload.invoice),'assurance_fix_source_mismatch',409)
+    insist(cents(String(payload.amount))<=-proof.differenceCents,'assurance_fix_exceeds_difference',409)
+    return {case:row.id,owner:row.owner_id,proposer:actor.id,kind:actor.kind}
+  }
+  insist(kind==='amendment' && payload.setup!==true && payload.invoice_credit!==true,'assurance_fix_kind_unsupported',409)
   const target=await one(env,'SELECT customer_id FROM nc_subscriptions WHERE id=?',payload.subscription)
   insist(target?.customer_id===row.customer_id,'assurance_fix_customer_mismatch',409)
   return {case:row.id,owner:row.owner_id,proposer:actor.id,kind:actor.kind}
+}
+
+// A member-prepared catch-up charge cites the open under-billed case it corrects. It bills only when a
+// person later approves the invoice that consumes it, and the case stays open until a recheck agrees.
+export async function assuranceCharge(env: Bindings, actor: Actor, input: Input, customer: string, subscription: string | null, amountCents: number) {
+  if (!input.has('assurance_case')) return null
+  const row=await assuranceCase(env,actor,input.text('assurance_case',{max:100}))
+  insist(row.status==='open' && row.kind===RAMP_KIND,'assurance_fix_kind_unsupported',409)
+  await activeOwner(env,row.owner_id)
+  const proof=await current(env,actor,row)
+  insist(proof.direction==='under_billed' && row.customer_id===customer && proof.subscription===subscription,'assurance_fix_source_mismatch',409)
+  const pending=await one(env,"SELECT COALESCE(SUM(amount_cents),0) AS cents FROM nc_charges WHERE invoice_id IS NULL AND json_extract(pricing_evidence_json,'$.assuranceCase')=?",row.source_id)
+  insist(amountCents+pending!.cents<=proof.differenceCents,'assurance_fix_exceeds_difference',409)
+  return {evidence:{assuranceCase:row.source_id,assurance:{case:row.id,owner:row.owner_id,proposer:actor.id,kind:actor.kind}},
+    guards:[guard(env,'assurance_case_changed',"EXISTS(SELECT 1 FROM nc_assurance_cases WHERE id=? AND status='open' AND owner_id=?)",row.id,row.owner_id)]}
 }
 
 export async function assuranceProposalGuards(env: Bindings, link: Row | null) {
