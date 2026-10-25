@@ -40,7 +40,8 @@ const ACTIONS = [...(await readFile(new URL('../../src/nectar/actions.ts', impor
 // can select this sequence without rerunning unrelated isolated journeys.
 if (!process.argv.includes('--core-only') && !process.argv.includes('--audit-only')) {
 for (const { file, name, load } of isolatedJourneys) {
-  await runIsolated(file, name, load)
+  const selectedLoad=name==='invoiceAutomationFlow'?async()=>({...await load(),invoiceAutomationFlow:auditAutomatedPolicyWrites}):load
+  await runIsolated(file, name, selectedLoad)
   if (name === 'customerLanguageFlow') await (await import('./customer-language.mjs')).translationFiles()
 }
 }
@@ -54,6 +55,72 @@ const invoiceOf = async (run, customer) => (await h.api(`runs/${run}`, cookie.ow
 const recurring = lines => lines.filter(line => ['flat', 'seat', 'discount'].includes(line.kind)).map(line => ({ description: line.description, amountCents: line.amount_cents, periodStart: line.period_start, periodEnd: line.period_end }))
 const stripe = async name => file(`${name}.json`, await readFile(new URL(`../fixtures/stripe/${name}.json`, import.meta.url)), 'application/json')
 const stripeFiles = async () => Object.fromEntries(await Promise.all(['manifest', 'customers', 'products', 'prices', 'subscriptions', 'invoices', 'meters'].map(async name => [name, await stripe(name)])))
+
+// Reuse the existing automation journey; the extra assertions observe each
+// scheduled public door rather than inventing a second scheduler fixture.
+async function auditAutomatedPolicyWrites(h,owner) {
+  const {invoiceAutomationFlow}=await import('./invoice-content.mjs')
+  const raw=h.raw
+  let observed=0
+  h.raw=async(path,options)=>{
+    if(!path.startsWith('/cdn-cgi/local/scheduled'))return raw(path,options)
+    const before=await h.api('audit',owner),start=Date.now()
+    const response=await raw(path,options),end=Date.now()
+    const after=await h.api('audit',owner)
+    const added=after.filter(r=>!before.some(old=>old.seq===r.seq))
+    assert.deepEqual(after.filter(r=>r.seq<=before[0]?.seq),before,'scheduled writes preserve the prior audit')
+    const reserve=added.find(r=>r.action==='invoice.automation.reserve')
+    if(added.length) {
+      assert.ok(reserve,'every new scheduled execution has its reservation')
+      const policyActor=`system:invoice-automation:${reserve.subject}`
+      const reserved=JSON.parse(reserve.detail)
+      assert.equal(reserve.actor,'system:invoices')
+      assert.equal(reserved.day,'2026-09-01');assert.equal(reserved.policyRevision,1)
+      const issued=[] ,runs=[]
+      for(const event of added) {
+        assert.ok(event.at>=start&&event.at<=end,'scheduled audit time belongs to this request')
+        const detail=JSON.parse(event.detail)
+        if(event.action==='invoice.automation.reserve')continue
+        if(event.action==='invoice.automation.complete') {
+          assert.equal(event.actor,'system:invoices');assert.equal(event.subject,reserve.subject)
+          continue
+        }
+        assert.equal(event.actor,policyActor,'exact automated policy execution is the actor')
+        if(event.action==='billrun.prepare') {
+          const run=await h.api(`runs/${event.subject}`,owner)
+          assert.equal(detail.period,run.period)
+          assert.equal(detail.invoices,run.invoices.length)
+          assert.deepEqual(detail.totals,run.summary.totals)
+          runs.push(run.id)
+        } else if(['invoice.approve','invoice.issue'].includes(event.action)) {
+          const invoice=await h.api(`invoices/${event.subject}`,owner)
+          assert.equal(detail.fingerprint,invoice.source_fingerprint)
+          if(event.action==='invoice.approve')assert.deepEqual(detail.acknowledged,[])
+          else {
+            assert.equal(detail.number,invoice.number);assert.equal(detail.total,invoice.total_cents)
+            assert.equal(detail.events,invoice.calculation.consumedEvents.length)
+            issued.push(invoice.number)
+          }
+        } else if(event.action==='billrun.finalise') {
+          const run=await h.api(`runs/${event.subject}`,owner)
+          assert.deepEqual(detail.issued.slice().sort(),run.invoices.filter(i=>i.status==='issued').map(i=>i.number).sort())
+        } else assert.fail(`Unasserted scheduled billing action: ${event.action}`)
+      }
+      const complete=added.find(r=>r.action==='invoice.automation.complete')
+      assert.ok(complete,'the scheduled execution committed its outcome')
+      const outcome=JSON.parse(complete.detail)
+      assert.deepEqual(outcome.issued.slice().sort(),issued.sort())
+      assert.deepEqual(outcome.runs.slice().sort(),runs.sort())
+      const held=(await Promise.all(runs.map(id=>h.api(`runs/${id}`,owner)))).flatMap(r=>r.invoices.filter(i=>i.status==='draft').map(i=>i.id)).sort()
+      assert.deepEqual(outcome.review.slice().sort(),held)
+      observed+=added.length
+    }
+    return response
+  }
+  try {await invoiceAutomationFlow(h,owner);assert.ok(observed>0,'automated billing audit assertions ran')}
+  finally {h.raw=raw}
+  console.log(`GOV-004 auditAutomatedPolicyWrites passed: ${observed} exact policy-attributed events`)
+}
 
 // Observe the audit through its public read door immediately around each write.
 // Expected facts come from the submitted operation and returned business record.
@@ -107,8 +174,18 @@ async function auditBillingWrites(h, owner) {
     await h.api('customer.update',owner,{...update,address:'Stale address'},409)
     assert.deepEqual(await h.api('audit',owner),beforeRefusal,'stale write appends no event')
     assert.equal((await h.api(`customers/${customer}`,owner)).address,update.address)
+    const product = await write(door,'product.create',{code:external,name:external},r=>({subject:r.id,detail:{code:external,name:external}}))
+    await write(door,'meter.create',{code:external,name:external,unit_label:'events'},r=>({subject:r.id,detail:{code:external,name:external,unit:'events'}}))
+    const price = await write(door,'price.create',{product:product.result.id,kind:'flat',unit_amount:'10',taxable:false},r=>({subject:r.id,detail:{product:product.result.id,productCode:external,kind:'flat',amount:'10.00',version:1,taxable:false}}))
+    await write(door,'feature.grant',{product:product.result.id,feature:'synthetic_feature'},()=>({subject:product.result.id,detail:{feature:'synthetic_feature'}}))
+    await write(door,'price.retire',{price:price.result.id},()=>({subject:price.result.id,detail:{product:external,version:1}}))
+    assert.equal((await h.api('catalog',owner)).prices.find(p=>p.id===price.result.id).status,'retired')
+    const credential = await write('api','credential.issue',{name:external,scopes:['usage']},r=>({subject:r.id,detail:{name:external,scopes:['usage']}}))
+    const usage = await write('api','usage.submit',{events:[{event_id:external,customer:external,meter:external,quantity:'7',occurred_at:'2026-01-05T12:00:00Z'}]},r=>({action:'usage.ingest',subject:r.batch,detail:{source:'api',filename:null,accepted:1,duplicates:0,rejected:0}}),{bearer:credential.result.key},`agent:${external}`)
+    assert.equal(usage.result.accepted,1)
+    assert.equal((await (await h.raw('/api/nectar/usage/batches',{cookie:owner})).json()).find(b=>b.id===usage.result.batch).accepted,1)
+    await write('api','credential.revoke',{key:credential.result.id},()=>({subject:credential.result.id}))
     const charge = await write('api','charge.add',{customer,amount:'125',description:'Synthetic audit service',effective_date:'2026-01-05'},r=>({subject:r.charge,detail:{customer,amount:12500,date:'2026-01-05'}}))
-    // The form redirect carries the customer, so identify the charge from its public record.
     const manual = await write('api','invoice.manual',{customer,charges:[charge.result.charge],service_date:'2026-01-05'},r=>({subject:r.id,detail:{customer,charges:[charge.result.charge]}}))
     const invoice = manual.result.id
     const draft = await h.api(`invoices/${invoice}`,owner)
@@ -176,6 +253,7 @@ try {
     await h.api('tax.review',cookie.owner,{revision:(await h.api('business',cookie.owner)).revision})
     await auditBillingWrites(h,cookie.owner)
     await h.close()
+    await runIsolatedJourney('invoice-content.mjs','auditAutomatedPolicyWrites',async()=>({auditAutomatedPolicyWrites}))
     process.exit(0)
   }
 

@@ -174,7 +174,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "7308fc5a7be9ac98eb538efbfbf6320e3ed6ef356a4623facf1561811ea4f272",
+      "sha256": "1a0f415a2e7ea2e003b633b7adf79f705a9a0fc3408a588ec147337b6afa7fc6",
       "executable": false
     },
     "AGENTS.consumer.md": {
@@ -194,7 +194,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "c78741f1961f0e4ac428c2567e08baea9cc4fdce7989f7a0da6a90ba42327498",
+      "sha256": "d1bc30f5d567e4882279e1a098a1a1a5d36feaf4618e1a301de5454e67ffe53d",
       "executable": false
     },
     "DEMO.md": {
@@ -4426,7 +4426,7 @@
       "executable": false
     },
     "tests/nectar/cli.mjs": {
-      "sha256": "e0489e69df2d8c6cfec4d3480aa62004c132e3bb2056c14c26d2b748b8e6e4a5",
+      "sha256": "f834d3ff75300e7fb71c2584cdacf611ad08f0942449e837f4b8b7e78516f518",
       "executable": false
     },
     "tests/nectar/commitments.mjs": {
@@ -4526,7 +4526,7 @@
       "executable": false
     },
     "tests/nectar/flows.mjs": {
-      "sha256": "de551c028dd047cd78501aa9c49b270175d80c79648de2f6ae73997bde785b9a",
+      "sha256": "2f02e3c8040342655bf85c842d16a32482aee02862bf109f28c63d3583722362",
       "executable": false
     },
     "tests/nectar/harness.mjs": {
@@ -4574,7 +4574,7 @@
       "executable": false
     },
     "tests/nectar/journey.mjs": {
-      "sha256": "36c357194e39a6359da140f92c2cc952baa54aaed520e80f6937e2b28222e6e0",
+      "sha256": "04347a95c9dc7569bd4f6ae0b300d4cf4b5c6a34db48ceb296c31f1ed048cebf",
       "executable": false
     },
     "tests/nectar/lifecycle-cancel.mjs": {

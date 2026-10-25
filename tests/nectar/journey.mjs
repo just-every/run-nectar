@@ -6,6 +6,7 @@
 // move-in), every main screen again at 390 pixels, and finally export and
 // restore into a second fresh clone. Every business is invented.
 import assert from 'node:assert/strict'
+import { randomUUID } from 'node:crypto'
 import { chromium } from '@playwright/test'
 import { access, chmod, copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { spawn } from 'node:child_process'
@@ -19,7 +20,10 @@ assert.equal(process.env.NECTAR_TEST_CHECKOUT, '1', 'Set NECTAR_TEST_CHECKOUT=1 
 const root = process.cwd()
 const evidence = process.env.NECTAR_EVIDENCE_DIR ?? join(root, '.evidence')
 await mkdir(evidence, { recursive: true })
-await access(join(root, '.dev.vars')).then(() => { throw new Error('The journey needs an unconfigured fresh clone') }, error => { if (error.code !== 'ENOENT') throw error })
+const configuredAudit = process.argv.includes('--configured')
+assert.ok(!configuredAudit || process.argv.includes('--audit-only'),'Configured mode is only for the audit proof in a disposable installation')
+if(configuredAudit) await access(join(root,'.dev.vars'))
+else await access(join(root, '.dev.vars')).then(() => { throw new Error('The journey needs an unconfigured fresh clone') }, error => { if (error.code !== 'ENOENT') throw error })
 const freePort = async () => { const socket = createServer(); await new Promise(resolve => socket.listen(0, '127.0.0.1', resolve)); const { port } = socket.address(); await new Promise(resolve => socket.close(resolve)); return port }
 const port = await freePort()
 let origin = `http://127.0.0.1:${port}`
@@ -228,28 +232,33 @@ async function auditCycle(page) {
     assert.equal(response.status(),200,action)
     return response.json()
   }
-  await api('business.configure',{legal_name:'Synthetic Audit Company',timezone:'UTC',invoice_prefix:'SA',payment_terms_days:30})
+  const existing=await api('business')
+  await api('business.configure',{...(existing?{revision:existing.revision}:{}),legal_name:'Synthetic Audit Company',timezone:'UTC',invoice_prefix:'SA',payment_terms_days:30})
   const policy=await api('tax.declare',{tax_jurisdiction:'CA',tax_mode:'no_tax',tax_note:'Synthetic reviewed audit journey'})
   await api('policy.decide',{request:policy.request,decision:'approved',confirm_single:true})
   await api('tax.review',{revision:(await api('business')).revision})
+  const external=`synthetic-nectar-audit-${randomUUID()}`
   await page.goto(origin+'/app/customers')
   const customerForm=form(page,'customer.create')
-  await customerForm.getByLabel('Customer ID',{exact:true}).fill('synthetic-nectar-audit')
+  await customerForm.getByLabel('Customer ID',{exact:true}).fill(external)
   await customerForm.getByLabel('Name',{exact:true}).fill('Synthetic Audit Customer')
   await customerForm.getByLabel('Billing email',{exact:true}).fill('audit@example.test')
   const before=await api('audit'),start=Date.now()
   await submit(page,customerForm,'Add customer')
-  const customer=(await api('customers')).find(c=>c.external_id==='synthetic-nectar-audit')
+  const customer=(await api('customers')).find(c=>c.external_id===external)
   const created=(await api('audit')).filter(r=>!before.some(old=>old.seq===r.seq))
   assert.equal(created.length,1)
   assert.equal(created[0].action,'customer.create');assert.equal(created[0].subject,customer.id)
   assert.equal(created[0].actor,'owner@example.test');assert.ok(created[0].at>=start&&created[0].at<=Date.now())
-  assert.equal(JSON.parse(created[0].detail).externalId,'synthetic-nectar-audit')
+  assert.equal(JSON.parse(created[0].detail).externalId,external)
   const charge=await api('charge.add',{customer:customer.id,amount:'125',description:'Synthetic audit service',effective_date:'2026-01-05'})
   const manual=await api('invoice.manual',{customer:customer.id,charges:[charge.charge],service_date:'2026-01-05'})
   await api('invoice.approve',{invoice:manual.id,acknowledge:true})
   await api('invoice.finalise',{invoice:manual.id,issue_date:'2026-01-06'})
-  await api('access.give',{email:'audit-accountant@example.test',name:'Audit Accountant',role:'accountant'})
+  const existingAccountant=(await api('members')).find(m=>m.email==='audit-accountant@example.test')
+  if(existingAccountant) {
+    assert.equal(existingAccountant.role,'accountant');assert.equal(existingAccountant.status,'active')
+  } else await api('access.give',{email:'audit-accountant@example.test',name:'Audit Accountant',role:'accountant'})
   const ownerTrail=await api('audit')
   const key=await devKey(root)
   const accountantContext=await browser.newContext()
@@ -289,7 +298,7 @@ try {
   await mkdir(join(root, 'exports'), { recursive: true })
   await writeFile(join(root, 'exports/answers.json'), JSON.stringify({ OWNER_EMAIL: 'owner@example.test' }), { mode: 0o600 })
   await chmod(join(root, 'exports/answers.json'), 0o600)
-  await command(root, ['setup', '--answers', 'exports/answers.json', '--non-interactive', '--port', String(port)])
+  if(!configuredAudit) await command(root, ['setup', '--answers', 'exports/answers.json', '--non-interactive', '--port', String(port)])
   server = await serving(root, 'dev', port)
   const open = server.open()
   assert.ok(open, 'dev prints a signed-in owner URL')

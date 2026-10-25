@@ -26,14 +26,19 @@ export async function serving(root, verb, port, extra = []) {
   let output = ''
   for (const stream of [child.stdout, child.stderr]) stream.on('data', chunk => { output += chunk })
   for (let attempt = 0; attempt < 1200; attempt++) {
-    if (child.exitCode !== null) throw new Error(`${verb} stopped before readiness (exit ${child.exitCode}):\n${redact(output)}`)
+    if (child.exitCode !== null || child.signalCode !== null) throw new Error(`${verb} stopped before readiness (exit ${child.exitCode}):\n${redact(output)}`)
     if (output.includes('RER_READY')) {
       return {
         output: () => output,
         open: () => output.match(/RER_OPEN (\S+)/)?.[1],
         async stop() {
-          if (child.exitCode === null) child.kill('SIGTERM')
-          await new Promise(resolve => child.exitCode !== null ? resolve() : child.once('exit', resolve))
+          const exited = () => child.exitCode !== null || child.signalCode !== null
+          if (exited()) return
+          const stopped = new Promise(resolve => child.once('exit', resolve))
+          child.kill('SIGTERM')
+          // Stop only this owned foreground process if graceful cleanup stalls.
+          const deadline = setTimeout(() => { if (!exited()) child.kill('SIGKILL') }, 30_000)
+          try { await stopped } finally { clearTimeout(deadline) }
         },
       }
     }
