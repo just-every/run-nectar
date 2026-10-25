@@ -50,7 +50,7 @@ export async function assuranceDetectorsFlow(h, owner) {
     for (const invoice of (await api(`runs/${run.id}`)).invoices) {
       if (skip.includes(invoice.customer_id)) { invoices[invoice.customer_id] = invoice; continue }
       await api('invoice.approve', { invoice: invoice.id, acknowledge: true })
-      await api('invoice.finalise', { invoice: invoice.id, issue_date: invoice.period_end })
+      await api('invoice.finalise', { invoice: invoice.id, issue_date: invoice.period_end <= '2026-10-25' ? invoice.period_end : invoice.period_start })
       invoices[invoice.customer_id] = await api(`invoices/${invoice.id}`)
     }
     return invoices
