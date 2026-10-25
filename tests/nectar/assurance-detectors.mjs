@@ -206,8 +206,8 @@ export async function assuranceDetectorsFlow(h, owner) {
   // Approved erasure deletes the operational investigation and never the retained invoice facts; a scan cannot recreate it.
   const requested = h.mails.length
   await api('erasure.request', { customer: credit.customer })
-  const link = h.mails.slice(requested).find(mail => [mail.to].flat().includes('ap@ramp-credit.example.test'))
-  const path = new URL(`${link.text ?? ''} ${link.html ?? ''}`.match(/https?:\/\/[^\s"<]+\/erase\/[a-f0-9]{64}/)[0]).pathname
+  const verification = h.mails.slice(requested).find(mail => [mail.to].flat().includes('ap@ramp-credit.example.test'))
+  const path = new URL(`${verification.text ?? ''} ${verification.html ?? ''}`.match(/https?:\/\/[^\s"<]+\/erase\/[a-f0-9]{64}/)[0]).pathname
   assert.equal((await h.raw(path, { form: new URLSearchParams({ confirm: 'yes' }) })).status, 200)
   const erasure = (await api('erasures')).find(row => row.customer_id === credit.customer)
   await api('erasure.approve', { request: erasure.id, confirm: true })
