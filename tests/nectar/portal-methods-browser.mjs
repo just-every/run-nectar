@@ -29,7 +29,9 @@ try {
    await page.setViewportSize({width,height:950})
    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`${label} fits ${width}`)
    assert.equal(await page.locator('a,button').evaluateAll(nodes=>nodes.filter(n=>!n.textContent.trim()).length),0)
-   await page.screenshot({path:`${directory}/${width}-${label}.png`,fullPage:true})
+   const changed=page.locator('#saved-payment-methods')
+   if(await changed.count())await changed.screenshot({path:`${directory}/${width}-${label}.png`})
+   else await page.screenshot({path:`${directory}/${width}-${label}.png`,fullPage:true})
   }
  }
  await customerSearchFlow(h,owner,async()=>{},{

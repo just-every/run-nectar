@@ -5002,7 +5002,7 @@
       "executable": false
     },
     "tests/nectar/portal-methods-browser.mjs": {
-      "sha256": "3792fcc66b08641e095454f011ef068faa24a17c9d4e20a62e15ccd07733a552",
+      "sha256": "a2932e7ed85ebbf3f5896cd0274755b9e48adb4f1424462bf08f9822de90a230",
       "executable": false
     },
     "tests/nectar/portal-prepaid-browser.mjs": {
