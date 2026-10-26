@@ -121,7 +121,7 @@ export async function consumeCardLifecycleEvent(env: Bindings, actor: Actor, inp
       id,binding.customer_id,binding.id,accountRef,customerRef,methodRef,card.brand,card.last4,card.expMonth,card.expYear,eventRef,created,at,newId())],
     {actor:actorLabel(actor),action:'card.lifecycle.updated',subject:binding.customer_id,detail:{accountRef,customerRef,methodRef,eventRef,eventType:event.type,providerCreatedAt:created,observationOnly:true}})
   }catch(error){
-    if(error instanceof NectarError && ['already_exists','card_lifecycle_state_changed'].includes(error.code)){const winner=await replay();if(winner)return winner}
+    if(error instanceof NectarError && ['already_exists','card_lifecycle_state_changed','precondition_failed'].includes(error.code)){const winner=await replay();if(winner)return winner}
     throw error
   }
   const result=await replay()
