@@ -3110,7 +3110,7 @@
       "executable": false
     },
     "src/nectar/customer-search.ts": {
-      "sha256": "76dea5e94ae6140c15b25d8d9b3e883934b37f449fb36da66b5ee6a99e0dceef",
+      "sha256": "5cf1b2a755666eeed27990c795ded418f9199bb8cfca5a4a2c404f4c4efc5652",
       "executable": false
     },
     "src/nectar/customer-upcoming.ts": {
