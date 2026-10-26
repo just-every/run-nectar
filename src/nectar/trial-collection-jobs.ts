@@ -1,3 +1,5 @@
+import { unusableMethodGuard } from './card-lifecycle'
+import { refusedPaymentWithLifecycle } from './payments/refusal'
 // Trial-only scheduled capture. A persisted human authority and an invoice-
 // unique native claim precede the sole POST. Unknown results never retry.
 import type { Bindings } from '../auth.server'
@@ -9,7 +11,7 @@ import { all, canonical, commit, fingerprint, guard, insist, newId, one, stmt, t
 import { today } from './dates'
 import { nativeCollectionSource, nativeSourceGuard } from './payments/source'
 import { bindingGuard, paymentIdentity, type NativeCollectionBasis } from './payments/state'
-import { capturedPayment, NativeStripeError, readIntent, refusedPayment, verifyIntent } from './payments/stripe'
+import { capturedPayment, NativeStripeError, readIntent, verifyIntent } from './payments/stripe'
 import { collectedPaymentStatements } from './receivables'
 import { trialSystem } from './trial-collection-invoice'
 import { currentTrialCollection, storedTrialCollection, trialCollectionGuard } from './trial-collection-records'
@@ -44,7 +46,7 @@ async function collectTrial(env: Bindings, authorization: string) {
   let native: Row = { id: request, invoice_id: row.invoice_id, customer_id: q.customer, amount_cents: q.amountCents,
     status: 'claimed', revision: newId(), basis_json: canonical(basis) }
   const revision = newId()
-  await commit(env, [trialCollectionGuard(env, row), nativeSourceGuard(env, source), bindingGuard(env, basis),
+  await commit(env, [trialCollectionGuard(env, row), nativeSourceGuard(env, source), bindingGuard(env, basis),unusableMethodGuard(env,q.accountRef,q.customerRef,q.paymentMethodRef),
     guard(env, 'native_collection_already_claimed', 'NOT EXISTS(SELECT 1 FROM nc_native_collection_claims WHERE invoice_id=?)', row.invoice_id),
     stmt(env, `INSERT INTO nc_native_collections(id,invoice_id,customer_id,account_ref,stripe_customer_ref,payment_method_ref,status,basis_json,basis_hash,amount_cents,currency,prepared_by,prepared_at,revision)
       VALUES(?,?,?,?,?,?,'pending',?,?,?,'usd',?,?,?)`, request, row.invoice_id, q.customer, q.accountRef, q.customerRef, q.paymentMethodRef, canonical(basis), await fingerprint(basis), q.amountCents, q.owner, at, native.revision),
@@ -71,7 +73,7 @@ async function collectTrial(env: Bindings, authorization: string) {
     }
     verifyIntent(intent, identity)
     if (intent.status !== 'succeeded') intent = await readIntent(selected.stripe, identity, verifyIntent(intent, identity), at, clockInstant(env))
-    const refusal = await refusedPayment(selected.stripe, intent, identity)
+    const refusal = await refusedPaymentWithLifecycle(env,selected.stripe, intent, identity)
     if (refusal) {
       await holdOutcome(env, row, native, { status: refusal.status, payment_intent_ref: refusal.paymentIntentRef, proof_json: canonical(refusal), error_code: refusal.errorCode }, refusal.status, refusal.errorCode)
       return
@@ -85,7 +87,7 @@ async function collectTrial(env: Bindings, authorization: string) {
       amountCents: q.amountCents, receivedOn: proof.receivedOn, reference: `stripe:${q.accountRef}:${proof.paymentIntentRef}`,
       evidence: canonical({ accountRef: q.accountRef, paymentIntentRef: proof.paymentIntentRef, chargeRef: proof.chargeRef,
         amountCents: q.amountCents, currency: 'usd', capturedAt: proof.capturedAt, proof: proof.proof }) })
-    await commit(env, [trialCollectionGuard(env, row), nativeSourceGuard(env, source), bindingGuard(env, basis),
+    await commit(env, [trialCollectionGuard(env, row), nativeSourceGuard(env, source), bindingGuard(env, basis),unusableMethodGuard(env,q.accountRef,q.customerRef,q.paymentMethodRef),
       guard(env, 'native_collection_state_changed', "EXISTS(SELECT 1 FROM nc_native_collections WHERE id=? AND revision=? AND status='uncertain')", request, native.revision),
       ...financial.statements,
       stmt(env, "UPDATE nc_native_collections SET status='collected',payment_id=?,allocation_id=?,error_code=NULL,reconciled_at=?,revision=? WHERE id=?", financial.paymentId, financial.allocationId, clockInstant(env), newId(), request),

@@ -1,3 +1,5 @@
+import { unusableMethodGuard } from '../card-lifecycle'
+import { refusedPaymentWithLifecycle } from './refusal'
 // Explicit manual collection only. A durable invoice claim precedes the one
 // off-session confirmation; all recovery reads Stripe without another POST.
 import type { Bindings } from '../../auth.server'
@@ -13,7 +15,7 @@ import { prepaidFundingStatements } from '../prepaid-funding'
 import { billingCurrency } from '../currency'
 import { nativeCollectionSource, nativeSourceGuard } from './source'
 import { bindingGuard, currentNativeCollection, nativeCollectionRows, nativeCollectionView, paymentIdentity, storedNativeCollection, type NativeCollectionBasis } from './state'
-import { NativeStripeError, refusedPayment, capturedPayment, providerUnavailable, readIntent, savedCard, stripeForAccount, verifyIntent } from './stripe'
+import { NativeStripeError, capturedPayment, providerUnavailable, readIntent, savedCard, stripeForAccount, verifyIntent } from './stripe'
 
 export { bindNativeCollectionCustomer } from './customer'
 
@@ -36,7 +38,7 @@ export async function prepareNativeCollection(env: Bindings, actor: Actor, input
     amountCents: source.collectibleCents, currency: billingCurrency(source.row.currency).toLowerCase(), livemode: card.livemode, card: card.card,
     key: await fingerprint(['nectar-native-collection-1', selected.account, source.row.id]) }
   const id = newId(), hash = await fingerprint(basis), at = clockInstant(env)
-  await commit(env, [collectionAuthority(env, actor), nativeSourceGuard(env, source), bindingGuard(env, basis),
+  await commit(env, [collectionAuthority(env, actor), nativeSourceGuard(env, source), bindingGuard(env, basis),unusableMethodGuard(env,basis.accountRef,basis.customerRef,basis.paymentMethodRef),
     guard(env,'prepaid_topup_invoice_managed','NOT EXISTS(SELECT 1 FROM nc_prepaid_topup_claims WHERE invoice_id=?)',source.row.id),
     guard(env, 'native_collection_already_claimed', 'NOT EXISTS(SELECT 1 FROM nc_native_collection_claims WHERE invoice_id=?)', source.row.id),
     stmt(env, `INSERT INTO nc_native_collections(id,invoice_id,customer_id,account_ref,stripe_customer_ref,payment_method_ref,status,basis_json,basis_hash,amount_cents,currency,prepared_by,prepared_at,revision)
@@ -82,7 +84,7 @@ async function recordCaptured(env: Bindings, actor: Actor, row: Row, proof: Capt
 async function recordIntentOutcome(env: Bindings, actor: Actor, row: Row, stripe: Awaited<ReturnType<typeof stripeForAccount>>['stripe'], intent: Row, identity: ReturnType<typeof paymentIdentity>) {
   const intentRef = verifyIntent(intent, identity)
   const current = await changeOutcome(env, actor, row, { payment_intent_ref: intentRef }, 'intent.record')
-  const refusal = await refusedPayment(stripe, intent, identity)
+  const refusal = await refusedPaymentWithLifecycle(env,stripe, intent, identity)
   if (refusal) return nativeCollectionView(await changeOutcome(env, actor, current, { status: refusal.status, error_code: refusal.errorCode, proof_json: canonical(refusal) }, 'refused'))
   return recordCaptured(env, actor, current, await capturedPayment(stripe, intent, identity, (await requireBusiness(env)).timezone))
 }
@@ -102,7 +104,7 @@ export async function confirmNativeCollection(env: Bindings, actor: Actor, input
   const selected = await stripeForAccount(env, basis.accountRef).catch(providerUnavailable)
   insist(canonical(await savedCard(selected.stripe, basis.customerRef).catch(providerUnavailable)) === canonical({ customerRef: basis.customerRef, paymentMethodRef: basis.paymentMethodRef, livemode: basis.livemode, card: basis.card }), 'native_collection_card_changed', 409)
   const revision = newId(), at = clockInstant(env)
-  await commit(env, [collectionAuthority(env, actor), nativeSourceGuard(env, source), bindingGuard(env, basis),
+  await commit(env, [collectionAuthority(env, actor), nativeSourceGuard(env, source), bindingGuard(env, basis),unusableMethodGuard(env,basis.accountRef,basis.customerRef,basis.paymentMethodRef),
     guard(env,'prepaid_topup_invoice_managed','NOT EXISTS(SELECT 1 FROM nc_prepaid_topup_claims WHERE invoice_id=?)',source.row.id),
     guard(env, 'native_collection_already_claimed', "EXISTS(SELECT 1 FROM nc_native_collections WHERE id=? AND status='pending' AND revision=? AND basis_hash=?) AND NOT EXISTS(SELECT 1 FROM nc_native_collection_claims WHERE invoice_id=?)", row.id, row.revision, row.basis_hash, row.invoice_id),
     stmt(env, 'INSERT INTO nc_native_collection_claims(invoice_id,request_id,customer_id,account_ref,intent_key,claimed_by,claimed_at) VALUES(?,?,?,?,?,?,?)', row.invoice_id, row.id, row.customer_id, basis.accountRef, basis.key, actor.id, at),

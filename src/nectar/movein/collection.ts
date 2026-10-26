@@ -1,3 +1,4 @@
+import { assertMethodUsable, unusableMethodGuard } from '../card-lifecycle'
 // Owner-approved, single-attempt collection of an original Stripe invoice.
 // The claim commits before provider writes. Claimed/uncertain work never pays
 // again: a separate owner action can only read actual settlement evidence.
@@ -20,7 +21,7 @@ export async function prepareImportedCollection(env: Bindings, actor: Actor, inp
   const stripe = collectionStripe(env)
   const snapshot = await stripeCollectionSnapshot(stripe, source.row.provider_ref).catch(collectionProviderRefusal)
   const basis = await collectionBasis(source, snapshot, actor), hash = await fingerprint(basis), id = newId(), at = clockInstant(env)
-  await commit(env, [collectionAuthority(env, actor), collectionSourceGuard(env, source),
+  await commit(env, [collectionAuthority(env, actor), collectionSourceGuard(env, source),unusableMethodGuard(env,basis.snapshot.account,basis.snapshot.invoice.customer,basis.snapshot.paymentMethod),
     stmt(env, `INSERT INTO nc_imported_collections(id,customer_id,invoice_id,account_ref,invoice_ref,number,status,basis_json,basis_hash,
       amount_cents,currency,prepared_by,prepared_at,revision) VALUES(?,?,?,?,?,?,'pending',?,?,?,?,?,?,?)`, id, source.row.customer_id,
     source.row.id, snapshot.account, source.row.provider_ref, source.row.number, canonical(basis), hash, source.row.remaining_cents,
@@ -89,7 +90,7 @@ export async function executeImportedCollection(env: Bindings, actor: Actor, inp
   const current = await stripeCollectionSnapshot(stripe, request.invoice_ref).catch(collectionProviderRefusal)
   insist(await fingerprint(await collectionBasis(source, current, actor)) === request.basis_hash, 'stripe_invoice_source_changed', 409)
   const claimed = clockInstant(env), revision = newId()
-  await commit(env, [collectionAuthority(env, actor), collectionSourceGuard(env, source),
+  await commit(env, [collectionAuthority(env, actor), collectionSourceGuard(env, source),unusableMethodGuard(env,basis.snapshot.account,basis.snapshot.invoice.customer,basis.snapshot.paymentMethod),
     guard(env, 'collection_already_executed', "EXISTS(SELECT 1 FROM nc_imported_collections WHERE id=? AND status='pending' AND revision=? AND basis_hash=?)", request.id, request.revision, request.basis_hash),
     stmt(env, "UPDATE nc_imported_collections SET status='claimed',approved_by=?,approved_at=?,claimed_at=?,revision=? WHERE id=?", actor.id, claimed, claimed, revision, request.id),
   ], { actor: actorLabel(actor), action: 'imported.collection.claim', subject: request.id,
@@ -111,6 +112,7 @@ export async function executeImportedCollection(env: Bindings, actor: Actor, inp
     insist(beforePayment.account === basis.snapshot.account && beforePayment.paymentMethod === basis.snapshot.paymentMethod
       && beforePayment.invoice.auto_advance === false, 'stripe_invoice_source_changed', 409)
     liveRequest = await collectionChange(env, actor, liveRequest, { error_code: 'stripe_payment_attempt_claimed' }, 'payment.attempt')
+    await assertMethodUsable(env,basis.snapshot.account,basis.snapshot.invoice.customer,basis.snapshot.paymentMethod)
     paymentAttempted = true
     const intent = await stripe('/payment_intents', new URLSearchParams({ amount: String(request.amount_cents), currency: request.currency,
       customer: basis.snapshot.invoice.customer, payment_method: basis.snapshot.paymentMethod, confirm: 'true', off_session: 'true', error_on_requires_action: 'true',

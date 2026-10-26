@@ -1,5 +1,6 @@
 // Explicit modules keep each isolated journey visible to Verify tooling.
 export const isolatedJourneys = [
+  { file: 'card-lifecycle', name: 'lifecycleFlow', load: () => import('./card-lifecycle.mjs') },
   { file: 'enterprise-identity', name: 'enterpriseIdentityFlow', load: () => import('./enterprise-identity.mjs') },
   { file: 'payment-links', name: 'paymentLinksFlow', load: () => import('./payment-links.mjs') },
   { file: 'automatic-collection', name: 'automaticCollectionFlow', load: () => import('./automatic-collection.mjs') },

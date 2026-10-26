@@ -1,3 +1,4 @@
+import { customerPortalMethodActions, operatePortalMethodAction } from './portal-method-actions'
 import { resolveSetupReturn, clearSetupReturnCookie } from './hosted-setup-return'
 import { operateHostedSetup } from './hosted-setup'
 import { hostedSetupPage } from './hosted-setup-page'
@@ -31,7 +32,7 @@ export async function portalResponse(request: Request, env: Bindings): Promise<R
   let language: string | null = null
   // Public stylesheet for refusal pages has no customer or merchant data.
   if (url.pathname === '/portal/theme.css' && !url.search) return ['GET','HEAD'].includes(request.method) ? portalStyle() : new Response(null, { status: 405, headers: { ...headers, allow: 'GET, HEAD' } })
-  if (!['GET','HEAD'].includes(request.method) && !(['/portal/payment-methods/start','/portal/payment-methods/finish','/portal/payment-methods/reconcile','/portal/prepaid-refund.request','/portal/privacy','/portal/answer-proposal','/portal/prepaid-topup.accept','/portal/prepaid-topup.revoke'].includes(url.pathname) && request.method === 'POST')) {
+  if (!['GET','HEAD'].includes(request.method) && !(['/portal/payment-methods/action','/portal/payment-methods/action/reconcile','/portal/payment-methods/start','/portal/payment-methods/finish','/portal/payment-methods/reconcile','/portal/prepaid-refund.request','/portal/privacy','/portal/answer-proposal','/portal/prepaid-topup.accept','/portal/prepaid-topup.revoke'].includes(url.pathname) && request.method === 'POST')) {
     if (request.body) await request.arrayBuffer()
     return new Response(null, { status: 405, headers: { ...headers, allow: 'GET, HEAD' } })
   }
@@ -41,6 +42,13 @@ export async function portalResponse(request: Request, env: Bindings): Promise<R
     const session = url.searchParams.has('session')?await customerSession(env, request):returned?.session??await customerSession(env,request)
     language = session.language
     if(url.pathname.startsWith('/portal/payment-methods')&&session.audience!=='hosted')throw new NectarError('forbidden',403)
+    if (['/portal/payment-methods/action','/portal/payment-methods/action/reconcile'].includes(url.pathname) && request.method==='POST') {
+      if(request.headers.get('origin')!==session.origin)throw new NectarError('forbidden',403)
+      const result=await operatePortalMethodAction(env,session,await Input.from(request),url.pathname.endsWith('/reconcile')?'reconcile':'confirm')
+      if(request.headers.get('content-type')?.startsWith('application/json'))return Response.json(result,{headers})
+      return new Response(null,{status:303,headers:{...headers,location:`/portal/payment-methods?session=${encodeURIComponent(url.searchParams.get('session')!)}`}})
+    }
+    if(url.pathname==='/portal/payment-methods/actions')return Response.json(await customerPortalMethodActions(env,session),{headers})
     if (['/portal/payment-methods/start','/portal/payment-methods/finish','/portal/payment-methods/reconcile'].includes(url.pathname) && request.method==='POST') {
       if(request.headers.get('origin')!==session.origin)throw new NectarError('forbidden',403)
       const operation=url.pathname.endsWith('/start')?'start':url.pathname.endsWith('/reconcile')?'reconcile':'finish'
@@ -130,7 +138,7 @@ export async function portalResponse(request: Request, env: Bindings): Promise<R
     return new Response(request.method === 'HEAD' ? null : response.body, { headers: resultHeaders })
   } catch (error) {
     if (!(error instanceof NectarError)) throw error
-    if(['/portal/payment-methods/start','/portal/payment-methods/finish','/portal/payment-methods/reconcile','/portal/prepaid-refund.request','/portal/answer-proposal','/portal/prepaid-topup.accept','/portal/prepaid-topup.revoke'].includes(url.pathname) && request.headers.get('content-type')?.startsWith('application/json')) return Response.json({error:error.code},{status:error.status,headers})
+    if(['/portal/payment-methods/action','/portal/payment-methods/action/reconcile','/portal/payment-methods/start','/portal/payment-methods/finish','/portal/payment-methods/reconcile','/portal/prepaid-refund.request','/portal/answer-proposal','/portal/prepaid-topup.accept','/portal/prepaid-topup.revoke'].includes(url.pathname) && request.headers.get('content-type')?.startsWith('application/json')) return Response.json({error:error.code},{status:error.status,headers})
     const known = language !== null && ![401,403].includes(error.status)
     const L = customerText(known ? language : null)
     const title = L.t(known ? 'portal.request.unavailable' : 'portal.unavailable')

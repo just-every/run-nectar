@@ -1,3 +1,5 @@
+import { unusableMethodGuard } from './card-lifecycle'
+import { refusedPaymentWithLifecycle } from './payments/refusal'
 // Invoice issuance claims once. All subsequent recovery is provider reads only.
 import type { Bindings } from '../auth.server'
 import { actorLabel, type Actor } from './actor'
@@ -11,7 +13,7 @@ import { collectedPaymentStatements, issuedInvoice } from './receivables'
 import { automaticAuthority, automaticQuote, automaticView, storedAutomaticCollection, validateAutomaticBasis } from './automatic-collection-records'
 import { savedCollectionMethod } from './payments/default-method'
 import { nativeCollectionSource, nativeSourceGuard } from './payments/source'
-import { capturedPayment, NativeStripeError, providerReference, readIntent, refusedPayment, stripeForAccount, verifyIntent, type PaymentIdentity, type StripeClient } from './payments/stripe'
+import { capturedPayment, NativeStripeError, providerReference, readIntent, stripeForAccount, verifyIntent, type PaymentIdentity, type StripeClient } from './payments/stripe'
 
 const system = (id:string):Actor => ({id:`automatic-collection:${id}`,kind:'agent',name:`automatic-collection:${id}`,email:'',role:null,sessionId:null,capabilities:new Set(['receivables'])})
 async function outcome(env:Bindings,row:Row,status:string,values:Row={}){
@@ -33,7 +35,7 @@ async function settle(env:Bindings,row:Row,stripe:StripeClient,intent:Row,identi
    charge.object==='charge'&&providerReference(charge.payment_intent)===intentRef&&providerReference(charge.customer)===identity.customerRef&&charge.status==='failed'&&charge.paid===false),'automatic_collection_return_unconfirmed',409)
   return automaticView(await outcome(env,row,'returned',{error_code:code}))
  }
- const refusal=await refusedPayment(stripe,intent,identity)
+ const refusal=await refusedPaymentWithLifecycle(env,stripe,intent,identity)
  if(refusal)return automaticView(await outcome(env,row,'refused',{error_code:refusal.errorCode}))
  if(intent.status!=='succeeded')return automaticView(await outcome(env,row,'uncertain',{error_code:'processor_outcome_unconfirmed'}))
  const q=automaticQuote(row),business=await requireBusiness(env),proof=await capturedPayment(stripe,intent,identity,business.timezone)
@@ -85,7 +87,7 @@ export async function collectAutomaticInvoice(env:Bindings,invoice:string){
    &&source.row.source_fingerprint===q.fingerprint&&source.row.calculation_json===q.calculation,'automatic_collection_terms_changed',409)
   insist(canonical(await savedCollectionMethod(stripe,q.method.customerRef,q.method.mandateRef??undefined))===canonical(q.method),'automatic_collection_method_changed',409)
   const identity=await identityFor(row)
-  await commit(env,[automaticAuthority(env,row),nativeSourceGuard(env,source),
+  await commit(env,[automaticAuthority(env,row),nativeSourceGuard(env,source),unusableMethodGuard(env,q.accountRef,q.method.customerRef,q.method.paymentMethodRef),
    guard(env,'native_collection_already_claimed','NOT EXISTS(SELECT 1 FROM nc_native_collection_claims WHERE invoice_id=?)',invoice),
    stmt(env,"UPDATE nc_automatic_collections SET status='claimed',claimed_at=?,revision=? WHERE id=?",at,newId(),row.id)],
   {actor:actorLabel(system(row.id)),action:'automatic.collection.claim',subject:row.id,detail:{invoice,basis:row.basis_hash,amountCents:q.amountCents,attempts:1}})

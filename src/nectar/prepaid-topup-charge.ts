@@ -1,3 +1,5 @@
+import { unusableMethodGuard } from './card-lifecycle'
+import { refusedPaymentWithLifecycle } from './payments/refusal'
 // One merchant-initiated off-session POST per claimed crossing. Recovery reads
 // exact Stripe evidence only, even after authorization/card revocation.
 import type { Bindings } from '../auth.server'
@@ -9,7 +11,7 @@ import { prepaidFundingStatements } from './prepaid-funding'
 import { prepaidRevisionGuard } from './prepaid-records'
 import { collectedPaymentStatements } from './receivables'
 import { nativeCollectionSource, nativeSourceGuard } from './payments/source'
-import { NativeStripeError, capturedPayment, readIntent, refusedPayment, stripeForAccount, verifyIntent, type PaymentIdentity, type StripeClient } from './payments/stripe'
+import { NativeStripeError, capturedPayment, readIntent, stripeForAccount, verifyIntent, type PaymentIdentity, type StripeClient } from './payments/stripe'
 import { currentTopupAuthorization, storedTopupAuthorization, topupAuthorizationGuard, topupBalance, topupQuote, topupRuntimeOwner } from './prepaid-topup-records'
 const terminal=(row:Row)=>['collected','declined','customer_action_required','stopped'].includes(row.status)
 const claimGuard=(env:Bindings,row:Row)=>guard(env,'topup_claim_changed',"EXISTS(SELECT 1 FROM nc_prepaid_topup_claims WHERE id=? AND revision=? AND status IN ('claimed','uncertain'))",row.id,row.revision)
@@ -23,7 +25,7 @@ async function outcome(env:Bindings,actor:Actor,row:Row,values:Row){
 async function recordIntent(env:Bindings,actor:Actor,row:Row,stripe:StripeClient,intent:Row){
   const auth=await storedTopupAuthorization(env,row.authorization_id),q=topupQuote(auth),who=identity(row,q),intentRef=verifyIntent(intent,who)
   row=await outcome(env,actor,row,{payment_intent_ref:intentRef,status:'uncertain'})
-  const refused=await refusedPayment(stripe,intent,who)
+  const refused=await refusedPaymentWithLifecycle(env,stripe,intent,who)
   if(refused)return outcome(env,actor,row,{status:refused.status,error_code:refused.errorCode,proof_json:canonical(refused)})
   const proof=await capturedPayment(stripe,intent,who,q.timezone)
   row=await outcome(env,actor,row,{status:'uncertain',charge_ref:proof.chargeRef,proof_json:canonical(proof),error_code:'topup_payment_record_pending'})
@@ -48,7 +50,7 @@ export async function chargePrepaidTopup(env:Bindings,actor:Actor,id:string){
   const purchase=await one(env,"SELECT 1 FROM nc_prepaid_funding_intents f JOIN nc_invoice_lines l ON l.invoice_id=f.invoice_id WHERE f.id=? AND f.invoice_id=? AND f.status='pending' AND f.amount_cents=? AND l.kind='prepaid_purchase' AND l.amount_cents=f.amount_cents AND json_extract(l.evidence_json,'$.prepaidPurchase')=f.id AND NOT EXISTS(SELECT 1 FROM nc_credit_notes WHERE invoice_id=f.invoice_id)",row.funding_id,row.invoice_id,q.amountCents)
   insist(purchase&&balance<=q.thresholdN,'topup_balance_or_purchase_changed',409)
   const revision=newId()
-  await commit(env,[topupRuntimeOwner(env,actor),topupAuthorizationGuard(env,auth),prepaidRevisionGuard(env,q.subscription,basis.revision),nativeSourceGuard(env,source),
+  await commit(env,[topupRuntimeOwner(env,actor),topupAuthorizationGuard(env,auth),prepaidRevisionGuard(env,q.subscription,basis.revision),nativeSourceGuard(env,source),unusableMethodGuard(env,q.accountRef,q.customerRef,q.paymentMethodRef),
     guard(env,'topup_claim_changed',"EXISTS(SELECT 1 FROM nc_prepaid_topup_claims WHERE id=? AND status='issued' AND revision=?) AND NOT EXISTS(SELECT 1 FROM nc_native_collection_claims WHERE invoice_id=?)",row.id,row.revision,row.invoice_id),
     stmt(env,"UPDATE nc_prepaid_topup_claims SET status='claimed',revision=? WHERE id=?",revision,row.id)],{actor:actorLabel(actor),action:'prepaid.topup.charge.claim',subject:row.id,detail:{authorization:auth.id,basis:auth.basis_hash,amountCents:q.amountCents,merchantInitiated:true}})
   row={...row,status:'claimed',revision}

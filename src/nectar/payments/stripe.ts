@@ -45,7 +45,15 @@ export async function stripeForAccount(env: StripeBindings, expectedAccount: str
   }))
   const matches = accounts.filter(account => expectedAccount === null || account.account === expectedAccount)
   insist(matches.length === 1, 'stripe_frozen_account_mismatch', 409)
-  return matches[0]
+  const selected=matches[0]
+  const stripe:StripeClient=async(path,body,key)=>{
+    if(path==='/payment_intents' && body) {
+      const {assertMethodUsable}=await import('../card-lifecycle')
+      await assertMethodUsable(env,selected.account,providerReference(body.get('customer')),providerReference(body.get('payment_method')))
+    }
+    return selected.stripe(path,body,key)
+  }
+  return {...selected,stripe}
 }
 export async function savedCard(stripe: StripeClient, customerRef: string) {
   const customer = await stripe(`/customers/${encodeURIComponent(customerRef)}`)
@@ -116,7 +124,7 @@ export async function refusedPayment(stripe: StripeClient, intent: Row, identity
   insist(history.data.every((charge: Row) => charge.object === 'charge' && ref(charge.payment_intent) === paymentIntentRef && ref(charge.customer) === identity.customerRef
     && charge.status !== 'succeeded' && charge.paid !== true && charge.captured !== true), 'stripe_native_refusal_unconfirmed', 409)
   const status = code === 'authentication_required' || decline === 'authentication_required' ? 'customer_action_required' : 'declined'
-  return { status, errorCode: status === 'customer_action_required' ? 'authentication_required' : code, paymentIntentRef,
+  return { status, declineCode: typeof decline==='string' && /^[a-z_]{1,100}$/.test(decline)?decline:null, errorCode: status === 'customer_action_required' ? 'authentication_required' : code, paymentIntentRef,
     proof: 'requires-payment-method-with-error-and-no-succeeded-charge', providerStatus: intent.status }
 }
 

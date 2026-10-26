@@ -393,5 +393,13 @@
   "automatic.returned": "Pago ACH devuelto; la factura sigue pendiente",
   "paymentLink.receipt": "Recibo",
   "paymentLink.oneTime.recording": "Tu pago fue cobrado; la factura se está preparando. No vuelvas a pagar.",
-  "automatic.historical": "Condiciones históricas; no se autoriza ningún cobro nuevo"
+  "automatic.historical": "Condiciones históricas; no se autoriza ningún cobro nuevo",
+  "methods.default": "Elegir predeterminado",
+  "methods.remove": "Eliminar método",
+  "methods.confirm.default": "Usar este método como predeterminado. Esto no autoriza un cargo.",
+  "methods.confirm.remove": "Eliminar este método guardado del procesador.",
+  "methods.status.prepared": "Confirma tu elección a continuación.",
+  "methods.status.uncertain": "El resultado del procesador no está confirmado. Consulta la solicitud original sin repetirla.",
+  "methods.status.complete": "Tu elección de método de pago está completa.",
+  "methods.status.superseded": "Una elección preparada más reciente reemplazó esta solicitud."
 }

@@ -179,6 +179,11 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "outcome": "text"
   },
   "cadence.run": {},
+  "card.lifecycle.consume": {
+    "binding": "text",
+    "confirm": "flag",
+    "event_ref": "text"
+  },
   "certificate.collect": {
     "customer": "text",
     "expires_on": "text",
@@ -685,6 +690,13 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "brand_name": "text",
     "hosts": "list",
     "parents": "list"
+  },
+  "portal.method.prepare": {
+    "binding": "text",
+    "confirm": "flag",
+    "customer": "text",
+    "operation": "text",
+    "setup": "text"
   },
   "portal.session.issue": {
     "audience": "text",

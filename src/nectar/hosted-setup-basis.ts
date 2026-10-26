@@ -25,6 +25,7 @@ export function setupSessionFence(env: Bindings, session: CustomerSession, row: 
     WHERE s.id=? AND s.status=? AND s.customer_id=? AND c.revision=s.customer_revision AND b.account_ref=s.account_ref AND b.stripe_customer_ref=s.customer_ref
     AND s.livemode=0 AND c.erased_at IS NULL AND c.status='active' AND p.id=? AND p.revoked_at IS NULL AND p.expires_at>?
     AND NOT EXISTS(SELECT 1 FROM nc_erased_records WHERE record_id IN (s.id,c.id,b.id))
+    AND NOT EXISTS(SELECT 1 FROM nc_portal_method_action_history WHERE account_ref=s.account_ref AND customer_ref=s.customer_ref AND status='uncertain')
     AND s.factor_verified_at BETWEEN ? AND ?
     AND EXISTS(SELECT 1 FROM oa_sessions os JOIN oa_operators oo ON oo.id=os.operator_id JOIN nc_members om ON om.email=lower(oo.email)
       JOIN nc_mfa_sessions factor ON factor.session_id=os.id AND factor.member_id=om.id

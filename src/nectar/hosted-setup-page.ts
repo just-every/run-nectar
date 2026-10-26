@@ -1,3 +1,4 @@
+import { portalMethodActionsPage } from './portal-method-actions-page'
 import type { Bindings } from '../auth.server'
 import { customerHostedSetups } from './hosted-setup'
 import { customerText } from './locale'
@@ -9,6 +10,7 @@ export async function hostedSetupPage(env: Bindings, session: CustomerSession, l
   const L=customerText(session.language,session.currency),rows=(await customerHostedSetups(env,session.customer)).filter(row=>!setup||row.id===setup)
   const consent=await setupConsent(env,session,rows.find(row=>row.status==='prepared')?.method??'card')
   return h`<header><h1>${L.t('checkout.heading')}</h1><p>${L.t('checkout.explain')}</p>${setup?'':h`<a href="${link('/portal')}">${L.t('portal.back')}</a>`}<p>${consent.wording.merchant}</p></header>
+    ${setup?'':await portalMethodActionsPage(env,session,link)}
     ${rows.length?await Promise.all(rows.map(async row=>{const method=row.paymentMethod,terms=await setupConsent(env,session,row.method);return h`<section class="card"><h2>${L.t(row.method==='card'?'checkout.card':'checkout.ach')}</h2>
     <p>${L.t(`checkout.status.${row.status}`)}</p>
     ${row.historical?h`<p>${L.t('checkout.historical')}</p>`:''}${row.status==='complete'?h`<p>${method?.brand??method?.bankName} · ${L.t('checkout.ending',{last4:method?.last4})}</p>${method?.mandateRef?h`<p>${L.t('checkout.mandate')}</p><p>${L.t('checkout.mandate.unavailable')}</p>`:''}<p>${L.t(row.defaultChoice?'checkout.choice.selected':'checkout.choice.unchanged')}</p>`:''}

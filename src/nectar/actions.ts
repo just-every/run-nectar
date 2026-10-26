@@ -1,3 +1,5 @@
+import { consumeCardLifecycleEvent } from './card-lifecycle'
+import { preparePortalMethodAction } from './portal-method-actions'
 import { configureSso } from './sso-config'
 import { approvePaymentLink } from './payment-links-approval'
 import { createPaymentLink,deactivatePaymentLink,activatePaymentLink } from './payment-links'
@@ -135,6 +137,8 @@ export const actions: Record<string, Handler> = {
   'payment.ach_evidence.record':recordAchPaymentEvidence,
   'customer.payment_methods.refresh':refreshCustomerPaymentMethods,
   'checkout.setup.prepare':prepareHostedSetup,
+  'portal.method.prepare':preparePortalMethodAction,
+  'card.lifecycle.consume':consumeCardLifecycleEvent,
   'currency.rate.record':recordDailyRate,
   'trial.collection.prepare':prepareTrialCollection,
   'trial.collection.confirm':confirmTrialCollection,

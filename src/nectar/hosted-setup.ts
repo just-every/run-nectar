@@ -28,6 +28,7 @@ export async function prepareHostedSetup(env: Bindings, actor: Actor, input: Inp
   insist(source.object === 'customer' && source.id === row.stripe_customer_ref && !source.deleted && typeof source.livemode === 'boolean', 'stripe_customer_evidence_invalid', 409)
   // This capture door is confined to the approved test-mode setup slice.
   insist(source.livemode === false, 'hosted_setup_test_mode_required', 409)
+  insist(!await one(env,"SELECT 1 FROM nc_portal_method_action_history WHERE account_ref=? AND customer_ref=? AND status='uncertain'",row.account_ref,row.stripe_customer_ref),'portal_method_uncertain',409)
   const id = newId()
   await commit(env, [...setupOwnerFence(env, actor),
     guard(env, 'hosted_setup_source_changed', `EXISTS(SELECT 1 FROM nc_stripe_customer_bindings b JOIN nc_customers c ON c.id=b.customer_id WHERE b.id=? AND b.revision=? AND c.id=? AND c.revision=? AND c.erased_at IS NULL AND c.status='active' AND NOT EXISTS(SELECT 1 FROM nc_erased_records WHERE record_id IN(b.id,c.id)))`, binding, row.revision, customer, row.customer_revision),

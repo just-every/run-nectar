@@ -6,16 +6,22 @@ import {mkdir} from 'node:fs/promises'
 import {chromium,expect} from '@playwright/test'
 import {harness} from './harness.mjs'
 import {totp} from './mfa.mjs'
+import {applyPolicy} from './policy-helper.mjs'
 import {stripeSandbox,safeError} from './stripe-sandbox-client.mjs'
 
 const stripe=stripeSandbox(process.env.STRIPE_SECRET_KEY),directory=process.env.NECTAR_EVIDENCE_DIR??'.evidence/hosted-sandbox'
 await mkdir(directory,{recursive:true})
 let h,browser,page,phase='account',customer
-const facts={journey:'PAY-002 existing-customer Stripe setup',head:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),setups:[],cleanup:false}
+const facts={journey:'PORT-004 replacement, verified ACH and next invoice',head:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),setups:[],cleanup:false}
 try {
   const account=await stripe.request('GET','/v1/account')
   facts.account=account.id
   customer=await stripe.request('POST','/v1/customers',{name:'Alder Analytics test customer',email:`nectar-${stripe.run}@example.test`,'metadata[nectar_run]':stripe.run})
+  const old=await stripe.request('POST','/v1/payment_methods',{type:'card','card[token]':'tok_visa'})
+  await stripe.request('POST',`/v1/payment_methods/${old.id}/attach`,{customer:customer.id})
+  await stripe.request('POST',`/v1/payment_methods/${old.id}`,{'card[exp_month]':new Date().getUTCMonth()+1,'card[exp_year]':new Date().getUTCFullYear()})
+  await stripe.request('POST',`/v1/customers/${customer.id}`,{'invoice_settings[default_payment_method]':old.id})
+  facts.previousExpiringCard=old.id
   let loseDefaultResponse=false
   h=await harness({assets:true,stripeSecret:process.env.STRIPE_SECRET_KEY,stripeFetch:async request=>{
     const response=await stripe.forward(request)
@@ -28,6 +34,10 @@ try {
   const owner=await h.signIn(h.vars.OWNER_EMAIL)
   await h.raw('/setup',{cookie:owner,form:new URLSearchParams({confirm:'yes'})})
   await h.api('business.configure',owner,{legal_name:'Alder Analytics',timezone:'UTC',invoice_prefix:'ALDER',payment_terms_days:30})
+  await applyPolicy(h,owner,'tax.declare',{tax_jurisdiction:'CA',tax_mode:'no_tax',tax_note:'Reviewed portal replacement journey'})
+  await h.api('tax.review',owner,{revision:(await h.api('business',owner)).revision})
+  await h.api('access.give',owner,{email:'synthetic-nectar-872@example.test',name:'Finance approver',role:'finance'})
+  const finance=await h.signIn('synthetic-nectar-872@example.test',{requested:true})
   const factor=await h.api('mfa.totp.start',owner,{})
   await h.api('mfa.totp.confirm',owner,{factor:factor.factor,code:totp(factor.secret,Date.now())})
   const native=await h.api('customer.create',owner,{external_id:'synthetic-nectar-819',name:'Alder Analytics test customer',billing_email:`nectar-${stripe.run}@example.test`})
@@ -117,6 +127,23 @@ try {
     const source=await stripe.request('GET',`/v1/customers/${customer.id}`)
     assert.equal(source.invoice_settings.default_payment_method,record.paymentMethod.methodRef)
     if(method==='us_bank_account')assert.ok(record.paymentMethod.mandateRef)
+    phase=`next-invoice-${method}`
+    const day=new Date().toISOString().slice(0,10)
+    const charge=await h.api('charge.add',owner,{customer:native.id,amount:'12',description:'Portal replacement renewal',effective_date:day,taxable:false})
+    const invoice=await h.api('invoice.manual',owner,{customer:native.id,charges:[charge.charge],service_date:day})
+    const authority=await h.api('automatic.collection.prepare',owner,{invoice:invoice.id,issue_date:day,...(method==='us_bank_account'?{mandate_ref:record.paymentMethod.mandateRef}:{})})
+    assert.equal(authority.quote.method.paymentMethodRef,record.paymentMethod.methodRef)
+    const acceptance=await h.raw(`/portal/automatic-collections/${authority.id}?session=${encodeURIComponent(session.token)}`,{body:{request:authority.id,basis_hash:authority.basis,accept:true}})
+    assert.equal(acceptance.status,200)
+    await h.api('automatic.collection.decide',finance,{request:authority.id,basis_hash:authority.basis,decision:'approved',confirm:true})
+    await h.api('invoice.approve',owner,{invoice:invoice.id,acknowledge:true})
+    await h.api('invoice.finalise',owner,{invoice:invoice.id,issue_date:day})
+    const collected=(await h.api('automatic-collections',owner)).find(row=>row.id===authority.id)
+    assert.equal(collected.status,method==='card'?'collected':'pending_settlement')
+    const intent=await stripe.request('GET',`/v1/payment_intents/${collected.paymentIntentRef}`)
+    assert.equal(intent.payment_method,record.paymentMethod.methodRef)
+    assert.notEqual(intent.payment_method,old.id)
+    facts.nextInvoices??=[];facts.nextInvoices.push({method,invoice:invoice.id,paymentIntent:intent.id,selectedMethod:intent.payment_method,status:intent.status,approvalMode:collected.approvalMode})
     facts.setups.push({id:setup.id,method,paymentMethod:record.paymentMethod.methodRef,mandate:record.paymentMethod.mandateRef,defaultChoice:record.defaultChoice})
     for(const width of [1440,390]){await page.setViewportSize({width,height:950});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);await page.screenshot({path:`${directory}/${width}-${method}-complete.png`,fullPage:true})}
     await h.assertStorageExcludes(['4242424242424242','000123456789',process.env.STRIPE_SECRET_KEY])
