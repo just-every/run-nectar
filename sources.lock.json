@@ -4670,7 +4670,7 @@
       "executable": false
     },
     "tests/nectar/card-lifecycle-webhook.mjs": {
-      "sha256": "88b7cca0e2662df5f21ddc4be1d49a1a1a2f8c6e7636940861e2827523e38f1b",
+      "sha256": "2fa25e1620dca00495e783b0f173127b08bc3b99ccc77924663bdc63cce33fa4",
       "executable": false
     },
     "tests/nectar/card-lifecycle.mjs": {

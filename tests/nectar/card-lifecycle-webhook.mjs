@@ -65,7 +65,11 @@ export async function cardLifecycleWebhookFlow(h,owner) {
   await post(JSON.stringify({...original,account:'synthetic-unconfigured-account'}),{status:409})
   await post(JSON.stringify({...original,data:{object:{...original.data.object,customer:'synthetic-unbound-customer'}}}),{status:409})
   const huge=JSON.stringify({...original,discarded:'x'.repeat(1024*1024)})
-  await post(huge,{status:413})
+  // A direct Worker HTTP request avoids the local proxy's early-response upload
+  // race while exercising the same public receiver and bounded-body refusal.
+  const oversized=await h.dispatch(new Request(h.origin+path,{method:'POST',headers:{'content-type':'application/json','stripe-signature':signature(huge)},body:huge}))
+  assert.equal(oversized.status,413)
+  assert.equal((await oversized.json()).error,'card_event_too_large')
   assert.equal(edge.calls.length,beforeCalls,'Invalid delivery never reaches provider traffic')
   const read=async id=>(await api(`customers/${id??customer}`)).billingRecord.cardLifecycle
   assert.deepEqual(await read(),[])
