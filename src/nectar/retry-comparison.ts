@@ -1,6 +1,6 @@
 // This declared test-edge data is used only for the labelled policy comparison.
 // Live recovery accounting never reads it or manufactures payment records.
-import dataset from '../../tests/fixtures/retry-comparison.json'
+import dataset from './retry-comparison.json'
 import type { Bindings } from '../auth.server'
 import { requireRead, type Actor } from './actor'
 import { all } from './core'

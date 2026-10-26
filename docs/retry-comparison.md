@@ -25,7 +25,7 @@ elapsed hours 72 and 168 (day 3 and day 7), stopping on success.
 ## Known outcomes
 
 The complete machine-readable source is
-[`retry-comparison.json`](../tests/fixtures/retry-comparison.json).
+[`retry-comparison.json`](../src/nectar/retry-comparison.json).
 Each record names an amount, a first-decline reason and zero or more intervals
 of elapsed hours in which a subsequent payment would succeed. An interval
 includes its start and excludes its end. Outside those intervals every

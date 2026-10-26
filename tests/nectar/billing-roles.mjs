@@ -43,7 +43,7 @@ const EXPECTED = {
   },
   analyst: {
     actions: ['report.schedule'],
-    api: ['currencyRates','currencyReport','customers', 'customer', 'entitlement', 'metadataObjects', 'report', 'reportInvoice', 'reportLine', 'periodCloses', 'revenue', 'revenueJournal', 'revenueSource', 'reportSchedule', 'reportDelivery'],
+    api: ['retryComparison','currencyRates','currencyReport','customers', 'customer', 'entitlement', 'metadataObjects', 'report', 'reportInvoice', 'reportLine', 'periodCloses', 'revenue', 'revenueJournal', 'revenueSource', 'reportSchedule', 'reportDelivery'],
     pages: ['currencyReport','customers', 'customer', 'certificateFile', 'metadataList', 'metadataCsv', 'revenue', 'revenueSource', 'revenueCsv', 'revenueJournalCsv', 'reportSchedule', 'reportDelivery', 'reportDeliveryCsv', 'reportCsv', 'report', 'reportInvoice', 'reportLine', 'exports', 'customersFile'],
   },
 }

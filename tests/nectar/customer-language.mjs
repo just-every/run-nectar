@@ -167,7 +167,7 @@ export async function translationFiles() {
       await cp(name, join(root, name), { recursive: true })
     await symlink(join(home, 'node_modules'), join(root, 'node_modules'))
     const locale = join(root, 'src/nectar/locales/fr.json')
-    const build = () => assert.equal(spawnSync(join(home, 'node_modules/.bin/vite'), ['build'], { cwd: root, encoding: 'utf8' }).status, 0, 'copy builds')
+    const build = () => { const result=spawnSync(join(home, 'node_modules/.bin/vite'), ['build'], { cwd: root, encoding: 'utf8' }); assert.equal(result.status, 0, `copy builds: ${result.stderr}`) }
     await writeFile(locale, JSON.stringify(french, null, 2))
     assert.equal(check(join(root, 'src/nectar/locales')).status, 0, 'The added French catalogue is complete')
     build()
