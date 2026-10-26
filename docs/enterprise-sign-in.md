@@ -18,7 +18,9 @@ initiated at `/sso/start`; unsolicited assertions are refused.
 
 Saving authorizes this connection and returns its provisioning bearer
 credential once. Keep it in the provider's secret store. Nectar stores only its
-SHA-256 fingerprint. Saving again rotates the credential, discards pending
+SHA-256 fingerprint. Connection settings, SCIM bindings and pending sign-ins are excluded from
+archives; a restored installation needs fresh owner authorization.
+Saving again rotates the credential, discards pending
 sign-ins and ends enterprise sessions. The issuer and existing role mappings
 cannot be reassigned while provisioned identities exist.
 

@@ -194,7 +194,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "e832df046838eac44098b1997d4e92277916977332f95fefdc57cb9a92a2cdaf",
+      "sha256": "9648687eaa972bca63e1765fdd27ac283d4968069a01cfd3ed97b13394e7928f",
       "executable": false
     },
     "DEMO.md": {
@@ -238,7 +238,7 @@
       "executable": false
     },
     "docs/enterprise-sign-in.md": {
-      "sha256": "720adab7b359748de1d2b8d63bbea527fc631172b3221a3d946efae311e612ef",
+      "sha256": "3ef455eb23c44f30244884dd93a770c0caa9497296f428e19470d8a52cc9a713",
       "executable": false
     },
     "docs/evidence/stripe-history-sandbox.json": {
@@ -318,7 +318,7 @@
       "executable": false
     },
     "management/integration/deployment-spec.json": {
-      "sha256": "45cf3275f11b66cff20040731c8a56d3e588d412cae7b027bee487c67cc7b1ce",
+      "sha256": "91256bd9c91b88943ecdd23f982f1977c402bb522a57dfc25a3d50b877f54dc4",
       "executable": false
     },
     "migrations/core/0001_owner.sql": {
