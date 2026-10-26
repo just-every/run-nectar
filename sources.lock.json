@@ -2934,7 +2934,7 @@
       "executable": false
     },
     "src/nectar/api-fields.ts": {
-      "sha256": "db3bf6a223c211f9d8e28fd8bcdd2b2745136e520ace5107a7d005710f2fd0b7",
+      "sha256": "80c8fdbb73305019f1bb2ba7cf90b6cc51d326c27fe3b0c10545208c72aadbed",
       "executable": false
     },
     "src/nectar/api-versions.ts": {

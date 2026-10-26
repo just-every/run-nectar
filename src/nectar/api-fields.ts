@@ -906,6 +906,13 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
   "shadow.app.reconcile": {
     "change": "text"
   },
+  "sso.configure": {
+    "certificate": "text",
+    "entry_point": "text",
+    "issuer": "text",
+    "revision": "integer",
+    "role_map": "json"
+  },
   "subscription.addon": {
     "effective_date": "text",
     "price": "text",
