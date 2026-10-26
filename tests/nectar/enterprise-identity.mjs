@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict'
 import { samlFixture, startSaml, postSaml } from './saml-fixture.mjs'
 
-export async function enterpriseIdentityFlow(h, owner, { onState } = {}) {
+export async function enterpriseIdentityFlow(h, owner, { onState, configure } = {}) {
   const idp = await samlFixture()
   const settings = { issuer: idp.issuer, entry_point: idp.entry_point, certificate: idp.certificate, role_map: { billing: 'accountant', ops: 'finance' }, revision: 0 }
-  const configured = await h.api('sso.configure', owner, settings)
+  const configured = configure ? await configure(settings) : await h.api('sso.configure', owner, settings)
   const scim = async (path = '', { body, method = 'GET', token = configured.scim_token, status = 200 } = {}) => {
     const response = await h.raw('/scim/v2/Users' + path, { method, body, headers: { authorization: 'Bearer ' + token } })
     assert.equal(response.status, status, 'SCIM public response status')

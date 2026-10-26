@@ -705,6 +705,10 @@
       "sha256": "66c9082248336b054f7a66a87c697354abbf179888073b32b1ed85710e3612fa",
       "executable": false
     },
+    "migrations/core/0095_enterprise_identity.sql": {
+      "sha256": "6494dde1b7b87f0b0bd8c54247dd40416213838bf8aa61743786e34182b66aa4",
+      "executable": false
+    },
     "ONBOARDING.md": {
       "sha256": "95bb235abff28ac36979868486caf2cb73bfbe4ab63037f3e301d189bb9398d9",
       "executable": false
@@ -718,7 +722,7 @@
       "executable": false
     },
     "package.json": {
-      "sha256": "1dfaac878866517ffd32c192bb36d3ca4b1ca5c7aa655d944b7b127a1b25d07c",
+      "sha256": "1575da5f8a6823df9b1570023c6b8c9093a92d4af66a6e506f521d5cbe53a620",
       "executable": false
     },
     "packaging.json": {
@@ -726,7 +730,7 @@
       "executable": false
     },
     "pnpm-lock.yaml": {
-      "sha256": "d5184d65c4c7470f16e1ad362dbdd9ead97e764f0a4c5a2a13b76383a10fef8a",
+      "sha256": "3f15513365038d968e873a1d2b2cdbc28eda1852c409b48af86d9377b98e2ff6",
       "executable": false
     },
     "public/brand/apple-touch-icon.png": {
@@ -1078,7 +1082,7 @@
       "executable": false
     },
     "src/auth.server.ts": {
-      "sha256": "b40a19a5f497c3d08220fe7f7e88d43f515e52571f21f3d84cab082cf389b171",
+      "sha256": "6e3f355af5e951e2989bdd00fb8005b7237d811ac681022d9769bc7c3d8acc5c",
       "executable": false
     },
     "src/base/contract-filter.ts": {
@@ -2910,7 +2914,7 @@
       "executable": false
     },
     "src/nectar/actions.ts": {
-      "sha256": "55a2070a6b75dff218b61280272da2804edb5608b15531a65f4b9f3b55ba6794",
+      "sha256": "972683e9309d6312cf76eae3396e20de7bd189f0613bf9e2f59d801d32fe1b2b",
       "executable": false
     },
     "src/nectar/actor.ts": {
@@ -3158,7 +3162,7 @@
       "executable": false
     },
     "src/nectar/doors.ts": {
-      "sha256": "06cd7323d80a9154e7889466306773d751388d8a1aafe5ffae3a7cd6d93398e8",
+      "sha256": "f5abc9bbac689bc28c5fade9992d0391ad6d95ee3f6683eab751143a390c93b8",
       "executable": false
     },
     "src/nectar/draft-correction-mail.ts": {
@@ -3458,7 +3462,7 @@
       "executable": false
     },
     "src/nectar/mfa.ts": {
-      "sha256": "cb6cbcb12e77a4d9ec2c77dc80615bc6ca5ea6be56f3b15a03e39d25f85fcb23",
+      "sha256": "63b18e95978adcd0eb2ed02ff39f78664b13701acb64ec275a2d74079f3834e8",
       "executable": false
     },
     "src/nectar/movein/collection-provider.ts": {
@@ -3957,6 +3961,14 @@
       "sha256": "ce226761f7317c39e5f1354c6c369b9f1fa05e2f24f140855eaa841f86d64142",
       "executable": false
     },
+    "src/nectar/saml.ts": {
+      "sha256": "b19e81f6b3afc855676a75b47ef03cb2272b0a003347fd13f05b884315891020",
+      "executable": false
+    },
+    "src/nectar/scim.ts": {
+      "sha256": "0df2510786e190cf0cdf47fa8e4217ebaa8df9b30ed86b74506b4ca4a5710dc2",
+      "executable": false
+    },
     "src/nectar/setup-apply.ts": {
       "sha256": "5178b66e57c38e095a2e300e4f546f339cb8be09ac7e03ec416ab5f41de45ee2",
       "executable": false
@@ -3995,6 +4007,10 @@
     },
     "src/nectar/shared-credit-custody.ts": {
       "sha256": "cbf766a030f00ba47a9e033270f63ee2b1363bdf2fe0b8ce266f9f44995fd23d",
+      "executable": false
+    },
+    "src/nectar/sso-config.ts": {
+      "sha256": "949af5c340dc2a25fd81bb02aa581ec98bdfc4b0be0c314064e4fb599d127874",
       "executable": false
     },
     "src/nectar/subscriptions.ts": {
@@ -4102,7 +4118,7 @@
       "executable": false
     },
     "src/nectar/ui/home.ts": {
-      "sha256": "b2ff697449106156632d9c09208bc30c2c2c0b528ecdb2d1e26ab070ba3ef4f7",
+      "sha256": "43305335e2b7f61d4a3d4fdf390731332717338e493234113a1869a2e57b7214",
       "executable": false
     },
     "src/nectar/ui/html.ts": {
@@ -4170,7 +4186,7 @@
       "executable": false
     },
     "src/nectar/ui/pages.ts": {
-      "sha256": "fa084a368f7c57121ae5f30e8e19880456d80b06980979b5b980895700317cfb",
+      "sha256": "1364aef8fa4096da94910a5c49b556cbc322b66d1098afe985b2178f232a4875",
       "executable": false
     },
     "src/nectar/ui/payment-links.ts": {
@@ -4263,6 +4279,10 @@
     },
     "src/nectar/ui/shell.ts": {
       "sha256": "dbf4b500e28b1b18fa1ed6ff96558653c24b7291a7d13da51997332183bb5058",
+      "executable": false
+    },
+    "src/nectar/ui/sso.ts": {
+      "sha256": "07543d0ca88af1bf41b17a01b612e6febca55264f545ab44344c18b427c8cb82",
       "executable": false
     },
     "src/nectar/ui/upcoming.ts": {
@@ -4358,7 +4378,7 @@
       "executable": false
     },
     "src/server.ts": {
-      "sha256": "4970f598851ca01d0d6775f0b3efcf7a8f578b18490f8d8319250ac677d7d1dc",
+      "sha256": "b4ac85dab65999a75502f6776dbb143d0031ec3a8f8bbbeb5427cc01c73c318c",
       "executable": false
     },
     "src/site/docs/docs.css": {
@@ -4586,7 +4606,7 @@
       "executable": false
     },
     "tests/nectar/billing-roles.mjs": {
-      "sha256": "a47b016cd99234063db19ed9049654add0a0d7e747f4be8b8275d064d2d16e65",
+      "sha256": "414e81facb5ece09460673c2fc78c8c4ab2b117583b952dbe254be8a30bff871",
       "executable": false
     },
     "tests/nectar/cadences.mjs": {
@@ -4681,6 +4701,14 @@
       "sha256": "c99e48206c441b96695238b66829773970c6d0ae9824461460e35d6a7d5820c8",
       "executable": false
     },
+    "tests/nectar/enterprise-identity-sandbox.mjs": {
+      "sha256": "a645bfdf0a81ac795d42f897ded6db8b37c9e336f681d69079d0c61cfc47db1e",
+      "executable": false
+    },
+    "tests/nectar/enterprise-identity.mjs": {
+      "sha256": "94188179f5230cde915784abf9f83adc63ad70018827b50be724b22c83031e4c",
+      "executable": false
+    },
     "tests/nectar/entitlement-quotas.mjs": {
       "sha256": "930bb9d598cfd2ee55d57974be0ca34456ef2f5febc34b7d6fc5593551f29a4b",
       "executable": false
@@ -4754,7 +4782,7 @@
       "executable": false
     },
     "tests/nectar/isolated-cases.mjs": {
-      "sha256": "3c91577dc2ed82e70544f644a87490fd467178a4090faeaff70205d075a46e47",
+      "sha256": "190f53b34e75c3a60e09fddcffb2503a2d781ca7998d973f89b42ab9d13496c9",
       "executable": false
     },
     "tests/nectar/isolated.mjs": {
@@ -5043,6 +5071,10 @@
     },
     "tests/nectar/revenue.mjs": {
       "sha256": "b72b297ccf819ba4ed3986b04cb03491df0731ab184892b36d21c1fb2e0c0024",
+      "executable": false
+    },
+    "tests/nectar/saml-fixture.mjs": {
+      "sha256": "71e246e3f68a7cc76cc6283a3c034de932696ee6978b04f06d4f43f194be81f2",
       "executable": false
     },
     "tests/nectar/stripe-app.mjs": {
