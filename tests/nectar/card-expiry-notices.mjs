@@ -119,6 +119,7 @@ export async function cardExpiryNoticesFlow(h,owner,{onState=async()=>{}}={}) {
   await h.advanceClock(new Date(prepared[0].expiresAt).toISOString())
   assert.equal((await h.raw(updateLink.pathname+updateLink.search)).status,401,'The original factor deadline expires the emailed link before the ordinary portal session deadline')
   assert.equal((await h.raw(`/portal/payment-methods/actions${updateLink.search}`)).status,401,'JSON access shares the original warning deadline')
+  assert.equal((await h.raw(`/portal${updateLink.search}`)).status,401,'The expired warning cannot reopen the customer billing record')
   await onState({state:'expired',updateLink:updateLink.href})
   instant+=16*60*1000;await h.advanceClock(new Date(instant).toISOString())
   await api('mfa.verify',{code:totp(factor.secret,instant)})

@@ -194,7 +194,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "48774edbeea8c482d90dcdc4e217877deec3e4d1124c244bdcc110056d5cb236",
+      "sha256": "6df37aa969f4c635c2092fbefac05c3c8ca257237490dbd8c23d7cb461221b9a",
       "executable": false
     },
     "DEMO.md": {
@@ -3730,7 +3730,7 @@
       "executable": false
     },
     "src/nectar/portal-session.ts": {
-      "sha256": "a3e1bd0384733765f9337eec41099abe9214c022b6c3593dec018312c8c3963e",
+      "sha256": "c911ec3ab684061e76d66dfb991c4d53efb07f042a1cf3d843416ccde7b9330c",
       "executable": false
     },
     "src/nectar/portal-upcoming.ts": {
@@ -4658,7 +4658,7 @@
       "executable": false
     },
     "tests/nectar/card-expiry-notices.mjs": {
-      "sha256": "b183fa5929485d65555ef7dedf812c329b37e3776fb8f4a18a1be93f907a9dbd",
+      "sha256": "b12113a37ee3f51ef75212fe4befcc1584389b4fdb858763f09b48d9a710fb49",
       "executable": false
     },
     "tests/nectar/card-expiry-sandbox.mjs": {
@@ -5010,7 +5010,7 @@
       "executable": false
     },
     "tests/nectar/portal-methods-browser.mjs": {
-      "sha256": "a2932e7ed85ebbf3f5896cd0274755b9e48adb4f1424462bf08f9822de90a230",
+      "sha256": "06a5eb05ef2191f0cbf00a1223cd13f0f778a4a5b40cb613dbfb7b2689c953c4",
       "executable": false
     },
     "tests/nectar/portal-prepaid-browser.mjs": {
