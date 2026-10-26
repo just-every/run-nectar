@@ -174,7 +174,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "aa89d97ddd82e5f4f67a35ff0e04386a313e571e943ffd05f4da808a2cbd9e38",
+      "sha256": "2ac797ca11c86507682593e27b1f3564f78221b01f28ef3ddf97ae80efa35b58",
       "executable": false
     },
     "AGENTS.consumer.md": {
@@ -3998,7 +3998,7 @@
       "executable": false
     },
     "src/nectar/retry-churn.ts": {
-      "sha256": "9edbde1690a3f16ad9ef78ef5998934f6be9c16cf82ae9a41039ccd2c8066910",
+      "sha256": "8e48a523b061bb946c11c2cea287adb37c7f30675cf046a112c866518e7a60f7",
       "executable": false
     },
     "src/nectar/retry-comparison.ts": {
@@ -4006,7 +4006,7 @@
       "executable": false
     },
     "src/nectar/retry-jobs.ts": {
-      "sha256": "8c4cc390c0dc35509562f0427ea46a8a35df3e4cd6ba29f6133b138f5980ef04",
+      "sha256": "3112615666bb09c5f0cfad2039f29eebc3f7991e83d20a1022623d831b7759e2",
       "executable": false
     },
     "src/nectar/retry-method-http.ts": {
@@ -4018,7 +4018,7 @@
       "executable": false
     },
     "src/nectar/retry-policy.ts": {
-      "sha256": "0fcb8907b48bbe45e041cc5e434495c6084cf91395633c569f0d7886f3e3aedd",
+      "sha256": "747d7e10cbdf964670ec4c33fe294c98af05b1ee71016d6b677df56e15febf25",
       "executable": false
     },
     "src/nectar/retry-records.ts": {

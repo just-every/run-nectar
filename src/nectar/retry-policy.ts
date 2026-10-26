@@ -2,7 +2,6 @@ import { setupOwner,setupOwnerFence } from './hosted-setup-basis'
 // Nectar owns the schedule; no provider billing retry service is invoked.
 import type { Bindings } from '../auth.server'
 import type { Actor } from './actor'
-import { collectionOwner,collectionAuthority } from './movein/collection-state'
 import { clockInstant } from './clock'
 import { all,commit,insist,one,stmt } from './core'
 import type { Input } from './input'

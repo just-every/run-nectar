@@ -3,7 +3,7 @@
 import type { Bindings } from '../auth.server'
 import { type Actor,requireRead,actorLabel } from './actor'
 import { clockInstant } from './clock'
-import { all,commit,guard,insist,newId,one,stmt } from './core'
+import { all,commit,guard,insist,one,stmt } from './core'
 import { collectionAuthority,collectionOwner } from './movein/collection-state'
 import { requireBusiness } from './business'
 import { localDate } from './dates'
