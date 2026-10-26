@@ -312,11 +312,17 @@
   "checkout.consent": "Je souhaite enregistrer un moyen de paiement auprès de Stripe.",
   "checkout.default": "Définir le moyen vérifié comme moyen par défaut. Cela n’autorise aucun prélèvement.",
   "checkout.continue": "Continuer vers Stripe",
-  "checkout.finish": "Vérifier et enregistrer",
+  "checkout.finish": "Vérifier le moyen enregistré",
   "checkout.empty": "Aucune configuration de paiement n’est prête. Contactez l’entreprise.",
   "checkout.status.prepared": "Prêt à saisir vos coordonnées de paiement en toute sécurité.",
   "checkout.status.creating": "La création est en attente de confirmation. Contactez l’entreprise ; ne recommencez pas.",
   "checkout.status.open": "Terminez la configuration sur Stripe, puis vérifiez ici votre moyen enregistré.",
   "checkout.status.updating": "La confirmation du moyen par défaut est en attente. Contactez l’entreprise ; ne répétez pas l’opération.",
-  "checkout.status.complete": "Votre moyen de paiement par défaut a été enregistré."
+  "checkout.status.complete": "Votre moyen de paiement a été enregistré. Votre choix distinct de moyen par défaut a été appliqué.",
+  "checkout.verify": "Vérifier la configuration Stripe originale. Cela n’autorise aucun prélèvement.",
+  "checkout.reconcile": "Vérifier la configuration originale",
+  "checkout.historical": "Configuration historique uniquement. Une nouvelle configuration et un nouveau consentement sont requis avant utilisation.",
+  "checkout.choice.selected": "Vous avez choisi ce moyen comme moyen par défaut.",
+  "checkout.choice.unchanged": "Votre moyen par défaut précédent est inchangé.",
+  "checkout.mandate.unavailable": "Le texte de l’autorisation n’est pas disponible ici. Enregistrer ce compte n’autorise pas Nectar à le débiter."
 }
