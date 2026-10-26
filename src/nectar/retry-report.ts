@@ -11,7 +11,7 @@ interface FailedInvoice {
   failedAmountCents: number; declineCode: string | null; attemptsJson: string; allocationsJson: string; stepsJson: string
 }
 interface Recovery extends Allocation { attempt: number | null; step: string | null }
-interface Cohort extends Omit<FailedInvoice, 'attemptsJson' | 'allocationsJson' | 'stepsJson'> { steps: string[]; attempts: Attempt[]; recoveries: Recovery[] }
+interface Cohort extends Omit<FailedInvoice, 'attemptsJson' | 'allocationsJson' | 'stepsJson'> { steps: string[]; stepDetails: {key:string;step:number}[]; attempts: Attempt[]; recoveries: Recovery[] }
 export interface RecoveryTotals {
   failedInvoices: number; recoveredInvoices: number; partiallyRecoveredInvoices: number;
   failedAmountCents: number; recoveredAmountCents: number; recoveryRate: number | null; amountRecoveryRate: number | null
@@ -35,7 +35,7 @@ SELECT f.invoice_id AS invoice,i.number,i.currency,f.customer_id AS customer,
  (SELECT json_group_array(json_object('collection',r.collection_id,'attempt',r.attempt,'at',r.attempted_at,
    'outcome',r.outcome,'payment',r.payment_id,'step',r.dunning_step))
   FROM attempts r WHERE r.invoice_id=f.invoice_id AND r.attempted_at>=f.attempted_at AND r.attempted_at<=?) AS attemptsJson,
- (SELECT json_group_array('dunning:'||d.id) FROM nc_dunning_deliveries d WHERE d.invoice_id=f.invoice_id AND d.claimed_at>=f.attempted_at AND d.claimed_at<=?) AS stepsJson,
+ (SELECT json_group_array(json_object('key','dunning:'||d.id,'step',d.step)) FROM nc_dunning_deliveries d WHERE d.invoice_id=f.invoice_id AND d.claimed_at>=f.attempted_at AND d.claimed_at<=?) AS stepsJson,
  (SELECT json_group_array(json_object('id',a.id,'payment',a.payment_id,'amountCents',a.amount_cents,'at',a.allocated_at))
   FROM nc_allocations a JOIN nc_payments p ON p.id=a.payment_id
   WHERE a.invoice_id=f.invoice_id AND p.customer_id=f.customer_id AND p.currency=i.currency
@@ -60,7 +60,8 @@ function cohort(row: FailedInvoice): Cohort {
     recoveries.push({...allocation,amountCents,attempt:attempt?.attempt ?? null,step:attempt?.step ?? null})
     remaining -= amountCents
   }
-  return {...source,steps:JSON.parse(stepsJson),attempts,recoveries}
+  const stepDetails=JSON.parse(stepsJson) as {key:string;step:number}[]
+  return {...source,steps:stepDetails.map(s=>s.key),stepDetails,attempts,recoveries}
 }
 
 function totals(cohorts: Cohort[]): RecoveryTotals {
@@ -104,7 +105,7 @@ export async function retryRecoveryReport(env: Bindings, actor: Actor) {
       recoveredAmountCents:currencies.length>1 ? null : counts.recoveredAmountCents,
       amountRecoveryRate:currencies.length>1 ? null : counts.amountRecoveryRate},
     currencies,byDecline:buckets(cohorts,'decline'),byAttempt:buckets(cohorts,'attempt'),byDunningStep:buckets(cohorts,'step'),
-    breakdownDefinition:'Decline groups use the first failure reason. Attempt and step groups count each invoice once per group reached, so exposure counts and failed amounts are not additive across groups. Cash is attributed by the collected attempt payment ID; other allocations have no recorded attempt or step. A group recovery rate counts invoices whose entire failed amount was recovered in that group.',
+    breakdownDefinition:'Decline groups use the first failure reason. Attempt and step groups count each invoice once per group reached, so exposure counts and failed amounts are not additive across groups. Step exposures include durably claimed dunning messages, without a mailbox-delivery claim. Cash is attributed by the explicitly linked collected attempt payment ID; other allocations have no recorded attempt or step. A group recovery rate counts invoices whose entire failed amount was recovered in that group.',
     involuntaryChurn:await retryChurnReport(env,actor),
     invoices:cohorts.map(invoice=>({...invoice,href:`/app/invoices/${invoice.invoice}`,recoveredAmountCents:invoice.recoveries.reduce((sum,r)=>sum+r.amountCents,0)}))}
 }

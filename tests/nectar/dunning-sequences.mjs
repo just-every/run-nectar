@@ -183,6 +183,7 @@ export async function dunningSequenceFlow(h,owner,{onState=async()=>{},createPol
  assert.deepEqual([recovery.totals.failedInvoices,recovery.totals.recoveredInvoices,recovery.totals.failedAmountCents,recovery.totals.recoveredAmountCents,recovery.totals.recoveryRate,recovery.totals.amountRecoveryRate],[5,1,50000,10000,1/5,1/5])
  for(const message of sent){
   const bucket=recovery.byDunningStep.find(b=>b.key===`dunning:${message.id}`),recovered=message.id===recoveryMail.message.id
+  assert.equal(recovery.invoices.find(i=>i.invoice===message.invoice).stepDetails.find(s=>s.key===`dunning:${message.id}`).step,message.step)
   assert.ok(bucket);assert.deepEqual([bucket.failedInvoices,bucket.failedAmountCents,bucket.recoveredInvoices,bucket.recoveredAmountCents,bucket.recoveryRate,bucket.amountRecoveryRate],[1,10000,recovered?1:0,recovered?10000:0,recovered?1:0,recovered?1:0])
  }
  const expected=records.map((record,index)=>{
