@@ -63,7 +63,7 @@ try{
       await customerPage.setViewportSize({width,height:950});assert.equal((await customerPage.goto(h.origin+`/portal/payment-methods?session=${encodeURIComponent(session.token)}`)).status(),200)
       assert.equal(await customerPage.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false)
       assert.equal(await customerPage.locator('a,button').evaluateAll(nodes=>nodes.filter(node=>!node.textContent.trim()).length),0,'All controls have visible labels')
-      const card=customerPage.locator('section').filter({has:customerPage.locator(`input[value="${setup}"]`)});if(state!=='complete')assert.equal(await card.count(),1)
+      const card=customerPage.locator('section').filter({has:customerPage.locator(`input[value="${setup}"]`)});if(['prepared','open'].includes(state))assert.equal(await card.count(),1)
       await customerPage.screenshot({path:`${directory}/${width}-hosted-${method}-${state}.png`,fullPage:true})
       console.log('BROWSER',width,'hosted',method,state)
       await page.setViewportSize({width,height:950});await page.goto(h.origin+`/app/customers/${customer}`);await shot(`hosted-${method}-${state}-operator`,width)

@@ -4546,11 +4546,11 @@
       "executable": false
     },
     "tests/nectar/customer-payment-methods.mjs": {
-      "sha256": "81004723b884bd633dcdaad68e1d8680094bfded95b90206a49fca499afe9732",
+      "sha256": "9aeb33f82e61fe266bdb86479faf9293de677ad5ad1d8ac0e5489a48c41b9c42",
       "executable": false
     },
     "tests/nectar/customer-record-browser.mjs": {
-      "sha256": "d37305db082e516aa9c6fa3ad50ec2144669ae4f8b703accabeff2b1a5e4586b",
+      "sha256": "4cc34a9a2cd483c8392921d787ab1d3da4dbe1a70849fc4c3e7750f6e4511bf1",
       "executable": false
     },
     "tests/nectar/customer-search.mjs": {

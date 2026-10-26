@@ -205,6 +205,7 @@ export async function assertHostedSetups(h, owner, { customer, other, binding, f
     await post(capability,operation,setup.id,502)
     await post(capability,operation,setup.id,409)
     assert.equal(writes(write),before+1,'An uncertain provider response never repeats its POST')
+    await onState({h,owner,session:capability,customer:target,setup:setup.id,state:operation==='start'?'creating':'updating',method:'card'})
     await h.api('checkout.setup.prepare',owner,{customer:target,binding:holdBinding,method:'card',confirm:true},409)
     assert.equal(writes(write),before+1,'A replacement preparation cannot bypass uncertain provider custody')
   }
