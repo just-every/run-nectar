@@ -401,5 +401,9 @@
   "methods.status.prepared": "Confirma tu elección a continuación.",
   "methods.status.uncertain": "El resultado del procesador no está confirmado. Consulta la solicitud original sin repetirla.",
   "methods.status.complete": "Tu elección de método de pago está completa.",
-  "methods.status.superseded": "Una elección preparada más reciente reemplazó esta solicitud."
+  "methods.status.superseded": "Una elección preparada más reciente reemplazó esta solicitud.",
+  "cardExpiry.subject": "{merchant}: actualiza tu tarjeta antes de la renovación",
+  "cardExpiry.body": "{merchant}: tu tarjeta terminada en {last4} vence el {expiry}, antes de tu renovación del {renewal}.",
+  "cardExpiry.linkExpiry": "Este enlace privado vence a las {expires} ({timezone}).",
+  "cardExpiry.button": "Actualizar método de pago"
 }

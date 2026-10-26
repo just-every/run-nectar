@@ -193,6 +193,9 @@ export async function nativeCollectionFlow(h,owner,{onState=async()=>{},confirm}
     assert.equal(edge.intents.size,beforeIntents+1)
     assert.equal(edge.calls.filter(call=>call.method==='POST').length,beforePosts+1,'Definitive refusal replay never creates a second PaymentIntent')
   }
+  // The authentication refusal prohibits the old saved method. Subsequent
+  // independent scenarios use a newly supplied provider method.
+  edge.customers.get('synthetic-nectar-native-customer-1').method='synthetic-nectar-native-replacement-1'
   // Native failure and financial recovery feed the same entitlement answer.
   const feature='synthetic-nectar-native-access'
   const product=(await api('product.create',{code:feature,name:'Native payment access'})).id

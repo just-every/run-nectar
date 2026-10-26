@@ -1,3 +1,4 @@
+import { readCardExpiryNotices } from './card-expiry-notices'
 import { readCardLifecycle } from './card-lifecycle'
 import { customerPaymentLinks } from './payment-links-state'
 import { automaticCollections } from './automatic-collection-records'
@@ -66,7 +67,7 @@ export async function customerBillingRecord(env: Bindings, actor: Actor, custome
   requireRead(actor, 'customers')
   const row = await one(env, 'SELECT id,erased_at FROM nc_customers WHERE id=?', customer)
   insist(row, 'customer_not_found', 404)
-  const empty = { processorPayments: null, paymentMethods: null, prepaid: null, refunds: null, creditBalance: null, subscriptionHistory:null,writeOffs:null,savedPaymentMethods:null,achPaymentEvidence:null,receipts:null,hostedSetups:null,cardLifecycle:null,auditEvents: [] }
+  const empty = { processorPayments: null, paymentMethods: null, prepaid: null, refunds: null, creditBalance: null, subscriptionHistory:null,writeOffs:null,savedPaymentMethods:null,achPaymentEvidence:null,receipts:null,hostedSetups:null,cardLifecycle:null,cardExpiryNotices:null,auditEvents: [] }
   // Do not parse retained processor or narrative bytes after erasure.
   if (row.erased_at || await one(env, 'SELECT 1 FROM nc_erased_records WHERE record_id=?', customer)) return empty
   const payments = canRead(actor, 'payments'), invoices = canRead(actor, 'invoices'), subscriptions = canRead(actor, 'subscriptions')
@@ -90,5 +91,5 @@ export async function customerBillingRecord(env: Bindings, actor: Actor, custome
   return { processorPayments, paymentMethods: processorPayments?.filter(payment => payment.card).map(payment => ({
     collection: payment.id, invoice: payment.invoice, card: payment.card, verifiedAt: payment.verifiedAt })) ?? null,
     prepaid, refunds: refunds?.flat().filter(refund => refund.customer === customer).map(typedRefund) ?? null,
-    cardLifecycle:payments&&invoices?await readCardLifecycle(env,actor,customer):null,creditBalance, auditEvents,subscriptionHistory,writeOffs,savedPaymentMethods,achPaymentEvidence,receipts,hostedSetups,paymentLinks:await customerPaymentLinks(env,actor,customer),automaticCollections:payments&&invoices?(await automaticCollections(env,actor,customer)).map(({id,invoice,status,amountCents,method,paymentIntentRef,payment,settledAt,quote})=>({id,invoice,status,amountCents,method,paymentIntentRef,payment,settledAt,summary:quote.method.summary})):null }
+    cardExpiryNotices:payments&&invoices?await readCardExpiryNotices(env,actor,customer):null,cardLifecycle:payments&&invoices?await readCardLifecycle(env,actor,customer):null,creditBalance, auditEvents,subscriptionHistory,writeOffs,savedPaymentMethods,achPaymentEvidence,receipts,hostedSetups,paymentLinks:await customerPaymentLinks(env,actor,customer),automaticCollections:payments&&invoices?(await automaticCollections(env,actor,customer)).map(({id,invoice,status,amountCents,method,paymentIntentRef,payment,settledAt,quote})=>({id,invoice,status,amountCents,method,paymentIntentRef,payment,settledAt,summary:quote.method.summary})):null }
 }

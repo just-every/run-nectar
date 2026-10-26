@@ -144,6 +144,21 @@ export async function assertPortalMethodActions(h,owner,{customer,other,binding,
     assert.deepEqual(afterRecord[family],beforeRecord[family],'Method choices preserve historical payment and setup observations')
   }
   await h.assertStorageExcludes(['4242424242424242','routing_number','synthetic-nectar-810'])
+  const languageWrites=writes(),displayed=(await api(`customers/${customer}`)).billingRecord.hostedSetups
+  for(const language of ['en','es-US']) {
+    const record=await api(`customers/${customer}`)
+    await api('customer.update',{customer,revision:record.revision,name:record.name,billing_email:record.billing_email,language})
+    session=await issue(customer)
+    const translated=await prepare(bank.id,'default')
+    const response=await h.raw(`/portal/payment-methods?session=${encodeURIComponent(session.token)}`)
+    assert.equal(response.status,200)
+    const html=await response.text()
+    assert.match(html,new RegExp(`lang="${language}"`));assert.ok(html.includes('6789'))
+    assert.ok(!html.includes('methods.confirm.default')&&!html.includes('methods.status.prepared'))
+    assert.deepEqual((await api(`customers/${customer}`)).billingRecord.hostedSetups,displayed,'Both languages preserve identical payment method figures')
+    await state(`locale-${language}`,translated)
+  }
+  assert.equal(writes(),languageWrites,'Translated reads and owner preparations never change the processor')
   const pending=await prepare(bank.id,'default')
   const record=await api(`customers/${customer}`)
   await api('customer.update',{customer,revision:record.revision,name:record.name,billing_email:record.billing_email,language:record.language==='en'?'es-US':'en'})

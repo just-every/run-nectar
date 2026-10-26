@@ -49,7 +49,7 @@ export async function erasurePlan(env: Bindings, customer: Row): Promise<Erasure
   for (const image of images) {
     const { table,row,key,required,foreignKeys } = image
     // Customer capabilities and investigations are operational custody, not retained financial facts.
-    if (['nc_portal_method_actions','nc_portal_method_action_history','nc_automatic_collection_authorizations','nc_payment_link_attempts','nc_hosted_setup_returns','nc_hosted_setup_history','nc_hosted_setups','nc_portal_sessions','nc_assurance_cases','nc_assurance_observations'].includes(table) && image.scoped) {
+    if (['nc_card_expiry_notice_authority','nc_portal_method_actions','nc_portal_method_action_history','nc_automatic_collection_authorizations','nc_payment_link_attempts','nc_hosted_setup_returns','nc_hosted_setup_history','nc_hosted_setups','nc_portal_sessions','nc_assurance_cases','nc_assurance_observations'].includes(table) && image.scoped) {
       mutations.push({ table, row, key, updates: null })
       const entry = changes.get(table) ?? { kind: table, fields: new Set<string>(), records: 0 }
       Object.keys(row).forEach(field => entry.fields.add(field)); entry.records++; changes.set(table, entry)
@@ -76,7 +76,7 @@ export async function erasurePlan(env: Bindings, customer: Row): Promise<Erasure
     if(table==='nc_imported_collections'&&affected&&row.charge_ref)updates.history_payment_id=images.find(image=>image.table==='nc_incumbent_history'&&image.row.kind==='payment'&&image.row.status==='succeeded'&&image.row.provider_ref===row.charge_ref)?.row.id??row.history_payment_id
     if (table==='nc_customers' && row.id===customer.id) { updates.status='archived'; updates.erased_at=Date.now(); updates.revision=crypto.randomUUID(); updates.tax_exempt=0 }
     if (affected) {
-      if (['nc_usage_correction_mail','nc_credit_correction_mail','nc_draft_correction_mail','nc_notifications','nc_note_mentions','nc_renewal_notices'].includes(table)) updates.status='suppressed'
+      if (['nc_usage_correction_mail','nc_credit_correction_mail','nc_draft_correction_mail','nc_notifications','nc_note_mentions','nc_renewal_notices','nc_card_expiry_notices'].includes(table)) updates.status='suppressed'
       if (table==='nc_cadence_deliveries') updates.status='superseded'
       if (table==='nc_webhook_deliveries') {updates.status='suppressed';updates.claim=null}
       if (table==='nc_notices') updates.status='discarded'

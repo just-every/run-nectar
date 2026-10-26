@@ -21,7 +21,9 @@ export async function harness({ assets = false, localTime, hostname = '127.0.0.1
   if(quickbooksFetch)Object.assign(vars,{QUICKBOOKS_ACCESS_TOKEN:'synthetic-nectar-qbo',QUICKBOOKS_ENVIRONMENT:'sandbox',QUICKBOOKS_COMPANY_ID:'synthetic-nectar-company'})
   const chunks = (await readdir('dist/server', { recursive: true })).filter(path => path.endsWith('.js') && path !== 'index.js')
   const mails = [], mailResponses = []
+  let nativeMailFetch=null
   const outboundService = async request => {
+    if(nativeMailFetch&&new URL(request.url).hostname==='api.sendgrid.com')return nativeMailFetch(request)
     if (new URL(request.url).hostname==='receiver.nectar-app.com'&&webhookFetch)return webhookFetch(request)
     if (new URL(request.url).hostname==='api.stripe.com'&&stripeFetch)return stripeFetch(request)
     if (new URL(request.url).hostname==='sandbox-quickbooks.api.intuit.com'&&quickbooksFetch)return quickbooksFetch(request)
@@ -39,7 +41,7 @@ export async function harness({ assets = false, localTime, hostname = '127.0.0.1
   vars.AUTH_ORIGIN = origin
   const options = {
     // Omitting port lets workerd bind a fresh port 0 on every runtime start.
-    unsafeTriggerHandlers: true, host: '127.0.0.1', modulesRoot: 'dist/server', modules: ['index.js', ...chunks].map(path => ({ type: 'ESModule', path: `dist/server/${path}` })), compatibilityDate: '2026-09-08', compatibilityFlags: ['nodejs_compat'],
+    cf: false, unsafeTriggerHandlers: true, host: '127.0.0.1', modulesRoot: 'dist/server', modules: ['index.js', ...chunks].map(path => ({ type: 'ESModule', path: `dist/server/${path}` })), compatibilityDate: '2026-09-08', compatibilityFlags: ['nodejs_compat'],
     d1Databases: { DB: databaseId }, ...(persistence?{resourcePersistencePath:persistence}:{}), bindings: vars, outboundService,
     ...(assets ? { assets: { directory: 'dist/client', binding: 'ASSETS', run_worker_first: true, routerConfig: { has_user_worker: true, invoke_user_worker_ahead_of_assets: true } } } : {}),
   }
@@ -125,7 +127,11 @@ export async function harness({ assets = false, localTime, hostname = '127.0.0.1
   }
 
   async function advanceClock(instant){assert.ok(Number.isFinite(Date.parse(instant)));vars.NECTAR_LOCAL_TIME=instant;await mf.setOptions(convertV4MiniflareOptions({...options,bindings:{...vars}}));await mf.ready;db=await mf.getD1Database('DB')}
-  return { origin, vars, raw, api, submit, page, signIn, close, mails, mailResponses,advanceClock,rejectAudit,assertStorageExcludes, dispatch: async request => mf.dispatchFetch(request.url, { redirect: 'manual', method: request.method, headers: Object.fromEntries(request.headers), ...(!['GET','HEAD'].includes(request.method) ? { body: await request.arrayBuffer() } : {}) }) }
+  async function configureMail({provider,apiKey,from},transport) {
+    Object.assign(vars,{MAIL_PROVIDER:provider,MAIL_API_KEY:apiKey,MAIL_FROM:from});nativeMailFetch=transport
+    await mf.setOptions(convertV4MiniflareOptions({...options,bindings:{...vars}}));await mf.ready;db=await mf.getD1Database('DB')
+  }
+  return { configureMail,origin, vars, raw, api, submit, page, signIn, close, mails, mailResponses,advanceClock,rejectAudit,assertStorageExcludes, dispatch: async request => mf.dispatchFetch(request.url, { redirect: 'manual', method: request.method, headers: Object.fromEntries(request.headers), ...(!['GET','HEAD'].includes(request.method) ? { body: await request.arrayBuffer() } : {}) }) }
 }
 
 export const file = (filename, content, type = 'application/octet-stream') => ({ filename, base64: Buffer.from(content).toString('base64'), type })

@@ -1,3 +1,4 @@
+import { cardExpiryNoticesSection } from './card-expiry-notices'
 import { readCardLifecycle } from '../card-lifecycle'
 import { customerHostedSetups } from '../hosted-setup'
 import type { Bindings } from '../../auth.server'
@@ -29,5 +30,6 @@ export async function customerPaymentMethodsSection(env: Bindings, actor: Actor,
         ? `${method.brand} card ending ${method.last4} · Expires ${method.expMonth}/${method.expYear}`
         : `ACH · ${method.bankName} · ${method.accountType} account ending ${method.last4}`}</li>`)}</ul>` : h`<p>No saved card or ACH methods were found at this verification.</p>`}</article>`)
       : h`<p>No verified saved-method snapshot. Refresh from a held Stripe customer association to inspect saved cards and ACH accounts.</p>`}
+    ${await cardExpiryNoticesSection(env,actor,customer)}
   </section>`
 }

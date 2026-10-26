@@ -179,6 +179,17 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "outcome": "text"
   },
   "cadence.run": {},
+  "card.expiry.prepare": {
+    "confirm": "flag",
+    "customer": "text",
+    "setup": "text",
+    "subscription": "text"
+  },
+  "card.expiry.send": {
+    "basis_hash": "text",
+    "confirm": "flag",
+    "notice": "text"
+  },
   "card.lifecycle.consume": {
     "binding": "text",
     "confirm": "flag",

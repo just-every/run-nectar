@@ -401,5 +401,9 @@
   "methods.status.prepared": "Confirm your choice below.",
   "methods.status.uncertain": "The processor outcome is unconfirmed. Reconcile the original request without repeating it.",
   "methods.status.complete": "Your payment method choice is complete.",
-  "methods.status.superseded": "A newer prepared choice replaced this request."
+  "methods.status.superseded": "A newer prepared choice replaced this request.",
+  "cardExpiry.subject": "{merchant}: update your card before renewal",
+  "cardExpiry.body": "{merchant}: your card ending in {last4} expires {expiry}, before your renewal on {renewal}.",
+  "cardExpiry.linkExpiry": "This private link expires at {expires} ({timezone}).",
+  "cardExpiry.button": "Update payment method"
 }

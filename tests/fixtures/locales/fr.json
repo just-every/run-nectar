@@ -401,5 +401,9 @@
   "methods.status.prepared": "Confirmez votre choix ci-dessous.",
   "methods.status.uncertain": "Le résultat du prestataire reste incertain. Consultez la demande originale sans la répéter.",
   "methods.status.complete": "Votre choix de moyen de paiement est terminé.",
-  "methods.status.superseded": "Un choix préparé plus récent a remplacé cette demande."
+  "methods.status.superseded": "Un choix préparé plus récent a remplacé cette demande.",
+  "cardExpiry.subject": "{merchant} : mettez votre carte à jour avant le renouvellement",
+  "cardExpiry.body": "{merchant} : votre carte se terminant par {last4} expire le {expiry}, avant votre renouvellement le {renewal}.",
+  "cardExpiry.linkExpiry": "Ce lien privé expire à {expires} ({timezone}).",
+  "cardExpiry.button": "Mettre à jour le moyen de paiement"
 }

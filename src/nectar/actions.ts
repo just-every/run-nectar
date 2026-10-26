@@ -1,3 +1,4 @@
+import { prepareCardExpiryNotice, sendCardExpiryNotice } from './card-expiry-notices'
 import { consumeCardLifecycleEvent } from './card-lifecycle'
 import { preparePortalMethodAction } from './portal-method-actions'
 import { configureSso } from './sso-config'
@@ -139,6 +140,8 @@ export const actions: Record<string, Handler> = {
   'checkout.setup.prepare':prepareHostedSetup,
   'portal.method.prepare':preparePortalMethodAction,
   'card.lifecycle.consume':consumeCardLifecycleEvent,
+  'card.expiry.prepare':prepareCardExpiryNotice,
+  'card.expiry.send':sendCardExpiryNotice,
   'currency.rate.record':recordDailyRate,
   'trial.collection.prepare':prepareTrialCollection,
   'trial.collection.confirm':confirmTrialCollection,
