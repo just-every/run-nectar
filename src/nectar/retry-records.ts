@@ -10,7 +10,7 @@ export async function retryState(env:Bindings,invoice:string){
  if(!row)return {attempt_count:0,next_payment_attempt:null,retry_status:null}
  const hold=await collectionHold(env,invoice)
  const allowed=row.authorized&&row.method_allowed&&['refused','returned'].includes(row.collection_status)&&row.status==='scheduled'&&!hold.disputedCents&&!hold.hold&&hold.collectibleCents>0
- return {attempt_count:row.attempts,next_payment_attempt:allowed?row.next_at:null,retry_status:!row.method_allowed?'requires_new_method':row.collection_status==='revoked'?'revoked':!row.authorized?'historical':hold.disputedCents?'disputed':hold.hold??row.status}
+ return {attempt_count:row.attempts,next_payment_attempt:allowed?row.next_at:null,retry_status:hold.disputedCents?'disputed':hold.hold??(row.collection_status==='revoked'?'revoked':!row.authorized?'historical':!row.method_allowed?'requires_new_method':row.status)}
 }
 export async function recordRetryFailure(env:Bindings,row:Row,code:string){
  const q=automaticQuote(row),at=clockInstant(env),prior=await one(env,'SELECT * FROM nc_retry_series WHERE collection_id=?',row.id)

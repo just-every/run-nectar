@@ -51,7 +51,7 @@ export async function retryMethodsFlow(h,owner,{onState=async()=>{},prepareRecov
  const tick=()=>h.raw(`/cdn-cgi/local/scheduled?time=${instant}&cron=${encodeURIComponent('* * * * *')}`)
  assert.equal((await tick()).status,200);assert.equal((await tick()).status,200)
  const paid=await api(`invoices/${invoice}`)
- assert.equal(paid.balanceCents,0);assert.equal(paid.paidCents,10000);assert.equal(paid.allocations.length,1);assert.equal(paid.attempt_count,2)
+ assert.equal(paid.balanceCents,0);assert.equal(paid.paidCents,10000);assert.equal(paid.allocations.length,1);assert.equal(paid.attempt_count,2);assert.equal(paid.retry_status,'paid')
  assert.equal(edge.writes.length,writes+1);assert.equal(new Set(edge.writes.map(w=>w.id)).size,1,'Replacement confirms the existing PaymentIntent')
  const attempts=(await api('automatic-collections')).find(r=>r.id===original.id)
  assert.equal(attempts.quote.method.paymentMethodRef,original.quote.method.paymentMethodRef,'Earlier approved terms are immutable')
