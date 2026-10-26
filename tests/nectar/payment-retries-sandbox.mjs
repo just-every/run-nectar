@@ -249,9 +249,34 @@ async function liveJourney() {
   const final = await proof(generic)
   check(final.invoice.balanceCents === generic.amount && final.invoice.next_payment_attempt === null,
     'replacement_method_gap_not_observed')
-  result.limitations.push({ code: 'replacement_method_recovery_unavailable', replacementMethodRef: replacement.id,
-    effect: 'The approved quote freezes the original method. Changing the saved default does not authorize or recover this invoice.' })
+  result.limitations.push({ code: 'saved_default_alone_never_authorizes_recovery', replacementMethodRef: replacement.id,
+    effect: 'Changing the saved default alone leaves the original exact consent in force.' })
   result.checks.changedDefaultNeverUsesOldConsent = true
+  phase = 'separately-consented-hard-decline-recovery'
+  const hard = sources.at(-1)
+  const freshMethod = await stripe.request('POST', '/v1/payment_methods', { type: 'card', 'card[token]': 'tok_visa' })
+  hard.methods.push(freshMethod.id)
+  await stripe.request('POST', `/v1/payment_methods/${freshMethod.id}/attach`, { customer: hard.customerRef })
+  await stripe.request('POST', `/v1/customers/${hard.customerRef}`, { 'invoice_settings[default_payment_method]': freshMethod.id })
+  await api('mfa.verify', { code: totp(factor, instant) })
+  const recovery = await api('retry.method.prepare', { request: hard.requestRef, confirm: true })
+  check(recovery.status === 'awaiting_customer' && recovery.quote.method.paymentMethodRef === freshMethod.id,
+    'replacement_quote_missing')
+  const session = await api('portal.session.issue', { customer: hard.nativeCustomer, origin: h.origin, audience: 'hosted' })
+  const target = `/portal/retry-method-recoveries/${recovery.id}?session=${encodeURIComponent(session.token)}`
+  const accepted = await h.raw(target, { body: { recovery: recovery.id, quote_hash: recovery.quoteHash, accept: true } })
+  check(accepted.status === 200 && (await accepted.json()).status === 'pending_approval', 'replacement_acceptance_missing')
+  const beforeRecovery = writes.length
+  await api('retry.method.decide', { recovery: recovery.id, quote_hash: recovery.quoteHash, decision: 'approved', confirm: true, confirm_single: true })
+  check(writes.length === beforeRecovery, 'replacement_approval_debited_before_tick')
+  await tick(instant); await tick(instant)
+  const paid = await api(`invoices/${hard.invoiceRef}`),provider = await stripe.request('GET', `/v1/payment_intents/${hard.initial.intent.id}`)
+  check(paid.balanceCents === 0 && paid.paidCents === hard.amount && paid.allocations.length === 1
+    && provider.status === 'succeeded' && provider.amount_received === hard.amount && reference(provider.payment_method) === freshMethod.id
+    && writes.length === beforeRecovery + 1, 'replacement_recovery_not_once')
+  Object.assign(hard.receipt, { recoveryRef: recovery.id, replacementMethodRef: freshMethod.id,
+    recoveredPaymentIntentRef: provider.id, recoveredAmount: provider.amount_received, nativePaymentRef: paid.allocations[0].payment_id })
+  result.checks.hardDeclineNewCardSeparateConsentSameIntentPaidOnce = true
   check(new Set(writes.map(write => write.key)).size === writes.length, 'reused_provider_mutation_key')
   result.checks.eachActualAttemptHasDistinctDurableKey = true
 }
