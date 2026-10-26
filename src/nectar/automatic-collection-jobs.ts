@@ -40,7 +40,7 @@ export async function settleAutomaticIntent(env:Bindings,row:Row,stripe:StripeCl
   const failed=await outcome(env,row,'returned',{error_code:code});await recordRetryFailure(env,failed,code);return automaticView(failed)
  }
  const refusal=await refusedPaymentWithLifecycle(env,stripe,intent,identity)
- if(refusal){const failed=await outcome(env,row,'refused',{error_code:refusal.retryProhibited?'do_not_try_again':refusal.declineCode??refusal.errorCode});await recordRetryFailure(env,failed,refusal.retryProhibited?'do_not_try_again':refusal.declineCode??refusal.errorCode);return automaticView(failed)}
+ if(refusal){const failed=await outcome(env,row,'refused',{error_code:refusal.declineCode??refusal.errorCode,retry_advice_code:refusal.retryProhibited?'do_not_try_again':null});await recordRetryFailure(env,failed,refusal.declineCode??refusal.errorCode);return automaticView(failed)}
  if(intent.status!=='succeeded')return automaticView(await outcome(env,row,'uncertain',{error_code:'processor_outcome_unconfirmed'}))
  if(['refused','returned'].includes(row.status))row=await outcome(env,row,'uncertain',{error_code:null})
  const q=automaticQuote(row),business=await requireBusiness(env),proof=await capturedPayment(stripe,intent,identity,business.timezone)

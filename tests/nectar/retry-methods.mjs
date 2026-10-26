@@ -20,7 +20,7 @@ export async function retryMethodsFlow(h,owner,{onState=async()=>{},prepareRecov
  const session=await api('portal.session.issue',{customer,origin:h.origin,audience:'hosted'}),foreign=await api('portal.session.issue',{customer:other,origin:h.origin,audience:'hosted'})
  assert.equal((await h.raw(`/portal/automatic-collections/${original.id}?session=${encodeURIComponent(session.token)}`,{body:{request:original.id,basis_hash:original.basis,accept:true}})).status,200)
  await api('automatic.collection.decide',{request:original.id,basis_hash:original.basis,decision:'approved',confirm:true,confirm_single:true})
- edge.rules.set('synthetic-nectar-native-card-1',{code:'stolen_card',recoverAt:Infinity})
+ edge.rules.set('synthetic-nectar-native-card-1',{code:'stolen_card',recoverAt:Infinity,advice:'do_not_try_again'})
  await api('invoice.approve',{invoice,acknowledge:true});await api('invoice.finalise',{invoice,issue_date:'2026-10-22'})
  assert.equal((await api(`invoices/${invoice}`)).next_payment_attempt,null)
  const writes=edge.writes.length

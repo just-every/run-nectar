@@ -9,7 +9,7 @@ import { automaticAuthority,storedAutomaticCollection,validateAutomaticBasis } f
 import { identityFor,settleAutomaticIntent } from './automatic-collection-jobs'
 import { nativeCollectionSource,nativeSourceGuard } from './payments/source'
 import { savedCollectionMethod } from './payments/default-method'
-import { assertMethodUsable,unusableMethodGuard } from './card-lifecycle'
+import { assertMethodUsable,HARD_CARD_DECLINES,unusableMethodGuard } from './card-lifecycle'
 import { NativeStripeError,readIntent,stripeForAccount } from './payments/stripe'
 
 export async function runPaymentRetries(env:Bindings){
@@ -31,7 +31,7 @@ export async function runPaymentRetries(env:Bindings){
    insist(observed.amount_received===0&&history.object==='list'&&history.has_more===false&&Array.isArray(history.data)&&history.data.every((c:Record<string,unknown>)=>c.status==='failed'&&c.paid===false&&c.captured!==true),'retry_prior_outcome_unconfirmed',409)
    if(q.method.kind==='card'){
     const refusal=await refusedPaymentWithLifecycle(env,stripe,observed,identity)
-    insist(refusal&&!refusal.retryProhibited&&(refusal.declineCode??refusal.errorCode)===series.decline_code,'retry_reason_changed',409)
+    insist(refusal&&(!refusal.retryProhibited||q.method.paymentMethodRef!==identity.paymentMethodRef&&HARD_CARD_DECLINES.has(refusal.declineCode??refusal.errorCode))&&(refusal.declineCode??refusal.errorCode)===series.decline_code,'retry_reason_changed',409)
    }
    if(q.method.kind==='us_bank_account')insist(bankReturnCode(observed.last_payment_error?.code)===series.decline_code,'retry_reason_changed',409)
    const attempt=series.attempts+1,claimAt=clockInstant(env)
