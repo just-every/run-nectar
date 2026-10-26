@@ -141,6 +141,11 @@ export async function paymentRetriesFlow(h,owner,{onState=async()=>{},prepareCol
  const missingCount=edge.writes.length;await tick(instant+day);assert.equal(edge.writes.length,missingCount)
  assert.equal((await api(`invoices/${missing.id}`)).next_payment_attempt,null,'Missing methods stop without a provider write')
  const mails=h.mails.length;await tick(instant+20*day);assert.equal(h.mails.length,mails,'Retries send no customer notices')
+ edge.customers.get('synthetic-nectar-native-customer-1').method='synthetic-nectar-native-card-1'
+ const overdue=await create('processing_error'),overdueWrites=edge.writes.length
+ await move(instant+15*day)
+ const expired=await api(`invoices/${overdue.id}`);assert.equal(expired.next_payment_attempt,null);assert.equal(expired.retry_status,'exhausted')
+ await tick(instant);assert.equal(edge.writes.length,overdueWrites,'An expired window cannot send even when the scheduler missed its earlier due time')
  console.log('paymentRetriesFlow: consented policy, exact timing, hard and ACH prohibitions, caps, dispute hold, once-only cash and page API webhook parity')
 }
 

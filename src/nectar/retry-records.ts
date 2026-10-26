@@ -9,8 +9,9 @@ export async function retryState(env:Bindings,invoice:string){
  const row=await one(env,`SELECT r.*,a.status AS collection_status,EXISTS(SELECT 1 FROM nc_automatic_collection_authorizations z WHERE z.id=a.id AND z.basis_hash=a.basis_hash) AS authorized,(NOT EXISTS(SELECT 1 FROM nc_card_lifecycle l WHERE l.account_ref=a.account_ref AND l.stripe_customer_ref=a.stripe_customer_ref AND l.payment_method_ref=a.payment_method_ref AND l.unusable_at IS NOT NULL) OR EXISTS(SELECT 1 FROM nc_retry_method_recovery_authorizations z WHERE z.collection_id=a.id AND z.status='active')) AS method_allowed FROM nc_retry_series r JOIN nc_automatic_collections a ON a.id=r.collection_id WHERE r.invoice_id=?`,invoice)
  if(!row)return {attempt_count:0,next_payment_attempt:null,retry_status:null}
  const hold=await collectionHold(env,invoice)
- const allowed=row.authorized&&row.method_allowed&&['refused','returned'].includes(row.collection_status)&&row.status==='scheduled'&&!hold.disputedCents&&!hold.hold&&hold.collectibleCents>0
- return {attempt_count:row.attempts,next_payment_attempt:allowed?row.next_at:null,retry_status:hold.disputedCents?'disputed':hold.hold??(row.collection_status==='revoked'?'revoked':!row.authorized?'historical':!row.method_allowed?'requires_new_method':row.status)}
+ const expired=clockInstant(env)>row.deadline
+ const allowed=!expired&&row.authorized&&row.method_allowed&&['refused','returned'].includes(row.collection_status)&&row.status==='scheduled'&&!hold.disputedCents&&!hold.hold&&hold.collectibleCents>0
+ return {attempt_count:row.attempts,next_payment_attempt:allowed?row.next_at:null,retry_status:hold.disputedCents?'disputed':hold.hold??(row.collection_status==='revoked'?'revoked':!row.authorized?'historical':!row.method_allowed?'requires_new_method':expired&&row.status==='scheduled'?'exhausted':row.status)}
 }
 export async function recordRetryFailure(env:Bindings,row:Row,code:string){
  const q=automaticQuote(row),at=clockInstant(env),prior=await one(env,'SELECT * FROM nc_retry_series WHERE collection_id=?',row.id)

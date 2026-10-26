@@ -174,7 +174,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "dad376e8e7cebb90f79066d0a8fd3239c15330d340e1fce5dc6741b72ae9924c",
+      "sha256": "aa89d97ddd82e5f4f67a35ff0e04386a313e571e943ffd05f4da808a2cbd9e38",
       "executable": false
     },
     "AGENTS.consumer.md": {
@@ -194,7 +194,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "41e232c6523ca2fb45f575d9f8e589e361011c02e51bccf128659d9a398b0dc3",
+      "sha256": "bf3b8b300e1e48dca2246ac2108c0588911e25357051ed87bf4fe7b7a317cf14",
       "executable": false
     },
     "DEMO.md": {
@@ -4022,7 +4022,7 @@
       "executable": false
     },
     "src/nectar/retry-records.ts": {
-      "sha256": "e57207819948e405e9ad3f45a3c242b4220f487bf5ebc242560b1e8794020bd6",
+      "sha256": "bb0194ead9adbfe78be8eeec0426c1b07f1c72d1d0930a853e19977d540a86d9",
       "executable": false
     },
     "src/nectar/retry-report.ts": {
@@ -5038,7 +5038,7 @@
       "executable": false
     },
     "tests/nectar/payment-retries.mjs": {
-      "sha256": "49b16aeddc91deabba2c39c7c7f12a94a7afc8b3fb45268ebef0c66c0a14cf9a",
+      "sha256": "c843ffce277f3ed589358bceb5a86aedfe278a6a843bca155c077e03eaf49988",
       "executable": false
     },
     "tests/nectar/period-close-browser.mjs": {
