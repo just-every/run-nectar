@@ -4998,7 +4998,7 @@
       "executable": false
     },
     "tests/nectar/portal-method-actions.mjs": {
-      "sha256": "bf69feaa8fee5d8c339df4c346a1987ee223a04868e564af3ea38b0a8b613e48",
+      "sha256": "e4c456b0dda36d8bac67a0ad65d2d47d037e3d3405f3beb0bd908042b69fa51e",
       "executable": false
     },
     "tests/nectar/portal-methods-browser.mjs": {

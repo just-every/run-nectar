@@ -50,13 +50,13 @@ export async function assertPortalMethodActions(h,owner,{customer,other,binding,
   let session=await issue(customer)
   const foreign=await issue(other)
   const read=async capability=>{
-    if(status===200&&capability===session&&executeAction)return executeAction({h,owner,customer,session,action,operation})
-    const consentHash=status===401?'unavailable':(await read(capability)).find(row=>row.id===action)?.consentHash??'unavailable'
     const response=await h.raw(`/portal/payment-methods/actions?session=${encodeURIComponent(capability.token)}`,{headers:{accept:'application/json'}})
     assert.equal(response.status,200)
     return response.json()
   }
   const post=async(action,operation='confirm',status=200,{capability=session,headers={},extra={}}={})=>{
+    if(status===200&&capability===session&&executeAction)return executeAction({h,owner,customer,session,action,operation})
+    const consentHash=status===401?'unavailable':(await read(capability)).find(row=>row.id===action)?.consentHash??'unavailable'
     const response=await h.raw(`/portal/payment-methods/action${operation==='reconcile'?'/reconcile':''}?session=${encodeURIComponent(capability.token)}`,
       {body:{action,confirm:true,consent_hash:consentHash,...extra},headers:{accept:'application/json',...headers}})
     const value=await response.json()
