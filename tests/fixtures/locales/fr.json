@@ -302,5 +302,21 @@
   "portal.quota.heading": "Quotas actuels",
   "portal.quota.used": "Quantité utilisée",
   "portal.quota.limit": "Quota",
-  "portal.quota.remaining": "Quantité restante"
+  "portal.quota.remaining": "Quantité restante",
+  "checkout.heading": "Moyens de paiement",
+  "checkout.explain": "Saisissez vos coordonnées de paiement uniquement sur Stripe. Enregistrer un moyen par défaut n’autorise aucun prélèvement.",
+  "checkout.card": "Carte",
+  "checkout.ach": "Compte bancaire américain",
+  "checkout.ending": "Se terminant par {last4}",
+  "checkout.mandate": "Un mandat ACH actif a été vérifié auprès de Stripe.",
+  "checkout.consent": "Je souhaite enregistrer un moyen de paiement auprès de Stripe.",
+  "checkout.default": "Définir le moyen vérifié comme moyen par défaut. Cela n’autorise aucun prélèvement.",
+  "checkout.continue": "Continuer vers Stripe",
+  "checkout.finish": "Vérifier et enregistrer",
+  "checkout.empty": "Aucune configuration de paiement n’est prête. Contactez l’entreprise.",
+  "checkout.status.prepared": "Prêt à saisir vos coordonnées de paiement en toute sécurité.",
+  "checkout.status.creating": "La création est en attente de confirmation. Contactez l’entreprise ; ne recommencez pas.",
+  "checkout.status.open": "Terminez la configuration sur Stripe, puis vérifiez ici votre moyen enregistré.",
+  "checkout.status.updating": "La confirmation du moyen par défaut est en attente. Contactez l’entreprise ; ne répétez pas l’opération.",
+  "checkout.status.complete": "Votre moyen de paiement par défaut a été enregistré."
 }
