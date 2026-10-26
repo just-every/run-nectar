@@ -236,5 +236,13 @@ export async function paymentLinksFlow(h,owner,{onState=async()=>{},interaction=
   if(interaction.activatePolicy)await interaction.activatePolicy({pending:pendingRow})
   else await api('payment_link.activate',{link:pending.id,revision:pendingRow.revision,confirm:true})
   assert.equal((await getOffer(pending.id)).terms.renewal.months,1)
+  const full=await api('payment-links'),paged=[]
+  let next=await api('payment-links?limit=2')
+  for(let count=0;;count++){
+    assert.ok(next.data.length<=2&&count<20);paged.push(...next.data)
+    if(!next.next_cursor)break
+    next=await api(`payment-links?limit=2&cursor=${encodeURIComponent(next.next_cursor)}`)
+  }
+  assert.deepEqual(paged.map(row=>row.id),full.map(row=>row.id),'Public link management pages include each policy once')
   await h.assertStorageExcludes(['synthetic-private-link-secret','Synthetic private billing input','4242424242424242'])
 }

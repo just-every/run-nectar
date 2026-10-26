@@ -124,6 +124,14 @@ export async function automaticCollectionFlow(h,owner,{onState=async()=>{},prepa
  assert.equal(returned.status,'returned');assert.equal((await api('invoices/'+returnedInvoice)).paidCents,0)
  await api('automatic.collection.reconcile',{request:returned.id});assert.equal(edge.posts(),4)
  await onState({state:'returned',invoice:returnedInvoice,customer:customers[1],session:returnAuthorization.s,request:returned})
+ const full=await api('automatic-collections'),paged=[]
+ let next=await api('automatic-collections?limit=2')
+ for(let count=0;;count++){
+  assert.ok(next.data.length<=2&&count<20);paged.push(...next.data)
+  if(!next.next_cursor)break
+  next=await api(`automatic-collections?limit=2&cursor=${encodeURIComponent(next.next_cursor)}`)
+ }
+ assert.deepEqual(paged.map(row=>row.id),full.map(row=>row.id),'Public automatic payment pages include each attempt once')
  const role=await api('role.define',{name:'Automatic customer reader',capabilities:['read.customers']})
  await api('access.give',{email:'automatic-reader@example.test',name:'Customer reader',role:'custom',custom_role:role.id})
  const reader=await h.signIn('automatic-reader@example.test',{requested:true}),readerFactor=await h.api('mfa.totp.start',reader,{})
