@@ -51,7 +51,9 @@ try {
       for (const width of [1440, 390]) {
         await memberPage.setViewportSize({ width, height: 950 })
         await memberPage.goto(h.origin + '/app/customers')
+        if (width === 390) await memberPage.locator('label[for=menu]').click()
         assert.match(await memberPage.locator('body').innerText(), /Accountant/)
+        if (width === 390) await memberPage.locator('label[for=menu]').click()
         assert.equal(await memberPage.evaluate(() => document.documentElement.scrollWidth > innerWidth), false)
         await memberPage.screenshot({ path: `${directory}/${width}-mapped-member.png`, fullPage: true })
       }

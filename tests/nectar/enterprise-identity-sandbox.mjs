@@ -12,7 +12,7 @@ const suffix = randomBytes(6).toString('hex'), label = 'nectar-c-i821-' + suffix
 async function okta(path, method = 'GET', body) {
   const response = await fetch(origin + path, { method, headers: { authorization: 'SSWS ' + token, 'content-type': 'application/json', accept: 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}) })
   const text = await response.text()
-  if (!response.ok) { let code; try { code = JSON.parse(text).errorCode } catch {} throw new Error('okta_' + response.status + '_' + (/^[A-Z0-9]+$/.test(code) ? code : 'request_refused')) }
+  if (!response.ok) { if (phase === 'owned_app') { try { const error = JSON.parse(text); console.error(JSON.stringify({appConfigurationError: error.errorCauses?.map(cause => cause.errorSummary)})) } catch {} } let code; try { code = JSON.parse(text).errorCode } catch {} throw new Error('okta_' + response.status + '_' + (/^[A-Z0-9]+$/.test(code) ? code : 'request_refused')) }
   if (!text) return null
   try { return JSON.parse(text) } catch { return text }
 }
@@ -33,16 +33,16 @@ try {
   phase = 'owned_group'
   group = await okta('/api/v1/groups', 'POST', { profile: { name: label, description: 'Temporary Nectar enterprise identity sandbox' } })
   phase = 'owned_app'
-  app = await okta('/api/v1/apps?activate=true', 'POST', { label, signOnMode: 'SAML_2_0', settings: { signOn: {
+  app = await okta('/api/v1/apps?activate=true', 'POST', { label, signOnMode: 'SAML_2_0', visibility: { autoSubmitToolbar: false, hide: { iOS: false, web: false } }, settings: { signOn: {
     ssoAcsUrl: h.origin + '/sso/acs', recipient: h.origin + '/sso/acs', destination: h.origin + '/sso/acs', audience: h.origin + '/sso/metadata',
     idpIssuer: 'http://www.okta.com/${org.externalKey}', subjectNameIdTemplate: '${user.id}', subjectNameIdFormat: 'urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified',
     responseSigned: true, assertionSigned: true, signatureAlgorithm: 'RSA_SHA256', digestAlgorithm: 'SHA256', honorForceAuthn: true,
     authnContextClassRef: 'urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport', requestCompressed: true,
-    attributeStatements: [{ type: 'EXPRESSION', name: 'email', values: ['user.email'] }, { type: 'EXPRESSION', name: 'role', values: [`isMemberOfGroup("${group.id}") ? "billing" : "none"`] }, { type: 'EXPRESSION', name: 'amr', values: ['session.amr'] }],
+    attributeStatements: [{ type: 'EXPRESSION', namespace: 'urn:oasis:names:tc:SAML:2.0:attrname-format:unspecified', name: 'email', values: ['user.email'] }, { type: 'EXPRESSION', namespace: 'urn:oasis:names:tc:SAML:2.0:attrname-format:unspecified', name: 'role', values: [`isMemberOfGroup("${group.id}") ? "billing" : "none"`] }, { type: 'EXPRESSION', namespace: 'urn:oasis:names:tc:SAML:2.0:attrname-format:unspecified', name: 'amr', values: ['session.amr'] }],
   } } })
   await okta('/api/v1/apps/' + app.id + '/groups/' + group.id, 'PUT', {})
   phase = 'owned_user'
-  const email = label + '@example.test', password = 'Nectar!' + randomBytes(24).toString('base64url') + '8a'
+  const email = label + '@example.test', password = 'Rer!' + randomBytes(24).toString('base64url') + '8a'
   user = await okta('/api/v1/users?activate=true', 'POST', { profile: { firstName: 'Nectar', lastName: 'Sandbox', login: email, email }, credentials: { password: { value: password } }, groupIds: [group.id] })
   check(user.status === 'ACTIVE', 'okta_user_not_active')
   phase = 'metadata'
