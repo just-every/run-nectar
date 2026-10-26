@@ -745,6 +745,10 @@
       "sha256": "64d42b86c1218689645bf393d18611831b379309d090dd232ad9b54d9f4de6c6",
       "executable": false
     },
+    "migrations/core/0102_dunning_sequences.sql": {
+      "sha256": "577c5a833b6b89ef837a0cd4630291f2b3ceda73d60beecb3e52cecbfb805e1a",
+      "executable": false
+    },
     "ONBOARDING.md": {
       "sha256": "95bb235abff28ac36979868486caf2cb73bfbe4ab63037f3e301d189bb9398d9",
       "executable": false
@@ -3225,6 +3229,22 @@
       "sha256": "7de80d21520da6494b564223da2c5aaef44fbe4f579a3623030376ae8d8487bd",
       "executable": false
     },
+    "src/nectar/dunning-mail.ts": {
+      "sha256": "0d41cb9bec13ae0fdfa715bb79a737bc2585319a132ce57a00beb54e6d933552",
+      "executable": false
+    },
+    "src/nectar/dunning-policy.ts": {
+      "sha256": "8a02e0ddbbfc50b8dd953a5dbda79f1a403fc1d59c74f49cd5a5bc31128a4a07",
+      "executable": false
+    },
+    "src/nectar/dunning-recovery.ts": {
+      "sha256": "1d05fa7732bf89e37512ff53fc01d26b021dbc2188ac42ae64034b2026cb26da",
+      "executable": false
+    },
+    "src/nectar/dunning.ts": {
+      "sha256": "845fa758791f136f6f0c2b65dc31d9a18829eea20b28e9b9a941ca32fb8598c3",
+      "executable": false
+    },
     "src/nectar/entitlement-state.ts": {
       "sha256": "a7cedd1695f3fb0310e25ee34bf708c0a27d7f3235cf9cce14d953c2e754e256",
       "executable": false
@@ -4213,6 +4233,10 @@
       "sha256": "218804b05dbdb5078f34c9e54b964ac7596a9b10d58879ecbd071ea73c77d0d9",
       "executable": false
     },
+    "src/nectar/ui/dunning.ts": {
+      "sha256": "f067818957361b437f45b043e124f530bd4282bb6a642ce59f1513dd54f7ad2d",
+      "executable": false
+    },
     "src/nectar/ui/erasure.ts": {
       "sha256": "03b85c20df31ee2e57f2bc5bfc310b5439adfbed25c5d91aea092b0f70e064f2",
       "executable": false
@@ -4835,6 +4859,18 @@
     },
     "tests/nectar/draft-corrections.mjs": {
       "sha256": "c99e48206c441b96695238b66829773970c6d0ae9824461460e35d6a7d5820c8",
+      "executable": false
+    },
+    "tests/nectar/dunning-browser.mjs": {
+      "sha256": "6327218f943228479a5fa39eba77b6f1b95c88bfa30c30bc77c65aad173a6699",
+      "executable": false
+    },
+    "tests/nectar/dunning-custody.mjs": {
+      "sha256": "ba11c6d1dbd39946bd337174ca58bdb67ab948e59c5e034d4a702476817ae75f",
+      "executable": false
+    },
+    "tests/nectar/dunning-sequences.mjs": {
+      "sha256": "9b3902f1e72c00d6cb6337860d9d1f96804b3b4403974f8de8c7aa1934b63d8d",
       "executable": false
     },
     "tests/nectar/enterprise-identity-browser.mjs": {

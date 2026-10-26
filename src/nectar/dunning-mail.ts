@@ -83,7 +83,7 @@ export async function sendDunningMail(env: Bindings,actor: Actor,input: Input) {
  return {id:row.id,status,provider}
 }
 
-export async function dunningDeliveryView(env: Bindings,actor: Actor,row: Row) {
- const authority=await one(env,'SELECT subject,body FROM nc_dunning_mail_authority WHERE id=? AND owner_session_id=?',row.id,actor.sessionId)
- return {...row,...(authority&&clockInstant(env)<row.expires_at?authority:{}),historical:!authority}
+export async function dunningDeliveryView(env: Bindings,actor: Actor,row: Row,sourceBasis: string) {
+ const authority=await one(env,'SELECT subject,body,source_json FROM nc_dunning_mail_authority WHERE id=? AND owner_session_id=?',row.id,actor.sessionId)
+ return {...row,...(authority&&clockInstant(env)<row.expires_at?{subject:authority.subject,body:authority.body}:{}),historical:!authority,expired:clockInstant(env)>=row.expires_at,stale:!!authority&&JSON.parse(authority.source_json).source!==sourceBasis}
 }

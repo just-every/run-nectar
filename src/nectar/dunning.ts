@@ -20,7 +20,7 @@ export async function dunningReport(env: Bindings,actor: Actor) {
    subscription:source.invoice.subscription_id,invoiceNumber:source.invoice.number,customerName:source.invoice.customer_name,
    steps:offsets.map((_,i)=>({step:i+1,due:dunningDue(row,i+1),dueToday:dunningDue(row,i+1)===source.day})),
    endDue:addDays(row.first_failed_date,row.end_day),day:source.day,
-   deliveries:await Promise.all(deliveries.map(d=>dunningDeliveryView(env,actor,d)))})
+   deliveries:await Promise.all(deliveries.map(d=>dunningDeliveryView(env,actor,d,source.basis)))})
  }
  return {policies:await dunningPolicyList(env),series,mode:'owner-confirmed'}
 }
