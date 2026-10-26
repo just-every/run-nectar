@@ -14,7 +14,7 @@ const json=(body:unknown,status=200,extra:Record<string,string>={})=>Response.js
 async function boundedBody(request:Request) {
   const length=request.headers.get('content-length')
   insist(length===null || /^\d+$/.test(length),'card_event_length_invalid',400)
-  if(length!==null && Number(length)>MAX_BYTES){await request.body?.cancel().catch(()=>{});throw new NectarError('card_event_too_large',413)}
+  if(length!==null && Number(length)>MAX_BYTES)throw new NectarError('card_event_too_large',413)
   const reader=request.body?.getReader()
   insist(reader,'card_event_body_required',400)
   const chunks:Uint8Array[]=[],bodyLimit=MAX_BYTES
@@ -23,7 +23,7 @@ async function boundedBody(request:Request) {
     for(;;){
       const part=await reader.read();if(part.done)break
       size+=part.value.byteLength
-      if(size>bodyLimit){await reader.cancel().catch(()=>{});throw new NectarError('card_event_too_large',413)}
+      if(size>bodyLimit)throw new NectarError('card_event_too_large',413)
       chunks.push(part.value)
     }
   }finally{reader.releaseLock()}

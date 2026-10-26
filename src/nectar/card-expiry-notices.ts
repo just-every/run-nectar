@@ -103,7 +103,11 @@ export async function prepareCardExpiryNotice(env:Bindings,actor:Actor,input:Inp
       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'prepared')`,id,s.customer,s.subscription,s.term,s.cycle,s.setup,s.binding,s.accountRef,s.method.paymentMethodRef,s.renewalDate,s.dueDate,s.recipient,L.tag,s.method.card.last4,s.method.card.expMonth,s.method.card.expYear,VERSION,basis,actor.id,at,expiresAt),
     stmt(env,'INSERT INTO nc_card_expiry_notice_authority(id,customer_id,owner_session_id,portal_session_id,source_json,subject,body,html,from_address,mail_provider) VALUES(?,?,?,?,?,?,?,?,?,?)',
       id,s.customer,actor.sessionId,session.id,canonical(s),subject,body,html,s.from,s.provider)],
-  {actor:actorLabel(actor),action:'card.expiry.prepare',subject:s.customer,detail:{notice:id,subscription:s.subscription,setup:s.setup,dueDate:s.dueDate,renewalDate:s.renewalDate,basis,wordingVersion:VERSION,expiresAt}})
+  {actor:actorLabel(actor),action:'card.expiry.prepare',subject:s.customer,detail:{notice:id,subscription:s.subscription,setup:s.setup,dueDate:s.dueDate,renewalDate:s.renewalDate,basis,wordingVersion:VERSION,expiresAt,
+    recipient:s.recipient,language:L.tag,factorVerification:{reference:s.factorRef,at:s.factorAt},
+    sourceBasis:{customerRevision:s.customerRevision,subscriptionRevision:s.subscriptionRevision,termRevision:s.termRevision,
+      bindingRevision:s.bindingRevision,businessRevision:s.businessRevision,cycle:s.cycle,timezone:s.timezone,accountRef:s.accountRef,mode:'test',methodRef:s.method.paymentMethodRef},
+    approvedWording:{subject,text:body.replaceAll(link.href,'[Customer update link]'),html:html.replaceAll(esc(link.href),'[Customer update link]'),linkOmitted:true}}})
   return view(await notice(env,id),await one(env,'SELECT * FROM nc_card_expiry_notice_authority WHERE id=?',id))
 }
 
@@ -136,7 +140,7 @@ export async function sendCardExpiryNotice(env:Bindings,actor:Actor,input:Input)
       WHERE p.id=? AND p.customer_id=? AND p.revoked_at IS NULL AND p.expires_at>?)`,row.expires_at,at,authority.portal_session_id,row.customer_id,at)]:[]),
     guard(env,'card_expiry_already_claimed',"EXISTS(SELECT 1 FROM nc_card_expiry_notices n JOIN nc_customers c ON c.id=n.customer_id JOIN nc_card_expiry_notice_authority a ON a.id=n.id WHERE n.id=? AND n.status='prepared' AND n.basis_hash=? AND a.owner_session_id=? AND c.erased_at IS NULL)",row.id,row.basis_hash,actor.sessionId),
     stmt(env,'UPDATE nc_card_expiry_notices SET status=?,claimed_at=?,error_code=?,finished_at=? WHERE id=?',status,at,reason,reason?at:null,row.id)],
-  {actor:actorLabel(actor),action:reason?'card.expiry.suppressed':'card.expiry.claim',subject:row.customer_id,detail:{notice:row.id,basis:row.basis_hash,status,reason}})
+  {actor:actorLabel(actor),action:reason?'card.expiry.suppressed':'card.expiry.claim',subject:row.customer_id,detail:{notice:row.id,basis:row.basis_hash,status,reason,recipient:row.recipient,wordingVersion:row.wording_version,wordingPreparation:row.id,factorVerification:{reference:frozen.factorRef,at:frozen.factorAt},originalFactorDeadline:frozen.factorAt+STEP_UP_MS}})
   if(reason)return view(await notice(env,row.id))
   let outcome='suppressed',provider:string|null=null
   try{

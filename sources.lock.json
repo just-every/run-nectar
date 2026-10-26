@@ -174,7 +174,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "8e312d84615c69d243fe641b0918a332049b48e339700cfa27c9902c1ef92243",
+      "sha256": "1b6b0def2e3937f45e23e405dcfebf17896f41729d73e01d7e4e061eef5e8fae",
       "executable": false
     },
     "AGENTS.consumer.md": {
@@ -194,7 +194,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "fb34f3e6eaaceda78571df6b1fb3301ea67d8081b4fd9cea3e5c799612db1369",
+      "sha256": "faf62dc6ec04be3d60dc1b30856ee7e434a6593bdeba01aa1efca97704801973",
       "executable": false
     },
     "DEMO.md": {
@@ -3082,7 +3082,11 @@
       "executable": false
     },
     "src/nectar/card-expiry-notices.ts": {
-      "sha256": "0747693ce7ebac0712955fe656956668fa67e4ffe830d05aea7caa747d38a5bd",
+      "sha256": "99940f0858be8aa28a9bec9300bdb7415930a5ffc0796758dd2f0ef0a0583c36",
+      "executable": false
+    },
+    "src/nectar/card-lifecycle-webhook.ts": {
+      "sha256": "bba6da38d9502f871700e555fd9db21150fbe83ede2f38a897d896e28bb9d730",
       "executable": false
     },
     "src/nectar/card-lifecycle.ts": {
@@ -4654,7 +4658,7 @@
       "executable": false
     },
     "tests/nectar/card-expiry-notices.mjs": {
-      "sha256": "7ee0e6fb9c20259aa92c3179339e77e378ff6c32ffb558bce13dd508b8d4ee36",
+      "sha256": "ed896825105d7e2321392e7fd8b51f518c26bb5e7673254a90eda2d78b4d40c3",
       "executable": false
     },
     "tests/nectar/card-expiry-sandbox.mjs": {
@@ -4663,6 +4667,10 @@
     },
     "tests/nectar/card-lifecycle-sandbox.mjs": {
       "sha256": "0aec428bc9f15411432880894c942518eeba9de5334bd2a33b3116d710f3a60a",
+      "executable": false
+    },
+    "tests/nectar/card-lifecycle-webhook.mjs": {
+      "sha256": "88b7cca0e2662df5f21ddc4be1d49a1a1a2f8c6e7636940861e2827523e38f1b",
       "executable": false
     },
     "tests/nectar/card-lifecycle.mjs": {
