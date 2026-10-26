@@ -67,10 +67,10 @@ export async function paymentRetriesFlow(h,owner,{onState=async()=>{},prepareCol
   await onState({state:code,...hard})
  }
  // Both ACH eligible returns allow at most two reinitiations; all authorization returns stop.
- for(const code of ['R01','R09','R02','R03','R05','R07','R10','R29']){
+ for(const code of ['R01','R09','insufficient_funds','R02','R03','R05','R07','R10','R29']){
   const bank=await create(code,{customer:customers[1]})
   const initial=await parity(bank)
-  assert.equal(initial.next_payment_attempt,['R01','R09'].includes(code)?instant+3*day:null)
+  assert.equal(initial.next_payment_attempt,['R01','R09','insufficient_funds'].includes(code)?instant+3*day:null)
   if(initial.next_payment_attempt){
    const before=edge.writes.length
    await tick(initial.next_payment_attempt);const second=await parity(bank);await tick(second.next_payment_attempt)

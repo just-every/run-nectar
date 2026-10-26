@@ -270,7 +270,7 @@
       "executable": false
     },
     "docs/retry-table.md": {
-      "sha256": "9ff6c70374623bcb2b045f0ab3fa5f2f10f72d34578df773dcc1150949934b5c",
+      "sha256": "8e9cdd0902ba3b1ecd51d81c2f79e667167f973c422187ecd885e6a425ef142f",
       "executable": false
     },
     "docs/site.json": {
@@ -4018,7 +4018,7 @@
       "executable": false
     },
     "src/nectar/retry-policy.ts": {
-      "sha256": "747d7e10cbdf964670ec4c33fe294c98af05b1ee71016d6b677df56e15febf25",
+      "sha256": "1ba03cba3436ed8bd7551782bc737af9033d5ca2711f88479f0fea2a0f174a60",
       "executable": false
     },
     "src/nectar/retry-records.ts": {
@@ -4986,7 +4986,7 @@
       "executable": false
     },
     "tests/nectar/native-collection.mjs": {
-      "sha256": "62fc9824ac252904b10820b3417072d9bdea0c4e66fdaba22b7e03bbd0d3b74c",
+      "sha256": "210b0787952394ad69975bba61ae4c74513831fe2fe1c8ce390abefd95e3a80e",
       "executable": false
     },
     "tests/nectar/notes.mjs": {
@@ -5038,7 +5038,7 @@
       "executable": false
     },
     "tests/nectar/payment-retries.mjs": {
-      "sha256": "c843ffce277f3ed589358bceb5a86aedfe278a6a843bca155c077e03eaf49988",
+      "sha256": "288227206415546a1a0f6400b50b8c455ed96d8babcecbd2cbd95f3ec5dd88fd",
       "executable": false
     },
     "tests/nectar/period-close-browser.mjs": {

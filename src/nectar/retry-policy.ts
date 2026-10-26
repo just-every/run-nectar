@@ -8,12 +8,12 @@ import type { Input } from './input'
 import { HARD_CARD_DECLINES } from './card-lifecycle'
 export const RETRY_TABLE_VERSION='nectar-declines-2026-10-27'
 export const DAY=86400000
-export const bankReturnCode=(code:string):string=>({insufficient_funds:'R01',bank_account_closed:'R02',bank_account_invalid_details:'R03',debit_not_authorized:'R10'} as Record<string,string>)[code]??code
+export const bankReturnCode=(code:string):string=>code==='insufficient_funds'?'ach_insufficient_funds':code
 export interface RetryPolicy {version:string;maxAttempts:number;windowDays:number;scope:string}
-export const RETRY_DELAYS:Record<string,number>={processing_error:4*3600000,do_not_honor:DAY,insufficient_funds:3*DAY,R01:3*DAY,R09:3*DAY}
+export const RETRY_DELAYS:Record<string,number>={processing_error:4*3600000,do_not_honor:DAY,insufficient_funds:3*DAY,R01:3*DAY,R09:3*DAY,ach_insufficient_funds:3*DAY}
 export function nextRetry(code:string,method:string,attempts:number,failedAt:number,firstFailedAt:number,policy:RetryPolicy){
  if(HARD_CARD_DECLINES.has(code)||!Object.hasOwn(RETRY_DELAYS,code))return null
- if(method==='us_bank_account'&&!['R01','R09'].includes(code))return null
+ if(method==='us_bank_account'&&!['R01','R09','ach_insufficient_funds'].includes(code))return null
  if(attempts>=Math.min(policy.maxAttempts,method==='us_bank_account'?3:8))return null
  const next=failedAt+RETRY_DELAYS[code],end=firstFailedAt+Math.min(policy.windowDays,method==='us_bank_account'?180:14)*DAY
  return next<=end?next:null

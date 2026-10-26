@@ -32,9 +32,10 @@ Hard card declines never retry the same method: `incorrect_number`, `lost_card`,
 `revocation_of_all_authorizations`, `authentication_required`, `highest_risk_level`
 and `transaction_not_allowed`. A charge carrying `do_not_try_again` advice also
 stops. Bank R02, R03, R05, R07, R10 and R29 never retry. Stripe's normalized
-`insufficient_funds` bank failure is treated as the R01 or R09 class;
-`bank_account_closed`, `bank_account_invalid_details` and `debit_not_authorized`
-are prohibited. Unknown bank codes stop. At most two reinitiations are possible,
+`insufficient_funds` bank failure is classified as `ach_insufficient_funds`, with the same limits as R01 and R09;
+Nectar never invents a raw return code when the provider supplied only a normalized
+reason. `bank_account_closed`, `bank_account_invalid_details` and
+`debit_not_authorized` are prohibited. Unknown bank codes stop. At most two reinitiations are possible,
 within the stricter consent window and 180-day outer cap. This is a conservative
 implementation limit, not a legal compliance certification.
 
