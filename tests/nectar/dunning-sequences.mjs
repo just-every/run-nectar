@@ -26,7 +26,7 @@ export const harnessOptions=()=>{
  }
  return {assets:true,localTime:new Date(first).toISOString(),stripeFetch:fetch,stripeSecret:'synthetic-nectar-1'}
 }
-export async function dunningSequenceFlow(h,owner,{onState=async()=>{},createPolicy,enroll,prepareMail,sendMail,finish,updateMethod,prepareRecovery,cancelSubscription}={}) {
+export async function dunningSequenceFlow(h,owner,{onState=async()=>{},createPolicy,enroll,prepareMail,sendMail,finish,updateMethod,prepareRecovery,acceptRecovery,approveRecovery,cancelSubscription}={}) {
  const api=(p,b,status)=>h.api(p,owner,b,status)
  let instant=first
  await api('business.configure',{...await api('business'),timezone:'UTC'})
@@ -140,8 +140,10 @@ export async function dunningSequenceFlow(h,owner,{onState=async()=>{},createPol
  await api('retry.method.prepare',{request:recover.collection.id,dunning_delivery:wrongMessage.id,confirm:true},409)
  const proposal=await (prepareRecovery??(p=>api('retry.method.prepare',p)))({request:recover.collection.id,dunning_delivery:recoveryMail.message.id,confirm:true})
  const sessionToken=new URL(recoveryMail.link).searchParams.get('session'),acceptPath=`/portal/retry-method-recoveries/${proposal.id}?session=${encodeURIComponent(sessionToken)}`
- assert.equal((await h.raw(acceptPath,{body:{recovery:proposal.id,quote_hash:proposal.quoteHash,accept:true}})).status,200)
- await api('retry.method.decide',{recovery:proposal.id,quote_hash:proposal.quoteHash,decision:'approved',confirm:true,confirm_single:true})
+ if(acceptRecovery)await acceptRecovery({path:acceptPath,proposal})
+ else assert.equal((await h.raw(acceptPath,{body:{recovery:proposal.id,quote_hash:proposal.quoteHash,accept:true}})).status,200)
+ if(approveRecovery)await approveRecovery({invoice:recover.invoice,proposal})
+ else await api('retry.method.decide',{recovery:proposal.id,quote_hash:proposal.quoteHash,decision:'approved',confirm:true,confirm_single:true})
  assert.equal((await h.raw(`/cdn-cgi/local/scheduled?time=${instant}&cron=${encodeURIComponent('* * * * *')}`)).status,200)
  const paid=await api(`invoices/${recover.invoice}`)
  assert.equal(paid.balanceCents,0);assert.equal(paid.allocations.length,1);assert.equal(paid.paidCents,10000)

@@ -113,6 +113,22 @@ try {
   cancelSubscription:async input=>{
    await postForm('subscription.cancel',input,{path:`/app/subscriptions/${input.subscription}`,label:'review-cancellation'})
   },
+  acceptRecovery:async({path,proposal})=>{
+   await customer.goto(h.origin+path);await shot(customer,'customer-recovery-consent')
+   const form=customer.locator('form').filter({has:customer.locator('[name=accept]')})
+   assert.equal(await form.locator('[name=quote_hash]').inputValue(),proposal.quoteHash)
+   await form.locator('[name=accept]').check()
+   await Promise.all([customer.waitForNavigation(),form.getByRole('button').click()]);await shot(customer,'customer-recovery-accepted')
+  },
+  approveRecovery:async({invoice,proposal})=>{
+   await page.goto(h.origin+`/app/invoices/${invoice}`)
+   const form=page.locator('form[action="/app/do/retry.method.decide"]').filter({has:page.locator(`[name=recovery][value="${proposal.id}"]`)})
+   assert.equal(await form.locator('[name=quote_hash]').inputValue(),proposal.quoteHash)
+   await form.locator('[name=confirm]').check();await form.locator('[name=confirm_single]').check()
+   await shot(page,'invoice-recovery-approval')
+   await Promise.all([page.waitForNavigation(),form.getByRole('button').click()])
+   assert.equal(new URL(page.url()).searchParams.has('error'),false)
+  },
   prepareRecovery:async input=>{
    const collection=(await h.api('automatic-collections',owner)).find(r=>r.id===input.request)
    await page.goto(h.origin+`/app/invoices/${collection.invoice}`)
@@ -121,7 +137,10 @@ try {
    await shot(page,'invoice-exact-message-recovery')
    await Promise.all([page.waitForNavigation(),form.getByRole('button').click()])
    assert.equal(new URL(page.url()).searchParams.has('error'),false)
-   return (await h.api('automatic-collections',owner)).find(r=>r.id===input.request).recoveries.at(-1)
+   const id=(await h.api('automatic-collections',owner)).find(r=>r.id===input.request).recoveries.at(-1).id
+   const token=new URL(customer.url()).searchParams.get('session');assert.ok(token)
+   const response=await h.raw(`/portal/retry-method-recoveries/${id}?session=${encodeURIComponent(token)}`,{headers:{accept:'application/json'}})
+   assert.equal(response.status,200);return response.json()
   }
  })
  await page.goto(h.origin+'/app/settings');await shot(page,'settings-entry')
