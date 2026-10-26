@@ -1,3 +1,6 @@
+import { createDunningPolicy, enrollDunning } from './dunning-policy'
+import { prepareDunningMail, sendDunningMail } from './dunning-mail'
+import { endDunning, revokeDunning } from './dunning'
 import { assignRetrySegment } from './retry-segments'
 import { prepareRetryMethodRecovery,decideRetryMethodRecovery } from './retry-method-recovery'
 import { recordRetryChurn } from './retry-churn'
@@ -131,6 +134,12 @@ export const actions: Record<string, Handler> = {
   'payment_link.activate': activatePaymentLink,
   'payment_link.create': createPaymentLink,
   'payment_link.deactivate': deactivatePaymentLink,
+  'dunning.policy.create': createDunningPolicy,
+  'dunning.enroll': enrollDunning,
+  'dunning.mail.prepare': prepareDunningMail,
+  'dunning.mail.send': sendDunningMail,
+  'dunning.end': endDunning,
+  'dunning.withdraw': revokeDunning,
   'retry.method.prepare': prepareRetryMethodRecovery,
   'retry.method.decide': decideRetryMethodRecovery,
   'retry.churn.record': recordRetryChurn,

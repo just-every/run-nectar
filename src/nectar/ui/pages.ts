@@ -1,3 +1,4 @@
+import { dunningPage } from './dunning'
 import { retryRecoveryPage } from './retry-report'
 import { ssoPage, ssoPost } from './sso'
 import { paymentLinksScreen } from './payment-links'
@@ -55,6 +56,7 @@ type Page = (env: Bindings, actor: Actor, request: Request, url: URL, id: string
 
 export const pages: Record<string, Page> = {
   paymentLinks:async(env,actor,_r,url)=>page('Payment links',actor,await paymentLinksScreen(env,actor),{current:'/app/settings',url}),
+  dunning:(env,actor,_r,url)=>dunningPage(env,actor,url),
   retryRecovery:(env,actor,_r,url)=>retryRecoveryPage(env,actor,url),
   paymentReceipt:(env,actor,_r,url,id)=>paymentReceiptPage(env,actor,id,url),
   currencyReport:(env,actor,_r,url)=>currencyPage(env,actor,url),

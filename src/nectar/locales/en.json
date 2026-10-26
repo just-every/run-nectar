@@ -426,5 +426,11 @@
   "retry.authentication.accept": "I authorize one authentication attempt with this card.",
   "retry.authentication.consent": "I authorize {merchant} to collect {amount} for invoice {invoice} once using the existing card ending in {last4}, after I confirm with my bank. This does not authorize automatic retries or other invoices.",
   "retry.authentication.continue": "Confirm with your bank",
-  "retry.authentication.check": "Check existing payment"
+  "retry.authentication.check": "Check existing payment",
+  "dunning.subject": "Payment update for invoice {invoice}",
+  "dunning.body": "{merchant}: invoice {invoice} has {amount} outstanding on {date}.",
+  "dunning.invoice_only": "Please arrange payment using the instructions on your invoice. Your service remains active.",
+  "dunning.update": "Update your payment method: {link}",
+  "dunning.update_label": "Update payment method",
+  "dunning.note": "This link expires within fifteen minutes. Saving a card does not authorize a payment."
 }

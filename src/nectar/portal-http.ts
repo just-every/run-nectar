@@ -77,7 +77,7 @@ export async function portalResponse(request: Request, env: Bindings): Promise<R
     if(url.pathname==='/portal/payment-methods') {
       const L=customerText(session.language,session.currency),token=url.searchParams.get('session')
       const link=(path:string)=>token?`${path}?session=${encodeURIComponent(token)}`:path
-      const body=await hostedSetupPage(env,session,link,returned?.setup)
+      const body=await hostedSetupPage(env,session,link,returned?.setup??url.searchParams.get('setup')??undefined)
       const response=portalPage(L.t('checkout.heading'),body,{lang:L.tag,style:'/portal/theme.css'})
       return new Response(request.method==='HEAD'?null:response.body,{headers:{...Object.fromEntries(response.headers),...headers,'referrer-policy':'strict-origin','content-security-policy':"default-src 'none'; style-src 'self'; font-src 'self'; img-src 'self'; form-action 'self' https://checkout.stripe.com; frame-ancestors 'none'; base-uri 'none'"}})
     }

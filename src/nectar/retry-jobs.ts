@@ -1,3 +1,4 @@
+import { retryDunningStep } from './dunning-recovery'
 import { effectiveRetryQuote,claimRetryMethodRecovery } from './retry-method-recovery'
 import { bankReturnCode } from './retry-policy'
 import { refusedPaymentWithLifecycle } from './payments/refusal'
@@ -34,13 +35,13 @@ export async function runPaymentRetries(env:Bindings){
     insist(refusal&&(!refusal.retryProhibited||q.method.paymentMethodRef!==identity.paymentMethodRef&&HARD_CARD_DECLINES.has(refusal.declineCode??refusal.errorCode))&&(refusal.declineCode??refusal.errorCode)===series.decline_code,'retry_reason_changed',409)
    }
    if(q.method.kind==='us_bank_account')insist(bankReturnCode(observed.last_payment_error?.code)===series.decline_code,'retry_reason_changed',409)
-   const attempt=series.attempts+1,claimAt=clockInstant(env)
+   const attempt=series.attempts+1,claimAt=clockInstant(env),dunningStep=await retryDunningStep(env,row,q)
    insist(claimAt<=series.deadline,'retry_window_expired',409)
    await commit(env,[automaticAuthority(env,row),...await claimRetryMethodRecovery(env,row,q),nativeSourceGuard(env,source),unusableMethodGuard(env,q.accountRef,q.method.customerRef,q.method.paymentMethodRef),
     guard(env,'retry_disputed','NOT EXISTS(SELECT 1 FROM nc_cadence_disputes WHERE invoice_id=? AND resolved_at IS NULL)',row.invoice_id),
     guard(env,'retry_state_changed',"EXISTS(SELECT 1 FROM nc_retry_series WHERE collection_id=? AND revision=? AND status='scheduled' AND next_at<=? AND deadline>=?)",row.id,series.revision,claimAt,claimAt),
     stmt(env,"UPDATE nc_retry_series SET attempts=?,next_at=NULL,status='uncertain',revision=? WHERE collection_id=?",attempt,newId(),row.id),
-    stmt(env,"INSERT INTO nc_retry_attempts(collection_id,invoice_id,customer_id,attempt,attempted_at,outcome,amount_cents) VALUES(?,?,?,?,?,'claimed',?)",row.id,row.invoice_id,row.customer_id,attempt,claimAt,row.amount_cents),
+    stmt(env,"INSERT INTO nc_retry_attempts(collection_id,invoice_id,customer_id,attempt,attempted_at,outcome,amount_cents,dunning_step) VALUES(?,?,?,?,?,'claimed',?,?)",row.id,row.invoice_id,row.customer_id,attempt,claimAt,row.amount_cents,dunningStep),
     stmt(env,"UPDATE nc_automatic_collections SET status='claimed',revision=? WHERE id=?",newId(),row.id)],
     {actor:'system:retries',action:'retry.claim',subject:row.invoice_id,detail:{attempt,policy:q.retryPolicy}})
    const current=await storedAutomaticCollection(env,row.id)

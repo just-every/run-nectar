@@ -426,5 +426,11 @@
   "retry.authentication.accept": "J’autorise une tentative d’authentification avec cette carte.",
   "retry.authentication.consent": "J’autorise {merchant} à prélever {amount} pour la facture {invoice} une seule fois avec la carte actuelle se terminant par {last4}, après confirmation auprès de ma banque. Ceci n’autorise aucune nouvelle tentative automatique ni aucune autre facture.",
   "retry.authentication.continue": "Confirmer auprès de votre banque",
-  "retry.authentication.check": "Vérifier le paiement existant"
+  "retry.authentication.check": "Vérifier le paiement existant",
+  "dunning.subject": "Mise à jour du paiement de la facture {invoice}",
+  "dunning.body": "{merchant} : la facture {invoice} présente un solde de {amount} au {date}.",
+  "dunning.invoice_only": "Veuillez payer selon les instructions de votre facture. Votre service reste actif.",
+  "dunning.update": "Mettez à jour votre moyen de paiement : {link}",
+  "dunning.update_label": "Mettre à jour le moyen de paiement",
+  "dunning.note": "Ce lien expire dans quinze minutes au plus. Enregistrer une carte n’autorise pas un paiement."
 }

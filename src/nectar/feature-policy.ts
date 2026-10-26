@@ -87,6 +87,10 @@ export async function featureDecision(env: Bindings, sub: Row, product: string, 
     }
     if (invoices.length) steps.push(`Unpaid after ${policy.grace_days} calendar days from the due date: ${invoices.map(i => i.number).join(', ')}; access restricted until settled.`)
   }
+  const dunning=await all(env,`SELECT i.id,i.number,i.due_date,${BALANCE_SQL} AS balance_cents FROM nc_dunning_series s JOIN nc_invoices i ON i.id=s.invoice_id JOIN nc_customers c ON c.id=s.customer_id
+    WHERE i.subscription_id=? AND i.status='issued' AND s.status='restrict' AND s.end_date<=? AND c.erased_at IS NULL AND ${BALANCE_SQL}>0`,sub.id,day)
+  for(const i of dunning)if(!invoices.some(v=>v.id===i.id))invoices.push({id:i.id,number:i.number,dueDate:i.due_date,balanceCents:i.balance_cents})
+  if(dunning.length)steps.push(`Owner-confirmed dunning restriction: ${dunning.map(i=>i.number).join(', ')}; access restores after settlement.`)
   return { allowed: !denied && invoices.length === 0, warning, quota, numericLimit,
     payment: { restricted: invoices.length > 0, graceDays: policy?.grace_days ?? null, invoices }, steps }
 }

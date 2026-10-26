@@ -376,6 +376,40 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "tax_exempt": "flag",
     "tax_exempt_ref": "text"
   },
+  "dunning.end": {
+    "action": "text",
+    "confirm": "flag",
+    "series": "text"
+  },
+  "dunning.enroll": {
+    "confirm": "flag",
+    "invoice": "text",
+    "policy": "text"
+  },
+  "dunning.mail.prepare": {
+    "confirm": "flag",
+    "series": "text",
+    "step": "integer"
+  },
+  "dunning.mail.send": {
+    "basis_hash": "text",
+    "confirm": "flag",
+    "delivery": "text"
+  },
+  "dunning.policy.create": {
+    "confirm": "flag",
+    "end_action": "text",
+    "end_day": "integer",
+    "invoice_only": "flag",
+    "name": "text",
+    "offsets": "text",
+    "scope": "text",
+    "scope_ref": "text"
+  },
+  "dunning.withdraw": {
+    "confirm": "flag",
+    "series": "text"
+  },
   "entity.create": {
     "*": "has",
     "address": "text",
@@ -912,6 +946,7 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
   "retry.method.prepare": {
     "authenticate": "flag",
     "confirm": "flag",
+    "dunning_delivery": "text",
     "request": "text"
   },
   "retry.policy.configure": {

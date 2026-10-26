@@ -742,3 +742,48 @@ payment. Cancellation, uncertain responses and repeated confirmation cannot
 create another provider write. Existing recovery authority exclusions and erasure
 apply to this branch. Provider guidance: [server confirmation and redirect
 authentication](https://docs.stripe.com/payments/3d-secure/authentication-flow#redirect-to-the-bank-website).
+
+## Dunning sequence preparation
+
+The current DUN-002 slice is owner-confirmed and pending ct policy approval.
+`GET dunning` and `/app/settings/dunning` expose policies, failed-invoice
+sequences, scheduled local dates and honest send outcomes to the current owner.
+
+`dunning.policy.create` takes `name`, `scope` (`default`, `plan` or `segment`),
+`scope_ref` for a price or an explicitly assigned retry segment, comma-separated
+`offsets`, `end_day`, `end_action` and `confirm`. Policies are immutable. A
+matching specific policy prevents enrollment under a default. An invoice-only
+policy uses `keep_active` and sends no update capability. `dunning.enroll` takes
+an issued failed `invoice`, the exact `policy` and `confirm`; its first-failure
+instant and billing timezone stay frozen.
+
+On a step's exact local date, `dunning.mail.prepare` takes `series`, `step` and
+`confirm`. The current owner needs a server-recorded fresh factor. Preparation
+sends nothing and freezes the recipient, amount, language, source and wording.
+`dunning.mail.send` separately confirms `delivery`, `basis_hash` and `confirm`.
+A durable claim precedes the provider call. Expired, changed, held, settled,
+withdrawn or already-claimed steps cannot send. No missed-date catch-up,
+uncertain resend or replacement preparation bypass is available.
+
+Update links use the existing fifteen-minute hosted customer session and an
+owner-prepared card setup; the earlier original factor deadline also applies.
+Saving a new default grants no debit authority. A separately prepared
+`retry.method.prepare` may name `dunning_delivery` to bind that exact message to
+the unchanged invoice and original PaymentIntent. Existing customer acceptance,
+human approval, hard-decline rules and original retry caps remain binding.
+Each claimed message is a recorded step exposure. Cash is attributed only by
+the explicitly linked collected attempt and its actual payment allocation;
+other receipts retain unrecorded attribution. No count or amount is inferred
+from message timing.
+
+After the final date, `dunning.end` requires the exact `series`, `action` and a
+fresh-factor owner `confirm`. `keep_active` leaves access unchanged;
+`mark_unpaid` records the native unpaid label without changing debt or features;
+`restrict` participates in ENT-002 decisions for only that invoice's
+subscription, restoring after actual settlement. For `cancel`, first review and
+confirm the existing governed subscription cancellation; final confirmation
+records its actual lifecycle transition and never bypasses credit governance.
+`dunning.withdraw` takes `series` and `confirm`, stops pending actions and revokes
+that sequence's emailed sessions. A restored sequence has historical custody
+but no send or terminal-action authority. Archives exclude both dunning
+authority tables, and erasure withdraws this record family.

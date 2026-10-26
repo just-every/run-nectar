@@ -8,10 +8,10 @@ interface Attempt { collection: string; attempt: number; at: number; outcome: st
 interface Allocation { id: string; payment: string; amountCents: number; at: number }
 interface FailedInvoice {
   invoice: string; number: string; currency: string; customer: string; firstFailedAt: number;
-  failedAmountCents: number; declineCode: string | null; attemptsJson: string; allocationsJson: string
+  failedAmountCents: number; declineCode: string | null; attemptsJson: string; allocationsJson: string; stepsJson: string
 }
 interface Recovery extends Allocation { attempt: number | null; step: string | null }
-interface Cohort extends Omit<FailedInvoice, 'attemptsJson' | 'allocationsJson'> { attempts: Attempt[]; recoveries: Recovery[] }
+interface Cohort extends Omit<FailedInvoice, 'attemptsJson' | 'allocationsJson' | 'stepsJson'> { steps: string[]; attempts: Attempt[]; recoveries: Recovery[] }
 export interface RecoveryTotals {
   failedInvoices: number; recoveredInvoices: number; partiallyRecoveredInvoices: number;
   failedAmountCents: number; recoveredAmountCents: number; recoveryRate: number | null; amountRecoveryRate: number | null
@@ -35,6 +35,7 @@ SELECT f.invoice_id AS invoice,i.number,i.currency,f.customer_id AS customer,
  (SELECT json_group_array(json_object('collection',r.collection_id,'attempt',r.attempt,'at',r.attempted_at,
    'outcome',r.outcome,'payment',r.payment_id,'step',r.dunning_step))
   FROM attempts r WHERE r.invoice_id=f.invoice_id AND r.attempted_at>=f.attempted_at AND r.attempted_at<=?) AS attemptsJson,
+ (SELECT json_group_array('dunning:'||d.id) FROM nc_dunning_deliveries d WHERE d.invoice_id=f.invoice_id AND d.claimed_at>=f.attempted_at AND d.claimed_at<=?) AS stepsJson,
  (SELECT json_group_array(json_object('id',a.id,'payment',a.payment_id,'amountCents',a.amount_cents,'at',a.allocated_at))
   FROM nc_allocations a JOIN nc_payments p ON p.id=a.payment_id
   WHERE a.invoice_id=f.invoice_id AND p.customer_id=f.customer_id AND p.currency=i.currency
@@ -46,7 +47,7 @@ WHERE f.ordinal=1 AND c.erased_at IS NULL
 ORDER BY f.attempted_at,f.invoice_id`
 
 function cohort(row: FailedInvoice): Cohort {
-  const { attemptsJson, allocationsJson, ...source } = row
+  const { attemptsJson, allocationsJson, stepsJson, ...source } = row
   const attempts = (JSON.parse(attemptsJson) as Attempt[]).sort((a,b)=>a.at-b.at || a.attempt-b.attempt || a.collection.localeCompare(b.collection))
   const allocations = (JSON.parse(allocationsJson) as Allocation[]).sort((a,b)=>a.at-b.at || a.id.localeCompare(b.id))
   let remaining = source.failedAmountCents
@@ -59,7 +60,7 @@ function cohort(row: FailedInvoice): Cohort {
     recoveries.push({...allocation,amountCents,attempt:attempt?.attempt ?? null,step:attempt?.step ?? null})
     remaining -= amountCents
   }
-  return {...source,attempts,recoveries}
+  return {...source,steps:JSON.parse(stepsJson),attempts,recoveries}
 }
 
 function totals(cohorts: Cohort[]): RecoveryTotals {
@@ -80,7 +81,7 @@ function buckets(cohorts: Cohort[], dimension: 'decline' | 'attempt' | 'step'): 
   for (const invoice of cohorts) {
     const recoveryKey=(r:Recovery)=>dimension==='decline' ? invoice.declineCode ?? 'unknown' : dimension==='attempt' ? String(r.attempt ?? 'unattributed') : r.step ?? 'unrecorded'
     const keys=new Set(dimension==='decline' ? [invoice.declineCode ?? 'unknown'] : dimension==='attempt'
-      ? invoice.attempts.map(a=>String(a.attempt)) : invoice.attempts.map(a=>a.step ?? 'unrecorded'))
+      ? invoice.attempts.map(a=>String(a.attempt)) : [...invoice.steps,...invoice.attempts.map(a=>a.step ?? 'unrecorded')])
     invoice.recoveries.forEach(r=>keys.add(recoveryKey(r)))
     for (const key of keys) {
       const id=JSON.stringify([invoice.currency,key]),group=groups.get(id) ?? {key,currency:invoice.currency,invoices:[]}
@@ -95,7 +96,7 @@ function buckets(cohorts: Cohort[], dimension: 'decline' | 'attempt' | 'step'): 
 export async function retryRecoveryReport(env: Bindings, actor: Actor) {
   requireRead(actor,'reports'); requireRead(actor,'payments'); requireRead(actor,'invoices')
   const asOf=clockInstant(env)
-  const cohorts=(await all<FailedInvoice>(env,sourceSql,asOf,asOf,asOf,asOf)).map(cohort)
+  const cohorts=(await all<FailedInvoice>(env,sourceSql,asOf,asOf,asOf,asOf,asOf)).map(cohort)
   const currencies=[...new Set(cohorts.map(c=>c.currency))].sort().map(currency=>({currency,...totals(cohorts.filter(c=>c.currency===currency))}))
   const counts=totals(cohorts)
   return {asOf,definition,period:'All recorded failures',

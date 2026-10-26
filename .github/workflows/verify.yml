@@ -45,3 +45,9 @@ jobs:
         run: |
           node tests/nectar/payment-retries-browser.mjs
           node tests/nectar/payment-retries-browser.mjs churn
+
+      - name: Dunning sequence browser journeys
+        if: ${{ matrix.shard == 0 }}
+        run: |
+          node tests/nectar/dunning-browser.mjs
+          node tests/nectar/dunning-browser.mjs custody

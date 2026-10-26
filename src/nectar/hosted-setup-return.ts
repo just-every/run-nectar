@@ -21,7 +21,8 @@ const currentBasis = `c.erased_at IS NULL AND c.status='active' AND c.revision=s
   AND p.revoked_at IS NULL AND p.audience='hosted' AND p.parent_origin=''
   AND p.issued_at<=? AND p.expires_at>? AND p.expires_at-p.issued_at=?
   AND EXISTS(SELECT 1 FROM json_each(policy.hosts_json) WHERE value=p.origin)
-  AND NOT EXISTS(SELECT 1 FROM nc_erased_records WHERE record_id IN(s.id,c.id,b.id,p.id))`
+  AND NOT EXISTS(SELECT 1 FROM nc_erased_records WHERE record_id IN(s.id,c.id,b.id,p.id))
+  AND NOT EXISTS(SELECT 1 FROM nc_dunning_mail_authority a JOIN nc_dunning_deliveries d ON d.id=a.id WHERE a.portal_session_id=p.id AND d.expires_at<=?)`
 const sessionBasis = `p.id=? AND p.customer_id=? AND p.origin=? AND p.audience=?
   AND p.parent_origin=? AND p.issued_at=? AND p.expires_at=?`
 const returnSource = `FROM nc_hosted_setup_returns r
@@ -35,7 +36,7 @@ const liveReturn = `r.id=? AND r.purpose='hosted-setup' AND r.consumed_at IS NUL
   AND NOT EXISTS(SELECT 1 FROM nc_erased_records WHERE record_id=r.id)`
 
 const sessionParams = (session: CustomerSession) => [session.jti, session.customer, session.origin, session.audience, session.parent, session.iat, session.exp]
-const timeParams = (at: number) => [at, at, PORTAL_LIFETIME]
+const timeParams = (at: number) => [at, at, PORTAL_LIFETIME, at]
 
 export async function createSetupReturn(env: Bindings, session: CustomerSession, setup: string, account: string, livemode: boolean) {
   const at = clockInstant(env), expiresAt = Math.min(at + PORTAL_LIFETIME, session.exp)

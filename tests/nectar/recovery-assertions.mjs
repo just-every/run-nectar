@@ -15,7 +15,7 @@ export function assertRecoveryBuckets(report,rows){
  for(const [field,exposures,attribution] of [
   ['byDecline',r=>[r.declineCode??'unknown'],(r,c)=>r.declineCode??'unknown'],
   ['byAttempt',r=>r.attempts.map(a=>String(a.attempt)),(r,c)=>String(c.attempt??'unattributed')],
-  ['byDunningStep',r=>r.attempts.map(a=>a.step??'unrecorded'),(r,c)=>c.step??'unrecorded']
+  ['byDunningStep',r=>[...(r.steps??[]),...r.attempts.map(a=>a.step??'unrecorded')],(r,c)=>c.step??'unrecorded']
  ]){
   const groups=new Map()
   for(const row of rows){

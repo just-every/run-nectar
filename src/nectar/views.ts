@@ -1,3 +1,4 @@
+import { dunningReport } from './dunning'
 import { retryComparisonReport } from './retry-comparison'
 import { retryRecoveryReport } from './retry-report'
 import { readPaymentLinks } from './payment-links'
@@ -108,6 +109,7 @@ export const views: Record<string, View> = {
   prepaidTopupAuthorizations:(env,actor,_r,_id,url)=>readPrepaidTopupAuthorizations(env,actor,url.searchParams.get('subscription')??undefined),
   prepaidTopupClaims:(env,actor,_r,_id,url)=>readPrepaidTopupClaims(env,actor,url.searchParams.get('subscription')??undefined),
   paymentLinks:(env,actor)=>readPaymentLinks(env,actor),
+  dunning:(env,actor)=>dunningReport(env,actor),
   retryComparison:(env,actor)=>retryComparisonReport(env,actor),
   retryRecovery:(env,actor)=>retryRecoveryReport(env,actor),
   automaticCollections:(env,actor,_r,_id,url)=>automaticCollections(env,actor,url.searchParams.get('customer')??undefined),

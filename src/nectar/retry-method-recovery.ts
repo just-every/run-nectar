@@ -1,3 +1,4 @@
+import { dunningRecoveryLink, dunningRecoveryStatements } from './dunning-recovery'
 // An exact recovery authorizes one confirmation of the existing intent.
 import type { Bindings } from '../auth.server'
 import { actorLabel, requireMember, type Actor } from './actor'
@@ -122,7 +123,7 @@ export async function claimRetryMethodRecovery(env:Bindings,row:Row,quote:Automa
 function event(env:Bindings,row:Row,kind:string,actor:string,detail:Row){return stmt(env,'INSERT INTO nc_retry_method_recovery_events(id,recovery_id,customer_id,kind,actor,at,detail_json) VALUES(?,?,?,?,?,?,?)',newId(),row.id,row.customer_id,kind,actor,clockInstant(env),canonical(detail))}
 
 export async function prepareRetryMethodRecovery(env:Bindings,actor:Actor,input:Input){
- const factor=await setupOwner(env,actor);input.only(['request','authenticate','confirm','returnTo']);insist(input.flag('confirm'),'retry_recovery_confirmation_required')
+ const factor=await setupOwner(env,actor);input.only(['request','authenticate','confirm','dunning_delivery','returnTo']);insist(input.flag('confirm'),'retry_recovery_confirmation_required')
  const row=await storedAutomaticCollection(env,input.text('request',{max:100})),original=await validateAutomaticBasis(row),at=clockInstant(env)
  const series=await one(env,'SELECT * FROM nc_retry_series WHERE collection_id=?',row.id),prior=await retryAttemptQuote(env,row)
  insist(original.retryPolicy&&original.method.kind==='card'&&row.status==='refused'&&row.payment_intent_ref&&!row.payment_id&&!row.charge_ref
@@ -141,10 +142,12 @@ export async function prepareRetryMethodRecovery(env:Bindings,actor:Actor,input:
  const business=await one(env,'SELECT * FROM nc_business WHERE singleton=1'),customer=await one(env,'SELECT language FROM nc_customers WHERE id=?',row.customer_id),source=await nativeCollectionSource(env,row.invoice_id),hold=await collectionHold(env,row.invoice_id)
  insist(business&&business.revision===original.businessRevision,'retry_recovery_basis_changed',409)
  const L=customerText(customer?.language),quote:AutomaticQuote={...original,method,wordingVersion:authentication?'exact-invoice-authentication-1':'exact-invoice-new-card-1',wording:recoveryText(customer?.language,authentication).consent(business.legal_name,L.money(original.amountCents),source.row.number,method.summary.last4)}
+ const dunningDelivery=input.text('dunning_delivery',{max:100,optional:true})
+ const delivery=dunningDelivery?await dunningRecoveryLink(env,dunningDelivery,row.invoice_id,row.customer_id):null
  const id=newId(),hash=await fingerprint(quote)
  insist(source.payerId===original.customer&&source.row.total_cents===original.amountCents&&source.collectibleCents===original.amountCents&&!hold.hold&&!hold.disputedCents&&hold.collectibleCents===original.amountCents,'retry_recovery_invoice_changed',409)
  const proposal={id,customer_id:row.customer_id,revision:newId(),quote_json:canonical(quote),quote_hash:hash}
- await commit(env,[...setupOwnerFence(env,actor),automaticAuthority(env,row),nativeSourceGuard(env,source),recoveryMethodGuard(env,row,quote),
+ await commit(env,[...setupOwnerFence(env,actor),...(delivery?dunningRecoveryStatements(env,id,delivery):[]),automaticAuthority(env,row),nativeSourceGuard(env,source),recoveryMethodGuard(env,row,quote),
  guard(env,'retry_recovery_state_changed',`EXISTS(SELECT 1 FROM nc_retry_series WHERE collection_id=? AND revision=? AND attempts=? AND deadline>=? AND status IN ('blocked','scheduled'))
  AND NOT EXISTS(SELECT 1 FROM nc_retry_attempts WHERE collection_id=? AND outcome='claimed')`,row.id,series.revision,series.attempts,clockInstant(env),row.id),
  guard(env,'retry_recovery_original_method_required',`EXISTS(SELECT 1 FROM nc_card_lifecycle WHERE account_ref=? AND stripe_customer_ref=? AND payment_method_ref=? AND unusable_at IS NOT NULL AND unusable_reason=?)`,original.accountRef,prior.method.customerRef,prior.method.paymentMethodRef,series.decline_code),

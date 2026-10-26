@@ -75,7 +75,7 @@ main > h1, .title-row { margin-bottom: 22px; }
 p { margin: 0 0 12px; }
 
 /* The warning preview follows the app CSP; long private links wrap locally. */
-.card-expiry-message { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }
+.card-expiry-message, .dunning-message { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }
 
 /* Cards */
 .card { background: var(--nc-surface); border: 1px solid var(--nc-card-edge); border-radius: var(--nc-radius-card); box-shadow: 0 1px 2px rgba(20, 23, 27, .03); padding: 22px 24px; margin: 0 0 16px; }
