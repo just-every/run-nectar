@@ -84,11 +84,14 @@ export async function dunningCustodyFlow(h,owner,{onState=async()=>{}}={}) {
  await api('dunning.withdraw',{series:concurrent.series,confirm:true})
  assert.equal((await api('dunning')).series.find(s=>s.id===concurrent.series).status,'withdrawn')
  await api('dunning.mail.send',payload(race),409)
+ const beforeErasure=h.mails.length
  const erasure=await api('erasure.request',{customer})
+ assert.equal(h.mails.length,beforeErasure+1,'The erasure request sends its own verification message')
+ assert.deepEqual(h.mails.at(-1).to,['updated@example.test'])
  await api('erasure.verify',{request:erasure.id,reason:'Verified own-customer request',evidence:file('dunning-identity.txt','Synthetic identity verification','text/plain')})
  await api('erasure.approve',{request:erasure.id,confirm:true})
  assert.deepEqual((await api('dunning')).series,[])
  await api('dunning.mail.send',payload(race),409)
- assert.equal(h.mails.length,after+1)
+ assert.equal(h.mails.length,beforeErasure+1,'Erasure and refused dunning replays send nothing beyond the original verification message')
  console.log('dunningCustodyFlow: current owner only, exact recipient and source, inclusive expiry, paid stop, no uncertain resend or preparation bypass, concurrent once-only claim, exact audit and erasure withdrawal')
 }

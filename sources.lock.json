@@ -3241,6 +3241,10 @@
       "sha256": "1d05fa7732bf89e37512ff53fc01d26b021dbc2188ac42ae64034b2026cb26da",
       "executable": false
     },
+    "src/nectar/dunning-setup.ts": {
+      "sha256": "6ffa2d7fdafdd92015aa3d8f1d763d223d067f917de3dd4687e7503205a1fbe6",
+      "executable": false
+    },
     "src/nectar/dunning.ts": {
       "sha256": "845fa758791f136f6f0c2b65dc31d9a18829eea20b28e9b9a941ca32fb8598c3",
       "executable": false
@@ -4746,7 +4750,7 @@
       "executable": false
     },
     "tests/nectar/billing-roles.mjs": {
-      "sha256": "121dd185bff2d0614a1ba396b04907869161a512f4e142fff9a0e51b59a22509",
+      "sha256": "2a6ce199ff829541060e0022f40a866bc1df1a6853ab7e2950fdc2537401232b",
       "executable": false
     },
     "tests/nectar/cadences.mjs": {
@@ -4866,7 +4870,7 @@
       "executable": false
     },
     "tests/nectar/dunning-custody.mjs": {
-      "sha256": "3368c83ce23788e5e691365dd6872efe8e73d3761ce293f789e8a88225b90f87",
+      "sha256": "bfb7cb48d421105b1bf493962778f343c08c1d3c60ff55a0656b86b23d56d8dd",
       "executable": false
     },
     "tests/nectar/dunning-sequences.mjs": {
