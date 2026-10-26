@@ -678,3 +678,37 @@ An over-billed `seat_ramp` case accepts one linked invoice-credit `proposal.crea
 `card.expiry.prepare` accepts customer, subscription, prepared replacement setup and confirmation. `card.expiry.send` requires the returned notice reference, exact basis digest and a second explicit confirmation. Customer reads expose `cardExpiryNotices`; only the preparing owner's current fresh session receives the executable preview. Restore retains historical outcomes and excludes executable send authority. These doors neither create debit authority nor retry uncertain mail.
 
 Signed Stripe card observations enter at `POST ./api/nectar/stripe/card-events`. Configure the optional installation secret `STRIPE_WEBHOOK_SECRET` for that endpoint. With no secret the receiver denies intake. It verifies the signature over the exact raw bytes and a five-minute timestamp window, resolves one live native binding, then fetches the genuine event and current card facts from that binding’s processor account. Duplicate deliveries reconcile the original observation. Signed payloads alone never authorize notices, default changes or charges.
+
+### Native payment retry policy and recovery
+
+`POST /api/nectar/retry.policy.configure` requires an owner session with a fresh
+factor and explicit `confirm`. `max_attempts` includes the original failure;
+`window_days` bounds the elapsed failure window. Optional `plan` is the catalogue
+price reference used by that plan. These settings affect only future exact
+invoice consent. `automatic.collection.prepare` accepts `enable_retries`; it is
+false unless explicitly selected. The customer and human approval steps retain
+ordinary automatic-collection custody.
+
+A failed invoice response includes `attempt_count`, `next_payment_attempt`
+(epoch milliseconds, or null), and `retry_status`. The invoice page and the
+consented endpoint's `invoice.payment_failed` snapshot use the same stored count
+and scheduled instant at failure. Later holds and revoked authority suppress the
+current next time; immutable earlier events remain historical snapshots.
+
+`GET /api/nectar/recovery` reads recorded failed cohorts and actual allocated
+payments, with currency, decline reason, attempt and recorded dunning-step
+breakdowns. `GET /api/nectar/retry-comparison` publishes the known-outcome test set,
+the default and fixed schedules, their rates and amounts, and every configured
+policy's replay. Both reports retain their declared read capabilities.
+
+`POST /api/nectar/retry.churn.record` lets a fresh-factor owner explicitly
+attribute an actually ended subscription to its unpaid failed invoice. It binds
+`invoice`, `subscription_revision` and `end_date`, requires `confirm`, and neither
+ends a subscription nor changes a financial fact. Exhausted retries alone never
+count as churn. The recovery report exposes eligible exact attributions to the
+owner and the resulting count to authorized report readers.
+
+See the [versioned decline table](docs/retry-table.md) and
+[published timing comparison](docs/retry-comparison.md). Automatic retry policy
+approval and the remaining live processor matrix are still pending; these
+native test-mode doors do not establish production operation.
