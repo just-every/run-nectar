@@ -125,7 +125,7 @@ export async function prepareRetryMethodRecovery(env:Bindings,actor:Actor,input:
  &&HARD_CARD_DECLINES.has(series.decline_code),'retry_recovery_not_eligible',409)
  const {stripe}=await stripeForAccount(env,original.accountRef),identity:PaymentIdentity={accountRef:original.accountRef,customerRef:prior.method.customerRef,paymentMethodRef:prior.method.paymentMethodRef,livemode:false,invoiceId:row.invoice_id,requestId:row.id,key:await fingerprint(['nectar-automatic-collection-1',original.accountRef,row.invoice_id]),amountCents:original.amountCents,currency:'usd'}
  const observed=await readIntent(stripe,identity,row.payment_intent_ref,row.claimed_at,at),refusal=await refusedPayment(stripe,observed,identity)
- insist(refusal&&!refusal.retryProhibited&&refusal.paymentIntentRef===row.payment_intent_ref&&(refusal.declineCode??refusal.errorCode)===series.decline_code,'retry_prior_outcome_unconfirmed',409)
+ insist(refusal&&refusal.paymentIntentRef===row.payment_intent_ref&&(refusal.declineCode??refusal.errorCode)===series.decline_code,'retry_prior_outcome_unconfirmed',409)
  const history=await stripe(`/charges?${new URLSearchParams({payment_intent:row.payment_intent_ref,limit:'100'})}`)
  insist(history.object==='list'&&history.has_more===false&&Array.isArray(history.data)&&history.data.every((charge:Row)=>charge.object==='charge'&&charge.status==='failed'&&charge.paid===false&&charge.captured!==true),'retry_prior_outcome_unconfirmed',409)
  const method=await savedCollectionMethod(stripe,original.method.customerRef)
