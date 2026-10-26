@@ -31,7 +31,7 @@ export async function prepareHostedSetup(env: Bindings, actor: Actor, input: Inp
   const id = newId()
   await commit(env, [...setupOwnerFence(env, actor),
     guard(env, 'hosted_setup_source_changed', `EXISTS(SELECT 1 FROM nc_stripe_customer_bindings b JOIN nc_customers c ON c.id=b.customer_id WHERE b.id=? AND b.revision=? AND c.id=? AND c.revision=? AND c.erased_at IS NULL AND c.status='active' AND NOT EXISTS(SELECT 1 FROM nc_erased_records WHERE record_id IN(b.id,c.id)))`, binding, row.revision, customer, row.customer_revision),
-    stmt(env, `INSERT INTO nc_hosted_setups(id,customer_id,binding_id,binding_revision,method,status,livemode,created_by,created_at,customer_revision,account_ref,customer_ref,factor_ref,factor_verified_at) VALUES(?,?,?,?,?,'prepared',0,?,?,?,?,?,?,?)`, id, customer, binding, row.revision, method, actor.id, clockInstant(env),row.customer_revision,row.account_ref,row.stripe_customer_ref,factor.reference,factor.verifiedAt),
+    stmt(env, `INSERT INTO nc_hosted_setups(id,customer_id,binding_id,binding_revision,method,status,livemode,created_by,created_at,customer_revision,account_ref,customer_ref,factor_ref,factor_verified_at,owner_session_id) VALUES(?,?,?,?,?,'prepared',0,?,?,?,?,?,?,?,?)`, id, customer, binding, row.revision, method, actor.id, clockInstant(env),row.customer_revision,row.account_ref,row.stripe_customer_ref,factor.reference,factor.verifiedAt,actor.sessionId),
   ], { actor: actorLabel(actor), action: 'checkout.setup.prepare', subject: id, detail: { customer, method, testMode: true, account:row.account_ref, sourceRevision:row.customer_revision, factorVerification:factor.reference, factorVerifiedAt:factor.verifiedAt } })
   return { id, customer, method, status: 'prepared' }
 }

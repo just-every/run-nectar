@@ -192,6 +192,19 @@ export async function customerSearchFlow(h, owner, onReady = async () => {},inte
   const laterReceipt=await api(`payments/${laterPayment.payment}/receipt`)
   assert.ok(laterReceipt.sequence>Math.max(...processorRecord.receipts.map(row=>row.sequence)),'Financial removal never recycles an old customer receipt number')
   for(const receipt of processorRecord.receipts)assert.deepEqual(await api(`customers?search=${receipt.number}`),[],'A removed customer receipt never resolves to another customer')
+  // Customer capture cannot outlive the current authority that prepared it.
+  await api('mfa.verify',{code:totp(factor.secret,Date.parse(h.vars.NECTAR_LOCAL_TIME))})
+  const revokedSource=await create('synthetic-nectar-821','Synthetic setup authority','synthetic-nectar-821@example.test')
+  const revokeBinding=await api('collection.customer.bind',{customer:revokedSource,account_ref:'synthetic-nectar-native-account-1',stripe_customer_ref:'synthetic-nectar-native-customer-4',confirm:true})
+  const revokedSetup=await api('checkout.setup.prepare',{customer:revokedSource,binding:revokeBinding.id,method:'card',confirm:true})
+  const scopedSession=await api('portal.session.issue',{customer:revokedSource,origin:h.origin,audience:'hosted'})
+  const scopedPage=await h.page(`/portal/payment-methods?session=${encodeURIComponent(scopedSession.token)}`)
+  const consentHash=scopedPage.match(/name="consent_hash" value="([^"]+)"/)[1]
+  const createsBefore=setupEdge.calls.filter(call=>call.operation==='create').length
+  assert.equal((await h.raw('/auth/signout',{cookie:owner,body:{}})).status,204)
+  const refusedSource=await h.raw(`/portal/payment-methods/start?session=${encodeURIComponent(scopedSession.token)}`,{body:{setup:revokedSetup.id,confirm:true,consent_hash:consentHash,make_default:true}})
+  assert.equal(refusedSource.status,409,'A signed-out preparing owner cannot authorize a later customer claim')
+  assert.equal(setupEdge.calls.filter(call=>call.operation==='create').length,createsBefore,'A revoked source causes no provider write')
   console.log('CUS-001 customer lookup, literal searches, scoped billing evidence, totals and role custody passed')
   return { customer, other, invoice, credit }
 }

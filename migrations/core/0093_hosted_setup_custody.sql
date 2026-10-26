@@ -1,4 +1,5 @@
 ALTER TABLE nc_hosted_setups ADD COLUMN customer_revision TEXT;
+ALTER TABLE nc_hosted_setups ADD COLUMN owner_session_id TEXT;
 ALTER TABLE nc_hosted_setups ADD COLUMN account_ref TEXT;
 ALTER TABLE nc_hosted_setups ADD COLUMN customer_ref TEXT;
 ALTER TABLE nc_hosted_setups ADD COLUMN factor_ref TEXT;
