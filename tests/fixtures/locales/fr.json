@@ -393,5 +393,13 @@
   "automatic.returned": "Paiement ACH retourné ; la facture reste due",
   "paymentLink.receipt": "Reçu",
   "paymentLink.oneTime.recording": "Votre paiement a été encaissé ; la facture est en cours de préparation. Ne payez pas à nouveau.",
-  "automatic.historical": "Conditions historiques ; aucun nouveau prélèvement n’est autorisé"
+  "automatic.historical": "Conditions historiques ; aucun nouveau prélèvement n’est autorisé",
+  "methods.default": "Choisir par défaut",
+  "methods.remove": "Supprimer le moyen",
+  "methods.confirm.default": "Utiliser ce moyen par défaut. Ceci ne permet aucun débit.",
+  "methods.confirm.remove": "Supprimer ce moyen enregistré auprès du prestataire.",
+  "methods.status.prepared": "Confirmez votre choix ci-dessous.",
+  "methods.status.uncertain": "Le résultat du prestataire reste incertain. Consultez la demande originale sans la répéter.",
+  "methods.status.complete": "Votre choix de moyen de paiement est terminé.",
+  "methods.status.superseded": "Un choix préparé plus récent a remplacé cette demande."
 }

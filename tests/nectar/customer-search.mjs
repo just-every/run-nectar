@@ -169,7 +169,7 @@ export async function customerSearchFlow(h, owner, onReady = async () => {},inte
   assert.equal(retained.totalCents, null, 'CUS-001 a period owned by the previous biller is not quoted as a Nectar charge')
   assert.match(await h.page(`/app/customers/${moved.id}?preview_period=2026-08`, owner), /Previous biller owns this period/)
   await assertHostedSetups(h,owner,{customer:nativeCustomer,other,binding:nativeBinding.id,finance,edge:setupEdge,onState:interaction.hostedState,executeStart:interaction.startHosted,executeFinish:interaction.finishHosted,executePrepare:interaction.prepareHosted})
-  await assertPortalMethodActions(h,owner,{customer:nativeCustomer,other,binding:nativeBinding.id,finance,edge:setupEdge,onState:interaction.methodState})
+  await assertPortalMethodActions(h,owner,{customer:nativeCustomer,other,binding:nativeBinding.id,finance,edge:setupEdge,onState:interaction.methodState,executePrepare:interaction.prepareMethodAction,executeAction:interaction.confirmMethodAction})
   const erasure = await api('erasure.request', { customer: nativeCustomer })
   await api('erasure.verify', { request: erasure.id, reason: 'synthetic-nectar-5', evidence: file('synthetic-nectar-5.txt', 'synthetic-nectar-5', 'text/plain') })
   const erasedApproval=await api('erasure.approve', { request: erasure.id, confirm: true })

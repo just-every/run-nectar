@@ -1,8 +1,9 @@
+import { customerText } from './locale'
 // Explicit customer choices over completed hosted setup, never debit authority.
 import type { Bindings } from '../auth.server'
 import { actorLabel, type Actor } from './actor'
 import { clockInstant } from './clock'
-import { all, commit, guard, insist, newId, one, stmt, type Row } from './core'
+import { all, commit, fingerprint, guard, insist, newId, one, stmt, type Row } from './core'
 import { customerHostedSetups } from './hosted-setup'
 import { setupOwner, setupOwnerFence } from './hosted-setup-basis'
 import type { Input } from './input'
@@ -82,6 +83,14 @@ function view(row: Row, historical=false) {
     acceptedAt:row.accepted_at,completedAt:row.completed_at,historical,debitAuthority:false}
 }
 
+export async function methodActionConsent(env: Bindings, session: CustomerSession, operation: string) {
+  const merchant=await one(env,'SELECT legal_name FROM nc_business WHERE singleton=1')
+  insist(merchant?.legal_name,'business_identity_required',409)
+  const L=customerText(session.language,session.currency)
+  const wording={version:'nectar-method-choice-1',merchant:merchant.legal_name,language:session.language,operation,text:L.t(operation==='default'?'methods.confirm.default':'methods.confirm.remove')}
+  return {wording,hash:await fingerprint(wording)}
+}
+
 export async function preparePortalMethodAction(env: Bindings, actor: Actor, input: Input) {
   const factor=await setupOwner(env,actor)
   input.only(['customer','binding','setup','operation','confirm','returnTo'])
@@ -134,16 +143,18 @@ export async function customerPortalMethodActions(env: Bindings, session: Custom
     UNION ALL SELECT h.id,h.customer_id,NULL,NULL,NULL,h.setup_id,h.account_ref,h.customer_ref,h.method_ref,NULL,0,h.operation,h.status,h.previous_default_ref,NULL,h.created_at,NULL,NULL,NULL,NULL,h.accepted_at,h.completed_at,1
     FROM nc_portal_method_action_history h WHERE h.customer_id=? AND NOT EXISTS(SELECT 1 FROM nc_portal_method_actions a WHERE a.id=h.id)
     AND NOT EXISTS(SELECT 1 FROM nc_erased_records WHERE record_id IN(h.id,h.setup_id,h.customer_id)) ORDER BY created_at,id`,session.customer,session.customer)
-  return rows.map(row=>view(row,row.historical===1))
+  return Promise.all(rows.map(async row=>({...view(row,row.historical===1),consentHash:(await methodActionConsent(env,session,row.operation)).hash})))
 }
 
 export async function operatePortalMethodAction(env: Bindings, session: CustomerSession, input: Input, operation: 'confirm'|'reconcile') {
   sessionShape(env,session)
-  input.only(['action','confirm'])
+  input.only(['action','confirm','consent_hash'])
   insist(input.flag('confirm'),'portal_method_confirmation_required')
   const row=await one(env,`SELECT a.*,s.method ${source} WHERE a.id=? AND a.customer_id=? AND ${current}`,input.text('action'),session.customer)
   insist(row,'portal_method_not_found',404)
   insist(operation==='confirm'?row.status==='prepared':row.status==='uncertain','portal_method_already_claimed',409)
+  const consent=await methodActionConsent(env,session,row.operation)
+  insist(input.text('consent_hash')===consent.hash,'portal_method_consent_changed',409)
   const at=clockInstant(env)
   insist(await one(env,`SELECT 1 ${source} WHERE a.id=? AND ${current} AND ${liveOwner} AND ${portal}`,row.id,...ownerParams(at),...portalParams(session,at)),'portal_method_source_changed',409)
   const {stripe}=await stripeForAccount(env,row.account_ref).catch(providerUnavailable)
@@ -160,7 +171,7 @@ export async function operatePortalMethodAction(env: Bindings, session: Customer
     await commit(env,[actionFence(env,session,row,'prepared'),...(row.operation==='remove'?[removalFence(env,row)]:[]),
       stmt(env,"UPDATE nc_portal_method_actions SET status='uncertain',customer_session_id=?,accepted_at=? WHERE id=?",session.jti,at,row.id),
       stmt(env,"UPDATE nc_portal_method_action_history SET status='uncertain',accepted_at=? WHERE id=?",at,row.id),
-    ],{actor:`customer:portal:${session.customer}`,action:'portal.method.claim',subject:row.id,detail:{customer:session.customer,setup:row.setup_id,operation:row.operation,account:row.account_ref,testMode:true,previous:row.previous_default_ref,selected:row.method_ref,acceptedAt:at}})
+    ],{actor:`customer:portal:${session.customer}`,action:'portal.method.claim',subject:row.id,detail:{customer:session.customer,setup:row.setup_id,operation:row.operation,account:row.account_ref,testMode:true,previous:row.previous_default_ref,selected:row.method_ref,acceptedAt:at,wording:consent.wording,wordingHash:consent.hash}})
     if(row.operation==='default') {
       const result=await stripe(`/customers/${encodeURIComponent(row.customer_ref)}`,new URLSearchParams({'invoice_settings[default_payment_method]':row.method_ref}),`nectar-portal-method-${row.id}`).catch(providerUnavailable)
       insist(result.object==='customer' && result.id===row.customer_ref && !result.deleted && result.livemode===false && defaultRef(result)===row.method_ref,'portal_method_uncertain',409)

@@ -44,24 +44,26 @@ export function portalMethodActionsEdge(edge) {
 }
 
 /** Run after assertHostedSetups, before its populated customer's erasure. */
-export async function assertPortalMethodActions(h,owner,{customer,other,binding,edge,finance,onState=async()=>{}}) {
+export async function assertPortalMethodActions(h,owner,{customer,other,binding,edge,finance,onState=async()=>{},executePrepare,executeAction}) {
   const api=(path,body,status)=>h.api(path,owner,body,status)
   const issue=customer=>api('portal.session.issue',{customer,origin:h.origin,audience:'hosted'})
   let session=await issue(customer)
   const foreign=await issue(other)
   const read=async capability=>{
+    if(status===200&&capability===session&&executeAction)return executeAction({h,owner,customer,session,action,operation})
+    const consentHash=status===401?'unavailable':(await read(capability)).find(row=>row.id===action)?.consentHash??'unavailable'
     const response=await h.raw(`/portal/payment-methods/actions?session=${encodeURIComponent(capability.token)}`,{headers:{accept:'application/json'}})
     assert.equal(response.status,200)
     return response.json()
   }
   const post=async(action,operation='confirm',status=200,{capability=session,headers={},extra={}}={})=>{
     const response=await h.raw(`/portal/payment-methods/action${operation==='reconcile'?'/reconcile':''}?session=${encodeURIComponent(capability.token)}`,
-      {body:{action,confirm:true,...extra},headers:{accept:'application/json',...headers}})
+      {body:{action,confirm:true,consent_hash:consentHash,...extra},headers:{accept:'application/json',...headers}})
     const value=await response.json()
     assert.equal(response.status,status,`Method ${operation}: ${JSON.stringify(value)}`)
     return value
   }
-  const prepare=(setup,operation,status)=>api('portal.method.prepare',{customer,binding,setup,operation,confirm:true},status)
+  const prepare=(setup,operation,status)=>!status&&executePrepare?executePrepare({h,owner,customer,binding,setup,operation}):api('portal.method.prepare',{customer,binding,setup,operation,confirm:true},status)
   const writes=()=>edge.calls.filter(call=>['method-default','method-remove'].includes(call.operation)).length
   const sources=(await api(`customers/${customer}`)).billingRecord.hostedSetups
   const cards=sources.filter(row=>row.status==='complete'&&row.method==='card'&&!row.historical)
@@ -131,8 +133,9 @@ export async function assertPortalMethodActions(h,owner,{customer,other,binding,
   await prepare(card.id,'default',409)
   await prepare(bank.id,'remove',409)
   const removal=await prepare(second.id,'remove')
+  const removalHash=(await read(session)).find(row=>row.id===removal.id).consentHash
   const competing=await Promise.all([1,2].map(()=>h.raw(`/portal/payment-methods/action?session=${encodeURIComponent(session.token)}`,
-    {body:{action:removal.id,confirm:true},headers:{accept:'application/json'}})))
+    {body:{action:removal.id,confirm:true,consent_hash:removalHash},headers:{accept:'application/json'}})))
   assert.deepEqual(competing.map(response=>response.status).sort(),[200,409])
   assert.equal(edge.calls.filter(call=>call.operation==='method-remove'&&call.id===removal.id).length,1,'Concurrent confirmations acquire one durable claim')
 

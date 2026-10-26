@@ -3686,11 +3686,11 @@
       "executable": false
     },
     "src/nectar/portal-method-actions-page.ts": {
-      "sha256": "e4e708a32600fdfb64da62cd9a7956e0ade8ee6737e09da7fc095db4d9ec9c90",
+      "sha256": "b64db21e64d6dd0686bb039a4e42ea5c3020e2091aa8f2a0c6172366106b3397",
       "executable": false
     },
     "src/nectar/portal-method-actions.ts": {
-      "sha256": "3f0dac33e2b8b20d2b3e7baa3b71225655373604ace48f9e99ada033e3fe4b74",
+      "sha256": "65becf631c9ed2f06f2fca0b69e72af95639c02937ad95bb2fea5c95065fea32",
       "executable": false
     },
     "src/nectar/portal-page.ts": {
@@ -4562,7 +4562,7 @@
       "executable": false
     },
     "tests/fixtures/locales/fr.json": {
-      "sha256": "87bbd2de739c92ceb34c5eac0f7885afc40adb892b41af02c6f7a2bf10d8438b",
+      "sha256": "4db4003a0de13c96604d1ce3d2f12d27b0fdec4eb7a33d9bb38e867eccddfcb5",
       "executable": false
     },
     "tests/fixtures/stripe-collection-edge.mjs": {
@@ -4639,6 +4639,10 @@
     },
     "tests/nectar/cadences.mjs": {
       "sha256": "4bfaca5bc776ebf2817cd10ecdda6f557cfaf2e6731b17633436bb2bdbb9bc45",
+      "executable": false
+    },
+    "tests/nectar/card-lifecycle-sandbox.mjs": {
+      "sha256": "0aec428bc9f15411432880894c942518eeba9de5334bd2a33b3116d710f3a60a",
       "executable": false
     },
     "tests/nectar/card-lifecycle.mjs": {
@@ -4726,7 +4730,7 @@
       "executable": false
     },
     "tests/nectar/customer-search.mjs": {
-      "sha256": "8221a0641e12a9cfc13cdb3ab7fc78b1930ab72cfd301355219ceac76c84bd1d",
+      "sha256": "8b1dca377869cbdc2c94f524f3ea35bdc957466b3619ccba7cffddb2c83702ad",
       "executable": false
     },
     "tests/nectar/draft-corrections.mjs": {
@@ -4974,7 +4978,11 @@
       "executable": false
     },
     "tests/nectar/portal-method-actions.mjs": {
-      "sha256": "1de358c7c2017e1f3831cbe500b1de0876e7bc3391f310e450821dd9c1976d61",
+      "sha256": "238e7efde683ed8792d1bec852d490ede65290d30b2786f117355311310c92b9",
+      "executable": false
+    },
+    "tests/nectar/portal-methods-browser.mjs": {
+      "sha256": "38a8e71c749032530d6e199bb52a41fd0f45af2637f42ff1f37f9608fa155c61",
       "executable": false
     },
     "tests/nectar/portal-prepaid-browser.mjs": {
