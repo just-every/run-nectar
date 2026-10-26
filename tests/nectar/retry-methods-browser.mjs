@@ -40,7 +40,7 @@ try{
   acceptRecovery:async({path})=>{
    await customer.goto(h.origin+path);await shot(customer,'new-card-spanish-consent')
    const form=customer.locator('form').filter({has:customer.locator('[name=accept]')});await form.locator('[name=accept]').check()
-   await Promise.all([customer.waitForNavigation(),form.getByRole('button').click()]);await shot(customer,'new-card-spanish-accepted')
+   await Promise.all([customer.waitForNavigation(),form.getByRole('button').click()]);await shot(customer,'new-card-spanish-accepted');const state=await h.raw(path,{headers:{accept:'application/json'}});assert.equal(state.status,200);assert.equal((await state.json()).status,'pending_approval')
   },
   approveRecovery:async({finance,invoice})=>{
    const financePage=await sessionPage(finance);await financePage.goto(h.origin+`/app/invoices/${invoice}`)

@@ -33,6 +33,7 @@ export async function retryMethodRecoveryResponse(request:Request,env:Bindings):
   return new Response(request.method==='HEAD'?null:response.body,{headers:{...Object.fromEntries(response.headers),...portalHeaders,'content-security-policy':"default-src 'none'; style-src 'self'; font-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"}})
  }catch(error){
   if(!(error instanceof NectarError))throw error
+  console.warn('retry method refusal',error.code)
   if(request.headers.get('content-type')?.startsWith('application/json')||request.headers.get('accept')?.includes('application/json'))return Response.json({error:error.code},{status:error.status,headers:portalHeaders})
   const L=recoveryText(language),response=portalPage(L.unavailable,h`<h1>${L.unavailable}</h1>`,{status:error.status,lang:L.tag})
   return new Response(request.method==='HEAD'?null:response.body,{status:error.status,headers:{...Object.fromEntries(response.headers),...portalHeaders}})

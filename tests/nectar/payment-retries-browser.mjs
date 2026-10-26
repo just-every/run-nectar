@@ -25,6 +25,8 @@ try{
    const icons=await target.locator('a,button,[role=button]').evaluateAll(nodes=>nodes.filter(n=>!n.textContent.trim()&&n.querySelector('svg,img')&&!n.getAttribute('aria-describedby')).map(n=>n.outerHTML))
    assert.deepEqual(icons,[],'Icon controls have descriptive tooltips')
    await target.screenshot({path:`${directory}/${width}-${label}.png`,fullPage:true})
+   if(label==='recovery-report'||label.startsWith('churn-'))for(const title of ['Failed payments and recovered revenue','By decline reason','By retry attempt','By dunning step','Involuntary churn','Published retry comparison']){const section=target.getByRole('heading',{name:title,exact:true}).locator('..');await section.screenshot({path:`${directory}/${width}-${label}-${title.toLowerCase().replaceAll(' ','-')}.png`})}
+   if(label==='retry-settings')await target.locator('#payment-retries').screenshot({path:`${directory}/${width}-retry-settings-detail.png`})
    if(await target.locator('#automatic-collection').count())await target.locator('#automatic-collection').screenshot({path:`${directory}/${width}-${label}-detail.png`})
    console.log('BROWSER',width,label)
   }
