@@ -312,11 +312,14 @@
   "checkout.consent": "Quiero guardar un método de pago mediante Stripe.",
   "checkout.default": "Usar el método verificado como predeterminado. Esto no autoriza ningún cobro.",
   "checkout.continue": "Continuar a Stripe",
-  "checkout.finish": "Verificar y guardar",
+  "checkout.finish": "Verificar método guardado",
   "checkout.empty": "No hay un método de pago listo para configurar. Contacta con la empresa.",
   "checkout.status.prepared": "Listo para introducir los datos de pago de forma segura.",
   "checkout.status.creating": "La creación del pago está pendiente de confirmación. Contacta con la empresa; no vuelvas a empezar.",
   "checkout.status.open": "Completa la configuración en Stripe y verifica aquí el método guardado.",
   "checkout.status.updating": "La confirmación del método predeterminado está pendiente. Contacta con la empresa; no repitas la operación.",
-  "checkout.status.complete": "Se guardó tu método de pago predeterminado."
+  "checkout.status.complete": "Se guardó tu método de pago. Se aplicó tu elección separada de método predeterminado.",
+  "checkout.verify": "Comprobar la configuración original de Stripe. Esto no autoriza un cobro.",
+  "checkout.reconcile": "Comprobar configuración original",
+  "checkout.historical": "Solo configuración histórica. Se requiere una nueva configuración y consentimiento antes de usarla."
 }

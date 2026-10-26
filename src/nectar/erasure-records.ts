@@ -49,7 +49,7 @@ export async function erasurePlan(env: Bindings, customer: Row): Promise<Erasure
   for (const image of images) {
     const { table,row,key,required,foreignKeys } = image
     // Customer capabilities and investigations are operational custody, not retained financial facts.
-    if (['nc_portal_sessions','nc_assurance_cases','nc_assurance_observations'].includes(table) && image.scoped) {
+    if (['nc_hosted_setup_returns','nc_hosted_setup_history','nc_hosted_setups','nc_portal_sessions','nc_assurance_cases','nc_assurance_observations'].includes(table) && image.scoped) {
       mutations.push({ table, row, key, updates: null })
       const entry = changes.get(table) ?? { kind: table, fields: new Set<string>(), records: 0 }
       Object.keys(row).forEach(field => entry.fields.add(field)); entry.records++; changes.set(table, entry)

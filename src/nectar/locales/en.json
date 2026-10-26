@@ -312,11 +312,14 @@
   "checkout.consent": "I want to save a payment method through Stripe.",
   "checkout.default": "Make the verified payment method my default. This does not authorize a charge.",
   "checkout.continue": "Continue to Stripe",
-  "checkout.finish": "Verify and save default",
+  "checkout.finish": "Verify saved method",
   "checkout.empty": "No payment method setup is ready. Contact the business.",
   "checkout.status.prepared": "Ready to enter payment details securely.",
   "checkout.status.creating": "Checkout creation is awaiting confirmation. Contact the business; do not start again.",
   "checkout.status.open": "Complete Stripe checkout, then verify your saved method here.",
   "checkout.status.updating": "Default method confirmation is pending. Contact the business; do not repeat.",
-  "checkout.status.complete": "Your default payment method was saved."
+  "checkout.status.complete": "Your payment method was saved. Your separate default choice was applied.",
+  "checkout.verify": "Check the original Stripe setup. This does not authorize a charge.",
+  "checkout.reconcile": "Check original setup",
+  "checkout.historical": "Historical setup only. A new setup and consent are required before use."
 }

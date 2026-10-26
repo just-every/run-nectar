@@ -38,7 +38,7 @@ export async function createHostedSetup(stripe: StripeClient, input: SetupIdenti
     body.set('payment_method_options[us_bank_account][verification_method]', 'automatic')
   }
   const session = await stripe('/checkout/sessions', body, `nectar-hosted-setup-${input.id}`)
-  insist(session.object === 'checkout.session' && session.mode === 'setup' && providerReference(session.customer) === input.customerRef
+  insist(session.object === 'checkout.session' && session.mode === 'setup' && session.livemode === false && providerReference(session.customer) === input.customerRef
     && session.metadata?.nectar_setup_id === input.id, mismatch, 409)
   let redirect: URL
   try { redirect = new URL(session.url) } catch { insist(false, 'invalid_hosted_setup_redirect', 409) }
@@ -97,6 +97,6 @@ export async function setHostedDefault(stripe: StripeClient, customerRef: string
   providerReference(customerRef); providerReference(methodRef); providerReference(id)
   const customer = await stripe(`/customers/${encodeURIComponent(customerRef)}`,
     new URLSearchParams({ 'invoice_settings[default_payment_method]': methodRef }), `nectar-hosted-default-${id}`)
-  insist(customer.object === 'customer' && customer.id === customerRef && customer.deleted !== true
+  insist(customer.object === 'customer' && customer.id === customerRef && customer.deleted !== true && customer.livemode===false
     && providerReference(customer.invoice_settings?.default_payment_method) === methodRef, mismatch, 409)
 }

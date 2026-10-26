@@ -64,6 +64,7 @@ export function hostedSetupEdge(baseFetch) {
   let fault = null
   const fetch = async request => {
     const path = new URL(request.url).pathname.slice(3)
+    if(path==='/checkout/sessions' && request.method==='GET')return Response.json({object:'list',has_more:false,data:[...sessions.values()].map(row=>row.session).filter(row=>row.customer===new URL(request.url).searchParams.get('customer'))})
     const record = [...sessions.values()].find(row => [row.session.id,row.setup.id,row.method.id,row.mandate.id].some(id => path.endsWith(`/${id}`)))
     if (path === '/checkout/sessions' && request.method === 'POST') {
       const body = new URLSearchParams(await request.text()), id = body.get('metadata[nectar_setup_id]'), method = body.get('payment_method_types[0]'), customer=body.get('customer')
@@ -121,8 +122,13 @@ export async function assertHostedSetups(h, owner, { customer, other, binding, f
   await h.api('portal.configure',owner,{hosts:[h.origin],parents:[]})
   const issue=customer=>h.api('portal.session.issue',owner,{customer,origin:h.origin,audience:'hosted'})
   const otherSession=await issue(other)
+  const returnCookies=new Map()
   const post=async(session,operation,setup,status=200,extra={})=>{
-    const response=await h.raw(`/portal/payment-methods.${operation}?session=${encodeURIComponent(session.token)}`,{body:{setup,confirm:true,...extra},headers:{accept:'application/json'}})
+    const page=operation==='start'?await (await h.raw(`/portal/payment-methods?session=${encodeURIComponent(session.token)}`)).text():''
+    const hash=page.match(/name="consent_hash" value="([^"]+)"/)?.[1]??''
+    const response=await h.raw(`/portal/payment-methods.${operation}?session=${encodeURIComponent(session.token)}`,{cookie:returnCookies.get(setup),body:{setup,confirm:true,...(operation==='start'?{consent_hash:hash,make_default:true}:{}),...extra},headers:{accept:'application/json'}})
+    const returned=response.headers.getSetCookie().find(value=>value.startsWith('nectar_setup_return=')&&!value.includes('Max-Age=0'))
+    if(returned)returnCookies.set(setup,returned.split(';')[0])
     const value=await response.json()
     assert.equal(response.status,status,`Hosted ${operation}: ${JSON.stringify(value)}`)
     return value
@@ -133,6 +139,8 @@ export async function assertHostedSetups(h, owner, { customer, other, binding, f
     const current=await h.api(`customers/${customer}`,owner)
     await h.api('customer.update',owner,{customer,revision:current.revision,name:current.name,billing_email:current.billing_email,language})
   }
+  const ordinaryOwner=await h.signIn(h.vars.OWNER_EMAIL)
+  await h.api('checkout.setup.prepare',ordinaryOwner,{customer,binding,method:'card',confirm:true},403)
   await h.api('checkout.setup.prepare',finance,{customer,binding,method:'card',confirm:true},403)
   await h.api('checkout.setup.prepare',owner,{customer,binding,method:'card',confirm:true,card_number:'4242424242424242'},400)
   for(const [method,language,locale] of [['card','en','en'],['us_bank_account','es-US','es']]) {
@@ -149,6 +157,7 @@ export async function assertHostedSetups(h, owner, { customer, other, binding, f
     assert.equal(writes('create'),creates,'Refused input never contacts hosted capture')
     const opened=executeStart?await executeStart({h,owner,session,setup:setup.id,method,post:()=>post(session,'start',setup.id)}):await post(session,'start',setup.id)
     assert.equal(opened.status,'open');assert.equal(new URL(opened.url).hostname,'checkout.stripe.com')
+    if(opened.cookie)returnCookies.set(setup.id,opened.cookie)
     const provider=edge.sessions.get(setup.id)
     assert.equal(opened.url,provider.session.url)
     assert.equal(edge.calls.filter(call=>call.operation==='create').at(-1).locale,locale)
@@ -164,7 +173,7 @@ export async function assertHostedSetups(h, owner, { customer, other, binding, f
     await post(otherSession,'finish',setup.id,404)
     const finished=executeFinish?await executeFinish({h,owner,session,setup:setup.id,method,post:()=>post(session,'finish',setup.id)}):await post(session,'finish',setup.id)
     assert.equal(finished.status,'complete')
-    assert.equal((await post(session,'finish',setup.id)).status,'complete')
+    await post(session,'finish',setup.id,401)
     assert.equal(writes('default'),defaults+1,'Repeated completion updates the customer default once')
     await state('complete')
     const record=await h.api(`customers/${customer}`,owner)
@@ -191,6 +200,12 @@ export async function assertHostedSetups(h, owner, { customer, other, binding, f
   }
   await updateLanguage('en')
   const session=await issue(customer)
+  const saveOnly=await prepare('card'),defaultWrites=writes('default')
+  await post(session,'start',saveOnly.id,200,{make_default:false})
+  edge.complete(saveOnly.id)
+  await post(session,'finish',saveOnly.id)
+  assert.equal(writes('default'),defaultWrites,'Saving without the separate default choice preserves the previous default')
+  assert.equal((await h.api(`customers/${customer}`,owner)).billingRecord.hostedSetups.find(row=>row.id===saveOnly.id).defaultChoice,false)
   const isolatedCustomer=(await h.api('customer.create',owner,{external_id:'synthetic-nectar-809',name:'Synthetic hosted uncertainty',billing_email:'synthetic-nectar-809@example.test'})).id
   const isolatedBinding=await h.api('collection.customer.bind',owner,{customer:isolatedCustomer,account_ref:'synthetic-nectar-native-account-1',stripe_customer_ref:'synthetic-nectar-native-customer-3',confirm:true})
   const isolatedSession=await issue(isolatedCustomer)
@@ -208,6 +223,21 @@ export async function assertHostedSetups(h, owner, { customer, other, binding, f
     await onState({h,owner,session:capability,customer:target,setup:setup.id,state:operation==='start'?'creating':'updating',method:'card'})
     await h.api('checkout.setup.prepare',owner,{customer:target,binding:holdBinding,method:'card',confirm:true},409)
     assert.equal(writes(write),before+1,'A replacement preparation cannot bypass uncertain provider custody')
+    const recovered=await post(capability,'reconcile',setup.id)
+    assert.equal(recovered.status,operation==='start'?'open':'complete')
+    assert.equal(writes(write),before+1,'Reconciliation reads the original provider write without another POST')
   }
+  const pending=(await h.api(`customers/${isolatedCustomer}`,owner)).billingRecord.hostedSetups.find(row=>row.status==='open')
+  const beforeEraseWrites=edge.calls.filter(row=>['create','default'].includes(row.operation)).length
+  await h.api('portal.session.revoke',owner,{session:isolatedSession.id})
+  await post(isolatedSession,'finish',pending.id,401)
+  const erasure=await h.api('erasure.request',owner,{customer:isolatedCustomer})
+  const message=h.mails.toReversed().find(mail=>[mail.to].flat().includes('synthetic-nectar-809@example.test'))
+  const confirmation=new URL(`${message.text??''} ${message.html??''}`.match(/https?:\/\/[^\s"<]+\/erase\/[a-f0-9]{64}/)[0]).pathname
+  assert.equal((await h.raw(confirmation,{form:new URLSearchParams({confirm:'yes'})})).status,200)
+  const erased=await h.api('erasure.approve',owner,{request:erasure.id,confirm:true})
+  for(const table of ['nc_hosted_setups','nc_hosted_setup_history','nc_hosted_setup_returns'])assert.ok(erased.receipt.changed.some(row=>row.kind===table&&row.records>0),'Erasure withdraws setup claims, consent and return access')
+  await post(isolatedSession,'finish',pending.id,401)
+  assert.equal(edge.calls.filter(row=>['create','default'].includes(row.operation)).length,beforeEraseWrites,'Revoked or erased setup access causes no provider write')
   assert.deepEqual((await h.api(`customers/${other}`,owner)).billingRecord.hostedSetups,[])
 }

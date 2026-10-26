@@ -18,6 +18,7 @@ export const monthName = index => new Date(monthTime(index) * 1000).toISOString(
 export function stripeSandbox(secret) {
   check(typeof secret === 'string' && /^(?:sk|rk)_test_[A-Za-z0-9]+$/.test(secret), 'stripe_test_key_required')
   const run = randomUUID(), authorization = `Basic ${Buffer.from(`${secret}:`).toString('base64')}`
+  const requests=[]
   const counts = { GET: 0, POST: 0, DELETE: 0 }
   let sequence = 0
   async function request(method, path, fields = {}, timeout = 20_000) {
@@ -34,6 +35,7 @@ export function stripeSandbox(secret) {
         ...(method === 'POST' ? { body: params } : {}),
       })
     } catch { throw new SandboxFailure('stripe_transport_failed') }
+    requests.push({method,path,status:response.status,requestId:response.headers.get('request-id')})
     let value
     try { value = await response.json() } catch { throw new SandboxFailure('stripe_invalid_json', response.status) }
     if (!response.ok) throw new SandboxFailure(safeError({ code: value?.error?.code ?? value?.error?.type }).code, response.status, value?.error?.param)
@@ -68,8 +70,10 @@ export function stripeSandbox(secret) {
     observe({ method, path: url.pathname, fields, idempotencyKey: incoming.headers.get('Idempotency-Key') })
     counts[method]++
     try {
-      return await fetch(incoming.url, { method, headers: Object.fromEntries(['authorization','Stripe-Version','content-type','Idempotency-Key'].flatMap(name=>{const value=incoming.headers.get(name);return value?[[name,value]]:[]})), ...(body ? { body } : {}),
+      const response=await fetch(incoming.url, { method, headers: Object.fromEntries(['authorization','Stripe-Version','content-type','Idempotency-Key'].flatMap(name=>{const value=incoming.headers.get(name);return value?[[name,value]]:[]})), ...(body ? { body } : {}),
         redirect: 'error', signal: AbortSignal.timeout(20000) })
+      requests.push({method,path:url.pathname,status:response.status,requestId:response.headers.get('request-id')})
+      return response
     } catch { throw new SandboxFailure('stripe_worker_transport_failed') }
   }
   async function advance(clock, target, label) {
@@ -87,5 +91,5 @@ export function stripeSandbox(secret) {
     }
     throw new SandboxFailure('stripe_clock_timeout')
   }
-  return { run, counts, request, list, forward, advance, apiVersion: '2025-09-30.clover' }
+  return { run, counts, requests, request, list, forward, advance, apiVersion: '2025-09-30.clover' }
 }

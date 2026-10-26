@@ -36,7 +36,9 @@ export async function customerEvidenceMatches(env: Bindings, search: string, act
     UNION SELECT json_extract(s.method_json,'$.last4') AS last4,json_extract(s.method_json,'$.brand') AS brand,s.customer_id FROM nc_hosted_setups s
     JOIN nc_stripe_customer_bindings b ON b.id=s.binding_id AND b.revision=s.binding_revision JOIN nc_customers c ON c.id=s.customer_id
     WHERE c.erased_at IS NULL AND s.status='complete' AND s.method='card'
-    AND NOT EXISTS(SELECT 1 FROM nc_erased_records WHERE record_id IN (s.id,b.id,c.id))`)
+    AND NOT EXISTS(SELECT 1 FROM nc_erased_records WHERE record_id IN (s.id,b.id,c.id))
+    UNION SELECT json_extract(h.method_json,'$.last4'),json_extract(h.method_json,'$.brand'),h.customer_id FROM nc_hosted_setup_history h JOIN nc_customers c ON c.id=h.customer_id
+    WHERE c.erased_at IS NULL AND h.method='card' AND NOT EXISTS(SELECT 1 FROM nc_erased_records WHERE record_id IN(h.id,c.id))`)
   for(const card of savedCards){const tokens=text.replace(/[^a-z0-9]+/g,' ').trim().split(/\s+/);if(text===card.last4||tokens.length===2&&tokens.includes(card.brand.toLowerCase())&&tokens.includes(card.last4))found.add(card.customer_id)}
   for (const row of await customerProcessorFacts(env)) {
     if ([row.paymentIntentRef, row.chargeRef].some(ref => typeof ref === 'string' && ref.toLowerCase().includes(text))) found.add(row.customer)
