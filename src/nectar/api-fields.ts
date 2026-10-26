@@ -902,6 +902,17 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "invoice": "text",
     "subscription_revision": "text"
   },
+  "retry.method.decide": {
+    "confirm": "flag",
+    "confirm_single": "flag",
+    "decision": "text",
+    "quote_hash": "text",
+    "recovery": "text"
+  },
+  "retry.method.prepare": {
+    "confirm": "flag",
+    "request": "text"
+  },
   "retry.policy.configure": {
     "confirm": "flag",
     "max_attempts": "integer",

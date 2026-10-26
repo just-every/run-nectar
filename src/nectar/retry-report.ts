@@ -21,15 +21,20 @@ export interface RecoveryBucket extends RecoveryTotals { key: string; currency: 
 const definition = 'Each invoice enters once, at its first recorded failed attempt and for that failed amount. Recovery is actual payment allocations made after that failure, capped at the failed amount. A recovered invoice has its full failed amount allocated; partial recoveries contribute money but not a fully recovered invoice. Credits, pending charges and uncertain outcomes are not recovered cash. Rates use fully recovered invoices divided by failed invoices.'
 
 // One statement gives the cohort, attempts and immutable allocations one read snapshot.
-const sourceSql = `WITH failures AS (
+const sourceSql = `WITH attempts AS (
+ SELECT collection_id,invoice_id,customer_id,attempt,attempted_at,outcome,decline_code,amount_cents,payment_id,dunning_step FROM nc_retry_attempts
+ UNION ALL
+ SELECT id,invoice_id,customer_id,1,reconciled_at,'failed',COALESCE(json_extract(proof_json,'$.declineCode'),error_code),amount_cents,NULL,NULL
+ FROM nc_native_collections WHERE status IN ('declined','customer_action_required') AND reconciled_at IS NOT NULL
+), failures AS (
  SELECT r.*,ROW_NUMBER() OVER(PARTITION BY r.invoice_id ORDER BY r.attempted_at,r.collection_id,r.attempt) AS ordinal
- FROM nc_retry_attempts r WHERE r.outcome='failed' AND r.attempted_at<=?
+ FROM attempts r WHERE r.outcome='failed' AND r.attempted_at<=?
 )
 SELECT f.invoice_id AS invoice,i.number,i.currency,f.customer_id AS customer,
  f.attempted_at AS firstFailedAt,f.amount_cents AS failedAmountCents,f.decline_code AS declineCode,
  (SELECT json_group_array(json_object('collection',r.collection_id,'attempt',r.attempt,'at',r.attempted_at,
    'outcome',r.outcome,'payment',r.payment_id,'step',r.dunning_step))
-  FROM nc_retry_attempts r WHERE r.invoice_id=f.invoice_id AND r.attempted_at>=f.attempted_at AND r.attempted_at<=?) AS attemptsJson,
+  FROM attempts r WHERE r.invoice_id=f.invoice_id AND r.attempted_at>=f.attempted_at AND r.attempted_at<=?) AS attemptsJson,
  (SELECT json_group_array(json_object('id',a.id,'payment',a.payment_id,'amountCents',a.amount_cents,'at',a.allocated_at))
   FROM nc_allocations a JOIN nc_payments p ON p.id=a.payment_id
   WHERE a.invoice_id=f.invoice_id AND p.customer_id=f.customer_id AND p.currency=i.currency

@@ -406,5 +406,20 @@
   "cardExpiry.body": "{merchant}: tu tarjeta terminada en {last4} vence el {expiry}, antes de tu renovación del {renewal}.",
   "cardExpiry.linkExpiry": "Este enlace privado vence a las {expires} ({timezone}).",
   "cardExpiry.button": "Actualizar método de pago",
-  "automatic.retryConsent": "Autorizo hasta {count} intentos de pago en total durante {days} días desde el primer fallo con este mismo método para esta factura, según la tabla {version}. No se envían avisos de reintento."
+  "automatic.retryConsent": "Autorizo hasta {count} intentos de pago en total durante {days} días desde el primer fallo con este mismo método para esta factura, según la tabla {version}. No se envían avisos de reintento.",
+  "automatic.retryInitialConsent": "Autorizo a {merchant} a cobrar {amount} el {date} por esta factura con mi {method} terminada en {last4}, con los intentos limitados descritos abajo. No autorizo otra factura ni otro importe. Puedo retirar los intentos futuros tras un fallo definitivo.",
+  "automatic.retryAccept": "Acepto esta factura exacta y sus intentos de pago limitados.",
+  "retry.recovery.heading": "Reintentar con otra tarjeta",
+  "retry.recovery.accept": "Autorizo este único intento con la nueva tarjeta.",
+  "retry.recovery.confirm": "Autorizar intento",
+  "retry.recovery.withdraw": "Retirar autorización",
+  "retry.recovery.unavailable": "Esta autorización no está disponible.",
+  "retry.recovery.awaiting_customer": "Esperando tu autorización",
+  "retry.recovery.pending_approval": "Esperando aprobación",
+  "retry.recovery.active": "Autorizado",
+  "retry.recovery.rejected": "Rechazado",
+  "retry.recovery.withdrawn": "Retirado",
+  "retry.recovery.consumed": "Intento iniciado",
+  "retry.recovery.historical": "Registro histórico",
+  "retry.recovery.consent": "Autorizo a {merchant} a cobrar {amount} por la factura {invoice} una sola vez con la nueva tarjeta terminada en {last4}. Esta autorización sustituye la tarjeta del intento rechazado y no autoriza más intentos."
 }

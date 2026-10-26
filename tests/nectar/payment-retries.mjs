@@ -10,7 +10,7 @@ export async function paymentRetriesFlow(h,owner,{onState=async()=>{},prepareCol
  const factor=await api('mfa.totp.start',{});await api('mfa.totp.confirm',{factor:factor.factor,code:totp(factor.secret,instant)});await api('mfa.policy',{scope:'all'})
  await api('portal.configure',{hosts:[h.origin],parents:[]})
  await api('webhook.register',{url:'https://receiver.nectar-app.com/retries',consent:true})
- const customers=[]
+ const customers=[],createdInvoices=[]
  for(const n of [1,3,4]){
   const c=(await api('customer.create',{external_id:`synthetic-nectar-retry-${n}`,name:`Cedar retry customer ${n}`,billing_email:`retry-${n}@example.test`,language:n===3?'es-US':'en'})).id
   customers.push(c);await api('collection.customer.bind',{customer:c,account_ref:'synthetic-nectar-native-account-1',stripe_customer_ref:`synthetic-nectar-native-customer-${n}`,confirm:true})
@@ -32,6 +32,7 @@ export async function paymentRetriesFlow(h,owner,{onState=async()=>{},prepareCol
   else assert.equal((await h.raw(path,{body:{request:request.id,basis_hash:request.basis,accept:true}})).status,200)
   await api('automatic.collection.decide',{request:request.id,basis_hash:request.basis,decision:'approved',confirm:true,confirm_single:true})
   await api('invoice.approve',{invoice:id,acknowledge:true});await api('invoice.finalise',{invoice:id,issue_date:new Date(instant).toISOString().slice(0,10)})
+  createdInvoices.push(id)
   return {id,request,method,path}
  }
  const parity=async invoice=>{
@@ -106,7 +107,13 @@ export async function paymentRetriesFlow(h,owner,{onState=async()=>{},prepareCol
  assert.equal((await api(`invoices/${unknown.id}`)).balanceCents,0,'Lost confirmation response reconciles the same intent once')
  await fresh()
  const report=await api('recovery')
- assert.ok(report.totals.failedInvoices>0);assert.equal(report.totals.recoveredInvoices,3)
+ assert.deepEqual(report.invoices.map(i=>i.invoice).sort(),createdInvoices.slice().sort())
+ assert.equal(report.totals.failedAmountCents,createdInvoices.length*10000)
+ const payments=await api('payments')
+ assert.equal(report.totals.recoveredAmountCents,payments.reduce((sum,p)=>sum+p.amount_cents,0))
+ for(const record of report.invoices){const invoice=await api(`invoices/${record.invoice}`);assert.equal(record.recoveredAmountCents,invoice.allocations.reduce((sum,a)=>sum+a.amount_cents,0))}
+ assert.equal(report.byDunningStep.find(s=>s.key==='unrecorded').recoveredAmountCents,report.totals.recoveredAmountCents)
+ assert.equal(report.totals.recoveredInvoices,3)
  assert.equal(report.totals.recoveredAmountCents,30000)
  assert.equal(report.involuntaryChurn.available,true);assert.equal(report.involuntaryChurn.count,0,'Exhaustion alone is never involuntary churn')
  await onState({state:'report',id:unknown.id,report})

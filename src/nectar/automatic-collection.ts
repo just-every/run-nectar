@@ -1,3 +1,4 @@
+import { setupOwner,setupOwnerFence } from './hosted-setup-basis'
 import { selectedRetryPolicy } from './retry-policy'
 import type { Bindings } from '../auth.server'
 import { actorLabel, requireMember, type Actor } from './actor'
@@ -29,12 +30,13 @@ export async function prepareAutomaticCollection(env: Bindings, actor: Actor, in
  const method=await savedCollectionMethod(selected.stripe,binding.stripe_customer_ref,input.text('mandate_ref',{max:255,optional:true})||undefined)
  const issueDate=requireDate(input.text('issue_date',{max:10}),'issue_date')
  insist(issueDate>=localDate(clockInstant(env),business.timezone),'automatic_collection_date_invalid',409)
+ const retryFactor=input.flag('enable_retries')?await setupOwner(env,actor):undefined
  const retryPolicy=input.flag('enable_retries')?await selectedRetryPolicy(env,invoice,method.kind):undefined
- const L=customerText(invoice.language),wording=L.t('automatic.consent',{merchant:business.legal_name,amount:L.money(invoice.total_cents),date:L.day(issueDate),last4:method.summary.last4,method:L.t(method.kind==='card'?'automatic.card':'automatic.bank')})+(retryPolicy?' '+L.t('automatic.retryConsent',{count:retryPolicy.maxAttempts,days:retryPolicy.windowDays,version:retryPolicy.version}):'')
+ const L=customerText(invoice.language),wording=L.t(retryPolicy?'automatic.retryInitialConsent':'automatic.consent',{merchant:business.legal_name,amount:L.money(invoice.total_cents),date:L.day(issueDate),last4:method.summary.last4,method:L.t(method.kind==='card'?'automatic.card':'automatic.bank')})+(retryPolicy?' '+L.t('automatic.retryConsent',{count:retryPolicy.maxAttempts,days:retryPolicy.windowDays,version:retryPolicy.version}):'')
  const q:AutomaticQuote={invoice:invoice.id,customer:invoice.customer_id,customerRevision:invoice.customer_revision,fingerprint:invoice.source_fingerprint,calculation:invoice.calculation_json,
- amountCents:invoice.total_cents,currency:'usd',accountRef:selected.account,bindingId:binding.id,bindingRevision:binding.revision,method,owner:actor.id,issueDate,businessRevision:business.revision,wording,wordingVersion:retryPolicy?'exact-invoice-retries-1':'exact-invoice-1',attempts:1,...(retryPolicy?{retryPolicy}:{})}
+ amountCents:invoice.total_cents,currency:'usd',accountRef:selected.account,bindingId:binding.id,bindingRevision:binding.revision,method,owner:actor.id,issueDate,businessRevision:business.revision,wording,wordingVersion:retryPolicy?'exact-invoice-retries-1':'exact-invoice-1',attempts:1,...(retryPolicy?{retryPolicy,retryFactor}:{})}
  const id=newId(),basis=await fingerprint(q),at=clockInstant(env)
- await commit(env,[collectionAuthority(env,actor),guard(env,'automatic_collection_draft_changed',"EXISTS(SELECT 1 FROM nc_invoices WHERE id=? AND status IN ('draft','approved') AND source_fingerprint=? AND calculation_json=?)",invoice.id,q.fingerprint,q.calculation),
+ await commit(env,[collectionAuthority(env,actor),...(retryPolicy?setupOwnerFence(env,actor):[]),guard(env,'automatic_collection_draft_changed',"EXISTS(SELECT 1 FROM nc_invoices WHERE id=? AND status IN ('draft','approved') AND source_fingerprint=? AND calculation_json=?)",invoice.id,q.fingerprint,q.calculation),
  stmt(env,`INSERT INTO nc_automatic_collections(id,invoice_id,customer_id,status,basis_json,basis_hash,prepared_by,prepared_at,account_ref,stripe_customer_ref,payment_method_ref,amount_cents,method_kind,revision)
  VALUES(?,?,?,'awaiting_customer',?,?,?,?,?,?,?,?,?,?)`,id,invoice.id,invoice.customer_id,canonical(q),basis,actor.id,at,q.accountRef,method.customerRef,method.paymentMethodRef,q.amountCents,method.kind,newId()),stmt(env,'INSERT INTO nc_automatic_collection_authorizations(id,customer_id,invoice_id,basis_hash,created_by,created_at) VALUES(?,?,?,?,?,?)',id,invoice.customer_id,invoice.id,basis,actor.id,at)],
  {actor:actorLabel(actor),action:'automatic.collection.prepare',subject:id,detail:{invoice:invoice.id,basis,amountCents:q.amountCents,issueDate}})
@@ -56,9 +58,11 @@ export async function decideAutomaticCollection(env:Bindings,actor:Actor,input:I
  input.only(['request','basis_hash','decision','confirm','confirm_single','returnTo'])
  const row=await storedAutomaticCollection(env,input.text('request',{max:100})),decision=input.text('decision',{max:10})
  insist(input.flag('confirm')&&row.status==='pending_approval'&&input.text('basis_hash',{max:100})===row.basis_hash&&['approved','rejected'].includes(decision),'automatic_collection_approval_changed',409)
- await validateAutomaticBasis(row);const single=actor.id===row.prepared_by
+ const quote=await validateAutomaticBasis(row);const single=actor.id===row.prepared_by
+ const at=clockInstant(env)
+ if(quote.retryPolicy)insist(await one(env,"SELECT 1 FROM nc_mfa_sessions WHERE member_id=? AND session_id=? AND method IN ('totp','passkey') AND verified_at BETWEEN ? AND ?",actor.id,actor.sessionId,at-15*60000,at),'mfa_step_up_required',403)
  if(single){await collectionOwner(env,actor);insist(input.flag('confirm_single')&&!await one(env,other,actor.id),'second_approver_required',409)}
- await commit(env,[automaticAuthority(env,row,false),guard(env,'forbidden',"EXISTS(SELECT 1 FROM nc_members WHERE id=? AND role IN ('owner','finance') AND status='active')",actor.id),
+ await commit(env,[automaticAuthority(env,row,false),...(quote.retryPolicy?[guard(env,'mfa_step_up_required',"EXISTS(SELECT 1 FROM nc_mfa_sessions WHERE member_id=? AND session_id=? AND method IN ('totp','passkey') AND verified_at BETWEEN ? AND ?)",actor.id,actor.sessionId,at-15*60000,at)]:[]),guard(env,'forbidden',"EXISTS(SELECT 1 FROM nc_members WHERE id=? AND role IN ('owner','finance') AND status='active')",actor.id),
  ...(single?[guard(env,'second_approver_required',`NOT EXISTS(${other})`,actor.id)]:[]),
  stmt(env,'UPDATE nc_automatic_collections SET status=?,approved_by=?,approved_at=?,approval_mode=?,revision=? WHERE id=?',decision==='approved'?'active':'revoked',actor.id,clockInstant(env),single?'single-approver':'two-person',newId(),row.id)],
  {actor:actorLabel(actor),action:`automatic.collection.${decision}`,subject:row.id,detail:{basis:row.basis_hash,approvalMode:single?'single-approver':'two-person'}})

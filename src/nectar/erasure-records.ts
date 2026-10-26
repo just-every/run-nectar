@@ -49,7 +49,7 @@ export async function erasurePlan(env: Bindings, customer: Row): Promise<Erasure
   for (const image of images) {
     const { table,row,key,required,foreignKeys } = image
     // Customer capabilities and investigations are operational custody, not retained financial facts.
-    if (['nc_retry_churn','nc_retry_series','nc_retry_attempts','nc_card_expiry_notices','nc_card_expiry_notice_authority','nc_portal_method_actions','nc_portal_method_action_history','nc_automatic_collection_authorizations','nc_payment_link_attempts','nc_hosted_setup_returns','nc_hosted_setup_history','nc_hosted_setups','nc_portal_sessions','nc_assurance_cases','nc_assurance_observations'].includes(table) && image.scoped) {
+    if (['nc_retry_method_recovery_authorizations','nc_retry_method_recovery_events','nc_retry_method_recoveries','nc_retry_churn','nc_retry_series','nc_retry_attempts','nc_card_expiry_notices','nc_card_expiry_notice_authority','nc_portal_method_actions','nc_portal_method_action_history','nc_automatic_collection_authorizations','nc_payment_link_attempts','nc_hosted_setup_returns','nc_hosted_setup_history','nc_hosted_setups','nc_portal_sessions','nc_assurance_cases','nc_assurance_observations'].includes(table) && image.scoped) {
       mutations.push({ table, row, key, updates: null })
       const entry = changes.get(table) ?? { kind: table, fields: new Set<string>(), records: 0 }
       Object.keys(row).forEach(field => entry.fields.add(field)); entry.records++; changes.set(table, entry)
@@ -94,5 +94,5 @@ export async function erasurePlan(env: Bindings, customer: Row): Promise<Erasure
     mutations.push({ table, row, key, updates: Object.fromEntries(fields.map(field => [field, updates[field]])) })
     const entry=changes.get(table)??{kind:table,fields:new Set<string>(),records:0};fields.forEach(f=>entry.fields.add(f));entry.records++;changes.set(table,entry)
   }
-  return { generation,personalValues:personal, statements:erasureMutationStatements(mutations.sort((a,b)=>{const order=['nc_card_expiry_notice_authority','nc_card_expiry_notices','nc_portal_method_actions'];const rank=(table:string)=>{const i=order.indexOf(table);return i<0?order.length:i};return rank(a.table)-rank(b.table)})), changes:[...changes.values()].map(v=>({...v,fields:[...v.fields].sort()})),ids:[...ids] }
+  return { generation,personalValues:personal, statements:erasureMutationStatements(mutations.sort((a,b)=>{const order=['nc_retry_method_recovery_authorizations','nc_retry_method_recovery_events','nc_retry_method_recoveries','nc_card_expiry_notice_authority','nc_card_expiry_notices','nc_portal_method_actions'];const rank=(table:string)=>{const i=order.indexOf(table);return i<0?order.length:i};return rank(a.table)-rank(b.table)})), changes:[...changes.values()].map(v=>({...v,fields:[...v.fields].sort()})),ids:[...ids] }
 }

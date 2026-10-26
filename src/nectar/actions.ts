@@ -1,3 +1,4 @@
+import { prepareRetryMethodRecovery,decideRetryMethodRecovery } from './retry-method-recovery'
 import { recordRetryChurn } from './retry-churn'
 import { prepareCardExpiryNotice, sendCardExpiryNotice } from './card-expiry-notices'
 import { consumeCardLifecycleEvent } from './card-lifecycle'
@@ -129,6 +130,8 @@ export const actions: Record<string, Handler> = {
   'payment_link.activate': activatePaymentLink,
   'payment_link.create': createPaymentLink,
   'payment_link.deactivate': deactivatePaymentLink,
+  'retry.method.prepare': prepareRetryMethodRecovery,
+  'retry.method.decide': decideRetryMethodRecovery,
   'retry.churn.record': recordRetryChurn,
   'retry.policy.configure': configureRetryPolicy,
   'automatic.collection.prepare': prepareAutomaticCollection,

@@ -1,3 +1,4 @@
+import { retryMethodRecoveryResponse } from './nectar/retry-method-http'
 import { cardLifecycleWebhook } from './nectar/card-lifecycle-webhook'
 import { samlResponse } from './nectar/saml'
 import { scimResponse } from './nectar/scim'
@@ -83,6 +84,8 @@ export default withDemo({
     if (asset) return asset
     const paymentLink=await paymentLinksResponse(request,runtimeBindings(env))
     if(paymentLink)return paymentLink
+    const recovery=await retryMethodRecoveryResponse(request,runtimeBindings(env))
+    if(recovery)return recovery
     const automatic=await automaticCollectionResponse(request,runtimeBindings(env))
     if(automatic)return automatic
     const portal = await portalResponse(request, runtimeBindings(env))

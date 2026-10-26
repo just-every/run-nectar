@@ -406,5 +406,20 @@
   "cardExpiry.body": "{merchant}: your card ending in {last4} expires {expiry}, before your renewal on {renewal}.",
   "cardExpiry.linkExpiry": "This private link expires at {expires} ({timezone}).",
   "cardExpiry.button": "Update payment method",
-  "automatic.retryConsent": "I authorize up to {count} total payment attempts within {days} days of the first failure on this same method for this invoice, using retry table {version}. No retry notices are sent."
+  "automatic.retryConsent": "I authorize up to {count} total payment attempts within {days} days of the first failure on this same method for this invoice, using retry table {version}. No retry notices are sent.",
+  "automatic.retryInitialConsent": "I authorize {merchant} to collect {amount} on {date} for this invoice using my {method} ending {last4}, with the bounded attempts described below. No other invoice or amount is authorized. I may withdraw future attempts after a definitive failure.",
+  "automatic.retryAccept": "I accept this exact invoice and its bounded payment attempts.",
+  "retry.recovery.heading": "Retry with another card",
+  "retry.recovery.accept": "I authorize this single attempt with the new card.",
+  "retry.recovery.confirm": "Authorize attempt",
+  "retry.recovery.withdraw": "Withdraw authorization",
+  "retry.recovery.unavailable": "This authorization is unavailable.",
+  "retry.recovery.awaiting_customer": "Awaiting your consent",
+  "retry.recovery.pending_approval": "Awaiting approval",
+  "retry.recovery.active": "Authorized",
+  "retry.recovery.rejected": "Rejected",
+  "retry.recovery.withdrawn": "Withdrawn",
+  "retry.recovery.consumed": "Attempt started",
+  "retry.recovery.historical": "Historical record",
+  "retry.recovery.consent": "I authorize {merchant} to collect {amount} for invoice {invoice} once using the new card ending in {last4}. This replaces the card from the refused attempt and does not authorize further attempts."
 }

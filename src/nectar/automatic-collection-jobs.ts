@@ -1,3 +1,4 @@
+import { retryAttemptQuote } from './retry-method-recovery'
 import { bankReturnCode } from './retry-policy'
 import { recordRetryFailure,recordRetrySuccess } from './retry-records'
 import { unusableMethodGuard } from './card-lifecycle'
@@ -63,8 +64,8 @@ export async function settleAutomaticIntent(env:Bindings,row:Row,stripe:StripeCl
  [...financial.audits,{actor:actorLabel(system(row.id)),action:'automatic.collection.collected',subject:row.id,detail:{invoice:row.invoice_id,payment:financial.paymentId,amountCents:row.amount_cents,paymentIntentRef:intentRef,settledAt}}])
  const collected=await storedAutomaticCollection(env,row.id);await recordRetrySuccess(env,collected);return automaticView(collected)
 }
-export async function identityFor(row:Row):Promise<PaymentIdentity>{
- const q=await validateAutomaticBasis(row)
+export async function identityFor(env:Bindings,row:Row):Promise<PaymentIdentity>{
+ const q=await retryAttemptQuote(env,row)
  return {invoiceId:row.invoice_id,requestId:row.id,accountRef:q.accountRef,customerRef:q.method.customerRef,paymentMethodRef:q.method.paymentMethodRef,
  livemode:false,key:await import('./core').then(m=>m.fingerprint(['nectar-automatic-collection-1',q.accountRef,row.invoice_id])),amountCents:q.amountCents,currency:'usd'}
 }
@@ -73,7 +74,7 @@ export async function reconcileAutomaticCollection(env:Bindings,id:string){
  if(['refused','returned'].includes(row.status)){await recordRetryFailure(env,row,row.error_code);return automaticView(row)}
  if(['collected','revoked','invalidated'].includes(row.status))return automaticView(row)
  insist(row.claimed_at&&['claimed','uncertain','pending_settlement'].includes(row.status),'automatic_collection_not_claimed',409)
- const identity=await identityFor(row),{stripe}=await stripeForAccount(env,row.account_ref)
+ const identity=await identityFor(env,row),{stripe}=await stripeForAccount(env,row.account_ref)
  try{return await settleAutomaticIntent(env,row,stripe,await readIntent(stripe,identity,row.payment_intent_ref,row.claimed_at,clockInstant(env)),identity)}catch(error){
   const current=await storedAutomaticCollection(env,id)
   if(current.status==='collected')return automaticView(current)
@@ -91,7 +92,7 @@ export async function collectAutomaticInvoice(env:Bindings,invoice:string){
   insist(source.payerId===row.customer_id&&source.row.issue_date===q.issueDate&&localDate(at,business.timezone)===q.issueDate&&source.collectibleCents===q.amountCents
    &&source.row.source_fingerprint===q.fingerprint&&source.row.calculation_json===q.calculation,'automatic_collection_terms_changed',409)
   insist(canonical(await savedCollectionMethod(stripe,q.method.customerRef,q.method.mandateRef??undefined))===canonical(q.method),'automatic_collection_method_changed',409)
-  const identity=await identityFor(row)
+  const identity=await identityFor(env,row)
   await commit(env,[automaticAuthority(env,row),nativeSourceGuard(env,source),unusableMethodGuard(env,q.accountRef,q.method.customerRef,q.method.paymentMethodRef),
    guard(env,'native_collection_already_claimed','NOT EXISTS(SELECT 1 FROM nc_native_collection_claims WHERE invoice_id=?)',invoice),
    stmt(env,"UPDATE nc_automatic_collections SET status='claimed',claimed_at=?,revision=? WHERE id=?",at,newId(),row.id)],

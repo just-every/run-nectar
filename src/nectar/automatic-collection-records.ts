@@ -9,7 +9,7 @@ export interface AutomaticQuote {
  invoice: string; customer: string; customerRevision: string; fingerprint: string; calculation: string;
  amountCents: number; currency: 'usd'; accountRef: string; bindingId: string; bindingRevision: string;
  method: Awaited<ReturnType<typeof savedCollectionMethod>>; owner: string; issueDate: string; businessRevision: number;
- wording: string; wordingVersion: string; attempts: 1; retryPolicy?: RetryPolicy
+ wording: string; wordingVersion: string; attempts: 1; retryPolicy?: RetryPolicy; retryFactor?: {verifiedAt:number;reference:string}
 }
 export const automaticQuote = (row: Row) => parseJson<AutomaticQuote>(row.basis_json, null as never)
 export async function storedAutomaticCollection(env: Bindings, id: string) {
@@ -45,6 +45,8 @@ export function automaticView(row: Row) {
 }
 export async function automaticCollections(env: Bindings, actor: Actor, customer?: string) {
  requireRead(actor,'payments'); requireRead(actor,'invoices')
- return (await all(env,`SELECT a.*,EXISTS(SELECT 1 FROM nc_automatic_collection_authorizations z WHERE z.id=a.id AND z.basis_hash=a.basis_hash) AS authorized FROM nc_automatic_collections a JOIN nc_customers c ON c.id=a.customer_id WHERE c.erased_at IS NULL
- AND NOT EXISTS(SELECT 1 FROM nc_erased_records WHERE record_id IN (a.id,a.customer_id,a.invoice_id)) ${customer?'AND a.customer_id=?':''} ORDER BY a.prepared_at,a.id`,...(customer?[customer]:[]))).map(automaticView)
+ const rows=await all(env,`SELECT a.*,EXISTS(SELECT 1 FROM nc_automatic_collection_authorizations z WHERE z.id=a.id AND z.basis_hash=a.basis_hash) AS authorized FROM nc_automatic_collections a JOIN nc_customers c ON c.id=a.customer_id WHERE c.erased_at IS NULL
+ AND NOT EXISTS(SELECT 1 FROM nc_erased_records WHERE record_id IN (a.id,a.customer_id,a.invoice_id)) ${customer?'AND a.customer_id=?':''} ORDER BY a.prepared_at,a.id`,...(customer?[customer]:[]))
+ const recoveries=await all(env,`SELECT r.*,COALESCE(z.status,'historical') AS recovery_status FROM nc_retry_method_recoveries r LEFT JOIN nc_retry_method_recovery_authorizations z ON z.id=r.id JOIN nc_customers c ON c.id=r.customer_id WHERE c.erased_at IS NULL ${customer?'AND r.customer_id=?':''} ORDER BY r.prepared_at,r.id`,...(customer?[customer]:[]))
+ return rows.map(row=>({...automaticView(row),recoveries:recoveries.filter(r=>r.collection_id===row.id).map(r=>({id:r.id,status:r.recovery_status,invoice:r.invoice_id,attempt:r.expected_attempt+1,summary:parseJson<AutomaticQuote>(r.quote_json,null as never).method?.summary??null}))}))
 }

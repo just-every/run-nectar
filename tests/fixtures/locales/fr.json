@@ -406,5 +406,20 @@
   "cardExpiry.body": "{merchant} : votre carte se terminant par {last4} expire le {expiry}, avant votre renouvellement le {renewal}.",
   "cardExpiry.linkExpiry": "Ce lien privé expire à {expires} ({timezone}).",
   "cardExpiry.button": "Mettre à jour le moyen de paiement",
-  "automatic.retryConsent": "J’autorise {count} tentatives au total sous {days} jours après le premier échec pour cette facture et ce moyen, selon la table {version}. Aucun avis de nouvelle tentative."
+  "automatic.retryConsent": "J’autorise {count} tentatives au total sous {days} jours après le premier échec pour cette facture et ce moyen, selon la table {version}. Aucun avis de nouvelle tentative.",
+  "automatic.retryInitialConsent": "J’autorise {merchant} à percevoir {amount} le {date} pour cette facture avec mon moyen {method} finissant par {last4}, selon les tentatives limitées ci-dessous. Aucune autre facture ni somme n’est autorisée. Je peux retirer les tentatives futures après un échec définitif.",
+  "automatic.retryAccept": "J’accepte cette facture exacte et ses tentatives de paiement limitées.",
+  "retry.recovery.heading": "Réessayer avec une autre carte",
+  "retry.recovery.accept": "J’autorise cette tentative unique avec la nouvelle carte.",
+  "retry.recovery.confirm": "Autoriser la tentative",
+  "retry.recovery.withdraw": "Retirer l’autorisation",
+  "retry.recovery.unavailable": "Cette autorisation n’est pas disponible.",
+  "retry.recovery.awaiting_customer": "En attente de votre consentement",
+  "retry.recovery.pending_approval": "En attente d’approbation",
+  "retry.recovery.active": "Autorisé",
+  "retry.recovery.rejected": "Refusé",
+  "retry.recovery.withdrawn": "Retiré",
+  "retry.recovery.consumed": "Tentative commencée",
+  "retry.recovery.historical": "Historique",
+  "retry.recovery.consent": "J’autorise {merchant} à prélever {amount} pour la facture {invoice}, une seule fois, avec la nouvelle carte se terminant par {last4}. Cette autorisation remplace la carte de la tentative refusée et n’autorise aucune autre tentative."
 }

@@ -1,3 +1,4 @@
+import { setupOwner,setupOwnerFence } from './hosted-setup-basis'
 // Nectar owns the schedule; no provider billing retry service is invoked.
 import type { Bindings } from '../auth.server'
 import type { Actor } from './actor'
@@ -24,10 +25,10 @@ export async function selectedRetryPolicy(env:Bindings,invoice:{id?:string;subsc
  return {version:RETRY_TABLE_VERSION,maxAttempts:row?.max_attempts??(method==='us_bank_account'?3:8),windowDays:row?.window_days??(method==='us_bank_account'?40:14),scope:row?.scope??'default'} as RetryPolicy
 }
 export async function configureRetryPolicy(env:Bindings,actor:Actor,input:Input){
- await collectionOwner(env,actor);input.only(['plan','max_attempts','window_days','confirm','returnTo'])
+ const factor=await setupOwner(env,actor);input.only(['plan','max_attempts','window_days','confirm','returnTo'])
  insist(input.flag('confirm'),'retry_policy_confirmation_required')
  const plan=input.text('plan',{max:100,optional:true});if(plan)insist(await one(env,'SELECT 1 FROM nc_prices WHERE id=?',plan),'plan_not_found',404)
  const count=input.integer('max_attempts',{min:1,max:8})!,days=input.integer('window_days',{min:1,max:14})!,scope=plan?`plan:${plan}`:'default',at=clockInstant(env)
- await commit(env,[collectionAuthority(env,actor),stmt(env,'INSERT INTO nc_retry_policies(scope,max_attempts,window_days,updated_by,updated_at) VALUES(?,?,?,?,?) ON CONFLICT(scope) DO UPDATE SET max_attempts=excluded.max_attempts,window_days=excluded.window_days,updated_by=excluded.updated_by,updated_at=excluded.updated_at',scope,count,days,actor.id,at)],{actor:`member:${actor.id}`,action:'retry.policy.configure',subject:scope,detail:{maxAttempts:count,windowDays:days,version:RETRY_TABLE_VERSION}})
+ await commit(env,[...setupOwnerFence(env,actor),stmt(env,'INSERT INTO nc_retry_policies(scope,max_attempts,window_days,updated_by,updated_at) VALUES(?,?,?,?,?) ON CONFLICT(scope) DO UPDATE SET max_attempts=excluded.max_attempts,window_days=excluded.window_days,updated_by=excluded.updated_by,updated_at=excluded.updated_at',scope,count,days,actor.id,at)],{actor:`member:${actor.id}`,action:'retry.policy.configure',subject:scope,detail:{maxAttempts:count,windowDays:days,version:RETRY_TABLE_VERSION,factor}})
  return {scope,maxAttempts:count,windowDays:days,version:RETRY_TABLE_VERSION}
 }
