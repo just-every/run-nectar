@@ -57,11 +57,29 @@ try {
     } else {
       // The hosted bank selector owns verification. No financial input is sent
       // to Nectar or to the test driver's HTTP transport.
+      await page.locator('#billingName').fill('Alder Analytics')
       const manual=page.getByText(/enter bank details manually|enter bank details|manually verify/i).first()
       await manual.click()
+      phase='bank-details'
+      const bankFrame=page.frames().find(frame=>frame!==page.mainFrame()&&frame.url().startsWith('https://js.stripe.com/'))
+      assert.ok(bankFrame,'Stripe hosts the financial input frame')
+      await bankFrame.getByRole('textbox',{name:'Routing number',exact:true}).fill('110000000')
+      await bankFrame.getByRole('textbox',{name:'Account number',exact:true}).fill('000123456789')
+      await bankFrame.getByRole('textbox',{name:'Confirm account number',exact:true}).fill('000123456789')
+      await bankFrame.getByRole('button',{name:'Submit',exact:true}).click()
+      await page.screenshot({path:`${directory}/bank-submitted.png`,fullPage:true})
     }
     phase=`return-${method}`
     await page.waitForURL(`${h.origin}/portal/payment-methods`,{timeout:60000})
+    if(method==='us_bank_account') {
+      const sessions=await stripe.list('/v1/checkout/sessions',{customer:customer.id})
+      const checkout=sessions.data.find(row=>row.metadata?.nectar_setup_id===setup.id)
+      const intent=await stripe.request('GET',`/v1/setup_intents/${checkout.setup_intent}`)
+      if(intent.status==='requires_action'&&intent.next_action?.type==='verify_with_microdeposits') {
+        const verification=intent.next_action.verify_with_microdeposits
+        await stripe.request('POST',`/v1/setup_intents/${intent.id}/verify_microdeposits`,verification.microdeposit_type==='descriptor_code'?{descriptor_code:'SM11AA'}:{'amounts[]':[32,45]})
+      }
+    }
     const complete=page.locator('form').filter({has:page.locator(`input[value="${setup.id}"]`)})
     await complete.locator('[name=confirm]').check()
     await complete.getByRole('button').first().click()
@@ -78,7 +96,7 @@ try {
   facts.outcome='passed'
 } catch(error) {
   facts.outcome='failed';facts.phase=phase;facts.error=safeError(error)
-  if(page){await page.screenshot({path:`${directory}/failed-${phase}.png`,fullPage:true}).catch(()=>{});facts.controls=await page.locator('input,button').evaluateAll(nodes=>nodes.map(node=>({tag:node.tagName,type:node.type,id:node.id,name:node.name,label:node.getAttribute('aria-label')}))).catch(()=>[])}
+  if(page){await page.screenshot({path:`${directory}/failed-${phase}.png`,fullPage:true}).catch(()=>{});facts.frames=page.frames().map(frame=>({origin:(()=>{try{return new URL(frame.url()).origin}catch{return 'unavailable'}})(),name:frame.name()}));facts.controls=await page.locator('input,button').evaluateAll(nodes=>nodes.map(node=>({tag:node.tagName,type:node.type,id:node.id,name:node.name,label:node.getAttribute('aria-label')}))).catch(()=>[])}
   // Deliberately avoid browser exception messages, URLs and provider bodies.
   process.exitCode=1
 } finally {
