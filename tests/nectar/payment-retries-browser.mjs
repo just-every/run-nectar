@@ -26,12 +26,30 @@ try{
    assert.deepEqual(icons,[],'Icon controls have descriptive tooltips')
    await target.screenshot({path:`${directory}/${width}-${label}.png`,fullPage:true})
    if(label==='recovery-report'||label.startsWith('churn-'))for(const title of ['Failed payments and recovered revenue','By decline reason','By retry attempt','By dunning step','Involuntary churn','Published retry comparison']){const section=target.getByRole('heading',{name:title,exact:true}).locator('..');await section.screenshot({path:`${directory}/${width}-${label}-${title.toLowerCase().replaceAll(' ','-')}.png`})}
-   if(label==='retry-settings')await target.locator('#payment-retries').screenshot({path:`${directory}/${width}-retry-settings-detail.png`})
+   if(await target.locator('#payment-retries').count())await target.locator('#payment-retries').screenshot({path:`${directory}/${width}-${label}-detail.png`})
    if(await target.locator('#automatic-collection').count())await target.locator('#automatic-collection').screenshot({path:`${directory}/${width}-${label}-detail.png`})
    console.log('BROWSER',width,label)
   }
  }
  await (process.argv.includes('churn')?retryPlanChurnFlow:paymentRetriesFlow)(h,owner,{
+  assignSegment:async input=>{
+   await page.goto(h.origin+'/app/settings#payment-retries')
+   const details=page.locator(`[data-retry-customer="${input.customer}"]`)
+   await details.locator('summary').click()
+   const form=details.locator('form')
+   assert.equal(await form.locator('[name=customer_revision]').inputValue(),input.customer_revision)
+   assert.equal(await form.locator('[name=revision]').inputValue(),input.revision??'')
+   await form.locator('[name=segment]').fill(input.segment)
+   await form.locator('[name=confirm]').check()
+   await shot(page,input.segment?`segment-form-${input.segment}`:'segment-clear-form')
+   await Promise.all([page.waitForNavigation(),form.getByRole('button').click()])
+   assert.equal(new URL(page.url()).searchParams.has('error'),false)
+   const saved=page.locator(`[data-retry-customer="${input.customer}"]`)
+   const revision=await saved.locator('[name=revision]').inputValue()
+   assert.equal(await saved.locator('[name=segment]').inputValue(),input.segment)
+   await saved.locator('summary').click();await shot(page,input.segment?`segment-saved-${input.segment}`:'segment-cleared')
+   return {customer:input.customer,segment:input.segment||null,revision}
+  },
   prepareCollection:async input=>{
    await page.goto(h.origin+`/app/invoices/${input.invoice}`)
    const details=page.locator('#automatic-collection details');await details.locator('summary').click()
@@ -55,7 +73,7 @@ try{
    if(state.state==='consent')return
    if(state.state==='report'||state.state.startsWith('churn-')){
     await page.goto(h.origin+'/app/reports/recovery');await shot(page,state.state==='report'?'recovery-report':state.state)
-    await page.goto(h.origin+'/app/settings#payment-retries');await page.locator('#payment-retries summary').click();await shot(page,'retry-settings')
+    await page.goto(h.origin+'/app/settings#payment-retries');await page.locator('#payment-retries > details > summary').first().click();await shot(page,'retry-settings')
    }else{await page.goto(h.origin+`/app/invoices/${state.id}`);await shot(page,state.state)}
   }
  })

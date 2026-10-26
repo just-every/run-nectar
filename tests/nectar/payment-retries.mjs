@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
 import { retryEdge } from './retry-edge.mjs'
 import { totp } from './mfa.mjs'
+import { file } from './harness.mjs'
+import { assertComparisons, assertComparisonDescription, assertRecoveryBuckets } from './recovery-assertions.mjs'
 let edge
 export const harnessOptions=()=>{edge=retryEdge();return {assets:true,localTime:'2026-10-22T10:00:00Z',stripeFetch:edge.fetch,stripeSecret:'synthetic-nectar-1',webhookFetch:async request=>{edge.delivered.push(await request.json());return Response.json({accepted:true})}}}
 export async function paymentRetriesFlow(h,owner,{onState=async()=>{},prepareCollection,acceptCollection}={}){
@@ -10,7 +12,7 @@ export async function paymentRetriesFlow(h,owner,{onState=async()=>{},prepareCol
  const factor=await api('mfa.totp.start',{});await api('mfa.totp.confirm',{factor:factor.factor,code:totp(factor.secret,instant)});await api('mfa.policy',{scope:'all'})
  await api('portal.configure',{hosts:[h.origin],parents:[]})
  await api('webhook.register',{url:'https://receiver.nectar-app.com/retries',consent:true})
- const customers=[],createdInvoices=[]
+ const customers=[],createdInvoices=[],failureLedger=[]
  for(const n of [1,3,4]){
   const c=(await api('customer.create',{external_id:`synthetic-nectar-retry-${n}`,name:`Cedar retry customer ${n}`,billing_email:`retry-${n}@example.test`,language:n===3?'es-US':'en'})).id
   customers.push(c);await api('collection.customer.bind',{customer:c,account_ref:'synthetic-nectar-native-account-1',stripe_customer_ref:`synthetic-nectar-native-customer-${n}`,confirm:true})
@@ -32,6 +34,7 @@ export async function paymentRetriesFlow(h,owner,{onState=async()=>{},prepareCol
   else assert.equal((await h.raw(path,{body:{request:request.id,basis_hash:request.basis,accept:true}})).status,200)
   await api('automatic.collection.decide',{request:request.id,basis_hash:request.basis,decision:'approved',confirm:true,confirm_single:true})
   await api('invoice.approve',{invoice:id,acknowledge:true});await api('invoice.finalise',{invoice:id,issue_date:new Date(instant).toISOString().slice(0,10)})
+  failureLedger.push({invoice:id,currency:'USD',firstFailedAt:instant,failedAmountCents:10000,declineCode:n===1&&code==='insufficient_funds'?'ach_insufficient_funds':code,intent:edge.writes.at(-1).id})
   createdInvoices.push(id)
   return {id,request,method,path}
  }
@@ -112,22 +115,19 @@ export async function paymentRetriesFlow(h,owner,{onState=async()=>{},prepareCol
  const payments=await api('payments')
  assert.equal(report.totals.recoveredAmountCents,payments.reduce((sum,p)=>sum+p.amount_cents,0))
  for(const record of report.invoices){const invoice=await api(`invoices/${record.invoice}`);assert.equal(record.recoveredAmountCents,invoice.allocations.reduce((sum,a)=>sum+a.amount_cents,0))}
- assert.equal(report.byDunningStep.find(s=>s.key==='unrecorded').recoveredAmountCents,report.totals.recoveredAmountCents)
- for(const bucket of report.byDecline){
-  const scoped=report.invoices.filter(r=>(r.declineCode??'unknown')===bucket.key)
-  assert.deepEqual([bucket.failedInvoices,bucket.failedAmountCents,bucket.recoveredAmountCents],[scoped.length,scoped.reduce((sum,r)=>sum+r.failedAmountCents,0),scoped.reduce((sum,r)=>sum+r.recoveredAmountCents,0)])
+ const expected=[]
+ for(const failure of failureLedger){
+  const invoice=await api(`invoices/${failure.invoice}`),writes=edge.writes.filter(w=>w.id===failure.intent)
+  const cash=invoice.allocations.reduce((sum,a)=>sum+a.amount_cents,0)
+  const attempts=writes.map((write,index)=>({attempt:index+1,at:write.at,step:null}))
+  const recoveries=cash?[{amountCents:cash,attempt:writes.length,step:null}]:[]
+  const actual=report.invoices.find(r=>r.invoice===failure.invoice)
+  assert.deepEqual([actual.firstFailedAt,actual.failedAmountCents,actual.declineCode],[failure.firstFailedAt,failure.failedAmountCents,failure.declineCode])
+  assert.deepEqual(actual.attempts.map(a=>({attempt:a.attempt,at:a.at,step:a.step})),attempts)
+  expected.push({...failure,attempts,recoveries,recoveredAmountCents:cash})
  }
- for(const bucket of report.byAttempt){
-  const scoped=report.invoices.filter(r=>r.attempts.some(a=>String(a.attempt)===bucket.key))
-  const cash=scoped.flatMap(r=>r.recoveries).filter(r=>String(r.attempt)===bucket.key).reduce((sum,r)=>sum+r.amountCents,0)
-  assert.deepEqual([bucket.failedInvoices,bucket.recoveredAmountCents],[scoped.length,cash])
- }
- const compared=await api('retry-comparison')
- for(const policy of compared.configuredPolicies){
-  const measured=policy.measured
-  assert.ok(measured.outcomes.every(o=>o.attemptsHours.length<=measured.policy.maxAttempts&&o.attemptsHours.every(h=>h<=measured.policy.windowDays*24)))
-  assert.equal(measured.recoveredAmountCents,compared.payments.filter(p=>measured.outcomes.find(o=>o.id===p.id).recoveredAtHours!==null).reduce((sum,p)=>sum+p.amountCents,0))
- }
+ assertRecoveryBuckets(report,expected)
+ await assertComparisons(await api('retry-comparison'),['default'])
 
  assert.equal(report.totals.recoveredInvoices,3)
  assert.equal(report.totals.recoveredAmountCents,30000)
@@ -151,22 +151,13 @@ export async function paymentRetriesFlow(h,owner,{onState=async()=>{},prepareCol
 
 export async function retryComparisonFlow(h,owner){
  const api=(p,b,status)=>h.api(p,owner,b,status)
- const record=await api('retry-comparison'),{measured,baseline}=record.publishedDefault
- assert.equal(measured.failedPayments,record.payments.length)
- const independentlySummed=result=>record.payments.reduce((sum,p)=>sum+(result.outcomes.find(o=>o.id===p.id).recoveredAtHours!==null?p.amountCents:0),0)
- for(const result of [measured,baseline]){
-  assert.equal(result.recoveredAmountCents,independentlySummed(result))
-  assert.equal(result.recoveredPayments,result.outcomes.filter(o=>o.recoveredAtHours!==null).length)
-  for(const o of result.outcomes){const p=record.payments.find(p=>p.id===o.id);if(o.recoveredAtHours!==null)assert.ok(p.successWindowsHours.some(([a,b])=>o.recoveredAtHours>=a&&o.recoveredAtHours<b))}
- }
- assert.deepEqual({count:measured.recoveredPayments,amount:measured.recoveredAmountCents},{count:record.publishedRecord.find(r=>r.policy==='decline-table-v1').recoveredPayments,amount:record.publishedRecord.find(r=>r.policy==='decline-table-v1').recoveredAmountCents})
- assert.equal(baseline.recoveredAmountCents,record.publishedRecord.find(r=>r.policy==='fixed-three-v1').recoveredAmountCents)
- const page=await h.page('/app/reports/recovery',owner)
- assert.ok(page.includes('$1,900')&&page.includes('$1,200'))
+ const record=await api('retry-comparison')
+ await assertComparisons(record,[])
+ await assertComparisonDescription(h,owner,record)
  console.log('retryComparisonFlow: published known outcomes independently sum to both schedules and the product description')
 }
 
-export async function retryPlanChurnFlow(h,owner,{onState=async()=>{}}={}){
+export async function retryPlanChurnFlow(h,owner,{onState=async()=>{},assignSegment,prepareCollection,acceptCollection}={}){
  const api=(p,b,status)=>h.api(p,owner,b,status)
  let instant=Date.parse('2026-10-22T10:00:00Z');await h.advanceClock(new Date(instant).toISOString());edge.setTime(instant)
  await api('business.configure',{...await api('business'),timezone:'UTC'})
@@ -199,6 +190,12 @@ export async function retryPlanChurnFlow(h,owner,{onState=async()=>{}}={}){
  await api('subscription.end',{subscription:sub,end_date:'2026-10-23',reason:'Ended after unpaid failed renewal'})
  const ended=await api(`subscriptions/${sub}`),before=await api(`invoices/${invoice}`)
  await onState({state:'churn-candidate',invoice})
+ await api('access.give',{email:'synthetic-nectar-901@example.test',name:'Synthetic churn support',role:'support'})
+ const churnFinance=await h.signIn('synthetic-nectar-901@example.test',{requested:true})
+ const churnFactor=await h.api('mfa.totp.start',churnFinance,{})
+ await h.api('mfa.totp.confirm',churnFinance,{factor:churnFactor.factor,code:totp(churnFactor.secret,instant)})
+ await h.api('retry.churn.record',churnFinance,{invoice,subscription_revision:ended.revision,end_date:ended.end_date,confirm:true},403)
+ assert.equal((await api('recovery')).involuntaryChurn.count,0)
  await api('retry.churn.record',{invoice,subscription_revision:ended.revision,end_date:ended.end_date,confirm:true})
  const report=await api('recovery');assert.equal(report.involuntaryChurn.count,1)
  assert.equal(report.involuntaryChurn.records[0].subscription_id,sub)
@@ -206,5 +203,87 @@ export async function retryPlanChurnFlow(h,owner,{onState=async()=>{}}={}){
  await api('retry.churn.record',{invoice,subscription_revision:ended.revision,end_date:ended.end_date,confirm:true},409)
  assert.equal((await api(`invoices/${invoice}`)).balanceCents,before.balanceCents)
  await onState({state:'churn-recorded',invoice})
- console.log('retryPlanChurnFlow: frozen plan override and confirmed actual ended-subscription churn without changing cash or invoice facts')
+ // Explicit segments are separate from customer revision and from collections cadences.
+ const customerRevision=(await api(`customers/${customer}`)).revision
+ const assignmentInput={customer,customer_revision:customerRevision,segment:'synthetic-nectar-1',confirm:true}
+ await api('retry.policy.configure',{segment:'synthetic-nectar-1',max_attempts:6,window_days:1,confirm:true})
+ await api('retry.policy.configure',{segment:'synthetic-nectar-2',max_attempts:5,window_days:3,confirm:true})
+ await api('retry.policy.configure',{plan:price,segment:'synthetic-nectar-1',max_attempts:3,window_days:2,confirm:true},400)
+ await api('retry.policy.configure',{segment:'Invalid label',max_attempts:3,window_days:2,confirm:true},400)
+ let assignment=await (assignSegment??(input=>api('retry.segment.assign',input)))(assignmentInput)
+ assert.equal((await api(`customers/${customer}`)).revision,customerRevision,'Segment assignment preserves existing exact consent')
+ await api('retry.segment.assign',assignmentInput,409)
+ await api('retry.segment.assign',{...assignmentInput,revision:assignment.revision,customer_revision:'synthetic-nectar-3'},409)
+ const prepare=async()=>{
+  const subscription=(await api('subscription.create',{customer,start_date:'2026-09-01',price:[price],quantity:['1']})).id
+  const nextRun=await api('billrun.prepare',{period:'2026-09'})
+  const id=(await api(`runs/${nextRun.id}`)).invoices.find(i=>i.subscription_id===subscription).id
+  const prepared=await (prepareCollection??(input=>api('automatic.collection.prepare',input)))({invoice:id,issue_date:'2026-10-23',enable_retries:true})
+  return {id,request:prepared}
+ }
+ const combined=await prepare()
+ assert.equal(combined.request.quote.retryPolicy.maxAttempts,2,'The plan supplies the smaller count')
+ assert.equal(combined.request.quote.retryPolicy.windowDays,1,'The segment independently supplies the shorter window')
+ assert.equal(combined.request.quote.retryPolicy.scope,[`plan:${price}`,'segment:synthetic-nectar-1'].sort().join(', '))
+ const combinedSession=await api('portal.session.issue',{customer,origin:h.origin,audience:'hosted'})
+ const path=`/portal/automatic-collections/${combined.request.id}?session=${encodeURIComponent(combinedSession.token)}`
+ if(acceptCollection)await acceptCollection({path,request:combined.request})
+ else assert.equal((await h.raw(path,{body:{request:combined.request.id,basis_hash:combined.request.basis,accept:true}})).status,200)
+ // Editing both inputs after acceptance cannot widen the accepted invoice's policy.
+ assignment=await (assignSegment??(input=>api('retry.segment.assign',input)))({...assignmentInput,revision:assignment.revision,segment:'synthetic-nectar-2'})
+ await api('retry.policy.configure',{plan:price,max_attempts:4,window_days:6,confirm:true})
+ await api('retry.policy.configure',{segment:'synthetic-nectar-1',max_attempts:8,window_days:14,confirm:true})
+ await api('automatic.collection.decide',{request:combined.request.id,basis_hash:combined.request.basis,decision:'approved',confirm:true,confirm_single:true})
+ await api('invoice.approve',{invoice:combined.id,acknowledge:true});await api('invoice.finalise',{invoice:combined.id,issue_date:'2026-10-23'})
+ const frozen=(await api('automatic-collections')).find(r=>r.id===combined.request.id)
+ assert.deepEqual(frozen.quote.retryPolicy,combined.request.quote.retryPolicy)
+ await onState({state:'segment-selected-invoice',...combined})
+ await api('retry.policy.configure',{max_attempts:1,window_days:1,confirm:true})
+ const changed=await prepare()
+ assert.equal(changed.request.quote.retryPolicy.maxAttempts,4)
+ assert.equal(changed.request.quote.retryPolicy.windowDays,3)
+ assert.ok(changed.request.quote.retryPolicy.scope.includes('segment:synthetic-nectar-2'))
+ assignment=await (assignSegment??(input=>api('retry.segment.assign',input)))({...assignmentInput,revision:assignment.revision,segment:''})
+ assert.equal(assignment.segment,null)
+ const cleared=await prepare()
+ assert.equal(cleared.request.quote.retryPolicy.maxAttempts,4)
+ assert.equal(cleared.request.quote.retryPolicy.windowDays,6)
+ assert.equal(cleared.request.quote.retryPolicy.scope,`plan:${price}`)
+ // Leave an explicit assignment for erasure to remove, then exercise denied roles.
+ assignment=await api('retry.segment.assign',{...assignmentInput,revision:assignment.revision})
+ await api('access.give',{email:'retry-segments@example.test',name:'Retry segment reader',role:'support'})
+ const support=await h.signIn('retry-segments@example.test',{requested:true})
+ const comparison=await api('retry-comparison')
+ await assertComparisons(comparison,['default',`plan:${price}`,'segment:synthetic-nectar-1','segment:synthetic-nectar-2'])
+
+ const trail=await api('audit'),assignmentEvents=trail.filter(e=>e.action==='retry.segment.assign'&&e.subject===customer)
+ assert.equal(assignmentEvents.length,4)
+ const ownerId=(await api('me')).id
+ assert.ok(assignmentEvents.every(e=>e.actor===`member:${ownerId}`))
+ assert.deepEqual(assignmentEvents.map(e=>JSON.parse(e.detail).segment).reverse(),['synthetic-nectar-1','synthetic-nectar-2',null,'synthetic-nectar-1'])
+ await h.api('retry.segment.assign',support,{...assignmentInput,revision:assignment.revision},403)
+ assert.deepEqual(await api('audit'),trail,'Refused assignment appends no audit event')
+ instant+=86400000;edge.setTime(instant);await h.advanceClock(new Date(instant).toISOString())
+ await api('retry.segment.assign',{...assignmentInput,revision:assignment.revision},403)
+ assert.deepEqual(await api('audit'),trail,'An expired factor cannot change assignment')
+ assert.equal((await h.raw(`/cdn-cgi/local/scheduled?time=${instant}&cron=${encodeURIComponent('* * * * *')}`)).status,200)
+ const combinedFailed=await api(`invoices/${combined.id}`)
+ assert.equal(combinedFailed.attempt_count,2);assert.equal(combinedFailed.next_payment_attempt,null,'Accepted segment terms keep their original cap after policy edits')
+ await api('mfa.verify',{code:totp(factor.secret,instant)})
+ const combinedSubscription=combinedFailed.subscription_id
+ await api('subscription.end',{subscription:combinedSubscription,end_date:'2026-10-24',reason:'Synthetic ended paid renewal'})
+ const payment=await api('payment.record',{customer,amount:(combinedFailed.balanceCents/100).toFixed(2),received_on:'2026-10-24',method:'bank_transfer',reference:'synthetic-nectar-902'})
+ await api('payment.allocate',{payment:payment.payment,invoice:combined.id,amount:(combinedFailed.balanceCents/100).toFixed(2)})
+ const paidEnded=await api(`subscriptions/${combinedSubscription}`)
+ await api('retry.churn.record',{invoice:combined.id,subscription_revision:paidEnded.revision,end_date:paidEnded.end_date,confirm:true},409)
+ assert.equal((await api('recovery')).involuntaryChurn.count,1,'An ended subscription with a fully paid failed invoice cannot add churn')
+ const erasure=await api('erasure.request',{customer})
+ await api('erasure.verify',{request:erasure.id,reason:'Independently verified identity',evidence:file('retry-segment-identity.txt','Synthetic verified identity','text/plain')})
+ const erased=await api('erasure.approve',{request:erasure.id,confirm:true})
+ assert.equal(erased.receipt.changed.find(r=>r.kind==='nc_retry_segments').records,1)
+ await api('retry.segment.assign',{...assignmentInput,revision:assignment.revision},409)
+ const erasedEvents=(await api('audit')).filter(e=>e.action==='retry.segment.assign'&&e.subject===customer)
+ assert.equal(erasedEvents.length,4);assert.ok(erasedEvents.every(e=>JSON.stringify(e.detail)==='{}'||e.detail==='{}'))
+ console.log('retryPlanChurnFlow: frozen plan and explicit segment independent limits, future assignment and clearing, erasure and confirmed ended-subscription churn')
+
 }

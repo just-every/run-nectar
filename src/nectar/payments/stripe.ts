@@ -123,8 +123,12 @@ export async function refusedPayment(stripe: StripeClient, intent: Row, identity
   insist(history.object === 'list' && history.has_more === false && Array.isArray(history.data), 'stripe_native_charge_history_incomplete', 409)
   insist(history.data.every((charge: Row) => charge.object === 'charge' && ref(charge.payment_intent) === paymentIntentRef && ref(charge.customer) === identity.customerRef
     && charge.status !== 'succeeded' && charge.paid !== true && charge.captured !== true), 'stripe_native_refusal_unconfirmed', 409)
-  const status = code === 'authentication_required' || decline === 'authentication_required' ? 'customer_action_required' : 'declined'
-  return { status, retryProhibited:history.data.some((charge:Row)=>charge.outcome?.advice_code==='do_not_try_again'), declineCode: typeof decline==='string' && /^[a-z_]{1,100}$/.test(decline)?decline:null, errorCode: status === 'customer_action_required' ? 'authentication_required' : code, paymentIntentRef,
+  const providerDeclineCode=typeof decline==='string' && /^[a-z_]{1,100}$/.test(decline)?decline:null
+  // Stripe documents authentication_not_handled as an authentication refusal.
+  // Keep its original code in the proof while the governed state stays canonical.
+  const declineCode=providerDeclineCode==='authentication_not_handled'?'authentication_required':providerDeclineCode
+  const status = ['authentication_required','authentication_not_handled'].includes(code) || declineCode === 'authentication_required' ? 'customer_action_required' : 'declined'
+  return { status, retryProhibited:history.data.some((charge:Row)=>charge.outcome?.advice_code==='do_not_try_again'), declineCode, providerDeclineCode, errorCode: status === 'customer_action_required' ? 'authentication_required' : code, paymentIntentRef,
     proof: 'requires-payment-method-with-error-and-no-succeeded-charge', providerStatus: intent.status }
 }
 

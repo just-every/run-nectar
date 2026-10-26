@@ -16,8 +16,8 @@ consent. A customer or owner can withdraw future retries after a definitive fail
 | Any other reason | No retry | Wait for a separately authorized resolution |
 
 All counts include the first failed payment. The owner may set a lower count and
-shorter window globally or for a catalogue price used by a plan. When an invoice
-contains several overridden prices, the smallest count and shortest window apply.
+shorter window globally, for a catalogue price used by a plan, or for an explicitly assigned retry segment. When an invoice
+contains several overridden prices or a segment override, the smallest count and shortest window apply independently. Segment assignment and clearing are explicit owner actions in Settings; cadence labels and customer metadata never enroll anyone. Without an applicable override, the global default applies.
 The exact selected limits and table version are frozen before customer acceptance.
 The current settings door permits 1–8 total attempts and 1–14 days; the unmodified
 bank default is 3 total attempts in 40 days. Neither an overdue tick nor a restart
@@ -50,7 +50,7 @@ Current limits remain explicit: this slice supports native test-mode Stripe
 collection only. A hard-declined card can be replaced through a fresh owner preparation,
 new exact customer consent and human approval of one confirmation on the same
 PaymentIntent. The original approved terms remain immutable. Same-method
-authentication recovery is not implemented. Other processors, segment policies, production operation and the full
+authentication recovery requires separate owner preparation, exact customer acceptance and human approval. The accepting customer then confirms once through the bank on the same PaymentIntent. Approval alone never schedules authentication; the card stays blocked for unattended use and no other invoice is authorized. Return parameters are discarded before a clean authenticated page, and uncertain outcomes reconcile through reads only. Other processors, production operation and the full
 live decline and bank matrix remain unproved. CT approval of automatic retries is
 pending. Historical retry facts confer no restored collection authority.
 
@@ -60,3 +60,5 @@ publishes its known outcomes and both schedules. No production improvement is cl
 Provider sources: [Stripe retry handling](https://docs.stripe.com/billing/revenue-recovery/smart-retries),
 [card retry advice](https://docs.stripe.com/declines/card),
 [network return codes](https://docs.stripe.com/declines/network-codes).
+
+Stripe’s documented `authentication_not_handled` refusal enters the same blocked authentication state as `authentication_required`. Its original provider code remains in the refusal proof. See [Stripe decline codes](https://docs.stripe.com/declines/codes).

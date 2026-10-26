@@ -421,5 +421,10 @@
   "retry.recovery.withdrawn": "Retiré",
   "retry.recovery.consumed": "Tentative commencée",
   "retry.recovery.historical": "Historique",
-  "retry.recovery.consent": "J’autorise {merchant} à prélever {amount} pour la facture {invoice}, une seule fois, avec la nouvelle carte se terminant par {last4}. Cette autorisation remplace la carte de la tentative refusée et n’autorise aucune autre tentative."
+  "retry.recovery.consent": "J’autorise {merchant} à prélever {amount} pour la facture {invoice}, une seule fois, avec la nouvelle carte se terminant par {last4}. Cette autorisation remplace la carte de la tentative refusée et n’autorise aucune autre tentative.",
+  "retry.authentication.heading": "Confirmer la carte actuelle",
+  "retry.authentication.accept": "J’autorise une tentative d’authentification avec cette carte.",
+  "retry.authentication.consent": "J’autorise {merchant} à prélever {amount} pour la facture {invoice} une seule fois avec la carte actuelle se terminant par {last4}, après confirmation auprès de ma banque. Ceci n’autorise aucune nouvelle tentative automatique ni aucune autre facture.",
+  "retry.authentication.continue": "Confirmer auprès de votre banque",
+  "retry.authentication.check": "Vérifier le paiement existant"
 }

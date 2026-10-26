@@ -11,7 +11,7 @@ export async function retryState(env:Bindings,invoice:string){
  const hold=await collectionHold(env,invoice)
  const expired=clockInstant(env)>row.deadline
  const allowed=!expired&&row.authorized&&row.method_allowed&&['refused','returned'].includes(row.collection_status)&&row.status==='scheduled'&&!hold.disputedCents&&!hold.hold&&hold.collectibleCents>0
- return {attempt_count:row.attempts,next_payment_attempt:allowed?row.next_at:null,retry_status:hold.disputedCents?'disputed':hold.hold??(row.collection_status==='revoked'?'revoked':!row.authorized?'historical':!row.method_allowed?'requires_new_method':expired&&row.status==='scheduled'?'exhausted':row.status)}
+ return {attempt_count:row.attempts,next_payment_attempt:allowed?row.next_at:null,retry_status:hold.disputedCents?'disputed':hold.hold??(row.collection_status==='revoked'?'revoked':!row.authorized?'historical':!row.method_allowed?(row.decline_code==='authentication_required'?'requires_authentication':'requires_new_method'):expired&&row.status==='scheduled'?'exhausted':row.status)}
 }
 export async function recordRetryFailure(env:Bindings,row:Row,code:string){
  const q=automaticQuote(row),at=clockInstant(env),prior=await one(env,'SELECT * FROM nc_retry_series WHERE collection_id=?',row.id)

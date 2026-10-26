@@ -8,10 +8,16 @@ export function retryEdge(){
  const apply=(intent,form)=>{
   const method=form.get('payment_method'),rule=rules.get(method),count=(attempts.get(intent.id)??0)+1;attempts.set(intent.id,count)
   intent.payment_method=method
+  if(rule?.authenticate&&form.get('off_session')==='false'){
+   Object.assign(intent,{status:'requires_action',amount_received:0,next_action:{type:'redirect_to_url',redirect_to_url:{url:rule.redirect??`https://hooks.stripe.com/redirect/authenticate/${intent.id}`,return_url:form.get('return_url')}}})
+   delete intent.last_payment_error
+   base.intents.get(intent.id).value=intent
+   return intent
+  }
   const failed=rule&&count<rule.recoverAt
   const charge=`synthetic-nectar-retry-charge-${writes.length}`
   Object.assign(intent,{status:failed?'requires_payment_method':'succeeded',amount_received:failed?0:intent.amount,latest_charge:charge})
-  if(failed){intent.last_payment_error={code:rule.code,payment_method:{id:method}};intent.payment_method=null}else delete intent.last_payment_error
+  if(failed){intent.last_payment_error={code:rule.declineCode?'card_declined':rule.code,...(rule.declineCode?{decline_code:rule.declineCode}:{}),payment_method:{id:method}};intent.payment_method=null}else delete intent.last_payment_error
   base.intents.get(intent.id).value=intent
   base.charges.set(charge,{account:1,value:{object:'charge',id:charge,status:failed?'failed':'succeeded',paid:!failed,captured:!failed,customer:intent.customer,payment_method:method,payment_intent:intent.id,currency:'usd',amount:intent.amount,amount_captured:failed?0:intent.amount,amount_refunded:0,refunded:false,disputed:false,created:instant/1000,livemode:false,balance_transaction:'synthetic-nectar-retry-balance',...(rule?.advice?{outcome:{advice_code:rule.advice}}:{})}})
   return intent
@@ -24,7 +30,7 @@ export function retryEdge(){
   if(path.startsWith('/v1/balance_transactions/'))return Response.json({object:'balance_transaction',id:path.split('/').at(-1),type:'payment',status:'available',source:[...base.charges.values()].at(-1).value.id,amount:10000,currency:'usd',available_on:instant/1000})
   if(request.method==='POST'&&path.match(/^\/v1\/payment_intents\/[^/]+\/confirm$/)){
    const id=path.split('/').at(-2),intent=structuredClone(base.intents.get(id).value)
-   writes.push({id,at:instant,key:request.headers.get('idempotency-key')})
+   writes.push({id,at:instant,key:request.headers.get('idempotency-key'),form:Object.fromEntries(form)})
    const result=apply(intent,form)
    if(lose){lose=false;return new Response(null,{status:503})}
    return Response.json(result)
@@ -37,5 +43,13 @@ export function retryEdge(){
   }
   return response
  }
- return {...base,fetch,bank,mandate,writes,delivered,rules,attempts,setTime(at){instant=at;base.capturedAt(new Date(at).toISOString())},lose(){lose=true}}
+ return {...base,fetch,bank,mandate,writes,delivered,rules,attempts,authenticate(id,success=true){
+  const intent=base.intents.get(id).value,method=intent.payment_method
+  const charge=`synthetic-nectar-auth-charge-${base.charges.size}`
+  Object.assign(intent,{status:success?'succeeded':'requires_payment_method',amount_received:success?intent.amount:0,latest_charge:charge})
+  delete intent.next_action
+  if(success)delete intent.last_payment_error
+  else{intent.payment_method=null;intent.last_payment_error={code:'authentication_required',payment_method:{id:method}}}
+  base.charges.set(charge,{account:1,value:{object:'charge',id:charge,status:success?'succeeded':'failed',paid:success,captured:success,customer:intent.customer,payment_method:method,payment_intent:id,currency:'usd',amount:intent.amount,amount_captured:success?intent.amount:0,amount_refunded:0,refunded:false,disputed:false,created:instant/1000,livemode:false}})
+ },setTime(at){instant=at;base.capturedAt(new Date(at).toISOString())},lose(){lose=true}}
 }

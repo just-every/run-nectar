@@ -1,5 +1,6 @@
 // Explicit modules keep each isolated journey visible to Verify tooling.
 export const isolatedJourneys = [
+  { file: 'retry-methods', name: 'retryAuthenticationFlow', load: () => import('./retry-methods.mjs') },
   { file: 'retry-methods', name: 'retryMethodsFlow', load: () => import('./retry-methods.mjs') },
   { file: 'payment-retries', name: 'retryPlanChurnFlow', load: () => import('./payment-retries.mjs') },
   { file: 'payment-retries', name: 'retryComparisonFlow', load: () => import('./payment-retries.mjs') },

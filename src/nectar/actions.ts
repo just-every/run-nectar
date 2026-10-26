@@ -1,3 +1,4 @@
+import { assignRetrySegment } from './retry-segments'
 import { prepareRetryMethodRecovery,decideRetryMethodRecovery } from './retry-method-recovery'
 import { recordRetryChurn } from './retry-churn'
 import { prepareCardExpiryNotice, sendCardExpiryNotice } from './card-expiry-notices'
@@ -134,6 +135,7 @@ export const actions: Record<string, Handler> = {
   'retry.method.decide': decideRetryMethodRecovery,
   'retry.churn.record': recordRetryChurn,
   'retry.policy.configure': configureRetryPolicy,
+  'retry.segment.assign': assignRetrySegment,
   'automatic.collection.prepare': prepareAutomaticCollection,
   'automatic.collection.decide': decideAutomaticCollection,
   'automatic.collection.revoke': revokeAutomaticCollection,

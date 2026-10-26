@@ -684,7 +684,7 @@ Signed Stripe card observations enter at `POST ./api/nectar/stripe/card-events`.
 `POST /api/nectar/retry.policy.configure` requires an owner session with a fresh
 factor and explicit `confirm`. `max_attempts` includes the original failure;
 `window_days` bounds the elapsed failure window. Optional `plan` is the catalogue
-price reference used by that plan. These settings affect only future exact
+price reference used by that plan. Optional `segment` instead names an explicit retry segment; supplying both is refused. `retry.segment.assign` requires a fresh-factor owner, exact `customer` and `customer_revision`, the current assignment `revision` (blank on first assignment), `segment` and explicit `confirm`. A blank segment clears the assignment. Labels use lowercase letters, numbers, underscores and hyphens, up to 64 characters. No cadence or metadata value enrolls a customer. Applicable plan and segment overrides use the smallest count and shortest window independently; the default applies only without an override. These settings affect only future exact
 invoice consent. `automatic.collection.prepare` accepts `enable_retries`; it is
 false unless explicitly selected. The customer and human approval steps retain
 ordinary automatic-collection custody.
@@ -720,5 +720,25 @@ owner's fresh factor and explicit confirmation. The own-customer hosted door
 or explicit sole-owner confirmation. Approval schedules one confirmation of the
 same PaymentIntent within the original caps and deadline. It never modifies the
 earlier quote. Executable recovery authorizations are excluded from archives;
-historical proposals cannot revive debit authority. Same-method authentication
-remains unavailable.
+historical proposals cannot revive debit authority.
+
+For an exact `authentication_required` refusal, `retry.method.prepare` additionally
+accepts `authenticate: true`. This keeps the same saved card and creates separate
+exact customer terms and human approval. Approval schedules no attempt. After
+approval the accepting customer explicitly confirms at the same hosted recovery
+door; one durable claim permits one on-session confirmation of the original
+PaymentIntent. The current customer session, owner and approver factors, invoice,
+method, dispute stop, original count and deadline are checked again. Other hard
+declines cannot use this branch and the card remains blocked for unattended use.
+
+The server follows only the provider's verified HTTPS authentication action on
+`hooks.stripe.com`; it never creates another intent or asks for a receipt email.
+The return URL contains no customer capability. A short-lived, path-scoped,
+HttpOnly SameSite=Lax cookie retains the already accepted hosted session, with
+Secure on HTTPS. The callback discards every query parameter and redirects to a
+clean page before rendering. A customer check or the scheduled reconciliation
+reads the original intent and captured charge; callback parameters never prove
+payment. Cancellation, uncertain responses and repeated confirmation cannot
+create another provider write. Existing recovery authority exclusions and erasure
+apply to this branch. Provider guidance: [server confirmation and redirect
+authentication](https://docs.stripe.com/payments/3d-secure/authentication-flow#redirect-to-the-bank-website).

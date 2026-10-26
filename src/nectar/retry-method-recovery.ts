@@ -1,4 +1,4 @@
-// A replacement card authorizes one confirmation of the existing exact intent.
+// An exact recovery authorizes one confirmation of the existing intent.
 import type { Bindings } from '../auth.server'
 import { actorLabel, requireMember, type Actor } from './actor'
 import { automaticAuthority, storedAutomaticCollection, validateAutomaticBasis, type AutomaticQuote } from './automatic-collection-records'
@@ -18,11 +18,11 @@ import { DAY } from './retry-policy'
 
 const other="SELECT 1 FROM nc_members WHERE id<>? AND role IN ('owner','finance') AND status='active'"
 const joined=`FROM nc_retry_method_recoveries r JOIN nc_retry_method_recovery_authorizations z ON z.id=r.id AND z.quote_hash=r.quote_hash`
-export const recoveryText = (language: string | null) => {
+export const recoveryText = (language: string | null, authentication = false) => {
  const L=customerText(language)
- return {tag:L.tag,heading:L.t('retry.recovery.heading'),accept:L.t('retry.recovery.accept'),confirm:L.t('retry.recovery.confirm'),withdraw:L.t('retry.recovery.withdraw'),unavailable:L.t('retry.recovery.unavailable'),
+ return {tag:L.tag,heading:L.t(authentication?'retry.authentication.heading':'retry.recovery.heading'),accept:L.t(authentication?'retry.authentication.accept':'retry.recovery.accept'),confirm:L.t('retry.recovery.confirm'),withdraw:L.t('retry.recovery.withdraw'),unavailable:L.t('retry.recovery.unavailable'),
  awaiting_customer:L.t('retry.recovery.awaiting_customer'),pending_approval:L.t('retry.recovery.pending_approval'),active:L.t('retry.recovery.active'),rejected:L.t('retry.recovery.rejected'),withdrawn:L.t('retry.recovery.withdrawn'),consumed:L.t('retry.recovery.consumed'),historical:L.t('retry.recovery.historical'),
- consent:(merchant:string,amount:string,invoice:string,last4:string)=>L.t('retry.recovery.consent',{merchant,amount,invoice,last4})}
+ consent:(merchant:string,amount:string,invoice:string,last4:string)=>L.t(authentication?'retry.authentication.consent':'retry.recovery.consent',{merchant,amount,invoice,last4})}
 }
 
 function factorFence(env:Bindings,member:string,session:string,verified:number,owner=false){
@@ -39,7 +39,7 @@ async function freshApprover(env:Bindings,actor:Actor){
  const at=clockInstant(env),factor=await one(env,"SELECT verified_at FROM nc_mfa_sessions WHERE member_id=? AND session_id=? AND method IN ('totp','passkey') AND verified_at BETWEEN ? AND ?",actor.id,actor.sessionId,at-STEP_UP_MS,at)
  insist(factor,'mfa_step_up_required',403);return factor.verified_at as number
 }
-function portalFence(env:Bindings,session:CustomerSession){
+export function portalFence(env:Bindings,session:CustomerSession){
  const at=clockInstant(env)
  insist(session.audience==='hosted'&&session.parent===''&&session.iss===env.AUTH_ORIGIN,'hosted_session_required',403)
  return guard(env,'customer_session_changed',`EXISTS(SELECT 1 FROM nc_portal_sessions p JOIN nc_portal_policy policy ON policy.singleton=1 AND policy.revision=p.policy_revision
@@ -48,12 +48,13 @@ function portalFence(env:Bindings,session:CustomerSession){
  AND c.status='active' AND c.erased_at IS NULL AND EXISTS(SELECT 1 FROM json_each(policy.hosts_json) WHERE value=p.origin)
  AND NOT EXISTS(SELECT 1 FROM nc_erased_records WHERE record_id IN(p.id,c.id)))`,session.jti,session.customer,session.origin,session.iat,session.exp,at,at,PORTAL_LIFETIME)
 }
-async function checkedQuote(row:Row,proposal:Row){
+export async function checkedQuote(row:Row,proposal:Row){
  const original=await validateAutomaticBasis(row),quote=parseJson<AutomaticQuote>(proposal.quote_json,null as never)
  insist(quote&&await fingerprint(quote)===proposal.quote_hash&&proposal.collection_id===row.id&&proposal.original_basis_hash===row.basis_hash
  &&proposal.payment_intent_ref===row.payment_intent_ref&&quote.method.kind==='card'&&quote.method.customerRef===original.method.customerRef
- &&quote.method.paymentMethodRef!==original.method.paymentMethodRef&&quote.method.paymentMethodRef!==proposal.previous_method_ref
- &&quote.wordingVersion==='exact-invoice-new-card-1'&&canonical({...quote,method:original.method,wording:original.wording,wordingVersion:original.wordingVersion})===canonical(original),'retry_recovery_basis_changed',409)
+ &&(quote.wordingVersion==='exact-invoice-authentication-1'
+ ?proposal.decline_code==='authentication_required'&&quote.method.paymentMethodRef===proposal.previous_method_ref
+ :quote.wordingVersion==='exact-invoice-new-card-1'&&quote.method.paymentMethodRef!==original.method.paymentMethodRef&&quote.method.paymentMethodRef!==proposal.previous_method_ref)&&canonical({...quote,method:original.method,wording:original.wording,wordingVersion:original.wordingVersion})===canonical(original),'retry_recovery_basis_changed',409)
  return quote
 }
 export async function retryMethodRecovery(env:Bindings,id:string){
@@ -63,7 +64,7 @@ export async function retryMethodRecovery(env:Bindings,id:string){
  insist(row,'retry_recovery_not_found',404);return row
 }
 export function retryMethodRecoveryView(row:Row){
- return {id:row.id,collection:row.collection_id,invoice:row.invoice_id,customer:row.customer_id,status:row.status,quoteHash:row.quote_hash,
+ return {id:row.id,authentication:parseJson<AutomaticQuote>(row.quote_json,null as never)?.wordingVersion==='exact-invoice-authentication-1',collection:row.collection_id,invoice:row.invoice_id,customer:row.customer_id,status:row.status,quoteHash:row.quote_hash,
  quote:parseJson<AutomaticQuote>(row.quote_json,null as never),paymentIntentRef:row.payment_intent_ref,expectedAttempt:row.expected_attempt+1,deadline:row.deadline,preparedAt:row.prepared_at,acceptedAt:row.accepted_at}
 }
 // The last claimed method is the identity to use when reading a refused intent.
@@ -85,6 +86,11 @@ function proposalFence(env:Bindings,row:Row,proposal:Row,status:string){
  AND s.policy_json=? AND NOT EXISTS(SELECT 1 FROM nc_retry_attempts t WHERE t.collection_id=a.id AND t.outcome='claimed')
  AND NOT EXISTS(SELECT 1 FROM nc_erased_records WHERE record_id IN(r.id,r.customer_id,r.collection_id,r.invoice_id)))`,proposal.id,proposal.revision,status,proposal.quote_hash,row.revision,Math.min(policy.maxAttempts,8),at,canonical(policy))
 }
+// Authentication is scoped to this exact refusal; the general hard stop stays.
+function recoveryMethodGuard(env:Bindings,row:Row,quote:AutomaticQuote){
+ if(quote.wordingVersion!=='exact-invoice-authentication-1')return unusableMethodGuard(env,quote.accountRef,quote.method.customerRef,quote.method.paymentMethodRef)
+ return guard(env,'retry_authentication_not_eligible',`EXISTS(SELECT 1 FROM nc_card_lifecycle WHERE account_ref=? AND stripe_customer_ref=? AND payment_method_ref=? AND unusable_at IS NOT NULL AND unusable_reason='authentication_required' AND source_request_ref=?)`,quote.accountRef,quote.method.customerRef,quote.method.paymentMethodRef,row.id)
+}
 export async function recoveryAuthority(env:Bindings,row:Row,quote:AutomaticQuote){
  const original=await validateAutomaticBasis(row)
  if(canonical(quote)===canonical(original))return []
@@ -98,7 +104,7 @@ export async function recoveryAuthority(env:Bindings,row:Row,quote:AutomaticQuot
  factorFence(env,proposal.prepared_by,proposal.owner_session_id,proposal.owner_verified_at,true),
  factorFence(env,proposal.approved_by,proposal.approver_session_id,proposal.approver_verified_at),
  portalFence(env,{v:1,iss:env.AUTH_ORIGIN,jti:session.id,customer:row.customer_id,origin:proposal.customer_origin,audience:'hosted',parent:'',iat:session.issued_at,exp:session.expires_at,language:'',currency:'USD'}),
- unusableMethodGuard(env,quote.accountRef,quote.method.customerRef,quote.method.paymentMethodRef),
+ recoveryMethodGuard(env,row,quote),
  guard(env,'payment_method_removal_claimed',`NOT EXISTS(SELECT 1 FROM nc_portal_method_action_history WHERE account_ref=? AND customer_ref=? AND method_ref=? AND operation='remove' AND status IN ('uncertain','complete'))`,quote.accountRef,quote.method.customerRef,quote.method.paymentMethodRef),
  guard(env,'retry_recovery_consent_changed',`EXISTS(SELECT 1 FROM nc_retry_method_recovery_events e WHERE e.recovery_id=? AND e.kind='accepted' AND json_extract(e.detail_json,'$.quoteHash')=?)
  AND EXISTS(SELECT 1 FROM nc_retry_method_recovery_events e WHERE e.recovery_id=? AND e.kind='approved' AND json_extract(e.detail_json,'$.quoteHash')=?)
@@ -107,16 +113,16 @@ export async function recoveryAuthority(env:Bindings,row:Row,quote:AutomaticQuot
  else guards.push(guard(env,'second_approver_required','?<>?',proposal.approved_by,proposal.prepared_by))
  return guards
 }
-export async function claimRetryMethodRecovery(env:Bindings,row:Row,quote:AutomaticQuote){
+export async function claimRetryMethodRecovery(env:Bindings,row:Row,quote:AutomaticQuote,by='system:retries'){
  const original=await validateAutomaticBasis(row);if(canonical(quote)===canonical(original))return []
  const guards=await recoveryAuthority(env,row,quote),proposal=await one(env,`SELECT r.* ${joined} WHERE r.collection_id=? AND z.status='active'`,row.id)
  insist(proposal,'retry_recovery_not_authorized',409)
- return [...guards,stmt(env,"UPDATE nc_retry_method_recovery_authorizations SET status='consumed',revision=? WHERE id=?",newId(),proposal.id),event(env,proposal,'claimed','system:retries',{quoteHash:proposal.quote_hash,attempt:proposal.expected_attempt+1})]
+ return [...guards,stmt(env,"UPDATE nc_retry_method_recovery_authorizations SET status='consumed',revision=? WHERE id=?",newId(),proposal.id),event(env,proposal,'claimed',by,{quoteHash:proposal.quote_hash,attempt:proposal.expected_attempt+1})]
 }
 function event(env:Bindings,row:Row,kind:string,actor:string,detail:Row){return stmt(env,'INSERT INTO nc_retry_method_recovery_events(id,recovery_id,customer_id,kind,actor,at,detail_json) VALUES(?,?,?,?,?,?,?)',newId(),row.id,row.customer_id,kind,actor,clockInstant(env),canonical(detail))}
 
 export async function prepareRetryMethodRecovery(env:Bindings,actor:Actor,input:Input){
- const factor=await setupOwner(env,actor);input.only(['request','confirm','returnTo']);insist(input.flag('confirm'),'retry_recovery_confirmation_required')
+ const factor=await setupOwner(env,actor);input.only(['request','authenticate','confirm','returnTo']);insist(input.flag('confirm'),'retry_recovery_confirmation_required')
  const row=await storedAutomaticCollection(env,input.text('request',{max:100})),original=await validateAutomaticBasis(row),at=clockInstant(env)
  const series=await one(env,'SELECT * FROM nc_retry_series WHERE collection_id=?',row.id),prior=await retryAttemptQuote(env,row)
  insist(original.retryPolicy&&original.method.kind==='card'&&row.status==='refused'&&row.payment_intent_ref&&!row.payment_id&&!row.charge_ref
@@ -128,16 +134,17 @@ export async function prepareRetryMethodRecovery(env:Bindings,actor:Actor,input:
  insist(refusal&&refusal.paymentIntentRef===row.payment_intent_ref&&(refusal.declineCode??refusal.errorCode)===series.decline_code,'retry_prior_outcome_unconfirmed',409)
  const history=await stripe(`/charges?${new URLSearchParams({payment_intent:row.payment_intent_ref,limit:'100'})}`)
  insist(history.object==='list'&&history.has_more===false&&Array.isArray(history.data)&&history.data.every((charge:Row)=>charge.object==='charge'&&charge.status==='failed'&&charge.paid===false&&charge.captured!==true),'retry_prior_outcome_unconfirmed',409)
- const method=await savedCollectionMethod(stripe,original.method.customerRef)
- insist(method.kind==='card'&&method.paymentMethodRef!==original.method.paymentMethodRef&&method.paymentMethodRef!==prior.method.paymentMethodRef,'retry_recovery_new_card_required',409)
- await assertMethodUsable(env,original.accountRef,method.customerRef,method.paymentMethodRef)
+ const method=await savedCollectionMethod(stripe,original.method.customerRef),authentication=input.flag('authenticate')
+ insist(!authentication||series.decline_code==='authentication_required'&&!refusal.retryProhibited&&row.retry_advice_code!=='do_not_try_again'&&method.paymentMethodRef===prior.method.paymentMethodRef,'retry_authentication_not_eligible',409)
+ insist(method.kind==='card'&&(authentication||method.paymentMethodRef!==original.method.paymentMethodRef&&method.paymentMethodRef!==prior.method.paymentMethodRef),'retry_recovery_new_card_required',409)
+ if(!authentication)await assertMethodUsable(env,original.accountRef,method.customerRef,method.paymentMethodRef)
  const business=await one(env,'SELECT * FROM nc_business WHERE singleton=1'),customer=await one(env,'SELECT language FROM nc_customers WHERE id=?',row.customer_id),source=await nativeCollectionSource(env,row.invoice_id),hold=await collectionHold(env,row.invoice_id)
  insist(business&&business.revision===original.businessRevision,'retry_recovery_basis_changed',409)
- const L=customerText(customer?.language),quote:AutomaticQuote={...original,method,wordingVersion:'exact-invoice-new-card-1',wording:recoveryText(customer?.language).consent(business.legal_name,L.money(original.amountCents),source.row.number,method.summary.last4)}
+ const L=customerText(customer?.language),quote:AutomaticQuote={...original,method,wordingVersion:authentication?'exact-invoice-authentication-1':'exact-invoice-new-card-1',wording:recoveryText(customer?.language,authentication).consent(business.legal_name,L.money(original.amountCents),source.row.number,method.summary.last4)}
  const id=newId(),hash=await fingerprint(quote)
  insist(source.payerId===original.customer&&source.row.total_cents===original.amountCents&&source.collectibleCents===original.amountCents&&!hold.hold&&!hold.disputedCents&&hold.collectibleCents===original.amountCents,'retry_recovery_invoice_changed',409)
  const proposal={id,customer_id:row.customer_id,revision:newId(),quote_json:canonical(quote),quote_hash:hash}
- await commit(env,[...setupOwnerFence(env,actor),automaticAuthority(env,row),nativeSourceGuard(env,source),unusableMethodGuard(env,quote.accountRef,method.customerRef,method.paymentMethodRef),
+ await commit(env,[...setupOwnerFence(env,actor),automaticAuthority(env,row),nativeSourceGuard(env,source),recoveryMethodGuard(env,row,quote),
  guard(env,'retry_recovery_state_changed',`EXISTS(SELECT 1 FROM nc_retry_series WHERE collection_id=? AND revision=? AND attempts=? AND deadline>=? AND status IN ('blocked','scheduled'))
  AND NOT EXISTS(SELECT 1 FROM nc_retry_attempts WHERE collection_id=? AND outcome='claimed')`,row.id,series.revision,series.attempts,clockInstant(env),row.id),
  guard(env,'retry_recovery_original_method_required',`EXISTS(SELECT 1 FROM nc_card_lifecycle WHERE account_ref=? AND stripe_customer_ref=? AND payment_method_ref=? AND unusable_at IS NOT NULL AND unusable_reason=?)`,original.accountRef,prior.method.customerRef,prior.method.paymentMethodRef,series.decline_code),
@@ -167,7 +174,7 @@ export async function decideRetryMethodRecovery(env:Bindings,actor:Actor,input:I
  await commit(env,[automaticAuthority(env,row),proposalFence(env,row,proposal,'pending_approval'),factorFence(env,proposal.prepared_by,proposal.owner_session_id,proposal.owner_verified_at,true),factorFence(env,actor.id,actor.sessionId!,verified),
  ...(single?[guard(env,'second_approver_required',`NOT EXISTS(${other})`,actor.id)]:[]),
  stmt(env,`UPDATE nc_retry_method_recovery_authorizations SET status=?,approved_by=?,approver_session_id=?,approver_verified_at=?,approval_mode=?,revision=? WHERE id=?`,decision==='approved'?'active':'rejected',actor.id,actor.sessionId,verified,single?'single-approver':'two-person',newId(),proposal.id),
- ...(decision==='approved'?[stmt(env,"UPDATE nc_retry_series SET status='scheduled',next_at=?,revision=? WHERE collection_id=?",clockInstant(env),newId(),row.id)]:[]),
+ ...(decision==='approved'&&JSON.parse(proposal.quote_json).wordingVersion!=='exact-invoice-authentication-1'?[stmt(env,"UPDATE nc_retry_series SET status='scheduled',next_at=?,revision=? WHERE collection_id=?",clockInstant(env),newId(),row.id)]:[]),
  event(env,proposal,decision,actorLabel(actor),{quoteHash:proposal.quote_hash,approvalMode:single?'single-approver':'two-person'})],{actor:actorLabel(actor),action:`retry.method.${decision}`,subject:proposal.id,detail:{quoteHash:proposal.quote_hash}})
  return retryMethodRecoveryView(await retryMethodRecovery(env,proposal.id))
 }

@@ -90,7 +90,4 @@ retry is labelled **No recorded retry attempt**; an absent dunning step is
 labelled **No recorded dunning step**. A group's count recovery rate counts
 invoices whose entire failed amount was recovered in that group.
 
-Involuntary churn is unavailable: the subscription lifecycle stores free-text
-cancellation reasons, without a structured failed-payment cause. Neither an
-exhausted retry series nor an unpaid invoice proves that a subscription
-ended involuntarily. The report does not manufacture a churn count.
+Involuntary churn counts only an owner-confirmed attribution of an actually ended subscription to its unpaid failed invoice. The owner confirms the current subscription revision and exact end date with a fresh factor. Neither an exhausted retry series, an unpaid invoice nor a free-text cancellation reason creates that attribution. Recording it changes no debt, payment or subscription state. Each ended subscription counts once.

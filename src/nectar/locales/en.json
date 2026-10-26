@@ -421,5 +421,10 @@
   "retry.recovery.withdrawn": "Withdrawn",
   "retry.recovery.consumed": "Attempt started",
   "retry.recovery.historical": "Historical record",
-  "retry.recovery.consent": "I authorize {merchant} to collect {amount} for invoice {invoice} once using the new card ending in {last4}. This replaces the card from the refused attempt and does not authorize further attempts."
+  "retry.recovery.consent": "I authorize {merchant} to collect {amount} for invoice {invoice} once using the new card ending in {last4}. This replaces the card from the refused attempt and does not authorize further attempts.",
+  "retry.authentication.heading": "Confirm the existing card",
+  "retry.authentication.accept": "I authorize one authentication attempt with this card.",
+  "retry.authentication.consent": "I authorize {merchant} to collect {amount} for invoice {invoice} once using the existing card ending in {last4}, after I confirm with my bank. This does not authorize automatic retries or other invoices.",
+  "retry.authentication.continue": "Confirm with your bank",
+  "retry.authentication.check": "Check existing payment"
 }

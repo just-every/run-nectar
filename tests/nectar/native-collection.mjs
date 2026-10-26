@@ -2,10 +2,11 @@
 import assert from 'node:assert/strict'
 import { file } from './harness.mjs'
 import { totp } from './mfa.mjs'
+import { assertRecoveryBuckets, assertRecoveryTotals } from './recovery-assertions.mjs'
 
 export function nativeCollectionEdge() {
   const calls=[],intents=new Map(),charges=new Map(),keys=new Set(),customers=new Map(),accounts=new Map([[1,'synthetic-nectar-native-account-1'],[2,'synthetic-nectar-native-account-2']])
-  let loseNext=false,loseBeforeNext=false,refusalNext=null,searchVisible=true,created=Date.parse('2026-10-22T10:00:00Z')/1000
+  let loseNext=false,loseBeforeNext=false,refusalNext=null,pendingNext=false,searchVisible=true,created=Date.parse('2026-10-22T10:00:00Z')/1000
   for(let n=1;n<=4;n++)customers.set(`synthetic-nectar-native-customer-${n}`,{account:n===2?2:1,method:`synthetic-nectar-native-card-${n}`})
   const list=data=>({object:'list',has_more:false,data})
   const fetch=async request=>{
@@ -40,6 +41,7 @@ export function nativeCollectionEdge() {
         intents.set(id,{account,value:intent})
         return Response.json({error:{type:'card_error',code,payment_intent:intent}},{status:402})
       }
+      if(pendingNext){pendingNext=false;Object.assign(intent,{status:'processing',amount_received:0,latest_charge:null});intents.set(id,{account,value:intent});return Response.json(intent)}
       intents.set(id,{account,value:intent})
       charges.set(charge,{account,value:{object:'charge',id:charge,status:'succeeded',paid:true,captured:true,customer:intent.customer,payment_method:intent.payment_method,payment_intent:id,
         currency:'usd',amount:intent.amount,amount_captured:intent.amount,amount_refunded:0,refunded:false,disputed:false,created,livemode:false}})
@@ -61,7 +63,7 @@ export function nativeCollectionEdge() {
     if(method==='GET'&&path==='/charges')return Response.json(list([...charges.values()].filter(row=>row.account===account&&row.value.payment_intent===url.searchParams.get('payment_intent')).map(row=>row.value)))
     throw new Error(`Unexpected native collection paid-edge request ${method} ${path}`)
   }
-  return {fetch,calls,customers,accounts,intents,charges,losePayment(){loseNext=true},loseBeforePayment(){loseBeforeNext=true},refuseNext(code){refusalNext=code},setSearchVisible(value){searchVisible=value},capturedAt(instant){created=Date.parse(instant)/1000}}
+  return {fetch,calls,customers,accounts,intents,charges,pendingPayment(){pendingNext=true},losePayment(){loseNext=true},loseBeforePayment(){loseBeforeNext=true},refuseNext(code){refusalNext=code},setSearchVisible(value){searchVisible=value},capturedAt(instant){created=Date.parse(instant)/1000}}
 }
 
 const edge=nativeCollectionEdge()
@@ -159,6 +161,7 @@ export async function nativeCollectionFlow(h,owner,{onState=async()=>{},confirm}
   edge.losePayment()
   const lost=await confirmReview(uncertain.instructions.confirm)
   assert.equal(lost.status,'uncertain')
+  assert.equal((await api('recovery')).invoices.some(r=>r.invoice===unknown.id),false,'An uncertain first attempt creates neither failed nor recovered cash')
   await onState({label:'uncertain',customer:customers[1],invoice:unknown.id,request:lost})
   assert.equal((await api(`invoices/${unknown.id}`)).paidCents,0,'A lost provider response never fabricates payment evidence')
   const posts=edge.calls.filter(call=>call.method==='POST').length
@@ -299,5 +302,90 @@ export async function nativeCollectionFlow(h,owner,{onState=async()=>{},confirm}
   await api('payment.allocate',{payment:cash.payment,invoice:failure.invoice_id,amount:(failure.amount_cents/100).toFixed(2)})
   recoveryReport=await api('recovery');assert.equal(recoveryReport.invoices.find(i=>i.invoice===failure.invoice_id).recoveredAmountCents,failure.amount_cents)
   assert.equal(recoveryReport.byAttempt.find(b=>b.key==='unattributed').recoveredAmountCents,unattributedBefore+failure.amount_cents,'Manual cash recovery is not attributed to a processor retry')
+  // A smaller first failure survives later balance changes. Pre-failure cash,
+  // credits and unallocated money cannot become recovery; later cash is capped.
+  const recoveryInvoice=await invoice(customers[0])
+  const beforeFailure=await api('payment.record',{customer:customers[0],amount:'20',received_on:'2026-10-22',method:'bank_transfer',reference:'synthetic-nectar-903'})
+  await api('payment.allocate',{payment:beforeFailure.payment,invoice:recoveryInvoice.id,amount:'20'})
+  instant+=1000;await h.advanceClock(new Date(instant).toISOString());edge.capturedAt(new Date(instant).toISOString())
+  const heldRecovery=await api('cadence.dispute',{invoice:recoveryInvoice.id,line:recoveryInvoice.lines[0].id,amount_cents:5000,reason:'Synthetic disputed amount limits first collection'})
+  const limitedReview=await api('collection.prepare',{invoice:recoveryInvoice.id})
+  assert.equal(limitedReview.amount_cents,3000)
+  edge.refuseNext('card_declined')
+  const limitedFailure=await api('collection.confirm',limitedReview.instructions.confirm)
+  assert.equal(limitedFailure.status,'declined')
+  const firstFailedAt=instant
+  const readCohort=async()=>{
+    const report=await api('recovery'),row=report.invoices.find(r=>r.invoice===recoveryInvoice.id)
+    assert.ok(row)
+    assert.deepEqual([row.firstFailedAt,row.failedAmountCents],[firstFailedAt,3000])
+    return {report,row}
+  }
+  let recoveryState=await readCohort()
+  assert.equal(recoveryState.row.recoveredAmountCents,0,'Cash allocated before the first failure is excluded')
+  await api('cadence.resolve',{dispute:heldRecovery.dispute,outcome:'Synthetic dispute resolved'})
+  instant+=1000;await h.advanceClock(new Date(instant).toISOString())
+  const partialCash=await api('payment.record',{customer:customers[0],amount:'10',received_on:'2026-10-22',method:'bank_transfer',reference:'synthetic-nectar-904'})
+  assert.equal((await readCohort()).row.recoveredAmountCents,0,'Unallocated cash does not recover a failed invoice')
+  await api('payment.allocate',{payment:partialCash.payment,invoice:recoveryInvoice.id,amount:'10'})
+  recoveryState=await readCohort()
+  assert.equal(recoveryState.row.recoveredAmountCents,1000)
+  const partialRows=recoveryState.report.invoices.map(row=>({...row,recoveredAmountCents:row.invoice===recoveryInvoice.id?1000:row.recoveredAmountCents}))
+  assertRecoveryTotals(recoveryState.report.totals,partialRows)
+  await api('credit.issue',{invoice:recoveryInvoice.id,amount:'10',reason:'Synthetic credit is not recovered cash'})
+  assert.equal((await readCohort()).row.recoveredAmountCents,1000,'Credits reduce debt without increasing recovered revenue')
+  const pendingInvoice=await invoice(customers[0]),pendingReview=await api('collection.prepare',{invoice:pendingInvoice.id})
+  let withoutPending=await api('recovery')
+  assert.equal(withoutPending.invoices.some(row=>row.invoice===pendingInvoice.id),false,'A prepared pending collection is not a failed cohort or recovered cash')
+  edge.pendingPayment()
+  const processing=await api('collection.confirm',pendingReview.instructions.confirm)
+  assert.equal(processing.status,'uncertain')
+  assert.deepEqual((await api('recovery')).totals,withoutPending.totals,'Provider processing and unresolved uncertainty create no recovered cash')
+  const laterCash=await api('payment.record',{customer:customers[0],amount:'60',received_on:'2026-10-22',method:'bank_transfer',reference:'synthetic-nectar-905'})
+  await api('payment.allocate',{payment:laterCash.payment,invoice:recoveryInvoice.id,amount:'60'})
+  recoveryState=await readCohort()
+  assert.equal((await api(`invoices/${recoveryInvoice.id}`)).paidCents,9000)
+  assert.equal(recoveryState.row.recoveredAmountCents,3000,'Post-failure cash above the first failed amount is capped')
+  assert.equal(recoveryState.row.recoveries.reduce((sum,row)=>sum+row.amountCents,0),3000)
+
+  // The native trial scheduler and an issued prepaid purchase produce ordinary
+  // refused collection evidence through their existing public doors.
+  await h.api('mfa.verify',finance,{code:totp(financeFactor.secret,instant)})
+  const prepaid=await api('prepaid.prepare',{subscription,mode:'grant',kind:'money',source:'purchase',amount:'40',effective_date:'2026-10-22',expires_date:'2027-10-22',priority:0,expiry_consent:true})
+  await h.api('prepaid.decide',finance,{request:prepaid.request,decision:'approved'})
+  const purchase=await api('prepaid.purchase.prepare',{intent:prepaid.request,issue_date:'2026-10-22'})
+  await api('invoice.approve',{invoice:purchase.invoice,acknowledge:true})
+  await api('invoice.finalise',{invoice:purchase.invoice,issue_date:'2026-10-22'})
+  const purchaseReview=await api('collection.prepare',{invoice:purchase.invoice})
+  edge.refuseNext('card_declined')
+  assert.equal((await api('collection.confirm',purchaseReview.instructions.confirm)).status,'declined')
+  assert.ok((await api(`invoices/${purchase.invoice}`)).lines.some(line=>line.kind==='prepaid_purchase'))
+  assert.equal((await api('recovery')).invoices.find(row=>row.invoice===purchase.invoice).failedAmountCents,4000)
+  const trialProduct=(await api('product.create',{code:'synthetic-nectar-906',name:'Synthetic trial recovery'})).id
+  const trialPrice=(await api('price.create',{product:trialProduct,kind:'flat',unit_amount:'100',taxable:false,billing_timing:'advance'})).id
+  const trialSub=(await api('subscription.create',{customer:customers[0],start_date:'2026-10-01',anchor_day:1,price:[trialPrice],trial_end:'2026-10-23',trial_payment:'card'})).id
+  const trialReview=await api('trial.collection.prepare',{subscription:trialSub})
+  const trialConsent=await api('trial.collection.confirm',trialReview.instructions.confirm)
+  await h.api('trial.collection.approve',finance,{request:trialConsent.id,basis_hash:trialConsent.basis,decision:'approved'})
+  instant=Date.parse('2026-10-23T10:00:00Z');await h.advanceClock(new Date(instant).toISOString());edge.capturedAt(new Date(instant).toISOString())
+  edge.refuseNext('card_declined')
+  assert.equal((await h.raw(`/cdn-cgi/local/scheduled?time=${instant}&cron=${encodeURIComponent('0 14 * * *')}`)).status,200)
+  const trialResult=(await api(`trial-collections?subscription=${trialSub}`)).find(row=>row.id===trialConsent.id)
+  assert.equal(trialResult.status,'declined')
+  const finalReport=await api('recovery'),trialCohort=finalReport.invoices.find(row=>row.invoice===trialResult.invoice)
+  assert.ok(trialCohort,'A native scheduled trial refusal enters recovery reporting')
+  assert.deepEqual([trialCohort.firstFailedAt,trialCohort.failedAmountCents,trialCohort.recoveredAmountCents],[instant,trialReview.quote.amountCents,0])
+  const finalFailures=(await api('native-collections')).filter(row=>['declined','customer_action_required'].includes(row.status))
+  const expectedRows=[]
+  for(const failure of finalFailures){
+    const source=await api(`invoices/${failure.invoice_id}`)
+    const allocations=source.allocations.filter(row=>row.allocated_at>=failure.reconciled_at).sort((a,b)=>a.allocated_at-b.allocated_at||a.id.localeCompare(b.id))
+    let remainder=failure.amount_cents
+    const recoveries=[]
+    for(const allocation of allocations){const amountCents=Math.min(remainder,allocation.amount_cents);if(amountCents){recoveries.push({amountCents,attempt:null,step:null});remainder-=amountCents}}
+    expectedRows.push({invoice:failure.invoice_id,currency:source.currency,declineCode:failure.error_code,failedAmountCents:failure.amount_cents,recoveredAmountCents:failure.amount_cents-remainder,attempts:[{attempt:1,step:null}],recoveries})
+  }
+  assert.deepEqual(finalReport.invoices.map(row=>row.invoice).sort(),expectedRows.map(row=>row.invoice).sort())
+  assertRecoveryBuckets(finalReport,expectedRows)
   console.log('Native collection: two frozen accounts, exact current balances, explicit owner confirmation, captured proof, atomic payment/allocation, read-only search/list recovery, definitive declined/authentication outcomes, concurrent confirmation, no second intent and erasure/factor boundaries')
 }

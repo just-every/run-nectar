@@ -40,3 +40,8 @@ jobs:
       # still fail if runtime support is missing. Avoid an unbounded apt mirror.
       - run: pnpm exec playwright install chromium
       - run: pnpm run verify
+      - name: Recovery reporting browser journeys
+        if: ${{ matrix.shard == 0 }}
+        run: |
+          node tests/nectar/payment-retries-browser.mjs
+          node tests/nectar/payment-retries-browser.mjs churn
