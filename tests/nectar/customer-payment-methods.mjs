@@ -230,6 +230,7 @@ export async function assertHostedSetups(h, owner, { customer, other, binding, f
   const pending=(await h.api(`customers/${isolatedCustomer}`,owner)).billingRecord.hostedSetups.find(row=>row.status==='open')
   const beforeEraseWrites=edge.calls.filter(row=>['create','default'].includes(row.operation)).length
   await h.api('portal.session.revoke',owner,{session:isolatedSession.id})
+  await onState({h,owner,session:isolatedSession,customer:isolatedCustomer,setup:pending.id,state:'refused',method:'card'})
   await post(isolatedSession,'finish',pending.id,401)
   const erasure=await h.api('erasure.request',owner,{customer:isolatedCustomer})
   const message=h.mails.toReversed().find(mail=>[mail.to].flat().includes('synthetic-nectar-809@example.test'))

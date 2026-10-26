@@ -60,7 +60,7 @@ try{
     return (await h.api(`customers/${customer}`,owner)).billingRecord.hostedSetups.find(row=>row.status==='prepared'&&row.method===method)
   },hostedState:async({session,customer,setup,state,method})=>{
     for(const width of [1440,390]){
-      await customerPage.setViewportSize({width,height:950});assert.equal((await customerPage.goto(h.origin+`/portal/payment-methods?session=${encodeURIComponent(session.token)}`)).status(),200)
+      await customerPage.setViewportSize({width,height:950});assert.equal((await customerPage.goto(h.origin+`/portal/payment-methods?session=${encodeURIComponent(session.token)}`)).status(),state==='refused'?401:200)
       assert.equal(await customerPage.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false)
       assert.equal(await customerPage.locator('a,button').evaluateAll(nodes=>nodes.filter(node=>!node.textContent.trim()).length),0,'All controls have visible labels')
       const card=customerPage.locator('section').filter({has:customerPage.locator(`input[value="${setup}"]`)});if(['prepared','open'].includes(state))assert.equal(await card.count(),1)

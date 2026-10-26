@@ -10,7 +10,7 @@ import {stripeSandbox,safeError} from './stripe-sandbox-client.mjs'
 
 const stripe=stripeSandbox(process.env.STRIPE_SECRET_KEY),directory=process.env.NECTAR_EVIDENCE_DIR??'.evidence/hosted-sandbox'
 await mkdir(directory,{recursive:true})
-let h,browser,phase='account',customer
+let h,browser,page,phase='account',customer
 const facts={head:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),setups:[],cleanup:false}
 try {
   const account=await stripe.request('GET','/v1/account')
@@ -27,7 +27,7 @@ try {
   const binding=await h.api('collection.customer.bind',owner,{customer:native.id,account_ref:account.id,stripe_customer_ref:customer.id,confirm:true})
   await h.api('portal.configure',owner,{hosts:[h.origin],parents:[]})
   browser=await chromium.launch({headless:true,args:['--use-mock-keychain','--password-store=basic']})
-  const context=await browser.newContext(),page=await context.newPage()
+  const context=await browser.newContext();page=await context.newPage()
   page.setDefaultTimeout(20000)
   for(const method of ['card','us_bank_account']) {
     phase=`prepare-${method}`
@@ -48,7 +48,7 @@ try {
       await page.locator('#cardCvc').fill('123')
       const name=page.locator('#billingName');if(await name.count())await name.fill('Alder Analytics')
       const postal=page.locator('#billingPostalCode');if(await postal.count())await postal.fill('94105')
-      await page.getByTestId('hosted-payment-submit-button').click()
+      await page.locator('button[type=submit]').click()
     } else {
       // The hosted bank selector owns verification. No financial input is sent
       // to Nectar or to the test driver's HTTP transport.
@@ -73,6 +73,7 @@ try {
   facts.outcome='passed'
 } catch(error) {
   facts.outcome='failed';facts.phase=phase;facts.error=safeError(error)
+  if(page){await page.screenshot({path:`${directory}/failed-${phase}.png`,fullPage:true}).catch(()=>{});facts.controls=await page.locator('input,button').evaluateAll(nodes=>nodes.map(node=>({tag:node.tagName,type:node.type,id:node.id,name:node.name,label:node.getAttribute('aria-label')}))).catch(()=>[])}
   // Deliberately avoid browser exception messages, URLs and provider bodies.
   process.exitCode=1
 } finally {

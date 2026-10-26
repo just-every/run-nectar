@@ -321,5 +321,8 @@
   "checkout.status.complete": "Your payment method was saved. Your separate default choice was applied.",
   "checkout.verify": "Check the original Stripe setup. This does not authorize a charge.",
   "checkout.reconcile": "Check original setup",
-  "checkout.historical": "Historical setup only. A new setup and consent are required before use."
+  "checkout.historical": "Historical setup only. A new setup and consent are required before use.",
+  "checkout.choice.selected": "You chose to make this the default method.",
+  "checkout.choice.unchanged": "Your previous default method is unchanged.",
+  "checkout.mandate.unavailable": "The authorization wording is unavailable here. Saving this account does not permit Nectar to debit it."
 }

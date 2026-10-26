@@ -321,5 +321,8 @@
   "checkout.status.complete": "Se guardó tu método de pago. Se aplicó tu elección separada de método predeterminado.",
   "checkout.verify": "Comprobar la configuración original de Stripe. Esto no autoriza un cobro.",
   "checkout.reconcile": "Comprobar configuración original",
-  "checkout.historical": "Solo configuración histórica. Se requiere una nueva configuración y consentimiento antes de usarla."
+  "checkout.historical": "Solo configuración histórica. Se requiere una nueva configuración y consentimiento antes de usarla.",
+  "checkout.choice.selected": "Elegiste usar este método como predeterminado.",
+  "checkout.choice.unchanged": "Tu método predeterminado anterior no ha cambiado.",
+  "checkout.mandate.unavailable": "El texto de autorización no está disponible aquí. Guardar esta cuenta no permite a Nectar realizar adeudos."
 }
