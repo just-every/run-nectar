@@ -6,11 +6,11 @@ import { nextRetry,DAY } from './retry-policy'
 import { collectionHold } from './cadence-holds'
 
 export async function retryState(env:Bindings,invoice:string){
- const row=await one(env,'SELECT * FROM nc_retry_series WHERE invoice_id=?',invoice)
+ const row=await one(env,`SELECT r.*,a.status AS collection_status,EXISTS(SELECT 1 FROM nc_automatic_collection_authorizations z WHERE z.id=a.id AND z.basis_hash=a.basis_hash) AS authorized FROM nc_retry_series r JOIN nc_automatic_collections a ON a.id=r.collection_id WHERE r.invoice_id=?`,invoice)
  if(!row)return {attempt_count:0,next_payment_attempt:null,retry_status:null}
  const hold=await collectionHold(env,invoice)
- const allowed=row.status==='scheduled'&&!hold.disputedCents&&!hold.hold&&hold.collectibleCents>0
- return {attempt_count:row.attempts,next_payment_attempt:allowed?row.next_at:null,retry_status:hold.disputedCents?'disputed':hold.hold??row.status}
+ const allowed=row.authorized&&['refused','returned'].includes(row.collection_status)&&row.status==='scheduled'&&!hold.disputedCents&&!hold.hold&&hold.collectibleCents>0
+ return {attempt_count:row.attempts,next_payment_attempt:allowed?row.next_at:null,retry_status:row.collection_status==='revoked'?'revoked':!row.authorized?'historical':hold.disputedCents?'disputed':hold.hold??row.status}
 }
 export async function recordRetryFailure(env:Bindings,row:Row,code:string){
  const q=automaticQuote(row),at=clockInstant(env),prior=await one(env,'SELECT * FROM nc_retry_series WHERE collection_id=?',row.id)

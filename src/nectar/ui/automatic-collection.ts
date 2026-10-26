@@ -21,5 +21,5 @@ export async function automaticCollectionSection(env:Bindings,actor:Actor,invoic
  ${(['awaiting_customer','pending_approval','active'].includes(row.status)||!!row.quote.retryPolicy&&['refused','returned'].includes(row.status))&&actor.role==='owner'?form('automatic.collection.revoke',back,hidden('request',row.id),'Withdraw collection',{secondary:true}):''}
  ${['claimed','uncertain','pending_settlement'].includes(row.status)&&actor.role==='owner'?form('automatic.collection.reconcile',back,hidden('request',row.id),'Check existing payment',{secondary:true}):''}
  ${row.paymentIntentRef?h`<p>Processor reference ${row.paymentIntentRef}. ${row.payment?h`<a href="/app/payments/${row.payment}/receipt">Payment receipt</a>`:row.status==='pending_settlement'?'The invoice remains owed while settlement is pending.':row.status==='returned'?'The bank payment returned. The invoice remains owed.':'No collected payment is confirmed. The invoice remains owed.'}</p>`:''}
- ${row.errorCode?h`<p role="status">${row.errorCode.replaceAll('_',' ')}. Check the existing outcome; another charge is never sent.</p>`:''}</article>`)}</section>`
+ ${row.errorCode?h`<p role="status">${row.errorCode.replaceAll('_',' ')}. ${row.quote.retryPolicy?'Only the accepted retry limits authorize another attempt.':'Another charge is not authorized.'}</p>`:''}</article>`)}</section>`
 }

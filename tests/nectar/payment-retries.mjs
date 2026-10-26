@@ -109,6 +109,13 @@ export async function paymentRetriesFlow(h,owner,{onState=async()=>{},prepareCol
  assert.equal(report.totals.recoveredAmountCents,30000)
  assert.equal(report.involuntaryChurn.available,true);assert.equal(report.involuntaryChurn.count,0,'Exhaustion alone is never involuntary churn')
  await onState({state:'report',id:unknown.id,report})
+ const stopped=await create('do_not_honor',{recoverAt:2}),session=await api('portal.session.issue',{customer:stopped.request.customer,origin:h.origin,audience:'hosted'})
+ assert.equal((await h.raw(`/portal/automatic-collections/${stopped.request.id}?session=${encodeURIComponent(session.token)}`,{body:{request:stopped.request.id,withdraw:true}})).status,200)
+ assert.equal((await api(`invoices/${stopped.id}`)).next_payment_attempt,null)
+ const stoppedCount=edge.writes.length;await tick(instant+day);assert.equal(edge.writes.length,stoppedCount,'Customer withdrawal revokes future retry authority')
+ const missing=await create('do_not_honor',{recoverAt:2});edge.customers.get('synthetic-nectar-native-customer-1').method=null
+ const missingCount=edge.writes.length;await tick(instant+day);assert.equal(edge.writes.length,missingCount)
+ assert.equal((await api(`invoices/${missing.id}`)).next_payment_attempt,null,'Missing methods stop without a provider write')
  const mails=h.mails.length;await tick(instant+20*day);assert.equal(h.mails.length,mails,'Retries send no customer notices')
  console.log('paymentRetriesFlow: consented policy, exact timing, hard and ACH prohibitions, caps, dispute hold, once-only cash and page API webhook parity')
 }
