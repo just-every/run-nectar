@@ -17,8 +17,8 @@ export function dunningRecoveryStatements(env: Bindings,id: string,delivery: Row
  stmt(env,'INSERT INTO nc_dunning_recoveries(id,customer_id,invoice_id,delivery_id) VALUES(?,?,?,?)',id,delivery.customer_id,delivery.invoice_id,delivery.id)]
 }
 export async function retryDunningStep(env: Bindings,collection: Row,quote: AutomaticQuote) {
- const row=await one(env,`SELECT d.id FROM nc_retry_method_recoveries r JOIN nc_retry_method_recovery_authorizations z ON z.id=r.id
- JOIN nc_dunning_recoveries link ON link.id=r.id JOIN nc_dunning_deliveries d ON d.id=link.delivery_id
+ const row=await one(env,`SELECT s.policy_id,d.step FROM nc_retry_method_recoveries r JOIN nc_retry_method_recovery_authorizations z ON z.id=r.id
+ JOIN nc_dunning_recoveries link ON link.id=r.id JOIN nc_dunning_deliveries d ON d.id=link.delivery_id JOIN nc_dunning_series s ON s.id=d.series_id
  WHERE r.collection_id=? AND z.status='active' AND r.quote_json=? AND d.invoice_id=r.invoice_id AND d.customer_id=r.customer_id`,collection.id,canonical(quote))
- return row?`dunning:${row.id}`:null
+ return row?`dunning:${row.policy_id}:${row.step}`:null
 }

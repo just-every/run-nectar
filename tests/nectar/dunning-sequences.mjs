@@ -69,8 +69,9 @@ export async function dunningSequenceFlow(h,owner,{onState=async()=>{},createPol
   await api('invoice.approve',{invoice,acknowledge:true});await api('invoice.finalise',{invoice,issue_date:'2026-10-22'})
   assert.equal((await api(`invoices/${invoice}`)).balanceCents,10000)
   if(index===3)await api('dunning.enroll',{invoice,policy:standard.id,confirm:true},409)
-  const series=await register({invoice,policy:index===3?enterprise.id:index===4?unpaidPolicy.id:index===5?cancelPolicy.id:standard.id,confirm:true})
-  records.push({customer,sub,invoice,collection,series,email:`dunning-${index}@example.test`})
+  const policyId=index===3?enterprise.id:index===4?unpaidPolicy.id:index===5?cancelPolicy.id:standard.id
+  const series=await register({invoice,policy:policyId,confirm:true})
+  records.push({customer,sub,invoice,collection,series,policy:policyId,email:`dunning-${index}@example.test`})
  }
  const [recover,overdue,enterpriseRecord,unpaid,canceled]=records
  const report=()=>api('dunning')
@@ -78,7 +79,7 @@ export async function dunningSequenceFlow(h,owner,{onState=async()=>{},createPol
  const sent=[]
  const mail=async(record,step)=>{
   const before=h.mails.length
-  const message=await prepare({series:record.series.id,step,confirm:true})
+  const message={...await prepare({series:record.series.id,step,confirm:true}),key:`dunning:${record.policy}:${step}`}
   assert.equal(h.mails.length,before,'Preparation sends nothing')
   await onState({state:'prepared',record,message,report:await report()})
   const response=await send({delivery:message.id,basis_hash:message.basisHash,confirm:true})
@@ -182,18 +183,19 @@ export async function dunningSequenceFlow(h,owner,{onState=async()=>{},createPol
  const recovery=await api('recovery')
  assert.deepEqual([recovery.totals.failedInvoices,recovery.totals.recoveredInvoices,recovery.totals.failedAmountCents,recovery.totals.recoveredAmountCents,recovery.totals.recoveryRate,recovery.totals.amountRecoveryRate],[5,1,50000,10000,1/5,1/5])
  for(const message of sent){
-  const bucket=recovery.byDunningStep.find(b=>b.key===`dunning:${message.id}`),recovered=message.id===recoveryMail.message.id
-  assert.equal(recovery.invoices.find(i=>i.invoice===message.invoice).stepDetails.find(s=>s.key===`dunning:${message.id}`).step,message.step)
-  assert.ok(bucket);assert.deepEqual([bucket.failedInvoices,bucket.failedAmountCents,bucket.recoveredInvoices,bucket.recoveredAmountCents,bucket.recoveryRate,bucket.amountRecoveryRate],[1,10000,recovered?1:0,recovered?10000:0,recovered?1:0,recovered?1:0])
+  const bucket=recovery.byDunningStep.find(b=>b.key===message.key),recovered=message.key===recoveryMail.message.key
+  assert.equal(recovery.invoices.find(i=>i.invoice===message.invoice).stepDetails.find(s=>s.key===message.key).step,message.step)
+  const exposed=new Set(sent.filter(s=>s.key===message.key).map(s=>s.invoice)).size
+  assert.ok(bucket);assert.deepEqual([bucket.failedInvoices,bucket.failedAmountCents,bucket.recoveredInvoices,bucket.recoveredAmountCents,bucket.recoveryRate,bucket.amountRecoveryRate],[exposed,exposed*10000,recovered?1:0,recovered?10000:0,recovered?1/exposed:0,recovered?1/exposed:0])
  }
  const expected=records.map((record,index)=>{
-  const intent=edge.writes[index].id,attempts=edge.writes.filter(w=>w.id===intent).map((w,n)=>({attempt:n+1,at:w.at,step:n===1?`dunning:${recoveryMail.message.id}`:null}))
+  const intent=edge.writes[index].id,attempts=edge.writes.filter(w=>w.id===intent).map((w,n)=>({attempt:n+1,at:w.at,step:n===1?recoveryMail.message.key:null}))
   const recovered=record===recover
-  return {currency:'USD',declineCode:'stolen_card',failedAmountCents:10000,recoveredAmountCents:recovered?10000:0,attempts,steps:sent.filter(s=>s.invoice===record.invoice).map(s=>`dunning:${s.id}`),recoveries:recovered?[{amountCents:10000,attempt:2,step:`dunning:${recoveryMail.message.id}`}]:[]}
+  return {currency:'USD',declineCode:'stolen_card',failedAmountCents:10000,recoveredAmountCents:recovered?10000:0,attempts,steps:sent.filter(s=>s.invoice===record.invoice).map(s=>s.key),recoveries:recovered?[{amountCents:10000,attempt:2,step:recoveryMail.message.key}]:[]}
  })
  assertRecoveryBuckets(recovery,expected)
  const allocation=paid.allocations[0],source=recovery.invoices.find(i=>i.invoice===recover.invoice)
- assert.equal(source.recoveries[0].payment,allocation.payment_id);assert.equal(source.recoveries[0].step,`dunning:${recoveryMail.message.id}`)
+ assert.equal(source.recoveries[0].payment,allocation.payment_id);assert.equal(source.recoveries[0].step,recoveryMail.message.key)
  assert.equal(recovery.byDunningStep.find(b=>b.key==='unrecorded').recoveredAmountCents,0)
  await onState({state:'complete',records,report:await report()})
  const payment=await api('payment.record',{customer:overdue.customer,amount:'100',received_on:'2026-11-19',method:'bank_transfer',reference:'synthetic-nectar-dunning-settlement'})
@@ -202,7 +204,7 @@ export async function dunningSequenceFlow(h,owner,{onState=async()=>{},createPol
  const afterExternal=await api('recovery')
  assert.deepEqual([afterExternal.totals.recoveredInvoices,afterExternal.totals.recoveredAmountCents,afterExternal.totals.recoveryRate],[2,20000,2/5])
  assert.equal(afterExternal.byDunningStep.find(b=>b.key==='unrecorded').recoveredAmountCents,10000,'An external allocation never acquires the latest email attribution')
- for(const message of sent.filter(s=>s.invoice===overdue.invoice))assert.equal(afterExternal.byDunningStep.find(b=>b.key===`dunning:${message.id}`).recoveredAmountCents,0)
+ for(const message of sent.filter(s=>s.invoice===overdue.invoice))assert.equal(afterExternal.byDunningStep.find(b=>b.key===message.key).recoveredAmountCents,recovery.byDunningStep.find(b=>b.key===message.key).recoveredAmountCents)
  await onState({state:'restored',record:overdue,report:await report()})
  console.log('dunningSequenceFlow: four exact dated messages, working update links, consented same-intent cash and stop, scoped restriction and restoration, independent invoice-only policy, recorded-step amounts and rates')
 }

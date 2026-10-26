@@ -771,7 +771,7 @@ Saving a new default grants no debit authority. A separately prepared
 `retry.method.prepare` may name `dunning_delivery` to bind that exact message to
 the unchanged invoice and original PaymentIntent. Existing customer acceptance,
 human approval, hard-decline rules and original retry caps remain binding.
-Each claimed message is a recorded step exposure. Cash is attributed only by
+Each claimed message is a recorded step exposure. Report groups use the immutable policy identity and step ordinal across invoices; each group links its actual invoices and preserves its configured day offset. Cash is attributed only by
 the explicitly linked collected attempt and its actual payment allocation;
 other receipts retain unrecorded attribution. No count or amount is inferred
 from message timing.

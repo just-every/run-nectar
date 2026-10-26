@@ -14,7 +14,13 @@ const breakdown=(rows:RecoveryBucket[],kind:string,stepLinks:ReadonlyMap<string,
 
 export async function retryRecoveryPage(env: Bindings, actor: Actor, url: URL) {
   const [report,comparison]=await Promise.all([retryRecoveryReport(env,actor),retryComparisonReport(env,actor)])
-  const stepLinks=new Map(report.invoices.flatMap(invoice=>invoice.stepDetails.map(step=>[step.key,h`<a href="${invoice.href}">${invoice.number} · step ${step.step}</a>`] as const)))
+  const groups=new Map<string,{step:number;day:number;invoices:{href:string;number:string}[]}>()
+  for(const invoice of report.invoices)for(const step of invoice.stepDetails){
+    const group=groups.get(step.key)??{step:step.step,day:step.day,invoices:[]}
+    if(!group.invoices.some(i=>i.href===invoice.href))group.invoices.push({href:invoice.href,number:invoice.number})
+    groups.set(step.key,group)
+  }
+  const stepLinks=new Map([...groups].map(([key,group])=>[key,h`Step ${group.step} · day ${group.day}<br>${group.invoices.map((invoice,index)=>h`${index?', ':''}<a href="${invoice.href}">${invoice.number}</a>`)}`] as const))
   const {measured,baseline}=comparison.publishedDefault
   return page('Payment recovery',actor,h`<p class="crumbs"><a href="/app/reports/billings">Financial reports</a></p>
     <h1>Payment recovery</h1><p class="lede">${report.period} · ${report.totals.failedInvoices} failed invoices · ${report.totals.recoveredInvoices} recovered · ${percent(report.totals.recoveryRate)} recovery rate</p>
