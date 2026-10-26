@@ -41,7 +41,7 @@ export async function dunningSequenceFlow(h,owner,{onState=async()=>{},createPol
  const prepare=prepareMail??(p=>api('dunning.mail.prepare',p))
  const send=sendMail??(p=>api('dunning.mail.send',p))
  const end=finish??(p=>api('dunning.end',p))
- const standard=await policy({name:'Standard recovery',scope:'default',scope_ref:'',offsets:'0,7,14,21',end_day:21,end_action:'restrict',confirm:true})
+ const standard=await policy({name:'Standard recovery',scope:'default',scope_ref:'',offsets:'0,3,7,21',end_day:21,end_action:'restrict',confirm:true})
  const product=(await api('product.create',{code:'dunning-service',name:'Cedar workspace'})).id
  await api('feature.grant',{product,feature:'api_access'})
  const price=(await api('price.create',{product,kind:'flat',unit_amount:'100',taxable:false})).id
@@ -114,15 +114,17 @@ export async function dunningSequenceFlow(h,owner,{onState=async()=>{},createPol
  assert.equal(edge.writes.length,writes)
  for(const prior of sent.filter(s=>s.link)){const url=new URL(prior.link);assert.equal((await h.raw(url.pathname+url.search)).status,401,'The original update capability expires rather than extending with a later owner factor')}
  await mail(enterpriseRecord,1)
- await move(7)
+ await move(3)
  const providerWrites=()=>setup.calls.filter(c=>['create','default'].includes(c.operation)).length
  const beforeRetirement=providerWrites()
  await api('dunning.mail.prepare',{series:recover.series.id,step:2,confirm:true},409)
  assert.equal(providerWrites(),beforeRetirement,'An open original processor setup is not replaced or retried')
  setup.expire(oldSetup)
- const recoveryMail=await mail(recover,2);await mail(overdue,2)
+ await mail(recover,2);await mail(overdue,2)
  assert.equal(providerWrites(),beforeRetirement,'Retiring a definitively expired or never-started setup makes no provider write')
  assert.ok((await api('audit')).some(e=>e.action==='dunning.setup.retire'&&e.subject===oldSetup&&JSON.parse(e.detail).reason==='provider-expired'))
+ await move(7)
+ const recoveryMail=await mail(recover,3);await mail(overdue,3)
  const path=new URL(recoveryMail.link).pathname+new URL(recoveryMail.link).search
  const methodPage=await (await h.raw(path)).text()
  const setupId=methodPage.match(/name="setup" value="([^"]+)"/)?.[1],hash=methodPage.match(/name="consent_hash" value="([^"]+)"/)?.[1]
@@ -137,7 +139,7 @@ export async function dunningSequenceFlow(h,owner,{onState=async()=>{},createPol
  if(updateMethod)await updateMethod({record:recover,path,setupId,complete:()=>setup.complete(setupId)})
  else await update()
  assert.equal(edge.writes.length,writes,'Saving the replacement grants no debit authority')
- const wrongMessage=sent.find(s=>s.invoice===overdue.invoice&&s.step===2)
+ const wrongMessage=sent.find(s=>s.invoice===overdue.invoice&&s.step===3)
  await api('retry.method.prepare',{request:recover.collection.id,dunning_delivery:wrongMessage.id,confirm:true},409)
  const proposal=await (prepareRecovery??(p=>api('retry.method.prepare',p)))({request:recover.collection.id,dunning_delivery:recoveryMail.message.id,confirm:true})
  const sessionToken=new URL(recoveryMail.link).searchParams.get('session'),acceptPath=`/portal/retry-method-recoveries/${proposal.id}?session=${encodeURIComponent(sessionToken)}`
@@ -153,13 +155,11 @@ export async function dunningSequenceFlow(h,owner,{onState=async()=>{},createPol
  await api('dunning.mail.prepare',{series:recover.series.id,step:2,confirm:true},409)
  await onState({state:'recovered',record:recover,report:await report()})
  await move(10);await mail(enterpriseRecord,2)
- await move(14);await mail(overdue,3)
- await api('dunning.mail.prepare',{series:recover.series.id,step:3,confirm:true},409)
  await move(20);await mail(enterpriseRecord,3)
  await api('dunning.end',{series:overdue.series.id,action:'restrict',confirm:true},409)
  const entitlement=record=>api(`entitlements/${record.customer}?feature=api_access`)
  assert.equal((await entitlement(overdue)).allowed,true)
- await move(21);await mail(overdue,4)
+ await move(21);await api('dunning.mail.prepare',{series:recover.series.id,step:4,confirm:true},409);await mail(overdue,4)
  assert.equal((await entitlement(overdue)).allowed,true,'No destructive action occurs without explicit final confirmation')
  await end({series:overdue.series.id,action:'restrict',confirm:true})
  assert.equal((await entitlement(overdue)).allowed,false)
@@ -179,7 +179,7 @@ export async function dunningSequenceFlow(h,owner,{onState=async()=>{},createPol
  await move(28);await end({series:enterpriseRecord.series.id,action:'keep_active',confirm:true})
  assert.equal((await entitlement(enterpriseRecord)).allowed,true)
  assert.equal(sent.filter(s=>s.invoice===overdue.invoice).length,4)
- assert.deepEqual(sent.filter(s=>s.invoice===overdue.invoice).map(s=>s.due),[0,7,14,21].map(n=>new Date(first+n*day).toISOString().slice(0,10)))
+ assert.deepEqual(sent.filter(s=>s.invoice===overdue.invoice).map(s=>s.due),[0,3,7,21].map(n=>new Date(first+n*day).toISOString().slice(0,10)))
  const recovery=await api('recovery')
  assert.deepEqual([recovery.totals.failedInvoices,recovery.totals.recoveredInvoices,recovery.totals.failedAmountCents,recovery.totals.recoveredAmountCents,recovery.totals.recoveryRate,recovery.totals.amountRecoveryRate],[5,1,50000,10000,1/5,1/5])
  for(const message of sent){
@@ -195,7 +195,7 @@ export async function dunningSequenceFlow(h,owner,{onState=async()=>{},createPol
  })
  assertRecoveryBuckets(recovery,expected)
  const allocation=paid.allocations[0],source=recovery.invoices.find(i=>i.invoice===recover.invoice)
- assert.equal(source.recoveries[0].payment,allocation.payment_id);assert.equal(source.recoveries[0].step,recoveryMail.message.key)
+ assert.equal(source.recoveries[0].attempt,2);assert.equal(source.recoveries[0].payment,allocation.payment_id);assert.equal(source.recoveries[0].step,recoveryMail.message.key)
  assert.equal(recovery.byDunningStep.find(b=>b.key==='unrecorded').recoveredAmountCents,0)
  await onState({state:'complete',records,report:await report()})
  const payment=await api('payment.record',{customer:overdue.customer,amount:'100',received_on:'2026-11-19',method:'bank_transfer',reference:'synthetic-nectar-dunning-settlement'})
