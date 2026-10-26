@@ -4657,6 +4657,10 @@
       "sha256": "7ee0e6fb9c20259aa92c3179339e77e378ff6c32ffb558bce13dd508b8d4ee36",
       "executable": false
     },
+    "tests/nectar/card-expiry-sandbox.mjs": {
+      "sha256": "6d1d074f1d4102c76b5f6aa13cd14c3d823865acebc014e5dceff2375719c2a5",
+      "executable": false
+    },
     "tests/nectar/card-lifecycle-sandbox.mjs": {
       "sha256": "0aec428bc9f15411432880894c942518eeba9de5334bd2a33b3116d710f3a60a",
       "executable": false
