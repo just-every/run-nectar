@@ -1,3 +1,4 @@
+import { retireExpiredDunningSetups } from './dunning-setup'
 // Each send requires a separate current owner confirmation of the frozen message.
 import type { Bindings } from '../auth.server'
 import { operatorMail } from '../mail.server.mjs'
@@ -27,6 +28,7 @@ export async function prepareDunningMail(env: Bindings,actor: Actor,input: Input
  if(!series.invoice_only) {
   const binding=await one(env,'SELECT * FROM nc_stripe_customer_bindings WHERE customer_id=?',series.customer_id)
   insist(binding,'native_customer_binding_required',409)
+  await retireExpiredDunningSetups(env,actor,series.customer_id)
   const setup=await prepareHostedSetup(env,actor,Input.of({customer:series.customer_id,binding:binding.id,method:'card',confirm:true}))
   const session=await issuePortalSession(env,actor,Input.of({customer:series.customer_id,origin:env.AUTH_ORIGIN,audience:'hosted'}))
   setupId=setup.id;sessionId=session.id

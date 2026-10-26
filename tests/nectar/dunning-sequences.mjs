@@ -114,7 +114,14 @@ export async function dunningSequenceFlow(h,owner,{onState=async()=>{},createPol
  for(const prior of sent.filter(s=>s.link)){const url=new URL(prior.link);assert.equal((await h.raw(url.pathname+url.search)).status,401,'The original update capability expires rather than extending with a later owner factor')}
  await mail(enterpriseRecord,1)
  await move(7)
+ const providerWrites=()=>setup.calls.filter(c=>['create','default'].includes(c.operation)).length
+ const beforeRetirement=providerWrites()
+ await api('dunning.mail.prepare',{series:recover.series.id,step:2,confirm:true},409)
+ assert.equal(providerWrites(),beforeRetirement,'An open original processor setup is not replaced or retried')
+ setup.expire(oldSetup)
  const recoveryMail=await mail(recover,2);await mail(overdue,2)
+ assert.equal(providerWrites(),beforeRetirement,'Retiring a definitively expired or never-started setup makes no provider write')
+ assert.ok((await api('audit')).some(e=>e.action==='dunning.setup.retire'&&e.subject===oldSetup&&JSON.parse(e.detail).reason==='provider-expired'))
  const path=new URL(recoveryMail.link).pathname+new URL(recoveryMail.link).search
  const methodPage=await (await h.raw(path)).text()
  const setupId=methodPage.match(/name="setup" value="([^"]+)"/)?.[1],hash=methodPage.match(/name="consent_hash" value="([^"]+)"/)?.[1]
@@ -189,6 +196,10 @@ export async function dunningSequenceFlow(h,owner,{onState=async()=>{},createPol
  const payment=await api('payment.record',{customer:overdue.customer,amount:'100',received_on:'2026-11-19',method:'bank_transfer',reference:'synthetic-nectar-dunning-settlement'})
  await api('payment.allocate',{payment:payment.payment,invoice:overdue.invoice,amount:'100'})
  assert.equal((await entitlement(overdue)).allowed,true,'Actual settlement restores only the dunning restriction')
+ const afterExternal=await api('recovery')
+ assert.deepEqual([afterExternal.totals.recoveredInvoices,afterExternal.totals.recoveredAmountCents,afterExternal.totals.recoveryRate],[2,20000,2/5])
+ assert.equal(afterExternal.byDunningStep.find(b=>b.key==='unrecorded').recoveredAmountCents,10000,'An external allocation never acquires the latest email attribution')
+ for(const message of sent.filter(s=>s.invoice===overdue.invoice))assert.equal(afterExternal.byDunningStep.find(b=>b.key===`dunning:${message.id}`).recoveredAmountCents,0)
  await onState({state:'restored',record:overdue,report:await report()})
  console.log('dunningSequenceFlow: four exact dated messages, working update links, consented same-intent cash and stop, scoped restriction and restoration, independent invoice-only policy, recorded-step amounts and rates')
 }
