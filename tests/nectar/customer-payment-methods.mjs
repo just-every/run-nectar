@@ -127,7 +127,7 @@ export async function assertHostedSetups(h, owner, { customer, other, binding, f
   const post=async(session,operation,setup,status=200,extra={})=>{
     const page=operation==='start'?await (await h.raw(`/portal/payment-methods?session=${encodeURIComponent(session.token)}`)).text():''
     const hash=page.match(/name="consent_hash" value="([^"]+)"/)?.[1]??''
-    const response=await h.raw(`/portal/payment-methods.${operation}?session=${encodeURIComponent(session.token)}`,{cookie:returnCookies.get(setup),body:{setup,confirm:true,...(operation==='start'?{consent_hash:hash,make_default:true}:{}),...extra},headers:{accept:'application/json'}})
+    const response=await h.raw(`/portal/payment-methods/${operation}?session=${encodeURIComponent(session.token)}`,{cookie:returnCookies.get(setup),body:{setup,confirm:true,...(operation==='start'?{consent_hash:hash,make_default:true}:{}),...extra},headers:{accept:'application/json'}})
     const returned=response.headers.getSetCookie().find(value=>value.startsWith('nectar_setup_return=')&&!value.includes('Max-Age=0'))
     if(returned)returnCookies.set(setup,returned.split(';')[0])
     const value=await response.json()
@@ -169,7 +169,7 @@ export async function assertHostedSetups(h, owner, { customer, other, binding, f
     assert.equal(edge.calls.filter(call=>call.operation==='create').at(-1).locale,locale)
     await state('open')
     const defaults=writes('default')
-    const crossSite=await h.raw('/portal/payment-methods.finish',{cookie:returnCookies.get(setup.id),body:{setup:setup.id,confirm:true},headers:{origin:'https://synthetic-nectar-foreign.example',accept:'application/json'}})
+    const crossSite=await h.raw('/portal/payment-methods/finish',{cookie:returnCookies.get(setup.id),body:{setup:setup.id,confirm:true},headers:{origin:'https://synthetic-nectar-foreign.example',accept:'application/json'}})
     assert.equal(crossSite.status,401,'A cross-origin completion cannot use the return capability')
     await post(session,'finish',setup.id,409)
     assert.equal(writes('default'),defaults,'Pending processor completion never changes default')

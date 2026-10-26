@@ -8,7 +8,7 @@ import {customerSearchFlow,harnessOptions} from './customer-search.mjs'
 const directory=process.env.NECTAR_EVIDENCE_DIR??'.evidence/customer-record'
 const hostedFocus=process.env.NECTAR_BROWSER_FOCUS==='hosted'
 await mkdir(directory,{recursive:true})
-const h=await harness({assets:true,hostname:'localhost',...harnessOptions()}),captures=[]
+const h=await harness({assets:true,...harnessOptions()}),captures=[]
 let browser
 try{
   await h.raw('/auth/bootstrap',{body:{token:h.vars.SETUP_TOKEN,displayName:'Nectar Owner'}})
@@ -71,14 +71,14 @@ try{
   },startHosted:async({session,setup})=>{
     await customerPage.goto(h.origin+`/portal/payment-methods?session=${encodeURIComponent(session.token)}`)
     const form=customerPage.locator('form').filter({has:customerPage.locator(`input[value="${setup}"]`)});await form.locator('[name=confirm]').check();await form.locator('[name=make_default]').check()
-    const response=customerPage.waitForResponse(r=>new URL(r.url()).pathname==='/portal/payment-methods.start');await form.getByRole('button').first().click({noWaitAfter:true});const result=await response
+    const response=customerPage.waitForResponse(r=>new URL(r.url()).pathname==='/portal/payment-methods/start');await form.getByRole('button').first().click({noWaitAfter:true});const result=await response
     assert.equal(result.status(),303);const url=result.headers().location;assert.equal(new URL(url).hostname,'checkout.stripe.com')
     const cookies=await customerContext.cookies();assert.ok(cookies.some(cookie=>cookie.name==='nectar_setup_return'&&cookie.httpOnly&&cookie.sameSite==='Lax'))
     assert.equal((await customerPage.goto(h.origin+'/portal/payment-methods')).status(),200);return {status:'open',url,cookie:cookies.filter(cookie=>cookie.name==='nectar_setup_return').map(cookie=>`${cookie.name}=${cookie.value}`).join('; ')}
   },finishHosted:async({session,setup})=>{
     assert.equal((await customerPage.goto(h.origin+'/portal/payment-methods')).status(),200)
     const form=customerPage.locator('form').filter({has:customerPage.locator(`input[value="${setup}"]`)});await form.locator('[name=confirm]').check()
-    const [completed]=await Promise.all([customerPage.waitForNavigation({waitUntil:'load'}),form.getByRole('button').first().click()]);assert.equal(completed.status(),200);assert.equal(new URL(customerPage.url()).pathname,'/portal/payment-methods.finish');for(const width of [1440,390]){await customerPage.setViewportSize({width,height:950});await customerPage.screenshot({path:`${directory}/${width}-hosted-return-complete.png`,fullPage:true})};return {status:'complete'}
+    const [completed]=await Promise.all([customerPage.waitForNavigation({waitUntil:'load'}),form.getByRole('button').first().click()]);assert.equal(completed.status(),200);assert.equal(new URL(customerPage.url()).pathname,'/portal/payment-methods/finish');for(const width of [1440,390]){await customerPage.setViewportSize({width,height:950});await customerPage.screenshot({path:`${directory}/${width}-hosted-return-complete.png`,fullPage:true})};return {status:'complete'}
   },recordAch:async({customer,input})=>{
     await page.goto(h.origin+`/app/customers/${customer}`)
     for(const width of [1440,390]){await page.setViewportSize({width,height:950});await shot('ach-before-verification',width)}
