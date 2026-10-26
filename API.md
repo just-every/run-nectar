@@ -761,7 +761,7 @@ On a step's exact local date, `dunning.mail.prepare` takes `series`, `step` and
 `confirm`. The current owner needs a server-recorded fresh factor. Preparation
 sends nothing and freezes the recipient, amount, language, source and wording.
 `dunning.mail.send` separately confirms `delivery`, `basis_hash` and `confirm`.
-A durable claim precedes the provider call. Expired, changed, held, settled,
+An expired earlier dunning setup is retired only when never started or definitively expired at the provider with no completable SetupIntent; open or uncertain originals block replacement. A durable claim precedes the provider call. Expired, changed, held, settled,
 withdrawn or already-claimed steps cannot send. No missed-date catch-up,
 uncertain resend or replacement preparation bypass is available.
 
