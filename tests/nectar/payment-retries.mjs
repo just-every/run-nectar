@@ -47,6 +47,7 @@ export async function paymentRetriesFlow(h,owner,{onState=async()=>{},prepareCol
  assert.equal((await parity(disabled)).next_payment_attempt,null)
  const processing=await create('processing_error',{recoverAt:2})
  assert.equal((await parity(processing)).next_payment_attempt,first+4*3600000)
+ await onState({state:'scheduled',...processing})
  const count=edge.writes.length;await tick(first+4*3600000-1);assert.equal(edge.writes.length,count)
  await tick(first+4*3600000);await tick(first+4*3600000)
  assert.equal(edge.writes.length,count+1);assert.equal((await api(`invoices/${processing.id}`)).balanceCents,0)
@@ -75,6 +76,15 @@ export async function paymentRetriesFlow(h,owner,{onState=async()=>{},prepareCol
    await tick(instant+day);assert.equal(edge.writes.length,before+2)
   }
  }
+ // Default attempt and time caps are independently observable at the public invoice door.
+ const capped=await create('do_not_honor'),capStart=instant
+ for(let n=1;n<=7;n++)await tick(capStart+n*day)
+ assert.equal((await parity(capped)).attempt_count,8);assert.equal((await api(`invoices/${capped.id}`)).next_payment_attempt,null)
+ const windowed=await create('insufficient_funds'),windowStart=instant
+ for(let n=1;n<=4;n++)await tick(windowStart+n*3*day)
+ assert.equal((await parity(windowed)).attempt_count,5);assert.equal((await api(`invoices/${windowed.id}`)).next_payment_attempt,null)
+ const prohibited=await create('do_not_honor',{advice:'do_not_try_again'})
+ assert.equal((await parity(prohibited)).next_payment_attempt,null,'Processor advice prohibits retry even for a soft code')
  // Configure the four-attempt week. Existing customer consent stays frozen.
  await fresh();await api('retry.policy.configure',{max_attempts:4,window_days:7,confirm:true})
  const limited=await create('do_not_honor'),start=instant
@@ -118,4 +128,47 @@ export async function retryComparisonFlow(h,owner){
  const page=await h.page('/app/reports/recovery',owner)
  assert.ok(page.includes('$1,900')&&page.includes('$1,200'))
  console.log('retryComparisonFlow: published known outcomes independently sum to both schedules and the product description')
+}
+
+export async function retryPlanChurnFlow(h,owner,{onState=async()=>{}}={}){
+ const api=(p,b,status)=>h.api(p,owner,b,status)
+ let instant=Date.parse('2026-10-22T10:00:00Z');await h.advanceClock(new Date(instant).toISOString());edge.setTime(instant)
+ await api('business.configure',{...await api('business'),timezone:'UTC'})
+ const factor=await api('mfa.totp.start',{});await api('mfa.totp.confirm',{factor:factor.factor,code:totp(factor.secret,instant)});await api('mfa.policy',{scope:'all'})
+ const customer=(await api('customer.create',{external_id:'synthetic-nectar-churn',name:'Cedar ended account',billing_email:'ended@example.test'})).id
+ await api('collection.customer.bind',{customer,account_ref:'synthetic-nectar-native-account-1',stripe_customer_ref:'synthetic-nectar-native-customer-1',confirm:true})
+ const product=(await api('product.create',{code:'retry-plan',name:'Monthly retry plan'})).id
+ const price=(await api('price.create',{product,kind:'flat',unit_amount:'100',taxable:false})).id
+ await api('retry.policy.configure',{max_attempts:4,window_days:7,confirm:true})
+ await api('retry.policy.configure',{plan:price,max_attempts:2,window_days:7,confirm:true})
+ const sub=(await api('subscription.create',{customer,start_date:'2026-09-01',price:[price],quantity:['1']})).id
+ const run=await api('billrun.prepare',{period:'2026-09'}),invoice=(await api(`runs/${run.id}`)).invoices.find(i=>i.subscription_id===sub).id
+ await api('portal.configure',{hosts:[h.origin],parents:[]})
+ const request=await api('automatic.collection.prepare',{invoice,issue_date:'2026-10-22',enable_retries:true})
+ assert.equal(request.quote.retryPolicy.maxAttempts,2,'The invoice price override precedes the default')
+ assert.equal(request.quote.retryPolicy.scope,`plan:${price}`)
+ const session=await api('portal.session.issue',{customer,origin:h.origin,audience:'hosted'})
+ assert.equal((await h.raw(`/portal/automatic-collections/${request.id}?session=${encodeURIComponent(session.token)}`,{body:{request:request.id,basis_hash:request.basis,accept:true}})).status,200)
+ await api('automatic.collection.decide',{request:request.id,basis_hash:request.basis,decision:'approved',confirm:true,confirm_single:true})
+ edge.rules.set('synthetic-nectar-native-card-1',{code:'do_not_honor',recoverAt:Infinity})
+ await api('invoice.approve',{invoice,acknowledge:true});await api('invoice.finalise',{invoice,issue_date:'2026-10-22'})
+ // A later broader default never widens customer-approved terms.
+ await api('retry.policy.configure',{max_attempts:8,window_days:14,confirm:true})
+ instant+=86400000;edge.setTime(instant);await h.advanceClock(new Date(instant).toISOString())
+ assert.equal((await h.raw(`/cdn-cgi/local/scheduled?time=${instant}&cron=${encodeURIComponent('* * * * *')}`)).status,200)
+ assert.equal((await api(`invoices/${invoice}`)).attempt_count,2);assert.equal((await api(`invoices/${invoice}`)).next_payment_attempt,null)
+ await api('mfa.verify',{code:totp(factor.secret,instant)})
+ await api('retry.churn.record',{invoice,subscription_revision:(await api(`subscriptions/${sub}`)).revision,end_date:'2026-10-23',confirm:true},409)
+ assert.equal((await api('recovery')).involuntaryChurn.count,0)
+ await api('subscription.end',{subscription:sub,end_date:'2026-10-23',reason:'Ended after unpaid failed renewal'})
+ const ended=await api(`subscriptions/${sub}`),before=await api(`invoices/${invoice}`)
+ await onState({state:'churn-candidate',invoice})
+ await api('retry.churn.record',{invoice,subscription_revision:ended.revision,end_date:ended.end_date,confirm:true})
+ const report=await api('recovery');assert.equal(report.involuntaryChurn.count,1)
+ assert.equal(report.involuntaryChurn.records[0].subscription_id,sub)
+ assert.equal(report.totals.failedInvoices,1);assert.equal(report.totals.failedAmountCents,10000);assert.equal(report.totals.recoveredAmountCents,0)
+ await api('retry.churn.record',{invoice,subscription_revision:ended.revision,end_date:ended.end_date,confirm:true},409)
+ assert.equal((await api(`invoices/${invoice}`)).balanceCents,before.balanceCents)
+ await onState({state:'churn-recorded',invoice})
+ console.log('retryPlanChurnFlow: frozen plan override and confirmed actual ended-subscription churn without changing cash or invoice facts')
 }

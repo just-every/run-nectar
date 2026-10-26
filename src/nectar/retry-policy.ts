@@ -17,8 +17,8 @@ export function nextRetry(code:string,method:string,attempts:number,failedAt:num
  const next=failedAt+RETRY_DELAYS[code],end=firstFailedAt+Math.min(policy.windowDays,method==='us_bank_account'?180:14)*DAY
  return next<=end?next:null
 }
-export async function selectedRetryPolicy(env:Bindings,invoice:{subscription_id?:string|null},method='card'){
- const plans=invoice.subscription_id?await all(env,`SELECT DISTINCT p.* FROM nc_retry_policies p JOIN nc_items i ON p.scope='plan:'||i.price_id WHERE i.subscription_id=? ORDER BY p.scope`,invoice.subscription_id):[]
+export async function selectedRetryPolicy(env:Bindings,invoice:{id?:string;subscription_id?:string|null},method='card'){
+ const plans=invoice.subscription_id?await all(env,`SELECT DISTINCT p.* FROM nc_retry_policies p JOIN nc_invoice_lines i ON p.scope='plan:'||i.price_id WHERE i.invoice_id=? ORDER BY p.scope`,invoice.id):[]
  const row=plans.length?{scope:plans.map(p=>p.scope).join(', '),max_attempts:Math.min(...plans.map(p=>p.max_attempts)),window_days:Math.min(...plans.map(p=>p.window_days))}:await one(env,"SELECT * FROM nc_retry_policies WHERE scope='default'")
  return {version:RETRY_TABLE_VERSION,maxAttempts:row?.max_attempts??(method==='us_bank_account'?3:8),windowDays:row?.window_days??(method==='us_bank_account'?40:14),scope:row?.scope??'default'} as RetryPolicy
 }

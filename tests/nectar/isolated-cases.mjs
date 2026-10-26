@@ -1,5 +1,6 @@
 // Explicit modules keep each isolated journey visible to Verify tooling.
 export const isolatedJourneys = [
+  { file: 'payment-retries', name: 'retryPlanChurnFlow', load: () => import('./payment-retries.mjs') },
   { file: 'payment-retries', name: 'retryComparisonFlow', load: () => import('./payment-retries.mjs') },
   { file: 'payment-retries', name: 'paymentRetriesFlow', load: () => import('./payment-retries.mjs') },
   { file: 'card-lifecycle-webhook', name: 'cardLifecycleWebhookFlow', load: () => import('./card-lifecycle-webhook.mjs') },
