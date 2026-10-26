@@ -74,7 +74,11 @@ try {
  const expiry=await installation(expiryOptions());h=expiry.h
  const expiryContext=await browser.newContext(),review=await expiryContext.newPage(),message=await expiryContext.newPage()
  await expiryContext.addCookies(expiry.owner.split('; ').map(value=>{const i=value.indexOf('=');return {name:value.slice(0,i),value:value.slice(i+1),url:h.origin}}))
- await cardExpiryNoticesFlow(h,expiry.owner,{onState:async({customer,state,notice})=>{
+ await cardExpiryNoticesFlow(h,expiry.owner,{onState:async({customer,state,notice,updateLink})=>{
+  if(state==='expired'){
+   assert.equal((await message.goto(updateLink)).status(),401)
+   await shot(message,'expiry-link-expired');return
+  }
   await review.goto(`${h.origin}/app/customers/${customer}`)
   await review.locator('#card-expiry-notices summary').click()
   await shot(review,`expiry-${state}`)

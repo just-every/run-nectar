@@ -35,8 +35,9 @@ export async function customerSession(env: Bindings, request: Request): Promise<
   const at = clockInstant(env)
   insist(claims!.v === 1 && claims!.iss === env.AUTH_ORIGIN && claims!.origin === url.origin && ['embedded','hosted'].includes(claims!.audience) && Number.isSafeInteger(claims!.iat) && Number.isSafeInteger(claims!.exp) && claims!.iat <= at && claims!.exp > at && claims!.exp - claims!.iat === PORTAL_LIFETIME, 'invalid_customer_session', 401)
   const row = await one<Row>(env, `SELECT s.*, c.language,c.currency FROM nc_portal_sessions s JOIN nc_customers c ON c.id=s.customer_id JOIN nc_portal_policy p ON p.singleton=1 AND p.revision=s.policy_revision
-    WHERE s.id=? AND s.customer_id=? AND s.token_hash=? AND s.origin=? AND s.audience=? AND s.parent_origin=? AND s.issued_at=? AND s.expires_at=? AND s.revoked_at IS NULL AND c.erased_at IS NULL`,
-    claims!.jti, claims!.customer, await sha256Hex(token), claims!.origin, claims!.audience, claims!.parent, claims!.iat, claims!.exp)
+    WHERE s.id=? AND s.customer_id=? AND s.token_hash=? AND s.origin=? AND s.audience=? AND s.parent_origin=? AND s.issued_at=? AND s.expires_at=? AND s.revoked_at IS NULL AND c.erased_at IS NULL
+      AND NOT EXISTS(SELECT 1 FROM nc_card_expiry_notice_authority a JOIN nc_card_expiry_notices n ON n.id=a.id WHERE a.portal_session_id=s.id AND n.expires_at<=?)`,
+    claims!.jti, claims!.customer, await sha256Hex(token), claims!.origin, claims!.audience, claims!.parent, claims!.iat, claims!.exp, at)
   insist(row, 'invalid_customer_session', 401)
   return { ...claims!, language: row.language,currency:row.currency }
 }
