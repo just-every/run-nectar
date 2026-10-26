@@ -324,5 +324,6 @@
   "checkout.historical": "Configuration historique uniquement. Une nouvelle configuration et un nouveau consentement sont requis avant utilisation.",
   "checkout.choice.selected": "Vous avez choisi ce moyen comme moyen par défaut.",
   "checkout.choice.unchanged": "Votre moyen par défaut précédent est inchangé.",
-  "checkout.mandate.unavailable": "Le texte de l’autorisation n’est pas disponible ici. Enregistrer ce compte n’autorise pas Nectar à le débiter."
+  "checkout.mandate.unavailable": "Le texte de l’autorisation n’est pas disponible ici. Enregistrer ce compte n’autorise pas Nectar à le débiter.",
+  "checkout.status.failed": "La configuration originale a expiré sans moyen utilisable. Contactez l’entreprise pour préparer une nouvelle configuration."
 }

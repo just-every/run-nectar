@@ -55,7 +55,7 @@ try{
     const detail=page.locator('#saved-payment-methods details');await detail.locator('summary').click()
     const form=detail.locator('form');await form.locator('[name=binding]').selectOption(binding);await form.locator('[name=method]').selectOption(method);await form.locator('[name=confirm]').check()
     for(const width of [1440,390]){await page.setViewportSize({width,height:950});await shot(`hosted-${method}-prepare`,width)}
-    await Promise.all([page.waitForNavigation({waitUntil:'load'}),form.getByRole('button').click()])
+    await Promise.all([page.waitForNavigation({waitUntil:'load'}),form.getByRole('button').first().click()])
     assert.equal(new URL(page.url()).searchParams.get('error'),null)
     return (await h.api(`customers/${customer}`,owner)).billingRecord.hostedSetups.find(row=>row.status==='prepared'&&row.method===method)
   },hostedState:async({session,customer,setup,state,method})=>{
@@ -71,14 +71,14 @@ try{
   },startHosted:async({session,setup})=>{
     await customerPage.goto(h.origin+`/portal/payment-methods?session=${encodeURIComponent(session.token)}`)
     const form=customerPage.locator('form').filter({has:customerPage.locator(`input[value="${setup}"]`)});await form.locator('[name=confirm]').check();await form.locator('[name=make_default]').check()
-    const response=customerPage.waitForResponse(r=>new URL(r.url()).pathname==='/portal/payment-methods.start');await form.getByRole('button').click({noWaitAfter:true});const result=await response
+    const response=customerPage.waitForResponse(r=>new URL(r.url()).pathname==='/portal/payment-methods.start');await form.getByRole('button').first().click({noWaitAfter:true});const result=await response
     assert.equal(result.status(),303);const url=result.headers().location;assert.equal(new URL(url).hostname,'checkout.stripe.com')
     const cookies=await customerContext.cookies();assert.ok(cookies.some(cookie=>cookie.name==='nectar_setup_return'&&cookie.httpOnly&&cookie.sameSite==='Lax'))
     await customerPage.goto(h.origin+'/portal/payment-methods');return {status:'open',url,cookie:cookies.filter(cookie=>cookie.name==='nectar_setup_return').map(cookie=>`${cookie.name}=${cookie.value}`).join('; ')}
   },finishHosted:async({session,setup})=>{
     await customerPage.goto(h.origin+'/portal/payment-methods')
     const form=customerPage.locator('form').filter({has:customerPage.locator(`input[value="${setup}"]`)});await form.locator('[name=confirm]').check()
-    await Promise.all([customerPage.waitForNavigation({waitUntil:'load'}),form.getByRole('button').click()]);assert.equal(new URL(customerPage.url()).pathname,'/portal/payment-methods.finish');for(const width of [1440,390]){await customerPage.setViewportSize({width,height:950});await customerPage.screenshot({path:`${directory}/${width}-hosted-return-complete.png`,fullPage:true})};return {status:'complete'}
+    await Promise.all([customerPage.waitForNavigation({waitUntil:'load'}),form.getByRole('button').first().click()]);assert.equal(new URL(customerPage.url()).pathname,'/portal/payment-methods.finish');for(const width of [1440,390]){await customerPage.setViewportSize({width,height:950});await customerPage.screenshot({path:`${directory}/${width}-hosted-return-complete.png`,fullPage:true})};return {status:'complete'}
   },recordAch:async({customer,input})=>{
     await page.goto(h.origin+`/app/customers/${customer}`)
     for(const width of [1440,390]){await page.setViewportSize({width,height:950});await shot('ach-before-verification',width)}
@@ -87,14 +87,14 @@ try{
     await form.locator('[name=account_ref]').selectOption(input.account_ref)
     await form.locator('[name=payment_intent_ref]').fill(input.payment_intent_ref)
     await form.locator('[name=confirm]').check()
-    await Promise.all([page.waitForNavigation({waitUntil:'load'}),form.getByRole('button').click()])
+    await Promise.all([page.waitForNavigation({waitUntil:'load'}),form.getByRole('button').first().click()])
     assert.equal(new URL(page.url()).searchParams.get('error'),null)
     return (await h.api(`customers/${customer}`,owner)).billingRecord.achPaymentEvidence.at(-1)
   },refreshMethods:async({customer})=>{
     await page.goto(h.origin+`/app/customers/${customer}`)
     for(const width of [1440,390]){await page.setViewportSize({width,height:950});await shot('saved-methods-before-refresh',width)}
     const form=page.locator('form[action="/app/do/customer.payment_methods.refresh"]')
-    await Promise.all([page.waitForNavigation({waitUntil:'load'}),form.getByRole('button').click()])
+    await Promise.all([page.waitForNavigation({waitUntil:'load'}),form.getByRole('button').first().click()])
     assert.equal(new URL(page.url()).searchParams.get('error'),null)
     return (await h.api(`customers/${customer}`,owner)).billingRecord.savedPaymentMethods
   }})

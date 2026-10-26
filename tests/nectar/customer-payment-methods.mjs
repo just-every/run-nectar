@@ -115,7 +115,7 @@ export function hostedSetupEdge(baseFetch) {
     }
     return response
   }
-  return {fetch,calls,sessions,setFault:value=>{fault=value},complete:id=>{sessions.get(id).session.status='complete'}}
+  return {fetch,calls,sessions,setFault:value=>{fault=value},complete:id=>{sessions.get(id).session.status='complete'},expire:id=>{sessions.get(id).session.status='expired';sessions.get(id).session.setup_intent=null}}
 }
 
 export async function assertHostedSetups(h, owner, { customer, other, binding, finance, edge, onState=async()=>{}, executeStart, executeFinish, executePrepare }) {
@@ -200,6 +200,14 @@ export async function assertHostedSetups(h, owner, { customer, other, binding, f
   }
   await updateLanguage('en')
   const session=await issue(customer)
+  const expired=await prepare('card')
+  await post(session,'start',expired.id)
+  await post(session,'reconcile',expired.id,409)
+  edge.expire(expired.id)
+  const expiredWrites=writes('create')+writes('default')
+  assert.equal((await post(session,'reconcile',expired.id)).status,'failed')
+  await onState({h,owner,session,customer,setup:expired.id,state:'failed',method:'card'})
+  assert.equal(writes('create')+writes('default'),expiredWrites,'Definitive expiry reconciliation does not write to Stripe')
   const saveOnly=await prepare('card'),defaultWrites=writes('default')
   await post(session,'start',saveOnly.id,200,{make_default:false})
   edge.complete(saveOnly.id)

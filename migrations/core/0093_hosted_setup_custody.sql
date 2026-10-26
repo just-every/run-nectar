@@ -31,3 +31,5 @@ FROM nc_hosted_setups s JOIN nc_stripe_customer_bindings b ON b.id=s.binding_id;
 CREATE TRIGGER nc_hosted_setup_history_generation_insert AFTER INSERT ON nc_hosted_setup_history BEGIN UPDATE nc_privacy_generation SET value=value+1 WHERE id=1; END;
 CREATE TRIGGER nc_hosted_setup_history_generation_update AFTER UPDATE ON nc_hosted_setup_history BEGIN UPDATE nc_privacy_generation SET value=value+1 WHERE id=1; END;
 CREATE TRIGGER nc_hosted_setup_history_generation_delete AFTER DELETE ON nc_hosted_setup_history BEGIN UPDATE nc_privacy_generation SET value=value+1 WHERE id=1; END;
+DROP INDEX nc_hosted_setup_active;
+CREATE UNIQUE INDEX nc_hosted_setup_active ON nc_hosted_setups(binding_id) WHERE status NOT IN ('complete','failed');

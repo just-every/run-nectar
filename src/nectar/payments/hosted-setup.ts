@@ -93,6 +93,21 @@ export async function readHostedSetup(stripe: StripeClient, input: SetupIdentity
     bankName: details.bank_name, accountType: details.account_type, mandateRef, mandateText: null }
 }
 
+/** Only an expired Checkout with no completable SetupIntent releases a claim. */
+export async function expiredHostedSetup(stripe: StripeClient, input: SetupIdentity & {sessionRef:string}) {
+  identity(input)
+  const sessionRef=providerReference(input.sessionRef),session=await stripe(`/checkout/sessions/${encodeURIComponent(sessionRef)}`)
+  insist(session.object==='checkout.session' && session.id===sessionRef && session.mode==='setup' && session.livemode===false
+    && providerReference(session.customer)===input.customerRef && session.metadata?.nectar_setup_id===input.id
+    && Array.isArray(session.payment_method_types) && session.payment_method_types.length===1 && session.payment_method_types[0]===input.method,mismatch,409)
+  if(session.status!=='expired')return false
+  if(!session.setup_intent)return true
+  const setupRef=providerReference(session.setup_intent),setup=await stripe(`/setup_intents/${encodeURIComponent(setupRef)}`)
+  insist(setup.object==='setup_intent' && setup.id===setupRef && setup.livemode===false && providerReference(setup.customer)===input.customerRef
+    && setup.metadata?.nectar_setup_id===input.id,mismatch,409)
+  return setup.status==='canceled' && !setup.payment_method
+}
+
 export async function setHostedDefault(stripe: StripeClient, customerRef: string, methodRef: string, id: string): Promise<void> {
   providerReference(customerRef); providerReference(methodRef); providerReference(id)
   const customer = await stripe(`/customers/${encodeURIComponent(customerRef)}`,

@@ -38,7 +38,7 @@ try {
     await form.locator('[name=confirm]').check();await form.locator('[name=make_default]').check()
     for(const width of [1440,390]) {await page.setViewportSize({width,height:950});await page.screenshot({path:`${directory}/${width}-${method}-acceptance.png`,fullPage:true})}
     phase=`stripe-${method}`
-    await form.getByRole('button').click()
+    await form.getByRole('button').first().click()
     await page.waitForURL('https://checkout.stripe.com/**')
     await page.locator('body').waitFor()
     await page.screenshot({path:`${directory}/${method}-stripe-arrival.png`,fullPage:true})
@@ -59,7 +59,7 @@ try {
     await page.waitForURL(`${h.origin}/portal/payment-methods`,{timeout:60000})
     const complete=page.locator('form').filter({has:page.locator(`input[value="${setup.id}"]`)})
     await complete.locator('[name=confirm]').check()
-    await complete.getByRole('button').click()
+    await complete.getByRole('button').first().click()
     assert.equal(new URL(page.url()).pathname,'/portal/payment-methods.finish')
     const record=(await h.api(`customers/${native.id}`,owner)).billingRecord.hostedSetups.find(row=>row.id===setup.id)
     assert.equal(record.status,'complete');assert.equal(record.debitAuthority,false)

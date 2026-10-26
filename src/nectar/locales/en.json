@@ -324,5 +324,6 @@
   "checkout.historical": "Historical setup only. A new setup and consent are required before use.",
   "checkout.choice.selected": "You chose to make this the default method.",
   "checkout.choice.unchanged": "Your previous default method is unchanged.",
-  "checkout.mandate.unavailable": "The authorization wording is unavailable here. Saving this account does not permit Nectar to debit it."
+  "checkout.mandate.unavailable": "The authorization wording is unavailable here. Saving this account does not permit Nectar to debit it.",
+  "checkout.status.failed": "The original checkout expired without a usable setup. Contact the business for a newly prepared setup."
 }

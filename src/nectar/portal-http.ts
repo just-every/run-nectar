@@ -45,9 +45,9 @@ export async function portalResponse(request: Request, env: Bindings): Promise<R
       if(request.headers.get('origin')!==session.origin)throw new NectarError('forbidden',403)
       const operation=url.pathname.endsWith('.start')?'start':url.pathname.endsWith('.reconcile')?'reconcile':'finish'
       const result=await operateHostedSetup(env,session,await Input.from(request),operation,returned,cookie=>{headers['set-cookie']=cookie})
-      if(result.status==='complete')headers['set-cookie']=clearSetupReturnCookie
+      if(['complete','failed'].includes(result.status))headers['set-cookie']=clearSetupReturnCookie
       if(request.headers.get('content-type')?.startsWith('application/json'))return Response.json(result,{headers})
-      if(result.status==='complete'&&!url.searchParams.has('session')) {
+      if(['complete','failed'].includes(result.status)&&!url.searchParams.has('session')) {
         const L=customerText(session.language,session.currency)
         const response=portalPage(L.t('checkout.heading'),await hostedSetupPage(env,session,path=>path,result.id),{lang:L.tag,style:'/portal/theme.css'})
         return new Response(response.body,{headers:{...Object.fromEntries(response.headers),...headers,'content-security-policy':"default-src 'none'; style-src 'self'; font-src 'self'; form-action 'none'; frame-ancestors 'none'; base-uri 'none'"}})

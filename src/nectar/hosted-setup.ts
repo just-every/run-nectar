@@ -9,7 +9,7 @@ import { setupConsent } from './hosted-setup-consent'
 import { createSetupReturn, setupReturnGuard, consumeSetupReturn, type SetupReturn } from './hosted-setup-return'
 import type { CustomerSession } from './portal-session'
 import { providerReference, providerUnavailable, stripeForAccount } from './payments/stripe'
-import { createHostedSetup, readHostedSetup, setHostedDefault } from './payments/hosted-setup'
+import { createHostedSetup, readHostedSetup, setHostedDefault, expiredHostedSetup } from './payments/hosted-setup'
 
 export async function prepareHostedSetup(env: Bindings, actor: Actor, input: Input) {
   const factor=await setupOwner(env, actor)
@@ -21,7 +21,7 @@ export async function prepareHostedSetup(env: Bindings, actor: Actor, input: Inp
     WHERE b.id=? AND b.customer_id=? AND c.erased_at IS NULL AND c.status='active'
     AND NOT EXISTS(SELECT 1 FROM nc_erased_records WHERE record_id IN (b.id,c.id))`, binding, customer)
   insist(row, 'native_customer_binding_required', 409)
-  insist(!await one(env,"SELECT 1 FROM nc_hosted_setup_history WHERE customer_id=? AND status<>'complete' AND NOT EXISTS(SELECT 1 FROM nc_hosted_setups WHERE id=nc_hosted_setup_history.id)",customer),'hosted_setup_historical_uncertainty',409)
+  insist(!await one(env,"SELECT 1 FROM nc_hosted_setup_history WHERE customer_id=? AND status NOT IN ('complete','failed') AND NOT EXISTS(SELECT 1 FROM nc_hosted_setups WHERE id=nc_hosted_setup_history.id)",customer),'hosted_setup_historical_uncertainty',409)
   insist(method !== 'us_bank_account' || row.currency === 'USD', 'ach_usd_required', 409)
   const { stripe } = await stripeForAccount(env, row.account_ref).catch(providerUnavailable)
   const source = await stripe(`/customers/${encodeURIComponent(row.stripe_customer_ref)}`).catch(providerUnavailable)
@@ -45,7 +45,7 @@ export async function customerHostedSetups(env: Bindings, customer: string) {
     WHERE h.customer_id=? AND c.erased_at IS NULL AND NOT EXISTS(SELECT 1 FROM nc_hosted_setups WHERE id=h.id)
     AND NOT EXISTS(SELECT 1 FROM nc_erased_records WHERE record_id IN(h.id,c.id)) ORDER BY completed_at,id`, customer,customer)
   return rows.map(row=>{
-    insist(['card','us_bank_account'].includes(row.method)&&['prepared','creating','open','updating','complete'].includes(row.status),'hosted_setup_evidence_invalid',409)
+    insist(['card','us_bank_account'].includes(row.method)&&['prepared','creating','open','updating','complete','failed'].includes(row.status),'hosted_setup_evidence_invalid',409)
     let paymentMethod=null
     if(row.method_json){
       const value=parseJson<Row>(row.method_json,{})
@@ -108,6 +108,12 @@ export async function operateHostedSetup(env: Bindings, session: CustomerSession
     return {id:row.id,status:'open',url:destination.href}
   }
   insist(['open','updating'].includes(row.status),'hosted_setup_unavailable',409)
+  if(operation==='reconcile' && row.status==='open') {
+    const expired=await expiredHostedSetup(stripe,{id:row.id,customerRef:row.customer_ref,method:row.method,sessionRef:row.session_ref}).catch(providerUnavailable)
+    insist(expired,'hosted_setup_pending',409)
+    await commit(env,[setupSessionFence(env,session,row,'open'),fence(),consumeSetupReturn(env,capability.hash),stmt(env,"UPDATE nc_hosted_setups SET status='failed' WHERE id=?",row.id),stmt(env,"UPDATE nc_hosted_setup_history SET status='failed' WHERE id=?",row.id)],{actor:by,action:'checkout.setup.expired',subject:row.id,detail:{customer:session.customer,account:row.account_ref,sessionRef:row.session_ref,outcome:'expired-with-no-completable-intent'}})
+    return {id:row.id,status:'failed'}
+  }
   const method=await readHostedSetup(stripe,{id:row.id,sessionRef:row.session_ref,customerRef:row.customer_ref,method:row.method,livemode:false}).catch(providerUnavailable)
   const reconciled=row.status==='updating'
   if(reconciled) {
