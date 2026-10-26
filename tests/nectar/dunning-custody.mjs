@@ -27,15 +27,17 @@ export async function dunningCustodyFlow(h,owner,{onState=async()=>{}}={}) {
   const series=await api('dunning.enroll',{invoice:draft.id,policy:policy.id,confirm:true})
   return {invoice:draft.id,series:series.id}
  }
- const stale=await invoice('processing_error'),expired=await invoice('processing_error'),uncertain=await invoice('processing_error'),concurrent=await invoice('processing_error'),paid=await invoice('processing_error')
+ const stale=await invoice('processing_error'),expired=await invoice('processing_error'),uncertain=await invoice('processing_error'),concurrent=await invoice('processing_error'),paid=await invoice('processing_error'),held=await invoice('processing_error'),promised=await invoice('processing_error')
  const prepare=record=>api('dunning.mail.prepare',{series:record.series,step:1,confirm:true})
  const payload=m=>({delivery:m.id,basis_hash:m.basisHash,confirm:true})
  const staleMessage=await prepare(stale),expiredMessage=await prepare(expired),unknownMessage=await prepare(uncertain),concurrentMessage=await prepare(concurrent),paidMessage=await prepare(paid)
  const count=h.mails.length
  await api('access.give',{email:'dunning-finance@example.test',name:'Finance Member',role:'finance'})
  const finance=await h.signIn('dunning-finance@example.test',{requested:true})
+ const financeFactor=await h.api('mfa.totp.start',finance,{})
+ await h.api('mfa.totp.confirm',finance,{factor:financeFactor.factor,code:totp(financeFactor.secret,instant)})
  for(const action of ['dunning.policy.create','dunning.enroll','dunning.mail.prepare','dunning.mail.send','dunning.end','dunning.withdraw']){
-  await h.api(action,finance,{},403);await h.api(action,undefined,{},401)
+  assert.equal((await h.api(action,finance,{},403)).error,'owner_required');await h.api(action,undefined,{},401)
  }
  await h.api('dunning',finance,undefined,403)
  const foreign=await h.raw('/api/nectar/dunning.mail.send',{cookie:owner,body:payload(concurrentMessage),headers:{origin:'https://synthetic-nectar-foreign.example'}})
@@ -53,7 +55,15 @@ export async function dunningCustodyFlow(h,owner,{onState=async()=>{}}={}) {
  // Day-one preparations freeze the new recipient and use the current owner factor.
  await refresh(start+86400000)
  const next=async record=>api('dunning.mail.prepare',{series:record.series,step:2,confirm:true})
- const unknown=await next(uncertain),race=await next(concurrent),settled=await next(paid)
+ const unknown=await next(uncertain),race=await next(concurrent),settled=await next(paid),disputed=await next(held),paused=await next(promised)
+ const disputedInvoice=await api(`invoices/${held.invoice}`)
+ await api('cadence.dispute',{invoice:held.invoice,line:disputedInvoice.lines[0].id,amount_cents:10000,reason:'Customer disputes this entire service amount'})
+ await api('cadence.promise',{invoice:promised.invoice,pay_date:'2026-10-24',note:'Customer promised payment on this date'})
+ await api('dunning.mail.send',payload(disputed),409);await api('dunning.mail.send',payload(paused),409)
+ assert.equal((await api('dunning')).series.find(s=>s.id===held.series).held,true)
+ assert.equal((await api('dunning')).series.find(s=>s.id===promised.series).held,true)
+ await onState({state:'disputed',record:held,report:await api('dunning')})
+ await onState({state:'promised',record:promised,report:await api('dunning')})
  const external=await api('payment.record',{customer,amount:'100',received_on:'2026-10-23',method:'bank_transfer',reference:'synthetic-nectar-custody-settlement'})
  await api('payment.allocate',{payment:external.payment,invoice:paid.invoice,amount:'100'})
  await api('dunning.mail.send',payload(settled),409)
