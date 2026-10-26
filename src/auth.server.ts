@@ -77,6 +77,12 @@ export async function authResponse(request: Request, original: Bindings): Promis
   const page = await createSignInHandler(operatorAuth(env), { defaultReturnTo: '/setup' })(request)
   if (page) return fontDocumentResponse(page)
  }
+ // Provisioned identities never acquire an alternate email sign-in route.
+ if (url.pathname === '/auth/magic-link' && request.method === 'POST') {
+  const copy = request.clone()
+  const input: any = request.headers.get('content-type')?.includes('application/json') ? await copy.json().catch(() => null) : Object.fromEntries(await copy.formData().catch(() => new FormData()))
+  if (typeof input?.email === 'string' && await env.DB.prepare('SELECT 1 FROM nc_scim_users WHERE email=?').bind(input.email.trim().toLowerCase()).first()) return Response.json({error:'provider_required'},{status:403})
+ }
  if (url.pathname.startsWith('/auth/')) return fontDocumentResponse(await createAuthHandler(operatorAuth(env))(request))
  if (url.pathname === '/setup' || url.pathname === '/app' || url.pathname.startsWith('/app/')) {
   const setup = await firstRunResponse(request, env, operatorAuth(env), { theme })

@@ -1,3 +1,4 @@
+import { ssoPage, ssoPost } from './sso'
 import { paymentLinksScreen } from './payment-links'
 import { paymentReceiptPage } from './payment-receipts'
 import { currencyPage } from './currency'
@@ -110,6 +111,7 @@ export const pages: Record<string, Page> = {
   invoicesFile: (env, actor,_r,url) => invoicesCsv(env, actor,url),
   usageFile: (env, actor) => usageCsv(env, actor),
   subscriptionsFile: (env, actor,_r,url) => subscriptionsCsv(env, actor,url),
+  sso: (env, actor, _r, url) => ssoPage(env, actor, url),
   access: (env, actor, _r, url) => accessPage(env, actor, url),
   audit: (env, actor, _r, url) => auditPage(env, actor, url),
   security: (env, actor, _r, url) => securityPage(env, actor, url),
@@ -122,6 +124,7 @@ export const pages: Record<string, Page> = {
 type PostPage = (env: Bindings, actor: Actor, input: Input, url: URL, request: Request) => Promise<Response>
 
 export const postPages: Record<string, PostPage> = {
+  '/app/sso': ssoPost,
   '/app/webhooks/register':async(env,actor,input,url)=>webhooksPage(env,actor,url,await registerWebhook(env,actor,input)),
   '/app/webhooks/rotate':async(env,actor,input,url)=>webhooksPage(env,actor,url,await rotateWebhook(env,actor,input)),
   '/app/usage/replay':(env,actor,input,url)=>usageReplayPage(env,actor,url,input),

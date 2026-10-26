@@ -1,3 +1,5 @@
+import { samlResponse } from './nectar/saml'
+import { scimResponse } from './nectar/scim'
 import { expirePaymentLinkAttempts } from './nectar/payment-links-expiry'
 import { paymentLinksResponse } from './nectar/payment-links-http'
 import { runAutomaticCollections } from './nectar/automatic-collection-jobs'
@@ -70,6 +72,8 @@ export default withDemo({
     await runAssurance(runtimeBindings(env),controller.scheduledTime)
   },
   async fetch(request, env, execution) {
+    const enterprise = await samlResponse(request, runtimeBindings(env)) ?? await scimResponse(request, runtimeBindings(env))
+    if (enterprise) return enterprise
     const asset = await staticAssetResponse(request, env)
     if (asset) return asset
     const paymentLink=await paymentLinksResponse(request,runtimeBindings(env))

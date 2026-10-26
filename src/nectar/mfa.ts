@@ -49,10 +49,10 @@ export async function standing(env: Bindings, actor: Actor) {
   const factors = await all<Factor>(env, "SELECT * FROM nc_mfa_factors WHERE member_id = ? AND status = 'active' ORDER BY created_at", actor.id)
   const usable: Factor[] = [], unreadable: Factor[] = []
   for (const factor of factors) (factor.kind === 'passkey' || await unseal(env.MFA_KEY, factor.sealed_secret!, binding(factor.id, actor.id)) ? usable : unreadable).push(factor)
-  const session = actor.sessionId ? await one<{ verified_at: number }>(env, 'SELECT verified_at FROM nc_mfa_sessions WHERE session_id = ? AND member_id = ?', actor.sessionId, actor.id) : null
+  const session = actor.sessionId ? await one<{ verified_at: number; method: string }>(env, 'SELECT verified_at, method FROM nc_mfa_sessions WHERE session_id = ? AND member_id = ?', actor.sessionId, actor.id) : null
   const required = covers(policy, actor)
   const reason = !usable.length && unreadable.length ? (env.MFA_KEY ? 'mfa_key_changed' : 'mfa_key_missing') : null
-  const state: 'enroll' | 'verify' | null = !required ? null : !usable.length ? 'enroll' : !session ? 'verify' : null
+  const state: 'enroll' | 'verify' | null = !required ? null : session?.method === 'saml' ? null : !usable.length ? 'enroll' : !session ? 'verify' : null
   return { policy, required, usable, unreadable, verifiedAt: session?.verified_at ?? null, state, reason }
 }
 

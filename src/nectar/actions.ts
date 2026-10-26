@@ -1,3 +1,4 @@
+import { configureSso } from './sso-config'
 import { approvePaymentLink } from './payment-links-approval'
 import { createPaymentLink,deactivatePaymentLink,activatePaymentLink } from './payment-links'
 import { prepareAutomaticCollection,decideAutomaticCollection,revokeAutomaticCollection } from './automatic-collection'
@@ -96,6 +97,7 @@ import { prepareMetric,previewMetric,activateMetric } from './meter-definitions'
 type Handler = (env: Bindings, actor: Actor, input: Input, request: Request) => Promise<unknown>
 
 export const actions: Record<string, Handler> = {
+  'sso.configure': configureSso,
   'assurance.scan': scanAssurance,
   'assurance.assign': assignAssurance,
   'assurance.approve': approveAssurance,
