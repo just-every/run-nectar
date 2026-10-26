@@ -174,7 +174,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "c158986244bb3bceaae7bcda2cbea96efe295423d5e82331afbcd83d5a2527e1",
+      "sha256": "1c41743951a9dc34f3c2466eb6d4224f1351ed8a75963a82aad627bff6ed9292",
       "executable": false
     },
     "AGENTS.consumer.md": {
@@ -194,7 +194,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "8d0f865d0e0981064c1e8578e36e8e6a3fde013b974d4bded20afaff9b76ee8f",
+      "sha256": "e832df046838eac44098b1997d4e92277916977332f95fefdc57cb9a92a2cdaf",
       "executable": false
     },
     "DEMO.md": {
@@ -4714,7 +4714,7 @@
       "executable": false
     },
     "tests/nectar/enterprise-identity.mjs": {
-      "sha256": "1538f95c21951effd9536df8806a9fe4a4e088f7c16857a528d02b4926a2a68c",
+      "sha256": "d3292bc6a3a1ba9bd56a44b400cc4b1f9b51f6d7b98265f1fea40ab7889df43c",
       "executable": false
     },
     "tests/nectar/entitlement-quotas.mjs": {
