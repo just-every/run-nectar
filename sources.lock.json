@@ -4570,7 +4570,7 @@
       "executable": false
     },
     "tests/nectar/customer-record-browser.mjs": {
-      "sha256": "d173b92491bced0b600ea2021e996f1635f051445385d0df7b2ab8bb62d5b991",
+      "sha256": "51659277cd6addb77be9f69a6e0a4efd04a319d76c53891e2811ff796634a989",
       "executable": false
     },
     "tests/nectar/customer-search.mjs": {
@@ -4622,7 +4622,7 @@
       "executable": false
     },
     "tests/nectar/hosted-setup-sandbox.mjs": {
-      "sha256": "eaedbc155d368b03cfe68181b9365cc41c4e7173da1d3c54c277914a55a09be1",
+      "sha256": "ab5ca90fc6b4b701b42dced566e4abcc8a47feda72b8af9de322984840da1745",
       "executable": false
     },
     "tests/nectar/http-listener.mjs": {

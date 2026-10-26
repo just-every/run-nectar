@@ -16,7 +16,7 @@ try {
   const account=await stripe.request('GET','/v1/account')
   facts.account=account.id
   customer=await stripe.request('POST','/v1/customers',{name:'Alder Analytics test customer',email:`nectar-${stripe.run}@example.test`,'metadata[nectar_run]':stripe.run})
-  h=await harness({assets:true,stripeSecret:process.env.STRIPE_SECRET_KEY,stripeFetch:request=>stripe.forward(request)})
+  h=await harness({assets:true,hostname:'localhost',stripeSecret:process.env.STRIPE_SECRET_KEY,stripeFetch:request=>stripe.forward(request)})
   await h.raw('/auth/bootstrap',{body:{token:h.vars.SETUP_TOKEN,displayName:'Nectar Owner'}})
   const owner=await h.signIn(h.vars.OWNER_EMAIL)
   await h.raw('/setup',{cookie:owner,form:new URLSearchParams({confirm:'yes'})})
