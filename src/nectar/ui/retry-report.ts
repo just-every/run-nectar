@@ -2,7 +2,7 @@ import type { Bindings } from '../../auth.server'
 import type { Actor } from '../actor'
 import { retryRecoveryReport, type RecoveryBucket } from '../retry-report'
 import { retryComparisonReport } from '../retry-comparison'
-import { cents, h, page, table } from './html'
+import { cents, h, page, table,form,hidden,check } from './html'
 
 const percent=(rate:number|null)=>rate===null ? '—' : `${(rate*100).toFixed(1)}%`
 const label=(key:string,kind:string)=>kind==='attempt' ? key==='unattributed' ? 'No recorded retry attempt' : `Attempt ${key}`
@@ -23,7 +23,7 @@ export async function retryRecoveryPage(env: Bindings, actor: Actor, url: URL) {
     <section class="card"><h2>By decline reason</h2>${breakdown(report.byDecline,'decline')}</section>
     <section class="card"><h2>By retry attempt</h2>${breakdown(report.byAttempt,'attempt')}</section>
     <section class="card"><h2>By dunning step</h2>${breakdown(report.byDunningStep,'step')}</section>
-    <section class="card"><h2>Involuntary churn</h2><p>${report.involuntaryChurn.reason}</p></section>
+    <section class="card"><h2>Involuntary churn</h2><p>${report.involuntaryChurn.count} confirmed ended subscriptions. ${report.involuntaryChurn.reason}</p>${report.involuntaryChurn.candidates.map(c=>form('retry.churn.record','/app/reports/recovery',h`${hidden('invoice',c.invoice)}${hidden('subscription_revision',c.revision)}${hidden('end_date',c.end_date)}${check(`I confirm subscription ending ${c.end_date} was involuntary churn caused by unpaid invoice ${c.number}`,'confirm')}`,'Record churn attribution',{secondary:true}))}</section>
     <section class="card"><h2>Invoice evidence</h2>${table(['Invoice','First failure (UTC)','Failed amount$','Recovered revenue$','Recorded attempts'],report.invoices.map(invoice=>[h`<a href="${invoice.href}">${invoice.number}</a>`,new Date(invoice.firstFailedAt).toISOString(),cents(invoice.failedAmountCents,invoice.currency),cents(invoice.recoveredAmountCents,invoice.currency),invoice.attempts.length]),{empty:'No failed invoice evidence to show.'})}</section>
     <section class="card"><h2>Published retry comparison</h2><p>On the published ${measured.failedPayments}-payment test set, the default decline table recovers ${measured.recoveredPayments} payments (${percent(measured.recoveryRate)}) and ${cents(measured.recoveredAmountCents,comparison.currency)}; the fixed three-attempt schedule recovers ${baseline.recoveredPayments} payments (${percent(baseline.recoveryRate)}) and ${cents(baseline.recoveredAmountCents,comparison.currency)}.</p><p>${comparison.definition}</p><details><summary>Configured policy comparisons</summary>${table(['Policy','Attempts','Window','Recovered payments','Recovered amount$','Recovery rate'],comparison.configuredPolicies.map(record=>[record.measured.policy.scope,record.measured.policy.maxAttempts,`${record.measured.policy.windowDays} days`,record.measured.recoveredPayments,cents(record.measured.recoveredAmountCents,comparison.currency),percent(record.measured.recoveryRate)]),{empty:'No configured policy overrides.'})}</details><p><a href="/api/nectar/retry-comparison">Open the test set, schedules and measured record</a></p></section>`,{current:'/app/billing',url})
 }

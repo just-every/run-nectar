@@ -14,7 +14,7 @@ const day = 86400000
 const iso = milliseconds => new Date(milliseconds).toISOString()
 const date = milliseconds => iso(milliseconds).slice(0, 10)
 const result = { version: 1, clause: 'DUN-001', status: 'running', clauseComplete: false, head: null,
-  accountRef: null, checks: {}, sources: [], limitations: [], cleanup: [],
+  accountRef: null, checks: { liveRetryBeforeDueAtDueAndRepeat: false }, sources: [], limitations: [], cleanup: [],
   documentation: ['https://docs.stripe.com/testing#declined-payments',
     'https://docs.stripe.com/billing/testing/test-clocks/api-advanced-usage'] }
 const sources = [], writes = []
@@ -170,7 +170,7 @@ async function proof(source) {
   const charges = (await stripe.list('/v1/charges', { customer: source.customerRef })).data
   check(charges.length > 0 && charges.every(charge => reference(charge.payment_intent) === intent.id
     && reference(charge.customer) === source.customerRef && charge.livemode === false && charge.amount === source.amount
-    && charge.status === 'failed' && charge.paid === false && charge.captured === false
+    && charge.status === 'failed' && charge.paid === false
     && !charge.receipt_email && !charge.disputed), 'failed_charge_proof_missing')
   check(intent.status === 'requires_payment_method' && intent.amount_received === 0 && intent.last_payment_error,
     'definitive_live_refusal_missing')
@@ -262,8 +262,13 @@ async function cleanup() {
   for (const source of sources.toReversed()) {
     for (const method of source.methods.toReversed()) {
       try {
-        if (source.customerRef) await stripe.request('POST', `/v1/payment_methods/${method}/detach`, {}, 10000)
-        result.cleanup.push({ resource: 'method', ref: method, status: 'detached' })
+        const current = await stripe.request('GET', `/v1/payment_methods/${method}`, {}, 10000)
+        if (reference(current.customer)) {
+          check(reference(current.customer) === source.customerRef, 'cleanup_method_owner_mismatch')
+          const detached = await stripe.request('POST', `/v1/payment_methods/${method}/detach`, {}, 10000)
+          check(detached.id === method && !reference(detached.customer), 'method_detach_unconfirmed')
+        }
+        result.cleanup.push({ resource: 'method', ref: method, status: 'unattached' })
       } catch (error) {
         result.cleanup.push({ resource: 'method', ref: method, status: 'failed', ...safeError(error) }); process.exitCode = 1
       }

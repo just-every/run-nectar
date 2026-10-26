@@ -70,6 +70,7 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "event_ref": "text",
     "request": "text"
   },
+  "retry.churn.record": {"invoice":"text","subscription_revision":"text","end_date":"text","confirm":"flag"},
   "retry.policy.configure": {"plan":"text","max_attempts":"integer","window_days":"integer","confirm":"flag"},
   "automatic.collection.prepare": {
     "enable_retries": "flag",

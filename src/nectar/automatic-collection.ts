@@ -66,8 +66,9 @@ export async function decideAutomaticCollection(env:Bindings,actor:Actor,input:I
 }
 export async function revokeAutomaticCollection(env:Bindings,actor:Actor,input:Input){
  await collectionOwner(env,actor);const row=await storedAutomaticCollection(env,input.text('request',{max:100}))
- insist(!row.claimed_at,'automatic_collection_already_claimed',409)
- await commit(env,[collectionAuthority(env,actor),guard(env,'automatic_collection_state_changed','EXISTS(SELECT 1 FROM nc_automatic_collections WHERE id=? AND revision=? AND claimed_at IS NULL)',row.id,row.revision),stmt(env,"UPDATE nc_automatic_collections SET status='revoked',revision=? WHERE id=?",newId(),row.id)],{actor:actorLabel(actor),action:'automatic.collection.revoke',subject:row.id,detail:{basis:row.basis_hash}})
+ const retryStop=!!(JSON.parse(row.basis_json).retryPolicy&&['refused','returned'].includes(row.status))
+ insist(!row.claimed_at||retryStop,'automatic_collection_already_claimed',409)
+ await commit(env,[collectionAuthority(env,actor),guard(env,'automatic_collection_state_changed','EXISTS(SELECT 1 FROM nc_automatic_collections WHERE id=? AND revision=?)',row.id,row.revision),stmt(env,"UPDATE nc_automatic_collections SET status='revoked',revision=? WHERE id=?",newId(),row.id)],{actor:actorLabel(actor),action:'automatic.collection.revoke',subject:row.id,detail:{basis:row.basis_hash}})
  return automaticView(await storedAutomaticCollection(env,row.id))
 }
 
@@ -75,7 +76,7 @@ export async function withdrawAutomaticCollection(env:Bindings,request:Request,i
  const session=await customerSession(env,request),row=await storedAutomaticCollection(env,input.text('request',{max:100}))
  insist(request.method==='POST'&&request.headers.get('origin')===session.origin&&session.audience==='hosted','forbidden',403)
  insist(row.customer_id===session.customer,'automatic_collection_not_found',404)
- insist(input.flag('withdraw')&&!row.claimed_at&&['awaiting_customer','pending_approval','active'].includes(row.status),'automatic_collection_already_claimed',409)
+ insist(input.flag('withdraw')&&(!row.claimed_at&&['awaiting_customer','pending_approval','active'].includes(row.status)||JSON.parse(row.basis_json).retryPolicy&&['refused','returned'].includes(row.status)),'automatic_collection_already_claimed',409)
  await commit(env,[automaticAuthority(env,row,false),guard(env,'customer_session_changed','EXISTS(SELECT 1 FROM nc_portal_sessions WHERE id=? AND customer_id=? AND revoked_at IS NULL AND expires_at>?)',session.jti,session.customer,clockInstant(env)),
  stmt(env,"UPDATE nc_automatic_collections SET status='revoked',revision=? WHERE id=?",newId(),row.id)],{actor:`customer:${session.customer}`,action:'automatic.collection.withdraw',subject:row.id,detail:{basis:row.basis_hash}})
  return automaticView(await storedAutomaticCollection(env,row.id))

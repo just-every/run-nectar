@@ -97,7 +97,7 @@ export async function paymentRetriesFlow(h,owner,{onState=async()=>{},prepareCol
  const report=await api('recovery')
  assert.ok(report.totals.failedInvoices>0);assert.equal(report.totals.recoveredInvoices,3)
  assert.equal(report.totals.recoveredAmountCents,30000)
- assert.equal(report.involuntaryChurn.available,false)
+ assert.equal(report.involuntaryChurn.available,true);assert.equal(report.involuntaryChurn.count,0,'Exhaustion alone is never involuntary churn')
  await onState({state:'report',id:unknown.id,report})
  const mails=h.mails.length;await tick(instant+20*day);assert.equal(h.mails.length,mails,'Retries send no customer notices')
  console.log('paymentRetriesFlow: consented policy, exact timing, hard and ACH prohibitions, caps, dispute hold, once-only cash and page API webhook parity')

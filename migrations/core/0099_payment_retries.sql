@@ -12,3 +12,6 @@ CREATE TRIGGER nc_retry_series_generation_delete AFTER delete ON nc_retry_series
 CREATE TRIGGER nc_retry_attempts_generation_insert AFTER insert ON nc_retry_attempts BEGIN UPDATE nc_privacy_generation SET value=value+1 WHERE id=1; END;
 CREATE TRIGGER nc_retry_attempts_generation_update AFTER update ON nc_retry_attempts BEGIN UPDATE nc_privacy_generation SET value=value+1 WHERE id=1; END;
 CREATE TRIGGER nc_retry_attempts_generation_delete AFTER delete ON nc_retry_attempts BEGIN UPDATE nc_privacy_generation SET value=value+1 WHERE id=1; END;
+CREATE TABLE nc_retry_churn(subscription_id TEXT PRIMARY KEY,invoice_id TEXT NOT NULL,customer_id TEXT NOT NULL,ended_on TEXT NOT NULL,subscription_revision TEXT NOT NULL,recorded_by TEXT NOT NULL,recorded_at INTEGER NOT NULL);
+CREATE TRIGGER nc_retry_churn_generation_insert AFTER INSERT ON nc_retry_churn BEGIN UPDATE nc_privacy_generation SET value=value+1 WHERE id=1; END;
+CREATE TRIGGER nc_retry_churn_generation_delete AFTER DELETE ON nc_retry_churn BEGIN UPDATE nc_privacy_generation SET value=value+1 WHERE id=1; END;

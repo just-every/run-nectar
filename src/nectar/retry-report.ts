@@ -1,3 +1,4 @@
+import { retryChurnReport } from './retry-churn'
 import type { Bindings } from '../auth.server'
 import { requireRead, type Actor } from './actor'
 import { all } from './core'
@@ -18,7 +19,6 @@ export interface RecoveryTotals {
 export interface RecoveryBucket extends RecoveryTotals { key: string; currency: string }
 
 const definition = 'Each invoice enters once, at its first recorded failed attempt and for that failed amount. Recovery is actual payment allocations made after that failure, capped at the failed amount. A recovered invoice has its full failed amount allocated; partial recoveries contribute money but not a fully recovered invoice. Credits, pending charges and uncertain outcomes are not recovered cash. Rates use fully recovered invoices divided by failed invoices.'
-const churnReason = 'Unavailable: subscription cancellations have free-text reasons, with no structured evidence that failed payments caused the subscription to end. Exhausted retries are not counted as churn.'
 
 // One statement gives the cohort, attempts and immutable allocations one read snapshot.
 const sourceSql = `WITH failures AS (
@@ -99,6 +99,6 @@ export async function retryRecoveryReport(env: Bindings, actor: Actor) {
       amountRecoveryRate:currencies.length>1 ? null : counts.amountRecoveryRate},
     currencies,byDecline:buckets(cohorts,'decline'),byAttempt:buckets(cohorts,'attempt'),byDunningStep:buckets(cohorts,'step'),
     breakdownDefinition:'Decline groups use the first failure reason. Attempt and step groups count each invoice once per group reached, so exposure counts and failed amounts are not additive across groups. Cash is attributed by the collected attempt payment ID; other allocations have no recorded attempt or step. A group recovery rate counts invoices whose entire failed amount was recovered in that group.',
-    involuntaryChurn:{available:false,count:null,reason:churnReason},
+    involuntaryChurn:await retryChurnReport(env,actor),
     invoices:cohorts.map(invoice=>({...invoice,href:`/app/invoices/${invoice.invoice}`,recoveredAmountCents:invoice.recoveries.reduce((sum,r)=>sum+r.amountCents,0)}))}
 }

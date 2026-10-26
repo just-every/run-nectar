@@ -3,7 +3,7 @@ import type { Bindings } from '../auth.server'
 import type { Actor } from './actor'
 import { collectionOwner,collectionAuthority } from './movein/collection-state'
 import { clockInstant } from './clock'
-import { commit,insist,one,stmt } from './core'
+import { all,commit,insist,one,stmt } from './core'
 import type { Input } from './input'
 import { HARD_CARD_DECLINES } from './card-lifecycle'
 export const RETRY_TABLE_VERSION='nectar-declines-2026-10-27'
@@ -18,9 +18,8 @@ export function nextRetry(code:string,method:string,attempts:number,failedAt:num
  return next<=end?next:null
 }
 export async function selectedRetryPolicy(env:Bindings,invoice:{subscription_id?:string|null},method='card'){
- const sub=invoice.subscription_id?await one(env,`SELECT DISTINCT p.scope FROM nc_retry_policies p JOIN nc_items i ON p.scope='plan:'||i.price_id WHERE i.subscription_id=? ORDER BY p.scope`,invoice.subscription_id):null
- const scope=sub?.scope??'default'
- const row=await one(env,'SELECT * FROM nc_retry_policies WHERE scope=?',scope)??await one(env,"SELECT * FROM nc_retry_policies WHERE scope='default'")
+ const plans=invoice.subscription_id?await all(env,`SELECT DISTINCT p.* FROM nc_retry_policies p JOIN nc_items i ON p.scope='plan:'||i.price_id WHERE i.subscription_id=? ORDER BY p.scope`,invoice.subscription_id):[]
+ const row=plans.length?{scope:plans.map(p=>p.scope).join(', '),max_attempts:Math.min(...plans.map(p=>p.max_attempts)),window_days:Math.min(...plans.map(p=>p.window_days))}:await one(env,"SELECT * FROM nc_retry_policies WHERE scope='default'")
  return {version:RETRY_TABLE_VERSION,maxAttempts:row?.max_attempts??(method==='us_bank_account'?3:8),windowDays:row?.window_days??(method==='us_bank_account'?40:14),scope:row?.scope??'default'} as RetryPolicy
 }
 export async function configureRetryPolicy(env:Bindings,actor:Actor,input:Input){
