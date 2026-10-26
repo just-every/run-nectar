@@ -266,15 +266,15 @@
       "executable": false
     },
     "docs/retry-comparison.md": {
-      "sha256": "d17cdf3bfeecd3cdc27aeebecebd3e610d9c1c1ea9463875343d9d1152bfc02e",
+      "sha256": "9e735fe50a54e2243e40d14fefbd2685c3cea649ae80889e69921eb04b724bba",
       "executable": false
     },
     "docs/retry-table.md": {
-      "sha256": "8e9cdd0902ba3b1ecd51d81c2f79e667167f973c422187ecd885e6a425ef142f",
+      "sha256": "e3ef2b85dc31ab9267b36210105fae2e4f15dc841a4385de30955a89ccb7635e",
       "executable": false
     },
     "docs/site.json": {
-      "sha256": "8d712a833af256e2c4235ae3559b086e225016cac26a756d35c39e83ec8225e5",
+      "sha256": "e08e29859889ffc49efb652444feadcc76f0db8ce2e027db9ca092062e8443f5",
       "executable": false
     },
     "docs/usage.md": {

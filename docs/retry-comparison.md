@@ -1,5 +1,3 @@
-# Retry timing comparison
-
 Nectar's decline-table v1 recovered five of eight failed payments on this
 published deterministic test set: 62.5%, with $1,900 recovered from $3,600.
 The fixed three-attempt schedule recovered three: 37.5%, with $1,200 recovered.
@@ -25,7 +23,7 @@ elapsed hours 72 and 168 (day 3 and day 7), stopping on success.
 ## Known outcomes
 
 The complete machine-readable source is
-[`retry-comparison.json`](../src/nectar/retry-comparison.json).
+[`retry-comparison.json`](https://github.com/just-every/run-nectar/blob/main/src/nectar/retry-comparison.json).
 Each record names an amount, a first-decline reason and zero or more intervals
 of elapsed hours in which a subsequent payment would succeed. An interval
 includes its start and excludes its end. Outside those intervals every

@@ -1,5 +1,3 @@
-# Nectar decline retry table
-
 Version: `nectar-declines-2026-10-27`.
 
 Nectar schedules PaymentIntent confirmations itself. It never invokes Stripe
@@ -56,7 +54,7 @@ authentication recovery is not implemented. Other processors, segment policies, 
 live decline and bank matrix remain unproved. CT approval of automatic retries is
 pending. Historical retry facts confer no restored collection authority.
 
-The timing is described as decline-table timing. The [comparison](retry-comparison.md)
+The timing is described as decline-table timing. The [comparison](/docs/retry-comparison)
 publishes its known outcomes and both schedules. No production improvement is claimed.
 
 Provider sources: [Stripe retry handling](https://docs.stripe.com/billing/revenue-recovery/smart-retries),
