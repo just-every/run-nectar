@@ -46,6 +46,8 @@ try {
     await page.locator('body').waitFor()
     await page.screenshot({path:`${directory}/${method}-stripe-arrival.png`,fullPage:true})
     if(method==='card') {
+      await page.locator('#enableStripePass').uncheck()
+      await page.locator('#billingCountry').selectOption('US')
       await page.locator('#cardNumber').fill('4242424242424242')
       await page.locator('#cardExpiry').fill('1235')
       await page.locator('#cardCvc').fill('123')
