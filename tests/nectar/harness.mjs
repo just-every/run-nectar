@@ -45,16 +45,18 @@ export async function harness({ assets = false, localTime, hostname = '127.0.0.1
   }
   const close = () => Promise.all([listener.close(), mf?.dispose()])
   let setupPhase='worker-ready'
+  const trace=()=>{if(process.env.NECTAR_HARNESS_TRACE==='1')console.log('HARNESS',setupPhase)}
   try {
     mf = new Miniflare(convertV4MiniflareOptions(options))
-    await mf.ready
+    trace();await mf.ready
+    setupPhase='database';trace()
     // Every committed migration, as `rer setup` leaves a database.
     db = await mf.getD1Database('DB')
     for (const name of (applyMigrations?await readdir('migrations/core'):[]).filter(name => name.endsWith('.sql')).sort()) {
-      setupPhase=`migration:${name}`
+      setupPhase=`migration:${name}`;trace()
       await db.batch(wrangler.unstable_splitSqlQuery(await readFile(`migrations/core/${name}`, 'utf8')).map(query => db.prepare(query)))
     }
-    setupPhase='health'
+    setupPhase='health';trace()
     assert.ok((await fetch(`${origin}/health`)).ok, 'the Worker is healthy')
   } catch (error) { console.error('HARNESS setup failure',setupPhase,error.message);await close(); throw error }
 
