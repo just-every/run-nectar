@@ -15,7 +15,7 @@ function verifier(env: Bindings, config: SsoConfig, transaction: Transaction) {
   return new SAML({ issuer: ssoEntity(env), audience: ssoEntity(env), callbackUrl: ssoCallback(env), entryPoint: config.entry_point,
     idpCert: config.certificate, idpIssuer: config.issuer, wantAssertionsSigned: true, wantAuthnResponseSigned: true,
     validateInResponseTo: ValidateInResponseTo.always, acceptedClockSkewMs: 0, maxAssertionAgeMs: 300000,
-    requestIdExpirationPeriodMs: 300000, disableRequestedAuthnContext: true, forceAuthn: true,
+    requestIdExpirationPeriodMs: 300000, disableRequestedAuthnContext: true, forceAuthn: false,
     cacheProvider: {
       async saveAsync(key, value) {
         await env.DB.prepare('UPDATE nc_saml_transactions SET request_id=?,request_time=? WHERE state_hash=? AND consumed=0').bind(key, value, transaction.state_hash).run()

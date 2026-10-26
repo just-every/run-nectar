@@ -237,6 +237,10 @@
       "sha256": "0cbb54a6ded193aec3f185ffdf14e0c98fdb3c4414af305d61b1dc25c1c13267",
       "executable": false
     },
+    "docs/enterprise-sign-in.md": {
+      "sha256": "720adab7b359748de1d2b8d63bbea527fc631172b3221a3d946efae311e612ef",
+      "executable": false
+    },
     "docs/evidence/stripe-history-sandbox.json": {
       "sha256": "705caacfa84a76664791ce5bea982a1c44fc588113b7507f521a82356069cbfa",
       "executable": false
@@ -3962,7 +3966,7 @@
       "executable": false
     },
     "src/nectar/saml.ts": {
-      "sha256": "b19e81f6b3afc855676a75b47ef03cb2272b0a003347fd13f05b884315891020",
+      "sha256": "2ec4ee64fd37a13d55d254227e669ec1028475f3022d8e86ca598621bd47635e",
       "executable": false
     },
     "src/nectar/scim.ts": {
@@ -4702,11 +4706,11 @@
       "executable": false
     },
     "tests/nectar/enterprise-identity-browser.mjs": {
-      "sha256": "c6424572be02554cfd553dff083958621ba33e01fc62a41b4ed66e8c8d461d0b",
+      "sha256": "ff9d1dea18f833c352012677ff24b38f50211b8a6c06c2ea232d7ab31abd9791",
       "executable": false
     },
     "tests/nectar/enterprise-identity-sandbox.mjs": {
-      "sha256": "a645bfdf0a81ac795d42f897ded6db8b37c9e336f681d69079d0c61cfc47db1e",
+      "sha256": "24042d8640ed3a4675b202543cec284d70e05095703b891432ba0d4b8fa06f67",
       "executable": false
     },
     "tests/nectar/enterprise-identity.mjs": {

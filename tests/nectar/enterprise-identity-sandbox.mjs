@@ -10,9 +10,9 @@ const result = { head: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'u
 let phase = 'worker', h, app, group, user, failed = false
 const suffix = randomBytes(6).toString('hex'), label = 'nectar-c-i821-' + suffix
 async function okta(path, method = 'GET', body) {
-  const response = await fetch(origin + path, { method, headers: { authorization: 'SSWS ' + token, 'content-type': 'application/json', accept: 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}) })
+  const response = await fetch(origin + path, { method, headers: { authorization: 'SSWS ' + token, 'content-type': 'application/json', accept: path.includes('/sso/saml/metadata') ? 'application/xml' : 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}) })
   const text = await response.text()
-  if (!response.ok) { if (phase === 'owned_app') { try { const error = JSON.parse(text); console.error(JSON.stringify({appConfigurationError: error.errorCauses?.map(cause => cause.errorSummary)})) } catch {} } let code; try { code = JSON.parse(text).errorCode } catch {} throw new Error('okta_' + response.status + '_' + (/^[A-Z0-9]+$/.test(code) ? code : 'request_refused')) }
+  if (!response.ok) { let code; try { code = JSON.parse(text).errorCode } catch {} throw new Error('okta_' + response.status + '_' + (/^[A-Z0-9]+$/.test(code) ? code : 'request_refused')) }
   if (!text) return null
   try { return JSON.parse(text) } catch { return text }
 }
