@@ -16,7 +16,8 @@ export async function paymentRetriesFlow(h,owner,{onState=async()=>{},prepareCol
   customers.push(c);await api('collection.customer.bind',{customer:c,account_ref:'synthetic-nectar-native-account-1',stripe_customer_ref:`synthetic-nectar-native-customer-${n}`,confirm:true})
  }
  const move=async at=>{instant=at;edge.setTime(at);await h.advanceClock(new Date(at).toISOString())}
- const fresh=()=>api('mfa.verify',{code:totp(factor.secret,instant)})
+ let verifiedAt=first
+ const fresh=async()=>{if(instant-verifiedAt>=14*60000){await api('mfa.verify',{code:totp(factor.secret,instant)});verifiedAt=instant}}
  const tick=async at=>{await move(at);assert.equal((await h.raw(`/cdn-cgi/local/scheduled?time=${at}&cron=${encodeURIComponent('* * * * *')}`)).status,200)}
  const create=async(code,{customer=customers[0],enabled=true,recoverAt=Infinity,advice}={})=>{
   await fresh()
