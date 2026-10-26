@@ -1058,7 +1058,7 @@
       "executable": false
     },
     "scripts/installer/local.mjs": {
-      "sha256": "74a97f51acd1d88ac8722c5b405aea0eee205f1cb352ec6a726ce93d48cb9648",
+      "sha256": "9fe41e29fb558e483505d928a06190bad431563866a0c5cc898b5821d145dd45",
       "executable": false
     },
     "scripts/installer/seed.mjs": {
@@ -3190,7 +3190,7 @@
       "executable": false
     },
     "src/nectar/erasure-checkpoint.ts": {
-      "sha256": "cdb0e89bbb6dcd195b5ae7e44413dcb5e6ba38c10f5817f52f4a6250d3da220e",
+      "sha256": "8cd81b04ea8de82ab0090d66ace78db3e0223d38fb216e188fb32316911ec00b",
       "executable": false
     },
     "src/nectar/erasure-import.ts": {
