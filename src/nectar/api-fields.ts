@@ -910,6 +910,7 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "recovery": "text"
   },
   "retry.method.prepare": {
+    "authenticate": "flag",
     "confirm": "flag",
     "request": "text"
   },
@@ -917,7 +918,15 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "confirm": "flag",
     "max_attempts": "integer",
     "plan": "text",
+    "segment": "text",
     "window_days": "integer"
+  },
+  "retry.segment.assign": {
+    "confirm": "flag",
+    "customer": "text",
+    "customer_revision": "text",
+    "revision": "text",
+    "segment": "text"
   },
   "revenue.close": {
     "period": "text"

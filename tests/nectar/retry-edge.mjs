@@ -19,7 +19,7 @@ export function retryEdge(){
   Object.assign(intent,{status:failed?'requires_payment_method':'succeeded',amount_received:failed?0:intent.amount,latest_charge:charge})
   if(failed){intent.last_payment_error={code:rule.declineCode?'card_declined':rule.code,...(rule.declineCode?{decline_code:rule.declineCode}:{}),payment_method:{id:method}};intent.payment_method=null}else delete intent.last_payment_error
   base.intents.get(intent.id).value=intent
-  base.charges.set(charge,{account:1,value:{object:'charge',id:charge,status:failed?'failed':'succeeded',paid:!failed,captured:!failed,customer:intent.customer,payment_method:method,payment_intent:intent.id,currency:'usd',amount:intent.amount,amount_captured:failed?0:intent.amount,amount_refunded:0,refunded:false,disputed:false,created:instant/1000,livemode:false,balance_transaction:'synthetic-nectar-retry-balance',...(rule?.advice?{outcome:{advice_code:rule.advice}}:{})}})
+  base.charges.set(charge,{account:1,value:{object:'charge',id:charge,status:failed?'failed':'succeeded',paid:!failed,captured:!failed||method===bank,customer:intent.customer,payment_method:method,payment_intent:intent.id,currency:'usd',amount:intent.amount,amount_captured:failed?0:intent.amount,amount_refunded:0,refunded:false,disputed:false,created:instant/1000,livemode:false,balance_transaction:'synthetic-nectar-retry-balance',...(rule?.advice?{outcome:{advice_code:rule.advice}}:{})}})
   return intent
  }
  const fetch=async request=>{

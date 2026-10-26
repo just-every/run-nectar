@@ -174,7 +174,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "b0a160be6783d9cb840319a6dc65e3b3b938e53c210965ff06d2d599e033ef48",
+      "sha256": "fc3c299b1e18a397dc7b59e308f4e9c8fcc6218eb4477dbe7b7fb2b75c2147aa",
       "executable": false
     },
     "AGENTS.consumer.md": {
@@ -194,7 +194,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "8bc4f3212bbf5cfe49fc0bc025eca598ddd71f3ca400490bf5152d95a951cbbd",
+      "sha256": "3170e11e496ce006f8c83e07a40e5ce1a461556835a07c98795f2eec741f31a8",
       "executable": false
     },
     "DEMO.md": {
@@ -2966,7 +2966,7 @@
       "executable": false
     },
     "src/nectar/api-fields.ts": {
-      "sha256": "475abbef24de56d3b81f4d4706c37f5c2ecffe3ffa29d7a75aebb4d00198f290",
+      "sha256": "13f299adf5d1c833cfb0669f35f5be80ca6229ac6f99e5ebddb464e23cd768ad",
       "executable": false
     },
     "src/nectar/api-versions.ts": {
@@ -4018,7 +4018,7 @@
       "executable": false
     },
     "src/nectar/retry-jobs.ts": {
-      "sha256": "3112615666bb09c5f0cfad2039f29eebc3f7991e83d20a1022623d831b7759e2",
+      "sha256": "d0e1dec2a0360003050422d071f420f33ce8a1947091e7f3ee21e320eddcdbc4",
       "executable": false
     },
     "src/nectar/retry-method-http.ts": {
@@ -5233,8 +5233,16 @@
       "sha256": "7e256658551c89019f1a1e3075a71baff838564c593e54730d4ee600c85d82c1",
       "executable": false
     },
+    "tests/nectar/retry-bank-evidence.mjs": {
+      "sha256": "300d355cb2f9dff72d7967a8f728ea565e86dfb351704a1aba76a4bed97c4292",
+      "executable": false
+    },
+    "tests/nectar/retry-bank-sandbox.mjs": {
+      "sha256": "a3e1aa7937da8f4a531c4bc4e410248d94bd1b75427118ddeb6d172454b413be",
+      "executable": false
+    },
     "tests/nectar/retry-edge.mjs": {
-      "sha256": "2e67fbe875518f443f7bc069ba257945dfb551259cae461cbac1c018f9336c33",
+      "sha256": "860e4cfd7eedcf623f2ccb168cab95aa5d9fd8901cb0d379918a10ba4b03fe9d",
       "executable": false
     },
     "tests/nectar/retry-methods-browser.mjs": {
