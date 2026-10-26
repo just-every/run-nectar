@@ -4658,7 +4658,7 @@
       "executable": false
     },
     "tests/nectar/card-expiry-notices.mjs": {
-      "sha256": "ed896825105d7e2321392e7fd8b51f518c26bb5e7673254a90eda2d78b4d40c3",
+      "sha256": "b183fa5929485d65555ef7dedf812c329b37e3776fb8f4a18a1be93f907a9dbd",
       "executable": false
     },
     "tests/nectar/card-expiry-sandbox.mjs": {
@@ -5010,7 +5010,7 @@
       "executable": false
     },
     "tests/nectar/portal-methods-browser.mjs": {
-      "sha256": "a2932e7ed85ebbf3f5896cd0274755b9e48adb4f1424462bf08f9822de90a230",
+      "sha256": "3b469a86568936e647d69e7c3adf689194ec3f9f37f62f105d03f82d546e7a90",
       "executable": false
     },
     "tests/nectar/portal-prepaid-browser.mjs": {

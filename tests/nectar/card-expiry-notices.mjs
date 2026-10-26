@@ -104,7 +104,7 @@ export async function cardExpiryNoticesFlow(h,owner,{onState=async()=>{}}={}) {
   const claims=h.mails.length
   for(const n of prepared.slice(0,5))assert.equal((await send(n)).replayed,true)
   assert.equal(h.mails.length,claims,'Accepted, failed, uncertain and suppressed claims never retry')
-  const auditRows=await api('audit')
+  const auditRows=(await api('audit')).map(row=>({...row,detail:JSON.parse(row.detail)}))
   const preparation=auditRows.find(row=>row.action==='card.expiry.prepare'&&row.detail.notice===prepared[0].id)
   assert.equal(preparation.detail.recipient,'expiry-1@example.test')
   assert.equal(preparation.detail.approvedWording.subject,prepared[0].preview.subject)
