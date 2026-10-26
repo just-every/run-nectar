@@ -115,5 +115,5 @@ export async function cardExpiryNoticesFlow(h,owner,{onState=async()=>{}}={}) {
   assert.equal(edge.posts(),providerWrites,'No expiry-warning state authorizes a charge or setup POST')
   await onState({state:'accepted',customer:records[0].customer,subscription:records[0].subscription,notice:(await read(records[0]))[0]})
   assert.ok(h.mails.length>initialMail)
-  console.log('PAY-005 exact local-day expiry warning, frozen English/Spanish review, scoped setup link, explicit once-only claim, honest mail outcomes and no debit passed')
+  console.log('PAY-005 exact local-day expiry warning, frozen English and Spanish review, scoped setup link, explicit once-only claim, honest mail outcomes and no debit passed')
 }

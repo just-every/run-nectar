@@ -186,7 +186,7 @@
       "executable": false
     },
     "API.md": {
-      "sha256": "6042919a0a571f856d07bb9ba18c225c99e803cfe063e40857d08419f5100378",
+      "sha256": "2103b3d2601e664d8b160114cfafff4a07012e73968d88094f616615888a38fc",
       "executable": false
     },
     "base-copies.json": {
@@ -226,7 +226,7 @@
       "executable": false
     },
     "docs/catalog-and-customers.md": {
-      "sha256": "a0aaa23bd5079f0e66ec6a528833d0f1098133687f52bae84fbba187e993412a",
+      "sha256": "56b2fb8625ca8941295e6722b0a2429d05b442f629a6ffc58a7d348dc4947ffb",
       "executable": false
     },
     "docs/composition-baseline.json": {
@@ -4654,7 +4654,7 @@
       "executable": false
     },
     "tests/nectar/card-expiry-notices.mjs": {
-      "sha256": "893edd42ca0d22f9af64b6016f05693be484eb1612d6a2dc76599e0cd4404067",
+      "sha256": "7ee0e6fb9c20259aa92c3179339e77e378ff6c32ffb558bce13dd508b8d4ee36",
       "executable": false
     },
     "tests/nectar/card-lifecycle-sandbox.mjs": {
@@ -4662,7 +4662,7 @@
       "executable": false
     },
     "tests/nectar/card-lifecycle.mjs": {
-      "sha256": "508102a2e733d3bd9d20726504c99ebe9afcc7a4073584feec082d8eb3b7d820",
+      "sha256": "8b315a7c0712365bb08e7e9f5504a58fe72d88c9bbf6c76722b897458ca2dbbc",
       "executable": false
     },
     "tests/nectar/catalogue-approvals.mjs": {
@@ -4798,7 +4798,7 @@
       "executable": false
     },
     "tests/nectar/harness.mjs": {
-      "sha256": "fbc797d3e6ecb870ef537c185a674acaa57b3559909aba24641180251bd6d80d",
+      "sha256": "bdd93a0630bcf5b02632a26665a7cae14e16b7fff09493a6ae4bf53f36aaee24",
       "executable": false
     },
     "tests/nectar/hierarchies.mjs": {
@@ -4998,7 +4998,7 @@
       "executable": false
     },
     "tests/nectar/portal-methods-browser.mjs": {
-      "sha256": "38a8e71c749032530d6e199bb52a41fd0f45af2637f42ff1f37f9608fa155c61",
+      "sha256": "3792fcc66b08641e095454f011ef068faa24a17c9d4e20a62e15ccd07733a552",
       "executable": false
     },
     "tests/nectar/portal-prepaid-browser.mjs": {

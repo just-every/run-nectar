@@ -147,5 +147,5 @@ export async function lifecycleFlow(h,owner,{onState=async()=>{}}={}) {
   const beforeStale=edge.calls.length
   await consume(first,{},403)
   assert.equal(edge.calls.length,beforeStale,'Even replay requires the current owner factor')
-  console.log('PAY-005 updater current facts, event replay/order/isolation, no notices or debit, stolen-card global block and separately confirmed replacement payment passed')
+  console.log('PAY-005 updater current facts, event replay, order and isolation, no notices or debit, stolen-card global block and separately confirmed replacement payment passed')
 }

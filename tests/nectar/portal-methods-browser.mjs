@@ -1,3 +1,4 @@
+import {cardExpiryNoticesFlow,harnessOptions as expiryOptions} from './card-expiry-notices.mjs'
 import assert from 'node:assert/strict'
 import {mkdir} from 'node:fs/promises'
 import {chromium} from '@playwright/test'
@@ -67,5 +68,22 @@ try {
  const lifecycleContext=await browser.newContext(),record=await lifecycleContext.newPage()
  await lifecycleContext.addCookies(lifecycle.owner.split('; ').map(value=>{const i=value.indexOf('=');return {name:value.slice(0,i),value:value.slice(i+1),url:h.origin}}))
  await lifecycleFlow(h,lifecycle.owner,{onState:async({customer,state})=>{await record.goto(`${h.origin}/app/customers/${customer}`);await shot(record,`lifecycle-${state}`)}})
+ await h.close();h=null
+ const expiry=await installation(expiryOptions());h=expiry.h
+ const expiryContext=await browser.newContext(),review=await expiryContext.newPage(),message=await expiryContext.newPage()
+ await expiryContext.addCookies(expiry.owner.split('; ').map(value=>{const i=value.indexOf('=');return {name:value.slice(0,i),value:value.slice(i+1),url:h.origin}}))
+ await cardExpiryNoticesFlow(h,expiry.owner,{onState:async({customer,state,notice})=>{
+  await review.goto(`${h.origin}/app/customers/${customer}`)
+  await review.locator('#card-expiry-notices summary').click()
+  await shot(review,`expiry-${state}`)
+  if(notice.preview){
+   await message.setContent(notice.preview.html)
+   await shot(message,'expiry-email')
+   const link=message.getByRole('link')
+   assert.ok(await link.evaluate(node=>node.getBoundingClientRect().height>=44))
+   const href=await link.getAttribute('href')
+   await message.goto(href);await shot(message,'expiry-update-link')
+  }
+ }})
  console.log('PORT-004 and PAY-005 native forms and end states passed at 1440 and 390')
 } finally {await h?.close();await browser.close()}

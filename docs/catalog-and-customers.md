@@ -73,3 +73,13 @@ trial with a payment method converts to paid, and one without ends unpaid with n
 charge; a trial with no recorded payment method is never resolved automatically.
 Nectar does not charge the card by itself: collect the first invoice through the
 owner-confirmed card collection.
+
+## Customer payment methods
+
+From a customer's saved payment methods, an owner with a fresh authenticator or passkey verification prepares a card or ACH setup. The customer opens the hosted portal, explicitly accepts saving the method, and separately chooses whether it becomes the default. Stripe owns the financial fields and ACH verification. Setup grants no debit authority.
+
+To change an existing default or remove a completed hosted method, open “Manage a saved method,” prepare the exact choice, and have the customer confirm it in the portal. Choose a replacement before removing the current default. Pending collection authority prevents removal. An uncertain result offers reconciliation of the original request; it never repeats the processor write. Existing financial approvals keep their original method.
+
+The same section shows verified card updater observations and methods prohibited after a hard decline. An owner can reconcile an actual processor updater event by reference. A hard decline stays prohibited even when another updater event arrives; a replacement needs its own collection approval.
+
+Card expiry notices currently require owner review and a separate send confirmation exactly fourteen local calendar days before renewal. The prepared warning freezes its recipient and localized wording. The private setup link expires at the displayed time, within fifteen minutes. Acceptance by the mail provider is recorded separately from mailbox delivery. Unattended notices, long-lived update access and the complete renewal journey remain unproved under PAY-005.
