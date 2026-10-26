@@ -9,16 +9,16 @@ const label=(key:string,kind:string)=>kind==='attempt' ? key==='unattributed' ? 
   : kind==='step' && key==='unrecorded' ? 'No recorded dunning step' : key==='unknown' ? 'Unknown decline reason' : key.replaceAll('_',' ')
 const breakdown=(rows:RecoveryBucket[],kind:string,stepLinks:ReadonlyMap<string,Html>=new Map())=>table(
   [kind==='decline' ? 'First decline' : kind==='attempt' ? 'Retry attempt' : 'Dunning step','Currency','Failed invoices','Failed amount$','Recovered invoices','Recovered revenue$','Recovery rate'],
-  rows.map(row=>[stepLinks.get(row.key)??label(row.key,kind),row.currency,row.failedInvoices,cents(row.failedAmountCents,row.currency),row.recoveredInvoices,cents(row.recoveredAmountCents,row.currency),percent(row.recoveryRate)]),
+  rows.map(row=>[stepLinks.get(JSON.stringify([row.currency,row.key]))??label(row.key,kind),row.currency,row.failedInvoices,cents(row.failedAmountCents,row.currency),row.recoveredInvoices,cents(row.recoveredAmountCents,row.currency),percent(row.recoveryRate)]),
   {empty:'No failed payment cohorts have been recorded.'})
 
 export async function retryRecoveryPage(env: Bindings, actor: Actor, url: URL) {
   const [report,comparison]=await Promise.all([retryRecoveryReport(env,actor),retryComparisonReport(env,actor)])
   const groups=new Map<string,{step:number;day:number;invoices:{href:string;number:string}[]}>()
   for(const invoice of report.invoices)for(const step of invoice.stepDetails){
-    const group=groups.get(step.key)??{step:step.step,day:step.day,invoices:[]}
+    const groupKey=JSON.stringify([invoice.currency,step.key]),group=groups.get(groupKey)??{step:step.step,day:step.day,invoices:[]}
     if(!group.invoices.some(i=>i.href===invoice.href))group.invoices.push({href:invoice.href,number:invoice.number})
-    groups.set(step.key,group)
+    groups.set(groupKey,group)
   }
   const stepLinks=new Map([...groups].map(([key,group])=>[key,h`Step ${group.step} · day ${group.day}<br>${group.invoices.map((invoice,index)=>h`${index?', ':''}<a href="${invoice.href}">${invoice.number}</a>`)}`] as const))
   const {measured,baseline}=comparison.publishedDefault
