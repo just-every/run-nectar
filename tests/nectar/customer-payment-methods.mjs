@@ -109,6 +109,7 @@ export function hostedSetupEdge(baseFetch) {
       return Response.json({object:'customer',id:customer,livemode:false,invoice_settings:{default_payment_method:defaultMethod}})
     }
     const response=await baseFetch(request)
+    if(customer==='synthetic-nectar-native-customer-3' && request.method==='GET' && !defaults.has(customer)){const value=await response.json();return Response.json({...value,invoice_settings:{default_payment_method:null}})}
     if(defaults.has(customer) && request.method==='GET') {
       const value=await response.json()
       return Response.json({...value,invoice_settings:{...value.invoice_settings,default_payment_method:defaults.get(customer)}})
@@ -216,6 +217,7 @@ export async function assertHostedSetups(h, owner, { customer, other, binding, f
   assert.equal((await h.api(`customers/${customer}`,owner)).billingRecord.hostedSetups.find(row=>row.id===saveOnly.id).defaultChoice,false)
   const isolatedCustomer=(await h.api('customer.create',owner,{external_id:'synthetic-nectar-809',name:'Synthetic hosted uncertainty',billing_email:'synthetic-nectar-809@example.test'})).id
   const isolatedBinding=await h.api('collection.customer.bind',owner,{customer:isolatedCustomer,account_ref:'synthetic-nectar-native-account-1',stripe_customer_ref:'synthetic-nectar-native-customer-3',confirm:true})
+  assert.equal(isolatedBinding.card,null,'An existing customer can set up their first method without a prior saved card')
   const isolatedSession=await issue(isolatedCustomer)
   for(const [operation,fault,write,target,holdBinding,capability] of [
     ['finish','lose-default','default',customer,binding,session],
