@@ -95,7 +95,17 @@ export async function dunningSequenceFlow(h,owner,{onState=async()=>{},createPol
   await onState({state:'sent',record,message,link,emailHtml:actual.html,report:await report()})
   return {message,link}
  }
- await mail(recover,1);await mail(overdue,1)
+ instant=first+14*60000;edge.setTime(instant);await h.advanceClock(new Date(instant).toISOString())
+ const firstMessage=await mail(recover,1);await mail(overdue,1)
+ const initialPage=await (await h.raw(new URL(firstMessage.link).pathname+new URL(firstMessage.link).search)).text()
+ const oldSetup=initialPage.match(/name="setup" value="([^"]+)"/)?.[1],oldHash=initialPage.match(/name="consent_hash" value="([^"]+)"/)?.[1]
+ const initialStart=await h.raw(`/portal/payment-methods/start${new URL(firstMessage.link).search}`,{body:{setup:oldSetup,consent_hash:oldHash,make_default:true,confirm:true},headers:{accept:'application/json'}})
+ assert.equal(initialStart.status,200)
+ const oldReturn=initialStart.headers.getSetCookie().find(v=>v.startsWith('nectar_setup_return=')).split(';')[0]
+ instant=first+15*60000;edge.setTime(instant);await h.advanceClock(new Date(instant).toISOString())
+ assert.equal((await h.raw(new URL(firstMessage.link).pathname+new URL(firstMessage.link).search)).status,401,'The original factor deadline expires a later-issued emailed session')
+ assert.equal((await h.raw('/portal/payment-methods',{cookie:oldReturn})).status,401,'The opaque return cannot extend the earlier dunning deadline')
+ assert.equal((await h.raw('/portal/payment-methods/finish',{cookie:oldReturn,body:{setup:oldSetup,confirm:true},headers:{accept:'application/json'}})).status,401)
  const sends=h.mails.length,writes=edge.writes.length
  await move(2)
  assert.equal((await h.raw(`/cdn-cgi/local/scheduled?time=${instant}&cron=${encodeURIComponent('* * * * *')}`)).status,200)
