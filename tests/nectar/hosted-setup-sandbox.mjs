@@ -70,6 +70,8 @@ try {
       await bankFrame.getByRole('textbox',{name:'Account number',exact:true}).fill('000123456789')
       await bankFrame.getByRole('textbox',{name:'Confirm account number',exact:true}).fill('000123456789')
       await bankFrame.getByRole('button',{name:'Submit',exact:true}).click()
+      await bankFrame.getByRole('button',{name:'Finish without saving',exact:true}).click()
+      if(new URL(page.url()).hostname==='checkout.stripe.com')await page.locator('button[type=submit]').click()
       await page.screenshot({path:`${directory}/bank-submitted.png`,fullPage:true})
     }
     phase=`return-${method}`
