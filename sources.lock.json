@@ -238,7 +238,7 @@
       "executable": false
     },
     "docs/enterprise-sign-in.md": {
-      "sha256": "3ef455eb23c44f30244884dd93a770c0caa9497296f428e19470d8a52cc9a713",
+      "sha256": "286a6a75fedca4bd2096e5860244a5cdd64d3ad5d2f0e7e8da3856c443eb52b3",
       "executable": false
     },
     "docs/evidence/stripe-history-sandbox.json": {
@@ -266,7 +266,7 @@
       "executable": false
     },
     "docs/site.json": {
-      "sha256": "2275fdf8fdd9899af745870a073ff80cf3cff805ada7dda9be666328612b5dd8",
+      "sha256": "8d712a833af256e2c4235ae3559b086e225016cac26a756d35c39e83ec8225e5",
       "executable": false
     },
     "docs/usage.md": {

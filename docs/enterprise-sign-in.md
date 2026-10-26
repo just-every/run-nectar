@@ -1,5 +1,3 @@
-# Enterprise sign-in
-
 Open Settings, Access, then Enterprise sign-in and provisioning. Only the owner
 may authorize the connection, with the current GOV-007 fresh-factor requirement.
 Enter the provider issuer, HTTPS SAML sign-in URL, public signing certificate,
