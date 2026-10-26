@@ -4622,7 +4622,7 @@
       "executable": false
     },
     "tests/nectar/hosted-setup-sandbox.mjs": {
-      "sha256": "b6e88cac08c7db09c920c24ee72a2556fc7bdfba09c66be4f985d59e731a8bd8",
+      "sha256": "5e83ea4fb439ba7b2a9ac60f66d8f0671b356b65c6ae92748cf32494c222f673",
       "executable": false
     },
     "tests/nectar/http-listener.mjs": {

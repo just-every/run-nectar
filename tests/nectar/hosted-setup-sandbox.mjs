@@ -78,6 +78,10 @@ try {
   process.exitCode=1
 } finally {
   await browser?.close();await h?.close()
-  if(customer?.id){try{await stripe.request('DELETE',`/v1/customers/${customer.id}`);facts.cleanup=true}catch{facts.cleanup=false}}
+  if(customer?.id){try{
+    const sessions=await stripe.list('/v1/checkout/sessions',{customer:customer.id})
+    for(const session of sessions.data)if(session.status==='open')await stripe.request('POST',`/v1/checkout/sessions/${session.id}/expire`,{})
+    await stripe.request('DELETE',`/v1/customers/${customer.id}`);facts.cleanup=true
+  }catch{facts.cleanup=false}}
   console.log(JSON.stringify({...facts,requests:stripe.requests}))
 }
