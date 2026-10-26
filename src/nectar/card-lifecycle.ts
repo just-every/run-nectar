@@ -84,6 +84,12 @@ export async function consumeCardLifecycleEvent(env: Bindings, actor: Actor, inp
   input.only(['binding','event_ref','confirm','returnTo'])
   insist(input.flag('confirm'),'card_lifecycle_confirmation_required')
   const bindingId=input.text('binding',{max:100}),eventRef=providerReference(input.text('event_ref',{max:255}))
+  return applyCardLifecycleEvent(env,bindingId,eventRef,actor)
+}
+
+/** Signed provider intake supplies no member authority: only typed observations. */
+export async function applyCardLifecycleEvent(env: Bindings, bindingId: string, eventRef: string, actor?: Actor) {
+  eventRef=providerReference(eventRef)
   const binding=await one(env,`SELECT b.* FROM nc_stripe_customer_bindings b JOIN nc_customers c ON c.id=b.customer_id
     WHERE b.id=? AND c.erased_at IS NULL AND c.status='active' AND NOT EXISTS(SELECT 1 FROM nc_erased_records WHERE record_id IN(b.id,c.id))`,bindingId)
   insist(binding,'native_customer_binding_required',409)
@@ -108,7 +114,7 @@ export async function consumeCardLifecycleEvent(env: Bindings, actor: Actor, inp
   const current=await stripe(`/payment_methods/${encodeURIComponent(methodRef)}`).catch(providerUnavailable)
   const card=cardSummary(current,methodRef,customerRef),at=clockInstant(env),created=event.created*1000,id=existing?.id??newId()
   try{
-    await commit(env,[...setupOwnerFence(env,actor),bindingGuard(env,binding),
+    await commit(env,[...(actor?setupOwnerFence(env,actor):[]),bindingGuard(env,binding),
       existing?guard(env,'card_lifecycle_state_changed','EXISTS(SELECT 1 FROM nc_card_lifecycle WHERE id=? AND revision=?)',existing.id,existing.revision):
         guard(env,'card_lifecycle_state_changed',`NOT EXISTS(SELECT 1 FROM nc_card_lifecycle WHERE ${methodWhere})`,accountRef,customerRef,methodRef),
       stmt(env,'INSERT INTO nc_card_lifecycle_events(id,customer_id,binding_id,account_ref,stripe_customer_ref,event_ref,payment_method_ref,provider_created_at,observed_at) VALUES(?,?,?,?,?,?,?,?,?)',
@@ -119,7 +125,7 @@ export async function consumeCardLifecycleEvent(env: Bindings, actor: Actor, inp
         source_event_ref=CASE WHEN excluded.source_created_at>=COALESCE(nc_card_lifecycle.source_created_at,0) THEN excluded.source_event_ref ELSE nc_card_lifecycle.source_event_ref END,
         source_created_at=MAX(COALESCE(nc_card_lifecycle.source_created_at,0),excluded.source_created_at),observed_at=excluded.observed_at,revision=excluded.revision`,
       id,binding.customer_id,binding.id,accountRef,customerRef,methodRef,card.brand,card.last4,card.expMonth,card.expYear,eventRef,created,at,newId())],
-    {actor:actorLabel(actor),action:'card.lifecycle.updated',subject:binding.customer_id,detail:{accountRef,customerRef,methodRef,eventRef,eventType:event.type,providerCreatedAt:created,observationOnly:true}})
+    {actor:actor?actorLabel(actor):'system:stripe-card-event',action:'card.lifecycle.updated',subject:binding.customer_id,detail:{accountRef,customerRef,methodRef,eventRef,eventType:event.type,providerCreatedAt:created,observationOnly:true}})
   }catch(error){
     if(error instanceof NectarError && ['already_exists','card_lifecycle_state_changed','precondition_failed'].includes(error.code)){const winner=await replay();if(winner)return winner}
     throw error

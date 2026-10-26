@@ -52,7 +52,8 @@
         "STRIPE_BILLING_SECRET",
         "QUICKBOOKS_ACCESS_TOKEN",
         "QUICKBOOKS_ENVIRONMENT",
-        "QUICKBOOKS_COMPANY_ID"
+        "QUICKBOOKS_COMPANY_ID",
+        "STRIPE_WEBHOOK_SECRET"
       ],
       "migrationPrefix": "core-",
       "recovery": "Export domain data and retain private configuration. Restore into fresh empty resources, establish the owner and compare a fresh export before routing traffic. Preserve applied migration history.",
