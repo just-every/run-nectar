@@ -1,0 +1,80 @@
+import assert from 'node:assert/strict'
+import { samlFixture, startSaml, postSaml } from './saml-fixture.mjs'
+
+export async function enterpriseIdentityFlow(h, owner, { onState } = {}) {
+  const idp = await samlFixture()
+  const settings = { issuer: idp.issuer, entry_point: idp.entry_point, certificate: idp.certificate, role_map: { billing: 'accountant', ops: 'finance' }, revision: 0 }
+  const configured = await h.api('sso.configure', owner, settings)
+  const scim = async (path = '', { body, method = 'GET', token = configured.scim_token, status = 200 } = {}) => {
+    const response = await h.raw('/scim/v2/Users' + path, { method, body, headers: { authorization: 'Bearer ' + token } })
+    assert.equal(response.status, status, 'SCIM public response status')
+    return response.status === 204 ? null : response.json()
+  }
+  await scim('', { token: 'synthetic-nectar-1', status: 401 })
+  const email = 'billing-idp@example.test'
+  const user = await scim('', { method: 'POST', body: { externalId: 'synthetic-nectar-1', userName: email, displayName: 'Alder billing analyst', roles: [{ value: 'billing' }], active: true }, status: 201 })
+  assert.equal(user.userName, email)
+  assert.equal((await scim('?filter=' + encodeURIComponent(`userName eq "${email}"`))).Resources[0].id, user.id)
+  const sign = async (changes = {}, expected = 303) => {
+    const start = await startSaml(h)
+    const response = idp.sign({ requestId: start.requestId, callback: h.origin + '/sso/acs', audience: h.origin + '/sso/metadata', email, ...changes })
+    const posted = await postSaml(h, start, response)
+    assert.equal(posted.status, expected, 'signed SAML assertion result')
+    return { start, response, posted }
+  }
+  const finish = async ({ start, posted }, expected = 303, binding = start.binding) => {
+    const result = await h.raw(posted.headers.get('location'), { cookie: binding })
+    assert.equal(result.status, expected, 'browser-bound SAML completion')
+    return result.headers.getSetCookie().map(line => line.split(';')[0]).join('; ')
+  }
+  const signed = await sign()
+  await finish(signed, 403, 'synthetic-nectar-2')
+  const member = await finish(signed)
+  assert.equal((await h.api('me', member)).role, 'accountant')
+  await h.api('customers', member)
+  await h.api('customer.create', member, {}, 403)
+  await h.api('sso.configure', member, settings, 403)
+  await h.page('/app/sso', member, 403)
+  assert.equal((await h.raw('/auth/magic-link', { body: { email } })).status, 403)
+  assert.equal((await h.raw('/auth/magic-link', { form: new URLSearchParams({ email }) })).status, 403)
+  await finish(signed, 403)
+  assert.equal((await postSaml(h, signed.start, signed.response)).status, 403, 'replay is refused')
+  await sign({ audience: 'https://other.nectar.example.test' }, 403)
+  await sign({ recipient: 'https://other.nectar.example.test' }, 403)
+  await sign({ age: 400000 }, 403)
+  await sign({ role: 'owner' }, 403)
+  await sign({ email: 'unprovisioned@example.test' }, 403)
+  const tampered = await startSaml(h)
+  const original = idp.sign({ requestId: tampered.requestId, callback: h.origin + '/sso/acs', audience: h.origin + '/sso/metadata', email })
+  const changed = Buffer.from(Buffer.from(original, 'base64').toString().replace('Alder', 'Other').replace('>billing<', '>ops<')).toString('base64')
+  assert.equal((await postSaml(h, tampered, changed)).status, 403, 'tampered signed role is refused')
+  await scim('', { method: 'POST', body: { externalId: 'synthetic-nectar-3', userName: h.vars.OWNER_EMAIL, roles: [{ value: 'billing' }] }, status: 409 })
+  await scim('', { method: 'POST', body: { externalId: 'synthetic-nectar-4', userName: 'unmapped@example.test', roles: [{ value: 'unknown' }] }, status: 403 })
+  await onState?.({ label: 'provisioned', member, user, settings, idp })
+
+  await h.api('mfa.policy', owner, { scope: 'roles', roles: ['accountant'] })
+  await sign({}, 403)
+  const trusted = await finish(await sign({ mfa: true }))
+  assert.equal((await h.api('me', trusted)).role, 'accountant', 'signed actual MFA satisfies the required policy without a local factor')
+  assert.equal((await h.api('mfa', trusted)).verifiedAt !== null, true)
+  await onState?.({ label: 'mfa-signed-in', member: trusted, user, settings, idp })
+  const inFlight = await sign({ mfa: true })
+  const began = performance.now()
+  await scim('/' + user.id, { method: 'PATCH', body: { schemas: ['urn:ietf:params:scim:api:messages:2.0:PatchOp'], Operations: [{ op: 'replace', path: 'active', value: false }] } })
+  await h.api('me', member, undefined, 401)
+  await h.api('me', trusted, undefined, 401)
+  assert.ok(performance.now() - began < 60000, 'deprovisioning invalidates every session within one minute')
+  await finish(inFlight, 403)
+  await sign({ mfa: true }, 403)
+  await onState?.({ label: 'deprovisioned', member: trusted, user, settings, idp })
+  await scim('/' + user.id, { method: 'PATCH', body: { Operations: [{ op: 'replace', value: { active: true } }] } })
+  await h.api('me', trusted, undefined, 401)
+  await finish(await sign({ mfa: true }))
+  const rotated = await h.api('sso.configure', owner, { ...settings, revision: 1 })
+  assert.ok(rotated.scim_token !== configured.scim_token)
+  await scim('', { status: 401 })
+  await h.assertStorageExcludes([configured.scim_token, rotated.scim_token])
+  const audit = await h.api('audit', owner)
+  for (const action of ['sso.configure', 'scim.create', 'sso.signin', 'scim.deprovision']) assert.ok(audit.some(row => row.action === action))
+  console.log('Enterprise identity: signed SAML, mapped SCIM role, MFA refusal and acceptance, replay refusal, immediate revocation and credential rotation passed')
+}

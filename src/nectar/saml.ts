@@ -42,7 +42,7 @@ async function principal(env: Bindings, config: SsoConfig, profile: any, transac
   // password class alone never proves a second factor.
   const methods = [profile.amr ?? []].flat().flatMap(value => String(value).split(/[ ,]+/))
   const mfa = ['https://refeds.org/profile/mfa', 'urn:oasis:names:tc:SAML:2.0:ac:classes:TimeSyncToken', 'urn:oasis:names:tc:SAML:2.0:ac:classes:SmartcardPKI'].includes(context) || methods.includes('mfa')
-  const user = await one(env, 'SELECT s.*,m.role,m.status FROM nc_scim_users s JOIN nc_members m ON m.id=s.member_id WHERE s.email=?', profile.nameID.toLowerCase())
+  const user = await one(env, 'SELECT s.*,m.role,m.status FROM nc_scim_users s JOIN nc_members m ON m.id=s.member_id WHERE s.external_id=?', profile.nameID)
   insist(user && user.active && user.status === 'active', 'not_provisioned', 403)
   insist(profile.email === user.email && mappedRole(config, profile.role) === user.role && profile.role === user.source_role, 'identity_mapping_mismatch', 403)
   const policy = await mfaPolicy(env)
