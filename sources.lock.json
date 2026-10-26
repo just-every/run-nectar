@@ -4566,7 +4566,7 @@
       "executable": false
     },
     "tests/nectar/customer-payment-methods.mjs": {
-      "sha256": "06302d85e1d86ad6fadd6d1784657f36dff845fa6d0fa2d845930dbc1f39a627",
+      "sha256": "99fb515a5146711c404a7959173d219374f550fd1a77971a50a7b945e982053e",
       "executable": false
     },
     "tests/nectar/customer-record-browser.mjs": {
