@@ -49,9 +49,9 @@ export async function createSetupReturn(env: Bindings, session: CustomerSession,
   const result = await stmt(env, `INSERT INTO nc_hosted_setup_returns
     (id,setup_id,customer_id,portal_session_id,account_ref,livemode,purpose,expires_at)
     SELECT ?,s.id,c.id,p.id,b.account_ref,s.livemode,'hosted-setup',? ${source}
-    WHERE s.id=? AND b.account_ref=? AND s.livemode=? AND ${currentBasis} AND ${sessionBasis}`,
-  hash, expiresAt, setup, account, Number(livemode), ...timeParams(at), ...sessionParams(session)).run()
-  insist(result.meta.changes === 1, 'invalid_customer_session', 401)
+    WHERE s.id=? AND b.account_ref=? AND s.livemode=? AND ${currentBasis} AND ${sessionBasis} RETURNING id`,
+  hash, expiresAt, setup, account, Number(livemode), ...timeParams(at), ...sessionParams(session)).first<{id:string}>()
+  insist(result?.id === hash, 'invalid_customer_session', 401)
   const maxAge = Math.floor((expiresAt - at) / 1000)
   return { token, hash, expiresAt, cookie: `${cookieName}=${token}; ${cookieAttributes}; Max-Age=${maxAge}` }
 }

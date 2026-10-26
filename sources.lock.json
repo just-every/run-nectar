@@ -3230,7 +3230,7 @@
       "executable": false
     },
     "src/nectar/hosted-setup-return.ts": {
-      "sha256": "4acfe6f3ce3f7d963815e01d61d8288f6e5e7e215c38371056e7860980617af2",
+      "sha256": "b932d6b4cddff9c5e88bfd3cc54f3e3bb177733c99520efef128b3ca35404667",
       "executable": false
     },
     "src/nectar/hosted-setup.ts": {
