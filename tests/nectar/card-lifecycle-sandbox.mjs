@@ -1,5 +1,8 @@
 // Held Stripe test account only. This proves real hard declines, not a network
 // updater event, expiry mail, or unattended renewal authority.
+// Stripe currently refuses its stolen-card fixture at attachment. The failed
+// fixture is a named sandbox Gap, never a successful application observation.
+// https://docs.stripe.com/testing#declined-payments
 import {execFileSync} from 'node:child_process'
 import {stripeSandbox,check,safeError} from './stripe-sandbox-client.mjs'
 import {harness} from './harness.mjs'

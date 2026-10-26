@@ -149,7 +149,6 @@ try {
     await h.api('automatic.collection.decide',finance,{request:authority.id,basis_hash:authority.basis,decision:'approved',confirm:true})
     await h.api('invoice.finalise',owner,{invoice:invoice.id,issue_date:day})
     const collected=(await h.api('automatic-collections',owner)).find(row=>row.id===authority.id)
-    facts.collectionState={method,status:collected.status,errorCode:collected.errorCode}
     assert.equal(collected.status,method==='card'?'collected':'pending_settlement')
     const intent=await stripe.request('GET',`/v1/payment_intents/${collected.paymentIntentRef}`)
     assert.equal(intent.payment_method,record.paymentMethod.methodRef)

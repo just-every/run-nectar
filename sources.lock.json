@@ -174,7 +174,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "2b7ce1f4cfc79828243744e15911c9cf24755631e74bbb54034015f7de57c74d",
+      "sha256": "5e950937c447b9fd71b9bce772c7be700439bb172e3786d73dbdaf2be1ed6000",
       "executable": false
     },
     "AGENTS.consumer.md": {
@@ -194,7 +194,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "6e9760e24bedcd3d35abcad6fd69e074073d93e4ffb3101ef6089a64ac714077",
+      "sha256": "48774edbeea8c482d90dcdc4e217877deec3e4d1124c244bdcc110056d5cb236",
       "executable": false
     },
     "DEMO.md": {
@@ -4666,7 +4666,7 @@
       "executable": false
     },
     "tests/nectar/card-lifecycle-sandbox.mjs": {
-      "sha256": "0aec428bc9f15411432880894c942518eeba9de5334bd2a33b3116d710f3a60a",
+      "sha256": "ae0f3d0eefc87fbbd711d8add40e0586324e55e2f60cb935aea22316f86227b3",
       "executable": false
     },
     "tests/nectar/card-lifecycle-webhook.mjs": {
@@ -4818,7 +4818,7 @@
       "executable": false
     },
     "tests/nectar/hosted-setup-sandbox.mjs": {
-      "sha256": "23a4f0775c80620c582f6bbaa9af20242061bda2bfffdaf26f2ee5f7eb854e02",
+      "sha256": "75bdf5e98ca26a25d06b10521cab058f7bcacade5bfc8cb052c6e2c4e6eefa42",
       "executable": false
     },
     "tests/nectar/http-listener.mjs": {
