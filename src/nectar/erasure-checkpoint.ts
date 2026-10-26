@@ -3,6 +3,6 @@ import { createPortability } from '@runeditrun/rer/modules/portability'
 import type { D1Sql } from '../modules/import-kit/src/d1/index'
 import { insist } from './core'
 export async function privacyCheckpoint(env: Bindings): Promise<D1Sql[]> {
-  const portability = await createPortability({ db: env.DB, policy: { product: 'billing/nectar', excludeTables: ['nc_hosted_setups','nc_hosted_setup_returns','rer_dependency_keys','rer_dependency_pending','rer_dependency_codes','nc_guard','nc_privacy_context','nc_privacy_generation','nc_idempotency','nc_mfa_sessions','nc_mfa_challenges','nc_portal_sessions'] } })
+  const portability = await createPortability({ db: env.DB, policy: { product: 'billing/nectar', excludeTables: ['nc_payment_link_activations','nc_payment_link_attempts','nc_automatic_collection_authorizations','nc_automatic_collection_events','nc_hosted_setups','nc_hosted_setup_returns','rer_dependency_keys','rer_dependency_pending','rer_dependency_codes','nc_guard','nc_privacy_context','nc_privacy_generation','nc_idempotency','nc_mfa_sessions','nc_mfa_challenges','nc_portal_sessions'] } })
   return [...await portability.redactionStatements(), ...await portability.invalidateTransfersStatements()].map(prepared => { const value=prepared as unknown as {statement:string;params:unknown[]}; insist(typeof value.statement==='string'&&Array.isArray(value.params),'invalid_privacy_checkpoint'); return {sql:value.statement,params:value.params} })
 }

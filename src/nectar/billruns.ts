@@ -318,6 +318,7 @@ async function finaliseCore(env: Bindings, actor: Actor, input: Input, trialAuth
       ...await revenueIssueStatements(env,{...invoice,issue_date:issueDate}),
       ...(calculation.inputs?.billing?billingComponentClaimStatements(env,invoice.subscription_id,invoice.id,calculation.inputs.billing):[]),
     ], { actor: actorLabel(actor), action: 'invoice.issue', subject: invoice.id, detail: { number, total: invoice.total_cents, fingerprint: invoice.approved_fingerprint, events: consumed.length, charges } })
+    await (await import('./automatic-collection-jobs')).collectAutomaticInvoice(env,invoice.id)
     issued.push(number)
     business = await requireBusiness(env)
   }
@@ -373,5 +374,23 @@ export async function issueAuthorizedTrialInvoice(env: Bindings, authorization: 
       {actor:actorLabel(actor),action:'invoice.approve',subject:invoice.id,detail:{authorization:row.id,basis:row.basis_hash,owner:row.prepared_by,approver:row.approved_by,fingerprint:q.fingerprint}})
   }
   if(invoice.status!=='issued')await finaliseCore(env,actor,Input.of({invoice:invoice.id,issue_date:q.chargeDate}),row)
+  return { invoice: invoice.id }
+}
+
+/** Complete an already captured hosted payment through ordinary native issue.
+ * Authority comes from its exact owner policy and customer consent, never an impersonated member. */
+export async function issueAuthorizedPaymentLinkInvoice(env: Bindings, attemptId: string) {
+  const { paymentLinkInvoiceAuthority, paymentLinkSystem } = await import('./payment-links-one-time')
+  const attempt = await one(env, "SELECT * FROM nc_payment_link_attempts WHERE id=? AND status='recording_invoice'", attemptId)
+  insist(attempt?.invoice_id && attempt.customer_id && attempt.proof_json, 'payment_link_source_missing', 409)
+  const invoice = await one(env, 'SELECT * FROM nc_invoices WHERE id=? AND customer_id=?', attempt.invoice_id, attempt.customer_id)
+  insist(invoice, 'invoice_not_found', 404)
+  const actor = paymentLinkSystem(attempt.id), authority = () => paymentLinkInvoiceAuthority(env, attempt.id)
+  if (invoice.status === 'draft') {
+    const business = await requireBusiness(env)
+    await commit(env, [authority(), ...await approveOne(env, actor, business, invoice, false, authority)],
+      { actor: actorLabel(actor), action: 'invoice.approve', subject: invoice.id, detail: { paymentLinkAttempt: attempt.id, consent: attempt.consent_hash, fingerprint: invoice.source_fingerprint } })
+  }
+  if (invoice.status !== 'issued') await finaliseCore(env, actor, Input.of({ invoice: invoice.id, issue_date: parseJson<Row>(attempt.proof_json, {}).receivedOn }), undefined, authority)
   return { invoice: invoice.id }
 }

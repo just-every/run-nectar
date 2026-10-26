@@ -81,7 +81,7 @@ export async function settingsPage(env: Bindings, actor: Actor, url: URL) {
       ${b.tax_mode !== 'undeclared' && !taxReady(b) ? form('tax.review', '/app/settings', hidden('revision', b.revision), 'I have reviewed this tax policy') : ''}` : ''}
     ${b.tax_reviewed_at ? details({ 'Reviewed by': personName(actor, b.tax_reviewed_by), 'Reviewed at': when(b.tax_reviewed_at, b.timezone) }) : ''}</section>` : ''
   const identityCard = h`<section class="card" aria-labelledby="identity"><h2 id="identity">Billing identity</h2><p><a href="/app/numbering">Invoice series and number register</a></p>${identity}</section>`
-  return page('Business and tax', actor, h`<h1>Business and tax</h1><p><a href="/app/more#notifications">Manage your email notifications</a></p>${tax ? h`<div class="split settings">${identityCard}${tax}</div>` : identityCard}${await policySection(env, actor)}`, { current: '/app/settings', url, showNav: !!b })
+  return page('Business and tax', actor, h`<h1>Business and tax</h1>${['owner','finance'].includes(actor.role??'')?h`<p><a href="/app/payment-links">Payment links</a></p>`:''}<p><a href="/app/more#notifications">Manage your email notifications</a></p>${tax ? h`<div class="split settings">${identityCard}${tax}</div>` : identityCard}${await policySection(env, actor)}`, { current: '/app/settings', url, showNav: !!b })
 }
 
 const CAPABILITY_LABELS: Partial<Record<Capability, string>> = {

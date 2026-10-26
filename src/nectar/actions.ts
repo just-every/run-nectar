@@ -1,3 +1,7 @@
+import { approvePaymentLink } from './payment-links-approval'
+import { createPaymentLink,deactivatePaymentLink,activatePaymentLink } from './payment-links'
+import { prepareAutomaticCollection,decideAutomaticCollection,revokeAutomaticCollection } from './automatic-collection'
+import { checkAutomaticCollection,consumeAutomaticEvent } from './automatic-collection-events'
 import { prepareHostedSetup } from './hosted-setup'
 import { scanAssurance,assignAssurance,approveAssurance,recheckAssurance } from './assurance'
 import { prepareInvoiceAutomation,decideInvoiceAutomation,runInvoiceAutomationDoor } from './invoice-automation'
@@ -114,6 +118,15 @@ export const actions: Record<string, Handler> = {
   'webhook.replay': replayWebhook,
   'webhook.dispatch': dispatchWebhookDoor,
   'collection.customer.bind': bindNativeCollectionCustomer,
+  'payment_link.approve': approvePaymentLink,
+  'payment_link.activate': activatePaymentLink,
+  'payment_link.create': createPaymentLink,
+  'payment_link.deactivate': deactivatePaymentLink,
+  'automatic.collection.prepare': prepareAutomaticCollection,
+  'automatic.collection.decide': decideAutomaticCollection,
+  'automatic.collection.revoke': revokeAutomaticCollection,
+  'automatic.collection.reconcile': checkAutomaticCollection,
+  'automatic.collection.event': consumeAutomaticEvent,
   'collection.prepare': prepareNativeCollection,
   'collection.confirm': confirmNativeCollection,
   'collection.reconcile': reconcileNativeCollection,

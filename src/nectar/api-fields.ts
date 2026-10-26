@@ -59,6 +59,28 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "owner": "text",
     "period": "text"
   },
+  "automatic.collection.decide": {
+    "basis_hash": "text",
+    "confirm": "flag",
+    "confirm_single": "flag",
+    "decision": "text",
+    "request": "text"
+  },
+  "automatic.collection.event": {
+    "event_ref": "text",
+    "request": "text"
+  },
+  "automatic.collection.prepare": {
+    "invoice": "text",
+    "issue_date": "text",
+    "mandate_ref": "text"
+  },
+  "automatic.collection.reconcile": {
+    "request": "text"
+  },
+  "automatic.collection.revoke": {
+    "request": "text"
+  },
   "balance.apply": {
     "assurance_case": "text",
     "invoice": "text"
@@ -583,6 +605,41 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "payment_mismatch": "has",
     "proposals": "has",
     "webhook_failure": "has"
+  },
+  "payment_link.activate": {
+    "confirm": "flag",
+    "link": "text",
+    "revision": "text"
+  },
+  "payment_link.approve": {
+    "basis_hash": "text",
+    "confirm": "flag",
+    "confirm_single": "flag",
+    "decision": "text",
+    "link": "text"
+  },
+  "payment_link.create": {
+    "*": "has",
+    "amount": "text",
+    "auto_renew": "json",
+    "confirm": "flag",
+    "confirm_single": "flag",
+    "description": "text",
+    "kind": "text",
+    "max_uses": "integer",
+    "months": "integer",
+    "name": "text",
+    "notice_days": "integer",
+    "price": "list",
+    "promotion_code": "text",
+    "quantity": "list",
+    "taxable": "flag",
+    "trial_days": "integer",
+    "uplift_percent": "text"
+  },
+  "payment_link.deactivate": {
+    "link": "text",
+    "revision": "text"
   },
   "payment.ach_evidence.record": {
     "account_ref": "text",

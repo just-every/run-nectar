@@ -1,3 +1,7 @@
+import { expirePaymentLinkAttempts } from './nectar/payment-links-expiry'
+import { paymentLinksResponse } from './nectar/payment-links-http'
+import { runAutomaticCollections } from './nectar/automatic-collection-jobs'
+import { automaticCollectionResponse } from './nectar/automatic-collection-http'
 import { runInvoiceAutomation } from './nectar/invoice-automation'
 import { deliverPendingPrepaidRefundNotices } from './nectar/prepaid-refund-mail'
 import { dispatchWebhooks } from './nectar/webhooks'
@@ -46,6 +50,8 @@ function noTransform(response: Response): Response {
 export default withDemo({
   async scheduled(controller, env) {
     await dispatchWebhooks(runtimeBindings(env))
+    await expirePaymentLinkAttempts(runtimeBindings(env))
+    await runAutomaticCollections(runtimeBindings(env))
     await runInvoiceAutomation(runtimeBindings(env),controller.scheduledTime)
     if(controller.cron==='* * * * *')return
     await removeExpiredFinancialRecords(runtimeBindings(env))
@@ -66,6 +72,10 @@ export default withDemo({
   async fetch(request, env, execution) {
     const asset = await staticAssetResponse(request, env)
     if (asset) return asset
+    const paymentLink=await paymentLinksResponse(request,runtimeBindings(env))
+    if(paymentLink)return paymentLink
+    const automatic=await automaticCollectionResponse(request,runtimeBindings(env))
+    if(automatic)return automatic
     const portal = await portalResponse(request, runtimeBindings(env))
     if (portal) return portal
     const auth = await authResponse(request, env)

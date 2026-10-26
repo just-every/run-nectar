@@ -18,7 +18,7 @@ export async function paymentReceiptPage(env: Bindings, actor: Actor, payment: s
       ${table(['Invoice', 'Amount'], receipt.allocations.map(a => [h`<a href="${a.sourcePath}">${a.invoiceNumber}</a>`, cents(a.amountCents, a.currency)]), { empty: 'No invoice allocations.' })}
     </section>
     <section class="card"><h2>Processor provenance</h2>
-      ${table(['Source', 'Invoice'], receipt.provenance.map(p => [p.kind === 'verified_external_ach' ? 'Verified external ACH settlement' : 'Native card collection',
+      ${table(['Source', 'Invoice'], receipt.provenance.map(p => [({verified_external_ach:'Verified external ACH settlement',native_card_collection:'Native card collection',automatic_invoice_collection:'Automatic invoice collection',payment_link_checkout:'Payment link checkout'} as Record<string,string>)[p.kind],
         h`<a href="${p.sourcePath}">Original invoice</a>`]), { empty: 'No retained verified processor source linked to this payment.' })}
     </section>`, { url, current: '/app/receivables' })
 }

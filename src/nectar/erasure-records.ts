@@ -9,7 +9,7 @@ import { erasureMutationStatements, type ErasureMutation } from './erasure-sql'
 
 const quote = (name: string) => `"${name.replaceAll('"', '""')}"`
 const relation = new Set(['customer_id','subscription_id','invoice_id','payment_id','proposal_id','credit_id','record_id','subject','related_id','term_id','offer_id','contract_id','note_id','correction_id','original_invoice_id'])
-const keep = new Set(['purpose','correction_kind','intent_key','billing_key','interval_unit','billing_timing','numbering_mode','capture_kind','account_ref','custody','basis_hash','error_code','occurred_text','number','kind','document_kind','status','origin','language','currency','method','billing_mode','invoice_kind','calc_version','version','revision','quantity','unit_amount','value','tax_rate','tax_mode','tax_jurisdiction','anchor_day','billing_interval','access','scope','scopes','pricing_model','action','state','approval_mode','mail_status','verified_method','event','created_by_kind','prepared_by_kind','requested_by_kind','source','proposal_kind'])
+const keep = new Set(['purpose','correction_kind','intent_key','billing_key','interval_unit','billing_timing','numbering_mode','capture_kind','account_ref','custody','basis_hash','error_code','occurred_text','number','kind','document_kind','status','origin','language','currency','method','method_kind','billing_mode','invoice_kind','calc_version','version','revision','quantity','unit_amount','value','tax_rate','tax_mode','tax_jurisdiction','anchor_day','billing_interval','access','scope','scopes','pricing_model','action','state','approval_mode','mail_status','verified_method','event','created_by_kind','prepared_by_kind','requested_by_kind','source','proposal_kind'])
 // The processor refund identifier is retained cash custody under ct batch11 I.
 const typedPlanField=(table:string,column:string)=>table==='nc_plan_changes'&&['mode','policy'].includes(column)
 const financialIdentifier=(table:string,column:string)=>table==='nc_prepaid_refunds'&&column==='refund_ref'
@@ -49,7 +49,7 @@ export async function erasurePlan(env: Bindings, customer: Row): Promise<Erasure
   for (const image of images) {
     const { table,row,key,required,foreignKeys } = image
     // Customer capabilities and investigations are operational custody, not retained financial facts.
-    if (['nc_hosted_setup_returns','nc_hosted_setup_history','nc_hosted_setups','nc_portal_sessions','nc_assurance_cases','nc_assurance_observations'].includes(table) && image.scoped) {
+    if (['nc_automatic_collection_authorizations','nc_payment_link_attempts','nc_hosted_setup_returns','nc_hosted_setup_history','nc_hosted_setups','nc_portal_sessions','nc_assurance_cases','nc_assurance_observations'].includes(table) && image.scoped) {
       mutations.push({ table, row, key, updates: null })
       const entry = changes.get(table) ?? { kind: table, fields: new Set<string>(), records: 0 }
       Object.keys(row).forEach(field => entry.fields.add(field)); entry.records++; changes.set(table, entry)
@@ -65,10 +65,11 @@ export async function erasurePlan(env: Bindings, customer: Row): Promise<Erasure
       if (column === 'csv') { updates[column] = affected ? '' : redactSnapshotCsv(String(value),personal); continue }
       if (!affected || typeof value !== 'string') continue
       if (column === 'token_hash') { updates[column] = null; continue }
+      if (table==='nc_subscriptions'&&column==='trial_payment') { updates[column]=null; continue }
       if (foreignKeys.has(column) || (column.endsWith('_id') && !['external_id','event_id'].includes(column)) || column === 'id' || column === 'subject' || keep.has(column) || financialIdentifier(table,column) || typedPlanField(table,column) || /(?:_at|_on|_date|_from|_to|_start|_end)$/.test(column)) continue
       if (column === 'external_id' || column === 'event_id' || column === 'reference') updates[column] = `erased-${row.id ?? customer.id}`
       else if (column === 'name' && table === 'nc_customers') updates[column] = 'Erased customer'
-      else if (['payment_intent_ref','charge_ref','payment_method_ref','refund_ref'].includes(column)) updates[column]=`erased-${row.id ?? customer.id}`
+      else if (['payment_intent_ref','charge_ref','payment_method_ref','refund_ref'].includes(column) || (table==='nc_payment_link_attributions'&&['customer_ref','session_ref'].includes(column))) updates[column]=`erased-${row.id ?? customer.id}`
       else if (column === 'provider_ref' || column === 'provider_schedule_ref' || column === 'stripe_customer_ref') updates[column] = required.has(column) ? `erased-${row.id ?? customer.id}` : null
       else updates[column] = column==='body' && table==='nc_notes' ? '[erased]' : ''
     }
@@ -82,6 +83,7 @@ export async function erasurePlan(env: Bindings, customer: Row): Promise<Erasure
       if (table==='nc_tasks') updates.status='done'
       if (table==='nc_renewal_terms') {updates.auto_renew=0;updates.token_hash=null;updates.status='ended'}
       if (table==='nc_prepaid_topup_authorizations') updates.status='revoked'
+      if (table==='nc_automatic_collections') updates.status='revoked'
       if (table==='nc_trial_collections') updates.status='revoked'
       if (table==='nc_prepaid_consents') updates.status='revoked'
       if (table==='nc_retention_offers') {updates.token_hash=null;updates.status='expired'}

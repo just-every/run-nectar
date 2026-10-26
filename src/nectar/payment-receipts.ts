@@ -20,9 +20,11 @@ export async function readPaymentReceipts(env: Bindings, actor: Actor, customer:
     all(env, `SELECT n.id,n.payment_id,n.invoice_id,'native_card_collection' AS kind FROM nc_native_collections n
       JOIN nc_payments p ON p.id=n.payment_id WHERE p.customer_id=? AND (? IS NULL OR p.id=?) AND n.status='collected'
       AND NOT EXISTS(SELECT 1 FROM nc_erased_records e WHERE e.record_id IN(n.id,n.customer_id,n.invoice_id))
+      UNION ALL SELECT n.id,n.payment_id,n.invoice_id,'automatic_invoice_collection' AS kind FROM nc_automatic_collections n JOIN nc_payments p ON p.id=n.payment_id WHERE p.customer_id=? AND (? IS NULL OR p.id=?) AND n.status='collected' AND NOT EXISTS(SELECT 1 FROM nc_erased_records e WHERE e.record_id IN(n.id,n.customer_id,n.invoice_id))
+      UNION ALL SELECT n.id,n.payment_id,n.invoice_id,'payment_link_checkout' AS kind FROM nc_payment_link_attributions n JOIN nc_payments p ON p.id=n.payment_id WHERE p.customer_id=? AND (? IS NULL OR p.id=?) AND NOT EXISTS(SELECT 1 FROM nc_erased_records e WHERE e.record_id IN(n.id,n.customer_id,n.invoice_id))
       UNION ALL SELECT n.id,n.payment_id,n.invoice_id,'verified_external_ach' AS kind FROM nc_ach_payment_evidence n
       JOIN nc_payments p ON p.id=n.payment_id WHERE p.customer_id=? AND (? IS NULL OR p.id=?)
-      AND NOT EXISTS(SELECT 1 FROM nc_erased_records e WHERE e.record_id IN(n.id,n.customer_id,n.invoice_id))`, customer, payment, payment, customer, payment, payment),
+      AND NOT EXISTS(SELECT 1 FROM nc_erased_records e WHERE e.record_id IN(n.id,n.customer_id,n.invoice_id))`, customer, payment, payment, customer, payment, payment, customer, payment, payment, customer, payment, payment),
   ])
   const group = (facts: Row[]) => {
     const grouped = new Map<string, Row[]>()
@@ -46,7 +48,7 @@ export async function readPaymentReceipts(env: Bindings, actor: Actor, customer:
       recordedAt: row.recorded_at, allocatedCents, returnedCents: row.amount_cents - allocatedCents - row.unallocated_cents, unallocatedCents: row.unallocated_cents,
       allocations: allocationFacts, erased, custody: 'recorded_cash' as const,
       provenance: provenance.map(p => ({ id: p.id, kind: p.kind, invoice: p.invoice_id,
-        sourcePath: `/app/invoices/${encodeURIComponent(p.invoice_id)}` })), sourcePath: paymentReceiptPath(row.id) }
+        sourcePath: p.invoice_id ? `/app/invoices/${encodeURIComponent(p.invoice_id)}` : `/app/payments/${encodeURIComponent(row.id)}/receipt` })), sourcePath: paymentReceiptPath(row.id) }
   })
 }
 

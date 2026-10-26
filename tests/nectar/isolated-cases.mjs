@@ -1,5 +1,7 @@
 // Explicit modules keep each isolated journey visible to Verify tooling.
 export const isolatedJourneys = [
+  { file: 'payment-links', name: 'paymentLinksFlow', load: () => import('./payment-links.mjs') },
+  { file: 'automatic-collection', name: 'automaticCollectionFlow', load: () => import('./automatic-collection.mjs') },
   { file: 'stripe-app', name: 'stripeAppFlow', load: () => import('./stripe-app.mjs') },
   { file: 'webhooks', name: 'webhooksFlow', load: () => import('./webhooks.mjs') },
   { file: 'webhooks', name: 'webhookLifecycleFlow', load: () => import('./webhooks.mjs') },

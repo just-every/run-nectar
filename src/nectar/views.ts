@@ -1,3 +1,5 @@
+import { readPaymentLinks } from './payment-links'
+import { automaticCollections } from './automatic-collection-records'
 import { assuranceCases,assuranceCase } from './assurance'
 import { assuranceRuns } from './assurance-schedule'
 import { readPaymentReceipt } from './payment-receipts'
@@ -103,6 +105,8 @@ export const views: Record<string, View> = {
   prepaidRefunds:(env,actor,_r,_id,url)=>readPrepaidRefunds(env,actor,url.searchParams.get('subscription')??undefined),
   prepaidTopupAuthorizations:(env,actor,_r,_id,url)=>readPrepaidTopupAuthorizations(env,actor,url.searchParams.get('subscription')??undefined),
   prepaidTopupClaims:(env,actor,_r,_id,url)=>readPrepaidTopupClaims(env,actor,url.searchParams.get('subscription')??undefined),
+  paymentLinks:(env,actor)=>readPaymentLinks(env,actor),
+  automaticCollections:(env,actor,_r,_id,url)=>automaticCollections(env,actor,url.searchParams.get('customer')??undefined),
   nativeCollections:(env,actor,_r,_id,url)=>readNativeCollections(env,actor,url.searchParams.get('customer')??undefined),
   prepaid:(env,actor,_r,id,url)=>prepaidState(env,actor,id,url.searchParams.get('date')??undefined),
   prepaidSource:(env,actor,_r,id)=>{const [subscription,entry]=id.split('/entries/');return prepaidSource(env,actor,subscription,decodeURIComponent(entry))},

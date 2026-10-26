@@ -21,6 +21,7 @@ export async function prepareNativeCollection(env: Bindings, actor: Actor, input
   await collectionOwner(env, actor)
   input.only(['invoice', 'returnTo'])
   const source = await nativeCollectionSource(env, input.text('invoice', { max: 100 }))
+  insist(!await one(env,"SELECT 1 FROM nc_automatic_collections WHERE invoice_id=? AND status NOT IN ('revoked','invalidated')",source.row.id),'automatic_collection_managed',409)
   insist(!await one(env,'SELECT 1 FROM nc_prepaid_topup_claims WHERE invoice_id=?',source.row.id),'prepaid_topup_invoice_managed',409)
   await prepaidFundingForInvoice(env, source.row.id)
   insist(!await one(env, 'SELECT 1 FROM nc_native_collection_claims WHERE invoice_id=?', source.row.id), 'native_collection_already_claimed', 409)

@@ -9,6 +9,7 @@ export async function nativeCollectionSection(env: Bindings, actor: Actor, invoi
   const cents=(value:number)=>importedCents(value,invoice.currency??'USD')
   const automatic = await one(env,'SELECT id,subscription_id,status FROM nc_prepaid_topup_claims WHERE invoice_id=?',invoice.id)
   if (automatic) return h`<section class="card" id="collection"><h2>Automatic prepaid purchase</h2><p>This invoice belongs to an authorized top-up crossing. Its existing payment outcome is ${automatic.status.replaceAll('_',' ')}.</p><p><a href="/app/prepaid/${automatic.subscription_id}">View the authorization and check its existing payment</a></p></section>`
+  if(await one(env,"SELECT 1 FROM nc_automatic_collections WHERE invoice_id=? AND status NOT IN ('revoked','invalidated')",invoice.id))return ''
   const rows = (await readNativeCollections(env, actor, invoice.customer_id)).filter(row => row.invoice_id === invoice.id)
   const payer=await one(env,'SELECT p.payer_id,c.name FROM nc_invoice_payers p JOIN nc_customers c ON c.id=p.payer_id WHERE p.invoice_id=?',invoice.id)
   const route = parseJson<Row>(invoice.billing_route_json, {}), back = `/app/invoices/${invoice.id}`
