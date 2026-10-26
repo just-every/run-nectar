@@ -712,3 +712,13 @@ See the [versioned decline table](docs/retry-table.md) and
 [published timing comparison](docs/retry-comparison.md). Automatic retry policy
 approval and the remaining live processor matrix are still pending; these
 native test-mode doors do not establish production operation.
+
+A hard-declined card may be replaced through `retry.method.prepare` with an
+owner's fresh factor and explicit confirmation. The own-customer hosted door
+`/portal/retry-method-recoveries/:id` records a separate exact acceptance.
+`retry.method.decide` requires an independent authorized human when one exists,
+or explicit sole-owner confirmation. Approval schedules one confirmation of the
+same PaymentIntent within the original caps and deadline. It never modifies the
+earlier quote. Executable recovery authorizations are excluded from archives;
+historical proposals cannot revive debit authority. Same-method authentication
+remains unavailable.

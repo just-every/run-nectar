@@ -27,7 +27,8 @@ export async function retryMethodsFlow(h,owner,{onState=async()=>{},prepareRecov
  await api('retry.method.prepare',{request:original.id,confirm:true},409)
  assert.equal(edge.writes.length,writes,'The refused card can never become its own replacement')
  edge.customers.get('synthetic-nectar-native-customer-1').method='synthetic-nectar-new-card'
- const prepared=await (prepareRecovery??(input=>api('retry.method.prepare',input)))({request:original.id,confirm:true})
+ const recoveryInput={request:original.id,confirm:true}
+ const prepared=prepareRecovery?await prepareRecovery({input:recoveryInput,invoice,session}):await api('retry.method.prepare',recoveryInput)
  assert.equal(prepared.quote.method.paymentMethodRef,'synthetic-nectar-new-card');assert.equal(prepared.paymentIntentRef,edge.writes[0].id)
  assert.equal(prepared.status,'awaiting_customer')
  const path=`/portal/retry-method-recoveries/${prepared.id}?session=${encodeURIComponent(session.token)}`

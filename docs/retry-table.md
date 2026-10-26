@@ -48,8 +48,10 @@ invoice page and API at the time the failure is recorded. `next_payment_attempt`
 is an epoch timestamp in milliseconds, or null when no attempt is currently allowed.
 
 Current limits remain explicit: this slice supports native test-mode Stripe
-collection only. Changed-method reauthorization and authenticated recovery are not
-implemented. Other processors, segment policies, production operation and the full
+collection only. A hard-declined card can be replaced through a fresh owner preparation,
+new exact customer consent and human approval of one confirmation on the same
+PaymentIntent. The original approved terms remain immutable. Same-method
+authentication recovery is not implemented. Other processors, segment policies, production operation and the full
 live decline and bank matrix remain unproved. CT approval of automatic retries is
 pending. Historical retry facts confer no restored collection authority.
 

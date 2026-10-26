@@ -293,9 +293,10 @@ export async function nativeCollectionFlow(h,owner,{onState=async()=>{},confirm}
   let recoveryReport=await api('recovery')
   for(const failure of recordedFailures){const cohort=recoveryReport.invoices.find(i=>i.invoice===failure.invoice_id);assert.ok(cohort,'Every recorded native payment refusal joins recovery reporting');assert.equal(cohort.failedAmountCents,failure.amount_cents)}
   assert.equal(recoveryReport.totals.failedAmountCents,recordedFailures.reduce((sum,r)=>sum+r.amount_cents,0))
+  const unattributedBefore=recoveryReport.byAttempt.find(b=>b.key==='unattributed')?.recoveredAmountCents??0
   const failure=recordedFailures[0],cash=await api('payment.record',{customer:failure.customer_id,amount:(failure.amount_cents/100).toFixed(2),received_on:'2026-10-22',method:'bank_transfer',reference:'synthetic-nectar-refusal-recovery'})
   await api('payment.allocate',{payment:cash.payment,invoice:failure.invoice_id,amount:(failure.amount_cents/100).toFixed(2)})
   recoveryReport=await api('recovery');assert.equal(recoveryReport.invoices.find(i=>i.invoice===failure.invoice_id).recoveredAmountCents,failure.amount_cents)
-  assert.equal(recoveryReport.byAttempt.find(b=>b.key==='unattributed').recoveredAmountCents,failure.amount_cents,'Manual cash recovery is not attributed to a processor retry')
+  assert.equal(recoveryReport.byAttempt.find(b=>b.key==='unattributed').recoveredAmountCents,unattributedBefore+failure.amount_cents,'Manual cash recovery is not attributed to a processor retry')
   console.log('Native collection: two frozen accounts, exact current balances, explicit owner confirmation, captured proof, atomic payment/allocation, read-only search/list recovery, definitive declined/authentication outcomes, concurrent confirmation, no second intent and erasure/factor boundaries')
 }
