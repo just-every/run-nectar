@@ -113,6 +113,22 @@ export async function paymentRetriesFlow(h,owner,{onState=async()=>{},prepareCol
  assert.equal(report.totals.recoveredAmountCents,payments.reduce((sum,p)=>sum+p.amount_cents,0))
  for(const record of report.invoices){const invoice=await api(`invoices/${record.invoice}`);assert.equal(record.recoveredAmountCents,invoice.allocations.reduce((sum,a)=>sum+a.amount_cents,0))}
  assert.equal(report.byDunningStep.find(s=>s.key==='unrecorded').recoveredAmountCents,report.totals.recoveredAmountCents)
+ for(const bucket of report.byDecline){
+  const scoped=report.invoices.filter(r=>(r.declineCode??'unknown')===bucket.key)
+  assert.deepEqual([bucket.failedInvoices,bucket.failedAmountCents,bucket.recoveredAmountCents],[scoped.length,scoped.reduce((sum,r)=>sum+r.failedAmountCents,0),scoped.reduce((sum,r)=>sum+r.recoveredAmountCents,0)])
+ }
+ for(const bucket of report.byAttempt){
+  const scoped=report.invoices.filter(r=>r.attempts.some(a=>String(a.attempt)===bucket.key))
+  const cash=scoped.flatMap(r=>r.recoveries).filter(r=>String(r.attempt)===bucket.key).reduce((sum,r)=>sum+r.amountCents,0)
+  assert.deepEqual([bucket.failedInvoices,bucket.recoveredAmountCents],[scoped.length,cash])
+ }
+ const compared=await api('retry-comparison')
+ for(const policy of compared.configuredPolicies){
+  const measured=policy.measured
+  assert.ok(measured.outcomes.every(o=>o.attemptsHours.length<=measured.policy.maxAttempts&&o.attemptsHours.every(h=>h<=measured.policy.windowDays*24)))
+  assert.equal(measured.recoveredAmountCents,compared.payments.filter(p=>measured.outcomes.find(o=>o.id===p.id).recoveredAtHours!==null).reduce((sum,p)=>sum+p.amountCents,0))
+ }
+
  assert.equal(report.totals.recoveredInvoices,3)
  assert.equal(report.totals.recoveredAmountCents,30000)
  assert.equal(report.involuntaryChurn.available,true);assert.equal(report.involuntaryChurn.count,0,'Exhaustion alone is never involuntary churn')
