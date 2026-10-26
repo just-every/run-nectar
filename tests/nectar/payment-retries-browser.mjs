@@ -45,11 +45,11 @@ try{
   },
   acceptCollection:async({path,request})=>{
    await customer.goto(h.origin+path)
-   await shot(customer,request.method==='us_bank_account'?'consent-spanish':'consent-english')
+   await shot(customer,request.method==='us_bank_account'?'consent-spanish':request.quote.retryPolicy?'consent-english-retries':'consent-english')
    const form=customer.locator('form').filter({has:customer.locator('[name=accept]')});await form.locator('[name=accept]').check()
    await Promise.all([customer.waitForNavigation(),form.getByRole('button').click()])
    assert.equal(new URL(customer.url()).searchParams.has('error'),false)
-   await shot(customer,request.method==='us_bank_account'?'accepted-spanish':'accepted-english')
+   await shot(customer,request.method==='us_bank_account'?'accepted-spanish':request.quote.retryPolicy?'accepted-english-retries':'accepted-english')
   },
   onState:async state=>{
    if(state.state==='consent')return

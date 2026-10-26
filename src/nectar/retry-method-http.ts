@@ -1,6 +1,7 @@
 import type { Bindings } from '../auth.server'
 import { storedAutomaticCollection } from './automatic-collection-records'
 import { NectarError, insist } from './core'
+import { customerText } from './locale'
 import { Input } from './input'
 import { portalHeaders, portalPage } from './portal-page'
 import { customerSession } from './portal-session'
@@ -30,12 +31,11 @@ export async function retryMethodRecoveryResponse(request:Request,env:Bindings):
   const response=portalPage(L.heading,h`<h1>${L.heading}</h1><section class="card"><p>${quote.wording}</p><p>${typeof status==='string'?status:L.unavailable}</p>
   ${view.status==='awaiting_customer'?h`<form method="post" action="${url.pathname+url.search}">${hidden('recovery',id)}${hidden('quote_hash',view.quoteHash)}<label><input type="checkbox" name="accept" value="true" required> ${L.accept}</label><button type="submit">${L.confirm}</button></form>`:''}
   ${['awaiting_customer','pending_approval','active'].includes(view.status)?h`<form method="post" action="${url.pathname+url.search}">${hidden('recovery',id)}${hidden('quote_hash',view.quoteHash)}${hidden('withdraw','true')}<button type="submit">${L.withdraw}</button></form>`:''}</section>`,{lang:L.tag})
-  return new Response(request.method==='HEAD'?null:response.body,{headers:{...Object.fromEntries(response.headers),...portalHeaders,'content-security-policy':"default-src 'none'; style-src 'self'; font-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"}})
+  return new Response(request.method==='HEAD'?null:response.body,{headers:{...Object.fromEntries(response.headers),...portalHeaders,'referrer-policy':'strict-origin','content-security-policy':"default-src 'none'; style-src 'self'; font-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"}})
  }catch(error){
   if(!(error instanceof NectarError))throw error
-  console.warn('retry method refusal',error.code)
   if(request.headers.get('content-type')?.startsWith('application/json')||request.headers.get('accept')?.includes('application/json'))return Response.json({error:error.code},{status:error.status,headers:portalHeaders})
-  const L=recoveryText(language),response=portalPage(L.unavailable,h`<h1>${L.unavailable}</h1>`,{status:error.status,lang:L.tag})
+  const L=recoveryText(language),response=portalPage(L.unavailable,h`<h1>${L.unavailable}</h1><p>${customerText(language).t('portal.request.unavailable.body')}</p>`,{status:error.status,lang:L.tag})
   return new Response(request.method==='HEAD'?null:response.body,{status:error.status,headers:{...Object.fromEntries(response.headers),...portalHeaders}})
  }
 }
