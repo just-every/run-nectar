@@ -11,12 +11,19 @@ import {stripeSandbox,safeError} from './stripe-sandbox-client.mjs'
 const stripe=stripeSandbox(process.env.STRIPE_SECRET_KEY),directory=process.env.NECTAR_EVIDENCE_DIR??'.evidence/hosted-sandbox'
 await mkdir(directory,{recursive:true})
 let h,browser,page,phase='account',customer
-const facts={head:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),setups:[],cleanup:false}
+const facts={journey:'PAY-002 existing-customer Stripe setup',head:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),setups:[],cleanup:false}
 try {
   const account=await stripe.request('GET','/v1/account')
   facts.account=account.id
   customer=await stripe.request('POST','/v1/customers',{name:'Alder Analytics test customer',email:`nectar-${stripe.run}@example.test`,'metadata[nectar_run]':stripe.run})
-  h=await harness({assets:true,stripeSecret:process.env.STRIPE_SECRET_KEY,stripeFetch:request=>stripe.forward(request)})
+  let loseDefaultResponse=false
+  h=await harness({assets:true,stripeSecret:process.env.STRIPE_SECRET_KEY,stripeFetch:async request=>{
+    const response=await stripe.forward(request)
+    if(loseDefaultResponse&&request.method==='POST'&&new URL(request.url).pathname===`/v1/customers/${customer.id}`){
+      loseDefaultResponse=false;await response.arrayBuffer();return new Response(null,{status:503})
+    }
+    return response
+  }})
   await h.raw('/auth/bootstrap',{body:{token:h.vars.SETUP_TOKEN,displayName:'Nectar Owner'}})
   const owner=await h.signIn(h.vars.OWNER_EMAIL)
   await h.raw('/setup',{cookie:owner,form:new URLSearchParams({confirm:'yes'})})
@@ -88,8 +95,23 @@ try {
     }
     const complete=page.locator('form').filter({has:page.locator(`input[value="${setup.id}"]`)})
     await complete.locator('[name=confirm]').check()
-    await complete.getByRole('button').first().click()
-    assert.equal(new URL(page.url()).pathname,'/portal/payment-methods/finish')
+    const defaultWrites=()=>stripe.requests.filter(row=>row.method==='POST'&&row.path===`/v1/customers/${customer.id}`).length
+    const writesBefore=defaultWrites()
+    loseDefaultResponse=method==='us_bank_account'
+    const [completed]=await Promise.all([page.waitForNavigation(),complete.getByRole('button').first().click()])
+    if(method==='us_bank_account') {
+      assert.equal(completed.status(),502,'The intentionally lost real response stays uncertain')
+      assert.equal(defaultWrites(),writesBefore+1)
+      for(const width of [1440,390]){await page.setViewportSize({width,height:950});await page.screenshot({path:`${directory}/${width}-ach-uncertain.png`,fullPage:true})}
+      assert.equal((await page.goto(`${h.origin}/portal/payment-methods`)).status(),200)
+      const reconcile=page.locator('form').filter({has:page.locator(`input[value="${setup.id}"]`)})
+      await reconcile.locator('[name=confirm]').check()
+      const [recovered]=await Promise.all([page.waitForNavigation(),reconcile.getByRole('button').click()])
+      assert.equal(recovered.status(),200)
+      assert.equal(defaultWrites(),writesBefore+1,'Real default reconciliation never repeats the provider write')
+      facts.lostResponseReconciled=true
+    }
+    assert.equal(new URL(page.url()).pathname,method==='us_bank_account'?'/portal/payment-methods/reconcile':'/portal/payment-methods/finish')
     const record=(await h.api(`customers/${native.id}`,owner)).billingRecord.hostedSetups.find(row=>row.id===setup.id)
     assert.equal(record.status,'complete');assert.equal(record.debitAuthority,false)
     const source=await stripe.request('GET',`/v1/customers/${customer.id}`)
@@ -102,7 +124,7 @@ try {
   facts.outcome='passed'
 } catch(error) {
   facts.outcome='failed';facts.phase=phase;facts.error=safeError(error)
-  if(page){await page.screenshot({path:`${directory}/failed-${phase}.png`,fullPage:true}).catch(()=>{});facts.frames=page.frames().map(frame=>({origin:(()=>{try{return new URL(frame.url()).origin}catch{return 'unavailable'}})(),name:frame.name()}));facts.controls=await page.locator('input,button').evaluateAll(nodes=>nodes.map(node=>({tag:node.tagName,type:node.type,id:node.id,name:node.name,label:node.getAttribute('aria-label')}))).catch(()=>[])}
+  if(page)await page.screenshot({path:`${directory}/failed-${phase}.png`,fullPage:true}).catch(()=>{})
   // Deliberately avoid browser exception messages, URLs and provider bodies.
   process.exitCode=1
 } finally {
