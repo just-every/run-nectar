@@ -8,6 +8,7 @@ import type { Input } from './input'
 import { HARD_CARD_DECLINES } from './card-lifecycle'
 export const RETRY_TABLE_VERSION='nectar-declines-2026-10-27'
 export const DAY=86400000
+export const bankReturnCode=(code:string):string=>({insufficient_funds:'R01',bank_account_closed:'R02',bank_account_invalid_details:'R03',debit_not_authorized:'R10'} as Record<string,string>)[code]??code
 export interface RetryPolicy {version:string;maxAttempts:number;windowDays:number;scope:string}
 export const RETRY_DELAYS:Record<string,number>={processing_error:4*3600000,do_not_honor:DAY,insufficient_funds:3*DAY,R01:3*DAY,R09:3*DAY}
 export function nextRetry(code:string,method:string,attempts:number,failedAt:number,firstFailedAt:number,policy:RetryPolicy){

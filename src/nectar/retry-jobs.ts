@@ -1,3 +1,4 @@
+import { bankReturnCode } from './retry-policy'
 import { refusedPaymentWithLifecycle } from './payments/refusal'
 import type { Bindings } from '../auth.server'
 import { all,canonical,commit,guard,insist,newId,one,stmt,NectarError } from './core'
@@ -31,16 +32,19 @@ export async function runPaymentRetries(env:Bindings){
     const refusal=await refusedPaymentWithLifecycle(env,stripe,observed,identity)
     insist(refusal&&!refusal.retryProhibited&&(refusal.declineCode??refusal.errorCode)===series.decline_code,'retry_reason_changed',409)
    }
-   const attempt=series.attempts+1
+   if(q.method.kind==='us_bank_account')insist(bankReturnCode(observed.last_payment_error?.code)===series.decline_code,'retry_reason_changed',409)
+   const attempt=series.attempts+1,claimAt=clockInstant(env)
+   insist(claimAt<=series.deadline,'retry_window_expired',409)
    await commit(env,[automaticAuthority(env,row),nativeSourceGuard(env,source),unusableMethodGuard(env,q.accountRef,q.method.customerRef,q.method.paymentMethodRef),
     guard(env,'retry_disputed','NOT EXISTS(SELECT 1 FROM nc_cadence_disputes WHERE invoice_id=? AND resolved_at IS NULL)',row.invoice_id),
-    guard(env,'retry_state_changed',"EXISTS(SELECT 1 FROM nc_retry_series WHERE collection_id=? AND revision=? AND status='scheduled' AND next_at<=? AND deadline>=?)",row.id,series.revision,at,at),
+    guard(env,'retry_state_changed',"EXISTS(SELECT 1 FROM nc_retry_series WHERE collection_id=? AND revision=? AND status='scheduled' AND next_at<=? AND deadline>=?)",row.id,series.revision,claimAt,claimAt),
     stmt(env,"UPDATE nc_retry_series SET attempts=?,next_at=NULL,status='uncertain',revision=? WHERE collection_id=?",attempt,newId(),row.id),
-    stmt(env,"INSERT INTO nc_retry_attempts(collection_id,invoice_id,customer_id,attempt,attempted_at,outcome,amount_cents) VALUES(?,?,?,?,?,'claimed',?)",row.id,row.invoice_id,row.customer_id,attempt,at,row.amount_cents),
+    stmt(env,"INSERT INTO nc_retry_attempts(collection_id,invoice_id,customer_id,attempt,attempted_at,outcome,amount_cents) VALUES(?,?,?,?,?,'claimed',?)",row.id,row.invoice_id,row.customer_id,attempt,claimAt,row.amount_cents),
     stmt(env,"UPDATE nc_automatic_collections SET status='claimed',revision=? WHERE id=?",newId(),row.id)],
     {actor:'system:retries',action:'retry.claim',subject:row.invoice_id,detail:{attempt,policy:q.retryPolicy}})
    const current=await storedAutomaticCollection(env,row.id)
    let intent
+   insist(clockInstant(env)<=series.deadline,'retry_window_expired',409)
    try{intent=await stripe(`/payment_intents/${encodeURIComponent(row.payment_intent_ref)}/confirm`,new URLSearchParams({payment_method:q.method.paymentMethodRef,off_session:'true',...(q.method.kind==='card'?{error_on_requires_action:'true'}:{mandate:q.method.mandateRef!})}),`nectar-retry-${row.id}-${attempt}`)}catch(error){
     if(!(error instanceof NativeStripeError)||!error.intentRef)continue
     intent=await readIntent(stripe,identity,error.intentRef,current.claimed_at,at)

@@ -1,3 +1,4 @@
+import { bankReturnCode } from './retry-policy'
 import { recordRetryFailure,recordRetrySuccess } from './retry-records'
 import { unusableMethodGuard } from './card-lifecycle'
 import { refusedPaymentWithLifecycle } from './payments/refusal'
@@ -30,7 +31,7 @@ export async function settleAutomaticIntent(env:Bindings,row:Row,stripe:StripeCl
  if(intent.status==='processing')return automaticView(await outcome(env,row,'pending_settlement',{error_code:null}))
  if(row.method_kind==='us_bank_account'&&intent.status==='requires_payment_method'&&intent.amount_received===0&&intent.last_payment_error){
   const providerCode=intent.last_payment_error.code
-  const code: string=({insufficient_funds:'R01',bank_account_closed:'R02',bank_account_invalid_details:'R03',debit_not_authorized:'R10'} as Record<string,string>)[providerCode]??providerCode
+  const code: string=bankReturnCode(providerCode)
   insist(typeof code==='string'&&/^[A-Za-z0-9_]{1,100}$/.test(code),'automatic_collection_return_unconfirmed',409)
   const history=await stripe(`/charges?${new URLSearchParams({payment_intent:intentRef,limit:'100'})}`)
   insist(history.object==='list'&&history.has_more===false&&Array.isArray(history.data)&&history.data.length>0&&history.data.every((charge:Row)=>

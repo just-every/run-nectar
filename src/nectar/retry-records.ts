@@ -17,12 +17,14 @@ export async function recordRetryFailure(env:Bindings,row:Row,code:string){
  // A replay observes the same terminal attempt, never advances the schedule.
  if(prior&&!await one(env,"SELECT 1 FROM nc_retry_attempts WHERE collection_id=? AND attempt=? AND outcome='claimed'",row.id,prior.attempts))return
  const attempts=prior?.attempts??1,first=prior?.first_failed_at??at,policy=q.retryPolicy??{version:'disabled',maxAttempts:1,windowDays:14,scope:'default'}
- const next=q.retryPolicy?nextRetry(code,row.method_kind,attempts,at,first,policy):null
+ const deadline=Math.min(first+policy.windowDays*DAY,row.method_kind==='us_bank_account'?row.claimed_at+180*DAY:Infinity)
+ const proposed=q.retryPolicy?nextRetry(code,row.method_kind,attempts,at,first,policy):null
+ const next=proposed!==null&&proposed<=deadline?proposed:null
  const status=next===null?(q.retryPolicy?'blocked':'disabled'):'scheduled',revision=newId(),event=newId()
  const hold=await collectionHold(env,row.invoice_id)
  const data={invoice:row.invoice_id,amount_cents:row.amount_cents,decline_code:code,attempt_count:attempts,next_payment_attempt:hold.disputedCents||hold.hold?null:next,retry_table:policy.version}
  await commit(env,[guard(env,'retry_state_changed',prior?'EXISTS(SELECT 1 FROM nc_retry_series WHERE collection_id=? AND revision=?)':'NOT EXISTS(SELECT 1 FROM nc_retry_series WHERE collection_id=?)',row.id,...(prior?[prior.revision]:[])),
- stmt(env,`INSERT INTO nc_retry_series(collection_id,invoice_id,customer_id,first_failed_at,next_at,deadline,attempts,decline_code,status,policy_json,revision) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(collection_id) DO UPDATE SET next_at=excluded.next_at,decline_code=excluded.decline_code,status=excluded.status,revision=excluded.revision`,row.id,row.invoice_id,row.customer_id,first,next,first+policy.windowDays*DAY,attempts,code,status,canonical(policy),revision),
+ stmt(env,`INSERT INTO nc_retry_series(collection_id,invoice_id,customer_id,first_failed_at,next_at,deadline,attempts,decline_code,status,policy_json,revision) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(collection_id) DO UPDATE SET next_at=excluded.next_at,decline_code=excluded.decline_code,status=excluded.status,revision=excluded.revision`,row.id,row.invoice_id,row.customer_id,first,next,deadline,attempts,code,status,canonical(policy),revision),
  stmt(env,`INSERT INTO nc_retry_attempts(collection_id,invoice_id,customer_id,attempt,attempted_at,outcome,decline_code,amount_cents) VALUES(?,?,?,?,?,'failed',?,?) ON CONFLICT(collection_id,attempt) DO UPDATE SET outcome='failed',decline_code=excluded.decline_code`,row.id,row.invoice_id,row.customer_id,attempts,at,code,row.amount_cents),
  stmt(env,'INSERT INTO nc_webhook_events(id,type,customer_id,subject,payload_json,created_at) VALUES(?,?,?,?,?,?)',event,'invoice.payment_failed',row.customer_id,row.invoice_id,canonical({type:'invoice.payment_failed',data}),at)],
  {actor:'system:retries',action:'retry.failure',subject:row.invoice_id,detail:data})

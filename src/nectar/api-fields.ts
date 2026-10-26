@@ -70,8 +70,6 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "event_ref": "text",
     "request": "text"
   },
-  "retry.churn.record": {"invoice":"text","subscription_revision":"text","end_date":"text","confirm":"flag"},
-  "retry.policy.configure": {"plan":"text","max_attempts":"integer","window_days":"integer","confirm":"flag"},
   "automatic.collection.prepare": {
     "enable_retries": "flag",
     "invoice": "text",
@@ -897,6 +895,18 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "winback_months": "integer",
     "winback_percent": "integer",
     "winback_price_id": "text"
+  },
+  "retry.churn.record": {
+    "confirm": "flag",
+    "end_date": "text",
+    "invoice": "text",
+    "subscription_revision": "text"
+  },
+  "retry.policy.configure": {
+    "confirm": "flag",
+    "max_attempts": "integer",
+    "plan": "text",
+    "window_days": "integer"
   },
   "revenue.close": {
     "period": "text"
