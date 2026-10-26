@@ -1,3 +1,4 @@
+import { clockInstant } from './clock'
 import { carriedUsageCredits,usageCreditApplicationLines } from './usage-correction-records'
 // A standalone invoice uses the same immutable lines, approval, numbering and
 // receivables ledger as subscription invoices, without inventing a subscription.
@@ -33,7 +34,7 @@ export async function manualCalculation(env: Bindings, b: Business, customerId: 
 export async function prepareManualInvoice(env: Bindings, actor: Actor, input: Input) {
   requireCapability(actor, 'records')
   const b = await requireBusiness(env), date = requireDate(input.text('service_date', { max: 10 }), 'service_date')
-  insist(date <= today(b.timezone), 'service_date_in_future')
+  insist(date <= today(b.timezone,clockInstant(env)), 'service_date_in_future')
   const customer = input.text('customer', { max: 100 }), ids = input.list('charges')
   insist(ids.length > 0 && ids.length <= 20 && new Set(ids).size === ids.length, 'charges_required')
   const calculation = await manualCalculation(env, b, customer, ids, date)

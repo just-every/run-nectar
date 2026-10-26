@@ -3,7 +3,7 @@ import { retryEdge } from './retry-edge.mjs'
 import { totp } from './mfa.mjs'
 let edge
 export const harnessOptions=()=>{edge=retryEdge();return {assets:true,localTime:'2026-10-22T10:00:00Z',stripeFetch:edge.fetch,stripeSecret:'synthetic-nectar-1',webhookFetch:async request=>{edge.delivered.push(await request.json());return Response.json({accepted:true})}}}
-export async function paymentRetriesFlow(h,owner,{onState=async()=>{}}={}){
+export async function paymentRetriesFlow(h,owner,{onState=async()=>{},prepareCollection,acceptCollection}={}){
  const api=(path,body,status)=>h.api(path,owner,body,status),first=Date.parse('2026-10-22T10:00:00Z'),day=86400000
  let instant=first
  await api('business.configure',{...await api('business'),timezone:'UTC'})
@@ -24,10 +24,11 @@ export async function paymentRetriesFlow(h,owner,{onState=async()=>{}}={}){
   edge.rules.set(method,{code,recoverAt,advice})
   const charge=await api('charge.add',{customer,amount:'100',description:'Monthly retry service',effective_date:new Date(instant).toISOString().slice(0,10),taxable:false})
   const id=(await api('invoice.manual',{customer,charges:[charge.charge],service_date:new Date(instant).toISOString().slice(0,10)})).id
-  const request=await api('automatic.collection.prepare',{invoice:id,issue_date:new Date(instant).toISOString().slice(0,10),enable_retries:enabled,...(n===1?{mandate_ref:edge.mandate}:{})})
+  const request=await (prepareCollection??(input=>api('automatic.collection.prepare',input)))({invoice:id,issue_date:new Date(instant).toISOString().slice(0,10),enable_retries:enabled,...(n===1?{mandate_ref:edge.mandate}:{})})
   const session=await api('portal.session.issue',{customer,origin:h.origin,audience:'hosted'}),path=`/portal/automatic-collections/${request.id}?session=${encodeURIComponent(session.token)}`
   await onState({state:'consent',id,customer,request,path})
-  assert.equal((await h.raw(path,{body:{request:request.id,basis_hash:request.basis,accept:true}})).status,200)
+  if(acceptCollection)await acceptCollection({path,request})
+  else assert.equal((await h.raw(path,{body:{request:request.id,basis_hash:request.basis,accept:true}})).status,200)
   await api('automatic.collection.decide',{request:request.id,basis_hash:request.basis,decision:'approved',confirm:true,confirm_single:true})
   await api('invoice.approve',{invoice:id,acknowledge:true});await api('invoice.finalise',{invoice:id,issue_date:new Date(instant).toISOString().slice(0,10)})
   return {id,request,method,path}
@@ -100,4 +101,21 @@ export async function paymentRetriesFlow(h,owner,{onState=async()=>{}}={}){
  await onState({state:'report',id:unknown.id,report})
  const mails=h.mails.length;await tick(instant+20*day);assert.equal(h.mails.length,mails,'Retries send no customer notices')
  console.log('paymentRetriesFlow: consented policy, exact timing, hard and ACH prohibitions, caps, dispute hold, once-only cash and page API webhook parity')
+}
+
+export async function retryComparisonFlow(h,owner){
+ const api=(p,b,status)=>h.api(p,owner,b,status)
+ const record=await api('retry-comparison'),{measured,baseline}=record.publishedDefault
+ assert.equal(measured.failedPayments,record.payments.length)
+ const independentlySummed=result=>record.payments.reduce((sum,p)=>sum+(result.outcomes.find(o=>o.id===p.id).recoveredAtHours!==null?p.amountCents:0),0)
+ for(const result of [measured,baseline]){
+  assert.equal(result.recoveredAmountCents,independentlySummed(result))
+  assert.equal(result.recoveredPayments,result.outcomes.filter(o=>o.recoveredAtHours!==null).length)
+  for(const o of result.outcomes){const p=record.payments.find(p=>p.id===o.id);if(o.recoveredAtHours!==null)assert.ok(p.successWindowsHours.some(([a,b])=>o.recoveredAtHours>=a&&o.recoveredAtHours<b))}
+ }
+ assert.deepEqual({count:measured.recoveredPayments,amount:measured.recoveredAmountCents},{count:record.publishedRecord.find(r=>r.policy==='decline-table-v1').recoveredPayments,amount:record.publishedRecord.find(r=>r.policy==='decline-table-v1').recoveredAmountCents})
+ assert.equal(baseline.recoveredAmountCents,record.publishedRecord.find(r=>r.policy==='fixed-three-v1').recoveredAmountCents)
+ const page=await h.page('/app/reports/recovery',owner)
+ assert.ok(page.includes('$1,900')&&page.includes('$1,200'))
+ console.log('retryComparisonFlow: published known outcomes independently sum to both schedules and the product description')
 }
