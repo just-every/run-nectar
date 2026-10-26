@@ -24,6 +24,9 @@ try {
   const factor=await h.api('mfa.totp.start',owner,{})
   await h.api('mfa.totp.confirm',owner,{factor:factor.factor,code:totp(factor.secret,Date.now())})
   const native=await h.api('customer.create',owner,{external_id:'synthetic-nectar-819',name:'Alder Analytics test customer',billing_email:`nectar-${stripe.run}@example.test`})
+  const beforeForeign=stripe.requests.filter(row=>row.method==='POST').length
+  await h.api('collection.customer.bind',owner,{customer:native.id,account_ref:'synthetic-nectar-foreign-account',stripe_customer_ref:customer.id,confirm:true},409)
+  assert.equal(stripe.requests.filter(row=>row.method==='POST').length,beforeForeign,'Foreign account association is refused without a Stripe write')
   const binding=await h.api('collection.customer.bind',owner,{customer:native.id,account_ref:account.id,stripe_customer_ref:customer.id,confirm:true})
   await h.api('portal.configure',owner,{hosts:[h.origin],parents:[]})
   browser=await chromium.launch({headless:true,args:['--use-mock-keychain','--password-store=basic']})
