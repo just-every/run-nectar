@@ -27,7 +27,7 @@ export function automaticAuthority(env: Bindings, row: Row, approved = true) {
  AND c.revision=? AND c.status='active' AND c.erased_at IS NULL AND m.status='active' AND m.role='owner' AND o.status='active' AND o.role='owner'
  AND b.customer_id=c.id AND b.revision=? AND b.account_ref=? AND b.stripe_customer_ref=?
  AND EXISTS(SELECT 1 FROM nc_business WHERE singleton=1 AND revision=?)
- ${approved ? "AND a.accepted_at IS NOT NULL AND a.approved_at IS NOT NULL AND EXISTS(SELECT 1 FROM nc_members f JOIN oa_operators fo ON lower(fo.email)=f.email WHERE f.id=a.approved_by AND f.role IN ('owner','finance') AND f.status='active' AND fo.status='active' AND ((f.role='owner' AND fo.role='owner') OR (f.role='finance' AND fo.role IN ('owner','operator'))))" : ''})
+ ${approved ? "AND a.accepted_at IS NOT NULL AND a.approved_at IS NOT NULL AND EXISTS(SELECT 1 FROM nc_members f JOIN oa_operators fo ON lower(fo.email)=f.email WHERE f.id=a.approved_by AND f.role IN ('owner','finance') AND f.status='active' AND fo.status='active' AND ((f.role='owner' AND fo.role='owner') OR (f.role='finance' AND fo.role IN ('owner','member'))))" : ''})
  AND NOT EXISTS(SELECT 1 FROM nc_erased_records WHERE record_id IN (?,?,?))`, q.bindingId,row.id,row.revision,row.status,row.basis_hash,q.fingerprint,q.calculation,q.customerRevision,q.bindingRevision,q.accountRef,q.method.customerRef,q.businessRevision,row.id,row.customer_id,row.invoice_id)
 }
 export async function validateAutomaticBasis(row: Row) {

@@ -27,9 +27,7 @@ try {
  const shot=async(page,label)=>{
   for(const width of [1440,390]) {
    await page.setViewportSize({width,height:950})
-   const overflow=await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth)
-   if(overflow){await page.screenshot({path:`${directory}/${width}-${label}-overflow.png`,fullPage:true});console.log('Overflow elements',label,width,await page.locator('body *').evaluateAll(nodes=>nodes.filter(n=>n.getBoundingClientRect().right>innerWidth).map(n=>({tag:n.tagName,id:n.id,class:n.className,width:n.getBoundingClientRect().width,text:n.textContent.slice(0,100)})).slice(0,12)))}
-   assert.equal(overflow,false,`${label} fits ${width}`)
+   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`${label} fits ${width}`)
    assert.equal(await page.locator('a,button').evaluateAll(nodes=>nodes.filter(n=>!n.textContent.trim()).length),0)
    const changed=page.locator('#saved-payment-methods')
    if(await changed.count())await changed.screenshot({path:`${directory}/${width}-${label}.png`})

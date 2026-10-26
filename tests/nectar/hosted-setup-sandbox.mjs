@@ -30,6 +30,14 @@ try {
     }
     return response
   }})
+  const publicApi=h.api
+  h.api=async(...args)=>{try{return await publicApi(...args)}catch(error){
+    facts.failureRoute=args[0]
+    const code=error.message?.match(/\"error\":\"([a-z_]+)\"/)
+    if(code)facts.applicationError=code[1]
+    if(typeof error.actual==='number')facts.actualStatus=error.actual
+    throw error
+  }}
   await h.raw('/auth/bootstrap',{body:{token:h.vars.SETUP_TOKEN,displayName:'Nectar Owner'}})
   const owner=await h.signIn(h.vars.OWNER_EMAIL)
   await h.raw('/setup',{cookie:owner,form:new URLSearchParams({confirm:'yes'})})
@@ -38,6 +46,8 @@ try {
   await h.api('tax.review',owner,{revision:(await h.api('business',owner)).revision})
   await h.api('access.give',owner,{email:'synthetic-nectar-872@example.test',name:'Finance approver',role:'finance'})
   const finance=await h.signIn('synthetic-nectar-872@example.test',{requested:true})
+  const financeFactor=await h.api('mfa.totp.start',finance,{})
+  await h.api('mfa.totp.confirm',finance,{factor:financeFactor.factor,code:totp(financeFactor.secret,Date.now())})
   const factor=await h.api('mfa.totp.start',owner,{})
   await h.api('mfa.totp.confirm',owner,{factor:factor.factor,code:totp(factor.secret,Date.now())})
   const native=await h.api('customer.create',owner,{external_id:'synthetic-nectar-819',name:'Alder Analytics test customer',billing_email:`nectar-${stripe.run}@example.test`})
@@ -131,14 +141,15 @@ try {
     const day=new Date().toISOString().slice(0,10)
     const charge=await h.api('charge.add',owner,{customer:native.id,amount:'12',description:'Portal replacement renewal',effective_date:day,taxable:false})
     const invoice=await h.api('invoice.manual',owner,{customer:native.id,charges:[charge.charge],service_date:day})
+    await h.api('invoice.approve',owner,{invoice:invoice.id,acknowledge:true})
     const authority=await h.api('automatic.collection.prepare',owner,{invoice:invoice.id,issue_date:day,...(method==='us_bank_account'?{mandate_ref:record.paymentMethod.mandateRef}:{})})
     assert.equal(authority.quote.method.paymentMethodRef,record.paymentMethod.methodRef)
     const acceptance=await h.raw(`/portal/automatic-collections/${authority.id}?session=${encodeURIComponent(session.token)}`,{body:{request:authority.id,basis_hash:authority.basis,accept:true}})
     assert.equal(acceptance.status,200)
     await h.api('automatic.collection.decide',finance,{request:authority.id,basis_hash:authority.basis,decision:'approved',confirm:true})
-    await h.api('invoice.approve',owner,{invoice:invoice.id,acknowledge:true})
     await h.api('invoice.finalise',owner,{invoice:invoice.id,issue_date:day})
     const collected=(await h.api('automatic-collections',owner)).find(row=>row.id===authority.id)
+    facts.collectionState={method,status:collected.status,errorCode:collected.errorCode}
     assert.equal(collected.status,method==='card'?'collected':'pending_settlement')
     const intent=await stripe.request('GET',`/v1/payment_intents/${collected.paymentIntentRef}`)
     assert.equal(intent.payment_method,record.paymentMethod.methodRef)

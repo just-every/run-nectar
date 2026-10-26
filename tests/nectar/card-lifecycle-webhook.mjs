@@ -94,5 +94,5 @@ export async function cardLifecycleWebhookFlow(h,owner) {
   assert.ok(!snapshot.includes('private-envelope@example.test')&&!snapshot.includes('9999'),'Raw webhook fields are excluded from saved projections')
   await h.advanceClock(new Date(instant+3600*1000).toISOString())
   await post(text,{status:401})
-  console.log('PAY-005 signed Stripe intake, exact-byte verification, stale/tamper/foreign refusal, current provider facts and deduplicated delivery passed')
+  console.log('PAY-005 signed Stripe intake, exact-byte verification, stale, tampered and foreign refusal, current provider facts and deduplicated delivery passed')
 }
