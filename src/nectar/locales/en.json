@@ -405,5 +405,6 @@
   "cardExpiry.subject": "{merchant}: update your card before renewal",
   "cardExpiry.body": "{merchant}: your card ending in {last4} expires {expiry}, before your renewal on {renewal}.",
   "cardExpiry.linkExpiry": "This private link expires at {expires} ({timezone}).",
-  "cardExpiry.button": "Update payment method"
+  "cardExpiry.button": "Update payment method",
+  "automatic.retryConsent": "I authorize up to {count} total payment attempts within {days} days of the first failure on this same method for this invoice, using retry table {version}. No retry notices are sent."
 }

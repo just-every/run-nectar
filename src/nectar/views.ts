@@ -1,3 +1,5 @@
+import { retryComparisonReport } from './retry-comparison'
+import { retryRecoveryReport } from './retry-report'
 import { readPaymentLinks } from './payment-links'
 import { automaticCollections } from './automatic-collection-records'
 import { assuranceCases,assuranceCase } from './assurance'
@@ -106,6 +108,8 @@ export const views: Record<string, View> = {
   prepaidTopupAuthorizations:(env,actor,_r,_id,url)=>readPrepaidTopupAuthorizations(env,actor,url.searchParams.get('subscription')??undefined),
   prepaidTopupClaims:(env,actor,_r,_id,url)=>readPrepaidTopupClaims(env,actor,url.searchParams.get('subscription')??undefined),
   paymentLinks:(env,actor)=>readPaymentLinks(env,actor),
+  retryComparison:(env,actor)=>retryComparisonReport(env,actor),
+  retryRecovery:(env,actor)=>retryRecoveryReport(env,actor),
   automaticCollections:(env,actor,_r,_id,url)=>automaticCollections(env,actor,url.searchParams.get('customer')??undefined),
   nativeCollections:(env,actor,_r,_id,url)=>readNativeCollections(env,actor,url.searchParams.get('customer')??undefined),
   prepaid:(env,actor,_r,id,url)=>prepaidState(env,actor,id,url.searchParams.get('date')??undefined),

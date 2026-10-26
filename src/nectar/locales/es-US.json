@@ -405,5 +405,6 @@
   "cardExpiry.subject": "{merchant}: actualiza tu tarjeta antes de la renovación",
   "cardExpiry.body": "{merchant}: tu tarjeta terminada en {last4} vence el {expiry}, antes de tu renovación del {renewal}.",
   "cardExpiry.linkExpiry": "Este enlace privado vence a las {expires} ({timezone}).",
-  "cardExpiry.button": "Actualizar método de pago"
+  "cardExpiry.button": "Actualizar método de pago",
+  "automatic.retryConsent": "Autorizo hasta {count} intentos de pago en total durante {days} días desde el primer fallo con este mismo método para esta factura, según la tabla {version}. No se envían avisos de reintento."
 }

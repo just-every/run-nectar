@@ -91,7 +91,7 @@ interface PaymentFact {
   method: string; reference: string; evidence: string; currency: string
 }
 export function paymentFactStatement(env: Bindings, actor: Actor, fact: PaymentFact) {
-  return stmt(env, 'INSERT INTO nc_payments (id, customer_id, amount_cents, currency, received_on, method, reference, evidence, recorded_by, recorded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', fact.paymentId, fact.customerId, fact.amountCents, billingCurrency(fact.currency), fact.receivedOn, fact.method, fact.reference, fact.evidence, actorLabel(actor), now())
+  return stmt(env, 'INSERT INTO nc_payments (id, customer_id, amount_cents, currency, received_on, method, reference, evidence, recorded_by, recorded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', fact.paymentId, fact.customerId, fact.amountCents, billingCurrency(fact.currency), fact.receivedOn, fact.method, fact.reference, fact.evidence, actorLabel(actor), clockInstant(env))
 }
 export function allocationFactStatements(env: Bindings, actor: Actor, paymentId: string, invoice: Row, amount: number, id: string) {
   const [balanceSql, balanceParam] = balanceOf(invoice.id)
@@ -99,7 +99,7 @@ export function allocationFactStatements(env: Bindings, actor: Actor, paymentId:
     guard(env, 'currency_mismatch', 'EXISTS(SELECT 1 FROM nc_payments p JOIN nc_invoices i ON i.id=? WHERE p.id=? AND p.currency=i.currency)', invoice.id, paymentId),
     guard(env, 'exceeds_payment', `(SELECT ${UNALLOCATED_SQL} FROM nc_payments p WHERE p.id = ?) >= ?`, paymentId, amount),
     guard(env, 'exceeds_balance', `${balanceSql} >= ?`, balanceParam, amount),
-    stmt(env, 'INSERT INTO nc_allocations (id, payment_id, invoice_id, amount_cents, allocated_by, allocated_at) VALUES (?, ?, ?, ?, ?, ?)', id, paymentId, invoice.id, amount, actorLabel(actor), now()),
+    stmt(env, 'INSERT INTO nc_allocations (id, payment_id, invoice_id, amount_cents, allocated_by, allocated_at) VALUES (?, ?, ?, ?, ?, ?)', id, paymentId, invoice.id, amount, actorLabel(actor), clockInstant(env)),
   ]
 }
 

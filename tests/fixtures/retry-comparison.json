@@ -1,0 +1,65 @@
+{
+  "version": "nectar-retry-comparison-v1",
+  "currency": "USD",
+  "firstFailureAt": "2026-10-01T00:00:00.000Z",
+  "outcomeRule": "The first attempt fails. Each later attempt succeeds exactly when its elapsed hours are inside a success window: start inclusive, end exclusive. Empty windows always fail. Stop at the first success.",
+  "policies": [
+    {
+      "id": "decline-table-v1",
+      "maxAttempts": 8,
+      "windowHours": 336,
+      "intervalHoursByDecline": {"processing_error": 4, "do_not_honor": 24, "insufficient_funds": 72}
+    },
+    {"id": "fixed-three-v1", "attemptOffsetsHours": [0, 72, 168]}
+  ],
+  "payments": [
+    {"id": "synthetic-nectar-1", "declineCode": "processing_error", "amountCents": 10000, "successWindowsHours": [[4, 8]]},
+    {"id": "synthetic-nectar-2", "declineCode": "processing_error", "amountCents": 20000, "successWindowsHours": [[72, 96]]},
+    {"id": "synthetic-nectar-3", "declineCode": "do_not_honor", "amountCents": 30000, "successWindowsHours": [[24, 48]]},
+    {"id": "synthetic-nectar-4", "declineCode": "do_not_honor", "amountCents": 40000, "successWindowsHours": [[168, 192]]},
+    {"id": "synthetic-nectar-5", "declineCode": "insufficient_funds", "amountCents": 50000, "successWindowsHours": [[144, 160]]},
+    {"id": "synthetic-nectar-6", "declineCode": "insufficient_funds", "amountCents": 60000, "successWindowsHours": [[72, 90]]},
+    {"id": "synthetic-nectar-7", "declineCode": "insufficient_funds", "amountCents": 70000, "successWindowsHours": [[240, 264]]},
+    {"id": "synthetic-nectar-8", "declineCode": "do_not_honor", "amountCents": 80000, "successWindowsHours": []}
+  ],
+  "record": [
+    {
+      "policy": "decline-table-v1",
+      "failedPayments": 8,
+      "failedAmountCents": 360000,
+      "recoveredPayments": 5,
+      "recoveredAmountCents": 190000,
+      "recoveryRate": 0.625,
+      "amountRecoveryRate": 0.5277777777777778,
+      "outcomes": [
+        {"id": "synthetic-nectar-1", "attemptsHours": [0, 4], "recoveredAtHours": 4},
+        {"id": "synthetic-nectar-2", "attemptsHours": [0, 4, 8, 12, 16, 20, 24, 28], "recoveredAtHours": null},
+        {"id": "synthetic-nectar-3", "attemptsHours": [0, 24], "recoveredAtHours": 24},
+        {"id": "synthetic-nectar-4", "attemptsHours": [0, 24, 48, 72, 96, 120, 144, 168], "recoveredAtHours": 168},
+        {"id": "synthetic-nectar-5", "attemptsHours": [0, 72, 144], "recoveredAtHours": 144},
+        {"id": "synthetic-nectar-6", "attemptsHours": [0, 72], "recoveredAtHours": 72},
+        {"id": "synthetic-nectar-7", "attemptsHours": [0, 72, 144, 216, 288], "recoveredAtHours": null},
+        {"id": "synthetic-nectar-8", "attemptsHours": [0, 24, 48, 72, 96, 120, 144, 168], "recoveredAtHours": null}
+      ]
+    },
+    {
+      "policy": "fixed-three-v1",
+      "failedPayments": 8,
+      "failedAmountCents": 360000,
+      "recoveredPayments": 3,
+      "recoveredAmountCents": 120000,
+      "recoveryRate": 0.375,
+      "amountRecoveryRate": 0.3333333333333333,
+      "outcomes": [
+        {"id": "synthetic-nectar-1", "attemptsHours": [0, 72, 168], "recoveredAtHours": null},
+        {"id": "synthetic-nectar-2", "attemptsHours": [0, 72], "recoveredAtHours": 72},
+        {"id": "synthetic-nectar-3", "attemptsHours": [0, 72, 168], "recoveredAtHours": null},
+        {"id": "synthetic-nectar-4", "attemptsHours": [0, 72, 168], "recoveredAtHours": 168},
+        {"id": "synthetic-nectar-5", "attemptsHours": [0, 72, 168], "recoveredAtHours": null},
+        {"id": "synthetic-nectar-6", "attemptsHours": [0, 72], "recoveredAtHours": 72},
+        {"id": "synthetic-nectar-7", "attemptsHours": [0, 72, 168], "recoveredAtHours": null},
+        {"id": "synthetic-nectar-8", "attemptsHours": [0, 72, 168], "recoveredAtHours": null}
+      ]
+    }
+  ]
+}

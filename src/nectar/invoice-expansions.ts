@@ -1,4 +1,5 @@
 // DEV-002: explicit relationships; legacy scalar fields stay available to clients.
+import { retryState } from './retry-records'
 import type { Bindings } from '../auth.server'
 import type { Actor } from './actor'
 import { metadataFor,withMetadata } from './metadata'
@@ -16,6 +17,6 @@ export async function invoiceView(env: Bindings, actor: Actor, id: string, url: 
     ? await all(env, `SELECT * FROM nc_prices WHERE id IN (${priceIds.map(() => '?').join(',')})`, ...priceIds) : []
   const expandedCustomer=customer&&typeof customer==='object'?{...customer,...await metadataFor(env,'customer',customer.id)}:customer
   const expandedPrices=await withMetadata(env,'price',prices)
-  return { ...invoice, customer:expandedCustomer,
+  return { ...invoice, ...await retryState(env,id), customer:expandedCustomer,
     lines: (invoice.lines as Row[]).map(line => ({ ...line, price: expand.has('lines.price') ? expandedPrices.find(price => price.id === line.price_id) ?? null : line.price_id })) }
 }

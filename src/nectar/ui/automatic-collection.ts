@@ -1,3 +1,4 @@
+import { retryState } from '../retry-records'
 import type { Bindings } from '../../auth.server'
 import type { Actor } from '../actor'
 import { automaticCollections } from '../automatic-collection-records'
@@ -9,9 +10,10 @@ import { cents,check,field,form,h,hidden } from './html'
 export async function automaticCollectionSection(env:Bindings,actor:Actor,invoice:Row){
  if(actor.kind!=='member'||!['owner','finance'].includes(actor.role??'')||invoice.retainedFinancial)return ''
  const rows=(await automaticCollections(env,actor,invoice.customer_id)).filter(row=>row.invoice===invoice.id),back=`/app/invoices/${invoice.id}`
+ const retry=invoice.status==='issued'?await retryState(env,invoice.id):null
  const date=localDate(clockInstant(env),(await requireBusiness(env)).timezone)
- return h`<section class="card" id="automatic-collection"><h2>Automatic collection</h2>
- ${['draft','approved'].includes(invoice.status)&&actor.role==='owner'&&!rows.some(row=>!['revoked','invalidated'].includes(row.status))?h`<details><summary>Set this invoice to auto-charge</summary><p>Review one exact collection. The customer accepts the terms in their signed-in portal, then a human approves. Saving a method alone never authorizes a debit.</p>${form('automatic.collection.prepare',back,h`${hidden('invoice',invoice.id)}${field('Collection date','issue_date',{type:'date',value:date})}${field('ACH mandate reference, for bank payments','mandate_ref',{required:false})}`,'Review collection',{secondary:true})}</details>`:''}
+ return h`<section class="card" id="automatic-collection"><h2>Automatic collection</h2><p><a href="/app/reports/recovery">Payment recovery report</a></p>${retry&&retry.attempt_count?h`<p>Payment attempts: ${retry.attempt_count} · ${retry.retry_status}</p><p>Next payment attempt: <time data-next-payment-attempt="${retry.next_payment_attempt??''}">${retry.next_payment_attempt?new Date(retry.next_payment_attempt).toISOString():'None scheduled'}</time></p>`:''}
+ ${['draft','approved'].includes(invoice.status)&&actor.role==='owner'&&!rows.some(row=>!['revoked','invalidated'].includes(row.status))?h`<details><summary>Set this invoice to auto-charge</summary><p>Review one exact collection. The customer accepts the terms in their signed-in portal, then a human approves. Saving a method alone never authorizes a debit.</p>${form('automatic.collection.prepare',back,h`${hidden('invoice',invoice.id)}${field('Collection date','issue_date',{type:'date',value:date})}${field('ACH mandate reference, for bank payments','mandate_ref',{required:false})}${check('Include bounded retries in the customer terms','enable_retries')}`,'Review collection',{secondary:true})}</details>`:''}
  ${rows.length?'':h`<p>Send invoice: payment waits until the customer pays. No automatic charge is authorized.</p>`}
  ${rows.map(row=>h`<article><h3>${row.historical?'Historical · ':''}${row.status.replaceAll('_',' ')}</h3>${row.historical&&!row.claimedAt?h`<p>Retained terms authorize no new debit. Withdraw these terms and prepare fresh customer consent and approval before collection.</p>`:''}<p>${cents(row.amountCents)} · ${row.quote.method.summary.brand} ending ${row.quote.method.summary.last4} · ${row.quote.issueDate}</p>
  ${row.status==='awaiting_customer'?h`<p>The customer can accept this exact invoice at <strong>/portal/automatic-collections/${row.id}</strong> with their current hosted portal session.</p>`:''}

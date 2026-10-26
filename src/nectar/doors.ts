@@ -23,6 +23,8 @@ export const API_DOORS: [string, string][] = [
   ['^prepaid/topup-authorizations$','prepaidTopupAuthorizations'],
   ['^prepaid/topup-claims$','prepaidTopupClaims'],
   ['^payment-links$','paymentLinks'],
+  ['^retry-comparison$', 'retryComparison'],
+  ['^recovery$', 'retryRecovery'],
   ['^automatic-collections$','automaticCollections'],
   ['^native-collections$','nativeCollections'],
   ['^prepaid/([\\w-]+/entries/[^/]+)$','prepaidSource'],
@@ -88,6 +90,7 @@ export const PAGE_DOORS: [string, string][] = [
   ['^/app/exports/customers\\.csv$', 'customersFile'],
   ['^/app/exports$', 'exports'], ['^/app/exports/invoices\\.csv$', 'invoicesFile'], ['^/app/exports/usage\\.csv$', 'usageFile'], ['^/app/exports/subscriptions\\.csv$', 'subscriptionsFile'],
   ['^/app/certificates/([\\w-]+)$', 'certificateFile'],
+  ['^/app/reports/recovery$', 'retryRecovery'],
   ['^/app/reports/([\\w-]+)$', 'report'], ['^/app/reports/([\\w-]+/[\\w-]+)$', 'reportInvoice'], ['^/app/invoices/([\\w-]+/lines/[\\w-]+)$', 'reportLine'],
   ['^/app/sso$', 'sso'], ['^/app/access$', 'access'], ['^/app/audit$', 'audit'], ['^/app/security$', 'security'], ['^/app/security/passkey\\.js$', 'passkeyScript'],
 ]

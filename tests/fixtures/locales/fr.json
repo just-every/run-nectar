@@ -405,5 +405,6 @@
   "cardExpiry.subject": "{merchant} : mettez votre carte à jour avant le renouvellement",
   "cardExpiry.body": "{merchant} : votre carte se terminant par {last4} expire le {expiry}, avant votre renouvellement le {renewal}.",
   "cardExpiry.linkExpiry": "Ce lien privé expire à {expires} ({timezone}).",
-  "cardExpiry.button": "Mettre à jour le moyen de paiement"
+  "cardExpiry.button": "Mettre à jour le moyen de paiement",
+  "automatic.retryConsent": "J’autorise {count} tentatives au total sous {days} jours après le premier échec pour cette facture et ce moyen, selon la table {version}. Aucun avis de nouvelle tentative."
 }

@@ -1,6 +1,7 @@
+import { recordRetryFailure,recordRetrySuccess } from './retry-records'
 import { unusableMethodGuard } from './card-lifecycle'
 import { refusedPaymentWithLifecycle } from './payments/refusal'
-// Invoice issuance claims once. All subsequent recovery is provider reads only.
+// Invoice issuance claims once; explicit retry consent governs later confirmations.
 import type { Bindings } from '../auth.server'
 import { actorLabel, type Actor } from './actor'
 import { requireBusiness } from './business'
@@ -23,20 +24,21 @@ async function outcome(env:Bindings,row:Row,status:string,values:Row={}){
  {actor:actorLabel(system(row.id)),action:`automatic.collection.${status}`,subject:row.id,detail:{invoice:row.invoice_id,errorCode:values.error_code??null,paymentIntentRef:values.payment_intent_ref??row.payment_intent_ref}})
  return storedAutomaticCollection(env,row.id)
 }
-async function settle(env:Bindings,row:Row,stripe:StripeClient,intent:Row,identity:PaymentIdentity){
+export async function settleAutomaticIntent(env:Bindings,row:Row,stripe:StripeClient,intent:Row,identity:PaymentIdentity){
  const intentRef=verifyIntent(intent,identity)
  if(!row.payment_intent_ref)row=await outcome(env,row,'uncertain',{payment_intent_ref:intentRef})
  if(intent.status==='processing')return automaticView(await outcome(env,row,'pending_settlement',{error_code:null}))
  if(row.method_kind==='us_bank_account'&&intent.status==='requires_payment_method'&&intent.amount_received===0&&intent.last_payment_error){
-  const code=intent.last_payment_error.code
-  insist(typeof code==='string'&&/^[a-z_]{1,100}$/.test(code),'automatic_collection_return_unconfirmed',409)
+  const providerCode=intent.last_payment_error.code
+  const code: string=({insufficient_funds:'R01',bank_account_closed:'R02',bank_account_invalid_details:'R03',debit_not_authorized:'R10'} as Record<string,string>)[providerCode]??providerCode
+  insist(typeof code==='string'&&/^[A-Za-z0-9_]{1,100}$/.test(code),'automatic_collection_return_unconfirmed',409)
   const history=await stripe(`/charges?${new URLSearchParams({payment_intent:intentRef,limit:'100'})}`)
   insist(history.object==='list'&&history.has_more===false&&Array.isArray(history.data)&&history.data.length>0&&history.data.every((charge:Row)=>
    charge.object==='charge'&&providerReference(charge.payment_intent)===intentRef&&providerReference(charge.customer)===identity.customerRef&&charge.status==='failed'&&charge.paid===false),'automatic_collection_return_unconfirmed',409)
-  return automaticView(await outcome(env,row,'returned',{error_code:code}))
+  const failed=await outcome(env,row,'returned',{error_code:code});await recordRetryFailure(env,failed,code);return automaticView(failed)
  }
  const refusal=await refusedPaymentWithLifecycle(env,stripe,intent,identity)
- if(refusal)return automaticView(await outcome(env,row,'refused',{error_code:refusal.errorCode}))
+ if(refusal){const failed=await outcome(env,row,'refused',{error_code:refusal.retryProhibited?'do_not_try_again':refusal.declineCode??refusal.errorCode});await recordRetryFailure(env,failed,refusal.retryProhibited?'do_not_try_again':refusal.declineCode??refusal.errorCode);return automaticView(failed)}
  if(intent.status!=='succeeded')return automaticView(await outcome(env,row,'uncertain',{error_code:'processor_outcome_unconfirmed'}))
  const q=automaticQuote(row),business=await requireBusiness(env),proof=await capturedPayment(stripe,intent,identity,business.timezone)
  let settledAt=clockInstant(env)
@@ -57,19 +59,20 @@ async function settle(env:Bindings,row:Row,stripe:StripeClient,intent:Row,identi
  await commit(env,[guard(env,'automatic_collection_state_changed',"EXISTS(SELECT 1 FROM nc_automatic_collections WHERE id=? AND revision=? AND status IN ('claimed','uncertain','pending_settlement') AND payment_id IS NULL)",row.id,row.revision),
  ...financial.statements,...funded,stmt(env,"UPDATE nc_automatic_collections SET status='collected',charge_ref=?,payment_id=?,allocation_id=?,settled_at=?,error_code=NULL,revision=? WHERE id=?",proof.chargeRef,financial.paymentId,financial.allocationId,settledAt,newId(),row.id)],
  [...financial.audits,{actor:actorLabel(system(row.id)),action:'automatic.collection.collected',subject:row.id,detail:{invoice:row.invoice_id,payment:financial.paymentId,amountCents:row.amount_cents,paymentIntentRef:intentRef,settledAt}}])
- return automaticView(await storedAutomaticCollection(env,row.id))
+ const collected=await storedAutomaticCollection(env,row.id);await recordRetrySuccess(env,collected);return automaticView(collected)
 }
-async function identityFor(row:Row):Promise<PaymentIdentity>{
+export async function identityFor(row:Row):Promise<PaymentIdentity>{
  const q=await validateAutomaticBasis(row)
  return {invoiceId:row.invoice_id,requestId:row.id,accountRef:q.accountRef,customerRef:q.method.customerRef,paymentMethodRef:q.method.paymentMethodRef,
  livemode:false,key:await import('./core').then(m=>m.fingerprint(['nectar-automatic-collection-1',q.accountRef,row.invoice_id])),amountCents:q.amountCents,currency:'usd'}
 }
 export async function reconcileAutomaticCollection(env:Bindings,id:string){
  let row=await storedAutomaticCollection(env,id)
- if(['collected','refused','returned','revoked','invalidated'].includes(row.status))return automaticView(row)
+ if(['refused','returned'].includes(row.status)){await recordRetryFailure(env,row,row.error_code);return automaticView(row)}
+ if(['collected','revoked','invalidated'].includes(row.status))return automaticView(row)
  insist(row.claimed_at&&['claimed','uncertain','pending_settlement'].includes(row.status),'automatic_collection_not_claimed',409)
  const identity=await identityFor(row),{stripe}=await stripeForAccount(env,row.account_ref)
- try{return await settle(env,row,stripe,await readIntent(stripe,identity,row.payment_intent_ref,row.claimed_at,clockInstant(env)),identity)}catch(error){
+ try{return await settleAutomaticIntent(env,row,stripe,await readIntent(stripe,identity,row.payment_intent_ref,row.claimed_at,clockInstant(env)),identity)}catch(error){
   const current=await storedAutomaticCollection(env,id)
   if(current.status==='collected')return automaticView(current)
   row=await outcome(env,current,current.status==='pending_settlement'?'pending_settlement':'uncertain',{error_code:error instanceof NectarError?error.code:'processor_outcome_unconfirmed'})
@@ -102,7 +105,7 @@ export async function collectAutomaticInvoice(env:Bindings,invoice:string){
    if(!(error instanceof NativeStripeError)||!error.intentRef)throw error
    intent=await readIntent(stripe,identity,error.intentRef,at,clockInstant(env))
   }
-  await settle(env,row,stripe,intent,identity)
+  await settleAutomaticIntent(env,row,stripe,intent,identity)
  }catch(error){
   const current=await storedAutomaticCollection(env,row.id)
   if(['collected','refused','returned','invalidated'].includes(current.status))return
@@ -110,7 +113,7 @@ export async function collectAutomaticInvoice(env:Bindings,invoice:string){
  }
 }
 export async function runAutomaticCollections(env:Bindings){
- for(const row of await all(env,"SELECT a.id,a.invoice_id,a.status FROM nc_automatic_collections a JOIN nc_invoices i ON i.id=a.invoice_id JOIN nc_customers c ON c.id=a.customer_id WHERE c.erased_at IS NULL AND i.status='issued' AND a.status IN ('active','claimed','uncertain','pending_settlement') ORDER BY a.prepared_at,a.id")){
+ for(const row of await all(env,"SELECT a.id,a.invoice_id,a.status FROM nc_automatic_collections a JOIN nc_invoices i ON i.id=a.invoice_id JOIN nc_customers c ON c.id=a.customer_id WHERE c.erased_at IS NULL AND i.status='issued' AND (a.status IN ('active','claimed','uncertain','pending_settlement') OR (a.status IN ('refused','returned') AND NOT EXISTS(SELECT 1 FROM nc_retry_series r WHERE r.collection_id=a.id))) ORDER BY a.prepared_at,a.id")){
   if(row.status==='active')await collectAutomaticInvoice(env,row.invoice_id)
   else await reconcileAutomaticCollection(env,row.id)
  }

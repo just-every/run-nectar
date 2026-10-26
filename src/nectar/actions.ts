@@ -4,6 +4,7 @@ import { preparePortalMethodAction } from './portal-method-actions'
 import { configureSso } from './sso-config'
 import { approvePaymentLink } from './payment-links-approval'
 import { createPaymentLink,deactivatePaymentLink,activatePaymentLink } from './payment-links'
+import { configureRetryPolicy } from './retry-policy'
 import { prepareAutomaticCollection,decideAutomaticCollection,revokeAutomaticCollection } from './automatic-collection'
 import { checkAutomaticCollection,consumeAutomaticEvent } from './automatic-collection-events'
 import { prepareHostedSetup } from './hosted-setup'
@@ -127,6 +128,7 @@ export const actions: Record<string, Handler> = {
   'payment_link.activate': activatePaymentLink,
   'payment_link.create': createPaymentLink,
   'payment_link.deactivate': deactivatePaymentLink,
+  'retry.policy.configure': configureRetryPolicy,
   'automatic.collection.prepare': prepareAutomaticCollection,
   'automatic.collection.decide': decideAutomaticCollection,
   'automatic.collection.revoke': revokeAutomaticCollection,

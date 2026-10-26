@@ -124,7 +124,7 @@ export async function refusedPayment(stripe: StripeClient, intent: Row, identity
   insist(history.data.every((charge: Row) => charge.object === 'charge' && ref(charge.payment_intent) === paymentIntentRef && ref(charge.customer) === identity.customerRef
     && charge.status !== 'succeeded' && charge.paid !== true && charge.captured !== true), 'stripe_native_refusal_unconfirmed', 409)
   const status = code === 'authentication_required' || decline === 'authentication_required' ? 'customer_action_required' : 'declined'
-  return { status, declineCode: typeof decline==='string' && /^[a-z_]{1,100}$/.test(decline)?decline:null, errorCode: status === 'customer_action_required' ? 'authentication_required' : code, paymentIntentRef,
+  return { status, retryProhibited:history.data.some((charge:Row)=>charge.outcome?.advice_code==='do_not_try_again'), declineCode: typeof decline==='string' && /^[a-z_]{1,100}$/.test(decline)?decline:null, errorCode: status === 'customer_action_required' ? 'authentication_required' : code, paymentIntentRef,
     proof: 'requires-payment-method-with-error-and-no-succeeded-charge', providerStatus: intent.status }
 }
 

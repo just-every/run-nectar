@@ -1,3 +1,4 @@
+import type { RetryPolicy } from './retry-policy'
 import type { Bindings } from '../auth.server'
 import type { Actor } from './actor'
 import { requireRead } from './actor'
@@ -8,7 +9,7 @@ export interface AutomaticQuote {
  invoice: string; customer: string; customerRevision: string; fingerprint: string; calculation: string;
  amountCents: number; currency: 'usd'; accountRef: string; bindingId: string; bindingRevision: string;
  method: Awaited<ReturnType<typeof savedCollectionMethod>>; owner: string; issueDate: string; businessRevision: number;
- wording: string; wordingVersion: string; attempts: 1
+ wording: string; wordingVersion: string; attempts: 1; retryPolicy?: RetryPolicy
 }
 export const automaticQuote = (row: Row) => parseJson<AutomaticQuote>(row.basis_json, null as never)
 export async function storedAutomaticCollection(env: Bindings, id: string) {

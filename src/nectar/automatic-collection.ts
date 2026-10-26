@@ -1,3 +1,4 @@
+import { selectedRetryPolicy } from './retry-policy'
 import type { Bindings } from '../auth.server'
 import { actorLabel, requireMember, type Actor } from './actor'
 import { requireBusiness } from './business'
@@ -16,7 +17,7 @@ const other = "SELECT 1 FROM nc_members WHERE id<>? AND role IN ('owner','financ
 
 export async function prepareAutomaticCollection(env: Bindings, actor: Actor, input: Input) {
  await collectionOwner(env,actor)
- input.only(['invoice','issue_date','mandate_ref','returnTo'])
+ input.only(['invoice','issue_date','mandate_ref','enable_retries','returnTo'])
  const invoice=await one(env,`SELECT i.*,c.language,c.revision AS customer_revision FROM nc_invoices i JOIN nc_customers c ON c.id=i.customer_id
  WHERE i.id=? AND i.status IN ('draft','approved') AND c.erased_at IS NULL AND c.status='active'`,input.text('invoice',{max:100}))
  insist(invoice && invoice.currency==='USD' && invoice.total_cents>=50 && invoice.total_cents<=99999999,'automatic_collection_draft_required',409)
@@ -28,9 +29,10 @@ export async function prepareAutomaticCollection(env: Bindings, actor: Actor, in
  const method=await savedCollectionMethod(selected.stripe,binding.stripe_customer_ref,input.text('mandate_ref',{max:255,optional:true})||undefined)
  const issueDate=requireDate(input.text('issue_date',{max:10}),'issue_date')
  insist(issueDate>=localDate(clockInstant(env),business.timezone),'automatic_collection_date_invalid',409)
- const L=customerText(invoice.language),wording=L.t('automatic.consent',{merchant:business.legal_name,amount:L.money(invoice.total_cents),date:L.day(issueDate),last4:method.summary.last4,method:L.t(method.kind==='card'?'automatic.card':'automatic.bank')})
+ const retryPolicy=input.flag('enable_retries')?await selectedRetryPolicy(env,invoice,method.kind):undefined
+ const L=customerText(invoice.language),wording=L.t('automatic.consent',{merchant:business.legal_name,amount:L.money(invoice.total_cents),date:L.day(issueDate),last4:method.summary.last4,method:L.t(method.kind==='card'?'automatic.card':'automatic.bank')})+(retryPolicy?' '+L.t('automatic.retryConsent',{count:retryPolicy.maxAttempts,days:retryPolicy.windowDays,version:retryPolicy.version}):'')
  const q:AutomaticQuote={invoice:invoice.id,customer:invoice.customer_id,customerRevision:invoice.customer_revision,fingerprint:invoice.source_fingerprint,calculation:invoice.calculation_json,
- amountCents:invoice.total_cents,currency:'usd',accountRef:selected.account,bindingId:binding.id,bindingRevision:binding.revision,method,owner:actor.id,issueDate,businessRevision:business.revision,wording,wordingVersion:'exact-invoice-1',attempts:1}
+ amountCents:invoice.total_cents,currency:'usd',accountRef:selected.account,bindingId:binding.id,bindingRevision:binding.revision,method,owner:actor.id,issueDate,businessRevision:business.revision,wording,wordingVersion:retryPolicy?'exact-invoice-retries-1':'exact-invoice-1',attempts:1,...(retryPolicy?{retryPolicy}:{})}
  const id=newId(),basis=await fingerprint(q),at=clockInstant(env)
  await commit(env,[collectionAuthority(env,actor),guard(env,'automatic_collection_draft_changed',"EXISTS(SELECT 1 FROM nc_invoices WHERE id=? AND status IN ('draft','approved') AND source_fingerprint=? AND calculation_json=?)",invoice.id,q.fingerprint,q.calculation),
  stmt(env,`INSERT INTO nc_automatic_collections(id,invoice_id,customer_id,status,basis_json,basis_hash,prepared_by,prepared_at,account_ref,stripe_customer_ref,payment_method_ref,amount_cents,method_kind,revision)
@@ -46,7 +48,7 @@ export async function acceptAutomaticCollection(env:Bindings,request:Request,inp
  await validateAutomaticBasis(row);const at=clockInstant(env)
  await commit(env,[automaticAuthority(env,row,false),guard(env,'customer_session_changed','EXISTS(SELECT 1 FROM nc_portal_sessions WHERE id=? AND customer_id=? AND revoked_at IS NULL AND expires_at>?)',session.jti,session.customer,at),
  stmt(env,"UPDATE nc_automatic_collections SET status='pending_approval',customer_session_id=?,accepted_at=?,revision=? WHERE id=?",session.jti,at,newId(),row.id)],
- {actor:`customer:${session.customer}`,action:'automatic.collection.accept',subject:row.id,detail:{basis:row.basis_hash,wordingVersion:'exact-invoice-1',session:session.jti}})
+ {actor:`customer:${session.customer}`,action:'automatic.collection.accept',subject:row.id,detail:{basis:row.basis_hash,wordingVersion:JSON.parse(row.basis_json).wordingVersion,session:session.jti}})
  return automaticView(await storedAutomaticCollection(env,row.id))
 }
 export async function decideAutomaticCollection(env:Bindings,actor:Actor,input:Input){

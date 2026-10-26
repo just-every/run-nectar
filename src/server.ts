@@ -3,6 +3,7 @@ import { samlResponse } from './nectar/saml'
 import { scimResponse } from './nectar/scim'
 import { expirePaymentLinkAttempts } from './nectar/payment-links-expiry'
 import { paymentLinksResponse } from './nectar/payment-links-http'
+import { runPaymentRetries } from './nectar/retry-jobs'
 import { runAutomaticCollections } from './nectar/automatic-collection-jobs'
 import { automaticCollectionResponse } from './nectar/automatic-collection-http'
 import { runInvoiceAutomation } from './nectar/invoice-automation'
@@ -55,6 +56,7 @@ export default withDemo({
     await dispatchWebhooks(runtimeBindings(env))
     await expirePaymentLinkAttempts(runtimeBindings(env))
     await runAutomaticCollections(runtimeBindings(env))
+    await runPaymentRetries(runtimeBindings(env))
     await runInvoiceAutomation(runtimeBindings(env),controller.scheduledTime)
     if(controller.cron==='* * * * *')return
     await removeExpiredFinancialRecords(runtimeBindings(env))

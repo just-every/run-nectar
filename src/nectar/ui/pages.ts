@@ -1,3 +1,4 @@
+import { retryRecoveryPage } from './retry-report'
 import { ssoPage, ssoPost } from './sso'
 import { paymentLinksScreen } from './payment-links'
 import { paymentReceiptPage } from './payment-receipts'
@@ -54,6 +55,7 @@ type Page = (env: Bindings, actor: Actor, request: Request, url: URL, id: string
 
 export const pages: Record<string, Page> = {
   paymentLinks:async(env,actor,_r,url)=>page('Payment links',actor,await paymentLinksScreen(env,actor),{current:'/app/settings',url}),
+  retryRecovery:(env,actor,_r,url)=>retryRecoveryPage(env,actor,url),
   paymentReceipt:(env,actor,_r,url,id)=>paymentReceiptPage(env,actor,id,url),
   currencyReport:(env,actor,_r,url)=>currencyPage(env,actor,url),
   hierarchies:(env,actor,_r,url)=>hierarchiesPage(env,actor,url),
