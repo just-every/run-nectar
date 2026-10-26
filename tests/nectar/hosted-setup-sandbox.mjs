@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict'
 import {execFileSync} from 'node:child_process'
 import {mkdir} from 'node:fs/promises'
-import {chromium} from '@playwright/test'
+import {chromium,expect} from '@playwright/test'
 import {harness} from './harness.mjs'
 import {totp} from './mfa.mjs'
 import {stripeSandbox,safeError} from './stripe-sandbox-client.mjs'
@@ -61,8 +61,11 @@ try {
       const manual=page.getByText(/enter bank details manually|enter bank details|manually verify/i).first()
       await manual.click()
       phase='bank-details'
-      const bankFrame=page.frames().find(frame=>frame!==page.mainFrame()&&frame.url().startsWith('https://js.stripe.com/'))
-      assert.ok(bankFrame,'Stripe hosts the financial input frame')
+      let bankFrame
+      await expect.poll(async()=>{
+        for(const frame of page.frames())if(frame.url().startsWith('https:')&&new URL(frame.url()).hostname.endsWith('.stripe.com')&&await frame.getByRole('textbox',{name:'Routing number',exact:true}).count()===1){bankFrame=frame;return true}
+        return false
+      },{timeout:20000}).toBe(true)
       await bankFrame.getByRole('textbox',{name:'Routing number',exact:true}).fill('110000000')
       await bankFrame.getByRole('textbox',{name:'Account number',exact:true}).fill('000123456789')
       await bankFrame.getByRole('textbox',{name:'Confirm account number',exact:true}).fill('000123456789')
