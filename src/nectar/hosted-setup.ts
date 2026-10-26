@@ -43,7 +43,7 @@ export async function customerHostedSetups(env: Bindings, customer: string) {
     AND NOT EXISTS(SELECT 1 FROM nc_erased_records WHERE record_id IN (s.id,c.id,b.id))
     UNION ALL SELECT h.id,h.method,h.status,h.method_json,h.completed_at,h.default_choice,h.consent_hash,1 FROM nc_hosted_setup_history h JOIN nc_customers c ON c.id=h.customer_id
     WHERE h.customer_id=? AND c.erased_at IS NULL AND NOT EXISTS(SELECT 1 FROM nc_hosted_setups WHERE id=h.id)
-    AND NOT EXISTS(SELECT 1 FROM nc_erased_records WHERE record_id IN(h.id,c.id)) ORDER BY completed_at,id`, customer,customer)
+    AND NOT EXISTS(SELECT 1 FROM nc_erased_records WHERE record_id IN(h.id,c.id)) ORDER BY 5,1`, customer,customer)
   return rows.map(row=>{
     insist(['card','us_bank_account'].includes(row.method)&&['prepared','creating','open','updating','complete','failed'].includes(row.status),'hosted_setup_evidence_invalid',409)
     let paymentMethod=null

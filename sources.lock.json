@@ -3234,7 +3234,7 @@
       "executable": false
     },
     "src/nectar/hosted-setup.ts": {
-      "sha256": "9084f2284d575247c7e46380ee1a9a3305e2936a82bec014570816a79a5aa6c7",
+      "sha256": "858881f0ac27ece8a965185a58f351c3ce0ce54ace522f696a407986d4f27839",
       "executable": false
     },
     "src/nectar/http.ts": {
@@ -4614,7 +4614,7 @@
       "executable": false
     },
     "tests/nectar/harness.mjs": {
-      "sha256": "ace62de49c171763ca7d86e9fbeb0e9793defab80383e247723bb8389112b4c3",
+      "sha256": "33ab998ad3c0a973af783b328ec8f986758a365a989233d476935e1b4945f400",
       "executable": false
     },
     "tests/nectar/hierarchies.mjs": {
