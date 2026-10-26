@@ -169,6 +169,8 @@ export async function assertHostedSetups(h, owner, { customer, other, binding, f
     assert.equal(edge.calls.filter(call=>call.operation==='create').at(-1).locale,locale)
     await state('open')
     const defaults=writes('default')
+    const crossSite=await h.raw('/portal/payment-methods.finish',{cookie:returnCookies.get(setup.id),body:{setup:setup.id,confirm:true},headers:{origin:'https://synthetic-nectar-foreign.example',accept:'application/json'}})
+    assert.equal(crossSite.status,401,'A cross-origin completion cannot use the return capability')
     await post(session,'finish',setup.id,409)
     assert.equal(writes('default'),defaults,'Pending processor completion never changes default')
     edge.complete(setup.id)
