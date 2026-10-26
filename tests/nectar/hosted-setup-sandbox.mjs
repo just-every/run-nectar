@@ -132,7 +132,8 @@ try {
   if(customer?.id){try{
     const sessions=await stripe.list('/v1/checkout/sessions',{customer:customer.id})
     for(const session of sessions.data)if(session.status==='open')await stripe.request('POST',`/v1/checkout/sessions/${session.id}/expire`,{})
-    await stripe.request('DELETE',`/v1/customers/${customer.id}`);facts.cleanup=true
+    const deleted=await stripe.request('DELETE',`/v1/customers/${customer.id}`);assert.equal(deleted.deleted,true);facts.cleanup=true
   }catch{facts.cleanup=false}}
+  if(customer?.id&&!facts.cleanup){facts.outcome='failed';process.exitCode=1}
   console.log(JSON.stringify({...facts,requests:stripe.requests}))
 }
