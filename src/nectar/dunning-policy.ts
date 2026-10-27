@@ -54,7 +54,8 @@ export async function enrollDunning(env: Bindings,actor: Actor,input: Input) {
  insist(policy.end_action!=='cancel'||!!invoice.subscription_id,'dunning_subscription_required',409)
  insist(!invoice.hold&&!invoice.disputedCents,'dunning_invoice_held',409)
  const failure=await one(env,`SELECT MIN(attempted_at) AS at FROM (SELECT attempted_at FROM nc_retry_attempts WHERE invoice_id=? AND outcome='failed'
- UNION ALL SELECT reconciled_at FROM nc_native_collections WHERE invoice_id=? AND status IN ('declined','customer_action_required'))`,invoice.id,invoice.id)
+ UNION ALL SELECT reconciled_at FROM nc_native_collections WHERE invoice_id=? AND status IN ('declined','customer_action_required')
+ UNION ALL SELECT attempted_at FROM nc_processor_failures WHERE invoice_id=?) WHERE attempted_at<=?`,invoice.id,invoice.id,invoice.id,clockInstant(env))
  insist(failure?.at!==null&&failure?.at!==undefined,'dunning_failure_required',409)
  const specific=await all(env,`SELECT p.id FROM nc_dunning_policies p WHERE (p.scope='plan' AND EXISTS(SELECT 1 FROM nc_invoice_lines l WHERE l.invoice_id=? AND l.price_id=p.scope_ref)) OR (p.scope='segment' AND EXISTS(SELECT 1 FROM nc_retry_segments s WHERE s.customer_id=? AND s.segment=p.scope_ref))`,invoice.id,invoice.customer_id)
  insist(policy.scope!=='default'||specific.length===0,'dunning_specific_policy_required',409)

@@ -1,4 +1,5 @@
 import { processorWebhook } from './nectar/processor-http'
+import { escalateProcessorCash } from './nectar/processor-cash-queue'
 import { observeSubscriptionStates } from './nectar/subscription-states'
 import { retryMethodRecoveryResponse } from './nectar/retry-method-http'
 import { cardLifecycleWebhook } from './nectar/card-lifecycle-webhook'
@@ -65,6 +66,7 @@ export default withDemo({
     await observeSubscriptionStates(runtimeBindings(env))
     if(controller.cron==='* * * * *')return
     await removeExpiredFinancialRecords(runtimeBindings(env))
+    await escalateProcessorCash(runtimeBindings(env),controller.scheduledTime)
     await runPrepaidSettlement(runtimeBindings(env))
     await runCadences(runtimeBindings(env),controller.scheduledTime)
     await runTrials(runtimeBindings(env),controller.scheduledTime)

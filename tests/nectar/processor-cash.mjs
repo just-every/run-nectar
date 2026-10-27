@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict'
 import { nativeCollectionEdge } from './native-collection.mjs'
 import { totp } from './mfa.mjs'
+import { processorCashReturnEdge, processorCashReturnFlow } from './processor-cash-return.mjs'
 
 export function processorCashEdge(base = nativeCollectionEdge()) {
   const transactions = new Map(), events = new Map(), intents = new Map(), charges = new Map(), calls = []
@@ -73,11 +74,12 @@ export function processorCashEdge(base = nativeCollectionEdge()) {
 }
 
 let edge
+export const cashTestEdge=()=>edge
 export const harnessOptions = () => {
-  edge = processorCashEdge()
+  edge = processorCashReturnEdge(processorCashEdge())
   return { localTime: '2026-10-28T10:00:00Z', stripeFetch: edge.fetch, stripeSecret: 'synthetic-nectar-1', stripeSecondarySecret: 'synthetic-nectar-2' }
 }
-export async function processorCashFlow(h, owner, { cashEdge = edge, onState=async()=>{} } = {}) {
+export async function processorCashFlow(h, owner, { cashEdge = edge, onState=async()=>{},allocate } = {}) {
   const api = (path, body, status) => h.api(path, owner, body, status)
   const instant = Date.parse('2026-10-28T10:00:00Z')
   await h.advanceClock(new Date(instant).toISOString())
@@ -129,12 +131,69 @@ export async function processorCashFlow(h, owner, { cashEdge = edge, onState=asy
   assert.equal(cashEdge.available(remote),0)
   assert.deepEqual(observed.cashBalances.map(row=>[row.currency,row.amount_cents]),[['usd',0]],'An empty provider available map clears the previously observed balance')
   assert.equal(cashEdge.cashCalls.length,3,'Observing externally consumed funds creates no payment intent')
+  const short = await invoice('90')
+  await apply(cashEdge.fund(remote, 3500, short.number))
+  assert.deepEqual([(await api(`invoices/${short.id}`)).paidCents,(await api(`invoices/${short.id}`)).balanceCents],[3500,5500], 'A referenced short transfer leaves precisely the unpaid remainder')
+  await h.advanceClock('2026-10-28T10:01:00Z')
+  const oldest = await invoice('45')
+  await h.advanceClock('2026-10-28T10:02:00Z')
+  const newer = await invoice('45')
+  await apply(cashEdge.fund(remote,4500))
+  assert.equal((await api(`invoices/${oldest.id}`)).balanceCents,0,'An unreferenced exact transfer chooses the oldest open matching invoice')
+  assert.equal((await api(`invoices/${newer.id}`)).balanceCents,4500)
+  const callsBeforeAmbiguous=cashEdge.cashCalls.length
+  const ambiguous=cashEdge.fund(remote,1000,`${short.number} and ${newer.number}`)
+  await apply(ambiguous);await apply(ambiguous)
+  assert.equal(cashEdge.cashCalls.length,callsBeforeAmbiguous,'Ambiguous invoice references cannot fall through to an automatic amount match')
+  assert.equal((await api(`invoices/${short.id}`)).balanceCents,5500)
+  assert.equal((await api(`invoices/${newer.id}`)).balanceCents,4500)
+  const other=(await api('customer.create',{external_id:'synthetic-nectar-cash-peer',name:'Other transfer customer',billing_email:'other-cash@example.test'})).id
+  const otherCharge=(await api('charge.add',{customer:other,amount:'80',description:'Separate customer service',effective_date:'2026-10-28',taxable:false})).charge
+  const otherInvoice=(await api('invoice.manual',{customer:other,charges:[otherCharge],service_date:'2026-10-28'})).id
+  await api('invoice.approve',{invoice:otherInvoice,acknowledge:true});await api('invoice.finalise',{invoice:otherInvoice,issue_date:'2026-10-28'})
+  await apply(cashEdge.fund(remote,8000,(await api(`invoices/${otherInvoice}`)).number))
+  assert.equal((await api(`invoices/${otherInvoice}`)).balanceCents,8000,'A customer cash account never pays another customer invoice')
+  assert.equal(cashEdge.cashCalls.length,callsBeforeAmbiguous)
+  const unmatchedState=await api(`processor-events?customer=${customer}`)
+  assert.equal(unmatchedState.cashBalances.find(row=>row.currency==='usd').amount_cents,9000)
+  assert.deepEqual(unmatchedState.cashApplications.filter(row=>row.invoice_id===short.id).map(row=>row.amount_cents),[3500])
+  assert.deepEqual(unmatchedState.unmatched.map(row=>row.amount_cents).sort((a,b)=>a-b),[1000,8000],'Unmatched funds enter the receivables queue with their exact remaining amounts')
+  const transfer=unmatchedState.unmatched.find(row=>row.amount_cents===8000)
+  assert.equal(transfer.reference,(await api(`invoices/${otherInvoice}`)).number)
+  const desk=await h.page('/app/receivables',owner)
+  assert.ok(desk.includes(transfer.id),'The ordinary receivables desk links to the exact unmatched transfer')
+  const allocation={customer,account_ref:account,transfer_ref:transfer.transfer_ref,invoice:newer.id,amount:'45',confirm:true}
+  const writesBeforeManual=cashEdge.cashCalls.length
+  await api('processor.cash.allocate',{...allocation,invoice:otherInvoice},409)
+  assert.equal(cashEdge.cashCalls.length,writesBeforeManual,'A manual choice still cannot cross customer custody')
+  const email='synthetic-nectar-cash-readonly@example.test'
+  await api('access.give',{email,name:'Read only cash observer',role:'accountant'})
+  const readonly=await h.signIn(email,{requested:true})
+  await h.api('processor.cash.allocate',readonly,allocation,403)
+  const allocated=allocate?await allocate(allocation):await api('processor.cash.allocate',allocation)
+  assert.equal(allocated.status,'collected')
+  const replay=await api('processor.cash.allocate',allocation)
+  assert.equal(replay.replayed,true)
+  assert.equal(cashEdge.cashCalls.length,writesBeforeManual+1,'Human allocation and its duplicate create exactly one processor cash payment')
+  assert.equal((await api(`invoices/${newer.id}`)).balanceCents,0)
+  assert.equal((await api(`invoices/${otherInvoice}`)).balanceCents,8000)
+  assert.equal(cashEdge.available(remote),4500)
+  const taskStart=(await api('tasks')).length
+  for(const [day,expected] of [['2026-11-03',0],['2026-11-04',1],['2026-11-27',2],['2026-12-27',3]]){
+    const clock=`${day}T10:00:00Z`;await h.advanceClock(clock)
+    for(let repeat=0;repeat<2;repeat++)assert.equal((await h.raw(`/cdn-cgi/local/scheduled?time=${Date.parse(clock)}&cron=${encodeURIComponent('0 14 * * *')}`)).status,200)
+    const tasks=(await api('tasks')).slice(0).filter(row=>row.customer_id===customer&&row.title.startsWith('Unapplied bank transfer:'))
+    assert.equal(tasks.length,expected,'Each due escalation produces exactly one owner task despite repeated ticks')
+  }
+  assert.ok((await api('tasks')).length>=taskStart+3)
+  assert.deepEqual((await api('audit')).filter(row=>row.action==='processor.cash.escalate').map(row=>JSON.parse(row.detail).ageDays).sort((a,b)=>a-b),[7,30,60])
+  await h.advanceClock('2026-10-28T10:02:00Z')
   await onState({customer})
-  return { customer, invoices: [byReference.id, byAmount.id, unknown.id], unappliedCents: 0 }
+  return { customer, invoices: [byReference.id, byAmount.id, unknown.id,short.id,oldest.id,newer.id], unappliedCents: 4500 }
 }
 
 if(process.argv[1]===new URL(import.meta.url).pathname){
  const {processorSetup}=await import('./processor-events.mjs')
  const options=harnessOptions(),{h,owner}=await processorSetup(undefined,options)
- try {await processorCashFlow(h,owner);console.log('Processor cash: exact matching, duplicate events, complete history, unapplied balance and unknown-response reconciliation passed')} finally {await h.close()}
+ try {await processorCashFlow(h,owner);await processorCashReturnFlow(h,owner,{cashReturnEdge:edge});console.log('Processor cash: matching, manual allocation, escalation, returns, complete history and uncertainty reconciliation passed')} finally {await h.close()}
 }

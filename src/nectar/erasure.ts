@@ -11,6 +11,7 @@ import type { D1Sql } from '../modules/import-kit/src/d1/index'
 import { erasurePlan } from './erasure-records'
 import { eraseImportCopies } from './erasure-import'
 import { erasureInsertStatements } from './erasure-sql'
+import { importedCashCollections } from './processor-cash-imported'
 
 const sql = (sql: string, ...params: unknown[]): D1Sql => ({ sql, params })
 export async function approveErasure(env: Bindings, actor: Actor, input: Input) {
@@ -27,7 +28,7 @@ export async function approveErasure(env: Bindings, actor: Actor, input: Input) 
   const payments=await all(env,'SELECT * FROM nc_payments WHERE customer_id=?',customer.id)
   const credits=await all(env,'SELECT * FROM nc_credit_notes WHERE customer_id=?',customer.id)
   const incumbent=await all(env,'SELECT * FROM nc_incumbent_invoices WHERE customer_id=?',customer.id)
-  const collected=await all(env,"SELECT * FROM nc_imported_collections WHERE customer_id=? AND charge_ref IS NOT NULL AND charge_ref<>'' AND collected_on IS NOT NULL",customer.id)
+  const collected=[...await all(env,"SELECT * FROM nc_imported_collections WHERE customer_id=? AND charge_ref IS NOT NULL AND charge_ref<>'' AND collected_on IS NOT NULL",customer.id),...await importedCashCollections(env,customer.id)]
   const importedMoney=await all(env,"SELECT * FROM nc_incumbent_history WHERE customer_id=? AND amount_cents IS NOT NULL",customer.id)
   const dates=[...collected.map(record=>record.collected_on),...importedMoney.map(record=>record.occurred_on),...incumbent.map(record=>record.issue_date).filter(Boolean),...invoices.map(i=>i.issue_date),...payments.map(p=>p.received_on),...credits.map(c=>localDate(c.issued_at,b.timezone))].filter(Boolean).sort()
   const legacyAnchor=incumbent.some(record=>!record.issue_date)?localDate(at,b.timezone):null

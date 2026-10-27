@@ -16,7 +16,7 @@ export async function collectibleInvoice(env: Bindings, invoiceId: string, insta
     FROM nc_invoices i JOIN nc_customers c ON c.id=i.customer_id WHERE i.id=? AND i.status='issued'`,invoiceId)
   insist(invoice,'invoice_not_found',404)
   const disputes=await all(env,'SELECT * FROM nc_cadence_disputes WHERE invoice_id=? AND resolved_at IS NULL ORDER BY id',invoiceId)
-  const processorDisputes=await all(env,"SELECT object_ref,amount_cents FROM nc_processor_objects WHERE invoice_id=? AND kind IN ('dispute','ach_return') AND status NOT IN ('won','warning_closed')",invoiceId)
+  const processorDisputes=await all(env,"SELECT object_ref,amount_cents FROM nc_processor_objects WHERE invoice_id=? AND kind IN ('dispute','ach_return') AND status IN ('needs_response','under_review','lost','warning_needs_response','warning_under_review')",invoiceId)
   const disputedCents=disputes.reduce((sum,row)=>sum+row.amount_cents,0)+processorDisputes.reduce((sum,row)=>sum+row.amount_cents,0)
   const promise=await one(env,'SELECT rowid AS ordinal,* FROM nc_cadence_promises WHERE invoice_id=? ORDER BY rowid DESC LIMIT 1',invoiceId)
   const allocations=await all(env,'SELECT id,payment_id,amount_cents FROM nc_allocations WHERE invoice_id=? ORDER BY id',invoiceId)

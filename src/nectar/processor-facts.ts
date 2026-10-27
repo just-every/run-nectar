@@ -7,7 +7,8 @@ import { all, canonical, fingerprint, guard, insist, newId, one, stmt, type Row 
 import { localDate } from './dates'
 import { providerReference, type StripeClient } from './payments/stripe'
 import { allocationFactStatements, issuedInvoice, paymentFactStatement } from './receivables'
-import { completeList, instant, integer, knownPayment, objectStatement, processorBinding, processorInvoice, ref, transactionStatement } from './processor-source'
+import { bankNetworkReturnCode, processorReturnStatements } from './processor-returns'
+import { completeList, instant, integer, knownPayment, objectStatement, payoutAttribution, processorBinding, processorImportedCash, processorInvoice, ref, transactionStatement } from './processor-source'
 export const processorActor:Actor={id:'system:processor',kind:'member',name:'Verified processor',email:'',role:'owner',sessionId:null,capabilities:new Set(ROLE_CAPABILITIES.owner)}
 
 export async function chargeFacts(env:Bindings,stripe:StripeClient,account:string,chargeRef:string,event:Row) {
@@ -26,7 +27,15 @@ export async function chargeFacts(env:Bindings,stripe:StripeClient,account:strin
  const statements:D1PreparedStatement[]=[]
  const at=clockInstant(env),amount=integer(charge.amount)
  const captured=charge.status==='succeeded'&&charge.paid===true&&charge.captured===true&&charge.amount_captured===amount
- if(captured&&!payment){
+ const imported=await processorImportedCash(env,stripe,binding,charge,intent)
+ if(imported){
+  insist(!invoice&&!payment,'processor_cash_imported_evidence_invalid',409)
+  if(imported.status==='uncertain'){
+   const {importedCashSettlementStatements}=await import('./processor-cash-imported')
+   statements.push(...await importedCashSettlementStatements(env,stripe,binding,imported,intent!,charge))
+  }
+ }
+ if(captured&&!payment&&!imported){
   insist(invoice,'processor_invoice_required',409)
   const owed=await issuedInvoice(env,invoice.id)
   insist(owed.balance_cents>=amount&&amount>0,'processor_allocation_exceeds_balance',409)
@@ -58,7 +67,8 @@ export async function chargeFacts(env:Bindings,stripe:StripeClient,account:strin
   }
  }
  const code=typeof charge.failure_code==='string'?charge.failure_code:null
- statements.push(objectStatement(env,account,charge,'charge',binding.customer_id,invoice?.id??null,charge.status,code,at))
+ const returned=processorReturnStatements(env,account,charge,intent,binding.customer_id,invoice?.id??null,at)
+ statements.push(...(returned.length?returned:[objectStatement(env,account,charge,'charge',binding.customer_id,invoice?.id??null,charge.status,code,at)]))
  return {statements,customer:binding.customer_id,invoice:invoice?.id??null,charge,intent,binding,payment}
 }
 
@@ -105,8 +115,14 @@ export async function failureFacts(env:Bindings,stripe:StripeClient,account:stri
  const source=event.data.object,error=source.last_payment_error,code=error?.decline_code??error?.code
  insist(source.object==='payment_intent'&&source.customer===intent.customer&&source.currency===invoice.currency.toLowerCase()
   &&source.metadata?.nectar_native_invoice===invoice.id&&integer(source.amount)>0&&source.amount<=invoice.total_cents&&source.amount_received===0&&source.status==='requires_payment_method'&&typeof code==='string'&&/^[a-zA-Z0-9_]{1,100}$/.test(code),'processor_failure_unconfirmed',409)
+ const bank=error?.payment_method?.type==='us_bank_account'||typeof error?.network_decline_code==='string'&&/^R\d{2}$/.test(error.network_decline_code)
+ const facts=bank&&ref(intent.latest_charge)?await chargeFacts(env,stripe,account,providerReference(ref(intent.latest_charge)),event):null
+ const sameBankCharge=facts?.charge.payment_method_details?.type==='us_bank_account'&&ref(source.latest_charge)===facts.charge.id
+ // Current failed-bank observations and automatic attempts share the raw reason.
+ // An earlier genuine failure event can arrive after that same charge recovered.
+ const raw=sameBankCharge?(bankNetworkReturnCode(facts!.charge,facts!.intent)??(/^R\d{2}$/.test(error?.network_decline_code??'')?error.network_decline_code:null)):null
  const id=await fingerprint({account,event:event.id})
- const statements=[stmt(env,`INSERT OR IGNORE INTO nc_processor_failures(id,account_ref,intent_ref,invoice_id,customer_id,attempted_at,amount_cents,decline_code) VALUES(?,?,?,?,?,?,?,?)`,id,account,intent.id,invoice.id,binding.customer_id,instant(event.created),integer(source.amount),code),
+ const statements=[...(facts?.statements??[]),stmt(env,`INSERT OR IGNORE INTO nc_processor_failures(id,account_ref,intent_ref,invoice_id,customer_id,attempted_at,amount_cents,decline_code) VALUES(?,?,?,?,?,?,?,?)`,id,account,intent.id,invoice.id,binding.customer_id,instant(event.created),integer(source.amount),raw??code),
   objectStatement(env,account,intent,'payment_intent',binding.customer_id,invoice.id,intent.status,code,clockInstant(env))]
  return {statements,customer:binding.customer_id,invoice:invoice.id}
 }
@@ -120,11 +136,10 @@ export async function payoutFacts(env:Bindings,stripe:StripeClient,account:strin
  // debit is retained honestly without inventing an invoice membership list.
  if(payout.automatic===true){
   // Stripe includes the payout debit itself; it is already recorded above.
-  const members=(await completeList(stripe,'/balance_transactions',{payout:payout.id})).filter(row=>row.id!==transaction.id)
+  const members=(await completeList(stripe,'/balance_transactions',{payout:payout.id,'expand[]':'data.source'})).filter(row=>row.id!==transaction.id)
   insist(members.length>0&&members.every(row=>row.currency===payout.currency)&&members.reduce((sum,row)=>sum+integer(row.net),0)===payout.amount,'processor_payout_does_not_reconcile',409)
   for(const member of members){
-   const prior=await one(env,'SELECT customer_id,invoice_id,payment_id FROM nc_processor_transactions WHERE account_ref=? AND transaction_ref=?',account,member.id)
-   statements.push(await transactionStatement(env,account,member,{customer:prior?.customer_id,invoice:prior?.invoice_id,payment:prior?.payment_id,payout:payout.id}))
+   statements.push(await transactionStatement(env,account,member,{...await payoutAttribution(env,stripe,account,member),payout:payout.id}))
   }
  }
  return {statements,customer:null,invoice:null}

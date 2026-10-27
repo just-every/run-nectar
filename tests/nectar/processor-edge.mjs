@@ -1,7 +1,7 @@
 // Fake only the paid network edge. Worker, authentication, D1 and reports are real.
 import assert from 'node:assert/strict'
 export function processorEdge() {
- const account='synthetic-nectar-account',customerRef='synthetic-nectar-customer',calls=[],events=new Map(),objects=new Map(),transactions=new Map()
+ const account='synthetic-nectar-account',customerRef='synthetic-nectar-customer',calls=[],events=new Map(),objects=new Map(),transactions=new Map(),payoutMembers=new Map()
  let fail=false
  const list=data=>({object:'list',data,has_more:false})
  const fetch=async request=>{
@@ -14,7 +14,11 @@ export function processorEdge() {
   if(path.startsWith('/events/'))return Response.json(events.get(path.split('/').at(-1))??{},{status:events.has(path.split('/').at(-1))?200:404})
   if(fail)return Response.json({},{status:503})
   if(path.startsWith('/balance_transactions/'))return Response.json(transactions.get(path.split('/').at(-1)))
-  if(path==='/balance_transactions')return Response.json(list([...transactions.values()]))
+  if(path==='/balance_transactions'){
+   const membership=payoutMembers.get(url.searchParams.get('payout'))
+   const rows=membership?membership.map(id=>transactions.get(id)):[...transactions.values()]
+   return Response.json(list(rows.map(row=>url.searchParams.get('expand[]')==='data.source'?{...row,source:objects.get(row.source)??row.source}:row)))
+  }
   if(path==='/refunds')return Response.json(list([...objects.values()].filter(row=>row.object==='refund'&&row.charge===url.searchParams.get('charge'))))
   const object=objects.get(path.split('/').at(-1))
   if(object)return Response.json(object)
@@ -29,5 +33,5 @@ export function processorEdge() {
   return {intent,charge,transaction}
  }
  const event=(id,type,object,created=at)=>{const value={object:'event',id,type,livemode:false,created,data:{object:structuredClone(object)}};events.set(id,value);return value}
- return {account,customerRef,calls,events,objects,transactions,fetch,seed,event,at,setFailure(value){fail=value}}
+ return {account,customerRef,calls,events,objects,transactions,payoutMembers,fetch,seed,event,at,setFailure(value){fail=value}}
 }

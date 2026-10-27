@@ -1,4 +1,5 @@
 import { tooltipLink } from './tooltip'
+import { unmatchedProcessorCash } from '../processor-cash-queue'
 // Receivables, the finance lead's working screen: what is owed, overdue and
 // collected; every open invoice and the recently settled ones; the decision
 // panel for a drafted reminder (recipient and wording, approved by a person);
@@ -70,7 +71,7 @@ async function decision(env: Bindings, actor: Actor, desk: Desk, drafts: any[], 
       : h`<div class="mail"><p class="mail-head">To ${addresses(notice.recipient)}</p><p><strong>${notice.subject}</strong></p><pre class="message">${notice.body}</pre></div>`
     return {
       focus: notice.customer_id, shown: notice.id,
-      panel: h`<aside class="decision" aria-labelledby="decide"><div class="decision-head"><div><h2 id="decide">${notice.customer_name}</h2><p class="sub">${placeOf(customer.address ?? '') || 'Reminder draft'}</p></div><a class="icon-link" href="/app/receivables?draft=none" aria-label="Close the panel">${icon('close')}</a></div>
+      panel: h`<aside class="decision" aria-labelledby="decide"><div class="decision-head"><div><h2 id="decide">${notice.customer_name}</h2><p class="sub">${placeOf(customer.address ?? '') || 'Reminder draft'}</p></div>${tooltipLink('/app/receivables?draft=none','Close the panel','close-reminder-panel',icon('close'),'Close panel')}</div>
         <p class="banner">${icon('alert')}<span>Reminder drafted by ${personName(actor, notice.created_by)}: ${money(notice.balance_cents)} ${oldest ? `is ${plural(oldest.daysOverdue, 'day')} past due` : 'past due'}.</span></p>
         ${factRows([['Invoice', owed.map(r => r.number).join(', ') || '—'], ['Amount', money(notice.balance_cents)], ['Due date', oldest ? dayText(oldest.due_date, true) : '—']])}
         ${decide}<p class="hint panel-hint">Nectar exports the approved message for you to send from your own mail; it never sends it. Amounts and due dates stay as invoiced.</p></aside>`,
@@ -83,7 +84,7 @@ async function decision(env: Bindings, actor: Actor, desk: Desk, drafts: any[], 
   const total = theirs.reduce((sum, r) => sum + r.balance_cents, 0)
   return {
     focus: worst.customer_id,
-    panel: h`<aside class="decision" aria-labelledby="decide"><div class="decision-head"><div><h2 id="decide">${worst.customer_name}</h2><p class="sub">${placeOf(worst.address ?? '') || 'Past due'}</p></div><a class="icon-link" href="/app/receivables?draft=none" aria-label="Close the panel">${icon('close')}</a></div>
+    panel: h`<aside class="decision" aria-labelledby="decide"><div class="decision-head"><div><h2 id="decide">${worst.customer_name}</h2><p class="sub">${placeOf(worst.address ?? '') || 'Past due'}</p></div>${tooltipLink('/app/receivables?draft=none','Close the panel','close-overdue-panel',icon('close'),'Close panel')}</div>
       <p class="banner">${icon('alert')}<span>${money(total)} is ${plural(worst.daysOverdue, 'day')} past due on ${plural(theirs.length, 'invoice')}.</span></p>
       ${factRows([['Invoice', theirs.map(r => r.number).join(', ')], ['Amount', money(total)], ['Due date', dayText(worst.due_date, true)]])}
       <p class="hint">Nectar drafts the reminder from these balances; you approve the recipient and wording before anything is exported.</p>
@@ -96,6 +97,7 @@ export async function receivablesPage(env: Bindings, actor: Actor, url: URL) {
   const handles = can(actor, 'read') || can(actor, 'receivables')
   const [desk, age, pays, noticeList, todo, people] = await Promise.all([receivablesDesk(env, actor), ageing(env, actor), payments(env, actor), handles ? notices(env, actor) : [], handles ? tasks(env, actor) : [], customers(env, actor)])
   const operator = can(actor, 'receivables')
+  const transfers=await unmatchedProcessorCash(env,actor)
   const drafts = noticeList.filter((n: any) => n.status === 'draft')
   const pending = (await all(env, "SELECT COUNT(*) AS n FROM nc_proposals WHERE status = 'pending'"))[0]?.n ?? 0
   const { panel, focus, shown } = await decision(env, actor, desk, drafts, url.searchParams.get('draft'))
@@ -110,7 +112,7 @@ export async function receivablesPage(env: Bindings, actor: Actor, url: URL) {
     <dl class="tiles"><div><dt>Owed</dt><dd>${toReport('/app/reports/ar', money(desk.owedCents))}</dd></div><div${desk.overdueCents ? raw(' class="hot"') : ''}><dt>Overdue</dt><dd>${toReport('/app/reports/ar?bucket=overdue', money(desk.overdueCents))}</dd></div><div><dt>Collected in ${monthText(desk.month)}</dt><dd>${toReport(`/app/reports/collections?period=${desk.month}`, money(desk.collectedCents))}</dd></div></dl>
     ${ledger(desk, focus, shown ? 'Review the reminder' : operator ? 'Draft a reminder' : 'See what is past due')}
     <section class="ask" aria-label="Agents">${icon('sparkle')}<p>Your own agent can draft reminders and proposals here through a <b>prepare</b> credential. A person approves each one.</p>${actor.role === 'owner' ? h`<a href="/app/access#agents">Agent credentials</a>` : ''}</section></div>`
-  const rest = h`<div class="desk-rest"><section class="card" aria-labelledby="ageing"><h2 id="ageing">Ageing on ${formatDate(age.asOf)}</h2>
+  const rest = h`<div class="desk-rest"><section class="card"><h2>Unapplied bank transfers</h2>${table(['Received','Sender','Reference','Amount',''],transfers.map(row=>[formatDate(new Date(row.occurred_at).toISOString().slice(0,10)),row.sender||'Not supplied',row.reference||'No reference',cents(row.amount_cents),h`<a href="/app/processor-events?customer=${row.customer_id}#${row.id}">Review transfer</a>`]))}</section><section class="card" aria-labelledby="ageing"><h2 id="ageing">Ageing on ${formatDate(age.asOf)}</h2>
       ${table(['Customer', 'Not yet due$', '1–30 days$', '31–60 days$', '61–90 days$', 'Over 90$', 'Owed$', ''], age.customers.map((c: any) => [h`<a href="/app/customers/${c.customer}">${c.name}</a>`, ...BUCKETS.map(b => toReport(`/app/reports/ar?customer=${c.customer}&bucket=${encodeURIComponent(b)}`, cents(c[b]))), toReport(`/app/reports/ar?customer=${c.customer}`, cents(c.total)),
         operator && c.oldest > 0 ? form('reminder.prepare', '/app/receivables', hidden('customer', c.customer), 'Draft reminder', { secondary: true }) : '']), { empty: 'Nothing is owed.' })}
       ${age.customers.length ? h`<p class="hint">Total owed ${toReport('/app/reports/ar', cents((age.totals as any).total))}, of which ${toReport('/app/reports/ar?bucket=overdue', cents((age.totals as any).total - (age.totals as any).current))} is past due.</p>` : ''}</section>

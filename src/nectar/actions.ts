@@ -1,4 +1,7 @@
 import { consumeProcessorEvent } from './processor-events'
+import { allocateProcessorCash } from './processor-cash-queue'
+import { prepareImportedCashTakeover, confirmImportedCashTakeover } from './processor-cash-imported'
+import { previewProcessorCashReturn, prepareProcessorCashReturn, executeProcessorCashReturn, reconcileProcessorCashReturn } from './processor-cash-return'
 import { prepareInvoiceRefund, executeInvoiceRefund, reconcileInvoiceRefund } from './invoice-refunds'
 import { previewInvoiceRefund } from './invoice-refund-preview'
 import { prepareInvoiceVoid, voidInvoice } from './invoice-voids'
@@ -291,6 +294,13 @@ export const actions: Record<string, Handler> = {
   'billrun.prepare': prepareRun,
   'invoice.correction.refresh': refreshCorrectingInvoice,
   'processor.event.consume': consumeProcessorEvent,
+  'processor.cash.allocate': allocateProcessorCash,
+  'processor.cash.imported.prepare': prepareImportedCashTakeover,
+  'processor.cash.imported.confirm': confirmImportedCashTakeover,
+  'processor.cash.return.preview': previewProcessorCashReturn,
+  'processor.cash.return.prepare': prepareProcessorCashReturn,
+  'processor.cash.return.execute': executeProcessorCashReturn,
+  'processor.cash.return.reconcile': reconcileProcessorCashReturn,
   'invoice.refund.preview': previewInvoiceRefund,
   'invoice.refund.prepare': prepareInvoiceRefund,
   'invoice.refund.execute': executeInvoiceRefund,

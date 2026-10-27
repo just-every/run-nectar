@@ -10,6 +10,7 @@ import { localDate } from './dates'
 import { nativeCollectionSource, nativeSourceGuard } from './payments/source'
 import { NativeStripeError, providerReference, stripeForAccount, type StripeClient } from './payments/stripe'
 import { collectedPaymentStatements } from './receivables'
+import { importedCashCandidates, importedCashSource, importedCashClaimStatements, importedCashSettlementStatements } from './processor-cash-imported'
 
 export interface ProcessorCashApplication {
   id: string; invoice: string; transferRef: string; amountCents: number; currency: string
@@ -97,7 +98,7 @@ function fundingLots(transactions: Row[], available: Record<string, number>) {
 }
 function verifyIntent(intent: Row, row: Row, livemode: boolean) {
   insist(intent.object === 'payment_intent' && providerReference(intent.customer) === row.stripe_customer_ref && intent.livemode === livemode
-    && intent.amount === row.amount_cents && intent.currency === row.currency && intent.metadata?.nectar_native_invoice === row.invoice_id
+    && intent.amount === row.amount_cents && intent.currency === row.currency && intent.metadata?.[row.source_kind==='imported'?'nectar_imported_invoice':'nectar_native_invoice'] === row.invoice_id
     && intent.metadata?.nectar_cash_application === row.id && intent.metadata?.nectar_cash_transfer === row.transfer_ref
     && Array.isArray(intent.payment_method_types) && intent.payment_method_types.length === 1 && intent.payment_method_types[0] === 'customer_balance'
     && (!row.payment_intent_ref || intent.id === row.payment_intent_ref), invalid, 409)
@@ -106,7 +107,8 @@ function verifyIntent(intent: Row, row: Row, livemode: boolean) {
 async function settle(env: Bindings, stripe: StripeClient, b: Row, row: Row, intent: Row, livemode: boolean) {
   const intentRef = verifyIntent(intent, row, livemode)
   if (!row.payment_intent_ref) {
-    await commit(env, [bindingGuard(env, b), stmt(env, 'UPDATE nc_processor_cash_applications SET payment_intent_ref=? WHERE id=? AND payment_intent_ref IS NULL', intentRef, row.id)], [])
+    const table=row.source_kind==='imported'?'nc_processor_cash_imported_applications':'nc_processor_cash_applications'
+    await commit(env, [bindingGuard(env, b), stmt(env, `UPDATE ${table} SET payment_intent_ref=? WHERE id=? AND payment_intent_ref IS NULL`, intentRef, row.id)], [])
     row.payment_intent_ref = intentRef
   }
   if (intent.status !== 'succeeded') return
@@ -120,6 +122,10 @@ async function settle(env: Bindings, stripe: StripeClient, b: Row, row: Row, int
     && charge.amount === row.amount_cents && charge.amount_captured === row.amount_cents && charge.amount_refunded === 0
     && charge.refunded === false && charge.disputed === false && charge.payment_method_details?.type === 'customer_balance'
     && Number.isSafeInteger(charge.created) && charge.created > 0 && charge.created * 1000 <= clockInstant(env), invalid, 409)
+  if(row.source_kind==='imported'){
+    await commit(env,await importedCashSettlementStatements(env,stripe,b,row,intent,charge),{actor:system.id,action:'processor.cash.imported.collected',subject:row.id,detail:{invoice:row.invoice_id,amountCents:row.amount_cents,paymentIntentRef:intentRef}})
+    return
+  }
   const source = await nativeCollectionSource(env, row.invoice_id)
   insist(source.sourceHash === row.source_hash && source.row.customer_id === b.customer_id && source.payerId === b.customer_id, 'processor_cash_source_changed', 409)
   const proof = { accountRef: b.account_ref, customerRef: b.stripe_customer_ref, transferRef: row.transfer_ref, paymentIntentRef: intentRef,
@@ -136,7 +142,7 @@ async function settle(env: Bindings, stripe: StripeClient, b: Row, row: Row, int
 
 /** A durable uncertain claim is never sent again, even if no intent can be
  * found. Later invocations reconcile it using reads of complete intent history. */
-export async function reconcileProcessorCash(env: Bindings, stripe: StripeClient, accountRef: string, customer: Row, allowApply=true): Promise<ProcessorCashResult> {
+export async function reconcileProcessorCash(env: Bindings, stripe: StripeClient, accountRef: string, customer: Row, allowApply=true, selection?:{transferRef:string;invoice:string;amountCents:number}): Promise<ProcessorCashResult> {
   providerReference(accountRef)
   const b = await binding(env, accountRef, customer), customerRef = providerReference(b.stripe_customer_ref)
   const [account, remote] = await Promise.all([stripe('/account'), stripe(`/customers/${encodeURIComponent(customerRef)}`)])
@@ -144,7 +150,8 @@ export async function reconcileProcessorCash(env: Bindings, stripe: StripeClient
     && remote.deleted !== true && typeof remote.livemode === 'boolean', invalid, 409)
   const livemode = remote.livemode as boolean
   let current = await snapshot(stripe, customerRef, livemode)
-  const rows = () => all(env, 'SELECT * FROM nc_processor_cash_applications WHERE customer_id=? AND account_ref=? ORDER BY claimed_at,id', b.customer_id, accountRef)
+  const rows = async() => [...await all(env, "SELECT *,'native' AS source_kind FROM nc_processor_cash_applications WHERE customer_id=? AND account_ref=?", b.customer_id, accountRef),
+    ...await all(env,"SELECT *,'imported' AS source_kind FROM nc_processor_cash_imported_applications WHERE customer_id=? AND account_ref=?",b.customer_id,accountRef)].sort((a,b)=>a.claimed_at-b.claimed_at||a.id.localeCompare(b.id))
   for (const row of (await rows()).filter(row => row.status === 'uncertain')) {
     const intents = row.payment_intent_ref ? [await stripe(`/payment_intents/${encodeURIComponent(row.payment_intent_ref)}`)]
       : (await history(stripe, `/payment_intents?${new URLSearchParams({ customer: customerRef })}`)).filter(intent => intent.metadata?.nectar_cash_application === row.id)
@@ -154,38 +161,45 @@ export async function reconcileProcessorCash(env: Bindings, stripe: StripeClient
   current = await snapshot(stripe, customerRef, livemode)
   const lots = fundingLots(current.transactions, current.available)
   const unmatched: ProcessorCashResult['unmatched'] = []
-  const invoices = await all(env, `SELECT i.*,${BALANCE_SQL} AS balance_cents FROM nc_invoices i WHERE i.customer_id=? AND i.status='issued'
-    AND ${BALANCE_SQL}>0 ORDER BY i.issued_at,i.created_at,i.id`, b.customer_id)
-  for (const lot of allowApply?lots:[]) {
+  for (const lot of allowApply?lots.filter(lot=>!selection||lot.transaction.id===selection.transferRef):[]) {
+    const invoices = [...await all(env, `SELECT i.*,${BALANCE_SQL} AS balance_cents,'native' AS source_kind FROM nc_invoices i WHERE i.customer_id=? AND i.status='issued'
+      AND ${BALANCE_SQL}>0`, b.customer_id),...await importedCashCandidates(env,b)].sort((a,b)=>String(a.issue_date).localeCompare(String(b.issue_date))||(a.issued_at??0)-(b.issued_at??0)||(a.created_at??0)-(b.created_at??0)||String(a.number).localeCompare(String(b.number))||a.id.localeCompare(b.id))
     const t = lot.transaction, reference = typeof t.funded?.bank_transfer?.reference === 'string' ? t.funded.bank_transfer.reference : ''
     const existing = await rows()
-    if (existing.some(row => row.transfer_ref === t.id)) continue
+    if (existing.some(row => row.transfer_ref === t.id && (!selection||row.invoice_id===selection.invoice))) continue
     let reason = 'no_matching_invoice'
     // Only this customer's own issued number can match, on word boundaries.
     const referenced = invoices.filter(invoice => invoice.number && new RegExp(`(^|[^A-Za-z0-9])${String(invoice.number).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}($|[^A-Za-z0-9])`, 'i').test(reference))
-    const candidate = referenced.length === 1 ? referenced[0] : referenced.length === 0
+    const candidate = selection ? invoices.find(invoice=>invoice.id===selection.invoice) : referenced.length === 1 ? referenced[0] : referenced.length === 0
       ? invoices.find(invoice => invoice.balance_cents === lot.remaining && invoice.currency.toLowerCase() === t.currency) : null
     if (t.currency !== 'usd') reason = 'currency_not_supported'
     else if (existing.some(row => row.status === 'uncertain')) reason = 'application_unconfirmed'
-    else if (referenced.length > 1) reason = 'ambiguous_reference'
+    else if (!selection&&referenced.length > 1) reason = 'ambiguous_reference'
     else if (candidate && candidate.currency.toLowerCase() === t.currency && lot.remaining > 0 && Math.min(candidate.balance_cents,lot.remaining) <= (current.available[t.currency] ?? 0)) {
       try {
-        const source = await nativeCollectionSource(env, candidate.id)
-        insist(source.payerId === b.customer_id && source.row.customer_id === b.customer_id && source.disputedCents === 0, 'processor_cash_own_invoice_required', 409)
-        insist(source.accountRef === accountRef || source.accountRef === null && accountRef === (await stripeForAccount(env, null)).account,
-          'processor_cash_invoice_account_mismatch', 409)
+        const imported=candidate.source_kind==='imported'
+        const source = imported?await importedCashSource(env,stripe,b,candidate.id):await nativeCollectionSource(env, candidate.id)
+        const amount=selection?.amountCents??Math.min(source.row.balance_cents,lot.remaining)
+        insist(Number.isSafeInteger(amount)&&amount>=50&&amount<=source.row.balance_cents&&amount<=lot.remaining&&amount<=(current.available[t.currency]??0),'processor_cash_allocation_exceeds_balance',409)
+        insist(!await one(env,"SELECT id FROM nc_processor_cash_returns WHERE account_ref=? AND stripe_customer_ref=? AND status IN ('claimed','uncertain')",accountRef,customerRef),'processor_cash_return_unconfirmed',409)
+        if(!('takeover' in source)){
+          insist(source.payerId === b.customer_id && source.row.customer_id === b.customer_id && source.disputedCents === 0, 'processor_cash_own_invoice_required', 409)
+          insist(source.accountRef === accountRef || source.accountRef === null && accountRef === (await stripeForAccount(env, null)).account,
+            'processor_cash_invoice_account_mismatch', 409)
+        }
         const row: Row = { id: newId(), customer_id: b.customer_id, invoice_id: candidate.id, account_ref: accountRef, stripe_customer_ref: customerRef,
-          transfer_ref: t.id, amount_cents: Math.min(source.row.balance_cents,lot.remaining), currency: t.currency, source_hash: source.sourceHash, claimed_at: clockInstant(env), payment_intent_ref: null }
-        await commit(env, [bindingGuard(env, b), nativeSourceGuard(env, source), stmt(env, `INSERT INTO nc_processor_cash_applications
+          transfer_ref: t.id, amount_cents: amount, currency: t.currency, source_hash: source.sourceHash, claimed_at: clockInstant(env), payment_intent_ref: null,source_kind:imported?'imported':'native' }
+        const claim='takeover' in source?importedCashClaimStatements(env,b,source,row):[bindingGuard(env, b), nativeSourceGuard(env, source), stmt(env, `INSERT INTO nc_processor_cash_applications
           (id,customer_id,invoice_id,account_ref,stripe_customer_ref,transfer_ref,amount_cents,currency,source_hash,claimed_at,status) VALUES(?,?,?,?,?,?,?,?,?,?,'uncertain')`,
-          row.id, row.customer_id, row.invoice_id, accountRef, customerRef, row.transfer_ref, row.amount_cents, row.currency, row.source_hash, row.claimed_at)],
+          row.id, row.customer_id, row.invoice_id, accountRef, customerRef, row.transfer_ref, row.amount_cents, row.currency, row.source_hash, row.claimed_at)]
+        await commit(env, claim,
         { actor: system.id, action: 'processor.cash.claim', subject: row.id, detail: { invoice: row.invoice_id, transferRef: t.id, amountCents: row.amount_cents } })
         // Only this invocation that inserted the claim may make these writes.
         let intent = await stripe('/payment_intents', new URLSearchParams({ customer: customerRef, amount: String(row.amount_cents), currency: row.currency,
           'payment_method_types[]': 'customer_balance', 'payment_method_data[type]': 'customer_balance',
           'payment_method_options[customer_balance][funding_type]': 'bank_transfer',
           'payment_method_options[customer_balance][bank_transfer][type]': 'us_bank_transfer', confirm: 'true',
-          'metadata[nectar_native_invoice]': row.invoice_id, 'metadata[nectar_cash_application]': row.id, 'metadata[nectar_cash_transfer]': row.transfer_ref }), `nectar-cash-${row.id}`)
+          [imported?'metadata[nectar_imported_invoice]':'metadata[nectar_native_invoice]']: row.invoice_id, 'metadata[nectar_cash_application]': row.id, 'metadata[nectar_cash_transfer]': row.transfer_ref }), `nectar-cash-${row.id}`)
         verifyIntent(intent, row, livemode)
         await settle(env, stripe, b, row, intent, livemode)
         if (intent.status !== 'succeeded' && ['requires_action', 'requires_payment_method'].includes(intent.status) && intent.amount_received === 0) {

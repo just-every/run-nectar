@@ -4,8 +4,10 @@ import { harness } from './harness.mjs'
 import { processorEdge } from './processor-edge.mjs'
 import { applyPolicy } from './policy-helper.mjs'
 import { csvRows } from './financial-reports.mjs'
+import { processorRecoveryEdge, processorRecoveryFlow } from './processor-recovery.mjs'
+import { processorReturnFlow } from './processor-returns.mjs'
 export const webhookSecret='synthetic-nectar-webhook'
-export async function processorSetup(edge=processorEdge(),options={}) {
+export async function processorSetup(edge=processorRecoveryEdge(processorEdge()),options={}) {
  const h=await harness({assets:true,localTime:'2026-10-22T12:00:00Z',stripeFetch:edge.fetch,stripeSecret:'synthetic-nectar-1',stripeWebhookSecret:webhookSecret,...options})
  await h.raw('/auth/bootstrap',{body:{token:h.vars.SETUP_TOKEN,displayName:'Nectar Owner'}})
  const owner=await h.signIn(h.vars.OWNER_EMAIL)
@@ -18,9 +20,9 @@ export async function processorSetup(edge=processorEdge(),options={}) {
 export async function processorEventFlow(h,owner,edge,{onState=async()=>{}}={}) {
  const api=(path,body,status)=>h.api(path,owner,body,status)
  const customer=(await api('customer.create',{external_id:'synthetic-nectar-pay004',name:'Cedar Finance',billing_email:'finance@cedar.example'})).id
- const manual=async(amount,tag)=>{
-  const charge=(await api('charge.add',{customer,amount,description:tag,taxable:false,effective_date:'2026-10-22'})).charge
-  const invoice=(await api('invoice.manual',{customer,charges:[charge],service_date:'2026-10-22'})).id
+ const manual=async(amount,tag,payer=customer)=>{
+  const charge=(await api('charge.add',{customer:payer,amount,description:tag,taxable:false,effective_date:'2026-10-22'})).charge
+  const invoice=(await api('invoice.manual',{customer:payer,charges:[charge],service_date:'2026-10-22'})).id
   await api('invoice.approve',{invoice,acknowledge:true});await api('invoice.finalise',{invoice,issue_date:'2026-10-22'});return invoice
  }
  const invoice=await manual('100','October platform service')
@@ -85,7 +87,7 @@ export async function processorEventFlow(h,owner,edge,{onState=async()=>{}}={}) 
  const bankPaid=edge.event('synthetic-nectar-event-bank-paid','charge.succeeded',bank.charge,edge.at+4)
  await deliver(bankPaid)
  assert.equal((await api(`invoices/${bankInvoice}`)).balanceCents,0)
- Object.assign(bank.charge,{status:'failed',paid:false,failure_code:'R01',failure_balance_transaction:'synthetic-nectar-txn-return'})
+ Object.assign(bank.charge,{status:'failed',paid:false,failure_code:'insufficient_funds',outcome:{network_decline_code:'R01'},failure_balance_transaction:'synthetic-nectar-txn-return'})
  edge.transactions.set(bank.charge.failure_balance_transaction,{object:'balance_transaction',id:bank.charge.failure_balance_transaction,type:'payment_failure_refund',source:bank.charge.id,amount:-4000,fee:0,net:-4000,currency:'usd',status:'available',created:edge.at+5,available_on:edge.at+5})
  const bankReturn=edge.event('synthetic-nectar-event-bank-return','charge.failed',bank.charge,edge.at+5)
  await deliver(bankReturn);await deliver(bankReturn);await deliver(bankPaid)
@@ -154,7 +156,71 @@ export async function processorEventFlow(h,owner,edge,{onState=async()=>{}}={}) 
  assert.equal(refused.replayed,true)
  assert.equal((await api(`processor-events?customer=${customer}`)).events.length,0)
  await onState({label:'erased',customer,invoice})
+ await processorRecoveryFlow(h,owner,edge,{deliver,finance:people.finance.who})
+ await payoutArrivalFlow(api,edge,deliver,manual)
+ await processorReturnFlow(h,owner,edge)
  return {customer,invoice,source,deliver,manual,people}
+}
+async function payoutArrivalFlow(api,edge,deliver,manual) {
+ const customer=(await api('customer.create',{external_id:'synthetic-nectar-payout-order',name:'Payout attribution',billing_email:'payout@example.test'})).id
+ const remote='synthetic-nectar-payout-customer'
+ edge.objects.set(remote,{object:'customer',id:remote,livemode:false,invoice_settings:{default_payment_method:null}})
+ await api('collection.customer.bind',{customer,account_ref:edge.account,stripe_customer_ref:remote,confirm:true})
+ const firstInvoice=await manual('73','Payout before capture observation',customer),secondInvoice=await manual('120','Capture before payout observation',customer)
+ const seed=(invoice,amount,suffix,fee)=>{
+  const value=edge.seed(invoice,amount,suffix)
+  value.charge.customer=remote;value.intent.customer=remote
+  Object.assign(value.transaction,{fee,net:amount-fee})
+  return value
+ }
+ const first=seed(firstInvoice,7300,'payout-first',219),second=seed(secondInvoice,12000,'charge-first',410),unknown=seed(null,2300,'unrelated-charge',84)
+ unknown.intent.metadata={}
+ second.charge.metadata={nectar_native_invoice:secondInvoice};second.intent.metadata={}
+ await deliver(edge.event('synthetic-nectar-charge-first-observed','charge.succeeded',second.charge))
+ // Once native cash exists, its allocation remains sufficient even if provider metadata is absent.
+ second.charge.metadata={}
+ const transaction=(id,type,source,amount,fee)=>({object:'balance_transaction',id,type,source,amount,fee,net:amount-fee,currency:'usd',status:'available',created:edge.at+7,available_on:edge.at+8})
+ const refund=(suffix,amount)=>{
+  const value={object:'refund',id:`synthetic-nectar-order-refund-${suffix}`,charge:first.charge.id,payment_intent:first.intent.id,status:'succeeded',amount,currency:'usd',created:edge.at+7,livemode:false,balance_transaction:`synthetic-nectar-order-refund-transaction-${suffix}`}
+  edge.objects.set(value.id,value);edge.transactions.set(value.balance_transaction,transaction(value.balance_transaction,'refund',value.id,-amount,0));return value
+ }
+ const refundFirst=refund('first',1100),refundSecond=refund('second',700)
+ const dispute={object:'dispute',id:'synthetic-nectar-order-dispute',charge:first.charge.id,status:'needs_response',amount:1700,currency:'usd',reason:'fraudulent',livemode:false,balance_transactions:['synthetic-nectar-order-dispute-transaction']}
+ edge.objects.set(dispute.id,dispute);edge.transactions.set(dispute.balance_transactions[0],transaction(dispute.balance_transactions[0],'adjustment',dispute.id,-1700,900))
+ const unrelated=transaction('synthetic-nectar-unrelated-adjustment','adjustment',null,447,11)
+ edge.transactions.set(unrelated.id,unrelated)
+ const payout=(suffix,amount,members)=>{
+  const value={object:'payout',id:`synthetic-nectar-order-payout-${suffix}`,status:'paid',amount,currency:'usd',automatic:true,livemode:false,balance_transaction:`synthetic-nectar-order-payout-debit-${suffix}`}
+  edge.objects.set(value.id,value);edge.transactions.set(value.balance_transaction,transaction(value.balance_transaction,'payout',value.id,-amount,0))
+  edge.payoutMembers.set(value.id,[...members,value.balance_transaction]);return value
+ }
+ const firstPayout=payout('first',6033,[first.transaction.id,refundFirst.balance_transaction,dispute.balance_transactions[0],unknown.transaction.id,unrelated.id])
+ const secondPayout=payout('second',10890,[second.transaction.id,refundSecond.balance_transaction])
+ const invoicesBefore=(await api(`invoices?customer=${customer}`)).data.map(row=>row.id).sort()
+ for(const value of [secondPayout,firstPayout])await deliver(edge.event(`${value.id}-observed`,'payout.paid',value))
+ let observed=await api(`processor-events?customer=${customer}`)
+ for(const id of [first.transaction.id,refundFirst.balance_transaction,refundSecond.balance_transaction,dispute.balance_transactions[0]]) {
+  const row=observed.transactions.find(row=>row.transaction_ref===id)
+  assert.equal(row.invoice_id,firstInvoice);assert.equal(row.payment_id,null)
+ }
+ assert.equal(observed.transactions.find(row=>row.transaction_ref===second.transaction.id).invoice_id,secondInvoice)
+ assert.ok(observed.transactions.find(row=>row.transaction_ref===second.transaction.id).payment_id)
+ assert.equal((await api(`invoices/${firstInvoice}`)).balanceCents,7300,'Payout attribution does not fabricate a payment')
+ for(const [kind,value] of [['charge.succeeded',first.charge],['refund.created',refundFirst],['charge.dispute.created',dispute],['refund.created',refundSecond]]) {
+  const event=edge.event(`${value.id}-late-observed`,kind,value);await deliver(event);await deliver(event)
+ }
+ // Distinct subsequent payout updates may revisit both sets after the charge enriched its own transaction.
+ for(const value of [firstPayout,secondPayout])await deliver(edge.event(`${value.id}-updated`,'payout.updated',value))
+ observed=await api('processor-events')
+ for(const [value,expected] of [[firstPayout,[[first.transaction.id,7300,219,7081,firstInvoice],[refundFirst.balance_transaction,-1100,0,-1100,firstInvoice],[dispute.balance_transactions[0],-1700,900,-2600,firstInvoice],[unknown.transaction.id,2300,84,2216,null],[unrelated.id,447,11,436,null]]],[secondPayout,[[second.transaction.id,12000,410,11590,secondInvoice],[refundSecond.balance_transaction,-700,0,-700,firstInvoice]]]]) {
+  const members=observed.transactions.filter(row=>row.payout_ref===value.id&&row.transaction_ref!==value.balance_transaction)
+  assert.deepEqual(members.map(row=>[row.transaction_ref,row.amount_cents,row.fee_cents,row.net_cents,row.invoice_id]).sort(),expected.sort())
+  assert.equal(members.reduce((sum,row)=>sum+row.net_cents,0),value.amount)
+  for(const row of members)if(row.invoice_id){assert.equal(row.customer_id,customer);assert.ok(row.payment_id)}else assert.deepEqual([row.customer_id,row.payment_id],[null,null])
+ }
+ assert.deepEqual((await api(`invoices?customer=${customer}`)).data.map(row=>row.id).sort(),invoicesBefore)
+ assert.equal(observed.transactions.find(row=>row.transaction_ref===unrelated.id).source_ref,'')
+ assert.deepEqual((await api('payments')).filter(row=>row.customer_id===customer).map(row=>row.amount_cents).sort((a,b)=>a-b),[7300,12000])
 }
 if(process.argv[1]===new URL(import.meta.url).pathname){
  const {h,owner,edge}=await processorSetup()

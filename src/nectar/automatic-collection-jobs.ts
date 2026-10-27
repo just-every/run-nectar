@@ -1,5 +1,6 @@
 import { retryAttemptQuote } from './retry-method-recovery'
 import { bankReturnCode } from './retry-policy'
+import { bankNetworkReturnCode, processorReturnStatements } from './processor-returns'
 import { recordRetryFailure,recordRetrySuccess } from './retry-records'
 import { unusableMethodGuard } from './card-lifecycle'
 import { refusedPaymentWithLifecycle } from './payments/refusal'
@@ -19,9 +20,9 @@ import { nativeCollectionSource, nativeSourceGuard } from './payments/source'
 import { capturedPayment, NativeStripeError, providerReference, readIntent, stripeForAccount, verifyIntent, type PaymentIdentity, type StripeClient } from './payments/stripe'
 
 const system = (id:string):Actor => ({id:`automatic-collection:${id}`,kind:'agent',name:`automatic-collection:${id}`,email:'',role:null,sessionId:null,capabilities:new Set(['receivables'])})
-async function outcome(env:Bindings,row:Row,status:string,values:Row={}){
+async function outcome(env:Bindings,row:Row,status:string,values:Row={},facts:D1PreparedStatement[]=[]){
  const fields={status,...values,revision:newId()}
- await commit(env,[guard(env,'automatic_collection_state_changed','EXISTS(SELECT 1 FROM nc_automatic_collections a JOIN nc_customers c ON c.id=a.customer_id WHERE a.id=? AND a.revision=? AND c.erased_at IS NULL)',row.id,row.revision),
+ await commit(env,[guard(env,'automatic_collection_state_changed','EXISTS(SELECT 1 FROM nc_automatic_collections a JOIN nc_customers c ON c.id=a.customer_id WHERE a.id=? AND a.revision=? AND c.erased_at IS NULL)',row.id,row.revision),...facts,
  stmt(env,`UPDATE nc_automatic_collections SET ${Object.keys(fields).map(key=>`${key}=?`).join(',')} WHERE id=?`,...Object.values(fields),row.id)],
  {actor:actorLabel(system(row.id)),action:`automatic.collection.${status}`,subject:row.id,detail:{invoice:row.invoice_id,errorCode:values.error_code??null,paymentIntentRef:values.payment_intent_ref??row.payment_intent_ref}})
  return storedAutomaticCollection(env,row.id)
@@ -31,13 +32,15 @@ export async function settleAutomaticIntent(env:Bindings,row:Row,stripe:StripeCl
  if(!row.payment_intent_ref)row=await outcome(env,row,'uncertain',{payment_intent_ref:intentRef})
  if(intent.status==='processing')return automaticView(await outcome(env,row,'pending_settlement',{error_code:null}))
  if(row.method_kind==='us_bank_account'&&intent.status==='requires_payment_method'&&intent.amount_received===0&&intent.last_payment_error){
-  const providerCode=intent.last_payment_error.code
-  const code: string=bankReturnCode(providerCode)
-  insist(typeof code==='string'&&/^[A-Za-z0-9_]{1,100}$/.test(code),'automatic_collection_return_unconfirmed',409)
   const history=await stripe(`/charges?${new URLSearchParams({payment_intent:intentRef,limit:'100'})}`)
   insist(history.object==='list'&&history.has_more===false&&Array.isArray(history.data)&&history.data.length>0&&history.data.every((charge:Row)=>
    charge.object==='charge'&&providerReference(charge.payment_intent)===intentRef&&providerReference(charge.customer)===identity.customerRef&&charge.status==='failed'&&charge.paid===false),'automatic_collection_return_unconfirmed',409)
-  const failed=await outcome(env,row,'returned',{error_code:code});await recordRetryFailure(env,failed,code);return automaticView(failed)
+  const latest=history.data.find((charge:Row)=>charge.id===providerReference(intent.latest_charge))
+  insist(latest,'automatic_collection_return_unconfirmed',409)
+  const code=bankNetworkReturnCode(latest,intent)??bankReturnCode(intent.last_payment_error.code)
+  insist(typeof code==='string'&&/^[A-Za-z0-9_]{1,100}$/.test(code),'automatic_collection_return_unconfirmed',409)
+  const facts=processorReturnStatements(env,row.account_ref,latest,intent,row.customer_id,row.invoice_id,clockInstant(env))
+  const failed=await outcome(env,row,'returned',{error_code:code,retry_advice_code:latest.outcome?.advice_code==='do_not_try_again'?'do_not_try_again':null},facts);await recordRetryFailure(env,failed,code);return automaticView(failed)
  }
  const refusal=await refusedPaymentWithLifecycle(env,stripe,intent,identity)
  if(refusal){const failed=await outcome(env,row,'refused',{error_code:refusal.declineCode??refusal.errorCode,retry_advice_code:refusal.retryProhibited?'do_not_try_again':null});await recordRetryFailure(env,failed,refusal.declineCode??refusal.errorCode);return automaticView(failed)}

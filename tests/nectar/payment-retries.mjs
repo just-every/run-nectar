@@ -79,6 +79,16 @@ export async function paymentRetriesFlow(h,owner,{onState=async()=>{},prepareCol
  for(const code of ['R01','R09','insufficient_funds','R02','R03','R05','R07','R10','R29']){
   const bank=await create(code,{customer:customers[1]})
   const initial=await parity(bank)
+  const intent=edge.intents.get(edge.writes.at(-1).id).value,charge=edge.charges.get(intent.latest_charge).value
+  const event={object:'event',id:`synthetic-nectar-${8000+edge.events.size}`,type:'charge.failed',livemode:false,created:instant/1000,data:{object:structuredClone(charge)}}
+  edge.events.set(event.id,event)
+  await api('processor.event.consume',{account_ref:'synthetic-nectar-native-account-1',event_ref:event.id})
+  assert.equal((await api('processor.event.consume',{account_ref:'synthetic-nectar-native-account-1',event_ref:event.id})).replayed,true)
+  const observed=(await api(`processor-events?customer=${customers[1]}`)).objects
+  const raw=code==='insufficient_funds'?null:code
+  assert.equal(observed.find(row=>row.object_ref===charge.id&&row.kind==='ach_return').code,raw,'Current raw network return identity is retained independently of the normalized provider error')
+  assert.equal(observed.find(row=>row.object_ref===intent.id&&row.kind==='payment_intent').code,intent.last_payment_error.code)
+  assert.equal((await parity(bank)).next_payment_attempt,initial.next_payment_attempt,'Processor return intake preserves the consented retry timing')
   assert.equal(initial.next_payment_attempt,['R01','R09','insufficient_funds'].includes(code)?instant+3*day:null)
   if(initial.next_payment_attempt){
    const before=edge.writes.length
@@ -87,6 +97,8 @@ export async function paymentRetriesFlow(h,owner,{onState=async()=>{},prepareCol
    await tick(instant+day);assert.equal(edge.writes.length,before+2)
   }
  }
+ const prohibitedBank=await create('R01',{customer:customers[1],advice:'do_not_try_again'})
+ assert.equal((await parity(prohibitedBank)).next_payment_attempt,null,'A bank return eligible by network code still obeys explicit processor retry prohibition')
  // Default attempt and time caps are independently observable at the public invoice door.
  const capped=await create('do_not_honor'),capStart=instant
  for(let n=1;n<=7;n++)await tick(capStart+n*day)

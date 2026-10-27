@@ -1,5 +1,6 @@
 import { requireUsdReporting } from './currency'
 import { processorReportSources, processorReportSource } from './processor-reports'
+import { processorCashReturnSources, processorCashReturnSource } from './processor-cash-return-report'
 import { translateReportAmount, invoiceTaxReporting, creditTaxReporting, reportingTotal } from './currency-report-translation'
 import { balanceFinancialSources, balanceSourceComponents } from './financial-balance'
 import { sharedCreditNotes } from './shared-credit-custody'
@@ -148,6 +149,7 @@ async function contributions(env: Bindings, metric: string, url: URL) {
   const unbilled = selected.metric === 'unbilled' ? await unbilledSources(env, business, month, customer) : null
   const prepaid = selected.metric === 'credit-balances' ? await prepaidFinancialSources(env, today(business.timezone, clockInstant(env)), customer, id => sourceHref(selected.metric, id, month, customer)) : null
   const refunds = selected.metric === 'refunds' ? await prepaidRefundFinancialSources(env, month, customer, today(business.timezone, clockInstant(env)), business.timezone, id => sourceHref('refunds', id, month, customer)) : null
+  const cashReturns=selected.metric==='refunds'?await processorCashReturnSources(env,month,customer,today(business.timezone,clockInstant(env)),business.timezone):null
   let entries: FinancialReportEntry[]
   if (refunds) {
     entries = [...refunds.values()].map(source => source.entry)
@@ -161,6 +163,7 @@ async function contributions(env: Bindings, metric: string, url: URL) {
       entry.processor = evidence
     }
     entries.push(...processor.entries)
+    entries.push(...[...cashReturns!.values()].map(source=>source.entry as FinancialReportEntry))
   }
   else if (unbilled) entries = [...unbilled.values()].map(source => source.entry)
   else if(selected.metric==='credit-balances'){
@@ -195,7 +198,7 @@ async function contributions(env: Bindings, metric: string, url: URL) {
   entries.push(...historical.map(source=>source.entry as FinancialReportEntry))
   const report: FinancialReport = { metric: selected.metric, ...DEFINITIONS[selected.metric], period: month,
     totalCents: reportingTotal(entries), entries, ...(entries.some(entry => entry.reporting) ? { reportingCurrency: 'USD' as const } : {}) }
-  return { report, unbilled, prepaid, refunds, business }
+  return { report, unbilled, prepaid, refunds, cashReturns, business }
 }
 
 /** Every contribution is sourced from actual ledger rows or exact rated usage lines. */
@@ -209,9 +212,11 @@ export async function financialReport(env: Bindings, actor: Actor, metric: strin
 export async function financialReportSource(env: Bindings, actor: Actor, metric: string, sourceId: string, url: URL): Promise<FinancialReportSource> {
   requireRead(actor, 'reports')
   if (metric === 'unbilled' || metric === 'credit-balances') await requireUsdReporting(env,url.searchParams.get('customer'))
-  const { report, unbilled, prepaid, refunds, business } = await contributions(env, metric, url)
+  const { report, unbilled, prepaid, refunds, cashReturns, business } = await contributions(env, metric, url)
   const entry = report.entries.find(row => row.invoiceId === sourceId)
   insist(entry, 'report_invoice_not_found', 404)
+  const cashReturn=cashReturns?.get(sourceId)
+  if(cashReturn)return processorCashReturnSource(report,cashReturn,actor) as FinancialReportSource
   if (entry.sourceKind === 'processor_refund') return processorReportSource(report, entry, actor) as FinancialReportSource
   if (entry.sourceKind === 'invoice_refund') {
     const refund=await one(env,"SELECT id,invoice_id,customer_id,payment_id,amount_cents,refund_ref,credit_id,completed_at FROM nc_invoice_refunds WHERE id=? AND status='completed' AND destination='original'",sourceId)

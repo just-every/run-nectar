@@ -93,18 +93,51 @@ try {
  const disputes=(await stripe.list('/v1/disputes',{charge:reference(disputed.latest_charge)})).data
  if(disputes.length){const event=await eventFor('charge.dispute.created',disputes[0].id);await ingest(event);results.push({kind:'dispute',eventRef:event.id,dispute:disputes[0].id,status:disputes[0].status})}
  else results.push({kind:'dispute',boundary:'genuine_dispute_not_yet_observed'})
- phase='ach-failure-boundary'
- const bankInvoice=await issue('20','ACH insufficient-funds boundary')
- let bank
- try {bank=await stripe.request('POST','/v1/payment_intents',{customer:remote.id,amount:2000,currency:'usd','payment_method_types[]':'us_bank_account',payment_method:'pm_usBankAccount_insufficientFunds',confirm:true,
-  'mandate_data[customer_acceptance][type]':'online','mandate_data[customer_acceptance][online][ip_address]':'127.0.0.1','mandate_data[customer_acceptance][online][user_agent]':'Nectar sandbox verification','metadata[nectar_native_invoice]':bankInvoice.id})}
- catch(error){if(error.status!==402)throw error;bank=(await stripe.list('/v1/payment_intents',{customer:remote.id})).data.find(row=>row.metadata?.nectar_native_invoice===bankInvoice.id)}
- assert.ok(bank)
- if(bank.status==='requires_payment_method'){
-  const event=await eventFor('payment_intent.payment_failed',bank.id);await ingest(event)
-  assert.equal((await api(`invoices/${bankInvoice.id}`)).balanceCents,2000)
-  results.push({kind:'ach_failure',paymentIntent:bank.id,eventRef:event.id,providerCode:bank.last_payment_error?.code??null,declineCode:bank.last_payment_error?.decline_code??null,lateReturnObserved:false})
- }else results.push({kind:'ach_failure',paymentIntent:bank.id,status:bank.status,lateReturnObserved:false})
+ phase='ach-returns'
+ // Official ACH fixtures; only actual raw provider fields establish Rxx identity.
+ const bankFixtures=[
+  ['pm_usBankAccount_insufficientFunds',['R01']],
+  ['pm_usBankAccount_accountClosed',['R02']],
+  ['pm_usBankAccount_noAccount',['R03','R04']],
+  ['pm_usBankAccount_debitNotAuthorized',['R05','R07','R08','R10','R11','R29','R31']],
+ ]
+ for(const [index,[fixture,expectedCodes]] of bankFixtures.entries()) {
+  const bankInvoice=await issue('20',`Genuine ACH return ${index+1}`)
+  let bank
+  try {bank=await stripe.request('POST','/v1/payment_intents',{customer:remote.id,amount:2000,currency:'usd','payment_method_types[]':'us_bank_account',payment_method:fixture,confirm:true,
+   'mandate_data[customer_acceptance][type]':'online','mandate_data[customer_acceptance][online][ip_address]':'127.0.0.1','mandate_data[customer_acceptance][online][user_agent]':'Nectar sandbox verification','metadata[nectar_native_invoice]':bankInvoice.id})}
+  catch(error){if(error.status!==402)throw error;bank=(await stripe.list('/v1/payment_intents',{customer:remote.id})).data.find(row=>row.metadata?.nectar_native_invoice===bankInvoice.id)}
+  assert.ok(bank,'The real failed intent exists')
+  bank=await stripe.request('GET',`/v1/payment_intents/${bank.id}`)
+  assert.equal(bank.status,'requires_payment_method')
+  const charge=await stripe.request('GET',`/v1/charges/${reference(bank.latest_charge)}`)
+  assert.equal(charge.status,'failed');assert.equal(charge.payment_method_details?.type,'us_bank_account')
+  const raw=charge.outcome?.network_decline_code,normalized=bank.last_payment_error?.decline_code??bank.last_payment_error?.code
+  assert.ok(/^R\d{2}$/.test(raw),'A genuine raw network return code is required')
+  assert.ok(expectedCodes.includes(raw),'The documented bank fixture produces its expected return category')
+  assert.equal(bank.last_payment_error?.network_decline_code,raw,'Current intent and charge independently agree on the raw return identity')
+  assert.ok(typeof normalized==='string'&&/^[a-z][a-z0-9_]{0,99}$/.test(normalized),'The normalized provider code remains separately identified')
+  const chargeEvent=await eventFor('charge.failed',charge.id),intentEvent=await eventFor('payment_intent.payment_failed',bank.id)
+  assert.equal(chargeEvent.data.object.outcome?.network_decline_code,raw)
+  assert.equal(intentEvent.data.object.last_payment_error?.network_decline_code,raw)
+  const order=index%2?[intentEvent,chargeEvent]:[chargeEvent,intentEvent]
+  for(const event of order)await ingest(event)
+  for(const event of order.toReversed())assert.equal((await api('processor.event.consume',{account_ref:account.id,event_ref:event.id})).replayed,true)
+  const record=await api(`invoices/${bankInvoice.id}`),ledger=await api(`processor-events?customer=${customer}`)
+  assert.deepEqual([record.balanceCents,record.allocations.length,record.processorReversals.length],[2000,0,0])
+  const returned=ledger.objects.find(row=>row.object_ref===charge.id),failure=ledger.objects.find(row=>row.object_ref===bank.id)
+  assert.deepEqual([returned?.kind,returned?.code,failure?.code],['ach_return',raw,normalized],'Raw return identity and normalized failure are retained independently')
+  assert.ok(charge.failure_balance_transaction,'A real return balance transaction is required')
+  const movements=[]
+  for(const transactionRef of [charge.balance_transaction,charge.failure_balance_transaction].filter(Boolean)){
+   const transaction=await stripe.request('GET',`/v1/balance_transactions/${reference(transactionRef)}`)
+   const observed=ledger.transactions.find(row=>row.transaction_ref===transaction.id)
+   assert.ok(observed);assert.equal(reference(transaction.source),charge.id)
+   assert.deepEqual([observed.amount_cents,observed.fee_cents,observed.net_cents,observed.currency],[transaction.amount,transaction.fee,transaction.net,transaction.currency])
+   movements.push({id:transaction.id,grossCents:transaction.amount,feeCents:transaction.fee,netCents:transaction.net})
+  }
+  results.push({kind:'ach_return',fixture,paymentIntent:bank.id,charge:charge.id,eventRefs:order.map(event=>event.id),networkReturnCode:raw,providerCode:normalized,movements,allocatedCents:0,apiVersion:stripe.apiVersion})
+ }
  phase='failure-alert'
  assert.ok(process.env.SENDGRID_KEY&&process.env.SENDGRID_FROM,'Held SendGrid inputs are required')
  const email=process.env.SENDGRID_FROM
@@ -124,7 +157,7 @@ try {
  await h.page(alert.href,finance);assert.equal((await h.raw(alert.href)).status,303)
  results.push({kind:'failure_alert',eventRef:rejectedEvent.id,status:alert.status,providerReference:alert.provider_ref,sends})
  phase='automatic-payout'
- results.push(await provePayout(account,api),{kind:'ach_return',boundary:'genuine_R01_identification_sandbox_pending'})
+ results.push(await provePayout(account,api))
  }
  console.log(JSON.stringify({head,status:'passed_for_named_slices',results,requests:stripe.counts}))
 }catch(error){console.error(JSON.stringify({head,status:'failed',phase,error:safeError(error),results}));process.exitCode=1}

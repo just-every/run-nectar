@@ -1,6 +1,7 @@
 import { retryDunningStep } from './dunning-recovery'
 import { effectiveRetryQuote,claimRetryMethodRecovery } from './retry-method-recovery'
 import { bankReturnCode } from './retry-policy'
+import { bankNetworkReturnCode } from './processor-returns'
 import { refusedPaymentWithLifecycle } from './payments/refusal'
 import type { Bindings } from '../auth.server'
 import { all,canonical,commit,guard,insist,newId,one,stmt,NectarError } from './core'
@@ -34,7 +35,11 @@ export async function runPaymentRetries(env:Bindings){
     const refusal=await refusedPaymentWithLifecycle(env,stripe,observed,identity)
     insist(refusal&&(!refusal.retryProhibited||q.method.paymentMethodRef!==identity.paymentMethodRef&&HARD_CARD_DECLINES.has(refusal.declineCode??refusal.errorCode))&&(refusal.declineCode??refusal.errorCode)===series.decline_code,'retry_reason_changed',409)
    }
-   if(q.method.kind==='us_bank_account')insist(bankReturnCode(observed.last_payment_error?.code)===series.decline_code,'retry_reason_changed',409)
+   if(q.method.kind==='us_bank_account'){
+    const latest=history.data.find((charge:Record<string,unknown>)=>charge.id===providerReference(observed.latest_charge))
+    insist(latest,'retry_prior_outcome_unconfirmed',409)
+    insist(latest.outcome?.advice_code!=='do_not_try_again'&&(bankNetworkReturnCode(latest,observed)??bankReturnCode(observed.last_payment_error?.code))===series.decline_code,'retry_reason_changed',409)
+   }
    const attempt=series.attempts+1,claimAt=clockInstant(env),dunningStep=await retryDunningStep(env,row,q)
    insist(claimAt<=series.deadline,'retry_window_expired',409)
    await commit(env,[automaticAuthority(env,row),...await claimRetryMethodRecovery(env,row,q),nativeSourceGuard(env,source),unusableMethodGuard(env,q.accountRef,q.method.customerRef,q.method.paymentMethodRef),

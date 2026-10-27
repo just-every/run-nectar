@@ -897,6 +897,46 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
   "price.retire": {
     "price": "text"
   },
+  "processor.cash.allocate": {
+    "account_ref": "text",
+    "amount": "text",
+    "confirm": "flag",
+    "customer": "text",
+    "invoice": "text",
+    "transfer_ref": "text"
+  },
+  "processor.cash.imported.confirm": {
+    "basis_hash": "text",
+    "confirm": "flag",
+    "disable_auto_advance": "flag",
+    "takeover": "text"
+  },
+  "processor.cash.imported.prepare": {
+    "account_ref": "text",
+    "invoice": "text"
+  },
+  "processor.cash.return.execute": {
+    "basis": "text",
+    "confirm": "flag",
+    "request": "text"
+  },
+  "processor.cash.return.prepare": {
+    "account_ref": "text",
+    "amount": "text",
+    "basis": "text",
+    "confirm": "flag",
+    "currency": "text",
+    "customer": "text"
+  },
+  "processor.cash.return.preview": {
+    "account_ref": "text",
+    "amount": "text",
+    "currency": "text",
+    "customer": "text"
+  },
+  "processor.cash.return.reconcile": {
+    "request": "text"
+  },
   "processor.event.consume": {
     "account_ref": "text",
     "event_ref": "text"

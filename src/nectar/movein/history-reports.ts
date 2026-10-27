@@ -4,14 +4,17 @@ import type { Bindings } from '../../auth.server'
 import { all, insist, parseJson, type Row } from '../core'
 import { daysBetween, isDate } from '../dates'
 import type { Report, ReportEntry, ReportInvoice, ReportMetric } from '../reports'
+import { importedCashCollections } from '../processor-cash-imported'
 
 export const historicalHref = (customer: string, id: string) => `/app/customers/${customer}#history-${id}`
 export async function customerHistory(env: Bindings, customer: string) {
   const documents = await all(env, 'SELECT * FROM nc_incumbent_invoices WHERE customer_id=? ORDER BY COALESCE(issue_date,period_start),id', customer)
   const records = await all(env, 'SELECT * FROM nc_incumbent_history WHERE customer_id=? ORDER BY occurred_on,id', customer)
-  const collected=await all(env,"SELECT p.* FROM nc_imported_collections p WHERE p.customer_id=? AND p.charge_ref IS NOT NULL AND p.collected_on IS NOT NULL",customer)
+  const cash=await importedCashCollections(env,customer)
+  const collected=[...await all(env,"SELECT p.* FROM nc_imported_collections p WHERE p.customer_id=? AND p.charge_ref IS NOT NULL AND p.collected_on IS NOT NULL",customer),...cash]
   const additional=collected.filter(payment=>!records.some(record=>record.kind==='payment'&&record.status==='succeeded'&&(record.id===payment.history_payment_id||record.provider_ref===payment.charge_ref)))
-  return { totals:{invoicedCents:documents.filter(row=>row.document_kind==='invoice'&&['paid','open','uncollectible'].includes(row.status)).reduce((n,row)=>n+row.total_cents,0), creditedCents:documents.filter(row=>row.document_kind==='credit-note'&&row.status==='issued').reduce((n,row)=>n+row.total_cents,0),paymentsCents:records.filter(row=>row.kind==='payment'&&row.status==='succeeded').reduce((n,row)=>n+row.amount_cents,0)+additional.reduce((n,row)=>n+row.amount_cents,0),refundsCents:records.filter(row=>row.kind==='refund'&&row.status==='succeeded').reduce((n,row)=>n+row.amount_cents,0),remainingCents:documents.filter(row=>row.document_kind==='invoice'&&row.status==='open').reduce((n,row)=>n+Math.max(0,row.remaining_cents-collected.filter(payment=>payment.invoice_id===row.id).reduce((sum,payment)=>sum+payment.amount_cents,0)),0)}, documents: documents.map(row => ({ ...historicalFinancialFacts(row), lines: publicLines(row.lines_json) })), records: records.map(row => ({ ...historicalFinancialFacts(row), ...(row.kind==='subscription-event'?{timeline:subscriptionSnapshot(parseJson<Row>(row.payload_json,{}))}:{}) })) }
+  const cashRecords=cash.filter(row=>additional.includes(row)).map(row=>historicalFinancialFacts({...row,provider:'stripe',provider_ref:row.charge_ref,kind:'payment',status:'succeeded',occurred_on:row.collected_on}))
+  return { totals:{invoicedCents:documents.filter(row=>row.document_kind==='invoice'&&['paid','open','uncollectible'].includes(row.status)).reduce((n,row)=>n+row.total_cents,0), creditedCents:documents.filter(row=>row.document_kind==='credit-note'&&row.status==='issued').reduce((n,row)=>n+row.total_cents,0),paymentsCents:records.filter(row=>row.kind==='payment'&&row.status==='succeeded').reduce((n,row)=>n+row.amount_cents,0)+additional.reduce((n,row)=>n+row.amount_cents,0),refundsCents:records.filter(row=>row.kind==='refund'&&row.status==='succeeded').reduce((n,row)=>n+row.amount_cents,0),remainingCents:documents.filter(row=>row.document_kind==='invoice'&&row.status==='open').reduce((n,row)=>n+Math.max(0,row.remaining_cents-collected.filter(payment=>payment.invoice_id===row.id).reduce((sum,payment)=>sum+payment.amount_cents,0)),0)}, documents: documents.map(row => ({ ...historicalFinancialFacts(row), lines: publicLines(row.lines_json) })), records: [...records.map(row => ({ ...historicalFinancialFacts(row), ...(row.kind==='subscription-event'?{timeline:subscriptionSnapshot(parseJson<Row>(row.payload_json,{}))}:{}) })),...cashRecords] }
 }
 // CT 21 October: originals are opaque downloads, never inline evidence for
 // any role. Every projection below selects typed facts, never provider prose.
@@ -71,10 +74,17 @@ export async function historicalContributions(env: Bindings, metric: ReportMetri
     const payments=await all(env,`SELECT p.*,c.name AS customer_name,c.erased_at FROM nc_incumbent_history p JOIN nc_customers c ON c.id=p.customer_id WHERE p.kind='payment' AND p.status='succeeded' AND substr(p.occurred_on,1,7)=? AND p.occurred_on<=? ${customer?'AND p.customer_id=?':''} ORDER BY p.occurred_on,p.id`,month,day,...(customer?[customer]:[]))
     for(const row of payments)add(row,row.amount_cents,[{kind:'imported_payment',label:`${row.provider} payment ${row.provider_ref}`,amountCents:row.amount_cents,href:historicalHref(row.customer_id,row.id)}],parseJson<Row>(row.payload_json,{}),'payment')
     const collected=await all(env,`SELECT p.*,c.name AS customer_name,c.erased_at,'stripe' AS provider,p.charge_ref AS provider_ref FROM nc_imported_collections p JOIN nc_customers c ON c.id=p.customer_id WHERE p.charge_ref IS NOT NULL AND p.collected_on IS NOT NULL AND substr(p.collected_on,1,7)=? AND p.collected_on<=? ${customer?'AND p.customer_id=?':''} AND NOT EXISTS(SELECT 1 FROM nc_incumbent_history h WHERE h.kind='payment' AND h.status='succeeded' AND (h.id=p.history_payment_id OR (p.charge_ref<>'' AND h.provider_ref=p.charge_ref))) ORDER BY p.collected_on,p.id`,month,day,...(customer?[customer]:[]))
+    const cash=await importedCashCollections(env,customer??undefined)
+    for(const row of cash){
+      if(row.collected_on.slice(0,7)!==month||row.collected_on>day||payments.some(p=>p.id===row.history_payment_id||(row.charge_ref&&p.provider_ref===row.charge_ref)))continue
+      const document=documents.find(document=>document.id===row.invoice_id)
+      if(document)collected.push({...row,customer_name:document.customer_name,erased_at:document.erased_at,provider:'stripe',provider_ref:row.charge_ref})
+    }
     for(const row of collected)add(row,row.amount_cents,[{kind:'imported_collection',label:`Stripe payment on original invoice ${row.number}`,amountCents:row.amount_cents,href:historicalHref(row.customer_id,row.invoice_id)}],{invoice:row.invoice_ref,charge:row.charge_ref,payment:row.payment_ref,collectedOn:row.collected_on,amountCents:row.amount_cents,currency:row.currency},'payment')
     return result
   }
   const collectedAmounts=new Map((await all(env,"SELECT invoice_id,SUM(amount_cents) AS amount FROM nc_imported_collections WHERE charge_ref IS NOT NULL AND collected_on IS NOT NULL GROUP BY invoice_id")).map(row=>[row.invoice_id,row.amount]))
+  for(const row of await importedCashCollections(env,customer??undefined))collectedAmounts.set(row.invoice_id,(collectedAmounts.get(row.invoice_id)??0)+row.amount_cents)
   const recurringRecords=metric==='mrr'?new Map((await (await import('./history-revenue')).historicalRevenueInvoices(env,null,customer)).map(record=>[record.invoice.id,record])):null
   for(const row of documents) {
     const original=parseJson<Row>(row.source_json,{}),href=historicalHref(row.customer_id,row.id)

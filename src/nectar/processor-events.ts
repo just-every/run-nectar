@@ -10,6 +10,8 @@ import { providerReference, stripeForAccount } from './payments/stripe'
 import { chargeFacts, disputeFacts, failureFacts, payoutFacts, refundFacts } from './processor-facts'
 import { instant, processorBinding, ref } from './processor-source'
 import { reconcileProcessorCash } from './processor-cash'
+import { processorCashObservation, unmatchedProcessorCash } from './processor-cash-queue'
+import { readProcessorCashReturns, observeCashReturnEvent } from './processor-cash-return'
 
 export const PROCESSOR_TYPES=['payment_intent.succeeded','payment_intent.processing','payment_intent.payment_failed','charge.succeeded','charge.failed','charge.refunded','refund.created','refund.updated','charge.dispute.created','charge.dispute.updated','charge.dispute.closed','cash_balance.funds_available','payout.created','payout.updated','payout.paid','payout.failed']
 export async function consumeProcessorEvent(env:Bindings,actor:Actor,input:Input) {
@@ -47,14 +49,16 @@ export async function applyProcessorEvent(env:Bindings,account:string|null,event
    }
   }
   else if(event.type.startsWith('charge.'))result=await chargeFacts(env,stripe,account,objectRef,event)
-  else if(event.type.startsWith('refund.'))result=await refundFacts(env,stripe,account,objectRef,event)
+  else if(event.type.startsWith('refund.')){
+   const refund=await stripe(`/refunds/${encodeURIComponent(objectRef)}`)
+   result=refund.origin==='customer_balance'||!ref(refund.charge)&&ref(refund.customer)
+    ?await observeCashReturnEvent(env,stripe,account,refund,event):await refundFacts(env,stripe,account,objectRef,event)
+  }
   else if(event.type.startsWith('payout.'))result=await payoutFacts(env,stripe,account,objectRef)
   else {
    const binding=await processorBinding(env,account,providerReference(ref(object.customer)))
    const cash=await reconcileProcessorCash(env,stripe,account,binding,prior?.status!=='applied')
-   const statements:D1PreparedStatement[]=[stmt(env,'DELETE FROM nc_processor_cash_balances WHERE account_ref=? AND customer_id=?',account,binding.customer_id)]
-   for(const [currency,amount] of Object.entries({usd:0,...cash.availableByCurrency}))statements.push(stmt(env,`INSERT INTO nc_processor_cash_balances(account_ref,customer_id,currency,amount_cents,observed_at) VALUES(?,?,?,?,?) ON CONFLICT(account_ref,customer_id,currency) DO UPDATE SET amount_cents=excluded.amount_cents,observed_at=excluded.observed_at`,account,binding.customer_id,currency,amount,clockInstant(env)))
-   for(const transaction of cash.transactions)statements.push(stmt(env,`INSERT OR IGNORE INTO nc_processor_cash_transactions(id,account_ref,transaction_ref,customer_id,type,amount_cents,ending_balance_cents,currency,occurred_at,intent_ref) VALUES(?,?,?,?,?,?,?,?,?,?)`,await fingerprint({account,cashTransaction:transaction.id}),account,transaction.id,binding.customer_id,transaction.type,transaction.net_amount,transaction.ending_balance,transaction.currency,instant(transaction.created),ref(transaction.applied_to_payment?.payment_intent)||null))
+   const statements=await processorCashObservation(env,account,binding.customer_id,cash)
    if(prior?.status==='applied'){
     await commit(env,[...authority,...statements],{actor:'system:processor',action:'processor.cash.observe',subject:id,detail:{customer:binding.customer_id}})
     return {id,replayed:true}
@@ -82,9 +86,11 @@ export async function applyProcessorEvent(env:Bindings,account:string|null,event
 export async function processorEvents(env:Bindings,actor:Actor,customer?:string) {
  requireRead(actor,'payments');requireRead(actor,'invoices')
  const active=`AND (customer_id IS NULL OR EXISTS(SELECT 1 FROM nc_customers c WHERE c.id=customer_id AND c.erased_at IS NULL AND NOT EXISTS(SELECT 1 FROM nc_erased_records e WHERE e.record_id=c.id)))`
- return {cashBalances:await all(env,`SELECT * FROM nc_processor_cash_balances WHERE 1=1 ${active} ${customer?'AND customer_id=?':''}`, ...(customer?[customer]:[])),
+ return {cashReturns:await readProcessorCashReturns(env,actor,customer),unmatched:await unmatchedProcessorCash(env,actor,customer),cashBalances:await all(env,`SELECT * FROM nc_processor_cash_balances WHERE 1=1 ${active} ${customer?'AND customer_id=?':''}`, ...(customer?[customer]:[])),
   cashTransactions:await all(env,`SELECT * FROM nc_processor_cash_transactions WHERE 1=1 ${active} ${customer?'AND customer_id=?':''} ORDER BY occurred_at,transaction_ref`,...(customer?[customer]:[])),
   cashApplications:await all(env,`SELECT id,customer_id,invoice_id,transfer_ref,amount_cents,currency,status,payment_intent_ref,payment_id,allocation_id FROM nc_processor_cash_applications WHERE 1=1 ${active} ${customer?'AND customer_id=?':''} ORDER BY claimed_at,id`,...(customer?[customer]:[])),
+  importedCashApplications:await all(env,`SELECT * FROM nc_processor_cash_imported_applications WHERE 1=1 ${active} ${customer?'AND customer_id=?':''} ORDER BY claimed_at,id`,...(customer?[customer]:[])),
+  importedCashTakeovers:await all(env,`SELECT id,customer_id,invoice_id,account_ref,status,basis_hash,amount_cents,prepared_by FROM nc_processor_cash_imported_takeovers WHERE 1=1 ${active} ${customer?'AND customer_id=?':''} ORDER BY prepared_at,id`,...(customer?[customer]:[])),
   events:await all(env,`SELECT * FROM nc_processor_events WHERE 1=1 ${active} ${customer?'AND customer_id=?':''} ORDER BY occurred_at,event_ref`,...(customer?[customer]:[])),
   transactions:await all(env,`SELECT * FROM nc_processor_transactions WHERE 1=1 ${active} ${customer?'AND customer_id=?':''} ORDER BY occurred_at,transaction_ref`,...(customer?[customer]:[])),
   objects:await all(env,`SELECT * FROM nc_processor_objects WHERE 1=1 ${active} ${customer?'AND customer_id=?':''} ORDER BY observed_at,object_ref`,...(customer?[customer]:[])),
