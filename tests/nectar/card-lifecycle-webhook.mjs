@@ -2,6 +2,7 @@
 // Only the paid provider edge is simulated; no raw event becomes app evidence.
 import assert from 'node:assert/strict'
 import { createHmac,randomBytes } from 'node:crypto'
+import { request as httpRequest } from 'node:http'
 import { nativeCollectionEdge } from './native-collection.mjs'
 import { totp } from './mfa.mjs'
 
@@ -65,11 +66,19 @@ export async function cardLifecycleWebhookFlow(h,owner) {
   await post(JSON.stringify({...original,account:'synthetic-unconfigured-account'}),{status:409})
   await post(JSON.stringify({...original,data:{object:{...original.data.object,customer:'synthetic-unbound-customer'}}}),{status:409})
   const huge=JSON.stringify({...original,discarded:'x'.repeat(1024*1024)})
-  // A direct Worker HTTP request avoids the local proxy's early-response upload
-  // race while exercising the same public receiver and bounded-body refusal.
-  const oversized=await h.dispatch(new Request(h.origin+path,{method:'POST',headers:{'content-type':'application/json','stripe-signature':signature(huge)},body:huge}))
+  // Send a prefix with the oversized declared length, then stop uploading
+  // when the real public receiver refuses it. Fetch can mask that early
+  // response with EPIPE while it is still writing the rest of a large body.
+  const oversized=await new Promise((resolve,reject)=>{
+    const request=httpRequest(h.origin+path,{method:'POST',headers:{'content-type':'application/json','stripe-signature':signature(huge),'content-length':Buffer.byteLength(huge)}},response=>{
+      let body='';response.setEncoding('utf8');response.on('data',chunk=>{body+=chunk})
+      response.on('error',reject);response.on('end',()=>{resolve({status:response.statusCode,body:JSON.parse(body)});request.destroy()})
+    })
+    request.on('error',reject);request.setTimeout(10000,()=>request.destroy(new Error('Oversized delivery did not receive a response')))
+    request.write(huge.slice(0,1024))
+  })
   assert.equal(oversized.status,413)
-  assert.equal((await oversized.json()).error,'card_event_too_large')
+  assert.equal(oversized.body.error,'card_event_too_large')
   assert.equal(edge.calls.length,beforeCalls,'Invalid delivery never reaches provider traffic')
   const read=async id=>(await api(`customers/${id??customer}`)).billingRecord.cardLifecycle
   assert.deepEqual(await read(),[])
