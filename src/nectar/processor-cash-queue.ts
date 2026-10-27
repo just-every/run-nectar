@@ -41,8 +41,11 @@ export async function allocateProcessorCash(env:Bindings,actor:Actor,input:Input
  if(prior){insist(prior.customer_id===customer&&prior.amount_cents===amount,'processor_cash_application_mismatch',409);return {id:customer,application:prior.id,status:prior.status,replayed:true}}
  const queued=await one(env,'SELECT * FROM nc_processor_cash_unmatched WHERE account_ref=? AND customer_id=? AND transfer_ref=? AND amount_cents>=?',account,customer,transfer,amount)
  insist(queued&&amount>=50,'processor_cash_transfer_not_available',409)
- const cash=await reconcileProcessorCash(env,selected.stripe,account,binding,true,{transferRef:transfer,invoice,amountCents:amount})
- await commit(env,[guard(env,'authority',"EXISTS(SELECT 1 FROM nc_members WHERE id=? AND status='active' AND role IN ('owner','finance','collections','custom'))",actor.id),...await processorCashObservation(env,account,customer,cash)],
+ const authority=()=>guard(env,'authority',`EXISTS(SELECT 1 FROM nc_members m JOIN oa_operators o ON o.email=m.email LEFT JOIN nc_roles r ON r.id=m.custom_role_id
+  WHERE m.id=? AND m.status='active' AND o.status='active' AND (m.role IN ('owner','finance','collections') OR m.role='custom' AND instr(' '||r.capabilities||' ',' receivables ')>0
+  AND instr(' '||r.capabilities||' ',' read.payments ')>0 AND instr(' '||r.capabilities||' ',' read.invoices ')>0))`,actor.id)
+ const cash=await reconcileProcessorCash(env,selected.stripe,account,binding,true,{transferRef:transfer,invoice,amountCents:amount,authority:[authority()]})
+ await commit(env,[authority(),...await processorCashObservation(env,account,customer,cash)],
   {actor:actorLabel(actor),action:'processor.cash.allocate',subject:queued.id,detail:{customer,invoice,transferRef:transfer,amountCents:amount}})
  const application=cash.applications.find(row=>row.transferRef===transfer&&row.invoice===invoice)
  insist(application,'processor_cash_application_unconfirmed',409)

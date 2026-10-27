@@ -70,7 +70,7 @@ export function processorCashEdge(base = nativeCollectionEdge()) {
   }
   return { ...base, fetch, cashCalls: calls, cashEvents: events, cashTransactions: transactions, cashIntents: intents,
     available: customer => balances.get(customer) ?? 0, consumeOutside(customer){transaction(customer,-balances.get(customer),'applied_to_payment',{applied_to_payment:{payment_intent:'synthetic-nectar-outside-intent'}})}, loseCashResponse() { loseNext = true }, event,
-    fund(customer, amount, reference = '') { transaction(customer, amount, 'funded', { funded: { bank_transfer: { type: 'us_bank_transfer', reference } } }); return event(customer) } }
+    fund(customer, amount, reference = '') { transaction(customer, amount, 'funded', { funded: { bank_transfer: { type: 'us_bank_transfer', reference, us_bank_transfer:{network:'ach',sender_name:'Synthetic transfer sender'} } } }); return event(customer) } }
 }
 
 let edge
@@ -97,6 +97,11 @@ export async function processorCashFlow(h, owner, { cashEdge = edge, onState=asy
     return api(`invoices/${draft.id}`)
   }
   const byReference = await invoice('100'), byAmount = await invoice('125'), unknown = await invoice('150')
+  const cadence=await api('cadence.policy.prepare',{enabled:true,require_human:false,rules:[{segment:'cash-transfer',minimum_cents:0,subject:'Invoice {invoice}: {balance}',body:'Please arrange the recorded transfer for {invoice}: {balance}.'}]})
+  const me=(await api('me')).id,otherApprover=(await api('members')).find(row=>row.id!==me&&row.status==='active'&&['owner','finance'].includes(row.role))
+  const cadenceApprover=otherApprover?await h.signIn(otherApprover.email):owner
+  await h.api('cadence.policy.decide',cadenceApprover,{request:cadence.request,decision:'approved',confirm_single:!otherApprover})
+  for(const issued of [byReference,byAmount,unknown])await api('cadence.enroll',{invoice:issued.id,segment:'cash-transfer',transfer_terms:'Synthetic signed transfer terms, Net30'})
   const apply = event_ref => api('processor.event.consume', { account_ref: account, event_ref })
   // The reference wins over a different exact-amount candidate.
   const competing = await invoice('110')
@@ -160,6 +165,7 @@ export async function processorCashFlow(h, owner, { cashEdge = edge, onState=asy
   assert.deepEqual(unmatchedState.unmatched.map(row=>row.amount_cents).sort((a,b)=>a-b),[1000,8000],'Unmatched funds enter the receivables queue with their exact remaining amounts')
   const transfer=unmatchedState.unmatched.find(row=>row.amount_cents===8000)
   assert.equal(transfer.reference,(await api(`invoices/${otherInvoice}`)).number)
+  assert.equal(transfer.sender,'Synthetic transfer sender');assert.equal(transfer.occurred_at,instant)
   const desk=await h.page('/app/receivables',owner)
   assert.ok(desk.includes(transfer.id),'The ordinary receivables desk links to the exact unmatched transfer')
   const allocation={customer,account_ref:account,transfer_ref:transfer.transfer_ref,invoice:newer.id,amount:'45',confirm:true}
@@ -186,10 +192,28 @@ export async function processorCashFlow(h, owner, { cashEdge = edge, onState=asy
     assert.equal(tasks.length,expected,'Each due escalation produces exactly one owner task despite repeated ticks')
   }
   assert.ok((await api('tasks')).length>=taskStart+3)
-  assert.deepEqual((await api('audit')).filter(row=>row.action==='processor.cash.escalate').map(row=>JSON.parse(row.detail).ageDays).sort((a,b)=>a-b),[7,30,60])
+  const escalations=(await api('audit')).filter(row=>row.action==='processor.cash.escalate').map(row=>JSON.parse(row.detail))
+  assert.deepEqual(escalations.map(row=>row.ageDays).sort((a,b)=>a-b),[7,30,60])
+  assert.deepEqual([...new Set(escalations.map(row=>row.assignedOwner))],[me],'Each escalation is assigned to the actual active owner')
+  await api('mfa.verify',{code:totp(factor.secret,Date.parse('2026-12-27T10:00:00Z'))})
+  const remaining=(await api(`processor-events?customer=${customer}`)).unmatched
+  assert.equal(remaining.length,1);assert.equal(remaining[0].amount_cents,4500)
+  const finalAllocation={...allocation,transfer_ref:remaining[0].transfer_ref,invoice:short.id}
+  await api('processor.cash.allocate',finalAllocation);await api('processor.cash.allocate',finalAllocation)
+  assert.deepEqual([(await api(`invoices/${short.id}`)).paidCents,(await api(`invoices/${short.id}`)).balanceCents],[8000,1000])
+  await h.advanceClock('2027-01-12T10:00:00Z')
+  assert.equal((await h.raw(`/cdn-cgi/local/scheduled?time=${Date.parse('2027-01-12T10:00:00Z')}&cron=${encodeURIComponent('0 14 * * *')}`)).status,200)
+  await apply(cashEdge.event(remote))
+  assert.equal(cashEdge.available(remote),0,'Before and after day 76 the processor holds no unapplied transfer funds')
+  assert.equal((await api(`processor-events?customer=${customer}`)).unmatched.length,0)
+  assert.equal([...cashEdge.cashTransactions.values()].filter(row=>row.type!=='funded'&&row.type!=='applied_to_payment').length,0,'No transfer was returned by the processor')
+  const cadenceState=await api('cadences'),paidIds=[byReference.id,byAmount.id,unknown.id]
+  assert.equal(cadenceState.invoices.filter(row=>paidIds.includes(row.id)&&row.segment==='cash-transfer').length,3,'Paid transfer invoices retain their real prior collection enrollment')
+  assert.equal(cadenceState.deliveries.filter(row=>paidIds.includes(row.invoice_id)).length,0,'Actual payment stops every enrolled transfer invoice before a reminder is reserved')
+  assert.equal((await api('dunning')).series.filter(row=>paidIds.includes(row.invoice)).length,0)
   await h.advanceClock('2026-10-28T10:02:00Z')
   await onState({customer})
-  return { customer, invoices: [byReference.id, byAmount.id, unknown.id,short.id,oldest.id,newer.id], unappliedCents: 4500 }
+  return { customer, invoices: [byReference.id, byAmount.id, unknown.id,short.id,oldest.id,newer.id], unappliedCents: 0 }
 }
 
 if(process.argv[1]===new URL(import.meta.url).pathname){

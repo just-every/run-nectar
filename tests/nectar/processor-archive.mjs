@@ -7,10 +7,16 @@ import { harness } from './harness.mjs'
 import { command } from './cli.mjs'
 import { processorSetup, processorEventFlow } from './processor-events.mjs'
 import { processorCashEdge, processorCashFlow } from './processor-cash.mjs'
+import { processorCashReturnEdge, processorCashReturnFlow } from './processor-cash-return.mjs'
+import { importedCashEdge, processorCashImportedFlow } from './processor-cash-imported.mjs'
+import { totp } from './mfa.mjs'
 
 const eventKinds=['nc_processor_events','nc_processor_transactions','nc_processor_objects','nc_processor_failures','nc_processor_reversals']
-const cashKinds=['nc_processor_events','nc_processor_cash_applications','nc_processor_cash_balances','nc_processor_cash_transactions']
-const sourceKinds=[...new Set([...eventKinds,...cashKinds])]
+const cashKinds=['nc_processor_events','nc_processor_cash_applications','nc_processor_cash_balances','nc_processor_cash_transactions','nc_processor_cash_unmatched','nc_processor_cash_escalations']
+const returnKinds=['nc_processor_cash_returns']
+const importedKinds=['nc_processor_cash_imported_applications','nc_processor_cash_imported_takeovers']
+const nativeKinds=[...new Set([...eventKinds,...cashKinds])]
+const sourceKinds=[...nativeKinds,...returnKinds,...importedKinds]
 const priorDay=day=>new Date(Date.parse(`${day}T12:00:00Z`)-86400000).toISOString()
 
 /** Reuse in the existing processor journey; targets already passed the real
@@ -21,23 +27,27 @@ export async function processorFinancialRemovalFlow(h,owner,{targets,finance,pee
  const groups=targets.map(target=>({...target,request:requests.find(row=>row.customer_id===target.customer&&row.status==='complete')}))
  for(const group of groups)assert.ok(group.request?.retain_until,'Issued processor money has a retention deadline')
  groups.sort((a,b)=>a.request.retain_until.localeCompare(b.request.retain_until))
- const peerBefore=await api(`processor-events?customer=${peer}`)
- assert.ok(peerBefore.events.length&&peerBefore.cashApplications.length,'The unaffected peer has real processor custody')
- await h.advanceClock(priorDay(groups[0].request.retain_until))
- await h.api('erasure.purge',finance,{},403)
- assert.deepEqual((await api('erasure.purge',{})).removed,[],'Owner removal refuses premature destruction')
- for(const target of groups)await api(`invoices/${target.invoice}`)
- for(const group of groups) {
-  await h.advanceClock(`${group.request.retain_until}T12:00:00Z`)
+ const peerBefore=peer?await api(`processor-events?customer=${peer}`):null
+ if(peerBefore)assert.ok(peerBefore.events.length&&peerBefore.cashApplications.length,'The unaffected peer has real processor custody')
+ for(const deadline of [...new Set(groups.map(group=>group.request.retain_until))]) {
+  const due=groups.filter(group=>group.request.retain_until===deadline)
+  await h.advanceClock(priorDay(deadline))
   await h.api('erasure.purge',finance,{},403)
-  assert.ok((await api('erasure.purge',{})).removed.includes(group.request.id),'The owner removes the due group at its deadline')
-  await api(`invoices/${group.invoice}`,undefined,404)
-  const completed=(await api('erasures')).find(row=>row.id===group.request.id)
-  const removal=JSON.parse(completed.receipt_json).removal
-  for(const kind of group.kinds)assert.ok(removal.records.some(row=>row.kind===kind&&row.records>0),`Due removal includes populated ${kind}`)
-  assert.ok(removal.retainedLegalIdentityRemoved)
-  assert.deepEqual(await api(`processor-events?customer=${peer}`),peerBefore,'Peer processor sources remain exact after each removal')
-  assert.ok((await api('audit')).some(row=>row.action==='erasure.financial.remove'&&row.subject===group.request.id))
+  assert.deepEqual((await api('erasure.purge',{})).removed,[],'Owner removal refuses premature destruction')
+  for(const group of due)if(group.invoice)await api(`invoices/${group.invoice}`)
+  await h.advanceClock(`${deadline}T12:00:00Z`)
+  await h.api('erasure.purge',finance,{},403)
+  const removed=(await api('erasure.purge',{})).removed
+  for(const group of due){
+   assert.ok(removed.includes(group.request.id),'The owner removes every due group at its deadline')
+   if(group.invoice)await api(`invoices/${group.invoice}`,undefined,404)
+   const completed=(await api('erasures')).find(row=>row.id===group.request.id)
+   const removal=JSON.parse(completed.receipt_json).removal
+   for(const kind of group.kinds)assert.ok(removal.records.some(row=>row.kind===kind&&row.records>0),`Due removal includes populated ${kind}`)
+   assert.ok(removal.retainedLegalIdentityRemoved)
+   assert.ok((await api('audit')).some(row=>row.action==='erasure.financial.remove'&&row.subject===group.request.id))
+  }
+  if(peerBefore)assert.deepEqual(await api(`processor-events?customer=${peer}`),peerBefore,'Peer processor sources remain exact after each removal')
  }
  assert.deepEqual((await api('erasure.purge',{})).removed,[],'Repeating removal creates no second destruction')
  return groups.map(group=>group.customer)
@@ -51,6 +61,23 @@ async function archiveItems(path) {
  return items
 }
 const sources=items=>items.filter(item=>item.kind==='row'&&sourceKinds.includes(item.table))
+
+// Observe the ordinary enrollment response, then present that factor through
+// the real verification route after restarting. Secrets never enter archives.
+function observeOwnerEnrollment(h,owner,state) {
+ const api=h.api
+ h.api=async(...args)=>{
+  const result=await api(...args)
+  if(args[0]==='mfa.totp.start'&&args[1]===owner)state.secret=result.secret
+  return result
+ }
+}
+async function restoredOwner(h,state,instant) {
+ const owner=await h.signIn(h.vars.OWNER_EMAIL)
+ if(state.secret)await h.api('mfa.verify',owner,{code:totp(state.secret,Date.parse(instant))})
+ observeOwnerEnrollment(h,owner,state)
+ return owner
+}
 
 async function erase(h,owner,customer) {
  const email=(await h.api(`customers/${customer}`,owner)).billing_email,start=h.mails.length
@@ -98,23 +125,26 @@ export async function processorArchiveJourney() {
   const setup=await processorSetup(undefined,{persistence,databaseId,applyMigrations:false})
   h=setup.h
   const {owner,edge}=setup
+  const enrollment={}
+  observeOwnerEnrollment(h,owner,enrollment)
   const events=await processorEventFlow(h,owner,edge)
   const cashEdge=processorCashEdge()
   // A second runtime swaps only the paid network edge, sharing the same real
   // installation. No SQL copies, injected business rows or alternate API exist.
+  let settings={...h.vars}
   await h.close();h=null
-  h=await harness({assets:true,persistence,databaseId,applyMigrations:false,localTime:'2026-10-28T10:00:00Z',stripeFetch:cashEdge.fetch,stripeSecret:'synthetic-nectar-1',stripeSecondarySecret:'synthetic-nectar-2'})
-  const cashOwner=await h.signIn(h.vars.OWNER_EMAIL)
+  h=await harness({assets:true,persistence,databaseId,applyMigrations:false,settings,localTime:'2026-10-28T10:00:00Z',stripeFetch:cashEdge.fetch,stripeSecret:'synthetic-nectar-1',stripeSecondarySecret:'synthetic-nectar-2'})
+  const cashOwner=await restoredOwner(h,enrollment,'2026-10-28T10:00:00Z')
   const cash=await processorCashFlow(h,cashOwner,{cashEdge})
   const peer=await cashPeer(h,cashOwner,cashEdge)
   await erase(h,cashOwner,cash.customer)
-  await h.close();h=null
+  settings={...h.vars};await h.close();h=null
   await command(root,['export','--output',populated])
   const before=await archiveItems(populated),captured=sources(before)
-  for(const kind of sourceKinds)assert.ok(captured.some(item=>item.table===kind),`Actual archive includes populated ${kind}`)
+  for(const kind of nativeKinds)assert.ok(captured.some(item=>item.table===kind),`Actual archive includes populated ${kind}`)
   for(const customer of [events.customer,cash.customer])assert.ok(captured.some(item=>item.row.customer_id===customer),'Erased financial custody remains in the archive until due')
-  h=await harness({assets:true,persistence,databaseId,applyMigrations:false,localTime:'2026-10-29T12:00:00Z'})
-  const removalOwner=await h.signIn(h.vars.OWNER_EMAIL)
+  h=await harness({assets:true,persistence,databaseId,applyMigrations:false,settings,localTime:'2026-10-29T12:00:00Z'})
+  const removalOwner=await restoredOwner(h,enrollment,'2026-10-29T12:00:00Z')
   const finance=await h.signIn(events.people.finance.email)
   const removed=await processorFinancialRemovalFlow(h,removalOwner,{finance,peer,targets:[{customer:events.customer,invoice:events.invoice,kinds:eventKinds},{customer:cash.customer,invoice:cash.invoices[0],kinds:cashKinds}]})
   await h.close();h=null
@@ -132,8 +162,54 @@ export async function processorArchiveJourney() {
   await command(root,['import','--input',purged,'--yes'])
   await command(root,['export','--output',restoredPurged])
   assert.deepEqual(sources(await archiveItems(restoredPurged)),sources(after),'Restoring the post-removal archive cannot resurrect purged processor custody')
+  await additionalArchivePhase(root,scratch,{label:'returns',persistence,databaseId,edge:processorCashReturnEdge(),requiredKinds:returnKinds,
+   async populate(worker,who,provider){
+    const result=await processorCashReturnFlow(worker,who,{cashReturnEdge:provider})
+    const peer=await cashPeer(worker,who,provider)
+    await erase(worker,who,result.customer)
+    return {customer:result.customer,peer,financeEmail:'synthetic-nectar-return-finance@example.test'}
+   }})
+  await additionalArchivePhase(root,scratch,{label:'imported',persistence,databaseId,edge:importedCashEdge(),requiredKinds:importedKinds,
+   async populate(worker,who,provider){
+    const result=await processorCashImportedFlow(worker,who,{cashEdge:provider,keepFinancial:true})
+    await worker.api('access.give',who,{email:'synthetic-nectar-archive-finance@example.test',name:'Archive finance',role:'finance'})
+    await worker.signIn('synthetic-nectar-archive-finance@example.test',{requested:true})
+    return {...result,financeEmail:'synthetic-nectar-archive-finance@example.test'}
+   }})
   console.log('Processor archive: public capture, exact rer restore, owner-only due removal, unchanged peers and older-archive refusal passed')
  } finally {await h?.close();await rm(scratch,{recursive:true,force:true})}
+}
+
+// Return-only and imported originals need separate installations: their real
+// frozen report journeys each reserve the owner's one October snapshot.
+async function additionalArchivePhase(root,scratch,{label,persistence,databaseId,edge,requiredKinds,populate}) {
+ const path=name=>join(scratch,`${label}-${name}.rer`)
+ let h
+ try {
+  await command(root,['reset','--yes'])
+  await command(root,['export','--output',path('empty')])
+  const setup=await processorSetup(edge,{persistence,databaseId,applyMigrations:false})
+  h=setup.h
+  const enrollment={};observeOwnerEnrollment(h,setup.owner,enrollment)
+  const target=await populate(h,setup.owner,edge)
+  const settings={...h.vars}
+  await h.close();h=null
+  await command(root,['export','--output',path('populated')])
+  const captured=sources(await archiveItems(path('populated')))
+  for(const kind of requiredKinds)assert.ok(captured.some(item=>item.table===kind&&item.row.customer_id===target.customer),`Actual ${label} archive includes populated ${kind}`)
+  h=await harness({assets:true,persistence,databaseId,applyMigrations:false,settings,localTime:'2026-11-02T12:00:00Z'})
+  const owner=await restoredOwner(h,enrollment,'2026-11-02T12:00:00Z'),finance=await h.signIn(target.financeEmail)
+  await processorFinancialRemovalFlow(h,owner,{finance,peer:target.peer,targets:[{customer:target.customer,kinds:requiredKinds}]})
+  await h.close();h=null
+  await command(root,['export','--output',path('purged')])
+  const removed=sources(await archiveItems(path('purged')))
+  assert.ok(!removed.some(item=>item.row.customer_id===target.customer),`Actual ${label} export contains no expired processor custody`)
+  assert.deepEqual(removed,captured.filter(item=>item.row.customer_id!==target.customer),`${label} removal preserves all peer processor sources`)
+  await command(root,['reset','--yes'])
+  await command(root,['import','--input',path('populated'),'--yes'])
+  await command(root,['export','--output',path('restored')])
+  assert.deepEqual(sources(await archiveItems(path('restored'))),captured,`Actual rer restore preserves every populated ${label} processor source`)
+ } finally {await h?.close()}
 }
 
 if(process.argv[1]===new URL(import.meta.url).pathname)await processorArchiveJourney()

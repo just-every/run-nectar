@@ -50,6 +50,8 @@ export async function processorRecoveryFlow(h,owner,edge,{deliver,finance}) {
  // A real approved native trial refusal remains a single native cohort. Its
  // webhook cannot create a second failure with a different time or amount.
  const trialReview=await api('trial.collection.prepare',{subscription:trialSub})
+ const trialCents=Math.round(1000*10/31)
+ assert.equal(trialReview.quote.amountCents,trialCents,'Trial-end advance billing prorates the ten remaining October days')
  const trialConsent=await api('trial.collection.confirm',trialReview.instructions.confirm)
  await h.api('trial.collection.approve',finance,{request:trialConsent.id,basis_hash:trialConsent.basis,decision:'approved'})
  native.capturedAt(new Date(instant).toISOString());native.refuseNext('card_declined')
@@ -60,9 +62,12 @@ export async function processorRecoveryFlow(h,owner,edge,{deliver,finance}) {
  const nativeIntent=[...native.intents.values()].find(row=>row.value.metadata.nectar_native_invoice===trial.invoice).value
  const trialEvent=edge.event(id(),'payment_intent.payment_failed',nativeIntent,instant/1000)
  assert.equal((await deliver(trialEvent,{status:409})).error,'processor_recovery_source_excluded')
- const expected=[{invoice:trial.invoice,currency:'USD',declineCode:'card_declined',firstFailedAt:instant,failedAmountCents:1000,recoveredAmountCents:0,attempts:[{attempt:1,step:null}],steps:[],recoveries:[]}]
+ const expected=[{invoice:trial.invoice,currency:'USD',declineCode:'card_declined',firstFailedAt:instant,failedAmountCents:trialCents,recoveredAmountCents:0,attempts:[{attempt:1,step:null}],steps:[],recoveries:[]}]
 
- const prepaid=await api('prepaid.prepare',{subscription:unpaidSub,mode:'grant',kind:'money',source:'purchase',amount:'50',effective_date:'2026-10-22',expires_date:'2027-10-22',priority:0,expiry_consent:true})
+ // The purchase's issued day extends through October 23. Keep it on the trial
+ // subscription so ending the two September service subscriptions on October
+ // 22 does not attempt to change an issued prepaid purchase period.
+ const prepaid=await api('prepaid.prepare',{subscription:trialSub,mode:'grant',kind:'money',source:'purchase',amount:'50',effective_date:'2026-10-22',expires_date:'2027-10-22',priority:0,expiry_consent:true})
  await h.api('prepaid.decide',finance,{request:prepaid.request,decision:'approved'})
  const purchase=await api('prepaid.purchase.prepare',{intent:prepaid.request,issue_date:'2026-10-22'})
  await issue(purchase.invoice)
@@ -153,7 +158,8 @@ export async function processorRecoveryFlow(h,owner,edge,{deliver,finance}) {
  await allocate(partial,6000)
  partialExpected.recoveredAmountCents=4000;partialExpected.recoveries.push({amountCents:3000,attempt:null,step:null})
  const report=await read()
- assert.deepEqual([report.totals.failedInvoices,report.totals.recoveredInvoices,report.totals.failedAmountCents,report.totals.recoveredAmountCents,report.totals.recoveryRate,report.totals.amountRecoveryRate],[4,2,19000,10000,1/2,10/19])
+ const failedCents=4000+8000+6000+trialCents
+ assert.deepEqual([report.totals.failedInvoices,report.totals.recoveredInvoices,report.totals.failedAmountCents,report.totals.recoveredAmountCents,report.totals.recoveryRate,report.totals.amountRecoveryRate],[4,2,failedCents,10000,1/2,10000/failedCents])
  assert.equal((await api(`invoices/${partial}`)).paidCents,9000,'Actual allocated cash can exceed the immutable failed cohort amount')
  assert.equal(report.byDunningStep.find(row=>row.key===partialExpected.steps[0]).recoveredAmountCents,0,'Later external cash never borrows a recorded reminder step')
 

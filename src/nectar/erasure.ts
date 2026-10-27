@@ -30,7 +30,9 @@ export async function approveErasure(env: Bindings, actor: Actor, input: Input) 
   const incumbent=await all(env,'SELECT * FROM nc_incumbent_invoices WHERE customer_id=?',customer.id)
   const collected=[...await all(env,"SELECT * FROM nc_imported_collections WHERE customer_id=? AND charge_ref IS NOT NULL AND charge_ref<>'' AND collected_on IS NOT NULL",customer.id),...await importedCashCollections(env,customer.id)]
   const importedMoney=await all(env,"SELECT * FROM nc_incumbent_history WHERE customer_id=? AND amount_cents IS NOT NULL",customer.id)
-  const dates=[...collected.map(record=>record.collected_on),...importedMoney.map(record=>record.occurred_on),...incumbent.map(record=>record.issue_date).filter(Boolean),...invoices.map(i=>i.issue_date),...payments.map(p=>p.received_on),...credits.map(c=>localDate(c.issued_at,b.timezone))].filter(Boolean).sort()
+  const processorMoney=[...await all(env,'SELECT id,amount_cents,occurred_at FROM nc_processor_cash_transactions WHERE customer_id=? AND amount_cents<>0',customer.id),...await all(env,'SELECT id,amount_cents,occurred_at FROM nc_processor_transactions WHERE customer_id=? AND amount_cents<>0',customer.id)]
+  const cashReturns=await all(env,'SELECT id,amount_cents,provider_created_at,completed_at FROM nc_processor_cash_returns WHERE customer_id=? AND provider_created_at IS NOT NULL',customer.id)
+  const dates=[...processorMoney.map(record=>localDate(record.occurred_at,b.timezone)),...cashReturns.flatMap(record=>[record.provider_created_at,record.completed_at].filter(Boolean).map(at=>localDate(at,b.timezone))),...collected.map(record=>record.collected_on),...importedMoney.map(record=>record.occurred_on),...incumbent.map(record=>record.issue_date).filter(Boolean),...invoices.map(i=>i.issue_date),...payments.map(p=>p.received_on),...credits.map(c=>localDate(c.issued_at,b.timezone))].filter(Boolean).sort()
   const legacyAnchor=incumbent.some(record=>!record.issue_date)?localDate(at,b.timezone):null
   if(legacyAnchor)dates.push(legacyAnchor)
   dates.sort()
@@ -51,6 +53,8 @@ export async function approveErasure(env: Bindings, actor: Actor, input: Input) 
   for(const [kind,records] of [['invoice',invoices],['payment',payments],['credit-note',credits],['incumbent-invoice',incumbent]] as const) for(const record of records) retained.push([id,kind,record.id,record.legal_name||customer.name,['invoice','incumbent-invoice'].includes(kind)?record.total_cents:record.amount_cents,['invoice','incumbent-invoice'].includes(kind)?record.tax_cents:0,kind==='invoice'?record.issue_date:kind==='payment'?record.received_on:kind==='incumbent-invoice'?(record.issue_date??legacyAnchor):localDate(record.issued_at,b.timezone),until,kind==='invoice'?JSON.stringify(Object.fromEntries(Object.entries(parseJson<Row>(record.calculation_json,{}).tax??{}).filter(([key])=>['mode','jurisdiction','taxableBaseCents','rate','exempt','rule'].includes(key)))):'{}'])
   for(const record of collected)retained.push([id,'incumbent-collection',record.id,customer.name,record.amount_cents,0,record.collected_on,until,'{}'])
   for(const record of importedMoney)retained.push([id,`incumbent-${record.kind}`,record.id,customer.name,record.amount_cents,0,record.occurred_on,until,'{}'])
+  for(const record of processorMoney)retained.push([id,'processor-cash',record.id,customer.name,record.amount_cents,0,localDate(record.occurred_at,b.timezone),until,'{}'])
+  for(const record of cashReturns)retained.push([id,'processor-cash-return',record.id,customer.name,-record.amount_cents,0,localDate(record.completed_at??record.provider_created_at,b.timezone),until,'{}'])
   statements.push(...erasureInsertStatements('nc_erasure_financial',['request_id','kind','record_id','legal_name','amount_cents','tax_cents','document_date','retain_until','tax_json'],retained))
   // Every request for this customer loses its recipient/token, not just the one
   // approved. No pending mail or public link can revive an erased identity.

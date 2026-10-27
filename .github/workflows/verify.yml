@@ -65,5 +65,7 @@ jobs:
         run: |
           node tests/nectar/processor-events.mjs
           node tests/nectar/processor-cash.mjs
+          node tests/nectar/processor-cash-imported.mjs
           node tests/nectar/processor-events-browser.mjs
           node tests/nectar/processor-events-browser.mjs cash
+          NECTAR_TEST_CHECKOUT=1 node tests/nectar/processor-archive.mjs

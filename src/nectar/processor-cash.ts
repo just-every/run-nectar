@@ -142,7 +142,7 @@ async function settle(env: Bindings, stripe: StripeClient, b: Row, row: Row, int
 
 /** A durable uncertain claim is never sent again, even if no intent can be
  * found. Later invocations reconcile it using reads of complete intent history. */
-export async function reconcileProcessorCash(env: Bindings, stripe: StripeClient, accountRef: string, customer: Row, allowApply=true, selection?:{transferRef:string;invoice:string;amountCents:number}): Promise<ProcessorCashResult> {
+export async function reconcileProcessorCash(env: Bindings, stripe: StripeClient, accountRef: string, customer: Row, allowApply=true, selection?:{transferRef:string;invoice:string;amountCents:number;authority?:D1PreparedStatement[]}): Promise<ProcessorCashResult> {
   providerReference(accountRef)
   const b = await binding(env, accountRef, customer), customerRef = providerReference(b.stripe_customer_ref)
   const [account, remote] = await Promise.all([stripe('/account'), stripe(`/customers/${encodeURIComponent(customerRef)}`)])
@@ -192,7 +192,7 @@ export async function reconcileProcessorCash(env: Bindings, stripe: StripeClient
         const claim='takeover' in source?importedCashClaimStatements(env,b,source,row):[bindingGuard(env, b), nativeSourceGuard(env, source), stmt(env, `INSERT INTO nc_processor_cash_applications
           (id,customer_id,invoice_id,account_ref,stripe_customer_ref,transfer_ref,amount_cents,currency,source_hash,claimed_at,status) VALUES(?,?,?,?,?,?,?,?,?,?,'uncertain')`,
           row.id, row.customer_id, row.invoice_id, accountRef, customerRef, row.transfer_ref, row.amount_cents, row.currency, row.source_hash, row.claimed_at)]
-        await commit(env, claim,
+        await commit(env, [...selection?.authority??[],...claim],
         { actor: system.id, action: 'processor.cash.claim', subject: row.id, detail: { invoice: row.invoice_id, transferRef: t.id, amountCents: row.amount_cents } })
         // Only this invocation that inserted the claim may make these writes.
         let intent = await stripe('/payment_intents', new URLSearchParams({ customer: customerRef, amount: String(row.amount_cents), currency: row.currency,

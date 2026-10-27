@@ -4,6 +4,7 @@ import { execFileSync } from 'node:child_process'
 import { setTimeout as delay } from 'node:timers/promises'
 import { stripeSandbox, safeError, reference } from './stripe-sandbox-client.mjs'
 import { processorSetup } from './processor-events.mjs'
+import { proveImportedCash } from './processor-cash-imported-sandbox.mjs'
 const stripe=stripeSandbox(process.env.STRIPE_SECRET_KEY)
 const head=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim()
 let h,remote,phase='account'
@@ -87,12 +88,15 @@ try {
  const observation=await api(`processor-events?customer=${customer}`)
  assert.deepEqual(observation.cashTransactions.map(row=>[row.transaction_ref,row.amount_cents,row.ending_balance_cents]).sort(),transactions.map(row=>[row.id,row.net_amount,row.ending_balance]).sort())
  results.push({kind:'cash_application',invoice:cashInvoice.id,eventRef:fundingEvent.id,transactions:transactions.map(row=>({id:row.id,type:row.type,netCents:row.net_amount,endingBalanceCents:row.ending_balance})),remainingCents:0})
+ phase='imported-cash'
+ results.push(...await proveImportedCash(stripe,h,owner,account))
  phase='dispute'
  const disputeInvoice=await issue('20','Real disputed card capture')
  const disputed=await stripe.request('POST','/v1/payment_intents',{customer:remote.id,amount:2000,currency:'usd','payment_method_types[]':'card',payment_method:'pm_card_createDispute',confirm:true,'metadata[nectar_native_invoice]':disputeInvoice.id})
- const disputes=(await stripe.list('/v1/disputes',{charge:reference(disputed.latest_charge)})).data
- if(disputes.length){const event=await eventFor('charge.dispute.created',disputes[0].id);await ingest(event);results.push({kind:'dispute',eventRef:event.id,dispute:disputes[0].id,status:disputes[0].status})}
- else results.push({kind:'dispute',boundary:'genuine_dispute_not_yet_observed'})
+ let disputes=[]
+ for(let observed=0;observed<20&&!disputes.length;observed++){disputes=(await stripe.list('/v1/disputes',{charge:reference(disputed.latest_charge)})).data;if(!disputes.length)await delay(1000)}
+ assert.ok(disputes.length,'The genuine disputed-card fixture must produce its dispute')
+ const disputeEvent=await eventFor('charge.dispute.created',disputes[0].id);await ingest(disputeEvent);results.push({kind:'dispute',eventRef:disputeEvent.id,dispute:disputes[0].id,status:disputes[0].status})
  phase='ach-returns'
  // Official ACH fixtures; only actual raw provider fields establish Rxx identity.
  const bankFixtures=[

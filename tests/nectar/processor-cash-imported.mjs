@@ -56,7 +56,7 @@ export const harnessOptions=()=>{
  edge=importedCashEdge()
  return {localTime:'2026-10-28T10:00:00Z',stripeFetch:edge.fetch,stripeSecret:'synthetic-nectar-1'}
 }
-export async function processorCashImportedFlow(h,owner,{cashEdge=edge}={}) {
+export async function processorCashImportedFlow(h,owner,{cashEdge=edge,keepFinancial=false}={}) {
  const api=(path,body,status)=>h.api(path,owner,body,status),remote='synthetic-nectar-1',account='synthetic-nectar-account'
  const capture=collectionCapture(),files=Object.fromEntries(Object.entries(capture).map(([name,value])=>[name,file(`${name}.json`,JSON.stringify(value),'application/json')]))
  const preview=await api('import.preview',files);assert.deepEqual(preview.rejected,[])
@@ -148,12 +148,14 @@ export async function processorCashImportedFlow(h,owner,{cashEdge=edge}={}) {
  for(const [metric,total]of [['collections',11000],['ar',33000],['settlements',10966]])assert.equal((await api(`reports/${metric}?period=2026-10&customer=${customer}`)).totalCents,total)
  assert.deepEqual((await history()).incumbentHistory,{documents:[],records:[]})
  assert.deepEqual((await api('erasure.purge',{})).removed,[])
- await h.advanceClock(`${erased.receipt.retained.until}T12:00:00Z`)
- assert.ok((await api('erasure.purge',{})).removed.includes(request.id))
- const receipt=JSON.parse((await api('erasures')).find(row=>row.id===request.id).receipt_json)
- assert.ok(receipt.removal.records.some(row=>row.kind==='nc_processor_cash_imported_applications'&&row.records===2))
- assert.ok(receipt.removal.records.some(row=>row.kind==='nc_processor_cash_imported_takeovers'&&row.records===2))
- return {customer,invoice:first.id}
+ if(!keepFinancial){
+  await h.advanceClock(`${erased.receipt.retained.until}T12:00:00Z`)
+  assert.ok((await api('erasure.purge',{})).removed.includes(request.id))
+  const receipt=JSON.parse((await api('erasures')).find(row=>row.id===request.id).receipt_json)
+  assert.ok(receipt.removal.records.some(row=>row.kind==='nc_processor_cash_imported_applications'&&row.records===2))
+  assert.ok(receipt.removal.records.some(row=>row.kind==='nc_processor_cash_imported_takeovers'&&row.records===2))
+ }
+ return {customer,invoice:first.id,request:request.id,retainUntil:erased.receipt.retained.until}
 }
 if(process.argv[1]===new URL(import.meta.url).pathname){
  const {processorSetup}=await import('./processor-events.mjs'),options=harnessOptions(),{h,owner}=await processorSetup(undefined,options)

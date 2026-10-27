@@ -49,7 +49,7 @@ export function cashReturnSourceGuards(env:Bindings,q:Row) {
  return [guard(env,'processor_cash_return_stale','COALESCE((SELECT revision FROM nc_credit_policy WHERE singleton=1),0)=?',q.policyRevision),
   guard(env,'processor_cash_return_stale',`EXISTS(SELECT 1 FROM nc_stripe_customer_bindings b JOIN nc_customers c ON c.id=b.customer_id WHERE b.id=? AND b.revision=? AND b.customer_id=? AND b.account_ref=? AND b.stripe_customer_ref=? AND c.revision=? AND c.status='active' AND c.erased_at IS NULL)
   AND NOT EXISTS(SELECT 1 FROM nc_erased_records WHERE record_id IN(?,?))`,q.bindingId,q.bindingRevision,q.customer,q.accountRef,q.customerRef,q.customerRevision,q.bindingId,q.customer),
-  guard(env,'processor_cash_return_application_uncertain',"NOT EXISTS(SELECT 1 FROM nc_processor_cash_applications WHERE account_ref=? AND stripe_customer_ref=? AND status='uncertain')",q.accountRef,q.customerRef)]
+  guard(env,'processor_cash_return_application_uncertain',"NOT EXISTS(SELECT 1 FROM nc_processor_cash_applications WHERE account_ref=? AND stripe_customer_ref=? AND status='uncertain') AND NOT EXISTS(SELECT 1 FROM nc_processor_cash_imported_applications WHERE account_ref=? AND stripe_customer_ref=? AND status='uncertain')",q.accountRef,q.customerRef,q.accountRef,q.customerRef)]
 }
 export async function cashReturnObservation(env:Bindings,q:Row,stripe:StripeClient) {
  const binding=await processorBinding(env,q.accountRef,q.customerRef)
@@ -62,7 +62,7 @@ export async function storedCashReturn(env:Bindings,id:string) {
  insist(row,'processor_cash_return_not_found',404);return row
 }
 export function cashReturnView(r:Row) {
- return {id:r.id,customer:r.customer_id,accountRef:r.account_ref,customerRef:r.stripe_customer_ref,currency:r.currency,amountCents:r.amount_cents,status:r.status,basis:r.basis_hash,
+ return {id:r.id,customer:r.customer_id,accountRef:r.account_ref,customerRef:r.stripe_customer_ref,currency:r.currency,amountCents:r.amount_cents,status:r.status,basis:r.basis_hash,needsSecondApprover:!!r.needs_second,
   preparedBy:r.prepared_by_id,preparedAt:r.prepared_at,approvedBy:r.approved_by_id,approvedAt:r.approved_at,claimedAt:r.claimed_at,refundRef:r.refund_ref,error:r.error_code,
   completedAt:r.completed_at,providerCreatedAt:r.provider_created_at,cashAmountCents:r.status==='succeeded'?-r.amount_cents:0,providerOutcome:['prepared','superseded','stopped'].includes(r.status)?'not-attempted':r.status,source:`/app/processor-events?customer=${r.customer_id}`}
 }

@@ -34,3 +34,14 @@ BEGIN SELECT RAISE(ABORT,'nectar_immutable'); END;
 CREATE TRIGGER nc_processor_cash_return_generation_insert AFTER INSERT ON nc_processor_cash_returns BEGIN UPDATE nc_privacy_generation SET value=value+1 WHERE id=1; END;
 CREATE TRIGGER nc_processor_cash_return_generation_update AFTER UPDATE ON nc_processor_cash_returns BEGIN UPDATE nc_privacy_generation SET value=value+1 WHERE id=1; END;
 CREATE TRIGGER nc_processor_cash_return_generation_delete AFTER DELETE ON nc_processor_cash_returns BEGIN UPDATE nc_privacy_generation SET value=value+1 WHERE id=1; END;
+CREATE TRIGGER nc_processor_cash_no_unknown_return BEFORE INSERT ON nc_processor_cash_applications
+WHEN EXISTS(SELECT 1 FROM nc_processor_cash_returns WHERE account_ref=NEW.account_ref AND stripe_customer_ref=NEW.stripe_customer_ref AND status IN('claimed','uncertain'))
+BEGIN SELECT RAISE(ABORT,'nectar_guard_processor_cash_return_unconfirmed'); END;
+CREATE TRIGGER nc_processor_cash_imported_no_unknown_return BEFORE INSERT ON nc_processor_cash_imported_applications
+WHEN EXISTS(SELECT 1 FROM nc_processor_cash_returns WHERE account_ref=NEW.account_ref AND stripe_customer_ref=NEW.stripe_customer_ref AND status IN('claimed','uncertain'))
+BEGIN SELECT RAISE(ABORT,'nectar_guard_processor_cash_return_unconfirmed'); END;
+CREATE TRIGGER nc_processor_cash_return_no_unknown_application BEFORE UPDATE OF status ON nc_processor_cash_returns
+WHEN OLD.status='prepared' AND NEW.status='claimed' AND (
+ EXISTS(SELECT 1 FROM nc_processor_cash_applications WHERE account_ref=NEW.account_ref AND stripe_customer_ref=NEW.stripe_customer_ref AND status='uncertain') OR
+ EXISTS(SELECT 1 FROM nc_processor_cash_imported_applications WHERE account_ref=NEW.account_ref AND stripe_customer_ref=NEW.stripe_customer_ref AND status='uncertain'))
+BEGIN SELECT RAISE(ABORT,'nectar_guard_processor_cash_return_application_uncertain'); END;
