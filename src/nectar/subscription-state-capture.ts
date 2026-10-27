@@ -20,7 +20,7 @@ export async function captureSubscriptionStates(env: Bindings, events: Audit[]) 
   const actions = canonical(events.map(({ action, subject }) => ({ action, subject })))
   // All source reads below execute after the business statements, inside their
   // D1 batch. A failed history, event or audit write rolls the source back too.
-  const insert = stmt(env, `WITH refs AS MATERIALIZED (SELECT value FROM json_each(?)), invoices AS MATERIALIZED (
+  const sources = `WITH refs AS MATERIALIZED (SELECT value FROM json_each(?)), invoices AS MATERIALIZED (
     SELECT i.id,i.subscription_id FROM nc_invoices i WHERE i.id IN (SELECT value FROM refs) OR i.number IN (SELECT value FROM refs)
       OR i.id IN (SELECT a.invoice_id FROM nc_allocations a WHERE a.id IN (SELECT value FROM refs) OR a.payment_id IN (SELECT value FROM refs))
       OR i.id IN (SELECT a.invoice_id FROM nc_native_collections a WHERE a.id IN (SELECT value FROM refs))
@@ -38,7 +38,8 @@ export async function captureSubscriptionStates(env: Bindings, events: Audit[]) 
         OR s.id IN (SELECT subscription_id FROM nc_trial_collections WHERE id IN (SELECT value FROM refs))
         OR s.id IN (SELECT subscription_id FROM nc_usage_corrections WHERE id IN (SELECT value FROM refs))
         OR s.id IN (SELECT subscription_id FROM nc_renewal_terms WHERE id IN (SELECT value FROM refs)))
-  ), inputs AS MATERIALIZED (
+  )`
+  const insert = stmt(env, `${sources}, inputs AS MATERIALIZED (
     SELECT f.*,
       CASE WHEN start_date>day THEN 'scheduled' WHEN end_date IS NOT NULL AND end_date<=day THEN 'ended'
         WHEN EXISTS(SELECT 1 FROM nc_subscription_lifecycle l WHERE l.subscription_id=f.id AND l.kind='cancel' AND l.effective_date<=day
@@ -86,6 +87,7 @@ export async function captureSubscriptionStates(env: Bindings, events: Audit[]) 
   const data = `json_object('subscription_id',subscription_id,'customer_id',customer_id,'transition_id',id,
     'previous_state',previous_state,'state',state,'cause',json(cause_json),'observed_at',observed_at)`
   return [insert,
+    stmt(env, `${sources} UPDATE nc_subscriptions SET state_checked_at=? WHERE id IN (SELECT id FROM facts)`,refs,day,at),
     stmt(env, `INSERT INTO nc_webhook_events(id,type,customer_id,subject,payload_json,created_at)
       SELECT id,'subscription.state_changed',customer_id,subscription_id,json_object('type','subscription.state_changed','data',${data}),observed_at
       FROM nc_subscription_states WHERE json_extract(cause_json,'$.sourceBatch')=?`,batch),

@@ -140,7 +140,7 @@ export const views: Record<string, View> = {
   customer: (env, actor, _request, id, url) => customerView(env, actor, id, url),
   catalog: (env, actor,_r,_id,url) => catalog(env, actor,url),
   upcoming: (env, actor, _r, id, url) => upcoming(env,actor,id,url.searchParams.get('period')),
-  subscription: (env, actor, _request, id) => subscriptionDetail(env, actor, id),
+  subscription: (env, actor, request, id) => subscriptionDetail(env, actor, id,new URL(request.url).searchParams.get('include_state')==='true'),
   batches: (env, actor) => batches(env, actor),
   inspect: (env, actor, _request, _id, url) => inspect(env, actor, url.searchParams.get('period') ?? ''),
   runs: (env, actor) => runs(env, actor),

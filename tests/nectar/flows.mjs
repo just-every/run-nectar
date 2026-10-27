@@ -61,7 +61,7 @@ async function assertStateAudits(h, owner, entries, start, end) {
   for (const event of entries.filter(row=>row.action==='subscription.state.observe')) {
     assert.equal(event.actor,'system:lifecycle')
     assert.ok(event.at>=start&&event.at<=end)
-    const detail=JSON.parse(event.detail),sub=await h.api(`subscriptions/${event.subject}`,owner)
+    const detail=JSON.parse(event.detail),sub=await h.api(`subscriptions/${event.subject}?include_state=true`,owner)
     const transition=sub.stateHistory.find(row=>row.id===detail.transition_id)
     assert.ok(transition,'Every system audit names a retained transition')
     assert.deepEqual(detail,{subscription_id:sub.id,customer_id:sub.customer_id,transition_id:transition.id,

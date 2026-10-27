@@ -30,10 +30,11 @@ import { assertSameCurrency, customerCurrencyGuard } from './currency'
 export async function requireSubscription(env: Bindings, id: string) {
   const sub = await one(env, 'SELECT s.*, c.name AS customer_name, c.external_id AS customer_external_id, c.currency, c.erased_at FROM nc_subscriptions s JOIN nc_customers c ON c.id = s.customer_id WHERE s.id = ?', id)
   insist(sub, 'subscription_not_found', 404)
-  return sub
+  const { state_checked_at: _checkpoint, ...record } = sub
+  return record
 }
 
-export async function subscriptionDetail(env: Bindings, actor: Actor, id: string): Promise<Row> {
+export async function subscriptionDetail(env: Bindings, actor: Actor, id: string, includeState = false): Promise<Row> {
   requireRead(actor, 'subscriptions')
   const sub = await requireSubscription(env, id)
   insist(!sub.erased_at,'customer_erased',410)
@@ -45,8 +46,9 @@ export async function subscriptionDetail(env: Bindings, actor: Actor, id: string
   ])
   const history = await lifecycleHistory(env, id)
   const financial = canRead(actor,'invoices') && canRead(actor,'payments')
-  const stateHistory = (await subscriptionStateHistory(env,id)).map(row => financial ? row : {...row,cause:{day:row.cause.day,timezone:row.cause.timezone}})
-  return { ...sub, state: stateHistory.at(-1)?.state ?? null, stateObservedAt: stateHistory.at(-1)?.observed_at ?? null, stateHistory,planChanges:await planChangesFor(env,actor,id), cancellations:await intervalCancellations(env,id),renewal:await termRecords(env,actor,id), contracts:await contractsFor(env,id),burnDown:await contractBurnDown(env,id), lifecyclePolicy: await lifecyclePolicy(env), lifecycle: history, intervals: lifecycleIntervals(history),...await metadataFor(env,'subscription',id), items, amendments, changes: changes.map(change => ({ ...change, preview: parseJson(change.preview_json, {}), preview_json: undefined })), invoices:await withMetadata(env,'invoice',invoices) }
+  const stateHistory = includeState ? (await subscriptionStateHistory(env,id)).map(row => financial ? row : {...row,cause:{day:row.cause.day,timezone:row.cause.timezone}}) : []
+  const observation = includeState ? {state:stateHistory.at(-1)?.state ?? null,stateObservedAt:stateHistory.at(-1)?.observed_at ?? null,stateHistory} : {}
+  return { ...sub,...observation,planChanges:await planChangesFor(env,actor,id), cancellations:await intervalCancellations(env,id),renewal:await termRecords(env,actor,id), contracts:await contractsFor(env,id),burnDown:await contractBurnDown(env,id), lifecyclePolicy: await lifecyclePolicy(env), lifecycle: history, intervals: lifecycleIntervals(history),...await metadataFor(env,'subscription',id), items, amendments, changes: changes.map(change => ({ ...change, preview: parseJson(change.preview_json, {}), preview_json: undefined })), invoices:await withMetadata(env,'invoice',invoices) }
 }
 
 // A subscription holds its meters while it is live on or after `from`: no end

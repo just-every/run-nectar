@@ -9,7 +9,7 @@ export async function customerSubscriptionHistory(env:Bindings,actor:Actor,custo
   if(!canRead(actor,'subscriptions'))return null
   const subscriptions=await all(env,'SELECT id FROM nc_subscriptions WHERE customer_id=? ORDER BY created_at,id',customer)
   return Promise.all(subscriptions.map(async ({id})=>({id,source:`/app/subscriptions/${id}`,
-    record:await subscriptionDetail(env,actor,id),events:await lifecycleHistory(env,id)})))
+    record:await subscriptionDetail(env,actor,id,true),events:await lifecycleHistory(env,id)})))
 }
 export async function customerWriteOffHistory(env:Bindings,actor:Actor,customer:string) {
   if(!canRead(actor,'invoices'))return null

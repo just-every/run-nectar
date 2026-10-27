@@ -107,7 +107,7 @@ export async function customerPage(env: Bindings, actor: Actor, id: string, url:
 const previewTable = (lines: any[]): Html => table(['Charge', 'From', 'To', 'Amount$'], lines.map(line => [line.description, formatDate(line.periodStart), formatDate(line.periodEnd ? addDays(line.periodEnd, -1) : null), cents(line.amountCents)]), { empty: 'No fixed or seat charges.' })
 
 export async function subscriptionPage(env: Bindings, actor: Actor, id: string, url: URL) {
-  const s = await subscriptionDetail(env, actor, id)
+  const s = await subscriptionDetail(env, actor, id,true)
   const today = new Date().toISOString().slice(0, 10)
   const approver = actor.kind === 'member' && can(actor, 'approve'), records = can(actor, 'records')
   const trialDay = localDate(clockInstant(env), (await requireBusiness(env)).timezone)

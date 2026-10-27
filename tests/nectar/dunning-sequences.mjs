@@ -29,9 +29,9 @@ export const harnessOptions=()=>{
  return {webhookFetch:async request=>{received.push(await request.json());return new Response(null,{status:200})},assets:true,localTime:new Date(first).toISOString(),stripeFetch:fetch,stripeSecret:'synthetic-nectar-1'}
 }
 export async function dunningSequenceFlow(h,owner,{onState=async()=>{},createPolicy,enroll,prepareMail,sendMail,finish,updateMethod,prepareRecovery,acceptRecovery,approveRecovery,cancelSubscription}={}) {
- const api=(p,b,status)=>h.api(p,owner,b,status)
+ const api=(p,b,status)=>h.api(p.startsWith('subscriptions/')?p+'?include_state=true':p,owner,b,status)
  let instant=first
- await api('business.configure',{...await api('business'),timezone:'UTC'})
+ await api('business.configure',{...await api('business'),timezone:'America/Los_Angeles'})
  const factor=await api('mfa.totp.start',{});await api('mfa.totp.confirm',{factor:factor.factor,code:totp(factor.secret,instant)});await api('mfa.policy',{scope:'all'})
  await api('webhook.register',{url:'https://receiver.nectar-app.com/events',consent:true})
  await api('portal.configure',{hosts:[h.origin],parents:[]})
@@ -68,7 +68,7 @@ export async function dunningSequenceFlow(h,owner,{onState=async()=>{},createPol
   assert.ok(history.at(-1).observed_at>=first&&history.at(-1).observed_at<=instant,'Observation time stays inside the pinned scheduled clock interval')
   assert.equal(history[0].observed_at,first,'The first tick records the initial state at its pinned time')
   assert.equal(history.at(-1).cause.day,new Date(history.at(-1).observed_at).toISOString().slice(0,10))
-  assert.equal(history.at(-1).cause.timezone,'UTC')
+  assert.equal(history.at(-1).cause.timezone,'America/Los_Angeles')
   for(const [index,row] of history.entries()){assert.equal(row.previous_id,index?history[index-1].id:null);assert.equal(row.previous_state,index?history[index-1].state:null)}
   assert.deepEqual(history.slice(0,(histories.get(record.sub)??[]).length),histories.get(record.sub)??[],'Earlier cause history remains byte-for-byte unchanged')
   assert.equal(new Set(history.map(row=>row.id)).size,history.length)
@@ -86,6 +86,15 @@ export async function dunningSequenceFlow(h,owner,{onState=async()=>{},createPol
  const pause=await api('subscription.pause',{subscription:trial.sub,revision:trialTerms.revision,effective_date:'2026-10-22',resume_date:'2026-10-23',access:'suspend',reason:'Synthetic scheduled lifecycle pause'})
  const paused=await observe(trial,'paused')
  assert.equal(paused.at(-1).cause.lifecycle[0].id,pause.transition)
+ const missedCustomer=(await api('customer.create',{external_id:'synthetic-nectar-state-missed',name:'Synthetic missed schedule',billing_email:'synthetic-nectar-state-missed@example.test'})).id
+ const missed={sub:(await api('subscription.create',{customer:missedCustomer,start_date:'2026-10-24',trial_end:'2026-10-25',trial_payment:'none',price:[price],quantity:['1']})).id}
+ await observe(missed,'scheduled')
+ const missedBefore=await api(`subscriptions/${missed.sub}`)
+ const missedPause=await api('subscription.pause',{subscription:missed.sub,revision:missedBefore.revision,effective_date:'2026-10-25',resume_date:'2026-10-26',access:'suspend',reason:'Synthetic pause wholly between observer ticks'})
+ const dstCustomer=(await api('customer.create',{external_id:'synthetic-nectar-state-dst',name:'Synthetic daylight saving schedule',billing_email:'synthetic-nectar-state-dst@example.test'})).id
+ const dst={sub:(await api('subscription.create',{customer:dstCustomer,start_date:'2026-10-31',anchor_day:1,trial_end:'2026-11-01',trial_payment:'none',price:[price],quantity:['1']})).id}
+ const dstBefore=await api(`subscriptions/${dst.sub}`)
+ await api('subscription.pause',{subscription:dst.sub,revision:dstBefore.revision,effective_date:'2026-11-01',resume_date:'2026-11-02',access:'suspend',reason:'Synthetic daylight saving pause'})
  const records=[]
  for(const [index,name,p,ref] of [[1,'Cedar recovery',price,'synthetic-nectar-native-customer-1'],[2,'Cedar overdue',price,'synthetic-nectar-native-customer-4'],[3,'Cedar enterprise',enterprisePrice,'synthetic-nectar-native-customer-3'],[4,'Cedar unpaid',price,'synthetic-nectar-dunning-unpaid'],[5,'Cedar cancellation',price,'synthetic-nectar-dunning-cancel']]){
   // Every failed invoice starts with a distinct usable card and exact consent.
@@ -163,6 +172,20 @@ export async function dunningSequenceFlow(h,owner,{onState=async()=>{},createPol
  assert.equal(providerWrites(),beforeRetirement,'Retiring a definitively expired or never-started setup makes no provider write')
  assert.ok((await api('audit')).some(e=>e.action==='dunning.setup.retire'&&e.subject===oldSetup&&JSON.parse(e.detail).reason==='provider-expired'))
  await move(7)
+ const beforeCatchup=await api(`subscriptions/${missed.sub}`)
+ await h.rejectAudit('subscription.state.observe')
+ assert.equal((await h.raw(`/cdn-cgi/local/scheduled?time=${instant}&cron=${encodeURIComponent('* * * * *')}`)).status,500)
+ assert.deepEqual((await api(`subscriptions/${missed.sub}`)).stateHistory,beforeCatchup.stateHistory,'An unavailable transition audit cannot advance the missed schedule')
+ await h.rejectAudit(null)
+ const concurrent=await Promise.all([0,1].map(()=>h.raw(`/cdn-cgi/local/scheduled?time=${instant}&cron=${encodeURIComponent('* * * * *')}`)))
+ assert.deepEqual(concurrent.map(response=>response.status),[200,200])
+ const catchup=await observe(missed,'active')
+ assert.deepEqual(catchup.map(row=>row.state),['scheduled','trialing','paused','active'],'A delayed observer retains both ends of a complete missed pause')
+ assert.deepEqual(catchup.map(row=>row.observed_at),[first,...['2026-10-24','2026-10-25','2026-10-26'].map(date=>Date.parse(date+'T07:00:00Z'))],'Each scheduled transition retains its effective boundary rather than the late tick time')
+ assert.equal(catchup[2].cause.lifecycle.find(row=>row.id===missedPause.transition).kind,'pause')
+ assert.equal(catchup[2].cause.recordedAt,instant)
+ assert.equal(catchup[3].cause.recordedAt,instant)
+ assert.deepEqual((await observe(missed,'active')),catchup,'Repeated late ticks never repeat the missed transitions')
  const recoveryMail=await mail(recover,3);await mail(overdue,3)
  const path=new URL(recoveryMail.link).pathname+new URL(recoveryMail.link).search
  const methodPage=await (await h.raw(path)).text()
@@ -277,12 +300,20 @@ export async function dunningSequenceFlow(h,owner,{onState=async()=>{},createPol
  const endedHistory=await observe(trial,'ended')
  assert.deepEqual(endedHistory.map(row=>row.state),['trialing','paused','active','canceled','ended'])
  assert.equal((await api(`entitlements/${trialCustomer}?feature=api_access`)).allowed,false,'The scheduled end withdraws access without another owner action')
+ const dstHistory=await observe(dst,'active')
+ assert.deepEqual(dstHistory.map(row=>row.state),['scheduled','trialing','paused','active'])
+ assert.deepEqual(dstHistory.slice(1).map(row=>row.observed_at),['2026-10-31T07:00:00Z','2026-11-01T07:00:00Z','2026-11-02T08:00:00Z'].map(Date.parse),'Saved schedules use business-local midnight across the 25-hour daylight saving day')
+ for(const transition of dstHistory)assert.equal(received.filter(event=>event.id===transition.id&&event.type==='subscription.state_changed').length,1)
+ await h.advanceClock(new Date(instant).toISOString())
+ assert.equal((await h.raw(`/cdn-cgi/local/scheduled?time=${instant}&cron=${encodeURIComponent('* * * * *')}`)).status,200)
+ assert.deepEqual((await api(`subscriptions/${dst.sub}`)).stateHistory,dstHistory,'A Worker restart retains the schedule checkpoint without duplicate transitions')
  const role=await api('role.define',{name:'Lifecycle state reader',capabilities:['read.subscriptions']})
  await api('access.give',{email:'synthetic-nectar-state-reader@example.test',name:'Lifecycle reader',role:'custom',custom_role:role.id})
  const reader=await h.signIn('synthetic-nectar-state-reader@example.test',{requested:true}),readerFactor=await h.api('mfa.totp.start',reader,{})
  await h.api('mfa.totp.confirm',reader,{factor:readerFactor.factor,code:totp(readerFactor.secret,instant)})
- const limited=await h.api(`subscriptions/${unpaid.sub}`,reader)
+ const limited=await h.api(`subscriptions/${unpaid.sub}?include_state=true`,reader)
  assert.deepEqual(limited.stateHistory.map(row=>Object.keys(row.cause).sort()),limited.stateHistory.map(()=>['day','timezone']),'Subscription-only readers receive no financial cause facts')
+ await h.api(`subscriptions/${unpaid.sub}?include_state=true`,undefined,undefined,401)
  await h.api(`subscriptions/${unpaid.sub}`,undefined,undefined,401)
  const erasure=await api('erasure.request',{customer:unpaid.customer})
  await api('erasure.verify',{request:erasure.id,reason:'Synthetic verified identity',evidence:file('identity.txt','Synthetic verified identity','text/plain')})

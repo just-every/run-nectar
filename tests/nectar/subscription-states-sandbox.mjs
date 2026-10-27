@@ -9,7 +9,7 @@ const delivered=[]
 let instant=Date.parse(end+'T12:00:00Z')-day,clock,providerCustomer,h,owner,factor,stripe,phase='sources'
 const receipt={head:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),clause:'SUB-001',clauseComplete:false,status:'running',states:[],cleanup:[],limitations:['Dunning final action remains owner-confirmed; this is not unattended exhaustion proof.','Native renewal collection uses exact per-invoice customer consent and approval.']}
 const date=()=>new Date(instant).toISOString().slice(0,10)
-const api=(p,b,status)=>h.api(p,owner,b,status)
+const api=(p,b,status)=>h.api(p.startsWith('subscriptions/')?p+'?include_state=true':p,owner,b,status)
 const tick=async()=>{check((await h.raw(`/cdn-cgi/local/scheduled?time=${instant}&cron=${encodeURIComponent('0 14 * * *')}`)).status===200,'scheduled_tick_failed')}
 async function move(at){await stripe.advance(clock,Math.floor(at/1000),'subscription-state');instant=at;await h.advanceClock(new Date(instant).toISOString());await api('mfa.verify',{code:totp(factor.secret,instant)})}
 async function state(subscription,expected){await tick();await tick();const row=await api(`subscriptions/${subscription}`);for(const transition of row.stateHistory)check(delivered.some(event=>event.id===transition.id&&event.type==='subscription.state_changed'&&event.data.state===transition.state&&event.data.transition_id===transition.id),'state_webhook_missing');check(row.state===expected&&row.stateHistory.at(-1).state===expected,'lifecycle_state_mismatch');receipt.states.push({state:expected,transition:row.stateHistory.at(-1).id,cause:row.stateHistory.at(-1).cause});return row}
