@@ -7,7 +7,7 @@ import { applyPolicy } from './policy-helper.mjs'
 import { dunningSequenceFlow,harnessOptions } from './dunning-sequences.mjs'
 import { dunningCustodyFlow,harnessOptions as custodyOptions } from './dunning-custody.mjs'
 if(process.env.NECTAR_JOURNEY_RUN)console.log(`JOURNEY RUN ${process.env.NECTAR_JOURNEY_RUN} HEAD ${execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim()}`)
-const custody=process.argv.includes('custody'),directory=process.env.NECTAR_EVIDENCE_DIR??'.evidence/dunning'
+const stateOnly=process.argv.includes('states'),custody=process.argv.includes('custody'),directory=process.env.NECTAR_EVIDENCE_DIR??'.evidence/dunning'
 await mkdir(directory,{recursive:true})
 const h=await harness(custody?custodyOptions():harnessOptions());let browser
 try {
@@ -17,7 +17,7 @@ try {
  await h.api('business.configure',owner,{legal_name:'Cedar Software Inc',timezone:'UTC',invoice_prefix:'DUN',payment_terms_days:30})
  await applyPolicy(h,owner,'tax.declare',{tax_jurisdiction:'CA',tax_mode:'no_tax',tax_note:'Reviewed dunning journey'})
  await h.api('tax.review',owner,{revision:(await h.api('business',owner)).revision})
- browser=await chromium.launch({headless:true,args:['--use-mock-keychain','--password-store=basic']})
+ browser=await chromium.launch({headless:true,...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?{executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH}:{}),args:['--no-sandbox','--use-mock-keychain','--password-store=basic']})
  const context=await browser.newContext(),customerContext=await browser.newContext()
  await context.addCookies(owner.split('; ').map(part=>{const i=part.indexOf('=');return {name:part.slice(0,i),value:part.slice(i+1),url:h.origin}}))
  const page=await context.newPage(),customer=await customerContext.newPage(),email=await (await browser.newContext()).newPage(),seen=new Set()
@@ -53,6 +53,17 @@ try {
   assert.equal(new URL(page.url()).searchParams.has('error'),false,`Native ${action} completed`)
  }
  const onState=async state=>{
+  if(state.state.startsWith('subscription-state-')){
+   await page.goto(h.origin+`/app/subscriptions/${state.record.sub}`)
+   if(page.viewportSize()?.width!==1440)await page.setViewportSize({width:1440,height:1000})
+   const table=page.locator('section[aria-labelledby="state-history"]')
+   assert.equal(await table.getByRole('row').count(),state.view.stateHistory.length+1)
+   assert.ok((await table.getByRole('row').last().innerText()).includes(state.view.state.replaceAll('_',' ')))
+   assert.equal((await page.locator('.summary').innerText()).includes(state.view.state.replaceAll('_',' ')),true)
+   await shot(page,state.state)
+   return
+  }
+  if(stateOnly)return
   const id=state.record?.series?.id??state.record?.series??state.records?.[0]?.series?.id
   await page.goto(h.origin+'/app/settings/dunning'+(id?`?series=${id}`:''))
   if(['enrolled','complete'].includes(state.state))await page.locator('#dunning-policy > summary').click()
@@ -73,7 +84,8 @@ try {
    await page.goto(h.origin+'/app/reports/recovery');await shot(page,`report-${state.state}`)
   }
  }
- if(custody)await dunningCustodyFlow(h,owner,{onState})
+ if(stateOnly)await dunningSequenceFlow(h,owner,{onState})
+ else if(custody)await dunningCustodyFlow(h,owner,{onState})
  else await dunningSequenceFlow(h,owner,{
   onState,
   createPolicy:async input=>{
