@@ -458,3 +458,6 @@ blockquote { margin: 0 0 6px; padding: 10px 16px; border-left: 3px solid var(--n
 .nc-tooltip-wrap:focus-within>.nc-tooltip{opacity:1;visibility:visible;transition-delay:0s}
 
 .processor-source-title,.processor-source-evidence{overflow-wrap:anywhere}
+
+.processor-reconciliation table{table-layout:fixed}
+.processor-reconciliation td{overflow-wrap:anywhere}

@@ -882,7 +882,7 @@
       "executable": false
     },
     "public/nectar.css": {
-      "sha256": "dd8da4125c51a77da3063f7d5f86e3f22c1fa0ac7297dc7fcd8e8d6a61600678",
+      "sha256": "c93ccd02c7ca722e37e5d8e1228917100bd2ead8ae7c42ccfedf365970ce929b",
       "executable": false
     },
     "public/rer-theme.css": {
@@ -4454,7 +4454,7 @@
       "executable": false
     },
     "src/nectar/ui/processor-events.ts": {
-      "sha256": "1203e81c3723f0728ad867eca1477ae70ea9193c1047620bbe2c370976a5c79d",
+      "sha256": "ea7cb77dba98f4275e9e602c875090ef46efb383ec10432d46b6b56a859ebc86",
       "executable": false
     },
     "src/nectar/ui/promotions.ts": {
@@ -5334,7 +5334,7 @@
       "executable": false
     },
     "tests/nectar/processor-events-browser.mjs": {
-      "sha256": "7a43d1b5a23165470e17c3ba42c9202be61588e617c222e955fb1de1c3816e6a",
+      "sha256": "d894ce2d730c4c34cf2db10e4fc4d284a6cc4177942ce83b5d29663c5979b36c",
       "executable": false
     },
     "tests/nectar/processor-events-sandbox.mjs": {

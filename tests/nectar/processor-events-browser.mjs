@@ -15,11 +15,13 @@ try {
  await context.addCookies(owner.split('; ').map(part=>{const at=part.indexOf('=');return {name:part.slice(0,at),value:part.slice(at+1),url:h.origin}}))
  const page=await context.newPage()
  const capture=async({label,customer,delivery,bankInvoice})=>{
-  const paths=[`/app/processor-events?customer=${customer}`,...(label==='reconciled'?['/app/receivables','/app/reports/settlements?period=2026-10','/app/reports/refunds?period=2026-10','/app/reports/collections?period=2026-10','/app/report-schedule',`/app/report-deliveries/${delivery}`,`/app/invoices/${bankInvoice}`]:[])]
+  const paths=[`/app/processor-events?customer=${customer}`,...(label==='failure-resolved'?['/app/processor-events']:[]),...(label==='reconciled'?['/app/receivables','/app/reports/settlements?period=2026-10','/app/reports/refunds?period=2026-10','/app/reports/collections?period=2026-10','/app/report-schedule',`/app/report-deliveries/${delivery}`,`/app/invoices/${bankInvoice}`]:[])]
   if(label==='reconciled')for(const metric of ['settlements','refunds','collections']){const report=await h.api(`reports/${metric}?period=2026-10&customer=${customer}`,owner);assert.ok(report.entries.length);paths.push(report.entries[0].href)}
   for(const [index,path] of paths.entries()){
    for(const width of [1440,390]){
-    await page.setViewportSize({width,height:1000});await page.goto(h.origin+path)
+    await page.setViewportSize({width,height:1000})
+    if(path==='/app/processor-events'){await page.goto(h.origin+'/app/receivables');await page.getByRole('link',{name:'Processor reconciliation',exact:true}).click()}
+    else await page.goto(h.origin+path)
     assert.equal(await page.locator('h1').count(),1)
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`${path} fits ${width} pixels`)
     const icons=await page.locator('a,button,[role=button]').evaluateAll(nodes=>nodes.filter(node=>!node.textContent.trim()&&node.querySelector('svg,img')&&!node.getAttribute('aria-describedby')).map(node=>node.outerHTML))
