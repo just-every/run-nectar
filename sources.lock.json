@@ -4686,7 +4686,7 @@
       "executable": false
     },
     "tests/fixtures/locales/fr.json": {
-      "sha256": "5d32ad97da0dd614fdce3988047f990a81835dfd8b5df82d3a225807f6e3e70a",
+      "sha256": "fe889cf6977bfd85cc4b32df3b3a19f42c37b89a5017200cdf3de33c99743c2e",
       "executable": false
     },
     "tests/fixtures/stripe-collection-edge.mjs": {
