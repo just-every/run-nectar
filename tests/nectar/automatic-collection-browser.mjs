@@ -56,6 +56,7 @@ try{
   },
   onState:async({state,invoice,customer,session,request,subscription})=>{
    if(subscription){
+    await page.setViewportSize({width:1440,height:950})
     await page.goto(h.origin+`/app/subscriptions/${subscription}`)
     const history=page.locator('section[aria-labelledby="state-history"]')
     const states=await h.api(`subscriptions/${subscription}?include_state=true`,owner)

@@ -4774,7 +4774,7 @@
       "executable": false
     },
     "tests/nectar/automatic-collection-browser.mjs": {
-      "sha256": "ef4751306b79ad32ce43864bdfb66ac79f480f13a2f7637e7550748ebc86efce",
+      "sha256": "5af91f2606483435a4b55f648b180f987b1884a389fdff1f091ed0b52d7435c3",
       "executable": false
     },
     "tests/nectar/automatic-collection-sandbox.mjs": {
