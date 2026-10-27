@@ -140,3 +140,35 @@ The response always says `executionAvailable: false` and
 `providerOutcome: "not-attempted"`. It creates no refund, tax-provider transaction,
 credit, approval, balance entry or customer message. Processor refund execution,
 provider tax reversal and cancellation-refund integration remain unfinished.
+
+
+### Review an agent's invoice refund correction
+
+An agent with full record read and proposal authority can prepare an amendment
+proposal with `invoice_refund: true`, the paid invoice, amount, destination,
+reason, customer explanation, subject, body and exact issued-line citations.
+Nectar computes the original and reversing subtotal and tax, cash or balance
+change, and revenue amount. The recipient is the customer's current billing
+address; the reviewed message is sent exactly as authored in that customer's
+language. Preparation moves no money and reserves no message.
+
+A human prepares the saved proposal through `invoice.refund.prepare` with its
+`proposal` identifier. Approval uses `proposal.decide`; the ordinary amount
+limit, fresh factor and different-approver rule still apply. The saved request
+cannot execute through the standalone refund door. Changed financial sources,
+policy, customer record or recipient require a new proposal. Rejection sends
+nothing. The proposal page shows the frozen figures, citations, wording and
+actual refund and mail outcomes.
+
+After a definitive provider outcome, the numbered credit and frozen message
+reservation commit together. A lost response or interrupted completion uses
+`invoice.refund.reconcile` and provider reads, preserving the original refund
+identity. Replaying approval or reconciliation cannot repeat the refund or
+message. Accepted mail means provider acceptance; it does not establish mailbox
+delivery. A pending reservation may be claimed once, while a claimed or uncertain
+send is never automatically retried.
+
+This door supports the existing non-taxable native card-capture refund scope.
+Provider tax reversal, cancellation-policy refunds and other source variants
+remain unproved. Closed revenue periods retain their frozen packet and CSV;
+a later refund adjustment appears in the open period.
