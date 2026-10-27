@@ -61,7 +61,14 @@ export async function dunningSequenceFlow(h,owner,{onState=async()=>{},createPol
   for(let n=0;n<2;n++){const response=await h.raw(`/cdn-cgi/local/scheduled?time=${instant}&cron=${encodeURIComponent('* * * * *')}`);assert.equal(response.status,200,await response.text())}
   const view=await api(`subscriptions/${record.sub}`),history=view.stateHistory
   assert.equal(view.state,expected,'Current lifecycle state follows native financial facts')
+  const customerRecord=await api(`customers/${view.customer_id}`)
+  assert.equal(customerRecord.subscriptions.find(s=>s.id===record.sub).state,expected,'Customer composition shares the observed subscription state')
+  assert.deepEqual(customerRecord.billingRecord.subscriptionHistory.find(s=>s.id===record.sub).record.stateHistory,history,'Customer source history agrees with the subscription public door')
   assert.equal(history.at(-1).state,expected,'Scheduled observation records the exact expected state')
+  assert.equal(history.at(-1).observed_at,instant,'Observation time is the pinned scheduled clock')
+  assert.equal(history.at(-1).cause.day,new Date(instant).toISOString().slice(0,10))
+  assert.equal(history.at(-1).cause.timezone,'UTC')
+  for(const [index,row] of history.entries()){assert.equal(row.previous_id,index?history[index-1].id:null);assert.equal(row.previous_state,index?history[index-1].state:null)}
   assert.deepEqual(history.slice(0,(histories.get(record.sub)??[]).length),histories.get(record.sub)??[],'Earlier cause history remains byte-for-byte unchanged')
   assert.equal(new Set(history.map(row=>row.id)).size,history.length)
   for(const row of history){
@@ -182,6 +189,7 @@ export async function dunningSequenceFlow(h,owner,{onState=async()=>{},createPol
  assert.equal((await report()).series.find(s=>s.id===recover.series.id).status,'settled')
  await api('dunning.mail.prepare',{series:recover.series.id,step:2,confirm:true},409)
  await observe(trial,'active')
+ assert.deepEqual((await api(`subscriptions/${trial.sub}`)).stateHistory.map(row=>row.state),['trialing','paused','active'])
  await observe(recover,'active')
  await onState({state:'recovered',record:recover,report:await report()})
  await move(10);await mail(enterpriseRecord,2)

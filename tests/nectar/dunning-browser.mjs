@@ -61,6 +61,7 @@ try {
    assert.ok((await table.getByRole('row').last().innerText()).includes(state.view.state.replaceAll('_',' ')))
    assert.equal((await page.locator('.summary').innerText()).includes(state.view.state.replaceAll('_',' ')),true)
    await shot(page,state.state)
+   if(state.view.state==='past_due'){await page.goto(h.origin+`/app/customers/${state.record.customer}`);await shot(page,'customer-lifecycle-state')}
    return
   }
   if(stateOnly)return
