@@ -21,12 +21,12 @@ export async function captureSubscriptionStates(env: Bindings, events: Audit[]) 
   // All source reads below execute after the business statements, inside their
   // D1 batch. A failed history, event or audit write rolls the source back too.
   const insert = stmt(env, `WITH refs AS MATERIALIZED (SELECT value FROM json_each(?)), invoices AS MATERIALIZED (
-    SELECT id,subscription_id FROM nc_invoices WHERE id IN (SELECT value FROM refs) OR number IN (SELECT value FROM refs)
-    UNION SELECT i.id,i.subscription_id FROM nc_invoices i JOIN nc_allocations a ON a.invoice_id=i.id WHERE a.id IN (SELECT value FROM refs) OR a.payment_id IN (SELECT value FROM refs)
-    UNION SELECT i.id,i.subscription_id FROM nc_invoices i JOIN nc_native_collections a ON a.invoice_id=i.id WHERE a.id IN (SELECT value FROM refs)
-    UNION SELECT i.id,i.subscription_id FROM nc_invoices i JOIN nc_automatic_collections a ON a.invoice_id=i.id WHERE a.id IN (SELECT value FROM refs)
-    UNION SELECT i.id,i.subscription_id FROM nc_invoices i JOIN nc_dunning_series a ON a.invoice_id=i.id WHERE a.id IN (SELECT value FROM refs)
-    UNION SELECT i.id,i.subscription_id FROM nc_invoices i JOIN nc_balance_entries a ON a.invoice_id=i.id WHERE a.id IN (SELECT value FROM refs)
+    SELECT i.id,i.subscription_id FROM nc_invoices i WHERE i.id IN (SELECT value FROM refs) OR i.number IN (SELECT value FROM refs)
+      OR i.id IN (SELECT a.invoice_id FROM nc_allocations a WHERE a.id IN (SELECT value FROM refs) OR a.payment_id IN (SELECT value FROM refs))
+      OR i.id IN (SELECT a.invoice_id FROM nc_native_collections a WHERE a.id IN (SELECT value FROM refs))
+      OR i.id IN (SELECT a.invoice_id FROM nc_automatic_collections a WHERE a.id IN (SELECT value FROM refs))
+      OR i.id IN (SELECT a.invoice_id FROM nc_dunning_series a WHERE a.id IN (SELECT value FROM refs))
+      OR i.id IN (SELECT a.invoice_id FROM nc_balance_entries a WHERE a.id IN (SELECT value FROM refs))
   ), facts AS MATERIALIZED (
     SELECT s.*,? AS day,
       (SELECT id FROM nc_subscription_states WHERE subscription_id=s.id ORDER BY seq DESC LIMIT 1) AS previous_id,
