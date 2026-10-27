@@ -8,11 +8,33 @@ const stripe=stripeSandbox(process.env.STRIPE_SECRET_KEY)
 const head=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim()
 let h,remote,phase='account'
 const results=[]
+async function provePayout(account,api) {
+ const payouts=(await stripe.list('/v1/payouts')).data.filter(row=>row.automatic===true&&row.method==='standard'&&row.reconciliation_status==='completed')
+ assert.ok(payouts.length,'A genuine reconciled automatic payout is required')
+ const events=(await stripe.list('/v1/events',{type:'payout.paid'})).data
+ const event=events.find(row=>payouts.some(payout=>payout.id===row.data?.object?.id))
+ assert.ok(event,'A genuine paid-payout event is required')
+ const payout=payouts.find(row=>row.id===event.data.object.id)
+ const debit=await stripe.request('GET',`/v1/balance_transactions/${reference(payout.balance_transaction)}`)
+ const members=(await stripe.list('/v1/balance_transactions',{payout:payout.id})).data.filter(row=>row.id!==debit.id)
+ assert.ok(members.length,'The automatic payout has actual constituents')
+ assert.equal(members.reduce((sum,row)=>sum+row.net,0),payout.amount)
+ await api('processor.event.consume',{account_ref:account.id,event_ref:event.id})
+ assert.equal((await api('processor.event.consume',{account_ref:account.id,event_ref:event.id})).replayed,true)
+ const ledger=await api('processor-events')
+ const observed=ledger.transactions.filter(row=>row.payout_ref===payout.id)
+ const actual=observed.map(row=>[row.transaction_ref,row.amount_cents,row.fee_cents,row.net_cents,row.currency]).sort()
+ const expected=[...members,debit].map(row=>[row.id,row.amount,row.fee,row.net,row.currency]).sort()
+ assert.deepEqual(actual,expected,'Every actual payout constituent and its debit reconcile exactly')
+ assert.equal(debit.amount,-payout.amount)
+ return {kind:'automatic_payout',payout:payout.id,eventRef:event.id,members:members.length,payoutCents:payout.amount,constituentNetCents:members.reduce((sum,row)=>sum+row.net,0),currency:payout.currency}
+}
 try {
  const account=await stripe.request('GET','/v1/account');assert.equal(account.country,'US')
- remote=await stripe.request('POST','/v1/customers',{name:`Synthetic Nectar events ${stripe.run}`,'cash_balance[settings][reconciliation_mode]':'manual'})
  const setup=await processorSetup(undefined,{localTime:undefined,stripeFetch:request=>stripe.forward(request),stripeSecret:process.env.STRIPE_SECRET_KEY})
  h=setup.h;const owner=setup.owner,api=(path,body,status)=>h.api(path,owner,body,status)
+ if(process.argv[2]==='payout'){phase='automatic-payout';results.push(await provePayout(account,api));assert.equal(stripe.counts.POST,0,'Payout proof makes no provider writes')}else{
+ remote=await stripe.request('POST','/v1/customers',{name:`Synthetic Nectar events ${stripe.run}`,'cash_balance[settings][reconciliation_mode]':'manual'})
  const customer=(await api('customer.create',{external_id:`synthetic-nectar-${stripe.run}`,name:'Nectar processor sandbox',billing_email:'processor@example.test'})).id
  await api('collection.customer.bind',{customer,account_ref:account.id,stripe_customer_ref:remote.id,confirm:true})
  const issue=async(amount,label)=>{
@@ -101,9 +123,9 @@ try {
  assert.equal(sends,1);assert.equal(alert.status,'accepted');assert.ok(alert.provider_ref)
  await h.page(alert.href,finance);assert.equal((await h.raw(alert.href)).status,303)
  results.push({kind:'failure_alert',eventRef:rejectedEvent.id,status:alert.status,providerReference:alert.provider_ref,sends})
- // Manual payout constituents are not supplied by Stripe. Keep this boundary
- // explicit rather than manufacturing an automatic payout or membership list.
- results.push({kind:'payout',boundary:'automatic_payout_constituent_sandbox_pending'},{kind:'ach_return',boundary:'genuine_late_R01_return_sandbox_pending'})
+ phase='automatic-payout'
+ results.push(await provePayout(account,api),{kind:'ach_return',boundary:'genuine_R01_identification_sandbox_pending'})
+ }
  console.log(JSON.stringify({head,status:'passed_for_named_slices',results,requests:stripe.counts}))
 }catch(error){console.error(JSON.stringify({head,status:'failed',phase,error:safeError(error),results}));process.exitCode=1}
 finally{

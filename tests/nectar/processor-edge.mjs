@@ -14,7 +14,7 @@ export function processorEdge() {
   if(path.startsWith('/events/'))return Response.json(events.get(path.split('/').at(-1))??{},{status:events.has(path.split('/').at(-1))?200:404})
   if(fail)return Response.json({},{status:503})
   if(path.startsWith('/balance_transactions/'))return Response.json(transactions.get(path.split('/').at(-1)))
-  if(path==='/balance_transactions')return Response.json(list([...transactions.values()].filter(row=>row.type!=='payout')))
+  if(path==='/balance_transactions')return Response.json(list([...transactions.values()]))
   if(path==='/refunds')return Response.json(list([...objects.values()].filter(row=>row.object==='refund'&&row.charge===url.searchParams.get('charge'))))
   const object=objects.get(path.split('/').at(-1))
   if(object)return Response.json(object)

@@ -119,7 +119,8 @@ export async function payoutFacts(env:Bindings,stripe:StripeClient,account:strin
  // Stripe supplies constituents only for automatic payouts. A manual payout's
  // debit is retained honestly without inventing an invoice membership list.
  if(payout.automatic===true){
-  const members=await completeList(stripe,'/balance_transactions',{payout:payout.id})
+  // Stripe includes the payout debit itself; it is already recorded above.
+  const members=(await completeList(stripe,'/balance_transactions',{payout:payout.id})).filter(row=>row.id!==transaction.id)
   insist(members.length>0&&members.every(row=>row.currency===payout.currency)&&members.reduce((sum,row)=>sum+integer(row.net),0)===payout.amount,'processor_payout_does_not_reconcile',409)
   for(const member of members){
    const prior=await one(env,'SELECT customer_id,invoice_id,payment_id FROM nc_processor_transactions WHERE account_ref=? AND transaction_ref=?',account,member.id)
