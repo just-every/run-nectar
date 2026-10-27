@@ -262,7 +262,7 @@
       "executable": false
     },
     "docs/receivables.md": {
-      "sha256": "0a34555bc1419e1011929bf0345724481f85ee1445892b542ee0aab9f6509041",
+      "sha256": "ee06aa058a914efcfc6549ddfca44577563598c19a2bfc62f3d48f0667b29e9d",
       "executable": false
     },
     "docs/retry-comparison.md": {
@@ -3162,7 +3162,7 @@
       "executable": false
     },
     "src/nectar/credit-correction-mail.ts": {
-      "sha256": "23705c4b5005363eb071f2be140fab3120dcdfe7d268837deaa1907fc6e3b696",
+      "sha256": "ac5baf84cb4c2b871068005a9ae351ae5c5c1dc47fa0a20bd77d656768403f1f",
       "executable": false
     },
     "src/nectar/credit-correction.ts": {
@@ -4238,7 +4238,7 @@
       "executable": false
     },
     "src/nectar/ui/credit-correction.ts": {
-      "sha256": "053e81be9a671d69ddcc6fcb901ee933a2dfd2ca3f50aa70d1807fe9525eec31",
+      "sha256": "e70ce7541ab33cceeaa4eab1c35708e8d12cf05135ad84fd30cc21fba5cd3dc1",
       "executable": false
     },
     "src/nectar/ui/currency.ts": {
@@ -4986,7 +4986,7 @@
       "executable": false
     },
     "tests/nectar/invoice-refund-preview.mjs": {
-      "sha256": "ed49c38c5c14f6ea8050204ed434d3335efe244c614d67f10238cddbcf58af8d",
+      "sha256": "12a3077177c71626c3782fde37df4f62493d02e16867734028885fc57c076008",
       "executable": false
     },
     "tests/nectar/invoice-refund-sandbox.mjs": {
