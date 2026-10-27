@@ -106,6 +106,10 @@ export async function invoiceVoidFlow(h, owner, { onState = async () => {} } = {
   await api('invoice.void', body(high), 409); await unchanged(high)
   for (const action of ['invoice.void.prepare', 'invoice.void']) await h.api(action, agent, body(high), 403)
   const request = await api('invoice.void.prepare', body(high))
+  const preparation = (await api('audit')).find(row => row.action === 'invoice.void.prepare' && row.subject === request.request)
+  assert.equal(preparation.actor, h.vars.OWNER_EMAIL)
+  assert.equal(JSON.parse(preparation.detail).invoice, high.id)
+  assert.equal(JSON.parse(preparation.detail).amount, 150000)
   await h.api('credit.approve', finance, { request: request.request }, 409)
   await api('invoice.void', { ...body(high), request: request.request }, 409)
   assert.equal((await api(`invoices/${high.id}`)).balanceCents, 150000)
@@ -146,18 +150,35 @@ export async function invoiceVoidFlow(h, owner, { onState = async () => {} } = {
   await api('invoice.void', body(partial), 409)
   const product = (await api('product.create', { code: 'synthetic-nectar-void-plan', name: 'Synthetic recurring service' })).id
   const price = (await api('price.create', { product, kind: 'flat', unit_amount: '300', taxable: false })).id
-  const subscription = (await api('subscription.create', { customer, start_date: '2026-05-01', price: [price] })).id
+  const seatProduct = (await api('product.create', { code: 'synthetic-nectar-void-seats', name: 'Synthetic seats' })).id
+  const seat = (await api('price.create', { product: seatProduct, kind: 'seat', unit_amount: '20', taxable: false })).id
+  const meter = (await api('meter.create', { code: 'synthetic-nectar-void-meter', name: 'Synthetic source-preserved units', unit_label: 'units' })).id
+  const usageProduct = (await api('product.create', { code: 'synthetic-nectar-void-usage', name: 'Synthetic usage' })).id
+  const unit = (await api('price.create', { product: usageProduct, meter, kind: 'unit', unit_amount: '0.07', taxable: false })).id
+  const subscription = (await api('subscription.create', { customer, start_date: '2026-05-01', price: [price,seat,unit], quantity: ['','7',''] })).id
+  await api('usage.submit', { events: [{ event_id: 'synthetic-nectar-void-event', customer: 'synthetic-nectar-void-1', meter: 'synthetic-nectar-void-meter', quantity: '23', occurred_at: '2026-05-15T12:00:00Z' }] })
   const run = await api('billrun.prepare', { period: '2026-05' })
   const recurring = (await api(`runs/${run.id}`)).invoices.find(row => row.subscription_id === subscription)
   assert.ok(recurring)
   await api('invoice.approve', { invoice: recurring.id, acknowledge: true })
   await api('invoice.finalise', { invoice: recurring.id, issue_date: '2026-06-01' })
   const recurringOriginal = await api(`invoices/${recurring.id}`)
+  assert.equal(recurringOriginal.total_cents, 44161)
+  assert.deepEqual(recurringOriginal.lines.map(row => row.kind).sort(), ['flat','seat','usage'])
+  assert.deepEqual(recurringOriginal.calculation.consumedEvents, ['synthetic-nectar-void-event'])
   const recurringReplacement = await api('invoice.void', body(recurringOriginal))
   await api('invoice.approve', { invoice: recurringReplacement.id, acknowledge: true })
   await api('invoice.finalise', { invoice: recurringReplacement.id, issue_date: '2026-06-10' })
   assert.equal((await api(`invoices/${recurring.id}`)).balanceCents, 0)
-  assert.equal((await api(`invoices/${recurringReplacement.id}`)).balanceCents, 30000)
+  const recurringReissued = await api(`invoices/${recurringReplacement.id}`)
+  assert.equal(recurringReissued.balanceCents, 44161)
+  assert.deepEqual(recurringReissued.lines.map(({id,invoice_id,...row}) => row), recurringOriginal.lines.map(({id,invoice_id,...row}) => row))
+  assert.deepEqual(recurringReissued.calculation.consumedEvents, [])
+  const revenueShape = source => source.schedules.map(row => ({ kind: row.kind, amountCents: row.amountCents, entries: row.entries.map(entry => [entry.period,entry.amountCents]) })).sort((a,b) => a.kind.localeCompare(b.kind))
+  const expectedRevenue = [{ kind: 'flat', amountCents: 30000, entries: [['2026-05',30000]] }, { kind: 'seat', amountCents: 14000, entries: [['2026-05',14000]] }, { kind: 'usage', amountCents: 161, entries: [['2026-05',161]] }]
+  assert.deepEqual(revenueShape(await api(`revenue/${recurring.id}`)), expectedRevenue)
+  assert.deepEqual(revenueShape(await api(`revenue/${recurringReplacement.id}`)), expectedRevenue, 'Replacement revenue preserves the saved usage dates and exact service amounts')
+  assert.deepEqual((await api(`invoices/${recurring.id}`)).calculation, recurringOriginal.calculation)
   const again = await api('billrun.prepare', { period: '2026-05' })
   assert.equal((await api(`runs/${again.id}`)).invoices.length, 0, 'A replacement never releases the original recurring period for billing again')
   const stale = await issue('1500'), staleRequest = await api('invoice.void.prepare', body(stale))

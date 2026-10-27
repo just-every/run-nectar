@@ -23,8 +23,10 @@ async function source(env: Bindings, actor: Actor, input: Input) {
   insist(!await one(env,"SELECT 1 FROM nc_customer_hierarchies WHERE customer_id=? AND billing_mode='consolidated'",invoice.customer_id),'consolidation_required',409)
   const lines = await all(env, 'SELECT * FROM nc_invoice_lines WHERE invoice_id=? ORDER BY seq', invoice.id)
   // Funding and credit-consumption lines retain their own correction duties.
+  const original = parseJson<Row>(invoice.calculation_json, {})
+  insist(original.inputs?.tax && ['no_tax','flat_rate'].includes(original.inputs.tax.mode), 'invoice_void_source_unavailable', 409)
   const kinds = ['one_time', 'flat', 'seat', 'usage', 'overage', 'discount', 'metric_usage']
-  insist(invoice.currency === 'USD' && invoice.tax_cents === 0 && invoice.total_cents > 0 && lines.length > 0 && lines.every(line => kinds.includes(line.kind)), 'invoice_void_scope_not_supported', 409)
+  insist(invoice.currency === 'USD' && invoice.tax_cents === 0 && invoice.subtotal_cents === invoice.total_cents && invoice.total_cents > 0 && lines.length > 0 && lines.every(line => kinds.includes(line.kind)), 'invoice_void_scope_not_supported', 409)
   insist(invoice.balance_cents === invoice.total_cents && !await one(env, 'SELECT 1 FROM nc_credit_notes WHERE invoice_id=?', invoice.id), 'invoice_not_wholly_unpaid', 409)
   return { invoice, lines }
 }
@@ -32,7 +34,7 @@ async function source(env: Bindings, actor: Actor, input: Input) {
 export async function prepareInvoiceVoid(env: Bindings, actor: Actor, input: Input) {
   const { invoice } = await source(env, actor, input)
   const prepared = await creditRequestStatements(env, actor, Input.of({ amount: plainMoney(invoice.total_cents), reason: input.text('reason', { max: 500 }) }), invoice, 'invoice-void')
-  await commit(env, [refundActorGuard(env, actor), ...prepared.statements], prepared.audits)
+  await commit(env, [refundActorGuard(env, actor), ...prepared.statements], prepared.audits.map(event => ({ ...event, action: 'invoice.void.prepare' })))
   return prepared.result
 }
 
@@ -48,7 +50,7 @@ export async function voidInvoice(env: Bindings, actor: Actor, input: Input) {
   insist(number.entityId === invoice.billing_entity_id && number.routeJson === invoice.billing_route_json, 'source_changed', 409)
   const id = newId(), credit = newId(), run = newId(), at = clockInstant(env)
   const original = parseJson<Row>(invoice.calculation_json, {})
-  const inputs = { version: invoice.calc_version, currency: invoice.currency, customer: customer.id, date: invoice.period_start, charges: [], tax: original.inputs.tax, invoiceContent: await invoiceContent(env, business, customer.id), reissue: { invoice: invoice.id, credit, sourceFingerprint: invoice.source_fingerprint } }
+  const inputs = { ...(original.inputs.timezone ? { timezone: original.inputs.timezone } : {}), ...(original.inputs.period ? { period: original.inputs.period } : {}), ...(original.inputs.events ? { events: original.inputs.events } : {}), version: invoice.calc_version, currency: invoice.currency, customer: customer.id, date: invoice.period_start, charges: [], tax: original.inputs.tax, invoiceContent: await invoiceContent(env, business, customer.id), reissue: { invoice: invoice.id, credit, sourceFingerprint: invoice.source_fingerprint } }
   const basis = await fingerprint(inputs)
   const calculation = { version: invoice.calc_version, fingerprint: basis, tax: original.tax, consumedEvents: [], inputs }
   await commit(env, [
