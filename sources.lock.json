@@ -174,7 +174,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "da8bf1b3afb1a922ea7d176d38869fbc0877c8ff65c52a270bc5169332fbcbf2",
+      "sha256": "829ba1f4719a0ff87ad2faf8ff44041f1f69efe0bc4721a3ada27a70ce42e4fc",
       "executable": false
     },
     "AGENTS.consumer.md": {
@@ -194,7 +194,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "88a6874b32ec0a0d6f6365d25d7900a60a9890c345d1f9be1c3a8ac11b12250f",
+      "sha256": "e4550a6476c4520209bce9d19e7d97fc39bc775501ba418c7a779286e4b61bc4",
       "executable": false
     },
     "DEMO.md": {
@@ -3166,7 +3166,7 @@
       "executable": false
     },
     "src/nectar/core.ts": {
-      "sha256": "bedce0dafcba6bb09f0ddc78dc145f0abb37b07bdcd1cc7369190a3cd7c338cd",
+      "sha256": "b8de1bd1f1c10e0117e959861142a25b0cdd00da1c6c431e2af931db45626550",
       "executable": false
     },
     "src/nectar/credit-correction-mail.ts": {
@@ -4170,7 +4170,7 @@
       "executable": false
     },
     "src/nectar/subscription-state-capture.ts": {
-      "sha256": "d6967b811e43f369452c0631372bbfc64c1de75b486007305bc6364b26e1c88a",
+      "sha256": "3ac8fe584c79ac8bbe61107829b538384654ba30ef298654ef77acf47d77a233",
       "executable": false
     },
     "src/nectar/subscription-states.ts": {
@@ -4910,7 +4910,7 @@
       "executable": false
     },
     "tests/nectar/dunning-sequences.mjs": {
-      "sha256": "abb7f5450f3ec259a1cc7adf08ecf1978342097ea262015a15debdd08b817717",
+      "sha256": "e2550c27b288e1d51a724c976dc508d7d848af39e115c909b86a0d2952fa06a6",
       "executable": false
     },
     "tests/nectar/enterprise-identity-browser.mjs": {

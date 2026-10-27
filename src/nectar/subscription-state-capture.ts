@@ -2,25 +2,15 @@
 // can hide it. These facts confer no collection or cancellation authority.
 import type { Bindings } from '../auth.server'
 import { clockInstant } from './clock'
-import { all, canonical, newId, stmt, type Audit } from './core'
-import { today } from './dates'
+import { all, canonical, guard, newId, one, stmt, type Audit } from './core'
+import { today, zonedStart } from './dates'
+import { subscriptionState } from './subscription-states'
 import { BALANCE_SQL } from './balance-sql'
 
 const changesState = /^(subscription\.(?!state\.)|trial\.|automatic\.collection\.|collection\.|retry\.|dunning\.end\.|payment\.allocate|credit\.|invoice\.|balance\.|writeoff\.|usage\.correction\.approve|renewal\.)/
 
-export async function captureSubscriptionStates(env: Bindings, events: Audit[]) {
-  if (!events.some(event => changesState.test(event.action))) return []
-  const business = (await all(env, 'SELECT timezone FROM nc_business WHERE singleton=1'))[0]
-  if (!business) return []
-  const at = clockInstant(env), day = today(business.timezone, at), batch = newId()
-  const refs = canonical([...new Set(events.flatMap(event => {
-    const detail = event.detail && typeof event.detail === 'object' ? event.detail as Record<string, unknown> : {}
-    return [event.subject, detail.invoice, detail.invoiceId, detail.subscription, detail.payment].filter(value => typeof value === 'string')
-  }))])
-  const actions = canonical(events.map(({ action, subject }) => ({ action, subject })))
-  // All source reads below execute after the business statements, inside their
-  // D1 batch. A failed history, event or audit write rolls the source back too.
-  const sources = `WITH refs AS MATERIALIZED (SELECT value FROM json_each(?)), invoices AS MATERIALIZED (
+
+const sources = `WITH refs AS MATERIALIZED (SELECT value FROM json_each(?)), invoices AS MATERIALIZED (
     SELECT i.id,i.subscription_id FROM nc_invoices i WHERE i.id IN (SELECT value FROM refs) OR i.number IN (SELECT value FROM refs)
       OR i.id IN (SELECT a.invoice_id FROM nc_allocations a WHERE a.id IN (SELECT value FROM refs) OR a.payment_id IN (SELECT value FROM refs))
       OR i.id IN (SELECT a.invoice_id FROM nc_native_collections a WHERE a.id IN (SELECT value FROM refs))
@@ -39,6 +29,23 @@ export async function captureSubscriptionStates(env: Bindings, events: Audit[]) 
         OR s.id IN (SELECT subscription_id FROM nc_usage_corrections WHERE id IN (SELECT value FROM refs))
         OR s.id IN (SELECT subscription_id FROM nc_renewal_terms WHERE id IN (SELECT value FROM refs)))
   )`
+
+function sourceReferences(events: Audit[]) {
+  return canonical([...new Set(events.flatMap(event => {
+    const detail = event.detail && typeof event.detail === 'object' ? event.detail as Record<string, unknown> : {}
+    return [event.subject, detail.invoice, detail.invoiceId, detail.subscription, detail.payment].filter(value => typeof value === 'string')
+  }))])
+}
+
+export async function captureSubscriptionStates(env: Bindings, events: Audit[]) {
+  if (!events.some(event => changesState.test(event.action))) return []
+  const business = (await all(env, 'SELECT timezone FROM nc_business WHERE singleton=1'))[0]
+  if (!business) return []
+  const at = clockInstant(env), day = today(business.timezone, at), batch = newId()
+  const refs = sourceReferences(events)
+  const actions = canonical(events.map(({ action, subject }) => ({ action, subject })))
+  // All source reads below execute after the business statements, inside their
+  // D1 batch. A failed history, event or audit write rolls the source back too.
   const insert = stmt(env, `${sources}, inputs AS MATERIALIZED (
     SELECT f.*,
       CASE WHEN start_date>day THEN 'scheduled' WHEN end_date IS NOT NULL AND end_date<=day THEN 'ended'
@@ -95,4 +102,52 @@ export async function captureSubscriptionStates(env: Bindings, events: Audit[]) 
       SELECT ?,'system:lifecycle','subscription.state.observe',subscription_id,${data}
       FROM nc_subscription_states WHERE json_extract(cause_json,'$.sourceBatch')=?`,Date.now(),batch),
   ]
+}
+
+// Read due schedule facts before the source changes, then append them after
+// its statements in that same batch. The early guard fences the read basis
+// without changing audit or privacy counters used by the source's own guards.
+export async function captureDueSubscriptionStates(env: Bindings, events: Audit[]) {
+  const empty = { before: [] as D1PreparedStatement[], after: [] as D1PreparedStatement[] }
+  if (!events.some(event => changesState.test(event.action))) return empty
+  const business = await one(env, 'SELECT timezone FROM nc_business WHERE singleton=1')
+  if (!business) return empty
+  const generation = (await one(env, 'SELECT value FROM nc_privacy_generation WHERE id=1'))!.value
+  const audit = (await one(env, 'SELECT COALESCE(MAX(seq),0) seq FROM nc_audit'))!.seq
+  const at = clockInstant(env), refs = sourceReferences(events)
+  const subs = await all(env, `${sources} SELECT * FROM facts`,refs,today(business.timezone,at))
+  const records: D1PreparedStatement[] = []
+  for (const sub of subs) {
+    if (!sub.previous_id) continue
+    const checked = Math.max(sub.state_checked_at ?? sub.previous_at,sub.previous_at)
+    if (checked>=at) continue
+    const lifecycle = await all(env,'SELECT id,kind,effective_date,until_date,related_id FROM nc_subscription_lifecycle WHERE subscription_id=? ORDER BY seq',sub.id)
+    const invoices = await all(env,"SELECT issue_date,due_date FROM nc_invoices WHERE subscription_id=? AND status='issued'",sub.id)
+    const boundaries = [...new Set([sub.start_date,sub.trial_end,sub.end_date,
+      ...lifecycle.flatMap(row=>[row.effective_date,row.until_date]),
+      ...invoices.flatMap(row=>[row.issue_date,row.due_date])].filter(Boolean)
+      .map(date=>zonedStart(date,business.timezone)).filter(time=>time>checked&&time<=at))].sort((a,b)=>a-b)
+    let previousId = sub.previous_id, previousState = sub.previous_state
+    for (const effectiveAt of boundaries) {
+      const day = today(business.timezone,effectiveAt)
+      const { state,input,cancellation } = await subscriptionState(env,sub,day)
+      if (state===previousState) continue
+      const dunning = await all(env,`SELECT d.id,d.policy_id,d.status,d.end_date,d.invoice_id FROM nc_dunning_series d JOIN nc_invoices i ON i.id=d.invoice_id WHERE i.subscription_id=? AND d.end_date<=? ORDER BY d.id`,sub.id,day)
+      const allocations = ['past_due','unpaid'].includes(previousState)&&state==='active'
+        ? await all(env,`SELECT a.id,a.invoice_id,a.payment_id,a.amount_cents FROM nc_allocations a JOIN nc_invoices i ON i.id=a.invoice_id WHERE i.subscription_id=? ORDER BY a.id`,sub.id) : []
+      const cause = {day,timezone:business.timezone,recordedAt:at,startDate:sub.start_date,trialEnd:sub.trial_end,
+        endDate:sub.end_date,lifecycle,scheduledCancellation:cancellation,payment:input.payment,dunning,allocations,
+        sourceActions:[{action:'subscription.state.schedule',subject:sub.id}]}
+      const id = newId(), data = {subscription_id:sub.id,customer_id:sub.customer_id,transition_id:id,
+        previous_state:previousState,state,cause,observed_at:effectiveAt}
+      records.push(
+        stmt(env,'INSERT INTO nc_subscription_states(id,subscription_id,customer_id,previous_id,previous_state,state,cause_json,observed_at) VALUES(?,?,?,?,?,?,?,?)',id,sub.id,sub.customer_id,previousId,previousState,state,canonical(cause),effectiveAt),
+        stmt(env,'INSERT INTO nc_webhook_events(id,type,customer_id,subject,payload_json,created_at) VALUES(?,?,?,?,?,?)',id,'subscription.state_changed',sub.customer_id,sub.id,canonical({type:'subscription.state_changed',data}),at),
+        stmt(env,'INSERT INTO nc_audit(at,actor,action,subject,detail) VALUES(?,?,?,?,?)',Date.now(),'system:lifecycle','subscription.state.observe',sub.id,canonical(data)),
+      )
+      previousId=id;previousState=state
+    }
+  }
+  if (!records.length) return empty
+  return {before:[guard(env,'subscription_state_changed','(SELECT value FROM nc_privacy_generation WHERE id=1)=? AND (SELECT COALESCE(MAX(seq),0) FROM nc_audit)=?',generation,audit)],after:records}
 }

@@ -91,6 +91,9 @@ export async function dunningSequenceFlow(h,owner,{onState=async()=>{},createPol
  await observe(missed,'scheduled')
  const missedBefore=await api(`subscriptions/${missed.sub}`)
  const missedPause=await api('subscription.pause',{subscription:missed.sub,revision:missedBefore.revision,effective_date:'2026-10-25',resume_date:'2026-10-26',access:'suspend',reason:'Synthetic pause wholly between observer ticks'})
+ const interleaved={sub:(await api('subscription.create',{customer:missedCustomer,start_date:'2026-10-24',trial_end:'2026-10-25',trial_payment:'none',price:[price],quantity:['1']})).id}
+ const interleavedBefore=await api(`subscriptions/${interleaved.sub}`)
+ await api('subscription.pause',{subscription:interleaved.sub,revision:interleavedBefore.revision,effective_date:'2026-10-25',resume_date:'2026-10-26',access:'suspend',reason:'Synthetic interleaved schedule'})
  const dstCustomer=(await api('customer.create',{external_id:'synthetic-nectar-state-dst',name:'Synthetic daylight saving schedule',billing_email:'synthetic-nectar-state-dst@example.test'})).id
  const dst={sub:(await api('subscription.create',{customer:dstCustomer,start_date:'2026-10-31',anchor_day:1,trial_end:'2026-11-01',trial_payment:'none',price:[price],quantity:['1']})).id}
  const dstBefore=await api(`subscriptions/${dst.sub}`)
@@ -172,6 +175,16 @@ export async function dunningSequenceFlow(h,owner,{onState=async()=>{},createPol
  assert.equal(providerWrites(),beforeRetirement,'Retiring a definitively expired or never-started setup makes no provider write')
  assert.ok((await api('audit')).some(e=>e.action==='dunning.setup.retire'&&e.subject===oldSetup&&JSON.parse(e.detail).reason==='provider-expired'))
  await move(7)
+ const beforeSource=await api(`subscriptions/${interleaved.sub}`)
+ const futurePause={subscription:interleaved.sub,revision:beforeSource.revision,effective_date:'2026-11-25',resume_date:'2026-11-26',access:'suspend',reason:'Synthetic later schedule write'}
+ await h.rejectAudit('subscription.state.observe')
+ await api('subscription.pause',futurePause,500)
+ assert.deepEqual(await api(`subscriptions/${interleaved.sub}`),beforeSource,'A failed catch-up audit rolls back the interleaved source write and history together')
+ await h.rejectAudit(null)
+ await api('subscription.pause',futurePause)
+ const sourceCatchup=await api(`subscriptions/${interleaved.sub}`)
+ assert.deepEqual(sourceCatchup.stateHistory.map(row=>row.state),['scheduled','trialing','paused','active'],'A source write retains missed transitions before changing their basis')
+ assert.deepEqual(sourceCatchup.stateHistory.slice(-2).map(row=>row.cause.sourceActions),Array.from({length:2},()=>[{action:'subscription.state.schedule',subject:interleaved.sub}]))
  const beforeCatchup=await api(`subscriptions/${missed.sub}`)
  await h.rejectAudit('subscription.state.observe')
  assert.equal((await h.raw(`/cdn-cgi/local/scheduled?time=${instant}&cron=${encodeURIComponent('* * * * *')}`)).status,500)
@@ -238,6 +251,7 @@ export async function dunningSequenceFlow(h,owner,{onState=async()=>{},createPol
  const unpaidHistory=await observe(unpaid,'unpaid')
  assert.deepEqual(unpaidHistory.at(-1).cause.dunning.map(d=>[d.id,d.policy_id,d.status]),[[unpaid.series.id,unpaidPolicy.id,'mark_unpaid']])
  await onState({state:'unpaid',record:unpaid,report:await report()})
+ await api('subscription.pause',{subscription:unpaid.sub,revision:unpaidBeforeTick.revision,effective_date:'2026-11-13',resume_date:'2026-11-14',access:'suspend',reason:'Synthetic missed pause before financial recovery'})
  await api('dunning.end',{series:canceled.series.id,action:'cancel',confirm:true},409)
  const beforeCancel=await api(`subscriptions/${canceled.sub}`)
  await (cancelSubscription??(input=>api('subscription.cancel',input)))({subscription:canceled.sub,revision:beforeCancel.revision,mode:'immediate',effective_date:new Date(instant).toISOString().slice(0,10),reason:'Owner reviewed the exhausted dunning policy'})
@@ -290,7 +304,7 @@ export async function dunningSequenceFlow(h,owner,{onState=async()=>{},createPol
  assert.deepEqual(immediateRecovery.stateHistory.at(-1).cause.sourceActions.map(a=>a.action),['payment.allocate'])
  const restored=await observe(unpaid,'active')
  assert.deepEqual(restored.at(-1).cause.allocations.map(a=>[a.invoice_id,a.payment_id,a.amount_cents]),[[unpaid.invoice,recoveryPayment.payment,10000]])
- assert.deepEqual(restored.map(row=>row.state),['active','past_due','unpaid','active'])
+ assert.deepEqual(restored.map(row=>row.state),['active','past_due','unpaid','paused','unpaid','active'],'A financial allocation retains the complete missed pause before recording recovery')
  const beforeScheduledCancel=await api(`subscriptions/${trial.sub}`)
  const scheduledCancel=await api('subscription.cancel',{subscription:trial.sub,revision:beforeScheduledCancel.revision,mode:'immediate',effective_date:'2026-11-20',reason:'Synthetic scheduled cancellation'})
  const canceledHistory=await observe(trial,'canceled')
