@@ -4974,7 +4974,7 @@
       "executable": false
     },
     "tests/nectar/entitlement-quotas.mjs": {
-      "sha256": "250af2e34e7fe5b0fbada4230b6b48d63e2a1ad3018c22fdc5642a712beb8100",
+      "sha256": "b98f32bf59b3feb0f155c6c2467d30f37233e15dd9cfdcb0827a9ccd75bbdd91",
       "executable": false
     },
     "tests/nectar/entity-revenue.mjs": {

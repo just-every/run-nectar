@@ -391,12 +391,15 @@ export async function usageThresholdFlow(h,owner,{onState=async()=>{}}={}) {
   await api('usage.threshold.configure',{id:own.id,...fields,recipient:'priya@acacia.example'})
   await api('webhook.dispatch',{})
   assert.equal((await api('usage' + '/thresholds')).crossings.length,3);assert.equal(sent().length,3);assert.equal(webhooks().length,3)
-  h.mailResponses.push({to:'priya@acacia.example',status:503,body:{message:'Synthetic refusal'}})
-  const refused=await api('usage.threshold.configure',{subscription,kind:'usage',meter:meter.id,threshold:'1000000',name:'Refused delivery',recipient:'priya@acacia.example',confirm_mail:true})
-  assert.equal((await api('usage' + '/thresholds')).crossings.find(x=>x.threshold_id===refused.id).email_status,'failed')
-  const attempts=sent().length
-  await api('usage.threshold.configure',{id:refused.id,subscription,kind:'usage',meter:meter.id,threshold:'1000000',name:'Refused delivery',recipient:'priya@acacia.example',confirm_mail:true})
-  assert.equal(sent().length,attempts,'A refused email is never sent again for the crossing')
+  for(const [httpStatus,expected] of [[400,'failed'],[503,'uncertain']]){
+    h.mailResponses.push({to:'priya@acacia.example',status:httpStatus,body:{message:'Synthetic provider response'}})
+    const fields={subscription,kind:'usage',meter:meter.id,threshold:'1000000',name:`Delivery outcome ${httpStatus}`,recipient:'priya@acacia.example',confirm_mail:true}
+    const delivery=await api('usage.threshold.configure',fields)
+    assert.equal((await api('usage' + '/thresholds')).crossings.find(x=>x.threshold_id===delivery.id).email_status,expected)
+    const attempts=sent().length
+    await api('usage.threshold.configure',{id:delivery.id,...fields})
+    assert.equal(sent().length,attempts,'Refused and unconfirmed email attempts are never retried for the crossing')
+  }
   const theirs=await portal(foreign.token);assert.deepEqual(theirs.definitions,[]);assert.deepEqual(theirs.crossings,[])
   await portal(foreign.token,'/portal/alerts',{id:own.id,...fields},404);await portal(foreign.token,'/portal/alerts',fields,404)
   const ownView=await portal(session.token)
