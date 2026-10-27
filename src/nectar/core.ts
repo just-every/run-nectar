@@ -1,3 +1,4 @@
+import { captureSubscriptionStates } from './subscription-state-capture'
 // Shared primitives: typed errors, ids, D1 helpers, audited atomic commits and
 // in-batch preconditions (nc_guard rows abort the whole batch when false).
 import type { Bindings } from '../auth.server'
@@ -39,6 +40,7 @@ export async function commit(env: Bindings, statements: D1PreparedStatement[], a
   try {
     await env.DB.batch([
       ...statements,
+      ...await captureSubscriptionStates(env, events),
       stmt(env, 'DELETE FROM nc_guard'),
       ...events.map(event => stmt(env, 'INSERT INTO nc_audit (at, actor, action, subject, detail) VALUES (?, ?, ?, ?, ?)', now(), event.actor, event.action, event.subject, JSON.stringify(event.detail ?? {}))),
     ])
