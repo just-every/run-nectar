@@ -74,6 +74,8 @@ export async function erasurePlan(env: Bindings, customer: Row): Promise<Erasure
       else updates[column] = column==='body' && table==='nc_notes' ? '[erased]' : ''
     }
     if(table==='nc_imported_collections'&&affected&&row.charge_ref)updates.history_payment_id=images.find(image=>image.table==='nc_incumbent_history'&&image.row.kind==='payment'&&image.row.status==='succeeded'&&image.row.provider_ref===row.charge_ref)?.row.id??row.history_payment_id
+    if (table==='nc_usage_thresholds' && affected) updates.enabled=0
+    if (table==='nc_usage_crossings' && affected) updates.email_status='suppressed'
     if (table==='nc_customers' && row.id===customer.id) { updates.status='archived'; updates.erased_at=Date.now(); updates.revision=crypto.randomUUID(); updates.tax_exempt=0 }
     if (affected) {
       if (['nc_usage_correction_mail','nc_credit_correction_mail','nc_draft_correction_mail','nc_notifications','nc_note_mentions','nc_renewal_notices','nc_card_expiry_notices'].includes(table)) updates.status='suppressed'

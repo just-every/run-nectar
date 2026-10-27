@@ -25,7 +25,7 @@ export async function usagePage(env: Bindings, actor: Actor, url: URL) {
   const month = isMonth(url.searchParams.get('period')) ? url.searchParams.get('period')! : today(b.timezone).slice(0, 7)
   const view = await inspect(env, actor, month)
   const recent = await batches(env, actor)
-  return page('Usage', actor, h`<h1>Usage</h1>
+  return page('Usage', actor, h`<h1>Usage</h1><p><a href="/app/usage/alerts">Usage alerts</a></p>
     ${can(actor, 'usage') ? h`<section class="card" aria-labelledby="import"><h2 id="import">Import usage</h2><p class="hint">A CSV with columns event_id, customer, meter, quantity, occurred_at (ISO 8601 with an offset), plus optional properties_json for metric dimensions. An event id already recorded with the same values is a duplicate and changes nothing; with different values it is rejected.</p>
       ${form('usage.submit', '/app/usage', fileField('Usage file (CSV)', 'file', { required: true, accept: '.csv,text/csv' }), 'Import usage', { multipart: true, layout: 'row-form' })}</section>` : ''}
     <section class="card" aria-labelledby="inspect"><div class="card-head"><h2 id="inspect">Before rating: ${monthName(month)}</h2><form method="get" action="/app/usage" class="row-form">${field('Month', 'period', { type: 'month', value: month })}<button type="submit" class="secondary">Show</button></form></div>

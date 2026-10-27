@@ -31,6 +31,8 @@ export async function issuePortalSession(env: Bindings, actor: Actor, input: Inp
   await requireFreshFactor(env, actor)
   const customer = await one(env, 'SELECT id FROM nc_customers WHERE id=? AND erased_at IS NULL', input.text('customer', { max: 100 }))
   insist(customer, 'customer_not_found', 404)
+  const contactId = input.text('contact', { max: 100, optional: true })
+  if (contactId) insist(await one(env, "SELECT id FROM nc_contacts WHERE id=? AND customer_id=? AND role='billing'", contactId, customer.id), 'billing_contact_not_found', 404)
   const origin = approvedOrigin(env, input.text('origin', { max: 300 })), audience = input.text('audience', { max: 20 }), parent = input.text('parent', { max: 300, optional: true })
   insist(audience === 'embedded' || audience === 'hosted', 'invalid_portal_audience')
   const policy = await one(env, 'SELECT * FROM nc_portal_policy WHERE singleton=1')
@@ -39,7 +41,7 @@ export async function issuePortalSession(env: Bindings, actor: Actor, input: Inp
   const iat = clockInstant(env), id = newId(), exp = iat + PORTAL_LIFETIME
   const claims: PortalClaims = { v: 1, iss: env.AUTH_ORIGIN, jti: id, customer: customer.id, origin, audience, parent, iat, exp }
   const token = await signPortalSession(env, claims)
-  await commit(env, [guard(env, 'stale', 'EXISTS(SELECT 1 FROM nc_portal_policy WHERE singleton=1 AND revision=?) AND EXISTS(SELECT 1 FROM nc_customers WHERE id=? AND erased_at IS NULL)', policy.revision, customer.id), stmt(env, 'INSERT INTO nc_portal_sessions(id,customer_id,token_hash,origin,audience,parent_origin,policy_revision,issued_at,expires_at) VALUES(?,?,?,?,?,?,?,?,?)', id, customer.id, await sha256Hex(token), origin, audience, parent, policy.revision, iat, exp)], { actor: actorLabel(actor), action: 'portal.session.issue', subject: id, detail: { customer: customer.id, origin, audience, parent, expiresAt: exp } })
+  await commit(env, [guard(env, 'stale', 'EXISTS(SELECT 1 FROM nc_portal_policy WHERE singleton=1 AND revision=?) AND EXISTS(SELECT 1 FROM nc_customers WHERE id=? AND erased_at IS NULL)', policy.revision, customer.id), stmt(env, 'INSERT INTO nc_portal_sessions(id,customer_id,token_hash,origin,audience,parent_origin,policy_revision,issued_at,expires_at) VALUES(?,?,?,?,?,?,?,?,?)', id, customer.id, await sha256Hex(token), origin, audience, parent, policy.revision, iat, exp), ...(contactId ? [guard(env, 'stale', "EXISTS(SELECT 1 FROM nc_contacts WHERE id=? AND customer_id=? AND role='billing')", contactId, customer.id), stmt(env, 'INSERT INTO nc_portal_session_contacts(session_id,contact_id) VALUES(?,?)', id, contactId)] : [])], { actor: actorLabel(actor), action: 'portal.session.issue', subject: id, detail: { customer: customer.id, contact: contactId || null, origin, audience, parent, expiresAt: exp } })
   return { id, token, url: `${origin}/portal?session=${encodeURIComponent(token)}`, expiresAt: exp }
 }
 

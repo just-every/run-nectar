@@ -1,5 +1,6 @@
 // Explicit modules keep each isolated journey visible to Verify tooling.
 export const isolatedJourneys = [
+  { file: 'entitlement-quotas', name: 'usageThresholdFlow', load: () => import('./entitlement-quotas.mjs') },
   { file: 'invoice-refund-preview', name: 'invoiceRefundPreviewFlow', load: () => import('./invoice-refund-preview.mjs') },
   { file: 'one-time', name: 'invoiceVoidFlow', load: () => import('./one-time.mjs') },
   { file: 'retry-methods', name: 'retryAuthenticationFlow', load: () => import('./retry-methods.mjs') },

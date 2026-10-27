@@ -1,3 +1,4 @@
+import { usageThresholdsPage } from './usage-thresholds'
 import { dunningPage } from './dunning'
 import { retryRecoveryPage } from './retry-report'
 import { ssoPage, ssoPost } from './sso'
@@ -55,6 +56,7 @@ import { reportPage, reportInvoicePage, reportLinePage } from './reports'
 type Page = (env: Bindings, actor: Actor, request: Request, url: URL, id: string) => Promise<Response>
 
 export const pages: Record<string, Page> = {
+  usageThresholds:(env,actor,_r,url)=>usageThresholdsPage(env,actor,url),
   paymentLinks:async(env,actor,_r,url)=>page('Payment links',actor,await paymentLinksScreen(env,actor),{current:'/app/settings',url}),
   dunning:(env,actor,_r,url)=>dunningPage(env,actor,url),
   retryRecovery:(env,actor,_r,url)=>retryRecoveryPage(env,actor,url),

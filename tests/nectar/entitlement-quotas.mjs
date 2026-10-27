@@ -1,3 +1,5 @@
+import { nativeCollectionEdge } from './native-collection.mjs'
+import { createHmac } from 'node:crypto'
 import assert from 'node:assert/strict'
 import { applyPolicy } from './policy-helper.mjs'
 import { publishPrice } from './price-helper.mjs'
@@ -57,7 +59,8 @@ export async function entitlementQuotasFlow(h, owner, {onState=async()=>{},measu
     if (fixture.policy === 'soft' && exhausted) assert.equal(path.warning, true, 'ENT-002 a soft quota warns while preserving access')
     assert.equal(path.payment.restricted, false)
     assert.equal(path.payment.graceDays, 3)
-    const session=await api('portal.session.issue',{customer:fixture.customer,origin:h.origin,audience:'hosted'})
+    await api('portal.session.issue',{customer,contact:otherContact,origin:h.origin,audience:'hosted'},404)
+  const session=await api('portal.session.issue',{customer:fixture.customer,origin:h.origin,audience:'hosted'})
     const response=await h.raw(`/portal/subscriptions/${fixture.subscription}/upcoming?period=2026-09&session=${session.token}`)
     assert.equal(response.status,200)
     const customerQuota=(await response.json()).quotas.find(row=>row.feature===feature)
@@ -325,4 +328,139 @@ async function numericLimits(h, owner, finance, onState, measure) {
 // Dedicated native timing receipt; deliberately outside the push Verify list.
 export async function entitlementTimingFlow(h,owner) {
   await entitlementQuotasFlow(h,owner,{measure:true})
+}
+
+let alertEdge, alertRequests=[], alertSecret=''
+export function harnessOptions() {
+  alertEdge=nativeCollectionEdge();alertEdge.capturedAt('2026-09-15T12:00:00Z');alertRequests=[];alertSecret=''
+  return {stripeFetch:alertEdge.fetch,stripeSecret:'synthetic-nectar-1',webhookFetch:async request=>{
+    const body=await request.text(),parts=Object.fromEntries(request.headers.get('nectar-signature').split(',').map(p=>p.split('=')))
+    assert.equal(parts.v1,createHmac('sha256',alertSecret).update(`${parts.t}.${body}`).digest('hex'),'Threshold webhook signature verifies')
+    alertRequests.push(JSON.parse(body));return new Response(null,{status:204})
+  }}
+}
+export async function usageThresholdFlow(h,owner,{onState=async()=>{}}={}) {
+  const api=(path,body,status)=>h.api(path,owner,body,status)
+  await h.advanceClock('2026-09-15T12:00:00Z')
+  await api('business.configure',{...await api('business'),timezone:'UTC'})
+  await api('access.give',{email:'threshold-finance@example.test',name:'Finance',role:'finance'})
+  const finance=await h.signIn('threshold-finance@example.test',{requested:true})
+  await api('access.give',{email:'threshold-reader@example.test',name:'Accountant',role:'accountant'})
+  const reader=await h.signIn('threshold-reader@example.test',{requested:true}),agent={bearer:(await api('credential.issue',{name:'Alert reader',scopes:['prepare']})).key}
+  for(const who of [finance,reader,agent,undefined])await h.api('usage.threshold.configure',who,{},who?403:401)
+  await api('portal.configure',{hosts:[h.origin],parents:[]})
+  const customer=(await api('customer.create',{external_id:'synthetic-nectar-alert-1',name:'Acacia Analytics',billing_email:'billing@acacia.example'})).id
+  const contact=(await api('contact.add',{customer,name:'Priya Finance',email:'priya@acacia.example',role:'billing'})).contact
+  const other=(await api('customer.create',{external_id:'synthetic-nectar-alert-2',name:'Banksia Data',billing_email:'billing@banksia.example'})).id
+  const otherContact=(await api('contact.add',{customer:other,name:'Other Finance',email:'finance@banksia.example',role:'billing'})).contact
+  const entity=(await api('entity.create',{revision:(await api('business')).revision,legal_name:'Acacia seller',address:'1 Synthetic Way',ein:'12-3456789',invoice_prefix:'ALERT',invoice_number_width:4,payment_terms_days:30,processor_account_ref:'synthetic-nectar-native-account-1',ledger_company_ref:'synthetic-nectar-native-ledger-1',tax_registration:'Test registration'})).id
+  await api('customer.entity',{revision:(await api('business')).revision,customer,entity,confirm:true})
+  const product=(await api('product.create',{code:'synthetic-nectar-alert-1',name:'Analytics calls'})).id
+  const meter=await api('meter.create',{code:'threshold-calls',name:'API calls',unit_label:'calls'})
+  const price=(await publishPrice(h,owner,{product,kind:'unit',meter:meter.id,unit_amount:'0.005',taxable:false})).id
+  const subscription=(await api('subscription.create',{customer,external_id:'acacia-analytics',start_date:'2026-09-01',anchor_day:1,price:[price]})).id
+  const terms=await api('contract.prepare',{subscription,revision:(await api(`subscriptions/${subscription}`)).revision,clause:'Signed monthly minimum',commitments:[{from:'2026-09-01',to:'2026-10-01',minimum:'6000',taxable:false}]})
+  await h.api('contract.decide',finance,{contract:terms.contract,decision:'approved'})
+  const session=await api('portal.session.issue',{customer,contact,origin:h.origin,audience:'hosted'}),foreign=await api('portal.session.issue',{customer:other,contact:otherContact,origin:h.origin,audience:'hosted'}),unbound=await api('portal.session.issue',{customer,origin:h.origin,audience:'hosted'})
+  const portal=async(token,path='/portal/alerts/data',body,status=200)=>{
+    const response=await h.raw(`${path}?session=${encodeURIComponent(token)}`,{body}),text=await response.text()
+    assert.equal(response.status,status,`${path}: ${text.slice(0,250)}`)
+    return response.headers.get('content-type')?.includes('application/json')?JSON.parse(text):text
+  }
+  await portal(unbound.token,'/portal/alerts',{},403)
+  const fields={subscription,kind:'usage',meter:meter.id,threshold:'1000000',name:'One million calls',confirm_mail:true}
+  await portal(session.token,'/portal/alerts',{...fields,recipient:'attacker@example.test'},400)
+  await portal(session.token,'/portal/alerts',{...fields,confirm_mail:false},400)
+  const own=await portal(session.token,'/portal/alerts',fields)
+  const spend=await api('usage.threshold.configure',{subscription,kind:'spend',threshold:'5000',name:'Accrued spend',recipient:'priya@acacia.example',confirm_mail:true}),commitment=await api('usage.threshold.configure',{subscription,kind:'commitment',contract:terms.contract,threshold:'80',name:'Commitment 80 percent',recipient:'priya@acacia.example',confirm_mail:true})
+  alertSecret=(await api('webhook.register',{url:'https://receiver.nectar-app.com/alerts',consent:true})).secret
+  const baseMails=h.mails.length,ingest=(id,quantity)=>api('usage.submit',{events:[{event_id:id,customer:'synthetic-nectar-alert-1',meter:meter.code,quantity,occurred_at:'2026-09-15T10:00:00Z'}]})
+  await ingest('synthetic-nectar-alert-before','950000')
+  assert.equal((await api('usage' + '/thresholds')).crossings.length,0,'No crossing below the configured thresholds')
+  await ingest('synthetic-nectar-alert-crossing','60000')
+  const crossed=await api('usage' + '/thresholds'),values=new Map(crossed.crossings.map(x=>[x.threshold_id,x.value]))
+  assert.deepEqual(crossed.crossings.map(x=>x.threshold_id).sort(),[own.id,spend.id,commitment.id].sort(),'Exactly the three expected thresholds cross')
+  assert.equal(values.get(own.id),'1010000.00');assert.equal(values.get(spend.id),'5050.00');assert.equal(values.get(commitment.id),'84.166667')
+  assert.ok(crossed.crossings.every(x=>x.email_status==='accepted'))
+  const sent=()=>h.mails.slice(baseMails).filter(m=>m.subject.startsWith('Usage alert:'))
+  assert.equal(sent().length,3);assert.ok(sent().every(m=>[m.to].flat().includes('priya@acacia.example')))
+  await api('webhook.dispatch',{})
+  const webhooks=()=>alertRequests.filter(e=>e.type==='usage.threshold_crossed')
+  assert.deepEqual(webhooks().map(e=>e.data.threshold_id).sort(),[own.id,spend.id,commitment.id].sort());assert.equal(new Set(webhooks().map(e=>e.id)).size,3)
+  await Promise.all([1,2].map(()=>ingest('synthetic-nectar-alert-crossing','60000')))
+  await api('usage.threshold.configure',{id:own.id,...fields,recipient:'priya@acacia.example'})
+  await api('webhook.dispatch',{})
+  assert.equal((await api('usage' + '/thresholds')).crossings.length,3);assert.equal(sent().length,3);assert.equal(webhooks().length,3)
+  h.mailResponses.push({to:'priya@acacia.example',status:503,body:{message:'Synthetic refusal'}})
+  const refused=await api('usage.threshold.configure',{subscription,kind:'usage',meter:meter.id,threshold:'1000000',name:'Refused delivery',recipient:'priya@acacia.example',confirm_mail:true})
+  assert.equal((await api('usage' + '/thresholds')).crossings.find(x=>x.threshold_id===refused.id).email_status,'failed')
+  const attempts=sent().length
+  await api('usage.threshold.configure',{id:refused.id,subscription,kind:'usage',meter:meter.id,threshold:'1000000',name:'Refused delivery',recipient:'priya@acacia.example',confirm_mail:true})
+  assert.equal(sent().length,attempts,'A refused email is never sent again for the crossing')
+  const theirs=await portal(foreign.token);assert.deepEqual(theirs.definitions,[]);assert.deepEqual(theirs.crossings,[])
+  await portal(foreign.token,'/portal/alerts',{id:own.id,...fields},404);await portal(foreign.token,'/portal/alerts',fields,404)
+  const ownView=await portal(session.token)
+  assert.equal(ownView.definitions.find(d=>d.id===own.id).recipient,'priya@acacia.example');assert.equal(ownView.crossings.find(x=>x.threshold_id===own.id).value,'1010000.00')
+  assert.equal((await h.raw(`/portal/alerts?session=${session.token}`,{body:fields,headers:{origin:'https://untrusted.example'}})).status,403)
+  await onState({label:'crossed',session,foreign,subscription,customer})
+  const spending=crossed.crossings.find(x=>x.threshold_id===spend.id)
+  for(const who of [reader,agent,undefined])await h.api('usage.threshold.invoice',who,{crossing:spending.id},who?403:401)
+  const draft=await api('usage.threshold.invoice',{crossing:spending.id})
+  assert.equal((await api('usage.threshold.invoice',{crossing:spending.id})).id,draft.id)
+  assert.equal((await api(`invoices/${draft.id}`)).subtotal_cents,505000)
+  await api('invoice.finalise',{invoice:draft.id},409)
+  await api('invoice.approve',{invoice:draft.id,acknowledge:true});await api('invoice.finalise',{invoice:draft.id,issue_date:'2026-09-15'})
+  await api('collection.customer.bind',{customer,account_ref:'synthetic-nectar-native-account-1',stripe_customer_ref:'synthetic-nectar-native-customer-1',confirm:true})
+  const prepared=await api('collection.prepare',{invoice:draft.id})
+  const collect=await api('collection.confirm',prepared.instructions.confirm)
+  assert.equal(collect.status,'collected');await api('collection.confirm',prepared.instructions.confirm,409)
+  const invoice=await api(`invoices/${draft.id}`)
+  assert.equal(invoice.status,'issued');assert.equal(invoice.paidCents,505000);assert.equal(invoice.balanceCents,0)
+  assert.equal(alertEdge.calls.filter(c=>c.method==='POST'&&c.path==='/payment_intents').length,1,'Threshold charged once')
+  await onState({label:'threshold-invoice',session,invoice:draft.id,subscription,customer})
+  await ingest('synthetic-nectar-alert-rest','190000')
+  await h.advanceClock('2026-10-02T12:00:00Z')
+  const run=await api('billrun.prepare',{period:'2026-09'}),final=(await api(`runs/${run.id}`)).invoices.find(i=>i.subscription_id===subscription)
+  assert.equal(final.subtotal_cents,95000,'Full $6000 liability less issued $5050 bills only $950')
+  assert.equal((await api(`invoices/${final.id}`)).lines.find(l=>l.kind==='threshold_settlement').amount_cents,-505000)
+  await api('invoice.approve',{invoice:final.id,acknowledge:true});await api('invoice.finalise',{invoice:final.id,issue_date:'2026-10-02'})
+  assert.equal((await api(`invoices/${final.id}`)).subtotal_cents+invoice.subtotal_cents,600000)
+  assert.equal((await api('usage.threshold.invoice',{crossing:spending.id})).id,draft.id)
+  await onState({label:'remainder-invoice',invoice:final.id,subscription,customer})
+  await thresholdPricingRemainders(h,owner)
+}
+
+async function thresholdPricingRemainders(h,owner) {
+  const api=(path,body,status)=>h.api(path,owner,body,status)
+  await h.advanceClock('2026-11-15T12:00:00Z')
+  await applyPolicy(h,owner,'tax.declare',{tax_jurisdiction:'CA',tax_mode:'flat_rate',tax_rate:'8.25',tax_note:'Synthetic exact threshold rounding'})
+  await api('tax.review',{revision:(await api('business')).revision})
+  const customer=(await api('customer.create',{external_id:'synthetic-nectar-volume-1',name:'Nonlinear usage account',billing_email:'ap@volume.example'})).id
+  await api('contact.add',{customer,name:'Volume Finance',email:'finance@volume.example',role:'billing'})
+  const product=(await api('product.create',{code:'synthetic-nectar-volume-1',name:'Volume calls'})).id,meter=await api('meter.create',{code:'threshold-volume',name:'Volume calls',unit_label:'calls'})
+  const price=(await publishPrice(h,owner,{product,kind:'unit',meter:meter.id,pricing_model:'volume',tiers:[{up_to:'1000',unit_amount:'0.006',flat_amount:'0.009'},{up_to:null,unit_amount:'0.004',flat_amount:'0.019'}],taxable:true})).id
+  const subscription=(await api('subscription.create',{customer,start_date:'2026-11-01',anchor_day:1,price:[price]})).id
+  const definitions=[]
+  for(const threshold of ['5','7'])definitions.push(await api('usage.threshold.configure',{subscription,kind:'spend',threshold,name:`Volume spend ${threshold}`,recipient:'finance@volume.example',confirm_mail:true}))
+  const issued=[]
+  for(const [index,amount,tax] of [[0,601,50],[1,201,16]]){
+    await api('usage.submit',{events:[{event_id:`synthetic-nectar-volume-${index}`,customer:'synthetic-nectar-volume-1',meter:meter.code,quantity:'1000',occurred_at:'2026-11-15T10:00:00Z'}]})
+    const crossing=(await api('usage' + '/thresholds')).crossings.find(x=>x.threshold_id===definitions[index].id)
+    assert.ok(crossing,'The expected volume threshold crosses')
+    const draft=await api('usage.threshold.invoice',{crossing:crossing.id})
+    let invoice=await api(`invoices/${draft.id}`)
+    assert.deepEqual([invoice.subtotal_cents,invoice.tax_cents],[amount,tax],'Cumulative volume pricing and original tax are deducted exactly')
+    await api('invoice.approve',{invoice:invoice.id,acknowledge:true});await api('invoice.finalise',{invoice:invoice.id,issue_date:'2026-11-15'})
+    await api('invoice.finalise',{invoice:invoice.id},409)
+    invoice=await api(`invoices/${invoice.id}`);issued.push(invoice)
+  }
+  await api('usage.submit',{events:[{event_id:'synthetic-nectar-volume-final',customer:'synthetic-nectar-volume-1',meter:meter.code,quantity:'1000',occurred_at:'2026-11-15T10:00:00Z'}]})
+  await h.advanceClock('2026-12-02T12:00:00Z')
+  const run=await api('billrun.prepare',{period:'2026-11'}),final=(await api(`runs/${run.id}`)).invoices.find(i=>i.subscription_id===subscription)
+  assert.deepEqual([final.subtotal_cents,final.tax_cents],[400,33],'Final invoice bills only the independent full-volume remainder and saved tax difference')
+  await api('invoice.approve',{invoice:final.id,acknowledge:true});await api('invoice.finalise',{invoice:final.id,issue_date:'2026-12-02'})
+  assert.equal(issued.reduce((n,i)=>n+i.subtotal_cents,0)+final.subtotal_cents,1202)
+  assert.equal(issued.reduce((n,i)=>n+i.tax_cents,0)+final.tax_cents,99)
+  const revenue=await api(`revenue?from=2026-11&to=2026-12&customer=${customer}`)
+  assert.deepEqual([revenue.recognizedCents,revenue.netBillingsCents,revenue.closingCents],[1202,1202,0],'Threshold recognition and final cumulative consideration reconcile without double recognition')
 }

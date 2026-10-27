@@ -1,3 +1,5 @@
+import { configureUsageThreshold } from './usage-thresholds'
+import { prepareThresholdInvoice } from './threshold-invoices'
 import { prepareInvoiceRefund, executeInvoiceRefund, reconcileInvoiceRefund } from './invoice-refunds'
 import { previewInvoiceRefund } from './invoice-refund-preview'
 import { prepareInvoiceVoid, voidInvoice } from './invoice-voids'
@@ -284,6 +286,8 @@ export const actions: Record<string, Handler> = {
   'usage.correction.authorize': authorizeUsageCorrection,
   'usage.correction.decide': decideUsageCorrection,
   'usage.correction.preview': previewUsageCorrection,
+  'usage.threshold.configure': configureUsageThreshold,
+  'usage.threshold.invoice': prepareThresholdInvoice,
   'usage.submit': submitUsage,
   'usage.control': recordControl,
   'usage.acknowledge': acknowledgeControl,

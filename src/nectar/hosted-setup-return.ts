@@ -75,7 +75,7 @@ export async function resolveSetupReturn(env: Bindings, request: Request): Promi
   const session: CustomerSession = {
     v: 1, iss: env.AUTH_ORIGIN, jti: row.portal_session_id, customer: row.customer_id,
     origin: row.origin, audience: row.audience, parent: row.parent_origin,
-    iat: row.issued_at, exp: row.expires_at, language: row.language, currency: row.currency,
+    iat: row.issued_at, exp: row.expires_at, language: row.language, currency: row.currency, contactId: null,
   }
   return { session, setup: row.setup_id, hash }
 }

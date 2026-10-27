@@ -1,4 +1,5 @@
 import { invoiceRefunds } from './invoice-refunds'
+import { thresholdInvoiceFingerprint, thresholdIssueStatements } from './threshold-invoices'
 import { currencyRecord } from './currency-rates'
 import { planChangeInvoiceFingerprint } from './plan-changes'
 import { consolidationCalculation,hierarchyPreIssue,hierarchyIssueStatements } from './hierarchies'
@@ -196,6 +197,7 @@ export async function currentFingerprint(env: Bindings, business: Business, invo
   if (invoice.invoice_kind === 'manual') {
     const saved = parseJson<Row>(invoice.calculation_json, {}).inputs
     insist(saved && await one(env,'SELECT 1 FROM nc_customers WHERE id=? AND erased_at IS NULL',invoice.customer_id),'customer_erased',409)
+    if (saved.thresholdInvoice) return thresholdInvoiceFingerprint(env, business, invoice)
     if(saved.reissue) {
       const source=await one(env,"SELECT 1 FROM nc_invoices i JOIN nc_credit_notes n ON n.invoice_id=i.id WHERE i.id=? AND i.status='issued' AND i.source_fingerprint=? AND n.id=? AND n.void_replacement_id=? AND n.amount_cents=i.total_cents",saved.reissue.invoice,saved.reissue.sourceFingerprint,saved.reissue.credit,invoice.id)
       insist(source,'source_changed',409)
@@ -325,6 +327,7 @@ async function finaliseCore(env: Bindings, actor: Actor, input: Input, trialAuth
       ...await issueApplicationStatements(env,invoice,carried.reduce((n,c)=>n+c.amountCents,0)),
       ...await prepaidIssueStatements(env,invoice,calculation,issueDate),
       ...await revenueIssueStatements(env,{...invoice,issue_date:issueDate}),
+      ...await thresholdIssueStatements(env, {...invoice, issue_date:issueDate}, calculation.inputs ?? {}),
       ...(calculation.inputs?.billing?billingComponentClaimStatements(env,invoice.subscription_id,invoice.id,calculation.inputs.billing):[]),
     ], { actor: actorLabel(actor), action: 'invoice.issue', subject: invoice.id, detail: { number, total: invoice.total_cents, fingerprint: invoice.approved_fingerprint, events: consumed.length, charges } })
     await (await import('./automatic-collection-jobs')).collectAutomaticInvoice(env,invoice.id)

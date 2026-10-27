@@ -7,7 +7,7 @@ import { b64url, fromB64url } from './mfa-crypto'
 
 export const PORTAL_LIFETIME = 15 * 60 * 1000
 export type PortalClaims = { v: 1; iss: string; jti: string; customer: string; origin: string; audience: 'embedded' | 'hosted'; parent: string; iat: number; exp: number }
-export type CustomerSession = PortalClaims & { language: string;currency:string }
+export type CustomerSession = PortalClaims & { language: string;currency:string;contactId:string|null }
 
 async function signingKey(env: Bindings) {
   insist(env.PORTAL_KEY && env.PORTAL_KEY.length >= 32, 'portal_key_missing', 503)
@@ -34,11 +34,13 @@ export async function customerSession(env: Bindings, request: Request): Promise<
   } catch { insist(false, 'invalid_customer_session', 401) }
   const at = clockInstant(env)
   insist(claims!.v === 1 && claims!.iss === env.AUTH_ORIGIN && claims!.origin === url.origin && ['embedded','hosted'].includes(claims!.audience) && Number.isSafeInteger(claims!.iat) && Number.isSafeInteger(claims!.exp) && claims!.iat <= at && claims!.exp > at && claims!.exp - claims!.iat === PORTAL_LIFETIME, 'invalid_customer_session', 401)
-  const row = await one<Row>(env, `SELECT s.*, c.language,c.currency FROM nc_portal_sessions s JOIN nc_customers c ON c.id=s.customer_id JOIN nc_portal_policy p ON p.singleton=1 AND p.revision=s.policy_revision
+  const row = await one<Row>(env, `SELECT s.*, c.language,c.currency,contact.id AS contact_id FROM nc_portal_sessions s JOIN nc_customers c ON c.id=s.customer_id JOIN nc_portal_policy p ON p.singleton=1 AND p.revision=s.policy_revision
+    LEFT JOIN nc_portal_session_contacts binding ON binding.session_id=s.id
+    LEFT JOIN nc_contacts contact ON contact.id=binding.contact_id AND contact.customer_id=s.customer_id AND contact.role='billing'
     WHERE s.id=? AND s.customer_id=? AND s.token_hash=? AND s.origin=? AND s.audience=? AND s.parent_origin=? AND s.issued_at=? AND s.expires_at=? AND s.revoked_at IS NULL AND c.erased_at IS NULL
       AND NOT EXISTS(SELECT 1 FROM nc_dunning_mail_authority a JOIN nc_dunning_deliveries d ON d.id=a.id WHERE a.portal_session_id=s.id AND d.expires_at<=?)
       AND NOT EXISTS(SELECT 1 FROM nc_card_expiry_notice_authority a JOIN nc_card_expiry_notices n ON n.id=a.id WHERE a.portal_session_id=s.id AND n.expires_at<=?)`,
     claims!.jti, claims!.customer, await sha256Hex(token), claims!.origin, claims!.audience, claims!.parent, claims!.iat, claims!.exp, at, at)
   insist(row, 'invalid_customer_session', 401)
-  return { ...claims!, language: row.language,currency:row.currency }
+  return { ...claims!, language: row.language,currency:row.currency,contactId:row.contact_id ?? null }
 }

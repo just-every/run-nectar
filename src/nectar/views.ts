@@ -1,3 +1,4 @@
+import { usageThresholds } from './usage-thresholds'
 import { dunningReport } from './dunning'
 import { retryComparisonReport } from './retry-comparison'
 import { retryRecoveryReport } from './retry-report'
@@ -129,6 +130,7 @@ export const views: Record<string, View> = {
   reportSchedule:(env,actor)=>reportSchedule(env,actor),
   reportDelivery:(env,actor,_r,id)=>reportDelivery(env,actor,id),
   setupSource:(env,actor,_r,id)=>setupSourceDownload(env,actor,id),
+  usageThresholds: (env,actor) => usageThresholds(env,actor),
   notifications: (env,actor) => notifications(env,actor),
   metadata: (env,actor,_r,id) => {const [kind,record]=id.split('/');return metadataView(env,actor,kind,record)},
   metadataObjects: (env,actor,_r,id,url) => metadataObjects(env,actor,id,url),

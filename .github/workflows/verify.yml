@@ -34,6 +34,8 @@ jobs:
         if: ${{ hashFiles('edition.json', 'sources.lock.json') != '' }}
         run: node scripts/edition-authoring/cli.mjs check
       - run: npm install --global pnpm@10.12.4
+      - name: Check generated contract documentation
+        run: node scripts/contract-docs.mjs check
       - run: pnpm install --frozen-lockfile
       - run: pnpm run deps
       # ubuntu-24.04 provides Chromium libraries; the real browser journeys
@@ -57,3 +59,7 @@ jobs:
         run: |
           node tests/nectar/invoice-void-browser.mjs
           node tests/nectar/invoice-void-browser.mjs refunds
+
+      - name: Usage threshold browser proof
+        if: ${{ matrix.shard == 0 }}
+        run: node tests/nectar/usage-thresholds-browser.mjs

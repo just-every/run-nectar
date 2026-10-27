@@ -1,3 +1,4 @@
+import { observeUsageThresholds } from './nectar/usage-threshold-observer'
 import { observeSubscriptionStates } from './nectar/subscription-states'
 import { retryMethodRecoveryResponse } from './nectar/retry-method-http'
 import { cardLifecycleWebhook } from './nectar/card-lifecycle-webhook'
@@ -56,6 +57,7 @@ function noTransform(response: Response): Response {
 export default withDemo({
   async scheduled(controller, env) {
     await observeSubscriptionStates(runtimeBindings(env))
+    await observeUsageThresholds(runtimeBindings(env))
     await dispatchWebhooks(runtimeBindings(env))
     await expirePaymentLinkAttempts(runtimeBindings(env))
     await runAutomaticCollections(runtimeBindings(env))

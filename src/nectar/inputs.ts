@@ -1,4 +1,5 @@
 import { billingCurrency } from './currency'
+import { thresholdSettlements } from './threshold-invoice-rating'
 import { amountCouponInputs } from './promotions'
 import { prepaidRefundSpendableBasis } from './prepaid-refund-records'
 import { prepaidSnapshot } from './prepaid-records'
@@ -85,7 +86,9 @@ export async function ratingInputs(env: Bindings, business: Business, subscripti
   const currency=billingCurrency((await one(env,'SELECT currency FROM nc_customers WHERE id=?',sub.customer_id))?.currency)
   const amountCoupons=await amountCouponInputs(env,sub.id)
   const prepaid = recordedPrepaid ? await prepaidRefundSpendableBasis(env,recordedPrepaid) : undefined
+  const settledThresholds = await thresholdSettlements(env, sub.id, period)
   return {
+    ...(settledThresholds.length ? { thresholdSettlements: settledThresholds } : {}),
     ...(currency==='USD'?{}:{currency}),
     ...(prepaid ? { prepaid } : {}),
     ...(amountCoupons.length?{amountCoupons}:{}),

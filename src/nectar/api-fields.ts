@@ -4,6 +4,8 @@
 export type FieldKind = 'text' | 'integer' | 'list' | 'json' | 'flag' | 'file' | 'has'
 
 export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
+  "usage.threshold.configure": {"id":"text","subscription":"text","kind":"text","meter":"text","contract":"text","threshold":"text","name":"text","recipient":"text","enabled":"flag","confirm_mail":"flag"},
+  "usage.threshold.invoice": {"crossing":"text"},
   "access.end": {
     "member": "text"
   },
@@ -781,6 +783,7 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "setup": "text"
   },
   "portal.session.issue": {
+    "contact": "text",
     "audience": "text",
     "customer": "text",
     "origin": "text",

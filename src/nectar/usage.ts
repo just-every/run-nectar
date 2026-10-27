@@ -14,6 +14,8 @@ import { rated } from './inputs'
 import { eventProperties } from './meter-definitions'
 import { canonical as canonicalJson } from './core'
 import type { Input } from './input'
+import { observeUsageThresholds } from './usage-threshold-observer'
+import { clockInstant } from './clock'
 
 export interface RawEvent { event_id: string; customer: string; meter: string; quantity: string; occurred_at: string; properties?: Record<string,unknown> }
 interface Outcome { row: number; eventId: string; status: 'accepted' | 'duplicate' | 'rejected'; reason?: string }
@@ -95,7 +97,7 @@ export type Screened = Awaited<ReturnType<typeof screen>>
 
 /** The batch record and its accepted events, for one atomic commit. */
 export function ingestStatements(env: Bindings, actor: Actor, screened: Screened, source: { kind: 'file' | 'api' | 'correction'; filename?: string; sha256?: string }) {
-  const batchId = newId(), at = now()
+  const batchId = newId(), at = clockInstant(env)
   return {
     batch: batchId,
     statements: [
@@ -119,6 +121,7 @@ export async function ingest(env: Bindings, actor: Actor, events: RawEvent[], so
     const write = ingestStatements(env, actor, screened, source)
     try {
       await commit(env, write.statements, write.audit)
+      await observeUsageThresholds(env,[...new Set(screened.accepted.map(e=>e.customerId as string))])
       return { batch: write.batch, ...screened.counts, report: screened.report }
     } catch (error) {
       const raced = error instanceof NectarError && error.code === 'already_exists' && /nc_usage_events\.event_id/.test(String(error.detail))

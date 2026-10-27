@@ -28,6 +28,7 @@ import { billingAnchor, billingPeriodContaining, INTERVAL_RATING_VERSION, MONTHL
 import { rateBillingWindow } from './interval-rating'
 import { intervalMetricUsage } from './interval-metrics'
 import { prepaidLines } from './prepaid-rating'
+import { settleThresholdConsideration, type ThresholdInvoiceBasis, type ThresholdSettlement } from './threshold-invoice-rating'
 
 export const RATING_VERSION = 'nectar-rating-1'
 
@@ -37,6 +38,8 @@ export interface AmendmentIn { id: string; kind: 'discount_percent' | 'fixed_cre
 export interface EventIn { eventId: string; meterId: string; quantity: string; occurredAt: number;properties?:Record<string,import('./metric-plan').PropertyValue>;invoiceId?:string|null }
 export interface RatingInput {
   version: string
+  thresholdInvoice?: ThresholdInvoiceBasis
+  thresholdSettlements?: ThresholdSettlement[]
   currency?: string
   amountCoupons?: import('./promotions').AmountCouponIn[]
   prepaid?: import('./prepaid-types').PrepaidBasis
@@ -90,9 +93,9 @@ const unitFor = (input: RatingInput, price: PriceIn, from: string, to: string) =
 }
 
 export function rate(input: RatingInput, presentCancellationCredits = true): Rating {
-  if (input.billing) return rateBillingWindow(input, inner => rateCore(inner, presentCancellationCredits))
+  if (input.billing) return settleThresholdConsideration(input, rateBillingWindow(input, inner => rateCore(inner, presentCancellationCredits)))
   insist(!Object.values(input.prices).some(price => price.billing && nonMonthlyArrears(price.billing)), 'billing_window_required')
-  return rateCore(input, presentCancellationCredits)
+  return settleThresholdConsideration(input, rateCore(input, presentCancellationCredits))
 }
 
 function rateCore(input: RatingInput, presentCancellationCredits = true): Rating {
