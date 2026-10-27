@@ -37,7 +37,7 @@ export async function creditRequests(env: Bindings, actor: Actor, invoice: strin
 }
 
 /** Build preparation and its guards so proposal binding can share the same commit. */
-export async function creditRequestStatements(env: Bindings, actor: Actor, input: Input, invoice: Row) {
+export async function creditRequestStatements(env: Bindings, actor: Actor, input: Input, invoice: Row, purpose: 'credit' | 'invoice-void' = 'credit') {
   requireMember(actor, 'approve')
   const policy = await creditPolicy(env)
   const amount = cents(input.text('amount', { max: 20 }))
@@ -48,7 +48,7 @@ export async function creditRequestStatements(env: Bindings, actor: Actor, input
   return { request: id, result: { id: invoice.id, request: id }, statements: [
     guard(env, 'credit_policy_changed', 'COALESCE((SELECT revision FROM nc_credit_policy WHERE singleton=1),0)=?', policy.revision),
     guard(env, 'credit_request_stale', `(SELECT ${BALANCE_SQL} FROM nc_invoices i WHERE i.id=? AND status='issued')=?`, invoice.id, invoice.balance_cents),
-    stmt(env, 'INSERT INTO nc_credit_requests (id,invoice_id,amount_cents,reason,prepared_by,prepared_name,prepared_at,basis,policy_revision,balance_cents) VALUES (?,?,?,?,?,?,?,?,?,?)', id, invoice.id, amount, reason, actor.id, actorLabel(actor), now(), basis, policy.revision, invoice.balance_cents),
+    stmt(env, 'INSERT INTO nc_credit_requests (id,invoice_id,amount_cents,reason,prepared_by,prepared_name,prepared_at,basis,policy_revision,balance_cents,purpose) VALUES (?,?,?,?,?,?,?,?,?,?,?)', id, invoice.id, amount, reason, actor.id, actorLabel(actor), now(), basis, policy.revision, invoice.balance_cents, purpose),
   ], audits: [{ actor: actorLabel(actor), action: 'credit.prepare', subject: id, detail: { invoice: invoice.id, amount, reason, basis, policyRevision: policy.revision } }] }
 }
 
@@ -59,7 +59,7 @@ export async function prepareCreditRequest(env: Bindings, actor: Actor, input: I
 }
 
 /** Returns in-transaction guards and the saved request to close on issue. */
-export async function authorizeCredit(env: Bindings, actor: Actor, input: Input, invoice: Row, amount: number, reason: string, proposalId?: string,cancellationId?:string,planChangeId?:string) {
+export async function authorizeCredit(env: Bindings, actor: Actor, input: Input, invoice: Row, amount: number, reason: string, proposalId?: string,cancellationId?:string,planChangeId?:string,purpose: 'credit' | 'invoice-void' = 'credit') {
   const policy = await creditPolicy(env)
   // GOV-001: a member without approval issues only bounded support credits,
   // never above the owner-set limit and never through a saved request.
@@ -76,6 +76,7 @@ export async function authorizeCredit(env: Bindings, actor: Actor, input: Input,
   insist(!input.has('request') || request, 'credit_request_not_found', 404)
   insist(!above || request, 'second_approver_required', 409)
   if (request) {
+    insist(request.purpose === purpose, 'credit_request_purpose_mismatch', 409)
     const binding = await one(env, 'SELECT proposal_id FROM nc_credit_correction_requests WHERE request_id=?', request.id)
     insist(!binding || binding.proposal_id === proposalId, 'credit_request_proposal_bound', 409)
     const planChange=await one(env,'SELECT change_id FROM nc_plan_change_credit_requests WHERE request_id=?',request.id)
@@ -90,7 +91,7 @@ export async function authorizeCredit(env: Bindings, actor: Actor, input: Input,
   return { request, guards: [
     guard(env, 'credit_policy_changed', 'COALESCE((SELECT revision FROM nc_credit_policy WHERE singleton=1),0)=?', policy.revision),
     ...(bounded ? [guard(env, 'forbidden', "EXISTS(SELECT 1 FROM nc_members WHERE id=? AND status='active')", actor.id)] : []),
-    ...(request ? [guard(env, 'credit_request_already_issued', "EXISTS(SELECT 1 FROM nc_credit_requests WHERE id=? AND status='pending')", request.id),
+    ...(request ? [guard(env, 'credit_request_already_issued', "EXISTS(SELECT 1 FROM nc_credit_requests WHERE id=? AND status='pending' AND purpose=?)", request.id, purpose),
       guard(env, 'credit_request_proposal_bound', 'NOT EXISTS(SELECT 1 FROM nc_credit_correction_requests WHERE request_id=? AND proposal_id<>?)', request.id, proposalId ?? ''),
       guard(env,'credit_request_plan_change_bound','NOT EXISTS(SELECT 1 FROM nc_plan_change_credit_requests WHERE request_id=? AND change_id<>?)',request.id,planChangeId??''),
       guard(env,'credit_request_cancellation_bound','NOT EXISTS(SELECT 1 FROM nc_interval_cancel_requests WHERE request_id=? AND cancellation_id<>?)',request.id,cancellationId??''),

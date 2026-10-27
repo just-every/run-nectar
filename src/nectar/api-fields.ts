@@ -536,6 +536,11 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "customer": "text",
     "service_date": "text"
   },
+  "invoice.refund.preview": {
+    "amount": "text",
+    "destination": "text",
+    "invoice": "text"
+  },
   "invoice.series": {
     "customer": "text",
     "entity": "text",
@@ -562,6 +567,18 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "kind": "text",
     "revision": "integer",
     "source_invoice": "text"
+  },
+  "invoice.void": {
+    "basis": "text",
+    "confirm": "flag",
+    "invoice": "text",
+    "reason": "text",
+    "request": "text"
+  },
+  "invoice.void.prepare": {
+    "basis": "text",
+    "invoice": "text",
+    "reason": "text"
   },
   "ledger.post": {
     "posting": "text"

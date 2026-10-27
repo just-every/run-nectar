@@ -1,3 +1,5 @@
+import { previewInvoiceRefund } from './invoice-refund-preview'
+import { prepareInvoiceVoid, voidInvoice } from './invoice-voids'
 import { createDunningPolicy, enrollDunning } from './dunning-policy'
 import { prepareDunningMail, sendDunningMail } from './dunning-mail'
 import { endDunning, revokeDunning } from './dunning'
@@ -286,6 +288,9 @@ export const actions: Record<string, Handler> = {
   'usage.acknowledge': acknowledgeControl,
   'billrun.prepare': prepareRun,
   'invoice.correction.refresh': refreshCorrectingInvoice,
+  'invoice.refund.preview': previewInvoiceRefund,
+  'invoice.void.prepare': prepareInvoiceVoid,
+  'invoice.void': voidInvoice,
   'invoice.approve': approve,
   'invoice.finalise': finalise,
   'policy.decide': decidePolicyChange,

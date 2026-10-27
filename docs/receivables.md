@@ -86,3 +86,44 @@ be prepared again. **Download message** saves it to send from your own mail.
 
 Approving a reminder opens a dated follow-up task. Close it with what happened
 (for example, "Ada confirmed payment run").
+
+
+## Void and reissue an unpaid invoice
+
+The authenticated JSON action `/api/nectar/invoice.void` supports ordinary
+zero-tax invoices that remain wholly unpaid and have no credit notes. It requires
+an owner or finance person with approval capability and any required fresh factor.
+Send `invoice`, its `source_fingerprint` as `basis`, a `reason` and `confirm: true`.
+The operation creates one numbered full credit and one linked replacement draft
+atomically with the audit. It preserves every original issued field, line and
+consumed charge or recurring billing period. The original screen says **Voided**
+and links to its replacement; the replacement links back to the original.
+
+Above the owner's credit threshold, call
+`/api/nectar/invoice.void.prepare` with the same invoice, basis and reason first.
+A different current authorized person executes `invoice.void` with the returned
+`request` and the same invoice, basis and reason. The saved purpose cannot be
+used through ordinary credit approval. A changed balance or policy, revoked
+preparer, duplicate, payment, partial credit or erased customer refuses without
+creating a replacement or credit. An audit failure rolls the entire operation
+back. At or below the threshold one person can execute directly.
+
+Review the replacement through the ordinary `invoice.approve` and
+`invoice.finalise` actions. Its copied service lines retain their original source
+evidence and receive a new invoice number. Issuing it does not consume the
+original sources again or reopen their recurring billing period. Taxed invoices,
+funding lines and credit-consumption lines are refused by this door.
+
+## Read-only refund estimates
+
+`/api/nectar/invoice.refund.preview` requires permission to read invoices and
+payments. Send `invoice`, `amount` and `destination` (`original` or `balance`).
+The invoice must have one verified native Stripe test-mode card capture funding
+its whole total. The estimate returns the issued original tax, the independently
+allocated reversing tax and pretax amount, the cash or customer-balance effect,
+the owner's second-approver requirement and a source-bound `basis`.
+
+The response always says `executionAvailable: false` and
+`providerOutcome: "not-attempted"`. It creates no refund, tax-provider transaction,
+credit, approval, balance entry or customer message. Processor refund execution,
+provider tax reversal and cancellation-refund integration remain unfinished.

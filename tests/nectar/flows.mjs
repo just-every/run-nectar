@@ -841,7 +841,7 @@ try {
     const metricPreview = await h.api('meter.prepare', cookie.owner, { code:'role-preview', name:'Role preview', unit_label:'events', source_meter:ids.meter, definition:{ aggregation:'count' } })
     assert.ok(ACTIONS.length > 30)
     for (const name of ACTIONS) {
-      if (name === 'usage.correction.preview') {
+      if (name === 'usage.correction.preview' || name === 'invoice.refund.preview') {
         await h.api(name,cookie.accountant,{},400)
       } else if (name === 'answer.read') {
         const answer = await h.api(name,cookie.accountant,{customer:ids.northwind,invoice:ids.julyNorthwind,question:'What is the invoice total?'})

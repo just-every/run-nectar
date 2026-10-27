@@ -185,6 +185,7 @@ export async function invoiceRecord(env: Bindings, actor: Actor, id: string): Pr
     ...await currencyRecord(env,invoice,invoice.total_cents,invoice.issue_date??invoice.period_start),retainedFinancial:await one(env,"SELECT legal_name,document_date,retain_until,tax_json FROM nc_erasure_financial WHERE kind='invoice' AND record_id=?",id),...await metadataFor(env,'invoice',id), creditPolicy: await creditPolicy(env), creditRequests: canRead(actor, 'invoices') ? await creditRequests(env, actor, id) : [], calculation: parseJson(invoice.calculation_json, {}), comparison: parseJson(invoice.comparison_json, {}), exceptions: parseJson(invoice.exceptions_json, []),
     calculation_json: undefined, comparison_json: undefined, exceptions_json: undefined,
     lines: lines.map(line => ({ ...line, evidence: parseJson(line.evidence_json, {}), evidence_json: undefined })),
+    voidedBy:credits.find(row=>row.void_replacement_id)??null, reissuedFrom:parseJson<Row>(invoice.calculation_json,{}).inputs?.reissue??null,
     carriedApplications, credits:await withMetadata(env,'credit-note',credits), allocations, balanceApplications, writeOffs, writtenOffCents: writtenOff, creditedCents: credited, paidCents: paid, balanceCents: invoice.status === 'issued' ? invoice.total_cents - credited - paid - writtenOff : null,
   }
 }
@@ -192,6 +193,12 @@ export async function invoiceRecord(env: Bindings, actor: Actor, id: string): Pr
 export async function currentFingerprint(env: Bindings, business: Business, invoice: Row) {
   if (invoice.invoice_kind === 'manual') {
     const saved = parseJson<Row>(invoice.calculation_json, {}).inputs
+    insist(saved && await one(env,'SELECT 1 FROM nc_customers WHERE id=? AND erased_at IS NULL',invoice.customer_id),'customer_erased',409)
+    if(saved.reissue) {
+      const source=await one(env,"SELECT 1 FROM nc_invoices i JOIN nc_credit_notes n ON n.invoice_id=i.id WHERE i.id=? AND i.status='issued' AND i.source_fingerprint=? AND n.id=? AND n.void_replacement_id=? AND n.amount_cents=i.total_cents",saved.reissue.invoice,saved.reissue.sourceFingerprint,saved.reissue.credit,invoice.id)
+      insist(source,'source_changed',409)
+      return correctionFingerprint({...saved,invoiceContent:await invoiceContent(env,business,invoice.customer_id)})
+    }
     if(saved.planChange)return planChangeInvoiceFingerprint(env,invoice)
     if (saved.consolidation)return (await consolidationCalculation(env,saved.consolidation.parent,saved.consolidation.sections.map((s:Row)=>s.sourceInvoice))).fingerprint
     if (saved.prepaidPurchase) return (await prepaidPurchaseCalculation(env, business, invoice.customer_id, saved.prepaidPurchase.intent, saved.date)).fingerprint
