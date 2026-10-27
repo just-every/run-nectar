@@ -174,7 +174,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "f399b353d1adfe1d9be17d67f0250379853e808666dcce65092953854343d8e1",
+      "sha256": "55b10d5520f35b3b1d2e79e7738bc525669ba7cf1cfbd5026b0429f3f15d5fac",
       "executable": false
     },
     "AGENTS.consumer.md": {
@@ -194,7 +194,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "60c393a90035808f58d922eaa5ce2bfbde2f8c2e598403da6ffc9e9162edeaa0",
+      "sha256": "dfe4cc237253b30c470e0edd61e37fd6a2bbeb255aeee34426e1c0654e73e713",
       "executable": false
     },
     "DEMO.md": {
@@ -4146,7 +4146,7 @@
       "executable": false
     },
     "src/nectar/subscription-states.ts": {
-      "sha256": "35f2ff4ea05cbc16f9485dd9fbd40fa72218320cc1f294d9f430c45e5c5ff982",
+      "sha256": "198c21a6282ebbbfe593104e46ac0afccdd949122225ba1e5f7e20aea2ba0085",
       "executable": false
     },
     "src/nectar/subscriptions.ts": {
@@ -4882,7 +4882,7 @@
       "executable": false
     },
     "tests/nectar/dunning-sequences.mjs": {
-      "sha256": "2f136fcc91dfea3a8a7a61ba8bf36f91cb7958edffa43281571edb0f80bfabdf",
+      "sha256": "46763affe18a4b97b283820d767567d0baa93fac824aca79d2420e95fc37549b",
       "executable": false
     },
     "tests/nectar/enterprise-identity-browser.mjs": {
@@ -5354,7 +5354,7 @@
       "executable": false
     },
     "tests/nectar/webhooks.mjs": {
-      "sha256": "aa9cb1c07ed2adcf8f18a79b2bfc6612b14c5b2e8b1121026fa3ef6763d177d9",
+      "sha256": "fef35577c27818acf4f96844066f1aeb35a04f9178b6db4c02d226cdade4c495",
       "executable": false
     },
     "tests/nectar/write-off-browser.mjs": {

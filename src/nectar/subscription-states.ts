@@ -9,9 +9,14 @@ import { entitlementState } from './entitlement-state'
 
 export async function subscriptionState(env: Bindings, sub: Row, day: string) {
   const input = await entitlementState(env, sub, day)
-  const state = input.lifecycle === 'active' && ['past_due','unpaid'].includes(input.payment.status)
+  const pendingCancellation = await one(env, `SELECT id FROM nc_subscription_lifecycle l
+    WHERE l.subscription_id=? AND l.kind='cancel' AND l.effective_date>?
+    AND NOT EXISTS(SELECT 1 FROM nc_subscription_lifecycle r WHERE r.related_id=l.id AND r.effective_date<=?)
+    ORDER BY l.seq DESC LIMIT 1`, sub.id, day, day)
+  const state = pendingCancellation && ['active','trialing'].includes(input.lifecycle) ? 'canceled'
+    : input.lifecycle === 'active' && ['past_due','unpaid'].includes(input.payment.status)
     ? input.payment.status : input.lifecycle
-  return { state, input }
+  return { state, input, pendingCancellation }
 }
 export async function subscriptionStateHistory(env: Bindings, subscription: string): Promise<Row[]> {
   return (await all(env, 'SELECT * FROM nc_subscription_states WHERE subscription_id=? ORDER BY seq', subscription))
@@ -28,9 +33,9 @@ export async function observeSubscriptionStates(env: Bindings) {
     const generation = (await one(env, 'SELECT value FROM nc_privacy_generation WHERE id=1'))!.value
     const audit = (await one(env, 'SELECT COALESCE(MAX(seq),0) seq FROM nc_audit'))!.seq
     const old = await one(env, 'SELECT * FROM nc_subscription_states WHERE subscription_id=? ORDER BY seq DESC LIMIT 1', sub.id)
-    const { state, input } = await subscriptionState(env, sub, day)
+    const { state, input, pendingCancellation } = await subscriptionState(env, sub, day)
     if (old?.state === state || old && old.observed_at > at) continue
-    const lifecycle = await all(env, `SELECT id,kind,effective_date,until_date,related_id FROM nc_subscription_lifecycle WHERE subscription_id=? AND effective_date<=? ORDER BY seq`, sub.id, day)
+    const lifecycle = await all(env, `SELECT id,kind,effective_date,until_date,related_id FROM nc_subscription_lifecycle WHERE subscription_id=? AND (effective_date<=? OR id=?) ORDER BY seq`, sub.id, day, pendingCancellation?.id ?? null)
     const dunning = await all(env, `SELECT d.id,d.policy_id,d.status,d.end_date,d.invoice_id FROM nc_dunning_series d JOIN nc_invoices i ON i.id=d.invoice_id WHERE i.subscription_id=? AND d.end_date<=? ORDER BY d.id`, sub.id, day)
     const allocations = old && ['past_due','unpaid'].includes(old.state) && state === 'active'
       ? await all(env, `SELECT a.id,a.invoice_id,a.payment_id,a.amount_cents FROM nc_allocations a JOIN nc_invoices i ON i.id=a.invoice_id WHERE i.subscription_id=? ORDER BY a.id`, sub.id) : []
