@@ -432,5 +432,9 @@
   "dunning.invoice_only": "Please arrange payment using the instructions on your invoice. Your service remains active.",
   "dunning.update": "Update your payment method: {link}",
   "dunning.update_label": "Update payment method",
-  "dunning.note": "This link expires within fifteen minutes. Saving a card does not authorize a payment."
+  "dunning.note": "This link expires within fifteen minutes. Saving a card does not authorize a payment.",
+  "billing_notice.payment_receipt.subject": "Payment recorded for invoice {invoice}",
+  "billing_notice.payment_receipt.body": "{merchant} recorded a payment of {amount} on {date} for invoice {invoice}.",
+  "billing_notice.payment_failed.subject": "Payment failed for invoice {invoice}",
+  "billing_notice.payment_failed.body": "The payment for invoice {invoice} from {merchant} failed on {date}. The current collectible amount is {amount}. No payment is confirmed by this message."
 }
