@@ -78,6 +78,8 @@ export async function reconcileAutomaticCollection(env:Bindings,id:string,retrie
   const current=await storedAutomaticCollection(env,id)
   if(['collected','revoked','invalidated'].includes(current.status))return automaticView(current)
   if(retries>0&&error instanceof NectarError&&['automatic_collection_state_changed','precondition_failed'].includes(error.code))return reconcileAutomaticCollection(env,id,retries-1)
+  // A failed provider read must remain retryable at the signed intake.
+  if(error instanceof NativeStripeError)throw error
   if(['refused','returned'].includes(current.status))return automaticView(current)
   row=await outcome(env,current,current.status==='pending_settlement'?'pending_settlement':'uncertain',{error_code:error instanceof NectarError?error.code:'processor_outcome_unconfirmed'})
   return automaticView(row)

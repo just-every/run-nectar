@@ -186,7 +186,7 @@
       "executable": false
     },
     "API.md": {
-      "sha256": "c9893013d0c2f94e17984ba432523675a7d6cc59a3d986f53ce0a1c9e5f7c0a3",
+      "sha256": "b5679e23100700baeaf87bb1b0d5826a093d404ff70fd6280a965365063d14e0",
       "executable": false
     },
     "base-copies.json": {
@@ -3030,7 +3030,7 @@
       "executable": false
     },
     "src/nectar/automatic-collection-jobs.ts": {
-      "sha256": "79244b1b152afbb2c07ab9b3baaea3212c39690ab420d1fcabb509b226c3f46f",
+      "sha256": "8c10dd73e128c622e6dacc0e792c9c4d375d83e97e89431cee7a93caf6ddab38",
       "executable": false
     },
     "src/nectar/automatic-collection-records.ts": {
