@@ -4438,7 +4438,7 @@
       "executable": false
     },
     "src/nectar/ui/processor-events.ts": {
-      "sha256": "9a9483f26d15f5876d47d7e60ad7a22e4bcdf884c317b4ed54b1e9464067ef8b",
+      "sha256": "1203e81c3723f0728ad867eca1477ae70ea9193c1047620bbe2c370976a5c79d",
       "executable": false
     },
     "src/nectar/ui/promotions.ts": {
