@@ -874,7 +874,7 @@
       "executable": false
     },
     "public/nectar.css": {
-      "sha256": "2ffa2b54232952ffd48ae90267fb8d97a1626daa0dc047a0383ff42eef83051f",
+      "sha256": "dd8da4125c51a77da3063f7d5f86e3f22c1fa0ac7297dc7fcd8e8d6a61600678",
       "executable": false
     },
     "public/rer-theme.css": {
@@ -4458,7 +4458,7 @@
       "executable": false
     },
     "src/nectar/ui/reports.ts": {
-      "sha256": "26e912ecc1cce05d5264e38b2f99f67210a118f0e79abce52dc6d01e3bafd58e",
+      "sha256": "1e3806bd8bd003a46e85ea3a5ab50c35ba4d175c6f49dbe5fd89dbe790453735",
       "executable": false
     },
     "src/nectar/ui/retention.ts": {
@@ -5318,7 +5318,7 @@
       "executable": false
     },
     "tests/nectar/processor-events-browser.mjs": {
-      "sha256": "81135dd1dcb3458814e8b56cb90897a2258f01d9a529019ae5026461512a6411",
+      "sha256": "7a43d1b5a23165470e17c3ba42c9202be61588e617c222e955fb1de1c3816e6a",
       "executable": false
     },
     "tests/nectar/processor-events-sandbox.mjs": {

@@ -21,7 +21,7 @@ try {
    for(const width of [1440,390]){
     await page.setViewportSize({width,height:1000});await page.goto(h.origin+path)
     assert.equal(await page.locator('h1').count(),1)
-    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'Processor views fit the screen')
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`${path} fits ${width} pixels`)
     const icons=await page.locator('a,button,[role=button]').evaluateAll(nodes=>nodes.filter(node=>!node.textContent.trim()&&node.querySelector('svg,img')&&!node.getAttribute('aria-describedby')).map(node=>node.outerHTML))
     assert.deepEqual(icons,[],'Icon controls have tooltips')
     if(path==='/app/receivables'){
