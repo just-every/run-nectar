@@ -1,5 +1,6 @@
 import { observeSubscriptionStates } from './nectar/subscription-states'
 import { retryMethodRecoveryResponse } from './nectar/retry-method-http'
+import { automaticCollectionWebhook } from './nectar/automatic-collection-webhook'
 import { cardLifecycleWebhook } from './nectar/card-lifecycle-webhook'
 import { samlResponse } from './nectar/saml'
 import { scimResponse } from './nectar/scim'
@@ -80,6 +81,8 @@ export default withDemo({
     await observeSubscriptionStates(runtimeBindings(env))
   },
   async fetch(request, env, execution) {
+    const paymentEvent=await automaticCollectionWebhook(request,runtimeBindings(env))
+    if(paymentEvent)return paymentEvent
     const cardEvent=await cardLifecycleWebhook(request,runtimeBindings(env))
     if(cardEvent)return cardEvent
     const enterprise = await samlResponse(request, runtimeBindings(env)) ?? await scimResponse(request, runtimeBindings(env))

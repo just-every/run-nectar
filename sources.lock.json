@@ -3022,7 +3022,7 @@
       "executable": false
     },
     "src/nectar/automatic-collection-events.ts": {
-      "sha256": "1167e009bb4b173484c32104073442970c4db50da57a8205b85c5f65c3680aaa",
+      "sha256": "15f58ef48a71a848a905cd0ee36b3f92e57413601405c99db92f1853a75d6b88",
       "executable": false
     },
     "src/nectar/automatic-collection-http.ts": {
@@ -3030,11 +3030,15 @@
       "executable": false
     },
     "src/nectar/automatic-collection-jobs.ts": {
-      "sha256": "4246b1bf52a93b67d8c1a3403ffc64beb297458b3f97db5af0ad2a31b7a2dec2",
+      "sha256": "6701c99330a3c2c3f5692d3e520b78047ab6e475ab8cbe0f15d9bd72ebb628ce",
       "executable": false
     },
     "src/nectar/automatic-collection-records.ts": {
       "sha256": "77e0d05a65575d65907f38d85508d88b5b4ad3c633738c938ab4abde7378667a",
+      "executable": false
+    },
+    "src/nectar/automatic-collection-webhook.ts": {
+      "sha256": "6f43afb49e6c538364774706bce57efc3c9b144ff78a9055c7419f90e01ba5c8",
       "executable": false
     },
     "src/nectar/automatic-collection.ts": {
@@ -3126,7 +3130,7 @@
       "executable": false
     },
     "src/nectar/card-lifecycle-webhook.ts": {
-      "sha256": "bba6da38d9502f871700e555fd9db21150fbe83ede2f38a897d896e28bb9d730",
+      "sha256": "5d3f86f0956d4f52d36999abba395beaf13d658f7030bedb6eeb0a380f635df7",
       "executable": false
     },
     "src/nectar/card-lifecycle.ts": {
@@ -4558,7 +4562,7 @@
       "executable": false
     },
     "src/server.ts": {
-      "sha256": "28b2f49d0a80b48128260bff6c1461ed11b6075ce38700581a046bfd19dcd2cd",
+      "sha256": "b9a7ef0b57ab08bf9b7543f74bb3a8cfadb20843f13a460bb496096da1cbcf54",
       "executable": false
     },
     "src/site/docs/docs.css": {
@@ -4778,7 +4782,7 @@
       "executable": false
     },
     "tests/nectar/automatic-collection.mjs": {
-      "sha256": "d385494a1a1d241edb54201adbe6ddde080b10ea4f47b4abedbef572eddba961",
+      "sha256": "7f8a4a3acae6bd427bf6dc9fa28399704d44e8e47c57d2f94a6c6dffd603878f",
       "executable": false
     },
     "tests/nectar/billing-answers.mjs": {

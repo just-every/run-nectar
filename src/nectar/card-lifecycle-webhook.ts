@@ -11,7 +11,7 @@ const PATH='/api/nectar/stripe/card-events',MAX_BYTES=128*1024,WINDOW_SECONDS=30
 const headers={'cache-control':'no-store','x-content-type-options':'nosniff'}
 const json=(body:unknown,status=200,extra:Record<string,string>={})=>Response.json(body,{status,headers:{...headers,...extra}})
 
-async function boundedBody(request:Request) {
+export async function boundedBody(request:Request) {
   const length=request.headers.get('content-length')
   insist(length===null || /^\d+$/.test(length),'card_event_length_invalid',400)
   if(length!==null && Number(length)>MAX_BYTES)throw new NectarError('card_event_too_large',413)
@@ -33,7 +33,7 @@ async function boundedBody(request:Request) {
   return bytes
 }
 
-async function verifySignature(request:Request,secret:string,bytes:Uint8Array,now:number) {
+export async function verifySignature(request:Request,secret:string,bytes:Uint8Array,now:number) {
   const header=request.headers.get('stripe-signature')??''
   insist(header.length>0 && header.length<=8192,'card_event_signature_invalid',401)
   const parts=header.split(',').map(value=>value.trim()),times=parts.filter(part=>part.startsWith('t=')),signatures=parts.filter(part=>part.startsWith('v1='))

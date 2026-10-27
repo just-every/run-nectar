@@ -1,5 +1,6 @@
 // Public Worker and D1 flow. Only the Stripe network edge controls settlement.
 import assert from 'node:assert/strict'
+import { createHmac } from 'node:crypto'
 import { nativeCollectionEdge } from './native-collection.mjs'
 import { totp } from './mfa.mjs'
 import { file } from './harness.mjs'
@@ -30,8 +31,9 @@ export function automaticEdge(){
  }
  return {...base,fetch,mandate,events,returnLastBank(){const intent=[...base.intents.values()].filter(row=>row.value.payment_method===bankMethod).at(-1).value;const charge=base.charges.get(intent.latest_charge).value;intent.status='requires_payment_method';intent.payment_method=null;intent.amount_received=0;intent.last_payment_error={code:'insufficient_funds',payment_method:{id:bankMethod}};charge.status='failed';charge.paid=false},settle(){available=true;for(const row of base.intents.values())if(row.value.payment_method===bankMethod&&row.value.status==='processing'){row.value.status='succeeded';row.value.amount_received=row.value.amount}},posts:()=>base.calls.filter(call=>call.path==='/payment_intents'&&call.method==='POST').length}
 }
+const webhookSecret='synthetic-nectar-payment-event-secret'
 let edge
-export const harnessOptions=()=>{edge=automaticEdge();return {localTime:'2026-10-22T10:00:00Z',stripeFetch:edge.fetch,stripeSecret:'synthetic-nectar-1',stripeSecondarySecret:'synthetic-nectar-2'}}
+export const harnessOptions=()=>{edge=automaticEdge();return {localTime:'2026-10-22T10:00:00Z',stripeFetch:edge.fetch,stripeSecret:'synthetic-nectar-1',stripeSecondarySecret:'synthetic-nectar-2',stripeWebhookSecret:webhookSecret}}
 export async function automaticCollectionFlow(h,owner,{onState=async()=>{},prepareCollection,acceptCollection,decideCollection}={}){
  const api=(path,body,status)=>h.api(path,owner,body,status)
  await api('business.configure',{...await api('business'),timezone:'UTC'})
@@ -100,7 +102,30 @@ export async function automaticCollectionFlow(h,owner,{onState=async()=>{},prepa
  assert.deepEqual(await api('invoices/'+uncertain),uncertainBeforeVoid)
  assert.equal(edge.posts(),3,'An uncertain automatic capture cannot be replaced by another provider write')
  await onState({state:'uncertain',invoice:uncertain,customer:customers[2],session:unknown.s,request:(await api('automatic-collections')).find(row=>row.id===unknown.prepared.id)})
- assert.equal((await api('automatic.collection.reconcile',{request:unknown.prepared.id})).status,'collected');assert.equal(edge.posts(),3)
+ const paymentEvent=structuredClone(edge.events.get('synthetic-nectar-automatic-event-3'))
+ const deliver=async(event,{status=200,secret=webhookSecret,time=Math.floor(instant/1000)}={})=>{
+  const text=JSON.stringify(event),signature=createHmac('sha256',secret).update(`${time}.${text}`).digest('hex')
+  const response=await h.raw('/api/nectar/stripe/payment-events',{form:text,headers:{'content-type':'application/json','stripe-signature':`t=${time},v1=${signature}`}})
+  const value=await response.json();assert.equal(response.status,status,JSON.stringify(value));return value
+ }
+ await deliver(paymentEvent,{secret:'synthetic-nectar-unrelated-secret',status:401})
+ await deliver(paymentEvent,{time:Math.floor(instant/1000)-301,status:401})
+ await deliver({...paymentEvent,livemode:true},{status:400})
+ await deliver({...paymentEvent,account:'synthetic-nectar-native-account-2'},{status:409})
+ await deliver({...paymentEvent,data:{object:{...paymentEvent.data.object,customer:'synthetic-nectar-unbound-customer'}}},{status:409})
+ assert.equal((await api('invoices/'+uncertain)).paidCents,0,'Refused delivery cannot publish cash')
+ const mismatch={...paymentEvent,id:'synthetic-nectar-foreign-provider-event'}
+ edge.events.set(mismatch.id,{...mismatch,data:{object:{...paymentEvent.data.object,customer:'synthetic-nectar-unbound-customer'}}})
+ await deliver(mismatch,{status:409})
+ const observed=await Promise.all([deliver(paymentEvent),deliver(paymentEvent)])
+ assert.deepEqual(observed.map(value=>value.replayed).sort(),[false,true])
+ assert.ok(observed.every(value=>value.status==='collected'))
+ const reconciledInvoice=await api('invoices/'+uncertain)
+ assert.equal(reconciledInvoice.paidCents,10000);assert.equal(reconciledInvoice.allocations.length,1)
+ const auditAfterDelivery=await api('audit')
+ assert.deepEqual(await deliver(paymentEvent),{received:true,replayed:true,status:'collected'})
+ assert.deepEqual(await api('audit'),auditAfterDelivery,'Duplicate event creates no financial or audit write')
+ assert.equal(edge.posts(),3,'Signed recovery reads the provider without another charge')
  // Four business days: Thu issue, Friday, Monday, Tuesday and Wednesday settlement. Only provider facts settle cash.
  instant=Date.parse('2026-10-28T10:00:00Z');await h.advanceClock(new Date(instant).toISOString());edge.settle()
  assert.equal((await h.raw(`/cdn-cgi/local/scheduled?time=${instant}&cron=${encodeURIComponent('* * * * *')}`)).status,200)
@@ -164,5 +189,28 @@ export async function automaticCollectionFlow(h,owner,{onState=async()=>{},prepa
  const independentlyCollected=(await api('automatic-collections')).find(row=>row.id===exact.id)
  assert.equal(independentlyCollected.status,'collected');assert.equal(edge.posts(),5)
  assert.equal((await api(`invoices/${independent}`)).balanceCents,0)
+ // An original card claim may settle after a definitive earlier refusal.
+ // This is an observed provider result, never a new application charge.
+ const lateInvoice=await draft(customers[0]),lateAuthority=await approve(lateInvoice,{issue_date:'2026-10-28'})
+ edge.refuseNext('processing_error')
+ await api('invoice.approve',{invoice:lateInvoice,acknowledge:true});await api('invoice.finalise',{invoice:lateInvoice,issue_date:'2026-10-28'})
+ const refused=(await api('automatic-collections')).find(row=>row.id===lateAuthority.prepared.id)
+ assert.equal(refused.status,'refused');assert.equal((await api('invoices/'+lateInvoice)).paidCents,0)
+ const intent=edge.intents.get(refused.paymentIntentRef).value,method=refused.quote.method.paymentMethodRef
+ const charge='synthetic-nectar-late-capture'
+ Object.assign(intent,{status:'succeeded',payment_method:method,amount_received:10000,latest_charge:charge});delete intent.last_payment_error
+ edge.charges.set(charge,{account:1,value:{object:'charge',id:charge,status:'succeeded',paid:true,captured:true,customer:intent.customer,payment_method:method,payment_intent:intent.id,currency:'usd',amount:10000,amount_captured:10000,amount_refunded:0,refunded:false,disputed:false,created:instant/1000,livemode:false}})
+ const recoveredEvent={object:'event',id:'synthetic-nectar-late-recovery-event',type:'payment_intent.succeeded',livemode:false,data:{object:structuredClone(intent)}}
+ edge.events.set(recoveredEvent.id,recoveredEvent)
+ const beforeRecoveryPosts=edge.posts()
+ assert.equal((await deliver(recoveredEvent)).status,'collected')
+ const latePaid=await api('invoices/'+lateInvoice)
+ assert.equal(latePaid.paidCents,10000);assert.equal(latePaid.balanceCents,0);assert.equal(latePaid.allocations.length,1)
+ const oldEvent={object:'event',id:'synthetic-nectar-late-failure-event',type:'payment_intent.payment_failed',livemode:false,data:{object:{...intent,status:'requires_payment_method',amount_received:0}}}
+ edge.events.set(oldEvent.id,oldEvent)
+ assert.equal((await deliver(oldEvent)).status,'collected','Out-of-order failure cannot undo current captured cash')
+ assert.deepEqual(await api('invoices/'+lateInvoice),latePaid)
+ assert.equal(edge.posts(),beforeRecoveryPosts,'Late recovery sends no provider write')
+ assert.equal((await api('recovery')).invoices.find(row=>row.invoice===lateInvoice).recoveredAmountCents,10000,'Recovery reporting agrees with allocated cash')
  console.log('automaticCollectionFlow: exact consent, approval, immediate card cash, pending ACH and four-business-day edge settlement, send-invoice wait, event and issue replay, once-only uncertainty recovery, source and receipt parity and erasure')
 }

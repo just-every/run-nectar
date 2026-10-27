@@ -71,9 +71,8 @@ export async function identityFor(env:Bindings,row:Row):Promise<PaymentIdentity>
 }
 export async function reconcileAutomaticCollection(env:Bindings,id:string){
  let row=await storedAutomaticCollection(env,id)
- if(['refused','returned'].includes(row.status)){await recordRetryFailure(env,row,row.error_code);return automaticView(row)}
  if(['collected','revoked','invalidated'].includes(row.status))return automaticView(row)
- insist(row.claimed_at&&['claimed','uncertain','pending_settlement'].includes(row.status),'automatic_collection_not_claimed',409)
+ insist(row.claimed_at&&['claimed','uncertain','pending_settlement','refused','returned'].includes(row.status),'automatic_collection_not_claimed',409)
  const identity=await identityFor(env,row),{stripe}=await stripeForAccount(env,row.account_ref)
  try{return await settleAutomaticIntent(env,row,stripe,await readIntent(stripe,identity,row.payment_intent_ref,row.claimed_at,clockInstant(env)),identity)}catch(error){
   const current=await storedAutomaticCollection(env,id)
