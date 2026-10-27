@@ -13,18 +13,21 @@ export async function captureSubscriptionStates(env: Bindings, events: Audit[]) 
   const business = (await all(env, 'SELECT timezone FROM nc_business WHERE singleton=1'))[0]
   if (!business) return []
   const at = clockInstant(env), day = today(business.timezone, at), batch = newId()
-  const refs = canonical([...new Set(events.flatMap(event => [event.subject, event.detail?.invoice, event.detail?.invoiceId, event.detail?.subscription, event.detail?.payment].filter(value => typeof value === 'string')))])
+  const refs = canonical([...new Set(events.flatMap(event => {
+    const detail = event.detail && typeof event.detail === 'object' ? event.detail as Record<string, unknown> : {}
+    return [event.subject, detail.invoice, detail.invoiceId, detail.subscription, detail.payment].filter(value => typeof value === 'string')
+  }))])
   const actions = canonical(events.map(({ action, subject }) => ({ action, subject })))
   // All source reads below execute after the business statements, inside their
   // D1 batch. A failed history, event or audit write rolls the source back too.
-  const insert = stmt(env, `WITH refs AS (SELECT value FROM json_each(?)), invoices AS (
+  const insert = stmt(env, `WITH refs AS MATERIALIZED (SELECT value FROM json_each(?)), invoices AS MATERIALIZED (
     SELECT id,subscription_id FROM nc_invoices WHERE id IN (SELECT value FROM refs) OR number IN (SELECT value FROM refs)
     UNION SELECT i.id,i.subscription_id FROM nc_invoices i JOIN nc_allocations a ON a.invoice_id=i.id WHERE a.id IN (SELECT value FROM refs) OR a.payment_id IN (SELECT value FROM refs)
     UNION SELECT i.id,i.subscription_id FROM nc_invoices i JOIN nc_native_collections a ON a.invoice_id=i.id WHERE a.id IN (SELECT value FROM refs)
     UNION SELECT i.id,i.subscription_id FROM nc_invoices i JOIN nc_automatic_collections a ON a.invoice_id=i.id WHERE a.id IN (SELECT value FROM refs)
     UNION SELECT i.id,i.subscription_id FROM nc_invoices i JOIN nc_dunning_series a ON a.invoice_id=i.id WHERE a.id IN (SELECT value FROM refs)
     UNION SELECT i.id,i.subscription_id FROM nc_invoices i JOIN nc_balance_entries a ON a.invoice_id=i.id WHERE a.id IN (SELECT value FROM refs)
-  ), facts AS (
+  ), facts AS MATERIALIZED (
     SELECT s.*,? AS day,
       (SELECT id FROM nc_subscription_states WHERE subscription_id=s.id ORDER BY seq DESC LIMIT 1) AS previous_id,
       (SELECT state FROM nc_subscription_states WHERE subscription_id=s.id ORDER BY seq DESC LIMIT 1) AS previous_state,
@@ -35,7 +38,7 @@ export async function captureSubscriptionStates(env: Bindings, events: Audit[]) 
         OR s.id IN (SELECT subscription_id FROM nc_trial_collections WHERE id IN (SELECT value FROM refs))
         OR s.id IN (SELECT subscription_id FROM nc_usage_corrections WHERE id IN (SELECT value FROM refs))
         OR s.id IN (SELECT subscription_id FROM nc_renewal_terms WHERE id IN (SELECT value FROM refs)))
-  ), inputs AS (
+  ), inputs AS MATERIALIZED (
     SELECT f.*,
       CASE WHEN start_date>day THEN 'scheduled' WHEN end_date IS NOT NULL AND end_date<=day THEN 'ended'
         WHEN EXISTS(SELECT 1 FROM nc_subscription_lifecycle l WHERE l.subscription_id=f.id AND l.kind='cancel' AND l.effective_date<=day
@@ -63,12 +66,12 @@ export async function captureSubscriptionStates(env: Bindings, events: Audit[]) 
       (SELECT json_group_array(json_object('id',id,'invoice_id',invoice_id,'payment_id',payment_id,'amount_cents',amount_cents)) FROM (
         SELECT a.* FROM nc_allocations a JOIN nc_invoices i ON i.id=a.invoice_id WHERE i.subscription_id=f.id ORDER BY a.id)) AS allocations_json
     FROM facts f
-  ), payment AS (
+  ), payment AS MATERIALIZED (
     SELECT inputs.*,CASE WHEN unpaid THEN 'unpaid'
       WHEN EXISTS(SELECT 1 FROM json_each(invoices_json) WHERE json_extract(value,'$.dueDate')<=day)
         OR EXISTS(SELECT 1 FROM json_each(failures_json) WHERE json_extract(value,'$.status')<>'uncertain') THEN 'past_due'
       WHEN json_array_length(failures_json)>0 THEN 'uncertain' ELSE 'current' END AS payment_status FROM inputs
-  ), states AS (
+  ), states AS MATERIALIZED (
     SELECT payment.*,CASE WHEN lifecycle IN ('active','trialing') AND scheduled_cancellation IS NOT NULL THEN 'canceled'
       WHEN lifecycle='active' AND payment_status IN ('past_due','unpaid') THEN payment_status ELSE lifecycle END AS state FROM payment
   ) INSERT INTO nc_subscription_states(id,subscription_id,customer_id,previous_id,previous_state,state,cause_json,observed_at)
