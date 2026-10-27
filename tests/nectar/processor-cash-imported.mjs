@@ -56,13 +56,13 @@ export const harnessOptions=()=>{
  edge=importedCashEdge()
  return {localTime:'2026-10-28T10:00:00Z',stripeFetch:edge.fetch,stripeSecret:'synthetic-nectar-1'}
 }
-export async function processorCashImportedFlow(h,owner,{cashEdge=edge,keepFinancial=false}={}) {
+export async function processorCashImportedFlow(h,owner,{cashEdge=edge,keepFinancial=false,onState=async()=>{}}={}) {
  const api=(path,body,status)=>h.api(path,owner,body,status),remote='synthetic-nectar-1',account='synthetic-nectar-account'
  const capture=collectionCapture(),files=Object.fromEntries(Object.entries(capture).map(([name,value])=>[name,file(`${name}.json`,JSON.stringify(value),'application/json')]))
  const preview=await api('import.preview',files);assert.deepEqual(preview.rejected,[])
  await api('import.apply',{...files,fingerprint:preview.fingerprint})
  const customer=(await api('customers')).find(row=>row.external_id===remote).id
- const shadow=(await api('shadow')).find(row=>row.customer_id===customer)
+ const shadow=(await api('shadow')).find(row=>row.provider_ref===capture.subscriptions.data[0].id)
  assert.ok(shadow)
  await api('subscription.adopt',{subscription:shadow.id,cutover_start:shadow.earliestCutover,acknowledge_unreconciled:true})
  await api('collection.customer.bind',{customer,account_ref:account,stripe_customer_ref:remote,confirm:true})
@@ -87,6 +87,7 @@ export async function processorCashImportedFlow(h,owner,{cashEdge=edge,keepFinan
  for(const action of ['prepare','confirm'])await h.api(`processor.cash.imported.${action}`,reader,{},403)
  const prepare=invoice=>api('processor.cash.imported.prepare',{invoice,account_ref:account})
  const prepared=await prepare(first.id)
+ await onState({customer,label:'takeover-prepared'})
  assert.equal(prepared.amountCents,11000)
  assert.equal(cashEdge.imported.calls.filter(row=>row.method==='POST').length,0,'Preparation makes no provider write')
  await api('processor.cash.imported.confirm',{...prepared.instructions.confirm,confirm:false},400)
@@ -94,6 +95,7 @@ export async function processorCashImportedFlow(h,owner,{cashEdge=edge,keepFinan
  cashEdge.loseDisableResponse()
  const uncertain=await api('processor.cash.imported.confirm',prepared.instructions.confirm)
  assert.equal(uncertain.status,'disabling')
+ await onState({customer,label:'takeover-unconfirmed'})
  const active=await api('processor.cash.imported.confirm',uncertain.instructions.observe)
  assert.equal(active.status,'active')
  await api('imported.collection.prepare',{invoice:first.id},409)
@@ -101,6 +103,7 @@ export async function processorCashImportedFlow(h,owner,{cashEdge=edge,keepFinan
  await consume(cashEdge.event(remote));await consume(funding)
  assert.equal(cashEdge.cashCalls.length,1)
  assert.equal((await history()).incumbentHistory.totals.remainingCents,39000)
+ await onState({customer,label:'imported-short-transfer'})
  const firstIntent=[...cashEdge.cashIntents.values()][0]
  await paymentEvent(firstIntent,'charge.succeeded');await paymentEvent(firstIntent);await paymentEvent(firstIntent,'payment_intent.processing')
  assert.equal((await history()).incumbentHistory.totals.remainingCents,39000,'Repeated and stale payment events retain the original imported receipt')
@@ -116,6 +119,7 @@ export async function processorCashImportedFlow(h,owner,{cashEdge=edge,keepFinan
  await consume(cashEdge.event(remote));await consume(cashEdge.event(remote))
  assert.equal(cashEdge.cashCalls.length,2,'Recovery never creates another payment intent')
  assert.equal((await history()).incumbentHistory.totals.remainingCents,33000)
+ await onState({customer,label:'imported-cash-collected'})
  assert.equal((await api(`processor-events?customer=${customer}`)).transactions.find(row=>row.transaction_ref===payout.charge.balance_transaction).payout_ref,payout.payout.id,'Later imported payment attribution preserves payout membership')
  assert.equal((await api(`processor-events?customer=${customer}`)).events.filter(row=>row.status==='failed').length,0,'Imported payment events reconcile without false failure alerts')
  // A different original is not adopted merely because another invoice was approved.

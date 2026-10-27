@@ -7,8 +7,10 @@ const directory=process.env.NECTAR_EVIDENCE_DIR??'.evidence/processor-events'
 await mkdir(directory,{recursive:true})
 console.log('PROCESSOR BROWSER HEAD',execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim())
 const cashMode=process.argv[2]==='cash'
+const importedMode=process.argv[2]==='imported'
 const cashModule=cashMode?await import('./processor-cash.mjs'):null
-const {h,owner,edge}=await processorSetup(undefined,cashModule?.harnessOptions());let browser
+const importedModule=importedMode?await import('./processor-cash-imported.mjs'):null
+const {h,owner,edge}=await processorSetup(undefined,(cashModule??importedModule)?.harnessOptions());let browser
 try {
  browser=await chromium.launch({headless:true,executablePath:process.env.NECTAR_CHROMIUM_PATH,args:['--no-sandbox','--use-mock-keychain','--password-store=basic']})
  const context=await browser.newContext()
@@ -64,5 +66,6 @@ try {
    assert.ok(request);return request
   }})
  }
+ else if(importedMode)await importedModule.processorCashImportedFlow(h,owner,{onState:capture})
  else await processorEventFlow(h,owner,edge,{onState:capture})
 }finally{await browser?.close();await h.close()}
