@@ -6,7 +6,7 @@ import { all, canonical, newId, stmt, type Audit } from './core'
 import { today } from './dates'
 import { BALANCE_SQL } from './balance-sql'
 
-const changesState = /^(subscription\.(?!state\.)|trial\.|automatic\.collection\.|collection\.|retry\.|dunning\.end\.|payment\.allocate|credit\.|invoice\.|balance\.|writeoff\.)/
+const changesState = /^(subscription\.(?!state\.)|trial\.|automatic\.collection\.|collection\.|retry\.|dunning\.end\.|payment\.allocate|credit\.|invoice\.|balance\.|writeoff\.|usage\.correction\.approve|renewal\.)/
 
 export async function captureSubscriptionStates(env: Bindings, events: Audit[]) {
   if (!events.some(event => changesState.test(event.action))) return []
@@ -14,7 +14,7 @@ export async function captureSubscriptionStates(env: Bindings, events: Audit[]) 
   if (!business) return []
   const at = clockInstant(env), day = today(business.timezone, at), batch = newId()
   const refs = canonical([...new Set(events.flatMap(event => [event.subject, event.detail?.invoice, event.detail?.invoiceId, event.detail?.subscription, event.detail?.payment].filter(value => typeof value === 'string')))])
-  const actions = canonical(events.map(({ actor, action, subject }) => ({ actor, action, subject })))
+  const actions = canonical(events.map(({ action, subject }) => ({ action, subject })))
   // All source reads below execute after the business statements, inside their
   // D1 batch. A failed history, event or audit write rolls the source back too.
   const insert = stmt(env, `WITH refs AS (SELECT value FROM json_each(?)), invoices AS (
@@ -32,7 +32,9 @@ export async function captureSubscriptionStates(env: Bindings, events: Audit[]) 
     FROM nc_subscriptions s JOIN nc_customers c ON c.id=s.customer_id
     WHERE s.billing_mode='live' AND c.status='active' AND c.erased_at IS NULL
       AND (s.id IN (SELECT value FROM refs) OR s.id IN (SELECT subscription_id FROM invoices)
-        OR s.id IN (SELECT subscription_id FROM nc_trial_collections WHERE id IN (SELECT value FROM refs)))
+        OR s.id IN (SELECT subscription_id FROM nc_trial_collections WHERE id IN (SELECT value FROM refs))
+        OR s.id IN (SELECT subscription_id FROM nc_usage_corrections WHERE id IN (SELECT value FROM refs))
+        OR s.id IN (SELECT subscription_id FROM nc_renewal_terms WHERE id IN (SELECT value FROM refs)))
   ), inputs AS (
     SELECT f.*,
       CASE WHEN start_date>day THEN 'scheduled' WHEN end_date IS NOT NULL AND end_date<=day THEN 'ended'
@@ -85,7 +87,7 @@ export async function captureSubscriptionStates(env: Bindings, events: Audit[]) 
       SELECT id,'subscription.state_changed',customer_id,subscription_id,json_object('type','subscription.state_changed','data',${data}),observed_at
       FROM nc_subscription_states WHERE json_extract(cause_json,'$.sourceBatch')=?`,batch),
     stmt(env, `INSERT INTO nc_audit(at,actor,action,subject,detail)
-      SELECT observed_at,'system:lifecycle','subscription.state.observe',subscription_id,${data}
-      FROM nc_subscription_states WHERE json_extract(cause_json,'$.sourceBatch')=?`,batch),
+      SELECT ?,'system:lifecycle','subscription.state.observe',subscription_id,${data}
+      FROM nc_subscription_states WHERE json_extract(cause_json,'$.sourceBatch')=?`,Date.now(),batch),
   ]
 }
