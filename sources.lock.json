@@ -4782,7 +4782,7 @@
       "executable": false
     },
     "tests/nectar/automatic-collection.mjs": {
-      "sha256": "0fb12c470c20f73a2e38b3d37fea5bdc08d2350abfe306cfafb8ce575e8a58ce",
+      "sha256": "31469f5859da6f1d6a9c346d1a11a77b8cc1220fffd95e014d63759ab1d37dfb",
       "executable": false
     },
     "tests/nectar/billing-answers.mjs": {
@@ -4810,7 +4810,7 @@
       "executable": false
     },
     "tests/nectar/card-lifecycle-webhook.mjs": {
-      "sha256": "eac131688afb121f8cab7dffdcb778ba76a9d4b8ac280843e7b0a932c391fa4e",
+      "sha256": "ac7d899ce16144d1c84c44b7e2222d0d8b584b7ff7bd8a53286e703f1d075667",
       "executable": false
     },
     "tests/nectar/card-lifecycle.mjs": {
@@ -4962,7 +4962,7 @@
       "executable": false
     },
     "tests/nectar/harness.mjs": {
-      "sha256": "2237130af040732704aaf4baa32406ee87c803ccc47cda8beee3c0b5c1d7ec63",
+      "sha256": "1715f43862fe4ef8ce22c433eb71408e4f89640c2e3349b580ed04a33ff54cca",
       "executable": false
     },
     "tests/nectar/hierarchies.mjs": {

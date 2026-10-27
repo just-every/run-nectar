@@ -5,7 +5,7 @@ import { createHmac,randomBytes } from 'node:crypto'
 import { nativeCollectionEdge } from './native-collection.mjs'
 import { totp } from './mfa.mjs'
 
-const webhookSecret=randomBytes(32).toString('hex'),path='/api/nectar/stripe/card-events'
+const paymentWebhookSecret='synthetic-nectar-payment-event-secret',webhookSecret=randomBytes(32).toString('hex'),path='/api/nectar/stripe/card-events'
 let edge
 export const harnessOptions=()=>{
   const base=nativeCollectionEdge(),events=new Map(),calls=[]
@@ -21,7 +21,7 @@ export const harnessOptions=()=>{
     return base.fetch(request)
   }
   edge={...base,fetch,events,calls,method}
-  return {localTime:'2026-10-22T10:00:00Z',stripeFetch:fetch,stripeSecret:'synthetic-nectar-1',stripeSecondarySecret:'synthetic-nectar-2',stripeWebhookSecret:webhookSecret}
+  return {localTime:'2026-10-22T10:00:00Z',stripeFetch:fetch,stripeSecret:'synthetic-nectar-1',stripeSecondarySecret:'synthetic-nectar-2',stripeWebhookSecret:webhookSecret,stripePaymentWebhookSecret:paymentWebhookSecret}
 }
 
 export async function cardLifecycleWebhookFlow(h,owner) {
@@ -52,7 +52,7 @@ export async function cardLifecycleWebhookFlow(h,owner) {
   await h.advanceClock(new Date(instant).toISOString());await post(text,{status:503})
   h.vars.STRIPE_WEBHOOK_SECRET=webhookSecret;await h.advanceClock(new Date(instant).toISOString())
   await post(text,{signed:'',cookie:owner,status:401})
-  await post(text,{signed:signature(text,seconds,'unrelated-test-secret'),cookie:owner,status:401})
+  await post(text,{signed:signature(text,seconds,paymentWebhookSecret),cookie:owner,status:401})
   await post(text+' ',{signed:signature(text),status:401})
   await post(text,{time:seconds-3600,status:401})
   await post(text,{time:seconds+3600,status:401})

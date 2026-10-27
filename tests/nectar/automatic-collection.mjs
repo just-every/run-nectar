@@ -8,10 +8,11 @@ import { file } from './harness.mjs'
 export function automaticEdge(){
  const base=nativeCollectionEdge(),bankCustomer='synthetic-nectar-native-customer-3',bankMethod='synthetic-nectar-automatic-bank-1',mandate='synthetic-nectar-automatic-mandate-1'
  base.customers.get(bankCustomer).method=bankMethod
- let available=false
+ let available=false,unavailableIntent=null
  const events=new Map()
  const fetch=async request=>{
   const url=new URL(request.url),path=url.pathname
+  if(unavailableIntent&&path===`/v1/payment_intents/${unavailableIntent}`)return Response.json({},{status:503})
   if(path===`/v1/payment_methods/${bankMethod}`)return Response.json({object:'payment_method',id:bankMethod,type:'us_bank_account',customer:bankCustomer,livemode:false,us_bank_account:{bank_name:'Synthetic Community Bank',last4:'6789',account_type:'checking'}})
   if(path===`/v1/mandates/${mandate}`)return Response.json({object:'mandate',id:mandate,status:'active',type:'multi_use',livemode:false,payment_method:bankMethod})
   if(path.startsWith('/v1/events/'))return Response.json(events.get(path.split('/').at(-1))??{},{status:events.has(path.split('/').at(-1))?200:404})
@@ -29,11 +30,11 @@ export function automaticEdge(){
   }
   return response
  }
- return {...base,fetch,mandate,events,returnLastBank(){const intent=[...base.intents.values()].filter(row=>row.value.payment_method===bankMethod).at(-1).value;const charge=base.charges.get(intent.latest_charge).value;intent.status='requires_payment_method';intent.payment_method=null;intent.amount_received=0;intent.last_payment_error={code:'insufficient_funds',payment_method:{id:bankMethod}};charge.status='failed';charge.paid=false},settle(){available=true;for(const row of base.intents.values())if(row.value.payment_method===bankMethod&&row.value.status==='processing'){row.value.status='succeeded';row.value.amount_received=row.value.amount}},posts:()=>base.calls.filter(call=>call.path==='/payment_intents'&&call.method==='POST').length}
+ return {...base,fetch,mandate,events,failIntentReads(id){unavailableIntent=id},returnLastBank(){const intent=[...base.intents.values()].filter(row=>row.value.payment_method===bankMethod).at(-1).value;const charge=base.charges.get(intent.latest_charge).value;intent.status='requires_payment_method';intent.payment_method=null;intent.amount_received=0;intent.last_payment_error={code:'insufficient_funds',payment_method:{id:bankMethod}};charge.status='failed';charge.paid=false},settle(){available=true;for(const row of base.intents.values())if(row.value.payment_method===bankMethod&&row.value.status==='processing'){row.value.status='succeeded';row.value.amount_received=row.value.amount}},posts:()=>base.calls.filter(call=>call.path==='/payment_intents'&&call.method==='POST').length}
 }
-const webhookSecret='synthetic-nectar-payment-event-secret'
+const webhookSecret='synthetic-nectar-payment-event-secret',cardWebhookSecret='synthetic-nectar-card-event-secret'
 let edge,delivered
-export const harnessOptions=()=>{edge=automaticEdge();delivered=[];return {localTime:'2026-10-22T10:00:00Z',stripeFetch:edge.fetch,stripeSecret:'synthetic-nectar-1',stripeSecondarySecret:'synthetic-nectar-2',stripeWebhookSecret:webhookSecret,webhookFetch:async request=>{delivered.push(await request.json());return new Response(null,{status:200})}}}
+export const harnessOptions=()=>{edge=automaticEdge();delivered=[];return {localTime:'2026-10-22T10:00:00Z',stripeFetch:edge.fetch,stripeSecret:'synthetic-nectar-1',stripeSecondarySecret:'synthetic-nectar-2',stripeWebhookSecret:cardWebhookSecret,stripePaymentWebhookSecret:webhookSecret,webhookFetch:async request=>{delivered.push(await request.json());return new Response(null,{status:200})}}}
 export async function automaticCollectionFlow(h,owner,{onState=async()=>{},prepareCollection,acceptCollection,decideCollection}={}){
  const api=(path,body,status)=>h.api(path,owner,body,status)
  await api('business.configure',{...await api('business'),timezone:'UTC'})
@@ -112,7 +113,10 @@ export async function automaticCollectionFlow(h,owner,{onState=async()=>{},prepa
   const response=await h.raw('/api/nectar/stripe/payment-events',{method:'POST',form:text,headers:{'content-type':'application/json','stripe-signature':`t=${time},v1=${signature}`}})
   const value=await response.json();assert.equal(response.status,status,JSON.stringify(value));return value
  }
- await deliver(paymentEvent,{secret:'synthetic-nectar-unrelated-secret',status:401})
+ await deliver(paymentEvent,{secret:cardWebhookSecret,status:401})
+ delete h.vars.STRIPE_PAYMENT_WEBHOOK_SECRET
+ await h.advanceClock(new Date(instant).toISOString());await deliver(paymentEvent,{status:503})
+ h.vars.STRIPE_PAYMENT_WEBHOOK_SECRET=webhookSecret;await h.advanceClock(new Date(instant).toISOString())
  await deliver(paymentEvent,{time:Math.floor(instant/1000)-301,status:401})
  await deliver({...paymentEvent,livemode:true},{status:400})
  await deliver({...paymentEvent,account:'synthetic-nectar-native-account-2'},{status:409})
@@ -231,7 +235,16 @@ export async function automaticCollectionFlow(h,owner,{onState=async()=>{},prepa
  const recoveredEvent={object:'event',id:'synthetic-nectar-late-recovery-event',type:'payment_intent.succeeded',livemode:false,data:{object:structuredClone(intent)}}
  edge.events.set(recoveredEvent.id,recoveredEvent)
  const beforeRecoveryPosts=edge.posts()
- assert.equal((await deliver(recoveredEvent)).status,'collected')
+ assert.equal((await api('invoices/'+lateInvoice)).retry_status,'disabled','No retry consent still retains a disabled series')
+ edge.failIntentReads(intent.id)
+ await deliver(recoveredEvent,{status:502})
+ assert.equal((await api('automatic-collections')).find(row=>row.id===refused.id).status,'refused','A failed observation preserves definitive failure')
+ assert.equal((await api('invoices/'+lateInvoice)).paidCents,0)
+ assert.deepEqual((await api(`subscriptions/${subscription}?include_state=true`)).stateHistory,stateBeforeRecovery.stateHistory)
+ edge.failIntentReads(null)
+ assert.equal((await h.raw(`/cdn-cgi/local/scheduled?time=${instant}&cron=${encodeURIComponent('* * * * *')}`)).status,200)
+ assert.equal((await api('automatic-collections')).find(row=>row.id===refused.id).status,'collected','Scheduled reads recover failed collections even with retries disabled')
+ assert.deepEqual(await deliver(recoveredEvent),{received:true,replayed:true,status:'collected'},'Provider redelivery completes after an interrupted observation')
  const latePaid=await api('invoices/'+lateInvoice)
  assert.equal(latePaid.paidCents,10000);assert.equal(latePaid.balanceCents,0);assert.equal(latePaid.allocations.length,1)
  assert.equal((await api('automatic-collections')).find(row=>row.id===refused.id).settledAt,instant+120000,'Card settlement time comes from the provider capture, independently of the observer clock')
