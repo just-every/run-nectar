@@ -142,6 +142,7 @@ export async function invoiceRefundExecutionFlow(h, owner, {account,customerRef,
     assert.equal(lost.status,'uncertain')
     const writes=processor.refunds.size
     await api('invoice.refund.execute',{refund:request.id,basis:request.basis,confirm:true},409)
+  await h.api('invoice.refund.execute',finance,{refund:request.id,basis:request.basis,confirm:true},409)
     const recovered=await api('invoice.refund.reconcile',{refund:request.id})
     assert.equal(recovered.status,'completed');assert.equal(processor.refunds.size,writes)
     assert.equal((await api('invoice.refund.reconcile',{refund:request.id})).credit,recovered.credit)
@@ -285,5 +286,22 @@ async function invoiceRefundCorrectionFlow(h,owner,{invoice,customer,finance,rea
   assert.equal((await api(`customers/${customer}/balance`)).carriedCents,balanceBefore+90000)
   await api('invoice.refund.reconcile',{refund:lowRequest.id})
   assert.equal(mails().length,2,'Reconciliation never retries an uncertain customer message')
+  if(processor) {
+    const late=await propose({...payload,amount:'100',subject:'Synthetic refund recipient race'})
+    await api('invoice.refund.prepare',{proposal:late.id})
+    const held=processor.pauseNext(), pending=decide(late.id)
+    await held.arrived
+    try { await api('customer.update',{...await api(`customers/${customer}`),customer,billing_email:'synthetic-nectar-changed@example.test'}) }
+    finally { held.release() }
+    const result=await pending
+    assert.equal((await detail(late.id)).refundRequest.status,'completed')
+    assert.equal((await detail(late.id)).correctionMail.status,'suppressed')
+    assert.equal(h.mails.filter(m=>m.subject==='Synthetic refund recipient race').length,0)
+    await api('invoice.refund.reconcile',{refund:result.refund})
+    assert.equal(h.mails.filter(m=>m.subject==='Synthetic refund recipient race').length,0)
+    assert.ok((await api('audit')).some(row=>row.subject===late.id&&JSON.parse(row.detail).reason==='refund_recipient_changed'))
+    await onState({label:'refund-correction-suppressed',id:late.id,kind:'proposal',owner})
+    await api('customer.update',{...await api(`customers/${customer}`),customer,billing_email:recipient})
+  }
   console.log('INV-005 refund correction: cited exact preview, refusal and rejection, human preparation, independent approval, recipient staleness, audit rollback, atomic credit and frozen mail, and once-only reconciliation passed')
 }

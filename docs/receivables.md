@@ -165,7 +165,9 @@ reservation commit together. A lost response or interrupted completion uses
 `invoice.refund.reconcile` and provider reads, preserving the original refund
 identity. Replaying approval or reconciliation cannot repeat the refund or
 message. Accepted mail means provider acceptance; it does not establish mailbox
-delivery. A pending reservation may be claimed once, while a claimed or uncertain
+delivery. If the billing contact changes while the processor write is in flight,
+the cash outcome is recorded and the message is suppressed with an audit reason.
+A pending reservation may be claimed once, while a claimed or uncertain
 send is never automatically retried.
 
 This door supports the existing non-taxable native card-capture refund scope.
