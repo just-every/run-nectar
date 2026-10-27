@@ -20,6 +20,9 @@ export function importedCashEdge() {
  }
  const fetch=async request=>{
   const url=new URL(request.url),path=url.pathname.replace('/v1','')
+  const savedMethod={object:'payment_method',id:'synthetic-nectar-method',customer:'synthetic-nectar-1',type:'card',livemode:false,card:{brand:'visa',last4:'4242',exp_month:12,exp_year:2035}}
+  if(request.method==='GET'&&path==='/payment_methods/synthetic-nectar-method')return Response.json(savedMethod)
+  if(request.method==='GET'&&path==='/payment_methods')return Response.json({object:'list',has_more:false,data:[savedMethod]})
   if(request.method==='GET'&&path==='/customers/synthetic-nectar-1')return Response.json({object:'customer',id:'synthetic-nectar-1',livemode:false,invoice_settings:{default_payment_method:'synthetic-nectar-method'}})
   if(request.method==='GET'&&path==='/charges'&&cash.cashIntents.has(url.searchParams.get('payment_intent')))return Response.json(await readCashCharges(request))
   if(request.method==='GET'&&path.startsWith('/charges/')){

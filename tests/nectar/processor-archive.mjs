@@ -143,8 +143,8 @@ export async function processorArchiveJourney() {
   const before=await archiveItems(populated),captured=sources(before)
   for(const kind of nativeKinds)assert.ok(captured.some(item=>item.table===kind),`Actual archive includes populated ${kind}`)
   for(const customer of [events.customer,cash.customer])assert.ok(captured.some(item=>item.row.customer_id===customer),'Erased financial custody remains in the archive until due')
-  h=await harness({assets:true,persistence,databaseId,applyMigrations:false,settings,localTime:'2026-10-29T12:00:00Z'})
-  const removalOwner=await restoredOwner(h,enrollment,'2026-10-29T12:00:00Z')
+  h=await harness({assets:true,persistence,databaseId,applyMigrations:false,settings,localTime:'2027-01-13T12:00:00Z'})
+  const removalOwner=await restoredOwner(h,enrollment,'2027-01-13T12:00:00Z')
   const finance=await h.signIn(events.people.finance.email)
   const removed=await processorFinancialRemovalFlow(h,removalOwner,{finance,peer,targets:[{customer:events.customer,invoice:events.invoice,kinds:eventKinds},{customer:cash.customer,invoice:cash.invoices[0],kinds:cashKinds}]})
   await h.close();h=null

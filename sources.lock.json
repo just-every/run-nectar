@@ -5370,7 +5370,7 @@
       "executable": false
     },
     "tests/nectar/processor-archive.mjs": {
-      "sha256": "fcf09916cd378699a8bf4b5e9d4dde127279636c110ad10eefc416854d30950c",
+      "sha256": "3260dccc487d1e5bb8f781e65b38b9cd0c03b442ef05b82df626ff29c5fafac9",
       "executable": false
     },
     "tests/nectar/processor-cash-imported-sandbox.mjs": {
@@ -5378,7 +5378,7 @@
       "executable": false
     },
     "tests/nectar/processor-cash-imported.mjs": {
-      "sha256": "f98e0e09323e416f4bfa357ea5fe7f31aa4ea8ee5d0f3aadce4d4f8e0e5b496e",
+      "sha256": "4bec35b64a526300c32df4382672e89fdfe148922bad8d594f0a1b6060d276fa",
       "executable": false
     },
     "tests/nectar/processor-cash-return.mjs": {
