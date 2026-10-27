@@ -174,7 +174,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "450594b3d77952efdea69567ab412b8404eb611970d657b7f9402d85b7fec669",
+      "sha256": "e117fe16c3935e306dd76f2df3586ff4e88a98bb564225b84e1ca2c8a0b439aa",
       "executable": false
     },
     "AGENTS.consumer.md": {
@@ -194,7 +194,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "72006843d8109f6c2b78dd36007cdb56d8e087ec26a9c432792bc82cb78d821f",
+      "sha256": "5d82434671959cfe3db5df88f377433e20d94a36f6f1300724062e83f460830f",
       "executable": false
     },
     "DEMO.md": {
@@ -262,7 +262,7 @@
       "executable": false
     },
     "docs/receivables.md": {
-      "sha256": "99c37513cea769c988f6898a471a0c3073ea726b30340b71a60e46c05661b0bd",
+      "sha256": "54811b7c828ce450c7b2d460ea46248aca0ef62523629c6fa20bd53930163e0b",
       "executable": false
     },
     "docs/retry-comparison.md": {
@@ -3434,7 +3434,7 @@
       "executable": false
     },
     "src/nectar/invoice-voids.ts": {
-      "sha256": "c00ed8611a8c8531c4e0c151b89022c3ceaf9da91503be1fd5ca10a67d2b1864",
+      "sha256": "bbb22e86c7df42d765034ef90981bd29f6e3771285a1873bbf30b980673b94c1",
       "executable": false
     },
     "src/nectar/ledger-postings.ts": {
@@ -4754,7 +4754,7 @@
       "executable": false
     },
     "tests/nectar/automatic-collection.mjs": {
-      "sha256": "93af4e81809df40b7c977ea7afaa012512266a44801cbfdc4953cfb7cad82a6e",
+      "sha256": "d385494a1a1d241edb54201adbe6ddde080b10ea4f47b4abedbef572eddba961",
       "executable": false
     },
     "tests/nectar/billing-answers.mjs": {
@@ -5058,7 +5058,7 @@
       "executable": false
     },
     "tests/nectar/native-collection.mjs": {
-      "sha256": "56190933bc098effd6d6c1b4b58e2839c6642aaaa7b9b376333596225df5083b",
+      "sha256": "e62edb637e832e2013fc7ad9d810efad2577374685de62794b4659b5e04d855f",
       "executable": false
     },
     "tests/nectar/notes.mjs": {
@@ -5094,7 +5094,7 @@
       "executable": false
     },
     "tests/nectar/payment-links.mjs": {
-      "sha256": "96f8813c9c44f9e4dfa59c1a25140b1f2dc807d79a02afe62d09bbfad9837d33",
+      "sha256": "a2e8869a563f0866f99c6df8da636e21f5db5727f50ea359f4051c22e4f0aba9",
       "executable": false
     },
     "tests/nectar/payment-receipts.mjs": {

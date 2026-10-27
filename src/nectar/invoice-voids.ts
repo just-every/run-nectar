@@ -13,6 +13,13 @@ import { documentNumberAllocation } from './invoice-numbering'
 import { requireFreshFactor } from './mfa'
 import { revenueCreditStatements } from './revenue-records'
 
+// A provider write may have succeeded before its response was lost. Its
+// durable claim must settle before a correction can consume the owed balance.
+const unresolvedCollection = `SELECT invoice_id FROM nc_native_collections WHERE invoice_id=? AND status IN ('claimed','uncertain')
+  UNION ALL SELECT invoice_id FROM nc_automatic_collections WHERE invoice_id=? AND status IN ('claimed','uncertain','pending_settlement')
+  UNION ALL SELECT invoice_id FROM nc_payment_link_attempts WHERE invoice_id=? AND status IN ('captured','recording_invoice')`
+const collectionArguments = (invoice: string) => [invoice, invoice, invoice]
+
 async function source(env: Bindings, actor: Actor, input: Input) {
   requireMember(actor, 'approve')
   await requireFreshFactor(env, actor)
@@ -28,13 +35,14 @@ async function source(env: Bindings, actor: Actor, input: Input) {
   const kinds = ['one_time', 'flat', 'seat', 'usage', 'overage', 'discount', 'metric_usage']
   insist(invoice.currency === 'USD' && invoice.tax_cents === 0 && invoice.subtotal_cents === invoice.total_cents && invoice.total_cents > 0 && lines.length > 0 && lines.every(line => kinds.includes(line.kind)), 'invoice_void_scope_not_supported', 409)
   insist(invoice.balance_cents === invoice.total_cents && !await one(env, 'SELECT 1 FROM nc_credit_notes WHERE invoice_id=?', invoice.id), 'invoice_not_wholly_unpaid', 409)
+  insist(!await one(env, unresolvedCollection, ...collectionArguments(invoice.id)), 'invoice_collection_unresolved', 409)
   return { invoice, lines }
 }
 
 export async function prepareInvoiceVoid(env: Bindings, actor: Actor, input: Input) {
   const { invoice } = await source(env, actor, input)
   const prepared = await creditRequestStatements(env, actor, Input.of({ amount: plainMoney(invoice.total_cents), reason: input.text('reason', { max: 500 }) }), invoice, 'invoice-void')
-  await commit(env, [refundActorGuard(env, actor), ...prepared.statements], prepared.audits.map(event => ({ ...event, action: 'invoice.void.prepare' })))
+  await commit(env, [refundActorGuard(env, actor), guard(env, 'invoice_collection_unresolved', `NOT EXISTS(${unresolvedCollection})`, ...collectionArguments(invoice.id)), ...prepared.statements], prepared.audits.map(event => ({ ...event, action: 'invoice.void.prepare' })))
   return prepared.result
 }
 
@@ -56,6 +64,7 @@ export async function voidInvoice(env: Bindings, actor: Actor, input: Input) {
   await commit(env, [
     refundActorGuard(env, actor), ...authorization.guards, ...number.statements,
     ...(authorization.request ? [guard(env, 'void_preparer_no_longer_authorized', "EXISTS(SELECT 1 FROM nc_members m JOIN oa_operators o ON o.email=m.email WHERE m.id=? AND m.status='active' AND m.role IN ('owner','finance') AND o.status='active' AND (m.role<>'owner' OR o.role='owner'))", authorization.request.prepared_by)] : []),
+    guard(env, 'invoice_collection_unresolved', `NOT EXISTS(${unresolvedCollection})`, ...collectionArguments(invoice.id)),
     guard(env, 'invoice_not_wholly_unpaid', `(SELECT ${BALANCE_SQL} FROM nc_invoices i WHERE i.id=? AND i.status='issued')=? AND NOT EXISTS(SELECT 1 FROM nc_credit_notes WHERE invoice_id=?)`, invoice.id, invoice.total_cents, invoice.id),
     stmt(env, "INSERT INTO nc_bill_runs(id,period,cutoff_at,calc_version,status,summary_json,created_by,created_at,kind) VALUES(?,?,?,?,'draft',?,?,?,'manual')", run, invoice.period_start.slice(0, 7), at, invoice.calc_version, JSON.stringify({ invoices: 1, totals: { subtotal: invoice.subtotal_cents, tax: 0, total: invoice.total_cents }, reissuedFrom: invoice.id }), actorLabel(actor), at),
     stmt(env, "INSERT INTO nc_invoices(id,bill_run_id,customer_id,subscription_id,invoice_kind,period_start,period_end,status,subtotal_cents,tax_cents,total_cents,currency,calc_version,source_fingerprint,calculation_json,comparison_json,exceptions_json,created_at) VALUES(?,?,?,NULL,'manual',?,?,'draft',?,0,?,?,?,?,?,'{}','[]',?)", id, run, invoice.customer_id, invoice.period_start, invoice.period_end, invoice.subtotal_cents, invoice.total_cents, invoice.currency, invoice.calc_version, basis, JSON.stringify(calculation), at),

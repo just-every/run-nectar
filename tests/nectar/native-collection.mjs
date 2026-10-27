@@ -156,11 +156,24 @@ export async function nativeCollectionFlow(h,owner,{onState=async()=>{},confirm}
   const changedResult=await confirmReview(fresh.instructions.confirm)
   assert.equal(changedResult.status,'collected')
   await onState({label:'collected',customer:customers[0],invoice:changed.id,request:changedResult})
+  const voidBasis={invoice:unknown.id,basis:unknown.source_fingerprint,reason:'Synthetic unresolved capture correction',confirm:true}
+  const voidRequest=await api('invoice.void.prepare',voidBasis)
+  const beforeLostInvoice=await api(`invoices/${unknown.id}`)
+  const beforeLostCustomer=await api(`customers/${customers[1]}`)
+  assert.deepEqual(beforeLostCustomer.ledger.invoices.map(row=>row.id),[unknown.id])
   const uncertain=await api('collection.prepare',{invoice:unknown.id})
   await onState({label:'review',customer:customers[1],invoice:unknown.id,request:uncertain})
   edge.losePayment()
   const lost=await confirmReview(uncertain.instructions.confirm)
   assert.equal(lost.status,'uncertain')
+  const captureWrites=edge.calls.filter(call=>call.method==='POST').length
+  for(const action of ['invoice.void','invoice.void.prepare']) {
+    const refused=await api(action,{...voidBasis,request:voidRequest.request},409)
+    assert.equal(refused.error,'invoice_collection_unresolved','An unresolved captured card cannot be voided or reissued, including a request prepared before the capture')
+  }
+  assert.deepEqual(await api(`invoices/${unknown.id}`),beforeLostInvoice,'Refused voids create no credit or replacement and preserve reconciliation basis')
+  assert.deepEqual((await api(`customers/${customers[1]}`)).ledger.invoices,beforeLostCustomer.ledger.invoices)
+  assert.equal(edge.calls.filter(call=>call.method==='POST').length,captureWrites,'A refused void sends no provider write')
   assert.equal((await api('recovery')).invoices.some(r=>r.invoice===unknown.id),false,'An uncertain first attempt creates neither failed nor recovered cash')
   await onState({label:'uncertain',customer:customers[1],invoice:unknown.id,request:lost})
   assert.equal((await api(`invoices/${unknown.id}`)).paidCents,0,'A lost provider response never fabricates payment evidence')
@@ -173,6 +186,12 @@ export async function nativeCollectionFlow(h,owner,{onState=async()=>{},confirm}
   edge.setSearchVisible(true)
   assert.equal(recovered.status,'collected');assert.ok(recovered.charge_ref)
   assert.equal((await api(`invoices/${unknown.id}`)).paidCents,10000)
+  await api('invoice.void',{...voidBasis,request:voidRequest.request},409)
+  await api('collection.prepare',{invoice:unknown.id},409)
+  const processorCaptured=[...edge.charges.values()].reduce((sum,row)=>sum+row.value.amount_captured,0)
+  const nativeRecorded=(await api('payments')).filter(row=>row.method==='card_external').reduce((sum,row)=>sum+row.amount_cents,0)
+  assert.equal(processorCaptured,26500,'The two ordinary captures and the lost-response capture total exactly USD 265')
+  assert.equal(nativeRecorded,processorCaptured,'Every processor capture is recorded once; void and reissue cannot hide an original capture or charge another USD 100')
   assert.equal(edge.calls.filter(call=>call.method==='POST').length,posts,'Recovery only reads provider evidence')
   assert.equal((await api('collection.reconcile',{request:lost.id})).payment_id,recovered.payment_id)
   await api('collection.confirm',uncertain.instructions.confirm,409)
@@ -195,6 +214,12 @@ export async function nativeCollectionFlow(h,owner,{onState=async()=>{},confirm}
     assert.equal((await api('collection.reconcile',{request:refused.id})).status,status)
     assert.equal(edge.intents.size,beforeIntents+1)
     assert.equal(edge.calls.filter(call=>call.method==='POST').length,beforePosts+1,'Definitive refusal replay never creates a second PaymentIntent')
+    if(code==='authentication_required') {
+      const safeReplacement=await api('invoice.void',{invoice:owed.id,basis:owed.source_fingerprint,reason:'Synthetic correction after definitive no-capture proof',confirm:true})
+      assert.equal((await api(`invoices/${safeReplacement.id}`)).status,'draft','Definitive no-capture refusals remain ordinary unpaid invoices that can be corrected')
+      assert.equal(edge.calls.filter(call=>call.method==='POST').length,beforePosts+1)
+      assert.equal((await api(`invoices/${owed.id}`)).paidCents,0)
+    }
   }
   // The authentication refusal prohibits the old saved method. Subsequent
   // independent scenarios use a newly supplied provider method.
@@ -241,6 +266,7 @@ export async function nativeCollectionFlow(h,owner,{onState=async()=>{},confirm}
   assert.equal((await api('collection.reconcile',{request:missing.id})).status,'uncertain','Search and list not-found never turn an unknown outcome into permission to charge again')
   await api('collection.confirm',missingReview.instructions.confirm,409)
   await api('collection.prepare',{invoice:missingInvoice.id},409)
+  for(const action of ['invoice.void.prepare','invoice.void'])assert.equal((await api(action,{invoice:missingInvoice.id,basis:missingInvoice.source_fingerprint,reason:'Synthetic unknown capture correction',confirm:true},409)).error,'invoice_collection_unresolved')
   assert.equal(edge.intents.size,beforeMissingIntents)
   assert.equal(edge.calls.filter(call=>call.method==='POST').length,beforeMissingReads)
   assert.deepEqual([(await api(`invoices/${missingInvoice.id}`)).paidCents,(await api(`invoices/${missingInvoice.id}`)).balanceCents],[0,10000])
@@ -340,6 +366,7 @@ export async function nativeCollectionFlow(h,owner,{onState=async()=>{},confirm}
   edge.pendingPayment()
   const processing=await api('collection.confirm',pendingReview.instructions.confirm)
   assert.equal(processing.status,'uncertain')
+  for(const action of ['invoice.void.prepare','invoice.void'])assert.equal((await api(action,{invoice:pendingInvoice.id,basis:pendingInvoice.source_fingerprint,reason:'Synthetic processing capture correction',confirm:true},409)).error,'invoice_collection_unresolved')
   assert.deepEqual((await api('recovery')).totals,withoutPending.totals,'Provider processing and unresolved uncertainty create no recovered cash')
   const laterCash=await api('payment.record',{customer:customers[0],amount:'60',received_on:'2026-10-22',method:'bank_transfer',reference:'synthetic-nectar-905'})
   await api('payment.allocate',{payment:laterCash.payment,invoice:recoveryInvoice.id,amount:'60'})
@@ -387,5 +414,14 @@ export async function nativeCollectionFlow(h,owner,{onState=async()=>{},confirm}
   }
   assert.deepEqual(finalReport.invoices.map(row=>row.invoice).sort(),expectedRows.map(row=>row.invoice).sort())
   assertRecoveryBuckets(finalReport,expectedRows)
+  await api('mfa.verify',{code:totp(secret,instant)})
+  edge.customers.get('synthetic-nectar-native-customer-1').method='synthetic-nectar-native-void-new-card'
+  const unclaimed=await invoice(customers[0]),unclaimedReview=await api('collection.prepare',{invoice:unclaimed.id})
+  const unclaimedPosts=postsNow()
+  const replacement=await api('invoice.void',{invoice:unclaimed.id,basis:unclaimed.source_fingerprint,reason:'Synthetic correction before any provider claim',confirm:true})
+  await api('collection.confirm',unclaimedReview.instructions.confirm,409)
+  assert.equal(postsNow(),unclaimedPosts,'A review prepared before a successful void cannot later claim or capture the original')
+  assert.equal((await api(`invoices/${replacement.id}`)).total_cents,10000)
+  assert.equal((await api(`invoices/${unclaimed.id}`)).balanceCents,0)
   console.log('Native collection: two frozen accounts, exact current balances, explicit owner confirmation, captured proof, atomic payment/allocation, read-only search/list recovery, definitive declined/authentication outcomes, concurrent confirmation, no second intent and erasure/factor boundaries')
 }

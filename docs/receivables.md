@@ -108,6 +108,19 @@ preparer, duplicate, payment, partial credit or erased customer refuses without
 creating a replacement or credit. An audit failure rolls the entire operation
 back. At or below the threshold one person can execute directly.
 
+A claimed or uncertain capture is unresolved even when the invoice still shows
+its full balance. Both void preparation and execution refuse with
+`invoice_collection_unresolved`, including a saved request prepared before the
+capture. Pending automatic settlement and a hosted capture awaiting invoice allocation
+are protected too. First reconcile the
+original collection through `/api/nectar/collection.reconcile` (or
+`/api/nectar/automatic.collection.reconcile` for automatic collection). These
+operations read the existing provider attempt; for a hosted payment link,
+reconcile the original attempt through its customer return door. They do not
+authorize a second
+charge. A successful capture makes the invoice paid and ineligible for void.
+A definitive no-capture refusal leaves ordinary unpaid correction available.
+
 Review the replacement through the ordinary `invoice.approve` and
 `invoice.finalise` actions. Its copied service lines retain their original source
 evidence and receive a new invoice number. Issuing it does not consume the
