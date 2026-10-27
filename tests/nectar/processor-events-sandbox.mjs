@@ -91,7 +91,7 @@ try {
  await h.api('notification.preferences',finance,{webhook_failure:true})
  let sends=0
  await h.configureMail({provider:'sendgrid',apiKey:process.env.SENDGRID_KEY,from:email},async request=>{
-  sends++;assert.equal(request.headers.get('authorization'),`Bearer ${process.env.SENDGRID_KEY}`)
+  sends++;assert.ok(request.headers.get('authorization')===`Bearer ${process.env.SENDGRID_KEY}`,'Held mail binding matches')
   return fetch(request.url,{method:request.method,headers:request.headers,body:await request.arrayBuffer(),redirect:'error',signal:AbortSignal.timeout(20000)})
  })
  const rejected=await stripe.request('POST','/v1/payment_intents',{customer:remote.id,amount:100,currency:'usd','payment_method_types[]':'card',payment_method:'pm_card_visa',confirm:true,'metadata[nectar_native_invoice]':'synthetic-nectar-absent'})

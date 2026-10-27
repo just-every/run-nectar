@@ -5322,7 +5322,7 @@
       "executable": false
     },
     "tests/nectar/processor-events-sandbox.mjs": {
-      "sha256": "734402b573d116b3b2a31de48e642c284415dbf06061a36b4dea0ca6bb51dae1",
+      "sha256": "d4570dfd813fd0647d8dd43709948780bf15a7f57a12de7440c0ccebe3353699",
       "executable": false
     },
     "tests/nectar/processor-events.mjs": {
