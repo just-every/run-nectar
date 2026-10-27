@@ -179,7 +179,7 @@ export async function invoiceRefundExecutionFlow(h, owner, {account,customerRef,
   assert.equal((await h.raw(new URL(link).pathname,{form:new URLSearchParams({confirm:'yes'})})).status,200)
   await api('erasure.approve',{request:erasure.id,confirm:true})
   await api('invoice.refund.reconcile',{refund:cash.id},404)
-  assert.deepEqual((await api(`invoices/${original.id}`)).refunds.map(row=>[row.amountCents,row.cashAmountCents,row.destination]),[[150000,-150000,'original'],[150000,0,'balance']])
+  assert.deepEqual((await api(`invoices/${original.id}`)).refunds.map(row=>[row.amountCents,row.cashAmountCents,row.destination]).sort((a,b)=>a[2].localeCompare(b[2])),[[150000,0,'balance'],[150000,-150000,'original']])
   console.log('INV-005 card refund and balance credit: exact half allocations, immutable originals, independent approval, low direct execution, refusal, stale, replay and cash custody passed')
   return {customer,invoice:original.id,cash,balance,low:lowRefund,original}
 }

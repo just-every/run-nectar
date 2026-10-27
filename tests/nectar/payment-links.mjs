@@ -185,6 +185,32 @@ export async function paymentLinksFlow(h,owner,{onState=async()=>{},interaction=
   assert.equal(cashCustomer.billingRecord.paymentLinks.find(row=>row.invoice===paid.invoice).kind,'one_time')
   assert.deepEqual(await post(cash,'reconcile'),paid);assert.equal(edge.calls.length,cashWrites,'Cash recording and replay submit no additional provider mutation')
   await onState({h,owner,link:cashLink,signup:cash,completed:paid,customer:cashCustomer,invoice:cashInvoice,state:'one-time-complete'})
+  // Interrupt allocation after captured cash and invoice issue. The original
+  // capture remains owed to that invoice and cannot fund a void and reissue.
+  const interruptedLink=await api('payment_link.create',{name:'Synthetic interrupted capture',kind:'one_time',amount:'100',description:'Synthetic service with saved capture',taxable:false,max_uses:1,confirm:true})
+  const interrupted=await start(interruptedLink.id,'en','synthetic-nectar-void-link-1@example.test',{make_default:false})
+  edge.complete(interrupted.body.id)
+  const interruptedWrites=edge.calls.length
+  await h.rejectAudit('payment.allocate')
+  await post(interrupted,'reconcile',503)
+  await h.rejectAudit(null)
+  const interruptedCustomer=(await api('customers?search=synthetic-nectar-void-link-1%40example.test'))[0]
+  assert.ok(interruptedCustomer)
+  const heldCash=await api(`customers/${interruptedCustomer.id}`)
+  assert.equal(heldCash.ledger.invoices.length,1)
+  const interruptedInvoice=await api(`invoices/${heldCash.ledger.invoices[0].id}`)
+  assert.deepEqual([interruptedInvoice.total_cents,interruptedInvoice.paidCents,interruptedInvoice.balanceCents],[10000,0,10000])
+  assert.equal(heldCash.ledger.payments.reduce((sum,row)=>sum+row.amount_cents,0),10000)
+  const voidInput={invoice:interruptedInvoice.id,basis:interruptedInvoice.source_fingerprint,reason:'Synthetic interrupted hosted capture correction',confirm:true}
+  for(const action of ['invoice.void','invoice.void.prepare'])assert.equal((await api(action,voidInput,409)).error,'invoice_collection_unresolved')
+  assert.deepEqual(await api(`invoices/${interruptedInvoice.id}`),interruptedInvoice)
+  const recoveredCash=await post(interrupted,'reconcile')
+  assert.equal(recoveredCash.status,'complete');assert.equal(recoveredCash.invoice,interruptedInvoice.id)
+  const recoveredInvoice=await api(`invoices/${recoveredCash.invoice}`)
+  assert.deepEqual([recoveredInvoice.paidCents,recoveredInvoice.balanceCents,recoveredInvoice.credits.length],[10000,0,0])
+  assert.equal((await api(`customers/${recoveredCash.customer}`)).ledger.invoices.length,1)
+  assert.deepEqual(await post(interrupted,'reconcile'),recoveredCash)
+  assert.equal(edge.calls.length,interruptedWrites,'Recovery and refused voids create no replacement charge or hosted checkout')
   const parent=(await api('customer.create',{external_id:'synthetic-nectar-link-parent',name:'Workspace family',billing_email:'family@example.test'})).id
   for(const person of [completed,paid])await api('hierarchy.configure',{customer:person.customer,parent,billing_mode:'separate',revision:0,consent:true})
   const family=await api(`customers/${parent}`)

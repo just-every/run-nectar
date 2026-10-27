@@ -174,7 +174,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "e92d4f71bb7732e0bcae1816d2306ea22aab8926cba43698099e672bbc226b9f",
+      "sha256": "2efb9e647e5046fcf01088955729bb63e104d08e71387b8bc883726e81e9b14f",
       "executable": false
     },
     "AGENTS.consumer.md": {
@@ -194,7 +194,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "a9eb47fc4a7ffa67121623d8ebe1869d9e6c57772eb66d2256ca76e03ff02f3a",
+      "sha256": "d3395cb1f3e70ac38c6d1a01a7d73f0ec46535d55660734561c80dac009652ee",
       "executable": false
     },
     "DEMO.md": {
@@ -262,7 +262,7 @@
       "executable": false
     },
     "docs/receivables.md": {
-      "sha256": "99c37513cea769c988f6898a471a0c3073ea726b30340b71a60e46c05661b0bd",
+      "sha256": "54811b7c828ce450c7b2d460ea46248aca0ef62523629c6fa20bd53930163e0b",
       "executable": false
     },
     "docs/retry-comparison.md": {
@@ -3442,7 +3442,7 @@
       "executable": false
     },
     "src/nectar/invoice-voids.ts": {
-      "sha256": "0b9a628d681671f4da9f01186c801b3377d9aefca74f1ca83a37bb2e01da7097",
+      "sha256": "52a6c14399c1fba9abd487d67463fd3f71b4c353053782d43cf90fe08cc127d0",
       "executable": false
     },
     "src/nectar/ledger-postings.ts": {
@@ -4762,7 +4762,7 @@
       "executable": false
     },
     "tests/nectar/automatic-collection.mjs": {
-      "sha256": "93af4e81809df40b7c977ea7afaa012512266a44801cbfdc4953cfb7cad82a6e",
+      "sha256": "d385494a1a1d241edb54201adbe6ddde080b10ea4f47b4abedbef572eddba961",
       "executable": false
     },
     "tests/nectar/billing-answers.mjs": {
@@ -4982,7 +4982,7 @@
       "executable": false
     },
     "tests/nectar/invoice-refund-preview.mjs": {
-      "sha256": "559a7f22b4e6feb443b93befbd01f5b564039b9c3ba1a2b68cad4eda5914a43c",
+      "sha256": "7d637b5a7170ed417ac742e38e01dffb54638132713f9ebaf8ed1bc8443f7536",
       "executable": false
     },
     "tests/nectar/invoice-refund-sandbox.mjs": {
@@ -5070,7 +5070,7 @@
       "executable": false
     },
     "tests/nectar/native-collection.mjs": {
-      "sha256": "56190933bc098effd6d6c1b4b58e2839c6642aaaa7b9b376333596225df5083b",
+      "sha256": "e62edb637e832e2013fc7ad9d810efad2577374685de62794b4659b5e04d855f",
       "executable": false
     },
     "tests/nectar/notes.mjs": {
@@ -5106,7 +5106,7 @@
       "executable": false
     },
     "tests/nectar/payment-links.mjs": {
-      "sha256": "96f8813c9c44f9e4dfa59c1a25140b1f2dc807d79a02afe62d09bbfad9837d33",
+      "sha256": "a2e8869a563f0866f99c6df8da636e21f5db5727f50ea359f4051c22e4f0aba9",
       "executable": false
     },
     "tests/nectar/payment-receipts.mjs": {

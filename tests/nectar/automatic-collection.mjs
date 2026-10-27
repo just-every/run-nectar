@@ -74,6 +74,10 @@ export async function automaticCollectionFlow(h,owner,{onState=async()=>{},prepa
  assert.equal(bankView.paidCents,0);assert.equal(bankView.balanceCents,10000);assert.equal(sendView.paidCents,0)
  let rows=await api('automatic-collections');assert.equal(rows.find(r=>r.invoice===bank).status,'pending_settlement')
  await onState({state:'collected',invoice:card,customer:customers[0],session:cardAuth.s,request:rows.find(r=>r.invoice===card)})
+ const bankBeforeVoid=await api('invoices/'+bank),bankPosts=edge.posts()
+ for(const action of ['invoice.void.prepare','invoice.void'])assert.equal((await api(action,{invoice:bank,basis:bankBeforeVoid.source_fingerprint,reason:'Synthetic pending settlement correction',confirm:true},409)).error,'invoice_collection_unresolved')
+ assert.deepEqual(await api('invoices/'+bank),bankBeforeVoid)
+ assert.equal(edge.posts(),bankPosts,'Pending settlement void refusal sends no provider writes')
  await onState({state:'pending_settlement',invoice:bank,customer:customers[1],session:bankAuth.s,request:rows.find(r=>r.invoice===bank)})
  for(const invoice of [card,bank]){await api('invoice.finalise',{invoice},409);await api('collection.prepare',{invoice},409)}
  const cardRequest=rows.find(r=>r.invoice===card),bankRequest=rows.find(r=>r.invoice===bank)
@@ -91,6 +95,10 @@ export async function automaticCollectionFlow(h,owner,{onState=async()=>{},prepa
  const uncertain=await draft(customers[2]);const unknown=await approve(uncertain)
  edge.losePayment();await api('invoice.approve',{invoice:uncertain,acknowledge:true});await api('invoice.finalise',{invoice:uncertain,issue_date:'2026-10-22'})
  assert.equal((await api('automatic-collections')).find(r=>r.invoice===uncertain).status,'uncertain');assert.equal(edge.posts(),3)
+ const uncertainBeforeVoid=await api('invoices/'+uncertain)
+ for(const action of ['invoice.void.prepare','invoice.void'])assert.equal((await api(action,{invoice:uncertain,basis:uncertainBeforeVoid.source_fingerprint,reason:'Synthetic uncertain automatic capture correction',confirm:true},409)).error,'invoice_collection_unresolved')
+ assert.deepEqual(await api('invoices/'+uncertain),uncertainBeforeVoid)
+ assert.equal(edge.posts(),3,'An uncertain automatic capture cannot be replaced by another provider write')
  await onState({state:'uncertain',invoice:uncertain,customer:customers[2],session:unknown.s,request:(await api('automatic-collections')).find(row=>row.id===unknown.prepared.id)})
  assert.equal((await api('automatic.collection.reconcile',{request:unknown.prepared.id})).status,'collected');assert.equal(edge.posts(),3)
  // Four business days: Thu issue, Friday, Monday, Tuesday and Wednesday settlement. Only provider facts settle cash.
