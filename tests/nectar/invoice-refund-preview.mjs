@@ -113,6 +113,10 @@ export async function invoiceRefundExecutionFlow(h, owner, {account,customerRef,
   assert.deepEqual(afterCash.lines,original.lines);assert.deepEqual(afterCash.calculation,original.calculation)
   assert.deepEqual(afterCash.allocations,original.allocations);assert.equal(afterCash.balanceCents,0)
   assert.equal((await api(`customers/${customer}/balance`)).totalCents,0)
+  const record=await api(`customers/${customer}`)
+  const composed=record.billingRecord.refunds.find(row=>row.id===cash.id)
+  assert.ok(composed);assert.equal(composed.refundRef,cash.refundRef);assert.equal(composed.cashAmountCents,-150000)
+  assert.deepEqual((await api(`customers?search=${cash.refundRef}`)).map(row=>row.id),[customer])
   const credit=afterCash.credits.find(row=>row.id===cash.credit)
   assert.deepEqual([credit.amount_cents,credit.subtotal_cents,credit.tax_cents,credit.applied_cents],[150000,150000,0,0])
   await h.api('invoice.refund.execute',finance,{refund:saved.id,basis:saved.basis,confirm:true},409)
@@ -160,6 +164,22 @@ export async function invoiceRefundExecutionFlow(h, owner, {account,customerRef,
   const source=snapshot.sourceEvidence.find(row=>row.metric==='refunds'&&row.detail.invoiceRefund?.id===cash.id)
   assert.ok(source);assert.equal(source.detail.totalCents,-150000)
     await onState({label:'refunded-and-balance-credited',id:original.id,owner})
+  const later=next.slice(0,10)
+  const futureCharge=(await api('charge.add',{customer,amount:'1800',description:'Synthetic later service',taxable:false,effective_date:later})).charge
+  const future=await api('invoice.manual',{customer,charges:[futureCharge],service_date:later})
+  await api('invoice.approve',{invoice:future.id,acknowledge:true});await api('invoice.finalise',{invoice:future.id,issue_date:later})
+  const applied=await api(`invoices/${future.id}`)
+  assert.equal(applied.balanceCents,30000)
+  assert.deepEqual(applied.carriedApplications.map(row=>[row.credit_id,row.amount_cents]),[[balance.credit,150000]])
+  assert.equal((await api(`customers/${customer}/balance`)).carriedCents,0)
+  await api('invoice.finalise',{invoice:future.id,issue_date:later},409)
+  assert.deepEqual((await api(`invoices/${future.id}`)).carriedApplications,applied.carriedApplications)
+  const erasure=await api('erasure.request',{customer})
+  const link=h.mails.at(-1).text.match(/https?:\/\/[^\s"<]+\/erase\/[a-f0-9]{64}/)[0]
+  assert.equal((await h.raw(new URL(link).pathname,{form:new URLSearchParams({confirm:'yes'})})).status,200)
+  await api('erasure.approve',{request:erasure.id,confirm:true})
+  await api('invoice.refund.reconcile',{refund:cash.id},404)
+  assert.deepEqual((await api(`invoices/${original.id}`)).refunds.map(row=>[row.amountCents,row.cashAmountCents,row.destination]),[[150000,-150000,'original'],[150000,0,'balance']])
   console.log('INV-005 card refund and balance credit: exact half allocations, immutable originals, independent approval, low direct execution, refusal, stale, replay and cash custody passed')
   return {customer,invoice:original.id,cash,balance,low:lowRefund,original}
 }

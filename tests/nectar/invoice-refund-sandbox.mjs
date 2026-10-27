@@ -44,13 +44,13 @@ finally {
   await h?.close()
   if(stripe&&customer) {
     try {
-      for(const charge of await stripe.list('/v1/charges',{customer:customer.id}))if(charge.paid&&charge.amount_refunded<charge.amount) {
+      for(const charge of (await stripe.list('/v1/charges',{customer:customer.id})).data)if(charge.paid&&charge.amount_refunded<charge.amount) {
         await stripe.request('POST','/v1/refunds',{charge:charge.id,amount:charge.amount-charge.amount_refunded})
         receipt.cleanup.push({charge:charge.id,remainingTestCashRefunded:true})
       }
       await stripe.request('DELETE',`/v1/customers/${customer.id}`)
       receipt.cleanup.push({customer:customer.id,deleted:true})
-    } catch(error) {receipt.cleanup.push({error:safeError(error)});process.exitCode=1}
+    } catch(error) {receipt.cleanup.push({error:safeError(error)});receipt.status='failed-cleanup';process.exitCode=1}
   }
   if(stripe)receipt.requests=stripe.requests
   await writeFile(`${directory}/invoice-refund-sandbox.json`,JSON.stringify(receipt,null,2)+'\n')

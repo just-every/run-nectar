@@ -174,7 +174,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "2eee264bc1607ea4b026fe0d939da101b98a3a304e8691904c78bb315567df43",
+      "sha256": "e92d4f71bb7732e0bcae1816d2306ea22aab8926cba43698099e672bbc226b9f",
       "executable": false
     },
     "AGENTS.consumer.md": {
@@ -194,7 +194,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "bac5410630411b7327068a38fd18cc96e5ab7836a1d2c689706319adb6725317",
+      "sha256": "a9eb47fc4a7ffa67121623d8ebe1869d9e6c57772eb66d2256ca76e03ff02f3a",
       "executable": false
     },
     "DEMO.md": {
@@ -3282,7 +3282,7 @@
       "executable": false
     },
     "src/nectar/erasure-records.ts": {
-      "sha256": "f7357b6a2280f505631da65cdeee4a11f3253a50811d138a6d67c377b313cec7",
+      "sha256": "f43dccfe0c95c06f9986d57e5806d7726f2e699cd045f7acb9bc187fb19a6fa0",
       "executable": false
     },
     "src/nectar/erasure-requests.ts": {
@@ -3434,7 +3434,7 @@
       "executable": false
     },
     "src/nectar/invoice-refunds.ts": {
-      "sha256": "7fa612a7e9a55b2f8755eccf2e5ca3f34d75eab42dc4137cd18270058aa8b238",
+      "sha256": "fadc0780820ad6ce0608e8bf030fee32d09029b868ebdbf324b6de4f95224ed0",
       "executable": false
     },
     "src/nectar/invoice-tax.ts": {
@@ -4982,11 +4982,11 @@
       "executable": false
     },
     "tests/nectar/invoice-refund-preview.mjs": {
-      "sha256": "184965c1ff8fbfc8b56220c8ff65dcadb144e7ed0b9384af96463a20cde69473",
+      "sha256": "559a7f22b4e6feb443b93befbd01f5b564039b9c3ba1a2b68cad4eda5914a43c",
       "executable": false
     },
     "tests/nectar/invoice-refund-sandbox.mjs": {
-      "sha256": "bd58a85aed40ecef4226c79cabe4888498c87ab7acc603837db38999e33a8bf8",
+      "sha256": "a11922c25ad2a8de92b5b952a2955920c25cdc4af5d340138bfcc1af3bb9f4b9",
       "executable": false
     },
     "tests/nectar/invoice-void-browser.mjs": {

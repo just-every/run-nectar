@@ -15,7 +15,7 @@ import { revenueCreditStatements } from './revenue-records'
 
 const ref = (v: unknown): string => typeof v === 'string' ? v : v && typeof v === 'object' ? (v as Row).id : ''
 const chargeQuote = (proof: Row, originalAmountCents: number, amountCents: number) => ({ accountRef:proof.accountRef,customerRef:proof.customerRef,paymentMethodRef:proof.paymentMethodRef,paymentIntentRef:proof.paymentIntentRef,chargeRef:proof.chargeRef,livemode:proof.livemode,originalAmountCents,amountCents })
-const view = (r: Row) => ({ id:r.id,invoice:r.invoice_id,customer:r.customer_id,payment:r.payment_id,amountCents:r.amount_cents,destination:r.destination,status:r.status,basis:r.basis_hash,preparedBy:r.prepared_by_id,approvedBy:r.approved_by_id,preparedAt:r.prepared_at,approvedAt:r.approved_at,refundRef:r.refund_ref,credit:r.credit_id,completedAt:r.completed_at,error:r.error_code,source:`/app/invoices/${r.invoice_id}#recv` })
+const view = (r: Row) => ({ id:r.id,invoice:r.invoice_id,customer:r.customer_id,payment:r.payment_id,amountCents:r.amount_cents,cashAmountCents:r.status==='completed'&&r.destination==='original'?-r.amount_cents:0,destination:r.destination,status:r.status,basis:r.basis_hash,preparedBy:r.prepared_by_id,approvedBy:r.approved_by_id,preparedAt:r.prepared_at,approvedAt:r.approved_at,refundRef:r.refund_ref,credit:r.credit_id,completedAt:r.completed_at,error:r.error_code,source:`/app/invoices/${r.invoice_id}#recv` })
 async function stored(env: Bindings, id: string) {
   const r = await one(env, 'SELECT r.* FROM nc_invoice_refunds r JOIN nc_customers c ON c.id=r.customer_id WHERE r.id=? AND c.erased_at IS NULL', id)
   insist(r, 'invoice_refund_not_found', 404); return r
