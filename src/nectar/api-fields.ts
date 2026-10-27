@@ -114,6 +114,26 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "reason": "text",
     "reference": "text"
   },
+  "billing.notice.configure": {
+    "body": "text",
+    "confirm": "flag",
+    "kind": "text",
+    "language": "text",
+    "revision": "integer",
+    "sender": "text",
+    "subject": "text"
+  },
+  "billing.notice.prepare": {
+    "confirm": "flag",
+    "event": "text",
+    "invoice": "text",
+    "kind": "text"
+  },
+  "billing.notice.send": {
+    "basis_hash": "text",
+    "confirm": "flag",
+    "notice": "text"
+  },
   "billrun.prepare": {
     "period": "text"
   },
