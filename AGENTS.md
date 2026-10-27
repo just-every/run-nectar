@@ -133,3 +133,11 @@ their maintenance.
 
 Pinned reference: https://github.com/runeditrun/base/blob/79f61faef682f9d6cdb64e843cfbd3cf02887982/TANSTACK-START-MIGRATION.md
 Native-session/runtime evidence: https://github.com/runeditrun/base/tree/79f61faef682f9d6cdb64e843cfbd3cf02887982/default-seed
+
+## Stripe observation endpoint secrets
+
+Configure `STRIPE_WEBHOOK_SECRET` for `POST ./api/nectar/stripe/card-events` and
+`STRIPE_PAYMENT_WEBHOOK_SECRET` for `POST ./api/nectar/stripe/payment-events`.
+Stripe gives each endpoint a separate signing secret. Supply both through the
+private setup answers or the optional deployment secret bindings; see `API.md`.
+Neither observation endpoint grants debit authority.

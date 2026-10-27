@@ -182,11 +182,11 @@
       "executable": false
     },
     "AGENTS.md": {
-      "sha256": "5d30d1f192773f8e559fd4430469e972ee6bc086baf3e2a0965be4588970e532",
+      "sha256": "410d8078435a95ee77e0fdc6b9d28e791470658e7a0e5c67ac4ff8d11beb4bf1",
       "executable": false
     },
     "API.md": {
-      "sha256": "140286ac4492aaadb862b3fb810bab8057da06f9b6a733a83603a4202967205a",
+      "sha256": "c9893013d0c2f94e17984ba432523675a7d6cc59a3d986f53ce0a1c9e5f7c0a3",
       "executable": false
     },
     "base-copies.json": {
@@ -210,7 +210,7 @@
       "executable": false
     },
     "deploy.json": {
-      "sha256": "3b7797ed40929666b01f911366c201ab9f4abd783295ecebfea1699e446cb0c6",
+      "sha256": "55317743f05165e40501d26f447d29ff768da371554b8e1039054e21de0740c0",
       "executable": false
     },
     "docs/agents-and-access.md": {
@@ -782,7 +782,7 @@
       "executable": false
     },
     "packaging.json": {
-      "sha256": "5a36eab78b66e9a1401554e277a4cd9a3abbeffd1f9e9d782739f37c5bab01cd",
+      "sha256": "c190affab9f263e0415bca9b677da7423a30a37ed4e1de92491a60352859b881",
       "executable": false
     },
     "pnpm-lock.yaml": {
@@ -946,7 +946,7 @@
       "executable": false
     },
     "rer-setup.json": {
-      "sha256": "438f7f9e4ffabff0ecb789837359e59ab76c05dae6f5500d2a7214f4c95f9361",
+      "sha256": "79b956ae9eef1837ed23e3eb9598c768e67ce7ed0b645f8d98caea7f8b851e23",
       "executable": false
     },
     "RUN-LOCALLY.md": {
@@ -1138,7 +1138,7 @@
       "executable": false
     },
     "src/auth.server.ts": {
-      "sha256": "9a7c6e27a935aa3b290c1e2c495894328344ff336598a50904855581bdcde9ad",
+      "sha256": "30ace4bff377043bfe076767e6d212033602216984c2a1e3104ffffbf5874bfc",
       "executable": false
     },
     "src/base/contract-filter.ts": {
@@ -3038,7 +3038,7 @@
       "executable": false
     },
     "src/nectar/automatic-collection-webhook.ts": {
-      "sha256": "9a68604deb7b8607b5c7d33581f23a5823ea0cdc49a0329c57610d1d0cd90e73",
+      "sha256": "4d73b3671b602929c9d00a3fc81c03ef227ab4d33576bc8e62024fe4274e5baf",
       "executable": false
     },
     "src/nectar/automatic-collection.ts": {

@@ -45,6 +45,8 @@ export interface Bindings {
  STRIPE_SECONDARY_SECRET_KEY?: string
  /** Signature secret for observation-only card updater delivery; never archived. */
  STRIPE_WEBHOOK_SECRET?: string
+ /** Signature secret for the separate automatic payment observation endpoint; never archived. */
+ STRIPE_PAYMENT_WEBHOOK_SECRET?: string
  /** AR-004 bad-debt journal posting; the token is a runtime secret, never archived or stored in records. */
  QUICKBOOKS_ACCESS_TOKEN?: string
  QUICKBOOKS_ENVIRONMENT?: 'sandbox' | 'production'

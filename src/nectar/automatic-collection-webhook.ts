@@ -8,15 +8,15 @@ import { NativeStripeError, providerReference } from './payments/stripe'
 
 const path='/api/nectar/stripe/payment-events'
 const json=(value:unknown,status=200)=>Response.json(value,{status,headers:{'cache-control':'no-store','x-content-type-options':'nosniff'}})
-export async function automaticCollectionWebhook(request:Request,env:Bindings&{STRIPE_WEBHOOK_SECRET?:string}):Promise<Response|null>{
+export async function automaticCollectionWebhook(request:Request,env:Bindings):Promise<Response|null>{
  if(new URL(request.url).pathname!==path)return null
  if(request.method!=='POST')return json({error:'method_not_allowed'},405)
- if(!env.STRIPE_WEBHOOK_SECRET?.trim())return json({error:'payment_event_intake_not_configured'},503)
+ if(!env.STRIPE_PAYMENT_WEBHOOK_SECRET?.trim())return json({error:'payment_event_intake_not_configured'},503)
  try{
   insist(request.headers.get('content-type')?.split(';')[0].trim().toLowerCase()==='application/json','payment_event_json_required',415)
   insist(!request.headers.has('content-encoding')||request.headers.get('content-encoding')==='identity','payment_event_encoding_unsupported',415)
   const bytes=await boundedBody(request)
-  await verifySignature(request,env.STRIPE_WEBHOOK_SECRET,bytes,clockInstant(env))
+  await verifySignature(request,env.STRIPE_PAYMENT_WEBHOOK_SECRET,bytes,clockInstant(env))
   let event:Row
   try{event=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(bytes))}catch{throw new NectarError('payment_event_json_invalid',400)}
   const object=event?.data?.object
