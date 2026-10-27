@@ -2,7 +2,7 @@
 
 Generated from CONTRACT.md by `node scripts/contract-docs.mjs write`. Edit the contract, then regenerate.
 
-130 clauses: 60 done, 37 partial, 33 missing.
+130 clauses: 60 done, 38 partial, 32 missing.
 
 ## NEC-01 — Set up the business
 
@@ -337,13 +337,13 @@ Remaining: All three governed dispositions, immutable originals, cumulative full
 
 ## USE-005 — Usage alerts and threshold invoicing
 
-Status: **missing**.
+Status: **partial**.
 
 Operators and customers set usage and spend thresholds per customer, meter or commitment; crossing one fires a signed webhook (`DEV-001`), an email and an in-app alert, and can issue a threshold invoice mid-period (bill when accrued charges reach $X) or apply an entitlement change (`ENT-002`). **Acceptance evidence:** Set a $5,000 threshold invoice and an 80% commitment alert, stream usage past both, and see one webhook and email per crossing, a mid-period invoice charged once, and the remaining period billing only the rest. A billing contact signed in to the portal sets their own 1,000,000-call alert on a meter; crossing it emails that contact, shows the alert in the portal and in the operator's in-app notification list, and fires one `usage.threshold_crossed` webhook; another customer's contact cannot see or change it.
 
-Proof: `tests/nectar/webhooks.mjs` — webhookLifecycleFlow proves the existing ENT-002 quota webhook crossing is emitted once in the same billing period despite policy rearming and concurrent observers. `src/nectar/webhook-entitlements.ts`
+Proof: `tests/nectar/entitlement-quotas.mjs` — usageThresholdFlow: quantity and spend and commitment definitions, exact 80-percent and 1-million-call crossings, one signed webhook and provider email attempt, contact-owned portal refusals, reviewed mid-period invoice charged once, cumulative remainder and two volume-priced thresholds with exact tax and revenue parity; `tests/nectar/usage-thresholds-browser.mjs` — operator and portal forms, in-app notification list and invoice screens at 1440 and 390; `tests/nectar/webhooks.mjs` — webhookLifecycleFlow retains existing ENT-002 once-only quota custody.
 
-Remaining: Existing governed entitlement-quota webhook crossings now retain once-only event custody per customer, subscription, feature, meter and billing-period start; changing the quota does not rearm that crossing. Independent usage and spend alert definitions, commitment percentage alerts, contact-owned portal controls, email and in-app delivery, entitlement actions, charged mid-period invoices and remainder-only billing remain unbuilt.
+Remaining: Conservative default ADOPTED, ct approval pending: owner-only operator definitions; bound billing contacts manage only their own portal alerts with explicit email consent; invoices and collection require the existing human review and approval doors. Automatic threshold issue or ENT-002 actions, customer-wide totals across subscriptions, customer commitment controls, fixed and seat spend accrual, time-weighted alert metrics, invoice scopes per meter or commitment, partial and nonmonthly service windows, lifecycle changes, prepaid and coupons and renewals and historical corrections and carried credits remain unproved. New-verb archive and closed-period proof and the full mutation matrix remain owed. No live sandbox receipt is claimed; current provider assertions use the contract-permitted network edge.
 
 ## USE-006 — Live usage and the upcoming invoice
 
