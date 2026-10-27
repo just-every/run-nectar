@@ -186,7 +186,7 @@
       "executable": false
     },
     "API.md": {
-      "sha256": "83f633eacd88d33c45d5400d9b5b799e9952c84e9dde4bfc6f4aa4ebd19a340b",
+      "sha256": "caae3f8b98395e9d546b7c724fa133f90c6a9d13cdcef548862a97302d2b665b",
       "executable": false
     },
     "base-copies.json": {
@@ -5394,7 +5394,7 @@
       "executable": false
     },
     "tests/nectar/webhooks.mjs": {
-      "sha256": "2dfe50364ac1d67f9e591f9ef69aea724161add25122167206412d1457bd02d3",
+      "sha256": "05e8bbf4e242e8b6bd0ed99accb7fbe4dda50f7e57d8d6a2130ecae2cd98da04",
       "executable": false
     },
     "tests/nectar/write-off-browser.mjs": {

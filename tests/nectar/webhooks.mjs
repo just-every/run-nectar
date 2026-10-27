@@ -191,6 +191,11 @@ export async function webhookLifecycleFlow(h,owner,{onState=async()=>{}}={}) {
     const dispatch=async()=>{await api('webhook.dispatch',{});assert.ok(requests.every(r=>verify(r.body,r.header,secrets,JSON.parse(r.header.split(',')[0].slice(2))*1000)))}
     // Row events use their wall clock; advance the disposable clock beyond it.
     clock=Math.max(clock,Date.now()+60000);await h.advanceClock(new Date(clock).toISOString());await dispatch()
+    assert.equal((await h.raw(`/cdn-cgi/local/scheduled?time=${clock}&cron=${encodeURIComponent('* * * * *')}`)).status,200)
+    await dispatch()
+    assert.deepEqual(received.filter(e=>e.type==='subscription.created'&&e.data.id===subscription).map(e=>e.id),[created.event_id],'The creation event survives scheduled observation and repeat dispatch exactly once')
+    assert.equal(received.filter(e=>e.type==='subscription.updated'&&e.data.id===subscription).length,0,'An unchanged scheduled observation emits no subscription update')
+    assert.equal(received.filter(e=>e.type==='subscription.state_changed'&&e.data.subscription_id===subscription).length,1,'Creation and its initial state remain separate once-only event facts')
     const entitlementEvents=()=>received.filter(e=>e.type==='entitlements.updated'&&e.data.customer_id===customer)
     assert.equal(entitlementEvents().at(-1).data.features.find(f=>f.feature==='api-access').allowed,true)
     const date=new Date(clock).toISOString().slice(0,10)
