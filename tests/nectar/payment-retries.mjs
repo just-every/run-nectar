@@ -2,11 +2,14 @@ import assert from 'node:assert/strict'
 import { retryEdge } from './retry-edge.mjs'
 import { totp } from './mfa.mjs'
 import { file } from './harness.mjs'
-import { assertComparisons, assertComparisonDescription, assertRecoveryBuckets } from './recovery-assertions.mjs'
+import { assertComparisons, assertRecoveryBuckets, retryPolicyWrites } from './recovery-assertions.mjs'
+import { assertComparisonDescription, assertTimingTable } from './retry-comparison-description.mjs'
 let edge
 export const harnessOptions=()=>{edge=retryEdge();return {assets:true,localTime:'2026-10-22T10:00:00Z',stripeFetch:edge.fetch,stripeSecret:'synthetic-nectar-1',webhookFetch:async request=>{edge.delivered.push(await request.json());return Response.json({accepted:true})}}}
 export async function paymentRetriesFlow(h,owner,{onState=async()=>{},prepareCollection,acceptCollection}={}){
  const api=(path,body,status)=>h.api(path,owner,body,status),first=Date.parse('2026-10-22T10:00:00Z'),day=86400000
+ const policies=retryPolicyWrites(api)
+ const observedTimings=new Map()
  let instant=first
  await api('business.configure',{...await api('business'),timezone:'UTC'})
  const factor=await api('mfa.totp.start',{});await api('mfa.totp.confirm',{factor:factor.factor,code:totp(factor.secret,instant)});await api('mfa.policy',{scope:'all'})
@@ -34,6 +37,9 @@ export async function paymentRetriesFlow(h,owner,{onState=async()=>{},prepareCol
   else assert.equal((await h.raw(path,{body:{request:request.id,basis_hash:request.basis,accept:true}})).status,200)
   await api('automatic.collection.decide',{request:request.id,basis_hash:request.basis,decision:'approved',confirm:true,confirm_single:true})
   await api('invoice.approve',{invoice:id,acknowledge:true});await api('invoice.finalise',{invoice:id,issue_date:new Date(instant).toISOString().slice(0,10)})
+  const initial=await api(`invoices/${id}`)
+  const observedCode=n===1&&code==='insufficient_funds'?'ach_insufficient_funds':code
+  if(enabled&&!observedTimings.has(observedCode))observedTimings.set(observedCode,{delayHours:initial.next_payment_attempt?(initial.next_payment_attempt-instant)/3600000:null,...request.quote.retryPolicy})
   failureLedger.push({invoice:id,currency:'USD',firstFailedAt:instant,failedAmountCents:10000,declineCode:n===1&&code==='insufficient_funds'?'ach_insufficient_funds':code,intent:edge.writes.at(-1).id})
   createdInvoices.push(id)
   return {id,request,method,path}
@@ -91,7 +97,7 @@ export async function paymentRetriesFlow(h,owner,{onState=async()=>{},prepareCol
  const prohibited=await create('do_not_honor',{advice:'do_not_try_again'})
  assert.equal((await parity(prohibited)).next_payment_attempt,null,'Processor advice prohibits retry even for a soft code')
  // Configure the four-attempt week. Existing customer consent stays frozen.
- await fresh();await api('retry.policy.configure',{max_attempts:4,window_days:7,confirm:true})
+ await fresh();await policies.configure({max_attempts:4,window_days:7,confirm:true})
  const limited=await create('do_not_honor'),start=instant
  for(let n=1;n<=3;n++){await tick(start+n*day);await parity(limited)}
  assert.equal((await api(`invoices/${limited.id}`)).attempt_count,4)
@@ -127,7 +133,8 @@ export async function paymentRetriesFlow(h,owner,{onState=async()=>{},prepareCol
   expected.push({...failure,attempts,recoveries,recoveredAmountCents:cash})
  }
  assertRecoveryBuckets(report,expected)
- await assertComparisons(await api('retry-comparison'),['default'])
+ await assertComparisons(await api('retry-comparison'),policies.expected)
+ await assertTimingTable(observedTimings)
 
  assert.equal(report.totals.recoveredInvoices,3)
  assert.equal(report.totals.recoveredAmountCents,30000)
@@ -152,13 +159,14 @@ export async function paymentRetriesFlow(h,owner,{onState=async()=>{},prepareCol
 export async function retryComparisonFlow(h,owner){
  const api=(p,b,status)=>h.api(p,owner,b,status)
  const record=await api('retry-comparison')
- await assertComparisons(record,[])
+ await assertComparisons(record,new Map())
  await assertComparisonDescription(h,owner,record)
  console.log('retryComparisonFlow: published known outcomes independently sum to both schedules and the product description')
 }
 
 export async function retryPlanChurnFlow(h,owner,{onState=async()=>{},assignSegment,prepareCollection,acceptCollection}={}){
  const api=(p,b,status)=>h.api(p,owner,b,status)
+ const policies=retryPolicyWrites(api)
  let instant=Date.parse('2026-10-22T10:00:00Z');await h.advanceClock(new Date(instant).toISOString());edge.setTime(instant)
  await api('business.configure',{...await api('business'),timezone:'UTC'})
  const factor=await api('mfa.totp.start',{});await api('mfa.totp.confirm',{factor:factor.factor,code:totp(factor.secret,instant)});await api('mfa.policy',{scope:'all'})
@@ -166,8 +174,8 @@ export async function retryPlanChurnFlow(h,owner,{onState=async()=>{},assignSegm
  await api('collection.customer.bind',{customer,account_ref:'synthetic-nectar-native-account-1',stripe_customer_ref:'synthetic-nectar-native-customer-1',confirm:true})
  const product=(await api('product.create',{code:'retry-plan',name:'Monthly retry plan'})).id
  const price=(await api('price.create',{product,kind:'flat',unit_amount:'100',taxable:false})).id
- await api('retry.policy.configure',{max_attempts:4,window_days:7,confirm:true})
- await api('retry.policy.configure',{plan:price,max_attempts:2,window_days:7,confirm:true})
+ await policies.configure({max_attempts:4,window_days:7,confirm:true})
+ await policies.configure({plan:price,max_attempts:2,window_days:7,confirm:true})
  const sub=(await api('subscription.create',{customer,start_date:'2026-09-01',price:[price],quantity:['1']})).id
  const run=await api('billrun.prepare',{period:'2026-09'}),invoice=(await api(`runs/${run.id}`)).invoices.find(i=>i.subscription_id===sub).id
  await api('portal.configure',{hosts:[h.origin],parents:[]})
@@ -180,7 +188,7 @@ export async function retryPlanChurnFlow(h,owner,{onState=async()=>{},assignSegm
  edge.rules.set('synthetic-nectar-native-card-1',{code:'do_not_honor',recoverAt:Infinity})
  await api('invoice.approve',{invoice,acknowledge:true});await api('invoice.finalise',{invoice,issue_date:'2026-10-22'})
  // A later broader default never widens customer-approved terms.
- await api('retry.policy.configure',{max_attempts:8,window_days:14,confirm:true})
+ await policies.configure({max_attempts:8,window_days:14,confirm:true})
  instant+=86400000;edge.setTime(instant);await h.advanceClock(new Date(instant).toISOString())
  assert.equal((await h.raw(`/cdn-cgi/local/scheduled?time=${instant}&cron=${encodeURIComponent('* * * * *')}`)).status,200)
  assert.equal((await api(`invoices/${invoice}`)).attempt_count,2);assert.equal((await api(`invoices/${invoice}`)).next_payment_attempt,null)
@@ -206,8 +214,8 @@ export async function retryPlanChurnFlow(h,owner,{onState=async()=>{},assignSegm
  // Explicit segments are separate from customer revision and from collections cadences.
  const customerRevision=(await api(`customers/${customer}`)).revision
  const assignmentInput={customer,customer_revision:customerRevision,segment:'synthetic-nectar-1',confirm:true}
- await api('retry.policy.configure',{segment:'synthetic-nectar-1',max_attempts:6,window_days:1,confirm:true})
- await api('retry.policy.configure',{segment:'synthetic-nectar-2',max_attempts:5,window_days:3,confirm:true})
+ await policies.configure({segment:'synthetic-nectar-1',max_attempts:6,window_days:1,confirm:true})
+ await policies.configure({segment:'synthetic-nectar-2',max_attempts:5,window_days:3,confirm:true})
  await api('retry.policy.configure',{plan:price,segment:'synthetic-nectar-1',max_attempts:3,window_days:2,confirm:true},400)
  await api('retry.policy.configure',{segment:'Invalid label',max_attempts:3,window_days:2,confirm:true},400)
  let assignment=await (assignSegment??(input=>api('retry.segment.assign',input)))(assignmentInput)
@@ -231,14 +239,14 @@ export async function retryPlanChurnFlow(h,owner,{onState=async()=>{},assignSegm
  else assert.equal((await h.raw(path,{body:{request:combined.request.id,basis_hash:combined.request.basis,accept:true}})).status,200)
  // Editing both inputs after acceptance cannot widen the accepted invoice's policy.
  assignment=await (assignSegment??(input=>api('retry.segment.assign',input)))({...assignmentInput,revision:assignment.revision,segment:'synthetic-nectar-2'})
- await api('retry.policy.configure',{plan:price,max_attempts:4,window_days:6,confirm:true})
- await api('retry.policy.configure',{segment:'synthetic-nectar-1',max_attempts:8,window_days:14,confirm:true})
+ await policies.configure({plan:price,max_attempts:4,window_days:6,confirm:true})
+ await policies.configure({segment:'synthetic-nectar-1',max_attempts:8,window_days:14,confirm:true})
  await api('automatic.collection.decide',{request:combined.request.id,basis_hash:combined.request.basis,decision:'approved',confirm:true,confirm_single:true})
  await api('invoice.approve',{invoice:combined.id,acknowledge:true});await api('invoice.finalise',{invoice:combined.id,issue_date:'2026-10-23'})
  const frozen=(await api('automatic-collections')).find(r=>r.id===combined.request.id)
  assert.deepEqual(frozen.quote.retryPolicy,combined.request.quote.retryPolicy)
  await onState({state:'segment-selected-invoice',...combined})
- await api('retry.policy.configure',{max_attempts:1,window_days:1,confirm:true})
+ await policies.configure({max_attempts:1,window_days:1,confirm:true})
  const changed=await prepare()
  assert.equal(changed.request.quote.retryPolicy.maxAttempts,4)
  assert.equal(changed.request.quote.retryPolicy.windowDays,3)
@@ -254,7 +262,7 @@ export async function retryPlanChurnFlow(h,owner,{onState=async()=>{},assignSegm
  await api('access.give',{email:'retry-segments@example.test',name:'Retry segment reader',role:'support'})
  const support=await h.signIn('retry-segments@example.test',{requested:true})
  const comparison=await api('retry-comparison')
- await assertComparisons(comparison,['default',`plan:${price}`,'segment:synthetic-nectar-1','segment:synthetic-nectar-2'])
+ await assertComparisons(comparison,policies.expected)
 
  const trail=await api('audit'),assignmentEvents=trail.filter(e=>e.action==='retry.segment.assign'&&e.subject===customer)
  assert.equal(assignmentEvents.length,4)

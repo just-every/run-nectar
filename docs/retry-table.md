@@ -51,8 +51,9 @@ collection only. A hard-declined card can be replaced through a fresh owner prep
 new exact customer consent and human approval of one confirmation on the same
 PaymentIntent. The original approved terms remain immutable. Same-method
 authentication recovery requires separate owner preparation, exact customer acceptance and human approval. The accepting customer then confirms once through the bank on the same PaymentIntent. Approval alone never schedules authentication; the card stays blocked for unattended use and no other invoice is authorized. Return parameters are discarded before a clean authenticated page, and uncertain outcomes reconcile through reads only. Other processors, production operation and the full
-live decline and bank matrix remain unproved. CT approval of automatic retries is
-pending. Historical retry facts confer no restored collection authority.
+live decline and bank matrix remain unproved. CT approved the current test-mode
+gates as an interim slice; unattended retries under standing auto-charge authority
+remain required. Historical retry facts confer no restored collection authority.
 
 The timing is described as decline-table timing. The [comparison](/docs/retry-comparison)
 publishes its known outcomes and both schedules. No production improvement is claimed.

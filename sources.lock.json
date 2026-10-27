@@ -174,7 +174,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "cdbbb1fce5e1e8accd5ccd6e7e8e13e61c6804a56db80c157fc85ede6c28548a",
+      "sha256": "dd1b173905df3e60de5870dc9c8586a5967a1c24830e8a39232afa356b4217b5",
       "executable": false
     },
     "AGENTS.consumer.md": {
@@ -194,7 +194,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "d6e9f73d4e05f07b3b4d8893a8b0ac6dc2d154550ebb806f1ae2975161005c08",
+      "sha256": "ee4bfbf3c69a689d867f03cc6c42235fcc4d0652eaf2637dad1abb015d2d3d13",
       "executable": false
     },
     "DEMO.md": {
@@ -270,7 +270,7 @@
       "executable": false
     },
     "docs/retry-table.md": {
-      "sha256": "c89abb19e995ff3cff1bb4a7167adde30328f5e80c704d18139c5a4311eb37d3",
+      "sha256": "924ec0ba2f0e18037b08f328967483d900d06430c7d62551175289550f5e7793",
       "executable": false
     },
     "docs/site.json": {
@@ -5082,7 +5082,7 @@
       "executable": false
     },
     "tests/nectar/payment-retries-browser.mjs": {
-      "sha256": "5b5639a7f28015217cb39d8e12325aaf4ed74ecb11c1dd1d42fd5deb8acb7d1a",
+      "sha256": "9a4618fd6285a5de4c6cbe68953b4489f8906e2578b78ffbf8bdaddd0c5636f1",
       "executable": false
     },
     "tests/nectar/payment-retries-sandbox.mjs": {
@@ -5090,7 +5090,7 @@
       "executable": false
     },
     "tests/nectar/payment-retries.mjs": {
-      "sha256": "deab738ee01899112ba1627bea82c8cc68c17f88e2ffd3c9a136f9331a6ccb28",
+      "sha256": "54b56c310207b43abb6771e3802b1edce4cedd3081d57c1c4699d9abe59233c3",
       "executable": false
     },
     "tests/nectar/period-close-browser.mjs": {
@@ -5246,7 +5246,7 @@
       "executable": false
     },
     "tests/nectar/recovery-assertions.mjs": {
-      "sha256": "c2bd40ddc62b45f23a1acbe814c33e4643dd17fc9cd6d877f6c3472dfc49679e",
+      "sha256": "7023a62bf8b127d0bca6d89bbf6c6844e81423f84feb962b57e56054f4322edf",
       "executable": false
     },
     "tests/nectar/renewal-pricing.mjs": {
@@ -5279,6 +5279,10 @@
     },
     "tests/nectar/retry-bank-sandbox.mjs": {
       "sha256": "a3e1aa7937da8f4a531c4bc4e410248d94bd1b75427118ddeb6d172454b413be",
+      "executable": false
+    },
+    "tests/nectar/retry-comparison-description.mjs": {
+      "sha256": "1f40f62252faba4940935743c08093b76befc6498317994d1f571b616f0e467d",
       "executable": false
     },
     "tests/nectar/retry-edge.mjs": {

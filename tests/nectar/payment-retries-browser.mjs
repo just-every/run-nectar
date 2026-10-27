@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict'
+import { execFileSync } from 'node:child_process'
 import { mkdir } from 'node:fs/promises'
 import { chromium } from '@playwright/test'
 import { harness } from './harness.mjs'
 import { applyPolicy } from './policy-helper.mjs'
 import { paymentRetriesFlow,retryPlanChurnFlow,harnessOptions } from './payment-retries.mjs'
+if(process.env.NECTAR_JOURNEY_RUN)console.log(`JOURNEY RUN ${process.env.NECTAR_JOURNEY_RUN} HEAD ${execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim()}`)
 const directory=process.env.NECTAR_EVIDENCE_DIR??'.evidence/payment-retries'
 await mkdir(directory,{recursive:true})
 const h=await harness(harnessOptions());let browser
@@ -72,7 +74,7 @@ try{
   onState:async state=>{
    if(state.state==='consent')return
    if(state.state==='report'||state.state.startsWith('churn-')){
-    await page.goto(h.origin+'/app/reports/recovery');await shot(page,state.state==='report'?'recovery-report':state.state)
+    await page.goto(h.origin+'/app/reports/recovery');await page.getByText('Configured policy comparisons',{exact:true}).click();await shot(page,state.state==='report'?'recovery-report':state.state)
     await page.goto(h.origin+'/app/settings#payment-retries');await page.locator('#payment-retries > details > summary').first().click();await shot(page,'retry-settings')
    }else{await page.goto(h.origin+`/app/invoices/${state.id}`);await shot(page,state.state)}
   }
