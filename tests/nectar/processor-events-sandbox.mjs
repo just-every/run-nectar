@@ -8,6 +8,7 @@ import { proveImportedCash } from './processor-cash-imported-sandbox.mjs'
 const stripe=stripeSandbox(process.env.STRIPE_SECRET_KEY)
 const head=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim()
 let h,remote,phase='account'
+const started=Math.floor(Date.now()/1000)-5
 const results=[]
 async function provePayout(account,api) {
  const payouts=(await stripe.list('/v1/payouts')).data.filter(row=>row.automatic===true&&row.method==='standard'&&row.reconciliation_status==='completed')
@@ -51,7 +52,7 @@ try {
  }
  async function eventFor(type,id) {
   for(let n=0;n<10;n++){
-   const list=await stripe.list('/v1/events',{type,'created[gte]':Math.floor(Date.now()/1000)-600})
+   const list=await stripe.list('/v1/events',{type,'created[gte]':started})
    const found=list.data.find(row=>row.data?.object?.id===id||row.data?.object?.customer===id)
    if(found)return found
    await delay(1500)
@@ -105,6 +106,8 @@ try {
   ['pm_usBankAccount_noAccount',['R03','R04']],
   ['pm_usBankAccount_debitNotAuthorized',['R05','R07','R08','R10','R11','R29','R31']],
  ]
+ // Test-mode ACH returns arrive minutes after confirmation: submit every fixture first, then observe each.
+ const submitted=[]
  for(const [index,[fixture,expectedCodes]] of bankFixtures.entries()) {
   const bankInvoice=await issue('20',`Genuine ACH return ${index+1}`)
   let bank
@@ -112,7 +115,11 @@ try {
    'mandate_data[customer_acceptance][type]':'online','mandate_data[customer_acceptance][online][ip_address]':'127.0.0.1','mandate_data[customer_acceptance][online][user_agent]':'Nectar sandbox verification','metadata[nectar_native_invoice]':bankInvoice.id})}
   catch(error){if(error.status!==402)throw error;bank=(await stripe.list('/v1/payment_intents',{customer:remote.id})).data.find(row=>row.metadata?.nectar_native_invoice===bankInvoice.id)}
   assert.ok(bank,'The real failed intent exists')
-  bank=await stripe.request('GET',`/v1/payment_intents/${bank.id}`)
+  submitted.push({index,fixture,expectedCodes,bankInvoice,bank})
+ }
+ for(const {index,fixture,expectedCodes,bankInvoice,bank:created} of submitted) {
+  let bank=await stripe.request('GET',`/v1/payment_intents/${created.id}`)
+  for(const deadline=Date.now()+15*60_000;bank.status==='processing'&&Date.now()<deadline;){await delay(5000);bank=await stripe.request('GET',`/v1/payment_intents/${created.id}`)}
   assert.equal(bank.status,'requires_payment_method')
   const charge=await stripe.request('GET',`/v1/charges/${reference(bank.latest_charge)}`)
   assert.equal(charge.status,'failed');assert.equal(charge.payment_method_details?.type,'us_bank_account')
@@ -164,11 +171,11 @@ try {
  results.push(await provePayout(account,api))
  }
  console.log(JSON.stringify({head,status:'passed_for_named_slices',results,requests:stripe.counts}))
-}catch(error){console.error(JSON.stringify({head,status:'failed',phase,error:safeError(error),results}));process.exitCode=1}
+}catch(error){console.error(JSON.stringify({head,status:'failed',phase,error:safeError(error),...(error?.code==='ERR_ASSERTION'?{assertion:String(error.stack).split('\n').slice(0,6).join(' | ').slice(0,900)}:{}),lastRequests:stripe.requests.slice(-4),results}));process.exitCode=1}
 finally{
  await h?.close()
  if(remote){
-  try{for(const charge of (await stripe.list('/v1/charges',{customer:remote.id})).data)if(charge.paid&&!charge.disputed&&charge.amount_refunded<charge.amount)await stripe.request('POST','/v1/refunds',{charge:charge.id,amount:charge.amount-charge.amount_refunded})}catch(error){console.error(JSON.stringify({cleanup:'remaining_test_cash',error:safeError(error)}))}
+  try{for(const charge of (await stripe.list('/v1/charges',{customer:remote.id})).data)if(charge.paid&&charge.payment_method_details?.type!=='customer_balance'&&!charge.disputed&&charge.amount_refunded<charge.amount)await stripe.request('POST','/v1/refunds',{charge:charge.id,amount:charge.amount-charge.amount_refunded})}catch(error){console.error(JSON.stringify({cleanup:'remaining_test_cash',error:safeError(error)}))}
   try{await stripe.request('DELETE',`/v1/customers/${remote.id}`)}catch(error){console.error(JSON.stringify({cleanup:'test_customer',error:safeError(error)}))}
  }
 }

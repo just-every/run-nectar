@@ -119,9 +119,11 @@ export async function processorArchiveJourney() {
  try {
   // Let the real CLI create and ledger every migration before the Worker opens
   // exactly that binding. Product rows are created exclusively through HTTP.
-  await command(root,['export','--output',empty])
+  const only=process.argv[2]
   const config=JSON.parse(await readFile(join(root,'wrangler.jsonc'),'utf8'))
   const persistence=join(root,'.wrangler/state/v3'),databaseId=config.d1_databases.find(binding=>binding.binding==='DB').database_id
+  if(!only){
+  await command(root,['export','--output',empty])
   const setup=await processorSetup(undefined,{persistence,databaseId,applyMigrations:false})
   h=setup.h
   const {owner,edge}=setup
@@ -162,14 +164,15 @@ export async function processorArchiveJourney() {
   await command(root,['import','--input',purged,'--yes'])
   await command(root,['export','--output',restoredPurged])
   assert.deepEqual(sources(await archiveItems(restoredPurged)),sources(after),'Restoring the post-removal archive cannot resurrect purged processor custody')
-  await additionalArchivePhase(root,scratch,{label:'returns',persistence,databaseId,edge:processorCashReturnEdge(),requiredKinds:returnKinds,
+  }
+  if(!only||only==='returns')await additionalArchivePhase(root,scratch,{label:'returns',persistence,databaseId,edge:processorCashReturnEdge(),requiredKinds:returnKinds,
    async populate(worker,who,provider){
     const result=await processorCashReturnFlow(worker,who,{cashReturnEdge:provider})
     const peer=await cashPeer(worker,who,provider)
     await erase(worker,who,result.customer)
     return {customer:result.customer,peer,financeEmail:'synthetic-nectar-return-finance@example.test'}
    }})
-  await additionalArchivePhase(root,scratch,{label:'imported',persistence,databaseId,edge:importedCashEdge(),requiredKinds:importedKinds,
+  if(!only||only==='imported')await additionalArchivePhase(root,scratch,{label:'imported',persistence,databaseId,edge:importedCashEdge(),requiredKinds:importedKinds,localTime:'2026-10-28T10:00:00Z',
    async populate(worker,who,provider){
     const result=await processorCashImportedFlow(worker,who,{cashEdge:provider,keepFinancial:true})
     await worker.api('access.give',who,{email:'synthetic-nectar-archive-finance@example.test',name:'Archive finance',role:'finance'})
@@ -182,13 +185,13 @@ export async function processorArchiveJourney() {
 
 // Return-only and imported originals need separate installations: their real
 // frozen report journeys each reserve the owner's one October snapshot.
-async function additionalArchivePhase(root,scratch,{label,persistence,databaseId,edge,requiredKinds,populate}) {
+async function additionalArchivePhase(root,scratch,{label,persistence,databaseId,edge,requiredKinds,populate,localTime}) {
  const path=name=>join(scratch,`${label}-${name}.rer`)
  let h
  try {
   await command(root,['reset','--yes'])
   await command(root,['export','--output',path('empty')])
-  const setup=await processorSetup(edge,{persistence,databaseId,applyMigrations:false})
+  const setup=await processorSetup(edge,{persistence,databaseId,applyMigrations:false,...localTime?{localTime}:{}})
   h=setup.h
   const enrollment={};observeOwnerEnrollment(h,setup.owner,enrollment)
   const target=await populate(h,setup.owner,edge)

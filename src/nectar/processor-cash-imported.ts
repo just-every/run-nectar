@@ -27,7 +27,16 @@ async function currentInvoice(stripe: StripeClient, source: Awaited<ReturnType<t
  const customer=await stripe(`/customers/${encodeURIComponent(providerReference(b.stripe_customer_ref))}`)
  insist(customer.object==='customer'&&customer.id===b.stripe_customer_ref&&customer.deleted!==true&&customer.livemode===false,'processor_cash_imported_source_changed',409)
  const payments=await completeList(stripe,'/invoice_payments',{invoice:live.id})
- insist(payments.every(row=>row.object==='invoice_payment'&&ref(row.invoice)===live.id&&row.status!=='open'),'processor_cash_imported_payment_pending',409)
+ for(const row of payments) {
+  insist(row.object==='invoice_payment'&&ref(row.invoice)===live.id,'processor_cash_imported_payment_pending',409)
+  if(row.status==='open') {
+   // Stripe lists an invoice's own unattempted PaymentIntent as its open default payment; anything attempted is pending.
+   const intentRef=row.payment?.type==='payment_intent'?ref(row.payment.payment_intent):null
+   insist(intentRef,'processor_cash_imported_payment_pending',409)
+   const intent=await stripe(`/payment_intents/${encodeURIComponent(providerReference(intentRef))}`)
+   insist(intent.object==='payment_intent'&&intent.id===intentRef&&intent.status==='requires_payment_method'&&!intent.latest_charge&&intent.amount_received===0,'processor_cash_imported_payment_pending',409)
+  }
+ }
  if(disabled)insist(live.auto_advance===false,'processor_cash_imported_not_disabled',409)
  return live
 }

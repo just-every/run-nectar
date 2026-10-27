@@ -8,7 +8,7 @@ import { csvRows } from './financial-reports.mjs'
 export function importedCashEdge() {
  const base=stripeCollectionEdge(),cash=processorCashEdge(base)
  const balanceTransactions=new Map(),cashCharges=new Map(),payouts=new Map(),payoutMembers=new Map()
- let loseDisable=false
+ let loseDisable=false,attempted=false
  const readCashCharges=async request=>{
   const listed=await(await cash.fetch(request)).json()
   for(const charge of listed.data){
@@ -21,7 +21,17 @@ export function importedCashEdge() {
  const fetch=async request=>{
   const url=new URL(request.url),path=url.pathname.replace('/v1','')
   const savedMethod={object:'payment_method',id:'synthetic-nectar-method',customer:'synthetic-nectar-1',type:'card',livemode:false,card:{brand:'visa',last4:'4242',exp_month:12,exp_year:2035}}
-  if(request.method==='GET'&&path==='/payment_methods/synthetic-nectar-method')return Response.json(savedMethod)
+  // Stripe lists each finalized invoice's own unattempted default PaymentIntent as an open payment.
+  if(path==='/invoice_payments'){
+   const invoice=url.searchParams.get('invoice'),intent=`synthetic-nectar-invoice-intent-${invoice}`
+   return Response.json({object:'list',has_more:false,data:[{object:'invoice_payment',id:`synthetic-nectar-invoice-payment-${invoice}`,invoice,status:'open',currency:'usd',amount_requested:1,amount_paid:null,is_default:true,payment:{type:'payment_intent',payment_intent:intent}}]})
+  }
+  if(path.startsWith('/payment_intents/synthetic-nectar-invoice-intent-')){
+   const intent={object:'payment_intent',id:path.split('/').at(-1),status:'requires_payment_method',amount_received:0,latest_charge:null,livemode:false}
+   if(attempted)Object.assign(intent,{status:'processing'})
+   return Response.json(intent)
+  }
+ if(request.method==='GET'&&path==='/payment_methods/synthetic-nectar-method')return Response.json(savedMethod)
   if(request.method==='GET'&&path==='/payment_methods')return Response.json({object:'list',has_more:false,data:[savedMethod]})
   if(request.method==='GET'&&path==='/customers/synthetic-nectar-1')return Response.json({object:'customer',id:'synthetic-nectar-1',livemode:false,invoice_settings:{default_payment_method:'synthetic-nectar-method'}})
   if(request.method==='GET'&&path==='/charges'&&cash.cashIntents.has(url.searchParams.get('payment_intent')))return Response.json(await readCashCharges(request))
@@ -43,7 +53,7 @@ export function importedCashEdge() {
   }
   return cash.fetch(request)
  }
- return {...cash,fetch,imported:base,loseDisableResponse(){loseDisable=true},async cashPayout(intent){
+ return {...cash,fetch,imported:base,loseDisableResponse(){loseDisable=true},attemptInvoicePayment(value){attempted=value},async cashPayout(intent){
   const charge=(await readCashCharges(new Request(`https://api.stripe.com/v1/charges?payment_intent=${intent.id}`,{headers:{authorization:'Bearer synthetic-nectar-1'}}))).data[0]
   const payout={object:'payout',id:'synthetic-nectar-imported-payout',amount:5983,currency:'usd',livemode:false,automatic:true,status:'paid',balance_transaction:'synthetic-nectar-imported-payout-debit'}
   payouts.set(payout.id,payout)
@@ -89,6 +99,9 @@ export async function processorCashImportedFlow(h,owner,{cashEdge=edge,keepFinan
  const reader=await h.signIn('imported-cash-reader@example.test',{requested:true})
  for(const action of ['prepare','confirm'])await h.api(`processor.cash.imported.${action}`,reader,{},403)
  const prepare=invoice=>api('processor.cash.imported.prepare',{invoice,account_ref:account})
+ cashEdge.attemptInvoicePayment(true)
+ await api('processor.cash.imported.prepare',{invoice:first.id,account_ref:account},409) // An attempted provider payment refuses takeover
+ cashEdge.attemptInvoicePayment(false)
  const prepared=await prepare(first.id)
  await onState({customer,label:'takeover-prepared'})
  assert.equal(prepared.amountCents,11000)

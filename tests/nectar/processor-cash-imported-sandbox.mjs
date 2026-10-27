@@ -21,7 +21,7 @@ export async function proveImportedCash(stripe,h,owner,account) {
  }
  const ingest=event=>api('processor.event.consume',{account_ref:account.id,event_ref:event.id})
  try {
-  remote=await stripe.request('POST','/v1/customers',{name:`Synthetic Nectar imported cash ${stripe.run}`,
+  remote=await stripe.request('POST','/v1/customers',{name:`Synthetic Nectar imported cash ${stripe.run}`,email:`synthetic-nectar-${stripe.run}@example.test`,
    'cash_balance[settings][reconciliation_mode]':'manual','metadata[nectar_run]':stripe.run})
   assert.equal(remote.livemode,false)
   original=await stripe.request('POST','/v1/invoices',{customer:remote.id,currency:'usd',collection_method:'send_invoice',days_until_due:30,auto_advance:false,
@@ -78,7 +78,9 @@ export async function proveImportedCash(stripe,h,owner,account) {
   const actual=[]
   for(const intent of intents){
    assert.equal(intent.status,'succeeded');assert.equal(intent.amount_received,intent.amount)
-   const charge=await stripe.request('GET',`/v1/charges/${reference(intent.latest_charge)}`)
+   let charge=await stripe.request('GET',`/v1/charges/${reference(intent.latest_charge)}`)
+   // Stripe attaches the balance transaction to a held-cash charge shortly after it succeeds.
+   for(let attempt=0;attempt<20&&!charge.balance_transaction;attempt++){await delay(1000);charge=await stripe.request('GET',`/v1/charges/${charge.id}`)}
    assert.deepEqual([charge.status,charge.paid,charge.captured,charge.amount_captured,charge.payment_method_details.type],['succeeded',true,true,intent.amount,'customer_balance'])
    const transaction=await stripe.request('GET',`/v1/balance_transactions/${reference(charge.balance_transaction)}`)
    assert.equal(transaction.net,transaction.amount-transaction.fee)
@@ -121,7 +123,7 @@ export async function proveImportedCash(stripe,h,owner,account) {
    try{
     const charges=(await stripe.list('/v1/charges',{customer:remote.id})).data
     assert.ok(charges.length<=10,'sandbox_imported_cleanup_scope')
-    for(const charge of charges)if(charge.paid&&!charge.disputed&&charge.amount_refunded<charge.amount){
+    for(const charge of charges)if(charge.paid&&charge.payment_method_details?.type!=='customer_balance'&&!charge.disputed&&charge.amount_refunded<charge.amount){
      const refund=await stripe.request('POST','/v1/refunds',{charge:charge.id,amount:charge.amount-charge.amount_refunded})
      cleanup.push({kind:'refund',charge:charge.id,refund:refund.id,amountCents:refund.amount,status:refund.status})
     }

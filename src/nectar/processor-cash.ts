@@ -203,8 +203,10 @@ export async function reconcileProcessorCash(env: Bindings, stripe: StripeClient
         verifyIntent(intent, row, livemode)
         await settle(env, stripe, b, row, intent, livemode)
         if (intent.status !== 'succeeded' && ['requires_action', 'requires_payment_method'].includes(intent.status) && intent.amount_received === 0) {
-          intent = await stripe(`/payment_intents/${encodeURIComponent(providerReference(intent.id))}/apply_customer_balance`,
+          await stripe(`/payment_intents/${encodeURIComponent(providerReference(intent.id))}/apply_customer_balance`,
             new URLSearchParams({ amount: String(row.amount_cents), currency: row.currency }), `nectar-cash-apply-${row.id}`)
+          // Stripe's apply response omits the customer, metadata and charge; settlement reads the complete current intent.
+          intent = await stripe(`/payment_intents/${encodeURIComponent(providerReference(intent.id))}`)
           await settle(env, stripe, b, row, intent, livemode)
         }
         current = await snapshot(stripe, customerRef, livemode)
