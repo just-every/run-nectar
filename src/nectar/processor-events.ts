@@ -74,7 +74,7 @@ export async function applyProcessorEvent(env:Bindings,account:string|null,event
   const code=error instanceof NectarError?error.code:'processor_provider_or_storage_failure'
   await commit(env,[stmt(env,`INSERT INTO nc_processor_events(id,account_ref,event_ref,event_type,object_ref,customer_id,invoice_id,status,occurred_at,received_at,error_code) VALUES(?,?,?,?,?,?,?,'failed',?,?,?)
    ON CONFLICT(id) DO NOTHING`,id,account,eventRef,event.type,objectRef,customer,invoice,occurred,clockInstant(env),code),
-   ...await alertStatements(env,'webhook_failure',id,`/app/processor-events?event=${id}`,'processor')],{actor:'system:processor',action:'processor.event.failure',subject:id,detail:{eventRef,code}})
+   ...await alertStatements(env,'webhook_failure',id,`/app/processor-events#${id}`,'processor')],{actor:'system:processor',action:'processor.event.failure',subject:id,detail:{eventRef,code}})
   await deliverAlerts(env,'webhook_failure',id,'system:processor')
   throw error
  }
