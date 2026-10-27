@@ -1,3 +1,4 @@
+import { processorWebhook } from './nectar/processor-http'
 import { retryMethodRecoveryResponse } from './nectar/retry-method-http'
 import { cardLifecycleWebhook } from './nectar/card-lifecycle-webhook'
 import { samlResponse } from './nectar/saml'
@@ -76,6 +77,8 @@ export default withDemo({
     await runAssurance(runtimeBindings(env),controller.scheduledTime)
   },
   async fetch(request, env, execution) {
+    const paymentEvent=await processorWebhook(request,runtimeBindings(env))
+    if(paymentEvent)return paymentEvent
     const cardEvent=await cardLifecycleWebhook(request,runtimeBindings(env))
     if(cardEvent)return cardEvent
     const enterprise = await samlResponse(request, runtimeBindings(env)) ?? await scimResponse(request, runtimeBindings(env))

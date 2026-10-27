@@ -178,17 +178,18 @@ export async function invoiceRecord(env: Bindings, actor: Actor, id: string): Pr
   const lines = await all(env, 'SELECT * FROM nc_invoice_lines WHERE invoice_id = ? ORDER BY seq', id)
   const credits = await sharedCreditNotes(env,'n.invoice_id=?',id)
   const allocations = await all(env, 'SELECT a.*, p.reference, p.received_on, p.method FROM nc_allocations a JOIN nc_payments p ON p.id = a.payment_id WHERE a.invoice_id = ? ORDER BY a.allocated_at', id)
+  const processorReversals=await all(env,'SELECT * FROM nc_processor_reversals WHERE invoice_id=? ORDER BY occurred_at,id',id)
   const carriedApplications=await all(env,'SELECT a.*,n.number,n.correction_id FROM nc_usage_credit_applications a JOIN nc_credit_notes n ON n.id=a.credit_id WHERE a.invoice_id=? ORDER BY a.applied_at,a.id',id)
   const writeOffs = invoice.status === 'issued' ? await writeOffsFor(env, id) : [], writtenOff = writeOffs.reduce((sum, row) => sum + row.netCents, 0)
   const balanceApplications = await all(env, "SELECT * FROM nc_balance_entries WHERE kind='application' AND grant_id IS NOT NULL AND invoice_id=? ORDER BY created_at,id", id)
-  const credited = credits.reduce((sum, row) => sum + (row.applied_cents??row.amount_cents), 0)+carriedApplications.reduce((n,r)=>n+r.amount_cents,0)+balanceApplications.reduce((n,r)=>n+r.amount_cents,0), paid = allocations.reduce((sum, row) => sum + row.amount_cents, 0)
+  const credited = credits.reduce((sum, row) => sum + (row.applied_cents??row.amount_cents), 0)+carriedApplications.reduce((n,r)=>n+r.amount_cents,0)+balanceApplications.reduce((n,r)=>n+r.amount_cents,0), paid = allocations.reduce((sum, row) => sum + row.amount_cents, 0)-processorReversals.reduce((sum,row)=>sum+row.amount_cents,0)
   return {
     ...await currencyRecord(env,invoice,invoice.total_cents,invoice.issue_date??invoice.period_start),retainedFinancial:await one(env,"SELECT legal_name,document_date,retain_until,tax_json FROM nc_erasure_financial WHERE kind='invoice' AND record_id=?",id),...await metadataFor(env,'invoice',id), creditPolicy: await creditPolicy(env), creditRequests: canRead(actor, 'invoices') ? await creditRequests(env, actor, id) : [], calculation: parseJson(invoice.calculation_json, {}), comparison: parseJson(invoice.comparison_json, {}), exceptions: parseJson(invoice.exceptions_json, []),
     calculation_json: undefined, comparison_json: undefined, exceptions_json: undefined,
     lines: lines.map(line => ({ ...line, evidence: parseJson(line.evidence_json, {}), evidence_json: undefined })),
     refunds:canRead(actor,'payments')?await invoiceRefunds(env,actor,id):[],
     voidedBy:credits.find(row=>row.void_replacement_id)??null, reissuedFrom:parseJson<Row>(invoice.calculation_json,{}).inputs?.reissue??null,
-    carriedApplications, credits:await withMetadata(env,'credit-note',credits), allocations, balanceApplications, writeOffs, writtenOffCents: writtenOff, creditedCents: credited, paidCents: paid, balanceCents: invoice.status === 'issued' ? invoice.total_cents - credited - paid - writtenOff : null,
+    processorReversals,carriedApplications, credits:await withMetadata(env,'credit-note',credits), allocations, balanceApplications, writeOffs, writtenOffCents: writtenOff, creditedCents: credited, paidCents: paid, balanceCents: invoice.status === 'issued' ? invoice.total_cents - credited - paid - writtenOff : null,
   }
 }
 

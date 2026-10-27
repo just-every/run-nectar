@@ -28,6 +28,8 @@ jobs:
         with:
           node-version: '22.20.0'
           package-manager-cache: false
+      - name: Check generated contract documents
+        run: node scripts/contract-docs.mjs check
       - name: Check edition source lock freshness
         # Technical foundation exports use composition.lock.json or reference-export.json.
         # Edition-owned seeds must commit both edition.json and sources.lock.json.
@@ -57,3 +59,11 @@ jobs:
         run: |
           node tests/nectar/invoice-void-browser.mjs
           node tests/nectar/invoice-void-browser.mjs refunds
+
+      - name: Processor reconciliation journeys
+        if: ${{ matrix.shard == 0 }}
+        run: |
+          node tests/nectar/processor-events.mjs
+          node tests/nectar/processor-cash.mjs
+          node tests/nectar/processor-events-browser.mjs
+          node tests/nectar/processor-events-browser.mjs cash

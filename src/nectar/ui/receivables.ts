@@ -1,3 +1,4 @@
+import { tooltipLink } from './tooltip'
 // Receivables, the finance lead's working screen: what is owed, overdue and
 // collected; every open invoice and the recently settled ones; the decision
 // panel for a drafted reminder (recipient and wording, approved by a person);
@@ -41,7 +42,7 @@ function ledger(desk: Desk, focus: string | null, jump: string): Html {
       <td data-label="Method"${method ? '' : raw(' data-empty')}>${method ? h`<span class="chip">${icon(method[1])}${method[0]}</span>` : ''}</td>
       <td data-label="Status">${status}</td>
       <td data-label="Due">${owed ? dayText(r.due_date) : h`<span class="sub-dash">—</span>`}</td>
-      <td class="row-menu"><a class="icon-link" href="/app/invoices/${r.id}" aria-label="Open invoice ${r.number}">${icon('more')}</a></td></tr>`
+      <td class="row-menu">${tooltipLink(`/app/invoices/${r.id}`,`Open invoice ${r.number}`,`invoice-tip-${r.id}`,icon('more'))}</td></tr>`
   }
   return h`<section class="card ledger-card" aria-label="Invoices"><div class="table-wrap ledger"><table><thead><tr><th scope="col">Customer</th><th scope="col">Invoice</th><th scope="col" class="num">Amount</th><th scope="col">Method</th><th scope="col">Status</th><th scope="col">Due</th><th scope="col"><span class="sr">Open</span></th></tr></thead><tbody>${rows.map(row)}</tbody></table></div></section>`
 }
@@ -105,7 +106,7 @@ export async function receivablesPage(env: Bindings, actor: Actor, url: URL) {
   const others = noticeList.filter((n: any) => n.status !== 'discarded' && n.id !== shown)
   // GOV-001: report and cadence links show only to members who can open them.
   const toReport = (href: string, content: unknown) => canRead(actor, 'reports') ? h`<a href="${href}">${content}</a>` : h`${content}`
-  const main = h`<div class="desk-main"><h1>Receivables</h1>${handles ? h`<p><a href="/app/cadences">Collections cadences and collection holds</a></p>` : ''}${canRead(actor, 'reports') ? h`<p><a href="/app/reports/ar">Open AR report</a></p>` : ''}<p class="lede">${subline}</p>${strip}
+  const main = h`<div class="desk-main"><h1>Receivables</h1><p><a href="/app/processor-events">Processor reconciliation</a></p>${handles ? h`<p><a href="/app/cadences">Collections cadences and collection holds</a></p>` : ''}${canRead(actor, 'reports') ? h`<p><a href="/app/reports/ar">Open AR report</a></p>` : ''}<p class="lede">${subline}</p>${strip}
     <dl class="tiles"><div><dt>Owed</dt><dd>${toReport('/app/reports/ar', money(desk.owedCents))}</dd></div><div${desk.overdueCents ? raw(' class="hot"') : ''}><dt>Overdue</dt><dd>${toReport('/app/reports/ar?bucket=overdue', money(desk.overdueCents))}</dd></div><div><dt>Collected in ${monthText(desk.month)}</dt><dd>${toReport(`/app/reports/collections?period=${desk.month}`, money(desk.collectedCents))}</dd></div></dl>
     ${ledger(desk, focus, shown ? 'Review the reminder' : operator ? 'Draft a reminder' : 'See what is past due')}
     <section class="ask" aria-label="Agents">${icon('sparkle')}<p>Your own agent can draft reminders and proposals here through a <b>prepare</b> credential. A person approves each one.</p>${actor.role === 'owner' ? h`<a href="/app/access#agents">Agent credentials</a>` : ''}</section></div>`

@@ -1,3 +1,4 @@
+import { PROCESSOR_REVERSED_SQL } from './balance-sql'
 import { sharedCreditNotes } from './shared-credit-custody'
 import { carriedUsageCredits } from './usage-correction-records'
 import { revenueCreditStatements } from './revenue-records'
@@ -201,7 +202,7 @@ export async function customerLedger(env: Bindings, actor: Actor, customerId: st
   requireRead(actor, 'customers')
   const invoices = await all(env, `SELECT i.id, i.number, i.issue_date, i.due_date, i.currency, i.total_cents, ${BALANCE_SQL} AS balance_cents,
     COALESCE((SELECT SUM(COALESCE(applied_cents,amount_cents)) FROM nc_credit_notes WHERE invoice_id = i.id), 0) + ${CARRIED_APPLICATION_SQL} + ${GOODWILL_APPLIED_SQL} AS credited_cents,
-    COALESCE((SELECT SUM(amount_cents) FROM nc_allocations WHERE invoice_id = i.id), 0) AS paid_cents, ${WRITE_OFF_NET_SQL} AS written_off_cents
+    COALESCE((SELECT SUM(amount_cents) FROM nc_allocations WHERE invoice_id = i.id), 0) - ${PROCESSOR_REVERSED_SQL} AS paid_cents, ${WRITE_OFF_NET_SQL} AS written_off_cents
     FROM nc_invoices i WHERE i.customer_id = ? AND i.status = 'issued' ORDER BY i.issue_date, i.number`, customerId)
   // The customer record includes its own payments, so customer readers see them here.
   const pays = await paymentRows(env, customerId)
@@ -233,7 +234,7 @@ export async function receivablesDesk(env: Bindings, actor: Actor) {
   const business = await requireBusiness(env)
   const day = today(business.timezone, clockInstant(env)), month = day.slice(0, 7)
   const rows = await all(env, `SELECT i.id, i.number, i.customer_id, c.name AS customer_name, c.address, i.issue_date, i.due_date, i.currency, i.total_cents, ${BALANCE_SQL} AS balance_cents,
-    COALESCE((SELECT SUM(amount_cents) FROM nc_allocations WHERE invoice_id = i.id), 0) AS paid_cents, ${WRITE_OFF_NET_SQL} AS written_off_cents,
+    COALESCE((SELECT SUM(amount_cents) FROM nc_allocations WHERE invoice_id = i.id), 0) - ${PROCESSOR_REVERSED_SQL} AS paid_cents, ${WRITE_OFF_NET_SQL} AS written_off_cents,
     (SELECT MAX(p.received_on) FROM nc_allocations a JOIN nc_payments p ON p.id = a.payment_id WHERE a.invoice_id = i.id) AS paid_on,
     (SELECT p.method FROM nc_allocations a JOIN nc_payments p ON p.id = a.payment_id WHERE a.invoice_id = i.id ORDER BY p.received_on DESC LIMIT 1) AS method
     FROM nc_invoices i JOIN nc_customers c ON c.id = i.customer_id WHERE i.status = 'issued'`)

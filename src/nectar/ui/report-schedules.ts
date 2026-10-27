@@ -6,7 +6,7 @@ import { cents, check, details, field, form, h, page, table } from './html'
 export async function reportSchedulePage(env: Bindings,actor: Actor,url: URL) {
   const view=await reportSchedule(env,actor)
   return page('Monthly financial reports',actor,h`<p class="crumbs"><a href="/app/reports/billings">Financial reports</a></p><h1>Monthly financial reports</h1>
-    <section class="card"><h2>Your email schedule</h2><p>Send the previous month's reports to your own email on the chosen day in the billing timezone. Reports include recorded receipts and current AR at generation, with their exact definitions. Provider acceptance does not confirm mailbox delivery.</p>
+    <section class="card"><h2>Your email schedule</h2><p>Send the previous month's reports to your own email on the chosen day in the billing timezone. Reports include recorded gross receipts, available processor settlements, successful cash refunds and current AR at generation, with their exact definitions. Provider acceptance does not confirm mailbox delivery.</p>
       ${form('report.schedule','/app/report-schedule',h`${check('Email my monthly report','enabled',{checked:view.schedule.enabled})}${field('Day of month','day',{type:'number',value:view.schedule.day,hint:'Choose a day from 1 to 28.'})}`,'Save schedule')}</section>
     <section class="card"><h2>Your report history</h2>${table(['Month','Generated report','Mail outcome'],view.deliveries.map(d=>[d.period,h`<a href="/app/report-deliveries/${d.id}">Open frozen report</a>`,d.status]),{empty:'No monthly reports have been generated for you.'})}</section>`,{current:'/app/billing',url})
 }

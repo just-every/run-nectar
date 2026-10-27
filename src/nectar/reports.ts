@@ -1,4 +1,5 @@
 import { requireUsdReporting } from './currency'
+import { processorReportSources, processorReportSource, type ProcessorReportEvidence } from './processor-reports'
 import { translateReportAmount, translateReportComponents, reportingTotal, type ReportCurrencyEvidence } from './currency-report-translation'
 import { intervalRecurringEntries } from './interval-reports'
 import { historicalMrrSeries, type HistoricalMrrMonth } from './movein/history-metrics'
@@ -15,14 +16,15 @@ import { clockInstant } from './clock'
 import { daysBetween, isMonth, today } from './dates'
 import { openInvoices } from './receivables'
 
-export type ReportMetric = 'mrr' | 'billings' | 'ar' | 'collections' | 'credits' | 'tax' | 'unbilled' | 'credit-balances' | 'refunds'
+export type ReportMetric = 'mrr' | 'billings' | 'ar' | 'collections' | 'credits' | 'tax' | 'unbilled' | 'credit-balances' | 'refunds' | 'settlements'
 export interface ReportEntry extends ReportCurrencyEvidence {
   // invoiceId is the report source id; collections use the payment id here
   // for the shared detail route and identify it explicitly with sourceKind.
   sourcePath?: string
   sourceProvider?: string; sourceReference?: string
   invoiceId: string; number: string; customerId: string; customerName: string; amountCents: number; href: string
-  sourceKind?: 'invoice' | 'payment' | 'customer_balance' | 'credit_note' | 'subscription_period' | 'prepaid_grant' | 'prepaid_refund' | 'invoice_refund'; paymentId?: string
+  sourceKind?: 'invoice' | 'payment' | 'customer_balance' | 'credit_note' | 'subscription_period' | 'prepaid_grant' | 'prepaid_refund' | 'invoice_refund' | 'processor_payment' | 'processor_settlement' | 'processor_refund'; paymentId?: string
+  processor?: ProcessorReportEvidence
   prepaid?: import('./financial-prepaid').PrepaidReportBalance
   refund?: import('./financial-refunds').PrepaidReportRefund
 }
@@ -65,7 +67,11 @@ const DEFINITIONS: Record<Exclude<ReportMetric,'credits'|'tax'|'unbilled'|'credi
   },
   collections: {
     title: 'Collections',
-    definition: 'Recorded external payments received in the selected month up to today in the business billing timezone, by their received-on date. Includes allocated and unallocated receipts. Allocations show which invoices a receipt pays. Owner-confirmed native card captures and authorized prepaid top-ups contribute their recorded captured amount; manually recorded receipts retain their external evidence custody. Retained successful Stripe charges contribute their original gross received amount. Verified prepaid refunds are separate negative cash outflows in the refund report; no bank settlement is inferred.',
+    definition: 'Recorded external payments received in the selected month up to today in the business billing timezone, by their received-on date. Includes allocated and unallocated receipts. Allocations show which invoices a receipt pays. Owner-confirmed native card captures and authorized prepaid top-ups contribute their recorded captured amount; manually recorded receipts retain their external evidence custody. Retained successful Stripe charges contribute their original gross received amount. Verified refunds are separate negative cash outflows in the refund report. Processor charge and payment balance transactions contribute their gross amount once, with existing receipts retaining custody. Processor availability and fees appear separately in Settlements; no bank settlement is inferred.',
+  },
+  settlements: {
+    title: 'Processor settlements',
+    definition: 'Available processor charge and payment balance transactions, by their available-on date in the business billing timezone. Each contribution is original gross payment less the actual processor fee, with exact native-currency and daily USD valuation evidence. Pending transactions, refunds, disputes, adjustments and payouts are excluded. This is processor balance availability, not confirmation of a bank deposit; gross receipts retain their own Collections custody.',
   },
 }
 
@@ -91,10 +97,13 @@ export async function report(env: Bindings, actor: Actor, metric: string, url: U
   if (['credits','tax','unbilled','credit-balances','refunds'].includes(metric)) return await financialReport(env,actor,metric,url)
   if (metric === 'ar' || metric === 'mrr') await requireUsdReporting(env,url.searchParams.get('customer'))
   const selected = filters(metric, url)
-  const day = today((await requireBusiness(env)).timezone, clockInstant(env))
+  const business = await requireBusiness(env)
+  const day = today(business.timezone, clockInstant(env))
   const month = selected.period ?? day.slice(0, 7)
   let rows: Row[]
-  if (selected.metric === 'ar') {
+  if (selected.metric === 'settlements') {
+    rows = []
+  } else if (selected.metric === 'ar') {
     rows = (await openInvoices(env, selected.customer ?? undefined))
       .filter(row => inBucket(row.due_date, day, selected.bucket))
       .map(row => ({ ...row, amount_cents: row.balance_cents }))
@@ -131,8 +140,20 @@ export async function report(env: Bindings, actor: Actor, metric: string, url: U
       : { amountCents: row.amount_cents }), href: `/app/reports/${selected.metric}/${encodeURIComponent(row.id)}?${query}`,
     ...(selected.metric === 'collections' ? { sourceKind: 'payment' as const, paymentId: row.id } : {}),
   })))
-  const historical=await historicalContributions(env,selected.metric,month,selected.customer,day,selected.bucket)
-  entries.push(...historical.map(source=>source.entry))
+  if (selected.metric === 'collections' || selected.metric === 'settlements') {
+    const processor = await processorReportSources(env, selected.metric, month, selected.customer, day, business.timezone)
+    for (const entry of entries) {
+      const evidence = processor.receipts.get(entry.invoiceId)
+      if (!evidence) continue
+      insist((entry.nativeAmountCents ?? entry.amountCents) === evidence.grossCents && (entry.nativeCurrency ?? 'USD').toLowerCase() === evidence.currency, 'processor_receipt_source_changed', 409)
+      entry.processor = evidence
+    }
+    entries.push(...processor.entries)
+  }
+  if (selected.metric !== 'settlements') {
+    const historical=await historicalContributions(env,selected.metric,month,selected.customer,day,selected.bucket)
+    entries.push(...historical.map(source=>source.entry))
+  }
   return { metric: selected.metric, ...DEFINITIONS[selected.metric as keyof typeof DEFINITIONS], period: selected.metric === 'ar' ? day : month,
     totalCents: reportingTotal(entries), entries, ...(entries.some(entry => entry.reporting) ? { reportingCurrency: 'USD' as const } : {}), ...(selected.metric==='mrr'?{series:await historicalMrrSeries(env,month,selected.customer)}:{}) }
 }
@@ -144,6 +165,7 @@ export async function reportInvoice(env: Bindings, actor: Actor, metric: string,
   const view = await report(env, actor, metric, url)
   const entry = view.entries.find(row => row.invoiceId === invoiceId)
   insist(entry, 'report_invoice_not_found', 404)
+  if (entry.sourceKind?.startsWith('processor_')) return processorReportSource(view, entry, actor)
   const historical=await historicalReportSource(env,view,invoiceId,url,today((await requireBusiness(env)).timezone, clockInstant(env)))
   if(historical)return historical
   if (view.metric === 'collections') {
@@ -182,6 +204,7 @@ export async function reportInvoice(env: Bindings, actor: Actor, metric: string,
       components.push({ kind: 'write_off', label: `Bad debt write-off: ${writeOff.reason}`, amountCents: -writeOff.amountCents, href: `${sourceHref}#write-offs` })
       for (const recovery of writeOff.recoveries as Row[]) components.push({ kind: 'write_off_recovery', label: `Recovery ${recovery.reference} reinstates receivable`, amountCents: recovery.amountCents, href: `${sourceHref}#write-offs` })
     }
+    for (const reversal of invoice.processorReversals as Row[]) components.push({kind:'payment_return',label:'Returned processor payment reinstates receivable',amountCents:reversal.amount_cents,href:`${sourceHref}#recv`})
     for (const allocation of invoice.allocations as Row[]) components.push({ kind: 'allocation', label: `Payment ${allocation.reference} received ${allocation.received_on}`, amountCents: -allocation.amount_cents, href: `${sourceHref}#recv` })
   }
   const translatedComponents = translateReportComponents(entry, components)

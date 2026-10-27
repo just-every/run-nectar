@@ -1,3 +1,4 @@
+import { processorEvents } from './processor-events'
 import { dunningReport } from './dunning'
 import { retryComparisonReport } from './retry-comparison'
 import { retryRecoveryReport } from './retry-report'
@@ -94,6 +95,7 @@ export async function customerView(env: Bindings, actor: Actor, id: string, url?
 }
 
 export const views: Record<string, View> = {
+  processorEvents:(env,actor,_r,_id,url)=>processorEvents(env,actor,url.searchParams.get('customer')??undefined),
   assuranceCases: (env,actor)=>assuranceCases(env,actor),
   assuranceRuns: (env,actor)=>assuranceRuns(env,actor),
   assuranceCase: (env,actor,_r,id)=>assuranceCase(env,actor,id),

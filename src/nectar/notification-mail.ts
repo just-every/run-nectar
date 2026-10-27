@@ -4,7 +4,7 @@ import { all, commit, now, stmt } from './core'
 import { eligibleRecipient, type AlertEvent } from './notifications'
 import { esc } from './ui/html'
 
-export const ALERT_LABELS = { webhook_failure: 'Outbound webhook delivery failed', payment_mismatch: 'Payment does not match an invoice balance', billrun_exceptions: 'Bill-run exceptions waiting', proposals: 'Proposal awaiting approval' }
+export const ALERT_LABELS = { webhook_failure: 'Webhook processing or delivery failed', payment_mismatch: 'Payment does not match an invoice balance', billrun_exceptions: 'Bill-run exceptions waiting', proposals: 'Proposal awaiting approval' }
 
 /** A sending claim is never automatically retried: an interrupted send may
  * already have reached the provider. Acceptance is not mailbox delivery. */
@@ -13,7 +13,7 @@ export async function deliverAlerts(env: Bindings, event: AlertEvent, subject: s
     const claimed = await env.DB.prepare("UPDATE nc_notifications SET status='sending',updated_at=? WHERE event=? AND subject=? AND member_id=? AND status='pending' RETURNING member_id").bind(now(),event,subject,row.member_id).first()
     if (!claimed) continue
     let status = 'suppressed', provider: string | null = null
-    if (await eligibleRecipient(env,event,row.member_id,row.email)) {
+    if (await eligibleRecipient(env,event,row.member_id,row.email,subject)) {
       const mail = operatorMail(env)
       status = 'failed'
       if (mail && env.MAIL_FROM) {

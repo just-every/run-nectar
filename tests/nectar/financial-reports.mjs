@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { applyPolicy } from './policy-helper.mjs'
 
-const metrics = ['billings', 'collections', 'refunds', 'ar', 'credits', 'tax', 'unbilled', 'credit-balances']
+const metrics = ['billings', 'collections', 'settlements', 'refunds', 'ar', 'credits', 'tax', 'unbilled', 'credit-balances']
 const sum = rows => rows.reduce((total, row) => total + row.amountCents, 0)
 const money = cents => (cents / 100).toFixed(2)
 const content = mail => `${mail.subject} ${mail.text ?? ''} ${mail.html ?? ''}`
@@ -153,7 +153,7 @@ export async function financialReportsFlow(h, owner) {
   assert.equal((await h.api(`invoices/${invoice.id}`, owner)).credits.reduce((n, credit) => n + credit.amount_cents, 0), 1250)
   const prepaid = await prepaidReportFixtures(h, owner, { subscription: subscriptions[0], customer: billed, meter, period, issue, payment })
 
-  const expected = { refunds: 0, billings: 14459, collections: 4800, ar: 13509, credits: 1250, tax: 1124, unbilled: 1235, 'credit-balances': 3300 }
+  const expected = { settlements: 0, refunds: 0, billings: 14459, collections: 4800, ar: 13509, credits: 1250, tax: 1124, unbilled: 1235, 'credit-balances': 3300 }
   const read = (metric, target) => h.api(`reports/${metric}?period=${period}${target ? `&customer=${target}` : ''}`, owner)
   const exportCsv = async (path, who = owner) => {
     const result = await h.raw(path, { cookie: who })

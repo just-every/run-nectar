@@ -46,14 +46,15 @@ const authorized = (event: AlertEvent, row: { role: Role; custom: string | null 
   return need.read.some(c => held.has(c)) && need.act.some(c => held.has(c))
 }
 
-export async function alertStatements(env: Bindings, event: AlertEvent, subject: string, href: string) {
+export async function alertStatements(env: Bindings, event: AlertEvent, subject: string, href: string, kind?: 'processor') {
   insist(href.startsWith('/app/'), 'invalid_notification_link')
-  const recipients = (await all<{ id: string; email: string; role: Role; custom: string | null }>(env, ALERT_SQL(event))).filter(m => authorized(event, m))
+  const recipients = (await all<{ id: string; email: string; role: Role; custom: string | null }>(env, ALERT_SQL(event))).filter(m => authorized(event, m) && (kind!=='processor'||['owner','finance'].includes(m.role)))
   return recipients.map(m => stmt(env, `INSERT OR IGNORE INTO nc_notifications(event,subject,href,member_id,email,status,updated_at) VALUES (?,?,?,?,?,'pending',?)`, event,subject,href,m.id,m.email,now()))
 }
 
 /** Rechecked just before each send, so removed authority stops the next one. */
-export async function eligibleRecipient(env: Bindings, event: AlertEvent, id: string, email: string) {
+export async function eligibleRecipient(env: Bindings, event: AlertEvent, id: string, email: string, subject?: string) {
   const row = await one<{ id: string; email: string; role: Role; custom: string | null }>(env, ALERT_SQL(event, ' AND m.id=? AND m.email=?'), id, email)
-  return row && authorized(event, row) ? { id: row.id } : null
+  const processor=subject&&event==='webhook_failure'?await one(env,'SELECT 1 FROM nc_processor_events WHERE id=?',subject):null
+  return row && authorized(event, row) && (!processor||['owner','finance'].includes(row.role)) ? { id: row.id } : null
 }

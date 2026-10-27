@@ -1,3 +1,4 @@
+import { consumeProcessorEvent } from './processor-events'
 import { prepareInvoiceRefund, executeInvoiceRefund, reconcileInvoiceRefund } from './invoice-refunds'
 import { previewInvoiceRefund } from './invoice-refund-preview'
 import { prepareInvoiceVoid, voidInvoice } from './invoice-voids'
@@ -289,6 +290,7 @@ export const actions: Record<string, Handler> = {
   'usage.acknowledge': acknowledgeControl,
   'billrun.prepare': prepareRun,
   'invoice.correction.refresh': refreshCorrectingInvoice,
+  'processor.event.consume': consumeProcessorEvent,
   'invoice.refund.preview': previewInvoiceRefund,
   'invoice.refund.prepare': prepareInvoiceRefund,
   'invoice.refund.execute': executeInvoiceRefund,

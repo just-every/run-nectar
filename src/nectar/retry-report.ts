@@ -26,6 +26,11 @@ const sourceSql = `WITH attempts AS (
  UNION ALL
  SELECT id,invoice_id,customer_id,1,reconciled_at,'failed',COALESCE(json_extract(proof_json,'$.declineCode'),error_code),amount_cents,NULL,NULL
  FROM nc_native_collections WHERE status IN ('declined','customer_action_required') AND reconciled_at IS NOT NULL
+ UNION ALL
+ SELECT id,invoice_id,customer_id,1,attempted_at,'failed',decline_code,amount_cents,NULL,NULL FROM nc_processor_failures
+ UNION ALL
+ SELECT e.object_ref,e.invoice_id,e.customer_id,1,e.occurred_at,'collected',NULL,p.amount_cents,p.id,NULL FROM nc_processor_events e JOIN nc_payments p ON p.reference='stripe:'||e.account_ref||':'||e.object_ref AND p.customer_id=e.customer_id
+ WHERE e.event_type='payment_intent.succeeded' AND e.status='applied'
 ), failures AS (
  SELECT r.*,ROW_NUMBER() OVER(PARTITION BY r.invoice_id ORDER BY r.attempted_at,r.collection_id,r.attempt) AS ordinal
  FROM attempts r WHERE r.outcome='failed' AND r.attempted_at<=?
@@ -40,7 +45,8 @@ SELECT f.invoice_id AS invoice,i.number,i.currency,f.customer_id AS customer,
   FROM nc_allocations a JOIN nc_payments p ON p.id=a.payment_id
   WHERE a.invoice_id=f.invoice_id AND p.customer_id=f.customer_id AND p.currency=i.currency
    AND a.allocated_at>=f.attempted_at AND a.allocated_at<=? AND p.recorded_at<=?
-   AND NOT EXISTS(SELECT 1 FROM nc_erased_records WHERE record_id IN(a.id,p.id))) AS allocationsJson
+   AND NOT EXISTS(SELECT 1 FROM nc_erased_records WHERE record_id IN(a.id,p.id))
+   AND NOT EXISTS(SELECT 1 FROM nc_processor_reversals r WHERE r.allocation_id=a.id)) AS allocationsJson
 FROM failures f JOIN nc_invoices i ON i.id=f.invoice_id JOIN nc_customers c ON c.id=f.customer_id
 WHERE f.ordinal=1 AND c.erased_at IS NULL
  AND NOT EXISTS(SELECT 1 FROM nc_erased_records WHERE record_id IN(f.invoice_id,f.customer_id,f.collection_id))

@@ -1,4 +1,5 @@
 import { requireUsdReporting } from './currency'
+import { processorReportSources, processorReportSource } from './processor-reports'
 import { translateReportAmount, invoiceTaxReporting, creditTaxReporting, reportingTotal } from './currency-report-translation'
 import { balanceFinancialSources, balanceSourceComponents } from './financial-balance'
 import { sharedCreditNotes } from './shared-credit-custody'
@@ -19,7 +20,7 @@ import type { Report, ReportComponent, ReportEntry, ReportInvoice } from './repo
 
 export type FinancialReportMetric = 'credits' | 'tax' | 'unbilled' | 'credit-balances' | 'refunds'
 export interface FinancialReportEntry extends Omit<ReportEntry, 'sourceKind'> {
-  sourceKind: 'invoice' | 'credit_note' | 'customer_balance' | 'subscription_period' | 'prepaid_grant' | 'prepaid_refund' | 'invoice_refund'
+  sourceKind: 'invoice' | 'credit_note' | 'customer_balance' | 'subscription_period' | 'prepaid_grant' | 'prepaid_refund' | 'invoice_refund' | 'processor_refund' | 'processor_payment' | 'processor_settlement'
   grantId?: string
   prepaid?: PrepaidReportBalance
   creditId?: string
@@ -64,7 +65,7 @@ export interface FinancialReportSource extends Omit<ReportInvoice, 'metric' | 's
 const USAGE = new Set(['usage', 'overage', 'metric_usage', 'late_usage', 'trial_usage', 'paused_usage'])
 const DEFINITIONS: Record<FinancialReportMetric, { title: string; definition: string }> = {
   'credit-balances': {title:'Customer credit balances',definition:'Current USD monetary available credits, including purchased and promotional prepaid money, plus unconsumed paid unit consideration and carried numbered correction/cancellation credits less actual applications. Unit quantities remain separately typed by meter and are never added as USD; promotional units carry zero paid liability. Only purchased prepaid value is a contract liability. The snapshot uses the current business date across source issue dates; the selected month labels its export, not historical month-end balances. Expired money is unavailable without mutating its ledger; unpaid expiry liability and pending settlement remain explicit in source evidence. Cash overpayments (the unallocated amount of a payment) and goodwill grants less their applications and returns are included; cash refunds of prepaid credit are reported separately.'},
-  refunds: { title: 'Cash refunds', definition: 'Verified successful original-card invoice refunds and refunds of unused purchased prepaid value, shown as negative USD outflows by their actual refund date in the business billing timezone. Original invoices and gross receipts remain unchanged. Each invoice refund cites its payment, processor refund and numbered credit; each prepaid refund additionally cites its zero-revenue liability reversal. Pending, uncertain and failed results and balance credits are excluded.' },
+  refunds: { title: 'Cash refunds', definition: 'Verified successful original-card invoice refunds and refunds of unused purchased prepaid value, shown as negative USD outflows by their actual refund date in the business billing timezone. Original invoices and gross receipts remain unchanged. Each invoice refund cites its payment, processor refund and numbered credit; each prepaid refund additionally cites its zero-revenue liability reversal. Processor-only successful refund balance transactions contribute once by processor refund reference. Pending, uncertain and failed refund results and balance credits are excluded.' },
   credits: {
     title: 'Issued credit notes',
     definition: 'Actual numbered credit notes created in the selected month in the business billing timezone, shown as positive credited amounts against their original invoices. Historical usage notes separately retain applied and carried customer credit and saved tax attribution; other notes reduce only amounts owed and have no tax attribution. Prepaid liability credits for cash refunds appear separately in the cash refunds report. These are not cash refunds.',
@@ -150,8 +151,16 @@ async function contributions(env: Bindings, metric: string, url: URL) {
   let entries: FinancialReportEntry[]
   if (refunds) {
     entries = [...refunds.values()].map(source => source.entry)
-    const native = await all(env,`SELECT r.*,i.number,c.name AS customer_name,c.erased_at FROM nc_invoice_refunds r JOIN nc_invoices i ON i.id=r.invoice_id JOIN nc_customers c ON c.id=r.customer_id WHERE r.status='completed' AND r.destination='original' AND r.completed_at>=? AND r.completed_at<? ${customer?'AND r.customer_id=?':''} ORDER BY r.completed_at,r.id`,zonedStart(`${month}-01`,business.timezone),zonedStart(addMonths(`${month}-01`,1),business.timezone),...(customer?[customer]:[]))
+    const native = await all(env,`SELECT r.*,i.number,c.name AS customer_name,c.erased_at FROM nc_invoice_refunds r JOIN nc_invoices i ON i.id=r.invoice_id JOIN nc_customers c ON c.id=r.customer_id WHERE r.status='completed' AND r.destination='original' AND NOT EXISTS(SELECT 1 FROM nc_prepaid_refunds p WHERE p.status='refunded' AND p.refund_ref=r.refund_ref) AND NOT EXISTS(SELECT 1 FROM nc_invoice_refunds p WHERE p.refund_ref=r.refund_ref AND p.status='completed' AND p.destination='original' AND (p.completed_at<r.completed_at OR (p.completed_at=r.completed_at AND p.id<r.id))) AND r.completed_at>=? AND r.completed_at<? ${customer?'AND r.customer_id=?':''} ORDER BY r.completed_at,r.id`,zonedStart(`${month}-01`,business.timezone),zonedStart(addMonths(`${month}-01`,1),business.timezone),...(customer?[customer]:[]))
     entries.push(...native.map(row=>({invoiceId:row.id,number:`Refund ${row.number}`,customerId:row.customer_id,customerName:row.erased_at?'Erased customer':row.customer_name,amountCents:-row.amount_cents,sourceKind:'invoice_refund' as const,sourceReference:row.refund_ref,href:sourceHref('refunds',row.id,month,customer)})))
+    const processor = await processorReportSources(env, 'refunds', month, customer, today(business.timezone, clockInstant(env)), business.timezone)
+    for (const entry of entries) {
+      const evidence = processor.refunds.get(entry.invoiceId)
+      if (!evidence) continue
+      insist(entry.amountCents === evidence.grossCents && evidence.currency === 'usd', 'processor_refund_source_changed', 409)
+      entry.processor = evidence
+    }
+    entries.push(...processor.entries)
   }
   else if (unbilled) entries = [...unbilled.values()].map(source => source.entry)
   else if(selected.metric==='credit-balances'){
@@ -203,6 +212,7 @@ export async function financialReportSource(env: Bindings, actor: Actor, metric:
   const { report, unbilled, prepaid, refunds, business } = await contributions(env, metric, url)
   const entry = report.entries.find(row => row.invoiceId === sourceId)
   insist(entry, 'report_invoice_not_found', 404)
+  if (entry.sourceKind === 'processor_refund') return processorReportSource(report, entry, actor) as FinancialReportSource
   if (entry.sourceKind === 'invoice_refund') {
     const refund=await one(env,"SELECT id,invoice_id,customer_id,payment_id,amount_cents,refund_ref,credit_id,completed_at FROM nc_invoice_refunds WHERE id=? AND status='completed' AND destination='original'",sourceId)
     insist(refund,'report_invoice_not_found',404)

@@ -47,7 +47,7 @@ export async function stripeForAccount(env: StripeBindings, expectedAccount: str
   insist(matches.length === 1, 'stripe_frozen_account_mismatch', 409)
   const selected=matches[0]
   const stripe:StripeClient=async(path,body,key)=>{
-    if(path==='/payment_intents' && body) {
+    if(path==='/payment_intents' && body && body.get('payment_method_data[type]')!=='customer_balance') {
       const {assertMethodUsable}=await import('../card-lifecycle')
       await assertMethodUsable(env,selected.account,providerReference(body.get('customer')),providerReference(body.get('payment_method')))
     }

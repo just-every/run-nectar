@@ -15,6 +15,8 @@ export async function customerEvidenceMatches(env: Bindings, search: string, act
     for(const row of invoices)found.add(row.customer_id)
   }
   if (!actor || !canRead(actor, 'payments') || !canRead(actor, 'invoices')) return found
+  const processorReferences=await all(env,`SELECT DISTINCT o.customer_id FROM nc_processor_objects o JOIN nc_customers c ON c.id=o.customer_id WHERE c.erased_at IS NULL AND instr(lower(o.object_ref),?)>0`,text)
+  processorReferences.forEach(row=>found.add(row.customer_id))
   const paymentReferences=await all(env,'SELECT customer_id FROM nc_payments WHERE instr(lower(reference),?)>0',text)
   for(const row of paymentReferences)found.add(row.customer_id)
   const receipts=await all(env,`SELECT p.customer_id FROM nc_payment_receipts r JOIN nc_payments p ON p.id=r.payment_id

@@ -16,7 +16,8 @@ export async function collectibleInvoice(env: Bindings, invoiceId: string, insta
     FROM nc_invoices i JOIN nc_customers c ON c.id=i.customer_id WHERE i.id=? AND i.status='issued'`,invoiceId)
   insist(invoice,'invoice_not_found',404)
   const disputes=await all(env,'SELECT * FROM nc_cadence_disputes WHERE invoice_id=? AND resolved_at IS NULL ORDER BY id',invoiceId)
-  const disputedCents=disputes.reduce((sum,row)=>sum+row.amount_cents,0)
+  const processorDisputes=await all(env,"SELECT object_ref,amount_cents FROM nc_processor_objects WHERE invoice_id=? AND kind IN ('dispute','ach_return') AND status NOT IN ('won','warning_closed')",invoiceId)
+  const disputedCents=disputes.reduce((sum,row)=>sum+row.amount_cents,0)+processorDisputes.reduce((sum,row)=>sum+row.amount_cents,0)
   const promise=await one(env,'SELECT rowid AS ordinal,* FROM nc_cadence_promises WHERE invoice_id=? ORDER BY rowid DESC LIMIT 1',invoiceId)
   const allocations=await all(env,'SELECT id,payment_id,amount_cents FROM nc_allocations WHERE invoice_id=? ORDER BY id',invoiceId)
   const credits=await all(env,'SELECT id,amount_cents FROM nc_credit_notes WHERE invoice_id=? ORDER BY id',invoiceId)
@@ -24,7 +25,7 @@ export async function collectibleInvoice(env: Bindings, invoiceId: string, insta
   const collectibleCents=Math.max(0,invoice.balance_cents-disputedCents)
   const writtenOff=await one<{n:number}>(env,"SELECT COUNT(*) AS n FROM nc_write_offs WHERE invoice_id=? AND status='executed'",invoiceId)
   const hold=invoice.balance_cents<=0?(writtenOff?.n?'written_off':'paid'):paused?'promise':collectibleCents<=0?'disputed':null
-  const basis=canonical({balanceCents:invoice.balance_cents,allocations,credits,writtenOff:writtenOff?.n||undefined,disputes:disputes.map(row=>[row.id,row.line_id,row.amount_cents]),promise:promise?.id??null,paused})
+  const basis=canonical({balanceCents:invoice.balance_cents,allocations,credits,writtenOff:writtenOff?.n||undefined,processorDisputes,disputes:disputes.map(row=>[row.id,row.line_id,row.amount_cents]),promise:promise?.id??null,paused})
   return {...invoice,business,day,disputes,promise,disputedCents,collectibleCents,paused,hold,basis}
 }
 
