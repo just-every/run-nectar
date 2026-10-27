@@ -12,7 +12,7 @@ import { httpListener } from './http-listener.mjs'
 const wrangler = createRequire(import.meta.url)('wrangler')
 const { Miniflare, convertV4MiniflareOptions } = createRequire(createRequire(import.meta.url).resolve('wrangler'))('miniflare')
 
-export async function harness({ assets = false, localTime, hostname = '127.0.0.1', stripeFetch, stripeSecret, stripeSecondarySecret, stripeWebhookSecret, quickbooksFetch, webhookFetch, persistence, databaseId='nectar', applyMigrations=true } = {}) {
+export async function harness({ localTime, hostname = '127.0.0.1', stripeFetch, stripeSecret, stripeSecondarySecret, stripeWebhookSecret, quickbooksFetch, webhookFetch, persistence, databaseId='nectar', applyMigrations=true } = {}) {
   const secret = () => randomBytes(32).toString('base64url')
   const vars = { AUTH_LOCAL: 'true', OWNER_EMAIL: 'owner@example.test', SESSION_SECRET: secret(), SETUP_TOKEN: secret(), MFA_KEY: secret(), PORTAL_KEY: secret(), MAIL_PROVIDER: 'resend', MAIL_API_KEY: 'test-only-resend-key', MAIL_FROM: 'auth@example.test' }
   if(localTime)vars.NECTAR_LOCAL_TIME=localTime
@@ -44,10 +44,11 @@ export async function harness({ assets = false, localTime, hostname = '127.0.0.1
     // Omitting port lets workerd bind a fresh port 0 on every runtime start.
     cf: false, unsafeTriggerHandlers: true, host: '127.0.0.1', modulesRoot: 'dist/server', modules: ['index.js', ...chunks].map(path => ({ type: 'ESModule', path: `dist/server/${path}` })), compatibilityDate: '2026-09-08', compatibilityFlags: ['nodejs_compat'],
     d1Databases: { DB: databaseId }, ...(persistence?{resourcePersistencePath:persistence}:{}), bindings: vars, outboundService,
-    ...(assets ? { assets: { directory: 'dist/client', binding: 'ASSETS', run_worker_first: true, routerConfig: { has_user_worker: true, invoke_user_worker_ahead_of_assets: true } } } : {}),
+    assets: { directory: 'dist/client', binding: 'ASSETS', run_worker_first: true, routerConfig: { has_user_worker: true, invoke_user_worker_ahead_of_assets: true } },
   }
   const close = () => Promise.all([listener.close(), mf?.dispose()])
   let setupPhase='worker-ready'
+  const startupDiagnostic=setTimeout(()=>console.error('HARNESS waiting at',setupPhase),10000)
   try {
     mf = new Miniflare(convertV4MiniflareOptions(options))
     await mf.ready
@@ -62,6 +63,7 @@ export async function harness({ assets = false, localTime, hostname = '127.0.0.1
     assert.ok((await fetch(`${origin}/health`)).ok, 'the Worker is healthy')
   } catch (error) { console.error('HARNESS setup failure',setupPhase,error.message);await close(); throw error }
 
+  clearTimeout(startupDiagnostic)
   const raw = (path, { cookie, body, form, method, bearer, headers = {} } = {}) => fetch(origin + path, {
     method: method ?? (body !== undefined || form ? 'POST' : 'GET'), redirect: 'manual',
     headers: { 'CF-Connecting-IP': '127.0.0.1', ...(cookie ? { cookie } : {}), ...(bearer ? { authorization: `Bearer ${bearer}` } : {}), ...((body !== undefined || form) && !bearer ? { origin } : {}), ...(body !== undefined ? { 'content-type': 'application/json' } : {}), ...headers },

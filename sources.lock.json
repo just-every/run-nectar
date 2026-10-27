@@ -5006,7 +5006,7 @@
       "executable": false
     },
     "tests/nectar/harness.mjs": {
-      "sha256": "2237130af040732704aaf4baa32406ee87c803ccc47cda8beee3c0b5c1d7ec63",
+      "sha256": "9036b83b6305ac995ba6a6896d8b01b649720db6f46f38a9758228f0ead7a0ce",
       "executable": false
     },
     "tests/nectar/hierarchies.mjs": {
