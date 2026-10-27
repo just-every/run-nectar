@@ -179,7 +179,7 @@ export async function processorArchiveJourney() {
     await worker.signIn('synthetic-nectar-archive-finance@example.test',{requested:true})
     return {...result,financeEmail:'synthetic-nectar-archive-finance@example.test'}
    }})
-  console.log('Processor archive: public capture, exact rer restore, owner-only due removal, unchanged peers and older-archive refusal passed')
+  console.log(`Processor archive${only?` ${only} phase`:''}: public capture, exact rer restore, owner-only due removal, unchanged peers and older-archive refusal passed`)
  } finally {await h?.close();await rm(scratch,{recursive:true,force:true})}
 }
 
