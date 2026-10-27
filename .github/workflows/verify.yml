@@ -51,6 +51,7 @@ jobs:
         run: |
           node tests/nectar/dunning-browser.mjs
           node tests/nectar/dunning-browser.mjs custody
+          node tests/nectar/dunning-browser.mjs winback
 
       - name: Invoice void and replacement browser proof
         if: ${{ matrix.shard == 0 }}

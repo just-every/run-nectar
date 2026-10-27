@@ -6,7 +6,7 @@ import { all, canonical, newId, stmt, type Audit } from './core'
 import { today } from './dates'
 import { BALANCE_SQL } from './balance-sql'
 
-const changesState = /^(subscription\.(?!state\.)|trial\.|automatic\.collection\.|collection\.|retry\.|dunning\.end\.|payment\.allocate|credit\.|invoice\.|balance\.|writeoff\.|usage\.correction\.approve|renewal\.)/
+const changesState = /^(subscription\.(?!state\.)|trial\.|automatic\.collection\.|collection\.|retry\.|dunning\.end\.|payment\.allocate|credit\.|invoice\.|balance\.|writeoff\.|usage\.correction\.approve|renewal\.|retention\.(?:save|winback)\.accept$)/
 
 export async function captureSubscriptionStates(env: Bindings, events: Audit[]) {
   if (!events.some(event => changesState.test(event.action))) return []

@@ -5,9 +5,10 @@ import { chromium } from '@playwright/test'
 import { harness } from './harness.mjs'
 import { applyPolicy } from './policy-helper.mjs'
 import { dunningSequenceFlow,harnessOptions } from './dunning-sequences.mjs'
+import { retentionFlow } from './retention.mjs'
 import { dunningCustodyFlow,harnessOptions as custodyOptions } from './dunning-custody.mjs'
 if(process.env.NECTAR_JOURNEY_RUN)console.log(`JOURNEY RUN ${process.env.NECTAR_JOURNEY_RUN} HEAD ${execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim()}`)
-const stateOnly=process.argv.includes('states'),custody=process.argv.includes('custody'),directory=process.env.NECTAR_EVIDENCE_DIR??'.evidence/dunning'
+const winback=process.argv.includes('winback'),stateOnly=process.argv.includes('states'),custody=process.argv.includes('custody'),directory=process.env.NECTAR_EVIDENCE_DIR??'.evidence/dunning'
 await mkdir(directory,{recursive:true})
 const h=await harness(custody?custodyOptions():harnessOptions());let browser
 try {
@@ -85,7 +86,21 @@ try {
    await page.goto(h.origin+'/app/reports/recovery');await shot(page,`report-${state.state}`)
   }
  }
- if(stateOnly)await dunningSequenceFlow(h,owner,{onState})
+ if(winback)await retentionFlow(h,owner,{onState:async(state,path,sub)=>{
+  if(!['return','reactivated'].includes(state))return
+  if(state==='return'){
+   await page.goto(h.origin+`/app/subscriptions/${sub}`)
+   assert.ok((await page.locator('.summary').innerText()).includes('ended'))
+   await shot(page,'winback-ended-history')
+  }else{
+   await page.goto(h.origin+path)
+   const table=page.locator('section[aria-labelledby="state-history"]')
+   assert.ok((await table.getByRole('row').last().innerText()).includes('active'))
+   assert.ok((await page.locator('.summary').innerText()).includes('active'))
+   await shot(page,'winback-reactivated-history')
+  }
+ }})
+ else if(stateOnly)await dunningSequenceFlow(h,owner,{onState})
  else if(custody)await dunningCustodyFlow(h,owner,{onState})
  else await dunningSequenceFlow(h,owner,{
   onState,
