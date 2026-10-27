@@ -42,10 +42,12 @@ export async function commit(env: Bindings, statements: D1PreparedStatement[], a
     await env.DB.batch([
       ...due.before,
       ...statements,
+      // Source audits must reach revision-based webhook triggers before the
+      // lifecycle observer records its derived facts for the same revision.
+      ...events.map(event => stmt(env, 'INSERT INTO nc_audit (at, actor, action, subject, detail) VALUES (?, ?, ?, ?, ?)', now(), event.actor, event.action, event.subject, JSON.stringify(event.detail ?? {}))),
       ...due.after,
       ...await captureSubscriptionStates(env, events),
       stmt(env, 'DELETE FROM nc_guard'),
-      ...events.map(event => stmt(env, 'INSERT INTO nc_audit (at, actor, action, subject, detail) VALUES (?, ?, ?, ?, ?)', now(), event.actor, event.action, event.subject, JSON.stringify(event.detail ?? {}))),
     ])
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
