@@ -119,7 +119,11 @@ try {
  }
  for(const {index,fixture,expectedCodes,bankInvoice,bank:created} of submitted) {
   let bank=await stripe.request('GET',`/v1/payment_intents/${created.id}`)
-  for(const deadline=Date.now()+15*60_000;bank.status==='processing'&&Date.now()<deadline;){await delay(5000);bank=await stripe.request('GET',`/v1/payment_intents/${created.id}`)}
+  for(const deadline=Date.now()+15*60_000;bank.status==='processing'&&Date.now()<deadline;){
+   await delay(5000)
+   // Stripe answers 429 lock_timeout while the intent is mid-transition; the next read observes the outcome.
+   try{bank=await stripe.request('GET',`/v1/payment_intents/${created.id}`)}catch(error){if(error.status!==429)throw error}
+  }
   assert.equal(bank.status,'requires_payment_method')
   const charge=await stripe.request('GET',`/v1/charges/${reference(bank.latest_charge)}`)
   assert.equal(charge.status,'failed');assert.equal(charge.payment_method_details?.type,'us_bank_account')
