@@ -22,10 +22,12 @@ try {
   const context = await browser.newContext()
   await context.addCookies(owner.split('; ').map(part => { const at = part.indexOf('='); return { name: part.slice(0, at), value: part.slice(at + 1), url: h.origin } }))
   const page = await context.newPage()
-  const onState = async ({ label, id }) => {
+  const onState = async ({ label, id, kind }) => {
     await page.setViewportSize({ width: 1440, height: 1000 })
-    await page.goto(h.origin + `/app/invoices/${id}`)
-    if(refunds) {
+    await page.goto(h.origin + `/app/${kind==='proposal'?'proposals':'invoices'}/${id}`)
+    if(kind==='proposal') {
+      assert.equal(await page.getByRole('heading',{name:'Invoice refund simulation'}).count(),1)
+    } else if(refunds) {
       assert.equal(await page.getByRole('heading',{name:'Invoice refunds'}).count(),1)
       assert.equal(await page.getByText('Customer balance',{exact:true}).count(),1)
     } else {
