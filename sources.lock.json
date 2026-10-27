@@ -3970,7 +3970,7 @@
       "executable": false
     },
     "src/nectar/processor-events.ts": {
-      "sha256": "ae61cc88819454a4c88a860744da4b6d0321efb8a5cbe0bcdab38101e3df14d2",
+      "sha256": "da57beccf0241035d24887d308c447c241f9c2d427647d48c28e844a4854d7ee",
       "executable": false
     },
     "src/nectar/processor-facts.ts": {
@@ -5310,7 +5310,7 @@
       "executable": false
     },
     "tests/nectar/processor-cash.mjs": {
-      "sha256": "8db19e297c1f0abd8f9b8ee09eb8fe78404c4f17fed590c06777eaf1c9d13c21",
+      "sha256": "ce9061bfad456ed90b2ac03b2641d0112974b434841e36580ffdebb9647ced5a",
       "executable": false
     },
     "tests/nectar/processor-edge.mjs": {

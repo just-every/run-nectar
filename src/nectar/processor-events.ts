@@ -52,8 +52,8 @@ export async function applyProcessorEvent(env:Bindings,account:string|null,event
   else {
    const binding=await processorBinding(env,account,providerReference(ref(object.customer)))
    const cash=await reconcileProcessorCash(env,stripe,account,binding,prior?.status!=='applied')
-   const statements:D1PreparedStatement[]=[]
-   for(const [currency,amount] of Object.entries(cash.availableByCurrency))statements.push(stmt(env,`INSERT INTO nc_processor_cash_balances(account_ref,customer_id,currency,amount_cents,observed_at) VALUES(?,?,?,?,?) ON CONFLICT(account_ref,customer_id,currency) DO UPDATE SET amount_cents=excluded.amount_cents,observed_at=excluded.observed_at`,account,binding.customer_id,currency,amount,clockInstant(env)))
+   const statements:D1PreparedStatement[]=[stmt(env,'DELETE FROM nc_processor_cash_balances WHERE account_ref=? AND customer_id=?',account,binding.customer_id)]
+   for(const [currency,amount] of Object.entries({usd:0,...cash.availableByCurrency}))statements.push(stmt(env,`INSERT INTO nc_processor_cash_balances(account_ref,customer_id,currency,amount_cents,observed_at) VALUES(?,?,?,?,?) ON CONFLICT(account_ref,customer_id,currency) DO UPDATE SET amount_cents=excluded.amount_cents,observed_at=excluded.observed_at`,account,binding.customer_id,currency,amount,clockInstant(env)))
    for(const transaction of cash.transactions)statements.push(stmt(env,`INSERT OR IGNORE INTO nc_processor_cash_transactions(id,account_ref,transaction_ref,customer_id,type,amount_cents,ending_balance_cents,currency,occurred_at,intent_ref) VALUES(?,?,?,?,?,?,?,?,?,?)`,await fingerprint({account,cashTransaction:transaction.id}),account,transaction.id,binding.customer_id,transaction.type,transaction.net_amount,transaction.ending_balance,transaction.currency,instant(transaction.created),ref(transaction.applied_to_payment?.payment_intent)||null))
    if(prior?.status==='applied'){
     await commit(env,[...authority,...statements],{actor:'system:processor',action:'processor.cash.observe',subject:id,detail:{customer:binding.customer_id}})

@@ -30,7 +30,7 @@ export function processorCashEdge(base = nativeCollectionEdge()) {
       const customer = cashPath[1]
       assert.equal(request.method, 'GET')
       if (cashPath[2] === 'cash_balance') return Response.json({ object: 'cash_balance', customer, livemode: false,
-        available: { usd: balances.get(customer) ?? 0 }, settings: { reconciliation_mode: 'manual' } })
+        available: balances.get(customer)?{usd:balances.get(customer)}:{}, settings: { reconciliation_mode: 'manual' } })
       return list([...transactions.values()].filter(row => row.customer === customer).reverse(), url)
     }
     if (path === '/payment_intents' && request.method === 'POST') {
@@ -68,7 +68,7 @@ export function processorCashEdge(base = nativeCollectionEdge()) {
     return id
   }
   return { ...base, fetch, cashCalls: calls, cashEvents: events, cashTransactions: transactions, cashIntents: intents,
-    available: customer => balances.get(customer) ?? 0, loseCashResponse() { loseNext = true }, event,
+    available: customer => balances.get(customer) ?? 0, consumeOutside(customer){transaction(customer,-balances.get(customer),'applied_to_payment',{applied_to_payment:{payment_intent:'synthetic-nectar-outside-intent'}})}, loseCashResponse() { loseNext = true }, event,
     fund(customer, amount, reference = '') { transaction(customer, amount, 'funded', { funded: { bank_transfer: { type: 'us_bank_transfer', reference } } }); return event(customer) } }
 }
 
@@ -121,6 +121,14 @@ export async function processorCashFlow(h, owner, { cashEdge = edge, onState=asy
   assert.equal((await api(`invoices/${unknown.id}`)).allocations.length, 1)
   assert.equal(cashEdge.cashCalls.length, 3, 'Unknown recovery only reads the original intent')
   assert.equal(cashEdge.available(remote), 1700)
+  const beforeZero=await api(`processor-events?customer=${customer}`)
+  assert.equal(beforeZero.cashBalances.find(row=>row.currency==='usd').amount_cents,1700)
+  cashEdge.consumeOutside(remote)
+  await apply(cashEdge.event(remote))
+  const observed=await api(`processor-events?customer=${customer}`)
+  assert.equal(cashEdge.available(remote),0)
+  assert.deepEqual(observed.cashBalances.map(row=>[row.currency,row.amount_cents]),[['usd',0]],'An empty provider available map clears the previously observed balance')
+  assert.equal(cashEdge.cashCalls.length,3,'Observing externally consumed funds creates no payment intent')
   await onState({customer})
   return { customer, invoices: [byReference.id, byAmount.id, unknown.id], unappliedCents: 1700 }
 }
