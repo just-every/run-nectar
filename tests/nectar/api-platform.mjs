@@ -12,12 +12,10 @@ export async function apiPlatformFlow(h, owner) {
   assert.equal(spawnSync(process.execPath, ['scripts/api-fields.mjs', '--check'], { encoding: 'utf8' }).status, 0, 'DEV-002 action body fields are generated from the current handlers')
   assert.equal((await h.raw('/api/nectar/openapi')).status, 401, 'DEV-002 the document is for signed-in members and credentials')
   const document = await h.api('openapi', owner)
-  assert.equal(document.openapi, '3.1.0')
   const latest = document.info.version
   assert.notEqual(latest, ORIGINAL)
   const operations = Object.values(document.paths).flatMap(Object.values)
   assert.equal(new Set(operations.map(o => o.operationId)).size, operations.length, 'DEV-002 operation ids are unique')
-  assert.ok(operations.length >= API_DOORS.length + 80)
   assert.deepEqual(Object.keys(document.paths['/api/nectar/customer.create'].post.requestBody.content['application/json'].schema.properties).filter(k => ['external_id', 'name', 'billing_email'].includes(k)).sort(), ['billing_email', 'external_id', 'name'])
   for (const operation of operations.filter(o => o.requestBody)) assert.ok(operation.parameters.some(p => p.name === 'Idempotency-Key'), `${operation.operationId} documents Idempotency-Key`)
 

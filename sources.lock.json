@@ -194,7 +194,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "2c44cda2bafb6305c9d7267a2875c9513cf79d73fd614b4b14138c521d6256d9",
+      "sha256": "10aaa73d03310950ea4253ef0856105331024638d8671bc95633f4a4741e9dd7",
       "executable": false
     },
     "DEMO.md": {
@@ -4378,7 +4378,7 @@
       "executable": false
     },
     "src/nectar/ui/notifications.ts": {
-      "sha256": "d525d891a999d033f821ade8fb33e9433b025ec0009714bd1f0913ef5416c135",
+      "sha256": "6d2462e98ccb13464cd19b09018c8e47a0ea255e15e5e8f6e0be1f4b582ca89a",
       "executable": false
     },
     "src/nectar/ui/number-register.ts": {
@@ -4814,7 +4814,7 @@
       "executable": false
     },
     "tests/nectar/api-platform.mjs": {
-      "sha256": "f7bb5fae22880d4b34eed8d7913ea2d45a323a6ab0056fd818c62680dce5a47d",
+      "sha256": "1aa0606d04ccf3b0bcf59f45939f11864d1ab876f2150bacd44ba91922f0966a",
       "executable": false
     },
     "tests/nectar/assurance-detectors.mjs": {
