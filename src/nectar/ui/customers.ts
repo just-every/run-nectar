@@ -38,7 +38,7 @@ import { priceRate } from './pricing'
 // PORT-006: the language this customer's mail and pages use; options are the complete translation files.
 const languageSelect = (selected: string) => select('Customer language', 'language', languages(), selected, { hint: 'Renewal, return-offer, reminder, certificate and correction messages Nectar writes. Text you write yourself is sent as written.' })
 const languageName = (tag: string) => languages().find(l => l.value === tag)?.label ?? `${tag} (translation file removed; English is used)`
-const subscriptionState = (s: Record<string, any>, today: string) => s.billing_mode === 'shadow' ? 'Shadow' : s.end_date && s.end_date <= today ? 'Ended' : s.intervals?.some((i: any)=>i.from<=today && (!i.to || i.to>today)) ? 'Paused' : s.trial_end && s.trial_end > today ? 'Trial' : 'Active'
+const subscriptionState = (s: Record<string, any>, today: string) => s.billing_mode === 'shadow' ? 'Shadow' : s.state ? s.state.replaceAll('_',' ') : s.end_date && s.end_date <= today ? 'Ended' : s.intervals?.some((i: any)=>i.from<=today && (!i.to || i.to>today)) ? 'Paused' : s.trial_end && s.trial_end > today ? 'Trial' : 'Active'
 
 export async function customersPage(env: Bindings, actor: Actor, url: URL) {
   const rows = await customers(env, actor,url)
@@ -114,7 +114,7 @@ export async function subscriptionPage(env: Bindings, actor: Actor, id: string, 
   const open = s.items.filter((i: any) => !i.effective_to)
   const prices = records || can(actor,'draft')&&canRead(actor,'catalog') ? await all(env, "SELECT p.id,p.currency, pr.name, p.version, p.kind, p.unit_amount, p.pricing_model, p.nickname,b.interval_unit,b.interval_count,b.billing_timing FROM nc_prices p JOIN nc_products pr ON pr.id = p.product_id LEFT JOIN nc_price_intervals b ON b.price_id=p.id WHERE p.status = 'active' AND p.kind <> 'unit' ORDER BY pr.name, p.version DESC") : []
   return page('Subscription', actor, h`<p class="crumbs"><a href="/app/customers/${s.customer_id}">${s.customer_name}</a></p><h1>Subscription ${s.external_id ? h`<span>${s.external_id}</span>` : ''}</h1><p>${metadataLink('subscription',s.id)}${canRead(actor,'invoices')?h` · <a href="/app/prepaid/${s.id}">Prepaid credits</a>`:''}</p>
-    <section class="card summary"><dl class="figures"><div><dt>Status</dt><dd>${tag(s.billing_mode === 'shadow' ? 'Shadow' : s.state.replaceAll('_',' '))}</dd></div><div><dt>Started</dt><dd>${formatDate(s.start_date)}</dd></div>
+    <section class="card summary"><dl class="figures"><div><dt>Status</dt><dd>${tag(s.billing_mode === 'shadow' ? 'Shadow' : (s.state??subscriptionState(s,today)).replaceAll('_',' '))}</dd></div><div><dt>Started</dt><dd>${formatDate(s.start_date)}</dd></div>
       <div><dt>Billing day</dt><dd>${s.anchor_day}</dd></div><div><dt>Trial ends</dt><dd>${formatDate(s.trial_end)}</dd></div><div><dt>Ends</dt><dd>${formatDate(s.end_date)}</dd></div><div><dt>Contract term</dt><dd>${s.contract_term_months?`${s.contract_term_months} months`:'Evergreen'}</dd></div><div><dt>Anniversary anchor</dt><dd>${formatDate(s.billing_anchor_date)}</dd></div>
       ${s.cutover_start ? h`<div><dt>Billed by Nectar from</dt><dd>${formatDate(s.cutover_start)}</dd></div>` : ''}</dl>
       ${s.billing_mode === 'shadow' ? h`<p class="hint">Moved in from Stripe. Nectar rates it in shadow for comparison and issues nothing until the owner adopts it under Move in.</p>` : ''}
