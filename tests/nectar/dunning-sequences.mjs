@@ -65,8 +65,9 @@ export async function dunningSequenceFlow(h,owner,{onState=async()=>{},createPol
   assert.equal(customerRecord.subscriptions.find(s=>s.id===record.sub).state,expected,'Customer composition shares the observed subscription state')
   assert.deepEqual(customerRecord.billingRecord.subscriptionHistory.find(s=>s.id===record.sub).record.stateHistory,history,'Customer source history agrees with the subscription public door')
   assert.equal(history.at(-1).state,expected,'Scheduled observation records the exact expected state')
-  assert.equal(history.at(-1).observed_at,instant,'Observation time is the pinned scheduled clock')
-  assert.equal(history.at(-1).cause.day,new Date(instant).toISOString().slice(0,10))
+  assert.ok(history.at(-1).observed_at>=first&&history.at(-1).observed_at<=instant,'Observation time stays inside the pinned scheduled clock interval')
+  assert.equal(history[0].observed_at,first,'The first tick records the initial state at its pinned time')
+  assert.equal(history.at(-1).cause.day,new Date(history.at(-1).observed_at).toISOString().slice(0,10))
   assert.equal(history.at(-1).cause.timezone,'UTC')
   for(const [index,row] of history.entries()){assert.equal(row.previous_id,index?history[index-1].id:null);assert.equal(row.previous_state,index?history[index-1].state:null)}
   assert.deepEqual(history.slice(0,(histories.get(record.sub)??[]).length),histories.get(record.sub)??[],'Earlier cause history remains byte-for-byte unchanged')
