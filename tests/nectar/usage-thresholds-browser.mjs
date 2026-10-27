@@ -62,7 +62,7 @@ try{
       assert.equal(await customerPage.locator('input[name=threshold]').first().inputValue(),'1500000.00','Portal form changes the owned alert')
       await capture(customerPage,'portal-alerts')
       const wrong=await customerPage.goto(h.origin+`/portal/alerts?session=${encodeURIComponent(state.foreign.token)}`)
-      assert.equal(wrong.status(),200);assert.equal(await customerPage.getByText('One million calls',{exact:true}).count(),0)
+      assert.equal(wrong.status(),200);assert.equal(await customerPage.getByText('One million calls',{exact:true}).count(),0);assert.equal(await customerPage.locator('form').count(),0,'An account without a subscription has no unfulfillable alert form')
       await capture(customerPage,'other-customer-alerts')
     }else{
       assert.equal((await page.goto(h.origin+`/app/invoices/${state.invoice}`)).status(),200)

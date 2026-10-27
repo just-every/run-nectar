@@ -13,6 +13,6 @@ export async function portalThresholdsPage(env: Bindings, session: CustomerSessi
     <section class="card"><h2>Alert settings</h2>
       ${data.definitions.map(d => h`<article><h3>${d.name}</h3><p>${d.kind} · ${thresholdValue(d.kind,d.threshold,session.currency)}${d.enabled ? '' : ' · Disabled'}</p>
         ${session.contactId ? h`<details><summary>Change alert settings</summary>${configuration(d)}</details>` : ''}</article>`)}
-      ${session.contactId ? h`<details${!data.definitions.length ? raw(' open') : ''}><summary>Create an alert</summary>${configuration()}</details>` : h`<p>Ask your billing team for a portal link bound to your billing contact to manage alerts.</p>`}
+      ${data.subscriptions.length ? h`<details${!data.definitions.length ? raw(' open') : ''}><summary>Create an alert</summary>${configuration()}</details>` : h`<p>No subscriptions are available for alerts. Contact your billing team.</p>`}
     </section>`
 }

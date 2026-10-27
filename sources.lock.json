@@ -3830,7 +3830,7 @@
       "executable": false
     },
     "src/nectar/portal-thresholds.ts": {
-      "sha256": "115efa6955c8f611a8001baa82bae18890b219af54fcc560f2a919ec9cf8512d",
+      "sha256": "e67fe8bfc4f7e1017420cd14660c956b4071e3b227f4c7e78c6c3abc38590ea3",
       "executable": false
     },
     "src/nectar/portal-upcoming.ts": {
@@ -5438,7 +5438,7 @@
       "executable": false
     },
     "tests/nectar/usage-thresholds-browser.mjs": {
-      "sha256": "7dce9ab27a30fa24aa4ba388072ce9a46e56c58c816b4bddb5539313fd4a5c56",
+      "sha256": "c52bf3ca28640a117c2d19f5b68c0dddeeaff14da2bc35921c0036e13895f221",
       "executable": false
     },
     "tests/nectar/webhook-restore.mjs": {
