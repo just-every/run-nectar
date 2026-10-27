@@ -4818,7 +4818,7 @@
       "executable": false
     },
     "tests/nectar/billing-roles.mjs": {
-      "sha256": "b670f0aca14db97236fdb20bc9f45dee9fafa9d5f503c815ea499d497d34116e",
+      "sha256": "6bde6379f9ca3973f8d08a0d39e97e6bb4292c8dce8a72c5fd69eaecfd2083b8",
       "executable": false
     },
     "tests/nectar/cadences.mjs": {
