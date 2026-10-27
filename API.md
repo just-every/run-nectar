@@ -787,3 +787,28 @@ records its actual lifecycle transition and never bypasses credit governance.
 that sequence's emailed sessions. A restored sequence has historical custody
 but no send or terminal-action authority. Archives exclude both dunning
 authority tables, and erasure withdraws this record family.
+
+### Observed subscription state history
+
+The existing subscription detail read includes `stateHistory`, ordered by its
+append sequence. Each observation has an immutable id, previous state, state,
+observation time and typed cause. The same history appears on the subscription
+screen. Only the owner receives financial source details in this read; other
+authorized subscription readers receive the cause kind and business-local date.
+
+The minute scheduler observes native live subscriptions in bounded pages of 100.
+A changed observation atomically records history and queues the existing
+`subscription.updated` event for enabled, explicitly consented endpoints. Its
+`data` includes `state`, `previous_state`, `transition_id` and `cause`, along with
+the existing subscription identifiers, billing mode and end date. Existing
+signatures, delivery retry and receiver deduplication apply. Endpoint registration
+is never inferred, and observations made without an enabled endpoint are not
+backfilled as deliveries. An ordinary read never creates history.
+
+These are current-state observations. Changes entirely between sweeps can be
+absent; the history is not a complete processor event journal. Recorded payment
+refusal or an overdue obligation yields past due, an existing confirmed unpaid
+dunning result yields unpaid, and cleared obligations restore only the dated
+lifecycle state. An uncertain collection is not invented as a definitive failure.
+This door grants no payment, dunning, cancellation or access-policy authority.
+The existing preparation, acceptance and terminal-confirmation gates remain.

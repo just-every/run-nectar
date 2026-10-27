@@ -54,11 +54,11 @@ function noTransform(response: Response): Response {
 
 export default withDemo({
   async scheduled(controller, env) {
-    await dispatchWebhooks(runtimeBindings(env))
     await expirePaymentLinkAttempts(runtimeBindings(env))
     await runAutomaticCollections(runtimeBindings(env))
     await runPaymentRetries(runtimeBindings(env))
     await runInvoiceAutomation(runtimeBindings(env),controller.scheduledTime)
+    await dispatchWebhooks(runtimeBindings(env))
     if(controller.cron==='* * * * *')return
     await removeExpiredFinancialRecords(runtimeBindings(env))
     await runPrepaidSettlement(runtimeBindings(env))

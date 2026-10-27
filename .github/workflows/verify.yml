@@ -51,3 +51,7 @@ jobs:
         run: |
           node tests/nectar/dunning-browser.mjs
           node tests/nectar/dunning-browser.mjs custody
+
+      - name: Subscription state history browser journey
+        if: ${{ matrix.shard == 1 }}
+        run: node tests/nectar/subscription-states-browser.mjs

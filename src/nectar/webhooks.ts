@@ -1,3 +1,4 @@
+import { observeSubscriptionStates } from './subscription-state'
 import { observeWebhookEntitlements } from './webhook-entitlements'
 // Outbound webhooks: explicit owner consent, immutable snapshots and durable
 // at-least-once delivery. A receiver must deduplicate the stable event id.
@@ -77,6 +78,7 @@ async function signature(secret: Uint8Array, timestamp: number, body: string) {
 }
 const delays=[60000,300000,1800000,3600000,21600000,86400000]
 export async function dispatchWebhooks(env: Bindings) {
+  await observeSubscriptionStates(env)
   await observeWebhookEntitlements(env)
   const dueAt=clockInstant(env)
   await env.DB.prepare('UPDATE nc_webhook_endpoints SET previous_sealed=NULL,overlap_until=NULL WHERE overlap_until<=?').bind(dueAt).run()
