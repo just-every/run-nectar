@@ -67,8 +67,45 @@ jobs:
           fi
           echo "skip=$skip" >> "$GITHUB_OUTPUT"
 
-  shards:
+  app:
     needs: plan
+    if: needs.plan.outputs.skip != 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      CI: 'true'
+      WRANGLER_SEND_METRICS: 'false'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1; action runtime Node 24
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0; action runtime Node 24
+        with:
+          node-version: '22.20.0'
+          package-manager-cache: false
+      - name: Check edition source lock freshness
+        # Technical foundation exports use composition.lock.json or reference-export.json.
+        # Edition-owned seeds must commit both edition.json and sources.lock.json.
+        if: ${{ hashFiles('edition.json', 'sources.lock.json') != '' }}
+        run: node scripts/edition-authoring/cli.mjs check
+      - run: npm install --global pnpm@10.12.4
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run deps
+      - name: Build, typecheck and runtime verification
+        run: |
+          pnpm run build
+          pnpm run typecheck
+          pnpm run test:runtime
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: verified-app
+          path: dist/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
+
+  shards:
+    needs: [plan, app]
     if: needs.plan.outputs.skip != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -88,18 +125,23 @@ jobs:
         with:
           node-version: '22.20.0'
           package-manager-cache: false
-      - name: Check edition source lock freshness
-        # Technical foundation exports use composition.lock.json or reference-export.json.
-        # Edition-owned seeds must commit both edition.json and sources.lock.json.
-        if: ${{ hashFiles('edition.json', 'sources.lock.json') != '' }}
-        run: node scripts/edition-authoring/cli.mjs check
       - run: npm install --global pnpm@10.12.4
       - run: pnpm install --frozen-lockfile
       - run: pnpm run deps
       # ubuntu-24.04 provides Chromium libraries; the real browser journeys
       # still fail if runtime support is missing. Avoid an unbounded apt mirror.
       - run: pnpm exec playwright install chromium
-      - run: pnpm run verify
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: verified-app
+          path: dist/
+      - run: pnpm run test:flows
+      # These are rer verify's post-flow checks, retained once on the shared build.
+      - name: Hosted output and hydration verification
+        if: ${{ matrix.shard == 0 }}
+        run: |
+          node node_modules/@runeditrun/rer/cli/hosted-output.mjs .
+          node node_modules/@runeditrun/rer/cli/hydration/check.mjs .
       - name: Recovery reporting browser journeys
         if: ${{ matrix.shard == 0 }}
         run: |
@@ -119,7 +161,7 @@ jobs:
           node tests/nectar/invoice-void-browser.mjs refunds
 
   verify:
-    needs: [plan, shards]
+    needs: [plan, app, shards]
     if: ${{ always() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 1
