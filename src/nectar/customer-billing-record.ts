@@ -1,3 +1,4 @@
+import { invoiceRefunds } from './invoice-refunds'
 import { readCardExpiryNotices } from './card-expiry-notices'
 import { readCardLifecycle } from './card-lifecycle'
 import { customerPaymentLinks } from './payment-links-state'
@@ -43,7 +44,7 @@ export async function customerProcessorFacts(env: Bindings, customer?: string) {
 }
 
 const refundFields = ['id','status','grant','subscription','customer','invoice','purchaseNumber','purchaseLine','payment',
-  'receiptReference','amountN','amountCents','kind','unitLabel','refundRef','credit','creditNumber','requestedBy',
+  'receiptReference','destination','amountN','amountCents','kind','unitLabel','refundRef','credit','creditNumber','requestedBy',
   'requestedByKind','requestedAt','reasonCategory','preparedBy','approvedBy','approvalMode','preparedAt','approvedAt',
   'claimedAt','refundedOn','liabilityCents','recognitionCents','cashAmountCents','source','intake'] as const
 const typedRefund = (row: Row) => Object.fromEntries(refundFields.filter(key => row[key] !== undefined).map(key => [key, row[key]]))
@@ -55,7 +56,7 @@ async function customerAuditEvents(env: Bindings, actor: Actor, customer: string
   if (canRead(actor, 'subscriptions')) sources.push('SELECT id FROM nc_retry_method_recoveries WHERE customer_id=?', 'SELECT id FROM nc_retry_method_recovery_events WHERE customer_id=?','SELECT id FROM nc_card_lifecycle WHERE customer_id=?', 'SELECT id FROM nc_card_lifecycle_events WHERE customer_id=?', 'SELECT id FROM nc_portal_method_action_history WHERE customer_id=?', 'SELECT id FROM nc_payment_link_attributions WHERE customer_id=? AND subscription_id IS NOT NULL', 'SELECT id FROM nc_payment_link_attempts WHERE customer_id=? AND subscription_id IS NOT NULL','SELECT id FROM nc_renewal_terms WHERE subscription_id IN (SELECT id FROM nc_subscriptions WHERE customer_id=?)', 'SELECT id FROM nc_subscriptions WHERE customer_id=?', 'SELECT id FROM nc_prepaid_requests WHERE customer_id=?', 'SELECT id FROM nc_prepaid_grants WHERE customer_id=?', 'SELECT id FROM nc_prepaid_ledger WHERE customer_id=?')
   if (canRead(actor, 'invoices')) sources.push('SELECT id FROM nc_invoices WHERE customer_id=?', 'SELECT id FROM nc_credit_notes WHERE customer_id=?', 'SELECT id FROM nc_write_offs WHERE customer_id=?', 'SELECT id FROM nc_write_off_recoveries WHERE customer_id=?', 'SELECT id FROM nc_charges WHERE customer_id=?')
   if (canRead(actor, 'payments')) sources.push('SELECT id FROM nc_payments WHERE customer_id=?', 'SELECT id FROM nc_balance_entries WHERE customer_id=?', 'SELECT id FROM nc_balance_requests WHERE customer_id=?')
-  if (canRead(actor, 'payments') && canRead(actor, 'invoices')) sources.push('SELECT id FROM nc_retry_method_recoveries WHERE customer_id=?', 'SELECT id FROM nc_retry_method_recovery_events WHERE customer_id=?','SELECT id FROM nc_card_lifecycle WHERE customer_id=?', 'SELECT id FROM nc_card_lifecycle_events WHERE customer_id=?', 'SELECT id FROM nc_portal_method_action_history WHERE customer_id=?', 'SELECT id FROM nc_payment_link_attributions WHERE customer_id=? AND payment_id IS NOT NULL', 'SELECT id FROM nc_payment_link_attempts WHERE customer_id=? AND payment_id IS NOT NULL', 'SELECT id FROM nc_automatic_collections WHERE customer_id=?', 'SELECT id FROM nc_hosted_setup_history WHERE customer_id=?', 'SELECT id FROM nc_hosted_setups WHERE customer_id=?', 'SELECT id FROM nc_ach_payment_evidence WHERE customer_id=?', 'SELECT id FROM nc_native_collections WHERE customer_id=?', 'SELECT id FROM nc_prepaid_refunds WHERE customer_id=?', 'SELECT id FROM nc_prepaid_refund_intakes WHERE customer_id=?', 'SELECT id FROM nc_allocations WHERE payment_id IN (SELECT id FROM nc_payments WHERE customer_id=?)')
+  if (canRead(actor, 'payments') && canRead(actor, 'invoices')) sources.push('SELECT id FROM nc_retry_method_recoveries WHERE customer_id=?', 'SELECT id FROM nc_retry_method_recovery_events WHERE customer_id=?','SELECT id FROM nc_card_lifecycle WHERE customer_id=?', 'SELECT id FROM nc_card_lifecycle_events WHERE customer_id=?', 'SELECT id FROM nc_portal_method_action_history WHERE customer_id=?', 'SELECT id FROM nc_payment_link_attributions WHERE customer_id=? AND payment_id IS NOT NULL', 'SELECT id FROM nc_payment_link_attempts WHERE customer_id=? AND payment_id IS NOT NULL', 'SELECT id FROM nc_automatic_collections WHERE customer_id=?', 'SELECT id FROM nc_hosted_setup_history WHERE customer_id=?', 'SELECT id FROM nc_hosted_setups WHERE customer_id=?', 'SELECT id FROM nc_ach_payment_evidence WHERE customer_id=?', 'SELECT id FROM nc_native_collections WHERE customer_id=?', 'SELECT id FROM nc_prepaid_refunds WHERE customer_id=?', 'SELECT id FROM nc_invoice_refunds WHERE customer_id=?', 'SELECT id FROM nc_prepaid_refund_intakes WHERE customer_id=?', 'SELECT id FROM nc_allocations WHERE payment_id IN (SELECT id FROM nc_payments WHERE customer_id=?)')
   sources.push("SELECT id FROM nc_notes WHERE customer_id=? AND kind='customer'")
   if (canRead(actor, 'invoices')) sources.push("SELECT id FROM nc_notes WHERE customer_id=? AND kind='invoice'")
   if (canRead(actor, 'payments')) sources.push("SELECT id FROM nc_notes WHERE customer_id=? AND kind='payment'")
@@ -76,7 +77,7 @@ export async function customerBillingRecord(env: Bindings, actor: Actor, custome
   const [processorPayments, prepaid, refunds, balance, auditEvents,subscriptionHistory,writeOffs,savedPaymentMethods,achPaymentEvidence,receipts,hostedSetups] = await Promise.all([
     payments && invoices ? customerProcessorFacts(env, customer) : null,
     subscriptions ? Promise.all(subs.map(sub => prepaidBalances(env, actor, sub.id, date!))) : null,
-    payments && invoices ? Promise.all(subs.map(sub => readPrepaidRefunds(env, actor, sub.id))) : null,
+    payments && invoices ? Promise.all([...subs.map(sub => readPrepaidRefunds(env, actor, sub.id)), ...(await all(env,'SELECT id FROM nc_invoices WHERE customer_id=?',customer)).map(invoice=>invoiceRefunds(env,actor,invoice.id))]) : null,
     payments ? balanceView(env, actor, customer) : null,
     customerAuditEvents(env, actor, customer),
     customerSubscriptionHistory(env,actor,customer),customerWriteOffHistory(env,actor,customer),

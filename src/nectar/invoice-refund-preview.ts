@@ -40,7 +40,7 @@ export async function previewInvoiceRefund(env: Bindings, actor: Actor, input: I
     reversing: { subtotalCents: amountCents - taxCents, taxCents, totalCents: amountCents },
     effects: { owedBeforeCents: 0, owedAfterCents: 0, cashCents: destination === 'original' ? -amountCents : 0, customerBalanceCents: destination === 'balance' ? amountCents : 0, revenueCents: -(amountCents - taxCents) },
     needsSecondApprover: policy.two_person_above_cents !== null && amountCents > policy.two_person_above_cents,
-    executionAvailable: false,
+    executionAvailable: invoice.tax_cents === 0,
     providerOutcome: 'not-attempted',
     boundary: 'Read-only estimate from issued records. No processor refund, provider tax reversal, customer balance credit, approval or customer message is created.',
   }

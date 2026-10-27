@@ -54,4 +54,6 @@ jobs:
 
       - name: Invoice void and replacement browser proof
         if: ${{ matrix.shard == 0 }}
-        run: node tests/nectar/invoice-void-browser.mjs
+        run: |
+          node tests/nectar/invoice-void-browser.mjs
+          node tests/nectar/invoice-void-browser.mjs refunds

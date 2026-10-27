@@ -1,3 +1,4 @@
+import { invoiceRefunds } from './invoice-refunds'
 import { currencyRecord } from './currency-rates'
 import { planChangeInvoiceFingerprint } from './plan-changes'
 import { consolidationCalculation,hierarchyPreIssue,hierarchyIssueStatements } from './hierarchies'
@@ -185,6 +186,7 @@ export async function invoiceRecord(env: Bindings, actor: Actor, id: string): Pr
     ...await currencyRecord(env,invoice,invoice.total_cents,invoice.issue_date??invoice.period_start),retainedFinancial:await one(env,"SELECT legal_name,document_date,retain_until,tax_json FROM nc_erasure_financial WHERE kind='invoice' AND record_id=?",id),...await metadataFor(env,'invoice',id), creditPolicy: await creditPolicy(env), creditRequests: canRead(actor, 'invoices') ? await creditRequests(env, actor, id) : [], calculation: parseJson(invoice.calculation_json, {}), comparison: parseJson(invoice.comparison_json, {}), exceptions: parseJson(invoice.exceptions_json, []),
     calculation_json: undefined, comparison_json: undefined, exceptions_json: undefined,
     lines: lines.map(line => ({ ...line, evidence: parseJson(line.evidence_json, {}), evidence_json: undefined })),
+    refunds:canRead(actor,'payments')?await invoiceRefunds(env,actor,id):[],
     voidedBy:credits.find(row=>row.void_replacement_id)??null, reissuedFrom:parseJson<Row>(invoice.calculation_json,{}).inputs?.reissue??null,
     carriedApplications, credits:await withMetadata(env,'credit-note',credits), allocations, balanceApplications, writeOffs, writtenOffCents: writtenOff, creditedCents: credited, paidCents: paid, balanceCents: invoice.status === 'issued' ? invoice.total_cents - credited - paid - writtenOff : null,
   }

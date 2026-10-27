@@ -536,10 +536,29 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "customer": "text",
     "service_date": "text"
   },
+  "invoice.refund.execute": {
+    "amount": "text",
+    "basis": "text",
+    "confirm": "flag",
+    "destination": "text",
+    "invoice": "text",
+    "reason": "text",
+    "refund": "text"
+  },
+  "invoice.refund.prepare": {
+    "amount": "text",
+    "basis": "text",
+    "destination": "text",
+    "invoice": "text",
+    "reason": "text"
+  },
   "invoice.refund.preview": {
     "amount": "text",
     "destination": "text",
     "invoice": "text"
+  },
+  "invoice.refund.reconcile": {
+    "refund": "text"
   },
   "invoice.series": {
     "customer": "text",

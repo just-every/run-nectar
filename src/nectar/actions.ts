@@ -1,3 +1,4 @@
+import { prepareInvoiceRefund, executeInvoiceRefund, reconcileInvoiceRefund } from './invoice-refunds'
 import { previewInvoiceRefund } from './invoice-refund-preview'
 import { prepareInvoiceVoid, voidInvoice } from './invoice-voids'
 import { createDunningPolicy, enrollDunning } from './dunning-policy'
@@ -289,6 +290,9 @@ export const actions: Record<string, Handler> = {
   'billrun.prepare': prepareRun,
   'invoice.correction.refresh': refreshCorrectingInvoice,
   'invoice.refund.preview': previewInvoiceRefund,
+  'invoice.refund.prepare': prepareInvoiceRefund,
+  'invoice.refund.execute': executeInvoiceRefund,
+  'invoice.refund.reconcile': reconcileInvoiceRefund,
   'invoice.void.prepare': prepareInvoiceVoid,
   'invoice.void': voidInvoice,
   'invoice.approve': approve,

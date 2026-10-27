@@ -49,15 +49,18 @@ export async function revenueIssueStatements(env: Bindings, invoice: Row): Promi
   return statements
 }
 
-export interface RevenueCreditIssue { id: string; invoice: string; customer: string; amountCents: number; issuedAt: number }
+export interface RevenueCreditIssue { id: string; invoice: string; customer: string; amountCents: number; subtotalCents?: number; issuedAt: number }
 export async function revenueCreditStatements(env: Bindings, credit: RevenueCreditIssue): Promise<D1PreparedStatement[]> {
   insist(Number.isSafeInteger(credit.amountCents) && credit.amountCents > 0 && Number.isSafeInteger(credit.issuedAt), 'revenue_invalid_credit', 409)
   const business = await requireBusiness(env)
   const period = localDate(credit.issuedAt, business.timezone).slice(0, 7)
   const prepaid = !!await one(env,"SELECT 1 FROM nc_invoice_lines WHERE invoice_id=? AND kind='prepaid_purchase'",credit.invoice)
+  const subtotal = credit.subtotalCents ?? credit.amountCents
+  insist(Number.isSafeInteger(subtotal) && subtotal > 0 && subtotal <= credit.amountCents, 'revenue_invalid_credit', 409)
   return [
     guard(env, 'revenue_credit_changed', `EXISTS(SELECT 1 FROM nc_credit_notes n JOIN nc_invoices i ON i.id=n.invoice_id WHERE n.id=? AND n.invoice_id=? AND n.customer_id=? AND n.amount_cents=? AND n.issued_at=? AND i.status='issued' AND i.customer_id=n.customer_id)`, credit.id, credit.invoice, credit.customer, credit.amountCents, credit.issuedAt),
-    stmt(env, `INSERT INTO nc_revenue_credits(id,credit_id,invoice_id,customer_id,recognition_date,amount_cents,policy_version,basis_json) VALUES(?,?,?,?,?,?,?,?)`, credit.id, credit.id, credit.invoice, credit.customer, `${period}-01`, -credit.amountCents, REVENUE_POLICY_VERSION,
+    ...(credit.subtotalCents === undefined ? [] : [guard(env, 'revenue_credit_changed', 'EXISTS(SELECT 1 FROM nc_credit_notes WHERE id=? AND subtotal_cents=? AND tax_cents=amount_cents-subtotal_cents)', credit.id, subtotal)]),
+    stmt(env, `INSERT INTO nc_revenue_credits(id,credit_id,invoice_id,customer_id,recognition_date,amount_cents,policy_version,basis_json) VALUES(?,?,?,?,?,?,?,?)`, credit.id, credit.id, credit.invoice, credit.customer, `${period}-01`, -subtotal, REVENUE_POLICY_VERSION,
       JSON.stringify({ method: prepaid ? 'unfunded-prepaid-liability-reversal' : 'invoice-level-contra-revenue', ...(prepaid?{recognitionCents:0}:{}), creditId: credit.id, invoiceId: credit.invoice, issuedAt: credit.issuedAt, timezone: business.timezone, originalTaxUnchanged: true, lineAllocation: 'No attribution to original lines or tax is inferred.' })),
   ]
 }

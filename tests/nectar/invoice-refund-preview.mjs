@@ -1,8 +1,12 @@
 import assert from 'node:assert/strict'
-import { nativeCollectionEdge } from './native-collection.mjs'
+import { prepaidRefundEdge } from './prepaid-refunds.mjs'
 import { applyPolicy } from './policy-helper.mjs'
 let edge
-export const harnessOptions = () => { edge = nativeCollectionEdge(); return { stripeFetch: edge.fetch, stripeSecret: 'synthetic-nectar-1' } }
+export const getInvoiceRefundEdge=()=>edge
+export const harnessOptions = () => {
+  edge = prepaidRefundEdge(); edge.at('2026-10-22T18:00:00Z')
+  return { stripeFetch: edge.fetch, stripeSecret: 'synthetic-nectar-1' }
+}
 
 export async function invoiceRefundPreviewFlow(h, owner) {
   const api = (path, body, status) => h.api(path, owner, body, status)
@@ -19,10 +23,10 @@ export async function invoiceRefundPreviewFlow(h, owner) {
   await api('invoice.finalise', { invoice: id, issue_date: '2026-10-22' })
   assert.equal((await preview('1100', 'original', 409)).error, 'paid_invoice_required')
   await api('collection.customer.bind', { customer, account_ref: 'synthetic-nectar-native-account-1', stripe_customer_ref: 'synthetic-nectar-native-customer-1', confirm: true })
-  assert.equal((await api('invoice.void', { invoice: id, basis: (await api(`invoices/${id}`)).source_fingerprint, reason: 'Synthetic taxed void refusal', confirm: true }, 409)).error, 'invoice_void_scope_not_supported')
+  assert.equal((await api('invoice.void', { invoice: id, basis: 'synthetic-nectar-stale', reason: 'Synthetic stale taxed void refusal', confirm: true }, 409)).error, 'source_changed')
   const collection = await api('collection.prepare', { invoice: id })
   await api('collection.confirm', collection.instructions.confirm)
-  const original = await api(`invoices/${id}`), audit = await api('audit'), writes = edge.calls.filter(call => call.method === 'POST').length, mails = h.mails.length
+  const original = await api(`invoices/${id}`), audit = await api('audit'), writes = [...edge.calls,...edge.native.calls].filter(call => call.method === 'POST').length, mails = h.mails.length
   assert.deepEqual([original.subtotal_cents, original.tax_cents, original.total_cents, original.balanceCents], [200000, 20000, 220000, 0])
   const cash = await preview('1100', 'original'), balance = await preview('1100', 'balance')
   assert.deepEqual(cash.reversing, { subtotalCents: 100000, taxCents: 10000, totalCents: 110000 })
@@ -31,7 +35,8 @@ export async function invoiceRefundPreviewFlow(h, owner) {
   assert.deepEqual(balance.effects, { owedBeforeCents: 0, owedAfterCents: 0, cashCents: 0, customerBalanceCents: 110000, revenueCents: -100000 })
   assert.equal(cash.needsSecondApprover, true); assert.equal(balance.needsSecondApprover, true)
   assert.notEqual(cash.basis, balance.basis)
-  assert.deepEqual(cash.original, { totalCents: 220000, subtotalCents: 200000, taxCents: 20000, payment: original.allocations[0].payment_id, capture: edge.charges.values().next().value.value.id })
+  assert.equal((await api('invoice.refund.prepare',{invoice:id,amount:'1100',destination:'original',basis:cash.basis,reason:'Synthetic taxed refund refusal'},409)).error,'invoice_refund_provider_tax_required')
+  assert.deepEqual(cash.original, { totalCents: 220000, subtotalCents: 200000, taxCents: 20000, payment: original.allocations[0].payment_id, capture: edge.native.charges.values().next().value.value.id })
   const low = await preview('900', 'original')
   assert.equal(low.needsSecondApprover, false)
   assert.deepEqual(low.reversing, { subtotalCents: 81818, taxCents: 8182, totalCents: 90000 })
@@ -42,7 +47,7 @@ export async function invoiceRefundPreviewFlow(h, owner) {
   assert.deepEqual(await h.api('invoice.refund.preview', agent, { invoice: id, amount: '1100', destination: 'original' }), cash)
   await h.api('invoice.refund.preview', undefined, { invoice: id, amount: '1', destination: 'original' }, 401)
   assert.deepEqual(await api('audit'), beforeAgent)
-  assert.equal(edge.calls.filter(call => call.method === 'POST').length, writes)
+  assert.equal([...edge.calls,...edge.native.calls].filter(call => call.method === 'POST').length, writes)
   // The credential issue sends no mail; quoting never reserves a message.
   assert.equal(h.mails.length, mails)
   assert.deepEqual(await api(`invoices/${id}`), original)
@@ -51,5 +56,110 @@ export async function invoiceRefundPreviewFlow(h, owner) {
   await applyPolicy(h, owner, 'credit.policy', { two_person_above: '1200' })
   const changed = await preview('1100', 'original')
   assert.equal(changed.needsSecondApprover, false); assert.notEqual(changed.basis, cash.basis)
-  console.log('INV-005 read-only refund preview: exact independent tax and pretax effects, original-method and balance destinations, thresholds, source basis, refused inputs and no provider, ledger or mail writes passed')
+  await invoiceRefundExecutionFlow(h,owner,{account:'synthetic-nectar-native-account-1',customerRef:'synthetic-nectar-native-customer-3',edge})
+  console.log('INV-005 refund preview: exact independent tax and pretax effects, original-method and balance destinations, thresholds, source basis, refused inputs and no provider, ledger or mail writes passed')
+}
+
+
+export async function invoiceRefundExecutionFlow(h, owner, {account,customerRef,edge:processor,onState=async()=>{}}) {
+  const api=(path,body,status)=>h.api(path,owner,body,status)
+  const instant=processor?'2026-10-22T18:00:00Z':new Date().toISOString()
+  await h.advanceClock(instant)
+  const date=instant.slice(0,10), period=date.slice(0,7)
+  await applyPolicy(h,owner,'tax.declare',{tax_jurisdiction:'CA',tax_mode:'no_tax',tax_note:'Synthetic non-taxable refund proof'})
+  await api('tax.review',{revision:(await api('business')).revision})
+  await applyPolicy(h,owner,'credit.policy',{two_person_above:'1000'})
+  await api('access.give',{email:'synthetic-nectar-refund-finance@example.test',name:'Synthetic refund approver',role:'finance'})
+  const finance=await h.signIn('synthetic-nectar-refund-finance@example.test',{requested:true})
+  await api('access.give',{email:'synthetic-nectar-refund-reader@example.test',name:'Synthetic refund accountant',role:'accountant'})
+  const reader=await h.signIn('synthetic-nectar-refund-reader@example.test',{requested:true})
+  const agent={bearer:(await api('credential.issue',{name:'Synthetic refund agent',scopes:['prepare']})).key}
+  const customer=(await api('customer.create',{external_id:'synthetic-nectar-refund-1',name:'Synthetic card refund business',billing_email:'synthetic-nectar-refund-1@example.test'})).id
+  await api('collection.customer.bind',{customer,account_ref:account,stripe_customer_ref:customerRef,confirm:true})
+  const paid=async amount=>{
+    const charge=(await api('charge.add',{customer,amount,description:'Synthetic refundable service',taxable:false,effective_date:date})).charge
+    const {id}=await api('invoice.manual',{customer,charges:[charge],service_date:date})
+    await api('invoice.approve',{invoice:id,acknowledge:true});await api('invoice.finalise',{invoice:id,issue_date:date})
+    const request=await api('collection.prepare',{invoice:id});await api('collection.confirm',request.instructions.confirm)
+    const invoice=await api(`invoices/${id}`);assert.equal(invoice.balanceCents,0);return invoice
+  }
+  const original=await paid('3000'),low=await paid('900'),uncertain=await paid('100')
+  const quote=async(invoice,amount,destination)=>api('invoice.refund.preview',{invoice:invoice.id,amount,destination})
+  const body=q=>({invoice:q.invoice,amount:String(q.amountCents/100),destination:q.destination,basis:q.basis,reason:'Synthetic customer correction',confirm:true})
+  const q=await quote(original,'1500','original'), before=processor?.refunds.size
+  await api('invoice.refund.execute',body(q),409)
+  const saved=await api('invoice.refund.prepare',body(q))
+  await api('invoice.refund.execute',{refund:saved.id,basis:saved.basis,confirm:true},409)
+  for(const who of [agent,reader])for(const action of ['invoice.refund.prepare','invoice.refund.execute','invoice.refund.reconcile'])await h.api(action,who,body(q),403)
+  assert.equal((await api(`invoices/${original.id}`)).balanceCents,0)
+  if(processor)assert.equal(processor.refunds.size,before)
+  await h.rejectAudit('invoice.refund.claim')
+  await h.api('invoice.refund.execute',finance,{refund:saved.id,basis:saved.basis,confirm:true},500)
+  await h.rejectAudit(null)
+  if(processor)assert.equal(processor.refunds.size,before,'A failed claim audit cannot move cash')
+  const cash=await h.api('invoice.refund.execute',finance,{refund:saved.id,basis:saved.basis,confirm:true})
+  assert.equal(cash.status,'completed');assert.ok(cash.refundRef);assert.equal(cash.amountCents,150000)
+  const afterCash=await api(`invoices/${original.id}`)
+  const refunds=await api(`reports/refunds?period=${period}&customer=${customer}`)
+  assert.equal(refunds.totalCents,-150000)
+  const refundEntry=refunds.entries.find(row=>row.invoiceId===cash.id)
+  assert.ok(refundEntry)
+  const refundSource=await api(refundEntry.href.replace('/app/',''))
+  assert.equal(refundSource.components.reduce((sum,row)=>sum+row.amountCents,0),-150000)
+  const {csvRows}=await import('./financial-reports.mjs')
+  const refundCsv=await h.raw(`/app/exports/reports/refunds.csv?period=${period}&customer=${customer}`,{cookie:owner})
+  assert.equal(refundCsv.status,200)
+  assert.deepEqual(csvRows(await refundCsv.text()).filter(row=>row.source!=='TOTAL').map(row=>Math.round(Number(row.amount.replace(/[^0-9.-]/g,''))*100)),[-150000])
+  assert.deepEqual(afterCash.lines,original.lines);assert.deepEqual(afterCash.calculation,original.calculation)
+  assert.deepEqual(afterCash.allocations,original.allocations);assert.equal(afterCash.balanceCents,0)
+  assert.equal((await api(`customers/${customer}/balance`)).totalCents,0)
+  const credit=afterCash.credits.find(row=>row.id===cash.credit)
+  assert.deepEqual([credit.amount_cents,credit.subtotal_cents,credit.tax_cents,credit.applied_cents],[150000,150000,0,0])
+  await h.api('invoice.refund.execute',finance,{refund:saved.id,basis:saved.basis,confirm:true},409)
+  assert.equal((await api('invoice.refund.reconcile',{refund:saved.id})).status,'completed')
+  const bq=await quote(original,'1500','balance'), balanceRequest=await api('invoice.refund.prepare',body(bq))
+  const balance=await h.api('invoice.refund.execute',finance,{refund:balanceRequest.id,basis:balanceRequest.basis,confirm:true})
+  assert.equal(balance.status,'completed');assert.equal(balance.refundRef,null)
+  assert.equal((await api(`customers/${customer}/balance`)).carriedCents,150000)
+  assert.equal((await api(`reports/credit-balances?period=${period}&customer=${customer}`)).totalCents,150000)
+  assert.equal((await api('invoice.refund.preview',{invoice:original.id,amount:'0.01',destination:'original'},409)).error,'exceeds_refundable_amount')
+  const lowQuote=await quote(low,'900','original'), lowRefund=await api('invoice.refund.execute',body(lowQuote))
+  assert.equal(lowRefund.status,'completed');assert.equal(lowRefund.preparedBy,lowRefund.approvedBy)
+  const staleQuote=await quote(uncertain,'100','original'), stale=await api('invoice.refund.prepare',body(staleQuote))
+  await applyPolicy(h,owner,'credit.policy',{two_person_above:'1001'})
+  assert.equal((await api('invoice.refund.execute',{refund:stale.id,basis:stale.basis,confirm:true},409)).error,'invoice_refund_stale')
+  const audit=(await api('audit')).filter(row=>row.action==='invoice.refund.complete'&&row.subject===cash.id)
+  assert.equal(audit.length,1)
+  assert.deepEqual([JSON.parse(audit[0].detail).preparedBy,JSON.parse(audit[0].detail).approvedBy],[h.vars.OWNER_EMAIL,'synthetic-nectar-refund-finance@example.test'])
+  if(processor) {
+    const uq=await quote(uncertain,'100','original'), request=await api('invoice.refund.prepare',body(uq))
+    processor.loseNext()
+    const lost=await api('invoice.refund.execute',{refund:request.id,basis:request.basis,confirm:true})
+    assert.equal(lost.status,'uncertain')
+    const writes=processor.refunds.size
+    await api('invoice.refund.execute',{refund:request.id,basis:request.basis,confirm:true},409)
+    const recovered=await api('invoice.refund.reconcile',{refund:request.id})
+    assert.equal(recovered.status,'completed');assert.equal(processor.refunds.size,writes)
+    assert.equal((await api('invoice.refund.reconcile',{refund:request.id})).credit,recovered.credit)
+  }
+  const final=await api(`invoices/${original.id}`)
+  assert.deepEqual(final.credits.map(n=>n.amount_cents),[150000,150000])
+  assert.equal(final.balanceCents,0);assert.equal(final.paidCents,300000)
+  assert.equal((await api(`reports/tax?period=${period}&customer=${customer}`)).totalCents,0)
+  await api('report.schedule',{enabled:true,day:5})
+  const next=new Date(Date.UTC(Number(period.slice(0,4)),Number(period.slice(5,7)),5,18)).toISOString()
+  await h.advanceClock(next)
+  const tick=await h.raw(`/cdn-cgi/local/scheduled?time=${Date.parse(next)}&cron=${encodeURIComponent('0 14 * * *')}`)
+  assert.equal(tick.status,200)
+  const deliveries=(await api('report-schedule')).deliveries
+  assert.equal(deliveries.length,1)
+  const snapshot=await api(`report-deliveries/${deliveries[0].id}`)
+  const cashSnapshot=snapshot.reports.find(row=>row.metric==='refunds')
+  assert.equal(cashSnapshot.totalCents,processor?-250000:-240000)
+  assert.equal(cashSnapshot.entries.filter(row=>row.sourceKind==='invoice_refund').length,processor?3:2)
+  const source=snapshot.sourceEvidence.find(row=>row.metric==='refunds'&&row.detail.invoiceRefund?.id===cash.id)
+  assert.ok(source);assert.equal(source.detail.totalCents,-150000)
+    await onState({label:'refunded-and-balance-credited',id:original.id,owner})
+  console.log('INV-005 card refund and balance credit: exact half allocations, immutable originals, independent approval, low direct execution, refusal, stale, replay and cash custody passed')
+  return {customer,invoice:original.id,cash,balance,low:lowRefund,original}
 }

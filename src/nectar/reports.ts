@@ -22,7 +22,7 @@ export interface ReportEntry extends ReportCurrencyEvidence {
   sourcePath?: string
   sourceProvider?: string; sourceReference?: string
   invoiceId: string; number: string; customerId: string; customerName: string; amountCents: number; href: string
-  sourceKind?: 'invoice' | 'payment' | 'customer_balance' | 'credit_note' | 'subscription_period' | 'prepaid_grant' | 'prepaid_refund'; paymentId?: string
+  sourceKind?: 'invoice' | 'payment' | 'customer_balance' | 'credit_note' | 'subscription_period' | 'prepaid_grant' | 'prepaid_refund' | 'invoice_refund'; paymentId?: string
   prepaid?: import('./financial-prepaid').PrepaidReportBalance
   refund?: import('./financial-refunds').PrepaidReportRefund
 }
