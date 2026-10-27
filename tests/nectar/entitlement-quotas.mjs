@@ -59,8 +59,7 @@ export async function entitlementQuotasFlow(h, owner, {onState=async()=>{},measu
     if (fixture.policy === 'soft' && exhausted) assert.equal(path.warning, true, 'ENT-002 a soft quota warns while preserving access')
     assert.equal(path.payment.restricted, false)
     assert.equal(path.payment.graceDays, 3)
-    await api('portal.session.issue',{customer,contact:otherContact,origin:h.origin,audience:'hosted'},404)
-  const session=await api('portal.session.issue',{customer:fixture.customer,origin:h.origin,audience:'hosted'})
+    const session=await api('portal.session.issue',{customer:fixture.customer,origin:h.origin,audience:'hosted'})
     const response=await h.raw(`/portal/subscriptions/${fixture.subscription}/upcoming?period=2026-09&session=${session.token}`)
     assert.equal(response.status,200)
     const customerQuota=(await response.json()).quotas.find(row=>row.feature===feature)
@@ -361,6 +360,7 @@ export async function usageThresholdFlow(h,owner,{onState=async()=>{}}={}) {
   const subscription=(await api('subscription.create',{customer,external_id:'acacia-analytics',start_date:'2026-09-01',anchor_day:1,price:[price]})).id
   const terms=await api('contract.prepare',{subscription,revision:(await api(`subscriptions/${subscription}`)).revision,clause:'Signed monthly minimum',commitments:[{from:'2026-09-01',to:'2026-10-01',minimum:'6000',taxable:false}]})
   await h.api('contract.decide',finance,{contract:terms.contract,decision:'approved'})
+  await api('portal.session.issue',{customer,contact:otherContact,origin:h.origin,audience:'hosted'},404)
   const session=await api('portal.session.issue',{customer,contact,origin:h.origin,audience:'hosted'}),foreign=await api('portal.session.issue',{customer:other,contact:otherContact,origin:h.origin,audience:'hosted'}),unbound=await api('portal.session.issue',{customer,origin:h.origin,audience:'hosted'})
   const portal=async(token,path='/portal/alerts/data',body,status=200)=>{
     const response=await h.raw(`${path}?session=${encodeURIComponent(token)}`,{body}),text=await response.text()
