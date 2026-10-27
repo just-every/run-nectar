@@ -165,6 +165,11 @@ export async function assuranceProposal(env: Bindings, actor: Actor, input: Inpu
   const row=await assuranceCase(env,actor,input.text('assurance_case',{max:100}))
   insist(row.status==='open','assurance_case_resolved',409)
   await activeOwner(env,row.owner_id)
+  if(payload.invoice_refund===true) {
+    insist(kind==='amendment' && row.kind==='usage_source_control','assurance_fix_kind_unsupported',409)
+    const invoice=await one(env,'SELECT customer_id FROM nc_invoices WHERE id=?',payload.invoice)
+    insist(invoice?.customer_id===row.customer_id,'assurance_fix_customer_mismatch',409)
+  }
   if(row.kind===RAMP_KIND) {
     insist(kind==='amendment' && payload.invoice_credit===true,'assurance_fix_kind_unsupported',409)
     const proof=await current(env,actor,row)

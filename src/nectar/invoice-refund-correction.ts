@@ -33,6 +33,12 @@ export async function checkedRefundCorrection(env: Bindings, id: string) {
   let plan: Awaited<ReturnType<typeof planInvoiceRefundCorrection>>
   try { plan = await planInvoiceRefundCorrection(env, payload) } catch { throw new NectarError('proposal_stale',409) }
   insist(canonical(plan.basis) === canonical(parseJson(proposal.basis_json, {})), 'proposal_stale', 409)
+  const link = parseJson<Row>(proposal.evidence_json,{}).assurance
+  if(link) {
+    const sourceCase = await one(env,'SELECT kind,customer_id FROM nc_assurance_cases WHERE id=?',link.case)
+    insist(sourceCase?.kind==='usage_source_control','assurance_fix_kind_unsupported',409)
+    insist(sourceCase.customer_id===plan.impact.refund.customer,'assurance_fix_customer_mismatch',409)
+  }
   return { proposal, plan }
 }
 

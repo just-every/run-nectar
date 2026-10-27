@@ -225,6 +225,13 @@ async function invoiceRefundCorrectionFlow(h,owner,{invoice,customer,finance,rea
   await api('assurance.scan',{period:closedPeriod,owner:ownerId})
   const sourceCase=(await api('assurance-cases')).find(row=>row.customer_id===customer&&row.kind==='usage_source_control')
   assert.ok(sourceCase,'A real source mismatch supplies the case link')
+  const foreignCustomer=(await api('customer.create',{external_id:'synthetic-nectar-refund-case-foreign',name:'Synthetic separate case customer',billing_email:'synthetic-nectar-refund-case-foreign@example.test'})).id
+  const foreignSubscription=(await api('subscription.create',{customer:foreignCustomer,start_date:invoice.issue_date,price:[price],quantity:['']})).id
+  await api('usage.control',{customer:foreignCustomer,meter:'synthetic-nectar-refund-events',day:invoice.issue_date,expected_count:1,expected_quantity:'1'})
+  await api('assurance.scan',{period:closedPeriod,owner:ownerId})
+  const foreignCase=(await api('assurance-cases')).find(row=>row.customer_id===foreignCustomer&&row.kind==='usage_source_control')
+  assert.ok(foreignCase)
+  assert.equal((await h.api('proposal.create',agent,{assurance_case:foreignCase.id,kind:'amendment',title:payload.reason,payload:{...payload,subscription:foreignSubscription}},409)).error,'assurance_fix_customer_mismatch','A case cannot authorize another customer invoice refund')
   const refusalResults=[]
   for(const change of ['credential-revoked','case-reassigned']) {
     const name='Synthetic refund authority '+change
