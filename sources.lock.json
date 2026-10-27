@@ -3030,7 +3030,7 @@
       "executable": false
     },
     "src/nectar/automatic-collection-jobs.ts": {
-      "sha256": "31f60cc04269dc33f991e5702b72dc4eed89c760cc71906bd6fa65b66bfcf414",
+      "sha256": "79244b1b152afbb2c07ab9b3baaea3212c39690ab420d1fcabb509b226c3f46f",
       "executable": false
     },
     "src/nectar/automatic-collection-records.ts": {

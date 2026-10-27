@@ -76,7 +76,7 @@ export async function reconcileAutomaticCollection(env:Bindings,id:string,retrie
  const identity=await identityFor(env,row),{stripe}=await stripeForAccount(env,row.account_ref)
  try{return await settleAutomaticIntent(env,row,stripe,await readIntent(stripe,identity,row.payment_intent_ref,row.claimed_at,clockInstant(env)),identity)}catch(error){
   const current=await storedAutomaticCollection(env,id)
-  if(current.status==='collected')return automaticView(current)
+  if(['collected','revoked','invalidated'].includes(current.status))return automaticView(current)
   if(retries>0&&error instanceof NectarError&&['automatic_collection_state_changed','precondition_failed'].includes(error.code))return reconcileAutomaticCollection(env,id,retries-1)
   if(['refused','returned'].includes(current.status))return automaticView(current)
   row=await outcome(env,current,current.status==='pending_settlement'?'pending_settlement':'uncertain',{error_code:error instanceof NectarError?error.code:'processor_outcome_unconfirmed'})
