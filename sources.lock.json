@@ -5294,7 +5294,7 @@
       "executable": false
     },
     "tests/nectar/retention.mjs": {
-      "sha256": "fdbc3dfcaea58b23b0a05184eb69060151c3b638a527bffdeecddebc64549408",
+      "sha256": "0d7af08e6f27fe88005603a16350a8c6fee374d98247b75eeb75fc0585b2fde9",
       "executable": false
     },
     "tests/nectar/retry-authentication-browser.mjs": {
