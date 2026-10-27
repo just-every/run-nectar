@@ -897,6 +897,10 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
   "price.retire": {
     "price": "text"
   },
+  "processor.event.consume": {
+    "account_ref": "text",
+    "event_ref": "text"
+  },
   "product.create": {
     "code": "text",
     "description": "text",
