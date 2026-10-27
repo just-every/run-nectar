@@ -3798,7 +3798,7 @@
       "executable": false
     },
     "src/nectar/portal-page.ts": {
-      "sha256": "b2a92444bc577c97f05b67c9c853dd2886ca9206ecaf55d1d65121a0af2f0ab2",
+      "sha256": "9cca6ecda0a1530ad5be4bd8c452a3f401cb55e06ec75af1dcb949adc26fb1be",
       "executable": false
     },
     "src/nectar/portal-policy.ts": {
@@ -3825,8 +3825,12 @@
       "sha256": "f6f9652494689bd99c292807c2343155b8b9649c9f0724e734b0fa65905b5715",
       "executable": false
     },
+    "src/nectar/portal-threshold-style.ts": {
+      "sha256": "4167e80e0c7d1c03e5d2cf8ff3341cafef100d43b205a5ddbeea1acb713f6b90",
+      "executable": false
+    },
     "src/nectar/portal-thresholds.ts": {
-      "sha256": "c9c1f127d802891d570f47890d17d592c9b0c66ae10ca347a1fec7daf340618c",
+      "sha256": "115efa6955c8f611a8001baa82bae18890b219af54fcc560f2a919ec9cf8512d",
       "executable": false
     },
     "src/nectar/portal-upcoming.ts": {
@@ -4506,7 +4510,7 @@
       "executable": false
     },
     "src/nectar/ui/usage-thresholds.ts": {
-      "sha256": "dcb9a791a43d68e56d57a049fb97eed0a5bdf9aa697563b8fdc8bd903abf86c9",
+      "sha256": "0f1d8ac7a144efa31ed2199a7971f3536d094e41548b59d49cdf3ee7ed61206e",
       "executable": false
     },
     "src/nectar/ui/webhooks.ts": {
@@ -4558,7 +4562,7 @@
       "executable": false
     },
     "src/nectar/usage-thresholds.ts": {
-      "sha256": "c7a31acc4c42a7ba6182b01a471994876abf5a48011f2a9e7d736938cbf52913",
+      "sha256": "626530b9f3d1b87b4ed3d586088aa2698387a5e59ce99479a5a5c19f16075eeb",
       "executable": false
     },
     "src/nectar/usage.ts": {
@@ -5062,7 +5066,7 @@
       "executable": false
     },
     "tests/nectar/isolated.mjs": {
-      "sha256": "84963202cc537c0d53606702cb9f8a5cdcb4db4996ac4f64a495cb52c92c32e3",
+      "sha256": "6ae11983842fe47d1d9417b92b90951003c0101699e5e4eb4922ce2e776e1c79",
       "executable": false
     },
     "tests/nectar/journey.mjs": {
@@ -5434,7 +5438,7 @@
       "executable": false
     },
     "tests/nectar/usage-thresholds-browser.mjs": {
-      "sha256": "e3535cf6490bb6eb9633408ee99b6684f4d450b655fa6683459dd0b4d22fb694",
+      "sha256": "7dce9ab27a30fa24aa4ba388072ce9a46e56c58c816b4bddb5539313fd4a5c56",
       "executable": false
     },
     "tests/nectar/webhook-restore.mjs": {

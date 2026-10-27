@@ -1,7 +1,7 @@
 // Alert definitions belong to a human operator or a bound billing contact.
 import type { Bindings } from '../auth.server'
 import { actorLabel, requireCapability, requireOwner, type Actor } from './actor'
-import { all, commit, guard, insist, newId, one, parseJson, stmt } from './core'
+import { all, commit, guard, insist, newId, one, parseJson, stmt, type Row } from './core'
 import { canonicalDecimal, cents, micros } from './decimal'
 import type { Input } from './input'
 import type { CustomerSession } from './portal-session'
@@ -18,22 +18,22 @@ export async function boundThresholdContact(env: Bindings, session: CustomerSess
 async function choices(env: Bindings, customer?: string) {
   const subscriptions = await all(env, `SELECT s.id,s.external_id,s.customer_id,c.name AS customer_name FROM nc_subscriptions s JOIN nc_customers c ON c.id=s.customer_id WHERE c.erased_at IS NULL${customer?' AND c.id=?':''} ORDER BY c.name,s.id`, ...(customer?[customer]:[]))
   const meters = await all(env, `SELECT DISTINCT m.id,m.code,m.name FROM nc_meters m JOIN nc_prices p ON p.meter_id=m.id JOIN nc_items i ON i.price_id=p.id JOIN nc_subscriptions s ON s.id=i.subscription_id JOIN nc_customers c ON c.id=s.customer_id WHERE c.erased_at IS NULL${customer?' AND c.id=?':''} ORDER BY m.name`, ...(customer?[customer]:[]))
-  const contracts = await all(env, `SELECT k.id,k.subscription_id FROM nc_contracts k JOIN nc_subscriptions s ON s.id=k.subscription_id JOIN nc_customers c ON c.id=s.customer_id WHERE k.status='approved' AND c.erased_at IS NULL${customer?' AND c.id=?':''}`, ...(customer?[customer]:[]))
+  const contracts = customer?[]:await all(env, `SELECT k.id,k.subscription_id,k.clause,c.name AS customer_name FROM nc_contracts k JOIN nc_subscriptions s ON s.id=k.subscription_id JOIN nc_customers c ON c.id=s.customer_id WHERE k.status='approved' AND c.erased_at IS NULL${customer?' AND c.id=?':''}`, ...(customer?[customer]:[]))
   return { subscriptions, meters, contracts }
 }
 export async function usageThresholdNotifications(env: Bindings, actor: Actor) {
   requireCapability(actor,'read')
-  return all(env,`SELECT x.* FROM nc_usage_crossings x JOIN nc_customers c ON c.id=x.customer_id WHERE c.erased_at IS NULL ORDER BY x.created_at DESC,x.id LIMIT 100`)
+  return all(env,`SELECT x.*,c.currency FROM nc_usage_crossings x JOIN nc_customers c ON c.id=x.customer_id WHERE c.erased_at IS NULL ORDER BY x.created_at DESC,x.id LIMIT 100`)
 }
 export async function usageThresholds(env: Bindings, actor: Actor) {
   requireCapability(actor, 'read')
-  return { ...await choices(env), definitions:await all(env, `SELECT t.* FROM nc_usage_thresholds t JOIN nc_customers c ON c.id=t.customer_id WHERE c.erased_at IS NULL ORDER BY t.created_at,t.id`),
+  return { ...await choices(env), definitions:await all(env, `SELECT t.*,c.currency FROM nc_usage_thresholds t JOIN nc_customers c ON c.id=t.customer_id WHERE c.erased_at IS NULL ORDER BY t.created_at,t.id`),
     crossings:await usageThresholdNotifications(env,actor) }
 }
 export async function portalThresholds(env: Bindings, session: CustomerSession) {
   const contact=await boundThresholdContact(env,session)
-  return { ...await choices(env,session.customer), definitions:await all(env,'SELECT * FROM nc_usage_thresholds WHERE customer_id=? AND contact_id=? AND created_by=? ORDER BY created_at,id',session.customer,contact.id,`customer:usage-alert:${contact.id}`),
-    crossings:await all(env,'SELECT x.* FROM nc_usage_crossings x JOIN nc_usage_thresholds t ON t.id=x.threshold_id WHERE x.customer_id=? AND x.contact_id=? AND t.created_by=? ORDER BY x.created_at DESC,x.id LIMIT 100',session.customer,contact.id,`customer:usage-alert:${contact.id}`) }
+  return { ...await choices(env,session.customer), definitions:(await all(env,'SELECT * FROM nc_usage_thresholds WHERE customer_id=? AND contact_id=? AND created_by=? ORDER BY created_at,id',session.customer,contact.id,`customer:usage-alert:${contact.id}`)).map((row):Row=>({...row,currency:session.currency})),
+    crossings:(await all(env,'SELECT x.* FROM nc_usage_crossings x JOIN nc_usage_thresholds t ON t.id=x.threshold_id WHERE x.customer_id=? AND x.contact_id=? AND t.created_by=? ORDER BY x.created_at DESC,x.id LIMIT 100',session.customer,contact.id,`customer:usage-alert:${contact.id}`)).map((row):Row=>({...row,currency:session.currency})) }
 }
 async function configure(env: Bindings, actor: string, input: Input, session?: CustomerSession) {
   input.only(session?['id','subscription','kind','meter','threshold','name','enabled','confirm_mail','returnTo']:['id','subscription','kind','meter','contract','threshold','name','recipient','enabled','confirm_mail','returnTo'])

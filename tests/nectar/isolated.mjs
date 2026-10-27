@@ -19,3 +19,14 @@ export async function runIsolated(file, name, load) {
     await module[name](h,owner)
   } finally {await h.close()}
 }
+
+// A real script entry keeps focused local runs in the same module context as Verify.
+if (process.argv[1] && import.meta.url === (await import('node:url')).pathToFileURL((await import('node:path')).resolve(process.argv[1])).href) {
+  const names=process.argv.slice(2),{isolatedJourneys}=await import('./isolated-cases.mjs')
+  assert.ok(names.length,'Name at least one registered journey')
+  for(const name of names){
+    const journey=isolatedJourneys.find(j=>j.name===name)
+    assert.ok(journey,`Unknown registered journey: ${name}`)
+    await runIsolated(journey.file,journey.name,journey.load)
+  }
+}
