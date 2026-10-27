@@ -787,3 +787,7 @@ records its actual lifecycle transition and never bypasses credit governance.
 that sequence's emailed sessions. A restored sequence has historical custody
 but no send or terminal-action authority. Archives exclude both dunning
 authority tables, and erasure withdraws this record family.
+
+Subscription reads preserve the ordinary subscription source record. Request `include_state=true` on the subscription detail URL to include the current observed state, its effective observation time and immutable transition history. The subscription page and customer history include that projection. Subscription readers without both invoice and payment read capabilities receive only the date and timezone in each cause; the internal schedule checkpoint is never part of the subscription source response.
+
+Native subscription creation retains its own `subscription.created` event alongside the initial `subscription.state_changed` event. Lifecycle observation does not turn creation into an update or repeat either event. A scheduled observer whose read basis loses a race leaves its page pending for the next tick and completes successfully; audit-storage failures still fail the tick and roll back the transition.

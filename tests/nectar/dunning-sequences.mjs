@@ -3,9 +3,11 @@ import { retryEdge } from './retry-edge.mjs'
 import { hostedSetupEdge } from './customer-payment-methods.mjs'
 import { assertRecoveryBuckets } from './recovery-assertions.mjs'
 import { totp } from './mfa.mjs'
-let edge,setup
+import { file } from './harness.mjs'
+let edge,setup,received
 const first=Date.parse('2026-10-22T10:00:00Z'),day=86400000
 export const harnessOptions=()=>{
+ received=[]
  edge=retryEdge()
  setup=hostedSetupEdge(async request=>{
   const url=new URL(request.url)
@@ -24,13 +26,14 @@ export const harnessOptions=()=>{
   }
   return response
  }
- return {assets:true,localTime:new Date(first).toISOString(),stripeFetch:fetch,stripeSecret:'synthetic-nectar-1'}
+ return {webhookFetch:async request=>{received.push(await request.json());return new Response(null,{status:200})},assets:true,localTime:new Date(first).toISOString(),stripeFetch:fetch,stripeSecret:'synthetic-nectar-1'}
 }
 export async function dunningSequenceFlow(h,owner,{onState=async()=>{},createPolicy,enroll,prepareMail,sendMail,finish,updateMethod,prepareRecovery,acceptRecovery,approveRecovery,cancelSubscription}={}) {
- const api=(p,b,status)=>h.api(p,owner,b,status)
+ const api=(p,b,status)=>h.api(p.startsWith('subscriptions/')?p+'?include_state=true':p,owner,b,status)
  let instant=first
- await api('business.configure',{...await api('business'),timezone:'UTC'})
+ await api('business.configure',{...await api('business'),timezone:'America/Los_Angeles'})
  const factor=await api('mfa.totp.start',{});await api('mfa.totp.confirm',{factor:factor.factor,code:totp(factor.secret,instant)});await api('mfa.policy',{scope:'all'})
+ await api('webhook.register',{url:'https://receiver.nectar-app.com/events',consent:true})
  await api('portal.configure',{hosts:[h.origin],parents:[]})
  const move=async offset=>{
   instant=first+offset*day;edge.setTime(instant);await h.advanceClock(new Date(instant).toISOString())
@@ -53,6 +56,48 @@ export async function dunningSequenceFlow(h,owner,{onState=async()=>{},createPol
  edge.customers.set('synthetic-nectar-dunning-unpaid',{account:1,method:'synthetic-nectar-dunning-card-4'})
  const cancelPolicy=await policy({name:'Reviewed cancellation',scope:'default',scope_ref:'',offsets:'21',end_day:21,end_action:'cancel',confirm:true})
  edge.customers.set('synthetic-nectar-dunning-cancel',{account:1,method:'synthetic-nectar-dunning-card-5'})
+ const histories=new Map()
+ const observe=async(record,expected)=>{
+  for(let n=0;n<2;n++){const response=await h.raw(`/cdn-cgi/local/scheduled?time=${instant}&cron=${encodeURIComponent('* * * * *')}`);assert.equal(response.status,200,await response.text())}
+  const view=await api(`subscriptions/${record.sub}`),history=view.stateHistory
+  assert.equal(view.state,expected,'Current lifecycle state follows native financial facts')
+  const customerRecord=await api(`customers/${view.customer_id}`)
+  assert.equal(customerRecord.subscriptions.find(s=>s.id===record.sub).state,expected,'Customer composition shares the observed subscription state')
+  assert.deepEqual(customerRecord.billingRecord.subscriptionHistory.find(s=>s.id===record.sub).record.stateHistory,history,'Customer source history agrees with the subscription public door')
+  assert.equal(history.at(-1).state,expected,'Scheduled observation records the exact expected state')
+  assert.ok(history.at(-1).observed_at>=first&&history.at(-1).observed_at<=instant,'Observation time stays inside the pinned scheduled clock interval')
+  assert.equal(history[0].observed_at,first,'The first tick records the initial state at its pinned time')
+  assert.equal(history.at(-1).cause.day,new Date(history.at(-1).observed_at).toISOString().slice(0,10))
+  assert.equal(history.at(-1).cause.timezone,'America/Los_Angeles')
+  for(const [index,row] of history.entries()){assert.equal(row.previous_id,index?history[index-1].id:null);assert.equal(row.previous_state,index?history[index-1].state:null)}
+  assert.deepEqual(history.slice(0,(histories.get(record.sub)??[]).length),histories.get(record.sub)??[],'Earlier cause history remains byte-for-byte unchanged')
+  assert.equal(new Set(history.map(row=>row.id)).size,history.length)
+  for(const row of history){
+   const event=received.find(e=>e.id===row.id&&e.type==='subscription.state_changed')
+   assert.ok(event,'Each observed transition reaches the configured webhook receiver')
+   assert.deepEqual(event.data,{subscription_id:record.sub,customer_id:view.customer_id,transition_id:row.id,previous_state:row.previous_state,state:row.state,cause:row.cause,observed_at:row.observed_at})
+  }
+  histories.set(record.sub,structuredClone(history));await onState({state:'subscription-state-'+(expected==='active'&&history.at(-1).previous_state==='unpaid'?'recovered':expected),record:{...record,customer:view.customer_id},view});return history
+ }
+ const trialCustomer=(await api('customer.create',{external_id:'synthetic-nectar-state-trial',name:'Synthetic lifecycle trial',billing_email:'synthetic-nectar-state-trial@example.test'})).id
+ const trial={sub:(await api('subscription.create',{customer:trialCustomer,start_date:'2026-10-01',trial_end:'2026-10-23',trial_payment:'card',price:[price],quantity:['1']})).id}
+ await observe(trial,'trialing')
+ const trialTerms=await api(`subscriptions/${trial.sub}`)
+ const pause=await api('subscription.pause',{subscription:trial.sub,revision:trialTerms.revision,effective_date:'2026-10-22',resume_date:'2026-10-23',access:'suspend',reason:'Synthetic scheduled lifecycle pause'})
+ const paused=await observe(trial,'paused')
+ assert.equal(paused.at(-1).cause.lifecycle[0].id,pause.transition)
+ const missedCustomer=(await api('customer.create',{external_id:'synthetic-nectar-state-missed',name:'Synthetic missed schedule',billing_email:'synthetic-nectar-state-missed@example.test'})).id
+ const missed={sub:(await api('subscription.create',{customer:missedCustomer,start_date:'2026-10-24',trial_end:'2026-10-25',trial_payment:'none',price:[price],quantity:['1']})).id}
+ await observe(missed,'scheduled')
+ const missedBefore=await api(`subscriptions/${missed.sub}`)
+ const missedPause=await api('subscription.pause',{subscription:missed.sub,revision:missedBefore.revision,effective_date:'2026-10-25',resume_date:'2026-10-26',access:'suspend',reason:'Synthetic pause wholly between observer ticks'})
+ const interleaved={sub:(await api('subscription.create',{customer:missedCustomer,start_date:'2026-10-24',trial_end:'2026-10-25',trial_payment:'none',price:[price],quantity:['1']})).id}
+ const interleavedBefore=await api(`subscriptions/${interleaved.sub}`)
+ await api('subscription.pause',{subscription:interleaved.sub,revision:interleavedBefore.revision,effective_date:'2026-10-25',resume_date:'2026-10-26',access:'suspend',reason:'Synthetic interleaved schedule'})
+ const dstCustomer=(await api('customer.create',{external_id:'synthetic-nectar-state-dst',name:'Synthetic daylight saving schedule',billing_email:'synthetic-nectar-state-dst@example.test'})).id
+ const dst={sub:(await api('subscription.create',{customer:dstCustomer,start_date:'2026-10-31',anchor_day:1,trial_end:'2026-11-01',trial_payment:'none',price:[price],quantity:['1']})).id}
+ const dstBefore=await api(`subscriptions/${dst.sub}`)
+ await api('subscription.pause',{subscription:dst.sub,revision:dstBefore.revision,effective_date:'2026-11-01',resume_date:'2026-11-02',access:'suspend',reason:'Synthetic daylight saving pause'})
  const records=[]
  for(const [index,name,p,ref] of [[1,'Cedar recovery',price,'synthetic-nectar-native-customer-1'],[2,'Cedar overdue',price,'synthetic-nectar-native-customer-4'],[3,'Cedar enterprise',enterprisePrice,'synthetic-nectar-native-customer-3'],[4,'Cedar unpaid',price,'synthetic-nectar-dunning-unpaid'],[5,'Cedar cancellation',price,'synthetic-nectar-dunning-cancel']]){
   // Every failed invoice starts with a distinct usable card and exact consent.
@@ -61,6 +106,7 @@ export async function dunningSequenceFlow(h,owner,{onState=async()=>{},createPol
   const customer=(await api('customer.create',{external_id:`synthetic-nectar-dunning-${index}`,name,billing_email:`dunning-${index}@example.test`,language:index===2?'es-US':'en'})).id
   await api('collection.customer.bind',{customer,account_ref:'synthetic-nectar-native-account-1',stripe_customer_ref:ref,confirm:true})
   const sub=(await api('subscription.create',{customer,start_date:'2026-09-01',price:[p],quantity:['1']})).id
+  await observe({sub},'active')
   const run=await api('billrun.prepare',{period:'2026-09'}),invoice=(await api(`runs/${run.id}`)).invoices.find(i=>i.subscription_id===sub).id
   const collection=await api('automatic.collection.prepare',{invoice,issue_date:'2026-10-22',enable_retries:true})
   const session=await api('portal.session.issue',{customer,origin:h.origin,audience:'hosted'})
@@ -68,6 +114,11 @@ export async function dunningSequenceFlow(h,owner,{onState=async()=>{},createPol
   await api('automatic.collection.decide',{request:collection.id,basis_hash:collection.basis,decision:'approved',confirm:true,confirm_single:true})
   await api('invoice.approve',{invoice,acknowledge:true});await api('invoice.finalise',{invoice,issue_date:'2026-10-22'})
   assert.equal((await api(`invoices/${invoice}`)).balanceCents,10000)
+  const immediateFailure=await api(`subscriptions/${sub}`)
+  assert.equal(immediateFailure.state,'past_due','A refused source write captures its state before any observer tick')
+  assert.deepEqual(immediateFailure.stateHistory.at(-1).cause.sourceActions.map(a=>a.action),['automatic.collection.refused'])
+  const failedHistory=await observe({sub},'past_due')
+  assert.deepEqual(failedHistory.at(-1).cause.payment.failures.map(f=>[f.invoice,f.status]),[[invoice,'refused']],'The actual declined automatic collection is the cause before the due date')
   if(index===3)await api('dunning.enroll',{invoice,policy:standard.id,confirm:true},409)
   const policyId=index===3?enterprise.id:index===4?unpaidPolicy.id:index===5?cancelPolicy.id:standard.id
   const series=await register({invoice,policy:policyId,confirm:true})
@@ -124,6 +175,30 @@ export async function dunningSequenceFlow(h,owner,{onState=async()=>{},createPol
  assert.equal(providerWrites(),beforeRetirement,'Retiring a definitively expired or never-started setup makes no provider write')
  assert.ok((await api('audit')).some(e=>e.action==='dunning.setup.retire'&&e.subject===oldSetup&&JSON.parse(e.detail).reason==='provider-expired'))
  await move(7)
+ const beforeSource=await api(`subscriptions/${interleaved.sub}`)
+ const futurePause={subscription:interleaved.sub,revision:beforeSource.revision,effective_date:'2026-11-25',resume_date:'2026-11-26',access:'suspend',reason:'Synthetic later schedule write'}
+ await h.rejectAudit('subscription.state.observe')
+ await api('subscription.pause',futurePause,500)
+ assert.deepEqual(await api(`subscriptions/${interleaved.sub}`),beforeSource,'A failed catch-up audit rolls back the interleaved source write and history together')
+ await h.rejectAudit(null)
+ await api('subscription.pause',futurePause)
+ const sourceCatchup=await api(`subscriptions/${interleaved.sub}`)
+ assert.deepEqual(sourceCatchup.stateHistory.map(row=>row.state),['scheduled','trialing','paused','active'],'A source write retains missed transitions before changing their basis')
+ assert.deepEqual(sourceCatchup.stateHistory.slice(-2).map(row=>row.cause.sourceActions),Array.from({length:2},()=>[{action:'subscription.state.schedule',subject:interleaved.sub}]))
+ const beforeCatchup=await api(`subscriptions/${missed.sub}`)
+ await h.rejectAudit('subscription.state.observe')
+ assert.equal((await h.raw(`/cdn-cgi/local/scheduled?time=${instant}&cron=${encodeURIComponent('* * * * *')}`)).status,500)
+ assert.deepEqual((await api(`subscriptions/${missed.sub}`)).stateHistory,beforeCatchup.stateHistory,'An unavailable transition audit cannot advance the missed schedule')
+ await h.rejectAudit(null)
+ const concurrent=await Promise.all([0,1,2,3].map(()=>h.raw(`/cdn-cgi/local/scheduled?time=${instant}&cron=${encodeURIComponent('* * * * *')}`)))
+ assert.deepEqual(concurrent.map(response=>response.status),[200,200,200,200],`Concurrent lifecycle ticks are successful no-ops after another tick wins: ${await Promise.all(concurrent.map(response=>response.text()))}`)
+ const catchup=await observe(missed,'active')
+ assert.deepEqual(catchup.map(row=>row.state),['scheduled','trialing','paused','active'],'A delayed observer retains both ends of a complete missed pause')
+ assert.deepEqual(catchup.map(row=>row.observed_at),[first,...['2026-10-24','2026-10-25','2026-10-26'].map(date=>Date.parse(date+'T07:00:00Z'))],'Each scheduled transition retains its effective boundary rather than the late tick time')
+ assert.equal(catchup[2].cause.lifecycle.find(row=>row.id===missedPause.transition).kind,'pause')
+ assert.equal(catchup[2].cause.recordedAt,instant)
+ assert.equal(catchup[3].cause.recordedAt,instant)
+ assert.deepEqual((await observe(missed,'active')),catchup,'Repeated late ticks never repeat the missed transitions')
  const recoveryMail=await mail(recover,3);await mail(overdue,3)
  const path=new URL(recoveryMail.link).pathname+new URL(recoveryMail.link).search
  const methodPage=await (await h.raw(path)).text()
@@ -153,6 +228,9 @@ export async function dunningSequenceFlow(h,owner,{onState=async()=>{},createPol
  assert.equal(edge.writes.length,writes+1);assert.equal(edge.writes.at(-1).id,edge.writes[0].id,'Recovery reconfirms the original intent')
  assert.equal((await report()).series.find(s=>s.id===recover.series.id).status,'settled')
  await api('dunning.mail.prepare',{series:recover.series.id,step:2,confirm:true},409)
+ await observe(trial,'active')
+ assert.deepEqual((await api(`subscriptions/${trial.sub}`)).stateHistory.map(row=>row.state),['trialing','paused','active'])
+ await observe(recover,'active')
  await onState({state:'recovered',record:recover,report:await report()})
  await move(10);await mail(enterpriseRecord,2)
  await move(20);await mail(enterpriseRecord,3)
@@ -167,13 +245,20 @@ export async function dunningSequenceFlow(h,owner,{onState=async()=>{},createPol
  await end({series:unpaid.series.id,action:'mark_unpaid',confirm:true})
  assert.equal((await entitlement(unpaid)).paths[0].state.payment.status,'unpaid')
  assert.equal((await entitlement(unpaid)).allowed,true,'Marking unpaid does not imply feature restriction')
+ const unpaidBeforeTick=await api(`subscriptions/${unpaid.sub}`)
+ assert.equal(unpaidBeforeTick.state,'unpaid','The terminal dunning transaction records unpaid without waiting for a tick')
+ assert.deepEqual(unpaidBeforeTick.stateHistory.at(-1).cause.sourceActions.map(a=>a.action),['dunning.end.confirm'])
+ const unpaidHistory=await observe(unpaid,'unpaid')
+ assert.deepEqual(unpaidHistory.at(-1).cause.dunning.map(d=>[d.id,d.policy_id,d.status]),[[unpaid.series.id,unpaidPolicy.id,'mark_unpaid']])
  await onState({state:'unpaid',record:unpaid,report:await report()})
+ await api('subscription.pause',{subscription:unpaid.sub,revision:unpaidBeforeTick.revision,effective_date:'2026-11-13',resume_date:'2026-11-14',access:'suspend',reason:'Synthetic missed pause before financial recovery'})
  await api('dunning.end',{series:canceled.series.id,action:'cancel',confirm:true},409)
  const beforeCancel=await api(`subscriptions/${canceled.sub}`)
  await (cancelSubscription??(input=>api('subscription.cancel',input)))({subscription:canceled.sub,revision:beforeCancel.revision,mode:'immediate',effective_date:new Date(instant).toISOString().slice(0,10),reason:'Owner reviewed the exhausted dunning policy'})
  await end({series:canceled.series.id,action:'cancel',confirm:true})
  assert.equal((await entitlement(canceled)).allowed,false)
  assert.equal((await api(`invoices/${canceled.invoice}`)).balanceCents,10000,'Cancellation never forgives the original debt')
+ await observe(canceled,'ended')
  await onState({state:'canceled',record:canceled,report:await report()})
  await onState({state:'restricted',record:overdue,report:await report()})
  await move(28);await end({series:enterpriseRecord.series.id,action:'keep_active',confirm:true})
@@ -206,5 +291,48 @@ export async function dunningSequenceFlow(h,owner,{onState=async()=>{},createPol
  assert.equal(afterExternal.byDunningStep.find(b=>b.key==='unrecorded').recoveredAmountCents,10000,'An external allocation never acquires the latest email attribution')
  for(const message of sent.filter(s=>s.invoice===overdue.invoice))assert.equal(afterExternal.byDunningStep.find(b=>b.key===message.key).recoveredAmountCents,recovery.byDunningStep.find(b=>b.key===message.key).recoveredAmountCents)
  await onState({state:'restored',record:overdue,report:await report()})
+ const recoveryPayment=await api('payment.record',{customer:unpaid.customer,amount:'100',received_on:'2026-11-19',method:'bank_transfer',reference:'synthetic-nectar-state-recovery'})
+ const priorUnpaid=await api(`subscriptions/${unpaid.sub}`)
+ await h.rejectAudit('subscription.state.observe')
+ await api('payment.allocate',{payment:recoveryPayment.payment,invoice:unpaid.invoice,amount:'100'},500)
+ assert.deepEqual((await api(`subscriptions/${unpaid.sub}`)).stateHistory,priorUnpaid.stateHistory,'No state history is published without its audit')
+ assert.equal((await api(`invoices/${unpaid.invoice}`)).balanceCents,10000,'History audit refusal rolls back the financial source in the same transaction')
+ await h.rejectAudit(null)
+ await api('payment.allocate',{payment:recoveryPayment.payment,invoice:unpaid.invoice,amount:'100'})
+ const immediateRecovery=await api(`subscriptions/${unpaid.sub}`)
+ assert.equal(immediateRecovery.state,'active','Payment recovery is retained before the next scheduled observer')
+ assert.deepEqual(immediateRecovery.stateHistory.at(-1).cause.sourceActions.map(a=>a.action),['payment.allocate'])
+ const restored=await observe(unpaid,'active')
+ assert.deepEqual(restored.at(-1).cause.allocations.map(a=>[a.invoice_id,a.payment_id,a.amount_cents]),[[unpaid.invoice,recoveryPayment.payment,10000]])
+ assert.deepEqual(restored.map(row=>row.state),['active','past_due','unpaid','paused','unpaid','active'],'A financial allocation retains the complete missed pause before recording recovery')
+ const beforeScheduledCancel=await api(`subscriptions/${trial.sub}`)
+ const scheduledCancel=await api('subscription.cancel',{subscription:trial.sub,revision:beforeScheduledCancel.revision,mode:'immediate',effective_date:'2026-11-20',reason:'Synthetic scheduled cancellation'})
+ const canceledHistory=await observe(trial,'canceled')
+ assert.equal(canceledHistory.at(-1).cause.scheduledCancellation,scheduledCancel.transition)
+ assert.equal((await api(`entitlements/${trialCustomer}?feature=api_access`)).allowed,true,'Scheduling cancellation preserves service until the agreed end date')
+ await move(29)
+ const endedHistory=await observe(trial,'ended')
+ assert.deepEqual(endedHistory.map(row=>row.state),['trialing','paused','active','canceled','ended'])
+ assert.equal((await api(`entitlements/${trialCustomer}?feature=api_access`)).allowed,false,'The scheduled end withdraws access without another owner action')
+ const dstHistory=await observe(dst,'active')
+ assert.deepEqual(dstHistory.map(row=>row.state),['scheduled','trialing','paused','active'])
+ assert.deepEqual(dstHistory.slice(1).map(row=>row.observed_at),['2026-10-31T07:00:00Z','2026-11-01T07:00:00Z','2026-11-02T08:00:00Z'].map(Date.parse),'Saved schedules use business-local midnight across the 25-hour daylight saving day')
+ for(const transition of dstHistory)assert.equal(received.filter(event=>event.id===transition.id&&event.type==='subscription.state_changed').length,1)
+ await h.advanceClock(new Date(instant).toISOString())
+ assert.equal((await h.raw(`/cdn-cgi/local/scheduled?time=${instant}&cron=${encodeURIComponent('* * * * *')}`)).status,200)
+ assert.deepEqual((await api(`subscriptions/${dst.sub}`)).stateHistory,dstHistory,'A Worker restart retains the schedule checkpoint without duplicate transitions')
+ const role=await api('role.define',{name:'Lifecycle state reader',capabilities:['read.subscriptions']})
+ await api('access.give',{email:'synthetic-nectar-state-reader@example.test',name:'Lifecycle reader',role:'custom',custom_role:role.id})
+ const reader=await h.signIn('synthetic-nectar-state-reader@example.test',{requested:true}),readerFactor=await h.api('mfa.totp.start',reader,{})
+ await h.api('mfa.totp.confirm',reader,{factor:readerFactor.factor,code:totp(readerFactor.secret,instant)})
+ const limited=await h.api(`subscriptions/${unpaid.sub}?include_state=true`,reader)
+ assert.deepEqual(limited.stateHistory.map(row=>Object.keys(row.cause).sort()),limited.stateHistory.map(()=>['day','timezone']),'Subscription-only readers receive no financial cause facts')
+ await h.api(`subscriptions/${unpaid.sub}?include_state=true`,undefined,undefined,401)
+ await h.api(`subscriptions/${unpaid.sub}`,undefined,undefined,401)
+ const erasure=await api('erasure.request',{customer:unpaid.customer})
+ await api('erasure.verify',{request:erasure.id,reason:'Synthetic verified identity',evidence:file('identity.txt','Synthetic verified identity','text/plain')})
+ const erased=await api('erasure.approve',{request:erasure.id,confirm:true})
+ assert.ok(erased.receipt.changed.some(change=>change.kind==='nc_subscription_states'),'Erasure receipt names the withdrawn operational history')
+ await api(`subscriptions/${unpaid.sub}`,undefined,410)
  console.log('dunningSequenceFlow: four exact dated messages, working update links, consented same-intent cash and stop, scoped restriction and restoration, independent invoice-only policy, recorded-step amounts and rates')
 }

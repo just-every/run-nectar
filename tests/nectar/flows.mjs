@@ -55,6 +55,21 @@ const recurring = lines => lines.filter(line => ['flat', 'seat', 'discount'].inc
 const stripe = async name => file(`${name}.json`, await readFile(new URL(`../fixtures/stripe/${name}.json`, import.meta.url)), 'application/json')
 const stripeFiles = async () => Object.fromEntries(await Promise.all(['manifest', 'customers', 'products', 'prices', 'subscriptions', 'invoices', 'meters'].map(async name => [name, await stripe(name)])))
 
+// Lifecycle audits are additional system facts. Assert each complete record
+// through the subscription door before applying the original billing checks.
+async function assertStateAudits(h, owner, entries, start, end) {
+  for (const event of entries.filter(row=>row.action==='subscription.state.observe')) {
+    assert.equal(event.actor,'system:lifecycle')
+    assert.ok(event.at>=start&&event.at<=end)
+    const detail=JSON.parse(event.detail),sub=await h.api(`subscriptions/${event.subject}?include_state=true`,owner)
+    const transition=sub.stateHistory.find(row=>row.id===detail.transition_id)
+    assert.ok(transition,'Every system audit names a retained transition')
+    assert.deepEqual(detail,{subscription_id:sub.id,customer_id:sub.customer_id,transition_id:transition.id,
+      previous_state:transition.previous_state,state:transition.state,cause:transition.cause,observed_at:transition.observed_at})
+  }
+  return entries.filter(row=>row.action!=='subscription.state.observe')
+}
+
 // Reuse the existing automation journey; the extra assertions observe each
 // scheduled public door rather than inventing a second scheduler fixture.
 async function auditAutomatedPolicyWrites(h,owner) {
@@ -66,7 +81,7 @@ async function auditAutomatedPolicyWrites(h,owner) {
     const before=await h.api('audit',owner),start=Date.now()
     const response=await raw(path,options),end=Date.now()
     const after=await h.api('audit',owner)
-    const added=after.filter(r=>!before.some(old=>old.seq===r.seq))
+    const added=await assertStateAudits(h,owner,after.filter(r=>!before.some(old=>old.seq===r.seq)),start,end)
     assert.deepEqual(after.filter(r=>r.seq<=before[0]?.seq),before,'scheduled writes preserve the prior audit')
     const reserve=added.find(r=>r.action==='invoice.automation.reserve')
     if(added.length) {
@@ -304,7 +319,9 @@ async function auditSubscriptionWrites(h,owner,door,write,customer,external,pric
   })))
   const outcomes=door==='api'?attempts.map(r=>r.status):attempts.map(r=>new URL(r.headers.get('location'),h.origin).searchParams.has('error')?409:200)
   assert.deepEqual(outcomes.sort(),[200,409],`${door}: one competing cancellation commits`)
-  const after=await read(),audit=await h.api('audit',owner),added=audit.filter(r=>!trail.some(old=>old.seq===r.seq))
+  const after=await read(),audit=await h.api('audit',owner),allAdded=audit.filter(r=>!trail.some(old=>old.seq===r.seq))
+  assert.equal(allAdded.filter(r=>r.action==='subscription.state.observe').length,1,'Only the winning cancellation captures its ended state')
+  const added=await assertStateAudits(h,owner,allAdded,started,Date.now())
   assert.equal(added.length,1,'the losing transaction contributes no audit entry')
   const transition=after.lifecycle.find(r=>r.reason===fields.reason)
   assert.equal(after.lifecycle.length,before.lifecycle.length+1)
@@ -407,7 +424,9 @@ async function auditBillingWrites(h, owner) {
       result = {id:target.pathname.split('/').pop()}
     } else result = await h.api(action, actor, fields)
     const end = Date.now(), after = await h.api('audit', owner)
-    const added = after.filter(row => !before.some(old => old.seq === row.seq))
+    const allAdded = after.filter(row => !before.some(old => old.seq === row.seq))
+    if(action==='subscription.create')assert.equal(allAdded.filter(row=>row.action==='subscription.state.observe').length,1,'A new native subscription has one initial state audit')
+    const added = await assertStateAudits(h,owner,allAdded,start,end)
     const facts = await expected(result)
     assert.equal(added.length, facts.extra || action === 'invoice.finalise' ? 2 : 1, `${door} ${action}: complete committed events`)
     for (const row of added) {

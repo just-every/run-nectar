@@ -1,3 +1,4 @@
+import { captureDueSubscriptionStates, captureSubscriptionStates } from './subscription-state-capture'
 // Shared primitives: typed errors, ids, D1 helpers, audited atomic commits and
 // in-batch preconditions (nc_guard rows abort the whole batch when false).
 import type { Bindings } from '../auth.server'
@@ -37,10 +38,16 @@ export interface Audit { actor: string; action: string; subject: string; detail?
 export async function commit(env: Bindings, statements: D1PreparedStatement[], audit: Audit | Audit[]) {
   const events = Array.isArray(audit) ? audit : [audit]
   try {
+    const due = await captureDueSubscriptionStates(env, events)
     await env.DB.batch([
+      ...due.before,
       ...statements,
-      stmt(env, 'DELETE FROM nc_guard'),
+      // Source audits must reach revision-based webhook triggers before the
+      // lifecycle observer records its derived facts for the same revision.
       ...events.map(event => stmt(env, 'INSERT INTO nc_audit (at, actor, action, subject, detail) VALUES (?, ?, ?, ?, ?)', now(), event.actor, event.action, event.subject, JSON.stringify(event.detail ?? {}))),
+      ...due.after,
+      ...await captureSubscriptionStates(env, events),
+      stmt(env, 'DELETE FROM nc_guard'),
     ])
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)

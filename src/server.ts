@@ -1,4 +1,5 @@
 import { processorWebhook } from './nectar/processor-http'
+import { observeSubscriptionStates } from './nectar/subscription-states'
 import { retryMethodRecoveryResponse } from './nectar/retry-method-http'
 import { cardLifecycleWebhook } from './nectar/card-lifecycle-webhook'
 import { samlResponse } from './nectar/saml'
@@ -55,11 +56,13 @@ function noTransform(response: Response): Response {
 
 export default withDemo({
   async scheduled(controller, env) {
+    await observeSubscriptionStates(runtimeBindings(env))
     await dispatchWebhooks(runtimeBindings(env))
     await expirePaymentLinkAttempts(runtimeBindings(env))
     await runAutomaticCollections(runtimeBindings(env))
     await runPaymentRetries(runtimeBindings(env))
     await runInvoiceAutomation(runtimeBindings(env),controller.scheduledTime)
+    await observeSubscriptionStates(runtimeBindings(env))
     if(controller.cron==='* * * * *')return
     await removeExpiredFinancialRecords(runtimeBindings(env))
     await runPrepaidSettlement(runtimeBindings(env))
@@ -75,6 +78,7 @@ export default withDemo({
     await deliverPendingDraftCorrectionMail(runtimeBindings(env))
     await deliverPendingPrepaidRefundNotices(runtimeBindings(env))
     await runAssurance(runtimeBindings(env),controller.scheduledTime)
+    await observeSubscriptionStates(runtimeBindings(env))
   },
   async fetch(request, env, execution) {
     const paymentEvent=await processorWebhook(request,runtimeBindings(env))

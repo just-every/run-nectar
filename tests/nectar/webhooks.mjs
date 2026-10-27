@@ -180,7 +180,10 @@ export async function webhookLifecycleFlow(h,owner,{onState=async()=>{}}={}) {
     const price=(await api('price.create',{product,kind:'flat',unit_amount:'100',taxable:false})).id
     for(const [kind,record]of [['customer',customer],['price',price]])await api('metadata.write',{kind,record,revision:0,metadata:{app_account_id:`synthetic-nectar-${kind}`}})
     const subscription=(await api('subscription.create',{customer,start_date:'2026-10-01',price:[price]})).id
-    const created=(await api('webhooks')).deliveries.find(d=>d.type==='subscription.created')
+    const initial=(await api('webhooks')).deliveries.filter(d=>d.subject===subscription)
+    assert.equal(initial.filter(d=>d.type==='subscription.created').length,1,'Creation retains its own webhook before lifecycle observation consumes the revision')
+    assert.equal(initial.filter(d=>d.type==='subscription.updated').length,0,'Initial lifecycle capture does not relabel creation as an update')
+    const created=initial.find(d=>d.type==='subscription.created')
     const payload=JSON.parse((await api(`webhooks/${created.id}`)).event.payload_json)
     assert.equal(payload.metadata.find(m=>m.kind==='prices').objects[0].metadata.app_account_id,'synthetic-nectar-price','creation snapshot includes price metadata after item insertion in the same transaction')
     assert.equal(payload.metadata.find(m=>m.kind==='customer').metadata.app_account_id,'synthetic-nectar-customer')
@@ -188,6 +191,11 @@ export async function webhookLifecycleFlow(h,owner,{onState=async()=>{}}={}) {
     const dispatch=async()=>{await api('webhook.dispatch',{});assert.ok(requests.every(r=>verify(r.body,r.header,secrets,JSON.parse(r.header.split(',')[0].slice(2))*1000)))}
     // Row events use their wall clock; advance the disposable clock beyond it.
     clock=Math.max(clock,Date.now()+60000);await h.advanceClock(new Date(clock).toISOString());await dispatch()
+    assert.equal((await h.raw(`/cdn-cgi/local/scheduled?time=${clock}&cron=${encodeURIComponent('* * * * *')}`)).status,200)
+    await dispatch()
+    assert.deepEqual(received.filter(e=>e.type==='subscription.created'&&e.data.id===subscription).map(e=>e.id),[created.event_id],'The creation event survives scheduled observation and repeat dispatch exactly once')
+    assert.equal(received.filter(e=>e.type==='subscription.updated'&&e.data.id===subscription).length,0,'An unchanged scheduled observation emits no subscription update')
+    assert.equal(received.filter(e=>e.type==='subscription.state_changed'&&e.data.subscription_id===subscription).length,1,'Creation and its initial state remain separate once-only event facts')
     const entitlementEvents=()=>received.filter(e=>e.type==='entitlements.updated'&&e.data.customer_id===customer)
     assert.equal(entitlementEvents().at(-1).data.features.find(f=>f.feature==='api-access').allowed,true)
     const date=new Date(clock).toISOString().slice(0,10)
