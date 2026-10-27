@@ -60,16 +60,16 @@ export async function observeSubscriptionStates(env: Bindings) {
         previous_state: old?.state ?? null, state, cause, observed_at: effectiveAt }
       try {
         await commit(env, [
-          guard(env, 'subscription_state_changed', '(SELECT value FROM nc_privacy_generation WHERE id=1)=? AND (SELECT COALESCE(MAX(seq),0) FROM nc_audit)=?', generation, audit),
-          guard(env, 'subscription_state_changed', '(SELECT id FROM nc_subscription_states WHERE subscription_id=? ORDER BY seq DESC LIMIT 1) IS ?', sub.id, old?.id ?? null),
-          guard(env, 'subscription_state_changed', 'EXISTS(SELECT 1 FROM nc_subscriptions WHERE id=? AND revision=? AND state_checked_at IS ?)',sub.id,sub.revision,sub.state_checked_at ?? null),
+          guard(env, 'stale', '(SELECT value FROM nc_privacy_generation WHERE id=1)=? AND (SELECT COALESCE(MAX(seq),0) FROM nc_audit)=?', generation, audit),
+          guard(env, 'stale', '(SELECT id FROM nc_subscription_states WHERE subscription_id=? ORDER BY seq DESC LIMIT 1) IS ?', sub.id, old?.id ?? null),
+          guard(env, 'stale', 'EXISTS(SELECT 1 FROM nc_subscriptions WHERE id=? AND revision=? AND state_checked_at IS ?)',sub.id,sub.revision,sub.state_checked_at ?? null),
           stmt(env, 'INSERT INTO nc_subscription_states(id,subscription_id,customer_id,previous_id,previous_state,state,cause_json,observed_at) VALUES(?,?,?,?,?,?,?,?)', id, sub.id, sub.customer_id, old?.id ?? null, old?.state ?? null, state, canonical(cause), effectiveAt),
           stmt(env, 'INSERT INTO nc_webhook_events(id,type,customer_id,subject,payload_json,created_at) VALUES(?,?,?,?,?,?)', id, 'subscription.state_changed', sub.customer_id, sub.id, canonical({type:'subscription.state_changed',data}), at),
           stmt(env, 'UPDATE nc_subscriptions SET state_checked_at=? WHERE id=?',effectiveAt,sub.id),
         ], { actor:'system:lifecycle', action:'subscription.state.observe', subject:sub.id, detail:data })
         sub.state_checked_at=effectiveAt
       } catch (error) {
-        if (!(error instanceof NectarError && error.code === 'subscription_state_changed')) throw error
+        if (!(error instanceof NectarError && error.code === 'stale')) throw error
         // Keep the page pending so a source race is retried on the next tick.
         return
       }

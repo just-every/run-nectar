@@ -180,7 +180,10 @@ export async function webhookLifecycleFlow(h,owner,{onState=async()=>{}}={}) {
     const price=(await api('price.create',{product,kind:'flat',unit_amount:'100',taxable:false})).id
     for(const [kind,record]of [['customer',customer],['price',price]])await api('metadata.write',{kind,record,revision:0,metadata:{app_account_id:`synthetic-nectar-${kind}`}})
     const subscription=(await api('subscription.create',{customer,start_date:'2026-10-01',price:[price]})).id
-    const created=(await api('webhooks')).deliveries.find(d=>d.type==='subscription.created')
+    const initial=(await api('webhooks')).deliveries.filter(d=>d.subject===subscription)
+    assert.equal(initial.filter(d=>d.type==='subscription.created').length,1,'Creation retains its own webhook before lifecycle observation consumes the revision')
+    assert.equal(initial.filter(d=>d.type==='subscription.updated').length,0,'Initial lifecycle capture does not relabel creation as an update')
+    const created=initial.find(d=>d.type==='subscription.created')
     const payload=JSON.parse((await api(`webhooks/${created.id}`)).event.payload_json)
     assert.equal(payload.metadata.find(m=>m.kind==='prices').objects[0].metadata.app_account_id,'synthetic-nectar-price','creation snapshot includes price metadata after item insertion in the same transaction')
     assert.equal(payload.metadata.find(m=>m.kind==='customer').metadata.app_account_id,'synthetic-nectar-customer')
