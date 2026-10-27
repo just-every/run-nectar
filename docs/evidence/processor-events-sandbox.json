@@ -1,15 +1,15 @@
 {
-  "head": "9e13016b4bb5ab1ab353798ddfc07446d85e2c3e",
+  "head": "cd72d464740e8a31f815d7137e10c916e3155ab6",
   "status": "passed_for_named_slices",
   "results": [
     {
       "kind": "card_and_refund",
-      "invoice": "e970afb3-c3b1-4595-9889-a2095fd2ddef",
-      "paymentIntent": "pi_3UVIajDg8BoejKxo2MkHTqCs",
-      "refund": "re_3UVIajDg8BoejKxo2kAo5D4Y",
+      "invoice": "0407db86-09b5-457f-a571-4d641de36d69",
+      "paymentIntent": "pi_3UVJ6zDg8BoejKxo4UjTbK9R",
+      "refund": "re_3UVJ6zDg8BoejKxo4siukd1m",
       "eventRefs": [
-        "evt_3UVIajDg8BoejKxo2fJjZZ9S",
-        "evt_3UVIajDg8BoejKxo2USXfimi"
+        "evt_3UVJ6zDg8BoejKxo4Jf9sUFX",
+        "evt_3UVJ6zDg8BoejKxo4Arlb4Xw"
       ],
       "grossCents": 10000,
       "refundCents": 2500,
@@ -17,17 +17,17 @@
     },
     {
       "kind": "cash_application",
-      "invoice": "329e626c-eb74-4377-9983-2275fde7da73",
-      "eventRef": "evt_1UVIasDg8BoejKxoTqastmEq",
+      "invoice": "5a46ef1c-dab5-4063-a332-adee37a21555",
+      "eventRef": "evt_1UVJ78Dg8BoejKxo52EdFJ7G",
       "transactions": [
         {
-          "id": "ccsbtxn_1UVIawDg8BoejKxoNm4Uvmo2",
+          "id": "ccsbtxn_1UVJ7CDg8BoejKxosqYjcfYX",
           "type": "applied_to_payment",
           "netCents": -2500,
           "endingBalanceCents": 0
         },
         {
-          "id": "ccsbtxn_1UVIasDg8BoejKxo21WWbJEc",
+          "id": "ccsbtxn_1UVJ78Dg8BoejKxo1ptHOF4G",
           "type": "funded",
           "netCents": 2500,
           "endingBalanceCents": 2500
@@ -37,37 +37,37 @@
     },
     {
       "kind": "held_cash_imported_and_native",
-      "customer": "cus_VWLHYQ3zYyDnLE",
-      "originalInvoice": "in_1UVIb1Dg8BoejKxoix4zjGTj",
-      "importedInvoice": "2e3c63ca3031f1898902922bb8ae4741",
-      "nativeInvoice": "7362c395-b73f-423d-b1fc-32449d459983",
-      "takeover": "100ddc14-d68e-462c-944b-64db6b6fcaf1",
-      "importJob": "d0b88d13-0328-4d25-8f39-dad12cd34155",
-      "funding": "ccsbtxn_1UVIb3Dg8BoejKxonUzEm8UQ",
+      "customer": "cus_VWLoKwS1wo3UFu",
+      "originalInvoice": "in_1UVJ7HDg8BoejKxoHJ5ihtx6",
+      "importedInvoice": "e36da2f0e5b380dc9a5bb0e5ab89e06f",
+      "nativeInvoice": "8647a28e-f7f2-420c-83e7-352fe51fcc49",
+      "takeover": "5e6f67a2-c2e7-49b3-9067-7b377dcda248",
+      "importJob": "e3346522-00a6-4c9b-b3cf-6897ec17b3f0",
+      "funding": "ccsbtxn_1UVJ7JDg8BoejKxo2ka6OlnZ",
       "fundedBeforeImport": true,
       "fundedCents": 30000,
       "importedAppliedCents": 25000,
       "nativeAppliedCents": 5000,
       "remainingCents": 0,
       "eventRefs": [
-        "evt_1UVIb3Dg8BoejKxoOakY5HOY",
-        "evt_3UVIbIDg8BoejKxo2PaZQVB5",
-        "evt_3UVIbCDg8BoejKxo0Txzbcr2"
+        "evt_1UVJ7KDg8BoejKxo3eqJoRdq",
+        "evt_3UVJ7ZDg8BoejKxo2RlMiE1E",
+        "evt_3UVJ7TDg8BoejKxo2lM5JBTo"
       ],
       "movements": [
         {
-          "paymentIntent": "pi_3UVIbIDg8BoejKxo2qXFLKA5",
-          "charge": "py_3UVIbIDg8BoejKxo2wP7J0ab",
-          "transaction": "txn_3UVIbIDg8BoejKxo2S8NOaRl",
+          "paymentIntent": "pi_3UVJ7ZDg8BoejKxo2WeqGx5N",
+          "charge": "py_3UVJ7ZDg8BoejKxo229Uv0Xh",
+          "transaction": "txn_3UVJ7ZDg8BoejKxo2u9KlnnC",
           "grossCents": 5000,
           "feeCents": 25,
           "netCents": 4975,
           "status": "pending"
         },
         {
-          "paymentIntent": "pi_3UVIbCDg8BoejKxo0fE9D6jc",
-          "charge": "py_3UVIbCDg8BoejKxo0Aj896MM",
-          "transaction": "txn_3UVIbCDg8BoejKxo0tQXivnk",
+          "paymentIntent": "pi_3UVJ7TDg8BoejKxo22DvkyRT",
+          "charge": "py_3UVJ7TDg8BoejKxo2PCpw68N",
+          "transaction": "txn_3UVJ7TDg8BoejKxo2OfVqe2y",
           "grossCents": 25000,
           "feeCents": 125,
           "netCents": 24875,
@@ -81,42 +81,42 @@
       "records": [
         {
           "kind": "original_invoice",
-          "invoice": "in_1UVIb1Dg8BoejKxoix4zjGTj",
+          "invoice": "in_1UVJ7HDg8BoejKxoHJ5ihtx6",
           "status": "void"
         },
         {
           "kind": "customer",
-          "customer": "cus_VWLHYQ3zYyDnLE",
+          "customer": "cus_VWLoKwS1wo3UFu",
           "status": "deleted"
         }
       ]
     },
     {
       "kind": "dispute",
-      "eventRef": "evt_1UVIbbDg8BoejKxox9IvDUPw",
-      "dispute": "du_1UVIbaDg8BoejKxoLMvsJy0e",
+      "eventRef": "evt_1UVJ7vDg8BoejKxoGnd3vCQY",
+      "dispute": "du_1UVJ7tDg8BoejKxofEXtwc3u",
       "status": "needs_response"
     },
     {
       "kind": "ach_return",
       "fixture": "pm_usBankAccount_insufficientFunds",
-      "paymentIntent": "pi_3UVIbeDg8BoejKxo2xzGGgnp",
-      "charge": "py_3UVIbeDg8BoejKxo2pQvhjpP",
+      "paymentIntent": "pi_3UVJ7xDg8BoejKxo1xw8uoyI",
+      "charge": "py_3UVJ7xDg8BoejKxo1U88miCN",
       "eventRefs": [
-        "evt_3UVIbeDg8BoejKxo2P1NHXZP",
-        "evt_3UVIbeDg8BoejKxo2CG4QOsw"
+        "evt_3UVJ7xDg8BoejKxo1dPJQ5ri",
+        "evt_3UVJ7xDg8BoejKxo1PBv4sOs"
       ],
       "networkReturnCode": "R01",
       "providerCode": "generic_decline",
       "movements": [
         {
-          "id": "txn_3UVIbeDg8BoejKxo2k7Duhsl",
+          "id": "txn_3UVJ7xDg8BoejKxo1T9HkBDZ",
           "grossCents": 2000,
           "feeCents": 16,
           "netCents": 1984
         },
         {
-          "id": "txn_1UVIbxDg8BoejKxoYL4Q1ntq",
+          "id": "txn_1UVJ8FDg8BoejKxoJIOL8a51",
           "grossCents": -2000,
           "feeCents": 384,
           "netCents": -2384
@@ -128,23 +128,23 @@
     {
       "kind": "ach_return",
       "fixture": "pm_usBankAccount_accountClosed",
-      "paymentIntent": "pi_3UVIbfDg8BoejKxo140KJzWr",
-      "charge": "py_3UVIbfDg8BoejKxo1LsuQaqu",
+      "paymentIntent": "pi_3UVJ7yDg8BoejKxo2uelgAjk",
+      "charge": "py_3UVJ7yDg8BoejKxo2XUAni6Z",
       "eventRefs": [
-        "evt_3UVIbfDg8BoejKxo1ba2NAZO",
-        "evt_3UVIbfDg8BoejKxo1R6Iin6x"
+        "evt_3UVJ7yDg8BoejKxo2LmP6Wam",
+        "evt_3UVJ7yDg8BoejKxo2zLc4uFm"
       ],
       "networkReturnCode": "R02",
       "providerCode": "generic_decline",
       "movements": [
         {
-          "id": "txn_3UVIbfDg8BoejKxo1JkoYBPm",
+          "id": "txn_3UVJ7yDg8BoejKxo2kP3qOx4",
           "grossCents": 2000,
           "feeCents": 16,
           "netCents": 1984
         },
         {
-          "id": "txn_1UVIbvDg8BoejKxohgMNHAF3",
+          "id": "txn_1UVJ8JDg8BoejKxo8ms6Rd12",
           "grossCents": -2000,
           "feeCents": 384,
           "netCents": -2384
@@ -156,23 +156,23 @@
     {
       "kind": "ach_return",
       "fixture": "pm_usBankAccount_noAccount",
-      "paymentIntent": "pi_3UVIbgDg8BoejKxo4aksA3rf",
-      "charge": "py_3UVIbgDg8BoejKxo47pp8USa",
+      "paymentIntent": "pi_3UVJ7zDg8BoejKxo30WMqIS0",
+      "charge": "py_3UVJ7zDg8BoejKxo3b9Nc6vm",
       "eventRefs": [
-        "evt_3UVIbgDg8BoejKxo4MUk4eIm",
-        "evt_3UVIbgDg8BoejKxo4l8m23q8"
+        "evt_3UVJ7zDg8BoejKxo3NUrOMKj",
+        "evt_3UVJ7zDg8BoejKxo3yPTbmSH"
       ],
       "networkReturnCode": "R03",
       "providerCode": "generic_decline",
       "movements": [
         {
-          "id": "txn_3UVIbgDg8BoejKxo4sgJpNAY",
+          "id": "txn_3UVJ7zDg8BoejKxo3oXf2mDF",
           "grossCents": 2000,
           "feeCents": 16,
           "netCents": 1984
         },
         {
-          "id": "txn_1UVIbyDg8BoejKxoyp5r9N9f",
+          "id": "txn_1UVJ8IDg8BoejKxoEeGSYBD5",
           "grossCents": -2000,
           "feeCents": 384,
           "netCents": -2384
@@ -184,23 +184,23 @@
     {
       "kind": "ach_return",
       "fixture": "pm_usBankAccount_debitNotAuthorized",
-      "paymentIntent": "pi_3UVIbhDg8BoejKxo0GMWk9z1",
-      "charge": "py_3UVIbhDg8BoejKxo06AU8X3r",
+      "paymentIntent": "pi_3UVJ80Dg8BoejKxo3UbcIqX4",
+      "charge": "py_3UVJ80Dg8BoejKxo3INSfBCK",
       "eventRefs": [
-        "evt_3UVIbhDg8BoejKxo0BitTWbB",
-        "evt_3UVIbhDg8BoejKxo0NrKGx9T"
+        "evt_3UVJ80Dg8BoejKxo3AublApa",
+        "evt_3UVJ80Dg8BoejKxo3tsJnxCP"
       ],
       "networkReturnCode": "R05",
       "providerCode": "generic_decline",
       "movements": [
         {
-          "id": "txn_3UVIbhDg8BoejKxo0enJkwMB",
+          "id": "txn_3UVJ80Dg8BoejKxo3R0Hrx56",
           "grossCents": 2000,
           "feeCents": 16,
           "netCents": 1984
         },
         {
-          "id": "txn_1UVIc0Dg8BoejKxoNf1kehMu",
+          "id": "txn_1UVJ8QDg8BoejKxoLQWf9GjJ",
           "grossCents": -2000,
           "feeCents": 384,
           "netCents": -2384
@@ -211,9 +211,9 @@
     },
     {
       "kind": "failure_alert",
-      "eventRef": "evt_3UVIcSDg8BoejKxo0QIgs9ry",
+      "eventRef": "evt_3UVJ8kDg8BoejKxo4EHIoYl1",
       "status": "accepted",
-      "providerReference": "1k0O-xGJRxCIUNTj8wA_nA",
+      "providerReference": "f4j1xWhBRlijN1sO4Jd48w",
       "sends": 1
     },
     {
