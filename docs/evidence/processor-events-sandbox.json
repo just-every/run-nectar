@@ -1,0 +1,234 @@
+{
+  "head": "9e13016b4bb5ab1ab353798ddfc07446d85e2c3e",
+  "status": "passed_for_named_slices",
+  "results": [
+    {
+      "kind": "card_and_refund",
+      "invoice": "e970afb3-c3b1-4595-9889-a2095fd2ddef",
+      "paymentIntent": "pi_3UVIajDg8BoejKxo2MkHTqCs",
+      "refund": "re_3UVIajDg8BoejKxo2kAo5D4Y",
+      "eventRefs": [
+        "evt_3UVIajDg8BoejKxo2fJjZZ9S",
+        "evt_3UVIajDg8BoejKxo2USXfimi"
+      ],
+      "grossCents": 10000,
+      "refundCents": 2500,
+      "allocations": 1
+    },
+    {
+      "kind": "cash_application",
+      "invoice": "329e626c-eb74-4377-9983-2275fde7da73",
+      "eventRef": "evt_1UVIasDg8BoejKxoTqastmEq",
+      "transactions": [
+        {
+          "id": "ccsbtxn_1UVIawDg8BoejKxoNm4Uvmo2",
+          "type": "applied_to_payment",
+          "netCents": -2500,
+          "endingBalanceCents": 0
+        },
+        {
+          "id": "ccsbtxn_1UVIasDg8BoejKxo21WWbJEc",
+          "type": "funded",
+          "netCents": 2500,
+          "endingBalanceCents": 2500
+        }
+      ],
+      "remainingCents": 0
+    },
+    {
+      "kind": "held_cash_imported_and_native",
+      "customer": "cus_VWLHYQ3zYyDnLE",
+      "originalInvoice": "in_1UVIb1Dg8BoejKxoix4zjGTj",
+      "importedInvoice": "2e3c63ca3031f1898902922bb8ae4741",
+      "nativeInvoice": "7362c395-b73f-423d-b1fc-32449d459983",
+      "takeover": "100ddc14-d68e-462c-944b-64db6b6fcaf1",
+      "importJob": "d0b88d13-0328-4d25-8f39-dad12cd34155",
+      "funding": "ccsbtxn_1UVIb3Dg8BoejKxonUzEm8UQ",
+      "fundedBeforeImport": true,
+      "fundedCents": 30000,
+      "importedAppliedCents": 25000,
+      "nativeAppliedCents": 5000,
+      "remainingCents": 0,
+      "eventRefs": [
+        "evt_1UVIb3Dg8BoejKxoOakY5HOY",
+        "evt_3UVIbIDg8BoejKxo2PaZQVB5",
+        "evt_3UVIbCDg8BoejKxo0Txzbcr2"
+      ],
+      "movements": [
+        {
+          "paymentIntent": "pi_3UVIbIDg8BoejKxo2qXFLKA5",
+          "charge": "py_3UVIbIDg8BoejKxo2wP7J0ab",
+          "transaction": "txn_3UVIbIDg8BoejKxo2S8NOaRl",
+          "grossCents": 5000,
+          "feeCents": 25,
+          "netCents": 4975,
+          "status": "pending"
+        },
+        {
+          "paymentIntent": "pi_3UVIbCDg8BoejKxo0fE9D6jc",
+          "charge": "py_3UVIbCDg8BoejKxo0Aj896MM",
+          "transaction": "txn_3UVIbCDg8BoejKxo0tQXivnk",
+          "grossCents": 25000,
+          "feeCents": 125,
+          "netCents": 24875,
+          "status": "pending"
+        }
+      ],
+      "apiVersion": "2025-09-30.clover"
+    },
+    {
+      "kind": "held_cash_cleanup",
+      "records": [
+        {
+          "kind": "original_invoice",
+          "invoice": "in_1UVIb1Dg8BoejKxoix4zjGTj",
+          "status": "void"
+        },
+        {
+          "kind": "customer",
+          "customer": "cus_VWLHYQ3zYyDnLE",
+          "status": "deleted"
+        }
+      ]
+    },
+    {
+      "kind": "dispute",
+      "eventRef": "evt_1UVIbbDg8BoejKxox9IvDUPw",
+      "dispute": "du_1UVIbaDg8BoejKxoLMvsJy0e",
+      "status": "needs_response"
+    },
+    {
+      "kind": "ach_return",
+      "fixture": "pm_usBankAccount_insufficientFunds",
+      "paymentIntent": "pi_3UVIbeDg8BoejKxo2xzGGgnp",
+      "charge": "py_3UVIbeDg8BoejKxo2pQvhjpP",
+      "eventRefs": [
+        "evt_3UVIbeDg8BoejKxo2P1NHXZP",
+        "evt_3UVIbeDg8BoejKxo2CG4QOsw"
+      ],
+      "networkReturnCode": "R01",
+      "providerCode": "generic_decline",
+      "movements": [
+        {
+          "id": "txn_3UVIbeDg8BoejKxo2k7Duhsl",
+          "grossCents": 2000,
+          "feeCents": 16,
+          "netCents": 1984
+        },
+        {
+          "id": "txn_1UVIbxDg8BoejKxoYL4Q1ntq",
+          "grossCents": -2000,
+          "feeCents": 384,
+          "netCents": -2384
+        }
+      ],
+      "allocatedCents": 0,
+      "apiVersion": "2025-09-30.clover"
+    },
+    {
+      "kind": "ach_return",
+      "fixture": "pm_usBankAccount_accountClosed",
+      "paymentIntent": "pi_3UVIbfDg8BoejKxo140KJzWr",
+      "charge": "py_3UVIbfDg8BoejKxo1LsuQaqu",
+      "eventRefs": [
+        "evt_3UVIbfDg8BoejKxo1ba2NAZO",
+        "evt_3UVIbfDg8BoejKxo1R6Iin6x"
+      ],
+      "networkReturnCode": "R02",
+      "providerCode": "generic_decline",
+      "movements": [
+        {
+          "id": "txn_3UVIbfDg8BoejKxo1JkoYBPm",
+          "grossCents": 2000,
+          "feeCents": 16,
+          "netCents": 1984
+        },
+        {
+          "id": "txn_1UVIbvDg8BoejKxohgMNHAF3",
+          "grossCents": -2000,
+          "feeCents": 384,
+          "netCents": -2384
+        }
+      ],
+      "allocatedCents": 0,
+      "apiVersion": "2025-09-30.clover"
+    },
+    {
+      "kind": "ach_return",
+      "fixture": "pm_usBankAccount_noAccount",
+      "paymentIntent": "pi_3UVIbgDg8BoejKxo4aksA3rf",
+      "charge": "py_3UVIbgDg8BoejKxo47pp8USa",
+      "eventRefs": [
+        "evt_3UVIbgDg8BoejKxo4MUk4eIm",
+        "evt_3UVIbgDg8BoejKxo4l8m23q8"
+      ],
+      "networkReturnCode": "R03",
+      "providerCode": "generic_decline",
+      "movements": [
+        {
+          "id": "txn_3UVIbgDg8BoejKxo4sgJpNAY",
+          "grossCents": 2000,
+          "feeCents": 16,
+          "netCents": 1984
+        },
+        {
+          "id": "txn_1UVIbyDg8BoejKxoyp5r9N9f",
+          "grossCents": -2000,
+          "feeCents": 384,
+          "netCents": -2384
+        }
+      ],
+      "allocatedCents": 0,
+      "apiVersion": "2025-09-30.clover"
+    },
+    {
+      "kind": "ach_return",
+      "fixture": "pm_usBankAccount_debitNotAuthorized",
+      "paymentIntent": "pi_3UVIbhDg8BoejKxo0GMWk9z1",
+      "charge": "py_3UVIbhDg8BoejKxo06AU8X3r",
+      "eventRefs": [
+        "evt_3UVIbhDg8BoejKxo0BitTWbB",
+        "evt_3UVIbhDg8BoejKxo0NrKGx9T"
+      ],
+      "networkReturnCode": "R05",
+      "providerCode": "generic_decline",
+      "movements": [
+        {
+          "id": "txn_3UVIbhDg8BoejKxo0enJkwMB",
+          "grossCents": 2000,
+          "feeCents": 16,
+          "netCents": 1984
+        },
+        {
+          "id": "txn_1UVIc0Dg8BoejKxoNf1kehMu",
+          "grossCents": -2000,
+          "feeCents": 384,
+          "netCents": -2384
+        }
+      ],
+      "allocatedCents": 0,
+      "apiVersion": "2025-09-30.clover"
+    },
+    {
+      "kind": "failure_alert",
+      "eventRef": "evt_3UVIcSDg8BoejKxo0QIgs9ry",
+      "status": "accepted",
+      "providerReference": "1k0O-xGJRxCIUNTj8wA_nA",
+      "sends": 1
+    },
+    {
+      "kind": "automatic_payout",
+      "payout": "po_1UUcCTDg8BoejKxoLWelYCMb",
+      "eventRef": "evt_1UUcHKDg8BoejKxofQQSwIOb",
+      "members": 24,
+      "payoutCents": 187473,
+      "constituentNetCents": 187473,
+      "currency": "usd"
+    }
+  ],
+  "requests": {
+    "GET": 303,
+    "POST": 23,
+    "DELETE": 1
+  }
+}
