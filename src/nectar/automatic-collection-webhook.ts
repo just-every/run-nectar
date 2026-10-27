@@ -24,10 +24,10 @@ export async function automaticCollectionWebhook(request:Request,env:Bindings&{S
    &&object?.object==='payment_intent','payment_event_envelope_invalid',400)
   const eventRef=providerReference(event.id),intentRef=providerReference(object.id),customerRef=providerReference(object.customer)
   const account=event.account===undefined?null:providerReference(event.account)
-  const rows=await all(env,`SELECT a.id FROM nc_automatic_collections a JOIN nc_customers c ON c.id=a.customer_id
+  const rows=await all(env,`SELECT a.id FROM nc_automatic_collections a JOIN nc_automatic_collection_authorizations z ON z.id=a.id AND z.basis_hash=a.basis_hash JOIN nc_customers c ON c.id=a.customer_id
    JOIN nc_stripe_customer_bindings b ON b.customer_id=c.id AND b.account_ref=a.account_ref AND b.stripe_customer_ref=a.stripe_customer_ref
-   WHERE a.payment_intent_ref=? AND a.stripe_customer_ref=? AND (? IS NULL OR a.account_ref=?) AND c.status='active' AND c.erased_at IS NULL
-   AND NOT EXISTS(SELECT 1 FROM nc_erased_records WHERE record_id IN(a.id,a.invoice_id,c.id,b.id)) LIMIT 2`,intentRef,customerRef,account,account)
+   WHERE (a.payment_intent_ref=? OR (a.payment_intent_ref IS NULL AND a.id=? AND a.claimed_at IS NOT NULL)) AND a.stripe_customer_ref=? AND (? IS NULL OR a.account_ref=?) AND c.status='active' AND c.erased_at IS NULL
+   AND NOT EXISTS(SELECT 1 FROM nc_erased_records WHERE record_id IN(a.id,a.invoice_id,c.id,b.id)) LIMIT 2`,intentRef,typeof object.metadata?.nectar_native_collection_request==='string'?object.metadata.nectar_native_collection_request:'',customerRef,account,account)
   insist(rows.length===1,'payment_event_claim_unknown',409)
   const result=await applyAutomaticEvent(env,rows[0].id,eventRef,'system:payment-events')
   return json({received:true,replayed:result.replayed,status:result.status})

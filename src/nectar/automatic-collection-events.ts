@@ -24,13 +24,14 @@ export async function consumeAutomaticEvent(env:Bindings,actor:Actor,input:Input
 // authority at the processor and never accepts a caller-supplied payment fact.
 export async function applyAutomaticEvent(env:Bindings,id:string,eventRef:string,actor:string,authority:D1PreparedStatement[]=[]){
  const row=await storedAutomaticCollection(env,id)
- insist(row.claimed_at&&row.payment_intent_ref&&['claimed','uncertain','pending_settlement','refused','returned','collected'].includes(row.status),'automatic_collection_not_claimed',409)
+ insist(row.authorized,'automatic_collection_historical',409)
+ insist(row.claimed_at&&['claimed','uncertain','pending_settlement','refused','returned','collected'].includes(row.status),'automatic_collection_not_claimed',409)
  const prior=await one(env,'SELECT collection_id FROM nc_automatic_collection_events WHERE account_ref=? AND event_ref=?',row.account_ref,eventRef)
  if(prior){insist(prior.collection_id===row.id,'automatic_collection_event_mismatch',409);return {...await reconcileAutomaticCollection(env,row.id),replayed:true}}
  const {stripe}=await stripeForAccount(env,row.account_ref),event=await stripe(`/events/${encodeURIComponent(eventRef)}`),object=event.data?.object
  insist(event.object==='event'&&event.id===eventRef&&event.livemode===false&&['payment_intent.processing','payment_intent.succeeded','payment_intent.payment_failed'].includes(event.type)
- &&object?.object==='payment_intent'&&providerReference(object.id)===row.payment_intent_ref&&providerReference(object.customer)===row.stripe_customer_ref,'automatic_collection_event_mismatch',409)
- try{await commit(env,[...authority,guard(env,'customer_erased','EXISTS(SELECT 1 FROM nc_customers WHERE id=? AND erased_at IS NULL)',row.customer_id),
+ &&object?.object==='payment_intent'&&(row.payment_intent_ref?providerReference(object.id)===row.payment_intent_ref:object.metadata?.nectar_native_collection_request===row.id&&object.metadata?.nectar_native_invoice===row.invoice_id)&&providerReference(object.customer)===row.stripe_customer_ref,'automatic_collection_event_mismatch',409)
+ try{await commit(env,[...authority,guard(env,'customer_erased',"EXISTS(SELECT 1 FROM nc_customers WHERE id=? AND erased_at IS NULL) AND EXISTS(SELECT 1 FROM nc_automatic_collection_authorizations WHERE id=? AND basis_hash=?) AND EXISTS(SELECT 1 FROM nc_automatic_collections WHERE id=? AND status NOT IN ('revoked','invalidated'))",row.customer_id,row.id,row.basis_hash,row.id),
  stmt(env,'INSERT INTO nc_automatic_collection_events(account_ref,event_ref,customer_id,collection_id,received_at) VALUES(?,?,?,?,?)',row.account_ref,eventRef,row.customer_id,row.id,clockInstant(env))],
  {actor,action:'automatic.collection.event',subject:row.id,detail:{eventRef,eventType:event.type,invoice:row.invoice_id}})}catch(error){
   if(!(error instanceof NectarError&&error.code==='already_exists'))throw error

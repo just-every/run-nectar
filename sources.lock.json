@@ -186,7 +186,7 @@
       "executable": false
     },
     "API.md": {
-      "sha256": "83f633eacd88d33c45d5400d9b5b799e9952c84e9dde4bfc6f4aa4ebd19a340b",
+      "sha256": "67373182ea0a6a3091f610d9050237fb12e2472aea63bf08bd5a1d3194c64101",
       "executable": false
     },
     "base-copies.json": {
@@ -3022,7 +3022,7 @@
       "executable": false
     },
     "src/nectar/automatic-collection-events.ts": {
-      "sha256": "15f58ef48a71a848a905cd0ee36b3f92e57413601405c99db92f1853a75d6b88",
+      "sha256": "7045269ef943b671640df7f31fb4d0f1776966a807d43038ba84256c06299c6a",
       "executable": false
     },
     "src/nectar/automatic-collection-http.ts": {
@@ -3030,7 +3030,7 @@
       "executable": false
     },
     "src/nectar/automatic-collection-jobs.ts": {
-      "sha256": "6701c99330a3c2c3f5692d3e520b78047ab6e475ab8cbe0f15d9bd72ebb628ce",
+      "sha256": "31f60cc04269dc33f991e5702b72dc4eed89c760cc71906bd6fa65b66bfcf414",
       "executable": false
     },
     "src/nectar/automatic-collection-records.ts": {
@@ -3038,7 +3038,7 @@
       "executable": false
     },
     "src/nectar/automatic-collection-webhook.ts": {
-      "sha256": "6f43afb49e6c538364774706bce57efc3c9b144ff78a9055c7419f90e01ba5c8",
+      "sha256": "9a68604deb7b8607b5c7d33581f23a5823ea0cdc49a0329c57610d1d0cd90e73",
       "executable": false
     },
     "src/nectar/automatic-collection.ts": {
@@ -4090,7 +4090,7 @@
       "executable": false
     },
     "src/nectar/retry-records.ts": {
-      "sha256": "68451bcb8364da576e8932b9710326216dcfbcc284f6b160de296589e4fe611b",
+      "sha256": "ce392cb3e6b283bf52b2e1df49d1659b53c7f61817a79636a8989fc3971903c3",
       "executable": false
     },
     "src/nectar/retry-report.ts": {
@@ -4782,7 +4782,7 @@
       "executable": false
     },
     "tests/nectar/automatic-collection.mjs": {
-      "sha256": "7f8a4a3acae6bd427bf6dc9fa28399704d44e8e47c57d2f94a6c6dffd603878f",
+      "sha256": "0fb12c470c20f73a2e38b3d37fea5bdc08d2350abfe306cfafb8ce575e8a58ce",
       "executable": false
     },
     "tests/nectar/billing-answers.mjs": {
