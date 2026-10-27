@@ -13,7 +13,7 @@ export async function subscriptionState(env: Bindings, sub: Row, day: string) {
     ? input.payment.status : input.lifecycle
   return { state, input }
 }
-export async function subscriptionStateHistory(env: Bindings, subscription: string) {
+export async function subscriptionStateHistory(env: Bindings, subscription: string): Promise<Row[]> {
   return (await all(env, 'SELECT * FROM nc_subscription_states WHERE subscription_id=? ORDER BY seq', subscription))
     .map(({ cause_json, ...row }) => ({ ...row, cause: parseJson<Row>(cause_json, {}) }))
 }
@@ -23,7 +23,7 @@ export async function observeSubscriptionStates(env: Bindings) {
   const at = clockInstant(env), day = today(business.timezone, at)
   const cursor = (await one(env, 'SELECT subscription_id FROM nc_subscription_state_cursor WHERE singleton=1'))!.subscription_id
   const rows = await all(env, `SELECT s.* FROM nc_subscriptions s JOIN nc_customers c ON c.id=s.customer_id
-    WHERE s.billing_mode='live' AND c.status='active' AND c.erased_at IS NULL AND s.id>? ORDER BY s.id LIMIT 100`, cursor)
+    WHERE s.billing_mode='live' AND c.status='active' AND c.erased_at IS NULL AND s.id>? ORDER BY s.id LIMIT 25`, cursor)
   for (const sub of rows) {
     const generation = (await one(env, 'SELECT value FROM nc_privacy_generation WHERE id=1'))!.value
     const audit = (await one(env, 'SELECT COALESCE(MAX(seq),0) seq FROM nc_audit'))!.seq
@@ -52,5 +52,5 @@ export async function observeSubscriptionStates(env: Bindings) {
     }
   }
   await env.DB.prepare('UPDATE nc_subscription_state_cursor SET subscription_id=? WHERE singleton=1 AND subscription_id=?')
-    .bind(rows.length === 100 ? rows.at(-1)!.id : '', cursor).run()
+    .bind(rows.length === 25 ? rows.at(-1)!.id : '', cursor).run()
 }
