@@ -5310,7 +5310,7 @@
       "executable": false
     },
     "tests/nectar/processor-cash.mjs": {
-      "sha256": "ce9061bfad456ed90b2ac03b2641d0112974b434841e36580ffdebb9647ced5a",
+      "sha256": "64722a0b6d496b04c0711beeb4a8bbf8ad2bc383fdba79d67e10bbc3437e3017",
       "executable": false
     },
     "tests/nectar/processor-edge.mjs": {

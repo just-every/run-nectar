@@ -130,7 +130,7 @@ export async function processorCashFlow(h, owner, { cashEdge = edge, onState=asy
   assert.deepEqual(observed.cashBalances.map(row=>[row.currency,row.amount_cents]),[['usd',0]],'An empty provider available map clears the previously observed balance')
   assert.equal(cashEdge.cashCalls.length,3,'Observing externally consumed funds creates no payment intent')
   await onState({customer})
-  return { customer, invoices: [byReference.id, byAmount.id, unknown.id], unappliedCents: 1700 }
+  return { customer, invoices: [byReference.id, byAmount.id, unknown.id], unappliedCents: 0 }
 }
 
 if(process.argv[1]===new URL(import.meta.url).pathname){
