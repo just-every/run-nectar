@@ -1,4 +1,5 @@
 // Outside push Verify: the injector supplies MAIL_API_KEY from held SendGrid.
+// TEST_MAIL_TO explicitly selects the authorized recipient for this live journey.
 // Actual provider acceptance is distinct from mailbox delivery or settlement.
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
@@ -10,7 +11,7 @@ const receipt={journey:'DUN-003 SendGrid recorded-payment notice',head:execFileS
 const h=await harness({localTime:new Date(instant).toISOString()})
 let sends=0
 try {
- assert.ok(process.env.MAIL_API_KEY&&process.env.MAIL_FROM,'held_mail_binding_required')
+ assert.ok(process.env.MAIL_API_KEY&&process.env.MAIL_FROM&&process.env.TEST_MAIL_TO,'held_mail_binding_required')
  await h.raw('/auth/bootstrap',{body:{token:h.vars.SETUP_TOKEN,displayName:'Nectar Owner'}})
  const owner=await h.signIn(h.vars.OWNER_EMAIL)
  await h.raw('/setup',{cookie:owner,form:new URLSearchParams({confirm:'yes'})})
@@ -20,7 +21,7 @@ try {
  await api('tax.review',{revision:(await api('business')).revision})
  const factor=await api('mfa.totp.start',{})
  await api('mfa.totp.confirm',{factor:factor.factor,code:totp(factor.secret,instant)})
- const customer=await api('customer.create',{external_id:'synthetic-nectar-931',name:'Synthetic Nectar notice customer',billing_email:'fleet@runeditrun.com'})
+ const customer=await api('customer.create',{external_id:'synthetic-nectar-931',name:'Synthetic Nectar notice customer',billing_email:process.env.TEST_MAIL_TO})
  const charge=await api('charge.add',{customer:customer.id,amount:'12',description:'Synthetic notice proof',effective_date:'2026-10-22',taxable:false})
  const invoice=await api('invoice.manual',{customer:customer.id,charges:[charge.charge],service_date:'2026-10-22'})
  await api('invoice.approve',{invoice:invoice.id,acknowledge:true})
@@ -30,7 +31,7 @@ try {
  await h.configureMail({provider:'sendgrid',apiKey:process.env.MAIL_API_KEY,from:process.env.MAIL_FROM},async request=>{
   assert.equal(request.url,'https://api.sendgrid.com/v3/mail/send')
   const payload=await request.clone().json()
-  assert.deepEqual(payload.personalizations.flatMap(p=>p.to.map(r=>r.email)),['fleet@runeditrun.com'])
+  assert.deepEqual(payload.personalizations.flatMap(p=>p.to.map(r=>r.email)),[process.env.TEST_MAIL_TO])
   sends++
   const response=await fetch(request.url,{method:request.method,headers:request.headers,body:await request.arrayBuffer(),signal:AbortSignal.timeout(20000)})
   receipt.httpStatus=response.status

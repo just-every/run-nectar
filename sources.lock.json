@@ -4758,7 +4758,7 @@
       "executable": false
     },
     "tests/nectar/billing-notices-sandbox.mjs": {
-      "sha256": "f044c01a5b361475a44db8e0ed3ea0645f5da937b9193da9e8585a4d7e8a2b7f",
+      "sha256": "d17d63796e759f58898f3efd47047448f7fe4e5b5046d5fd8859ee37ef17a992",
       "executable": false
     },
     "tests/nectar/billing-notices.mjs": {
