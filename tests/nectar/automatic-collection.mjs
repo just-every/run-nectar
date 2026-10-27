@@ -215,6 +215,7 @@ export async function automaticCollectionFlow(h,owner,{onState=async()=>{},prepa
  assert.equal(stateBeforeRecovery.state,'past_due',JSON.stringify({status:refused.status,error:refused.errorCode}))
  assert.deepEqual(stateBeforeRecovery.stateHistory.map(row=>row.state),['active','past_due'])
  assert.equal(refused.status,'refused');assert.equal((await api('invoices/'+lateInvoice)).paidCents,0)
+ await onState({state:'provider-refused',invoice:lateInvoice,customer:lateCustomer,session:lateAuthority.s,request:refused,subscription})
  const failedCohort=(await api('recovery')).invoices.find(row=>row.invoice===lateInvoice)
  assert.equal(failedCohort.failedAmountCents,10000);assert.equal(failedCohort.declineCode,'processing_error')
  const missingProof=structuredClone(edge.intents.get(refused.paymentIntentRef).value)
@@ -265,6 +266,7 @@ export async function automaticCollectionFlow(h,owner,{onState=async()=>{},prepa
   assert.equal(events.length,1,'Every payment-driven transition emits one state event')
   assert.equal(events[0].data.state,transition.state);assert.deepEqual(events[0].data.cause,transition.cause)
  }
+ await onState({state:'provider-recovered',invoice:lateInvoice,customer:lateCustomer,session:lateAuthority.s,request:(await api('automatic-collections')).find(row=>row.id===refused.id),subscription})
  const recoveredCohort=(await api('recovery')).invoices.find(row=>row.invoice===lateInvoice)
  assert.equal(recoveredCohort.recoveredAmountCents,10000,'Recovery reporting agrees with allocated cash')
  assert.equal(recoveredCohort.firstFailedAt,failedCohort.firstFailedAt)
