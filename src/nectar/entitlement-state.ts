@@ -15,9 +15,9 @@ export async function entitlementState(env: Bindings, sub: Row, day: string) {
     : sub.trial_end && sub.trial_end > day ? 'trialing' : 'active'
   const invoices = await all(env, `SELECT i.id,i.due_date,${BALANCE_SQL} AS balance_cents FROM nc_invoices i
     WHERE i.subscription_id=? AND i.status='issued' AND i.issue_date<=? AND ${BALANCE_SQL}>0 ORDER BY i.due_date,i.id`, sub.id, day)
-  const failures = await all(env, `SELECT n.id,n.invoice_id,n.status FROM nc_native_collections n
+  const failures = await all(env, `SELECT n.id AS id,n.invoice_id,n.status FROM nc_native_collections n
     JOIN nc_invoices i ON i.id=n.invoice_id WHERE i.subscription_id=? AND i.issue_date<=? AND i.status='issued'
-    AND ${BALANCE_SQL}>0 AND n.status IN ('declined','customer_action_required','uncertain') ORDER BY n.id`, sub.id, day)
+    AND ${BALANCE_SQL}>0 AND n.status IN ('declined','customer_action_required','uncertain') UNION ALL SELECT a.id,a.invoice_id,a.status FROM nc_automatic_collections a JOIN nc_invoices i ON i.id=a.invoice_id WHERE i.subscription_id=? AND i.issue_date<=? AND i.status='issued' AND ${BALANCE_SQL}>0 AND a.status IN ('refused','returned','uncertain') ORDER BY 1`, sub.id, day, sub.id, day)
   const unpaid=await one(env,`SELECT 1 FROM nc_dunning_series s JOIN nc_invoices i ON i.id=s.invoice_id JOIN nc_customers c ON c.id=s.customer_id WHERE i.subscription_id=? AND s.status='mark_unpaid' AND s.end_date<=? AND i.status='issued' AND c.erased_at IS NULL AND ${BALANCE_SQL}>0`,sub.id,day)
   return { lifecycle, suspended: intervals.some(i => i.access === 'suspend'),
     payment: { status: unpaid ? 'unpaid' : invoices.some(i => i.due_date <= day) || failures.some(f => f.status !== 'uncertain') ? 'past_due' : failures.length ? 'uncertain' : 'current',

@@ -1,3 +1,6 @@
+import { subscriptionStateHistory, subscriptionState } from './subscription-states'
+import { clockInstant } from './clock'
+import { today } from './dates'
 import { planChangesFor } from './plan-changes'
 import { serviceEndSql } from './renewal-sql'
 import { termRecords } from './renewal-terms'
@@ -8,7 +11,7 @@ import { termRecords } from './renewal-terms'
 import type { Bindings } from '../auth.server'
 import { requirePrice } from './catalog'
 import { promotionRedemption } from './promotions'
-import { requireAny, requireRead, actorLabel, requireCapability, requireMember, type Actor } from './actor'
+import { requireAny, requireRead, canRead, actorLabel, requireCapability, requireMember, type Actor } from './actor'
 import { requireBusiness } from './business'
 import { all, commit, guard, insist, newId, now, one, parseJson, stmt, type Row } from './core'
 import { canonicalDecimal, micros } from './decimal'
@@ -43,7 +46,7 @@ export async function subscriptionDetail(env: Bindings, actor: Actor, id: string
     all(env, "SELECT id, number, status, period_start, period_end, total_cents, currency FROM nc_invoices WHERE subscription_id = ? AND status <> 'discarded' ORDER BY period_start DESC", id),
   ])
   const history = await lifecycleHistory(env, id)
-  return { ...sub,planChanges:await planChangesFor(env,actor,id), cancellations:await intervalCancellations(env,id),renewal:await termRecords(env,actor,id), contracts:await contractsFor(env,id),burnDown:await contractBurnDown(env,id), lifecyclePolicy: await lifecyclePolicy(env), lifecycle: history, intervals: lifecycleIntervals(history),...await metadataFor(env,'subscription',id), items, amendments, changes: changes.map(change => ({ ...change, preview: parseJson(change.preview_json, {}), preview_json: undefined })), invoices:await withMetadata(env,'invoice',invoices) }
+  return { ...sub, state: (await subscriptionState(env, sub, today((await requireBusiness(env)).timezone, clockInstant(env)))).state, stateHistory: (await subscriptionStateHistory(env,id)).map(row => canRead(actor,'invoices') && canRead(actor,'payments') ? row : {...row,cause:{day:row.cause.day,timezone:row.cause.timezone}}),planChanges:await planChangesFor(env,actor,id), cancellations:await intervalCancellations(env,id),renewal:await termRecords(env,actor,id), contracts:await contractsFor(env,id),burnDown:await contractBurnDown(env,id), lifecyclePolicy: await lifecyclePolicy(env), lifecycle: history, intervals: lifecycleIntervals(history),...await metadataFor(env,'subscription',id), items, amendments, changes: changes.map(change => ({ ...change, preview: parseJson(change.preview_json, {}), preview_json: undefined })), invoices:await withMetadata(env,'invoice',invoices) }
 }
 
 // A subscription holds its meters while it is live on or after `from`: no end
