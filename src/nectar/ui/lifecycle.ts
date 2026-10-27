@@ -15,7 +15,7 @@ export function lifecycleSection(s: Row, actor: Actor) {
   const policy=s.lifecyclePolicy
   return h`<section class="card" aria-labelledby="lifecycle"><h2 id="lifecycle">Lifecycle</h2>
     <h3>State history</h3>
-    ${table(['State', 'Previous state', 'Observed date', 'Cause'], (s.stateHistory??[]).map((e: Row) => [e.state, e.previous_state??'—', formatDate(e.cause.day), String(e.cause.kind??'Historical observation').replaceAll('_',' ')]), { empty: 'No scheduled state observations yet.' })}
+    ${s.stateHistory===null?h`<p role="status">Billing access is required to read state history.</p>`:table(['State', 'Previous state', 'Observed date', 'Cause'], (s.stateHistory??[]).map((e: Row) => [e.state, e.previous_state??'—', formatDate(e.cause.day), String(e.cause.kind??'Historical observation').replaceAll('_',' ')]), { empty: 'No scheduled state observations yet.' })}
     <p class="hint">Paused days have no charges. Usage remains recorded at zero. Choose whether the plan's access continues; billing resumes on the saved date.</p>
     ${table(['Change', 'Effective', 'Resume', 'Access', 'Reason', 'Recorded by'], s.lifecycle.map((e: Row) => [e.kind, formatDate(e.effective_date), formatDate(e.until_date), e.access, e.reason, who(actor,e.author)]), { empty: 'No lifecycle changes recorded.' })}
     ${approve && open ? form('subscription.pause', back, h`${base}${field('Pause from', 'effective_date', { type: 'date' })}${field('Resume on', 'resume_date', { type: 'date' })}${select('Access while paused', 'access', [{value:'suspend',label:'Suspend access'},{value:'retain',label:'Keep access'}], 'suspend')}${field('Reason', 'reason')}`, 'Pause subscription', {layout:'columns',secondary:true}) : ''}

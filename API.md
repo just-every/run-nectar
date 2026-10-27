@@ -794,7 +794,8 @@ The existing subscription detail read includes `stateHistory`, ordered by its
 append sequence. Each observation has an immutable id, previous state, state,
 observation time and typed cause. The same history appears on the subscription
 screen. Only the owner receives financial source details in this read; other
-authorized subscription readers receive the cause kind and business-local date.
+authorized billing readers receive the cause kind and business-local date.
+Readers without both invoice and payment access receive no state history.
 
 The minute scheduler observes native live subscriptions in bounded pages of 100.
 A changed observation atomically records history and queues the existing

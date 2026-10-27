@@ -174,7 +174,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "675157974874545b0e8f453b70c208754978ff85dea2deaf78e7a23bafee4b60",
+      "sha256": "e2af89d85041dc533b2b40468b02465d982c2170e82f88a299c8e27a84a13526",
       "executable": false
     },
     "AGENTS.consumer.md": {
@@ -186,7 +186,7 @@
       "executable": false
     },
     "API.md": {
-      "sha256": "247c0368620965ef96013b65c00460b8a6fe349ae81bcaeab84310457ab0c375",
+      "sha256": "7b228ae8034818e8ec49985e7653ef8c778ed8b2c4c1694a1f52225112d7617c",
       "executable": false
     },
     "base-copies.json": {
@@ -194,7 +194,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "2609a92d217229036f757ad7da3462754a3b95a5cbffe2aae08c44a12c7a1792",
+      "sha256": "40ccae5ae8f47335f930d2c38f26137cea4d790c4e106c93b44fd3c2ddb8cf60",
       "executable": false
     },
     "DEMO.md": {
@@ -4146,7 +4146,7 @@
       "executable": false
     },
     "src/nectar/subscription-state.ts": {
-      "sha256": "59cd226068d92001074addef197b51322874b7fde146dbe83fa83296a9a981c7",
+      "sha256": "855e3363bde6fcb299430820256cde7dcf9e39347283e7dee49982372354a2d2",
       "executable": false
     },
     "src/nectar/subscriptions.ts": {
@@ -4294,7 +4294,7 @@
       "executable": false
     },
     "src/nectar/ui/lifecycle.ts": {
-      "sha256": "4f4011ce4b5fe4c59d8085d2c2dcbf6848cf2bfef0f52ae2d2ff1b2b2c75a969",
+      "sha256": "27ee508aa87608dae166ccf0d19a6a454e70b493ef2cbf1a0aa99f1858b738ce",
       "executable": false
     },
     "src/nectar/ui/metadata.ts": {
@@ -5334,7 +5334,7 @@
       "executable": false
     },
     "tests/nectar/subscription-states-browser.mjs": {
-      "sha256": "beade94849d4538d34ab267ba6f26b02e9ed326d9917972f91582b743e19925d",
+      "sha256": "05bf3df8fd1d761c884aa0a4666f184890a297eb6dd5a5188bb17f67bd4c2d84",
       "executable": false
     },
     "tests/nectar/subscription-states-sandbox.mjs": {
@@ -5342,7 +5342,7 @@
       "executable": false
     },
     "tests/nectar/subscription-states.mjs": {
-      "sha256": "61a7c356bfd0ecacba77cb85ebaccaf7b64ae46e7c58110729caf77e3d540b77",
+      "sha256": "2679768fd2bf4532dde46a0601609d374a39543c81ab2b7cdd26b3e4090f7e33",
       "executable": false
     },
     "tests/nectar/upcoming.mjs": {

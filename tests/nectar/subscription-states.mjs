@@ -97,5 +97,9 @@ export async function subscriptionStatesFlow(h,owner,{onState=async()=>{}}={}) {
  assert.deepEqual(visible.map(row=>row.state),expected)
  assert.ok(visible.every(row=>Object.keys(row.cause).sort().join(',')==='day,kind'),'Financial cause sources stay owner-only')
  assert.ok(!JSON.stringify(visible).includes(invoice))
+ await api('access.give',{email:'state-sales@example.test',name:'State sales',role:'sales'})
+ const sales=await h.signIn('state-sales@example.test',{requested:true})
+ assert.equal((await h.api(`subscriptions/${subscription}`,sales)).stateHistory,null,'A subscription reader without billing access cannot read payment-derived states')
+ await onState({state:'restricted-reader',subscription,actor:sales})
  console.log('subscriptionStatesFlow: scheduled trial, active, decline, unpaid, allocated recovery, pause, resume and end; immutable causes, signed per-step events, replay and atomic audit rollback')
 }

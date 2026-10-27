@@ -7,9 +7,13 @@ import { today } from './dates'
 import { metadataFor, withMetadata } from './metadata'
 import { entitlementState } from './entitlement-state'
 
-export const subscriptionStateHistory = async (env: Bindings, subscription: string, actor: Actor) =>
-  (await all(env,'SELECT * FROM nc_subscription_states WHERE subscription_id=? ORDER BY seq',subscription))
-    .map(row=>({...row,cause:actor.kind==='member'&&actor.role==='owner'&&canRead(actor,'payments')&&canRead(actor,'invoices')?parseJson(row.cause_json,{}):{kind:parseJson<Record<string,unknown>>(row.cause_json,{}).kind,day:parseJson<Record<string,unknown>>(row.cause_json,{}).day},cause_json:undefined}))
+export async function subscriptionStateHistory(env: Bindings, subscription: string, actor: Actor) {
+  if(!canRead(actor,'payments')||!canRead(actor,'invoices'))return null
+  const full=actor.kind==='member'&&actor.role==='owner'
+  return (await all(env,'SELECT * FROM nc_subscription_states WHERE subscription_id=? ORDER BY seq',subscription))
+    .map(row=>{const cause=parseJson<Record<string,unknown>>(row.cause_json,{})
+      return {...row,cause:full?cause:{kind:cause.kind,day:cause.day},cause_json:undefined}})
+}
 
 /** Bounded scheduled observation, independent of outbound endpoint consent.
  * A retry rereads current facts; it cannot duplicate a committed transition. */
