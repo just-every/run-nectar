@@ -11,7 +11,7 @@ const summary=`${contract.counts.total} clauses: ${contract.counts.done} done, $
 const acceptance=['# Nectar acceptance record','','Generated from [CONTRACT.md](CONTRACT.md). Regenerate with `node scripts/contract-docs.mjs write`.',`Status: **${summary}**`,'',
  '| Clause | Title | Acceptance evidence required | Present proof | Status | Gap |','| --- | --- | --- | --- | --- | --- |',
  ...contract.clauses.map(clause=>`| ${clause.id} | ${escaped(clause.title)} | ${escaped(clause.text.split('**Acceptance evidence:**').slice(1).join('**Acceptance evidence:**')||clause.text)} | ${prose(evidence(clause))} | **${clause.status.toUpperCase()}** | ${escaped(clause.gap)} |`),''].join('\n')
-const claims=['# Nectar implementation claims','','Generated from [CONTRACT.md](../CONTRACT.md). A partial or missing clause retains the work named in its Gap.',`Status: **${summary}**`,'',
+const claims=['## Nectar implementation claims','','Generated from [CONTRACT.md](https://github.com/just-every/run-nectar/blob/main/CONTRACT.md). A partial or missing clause retains the work named in its Gap.',`Status: **${summary}**`,'',
  '| Clause | Title | Status | Present proof | Gap |','| --- | --- | --- | --- | --- |',
  ...contract.clauses.map(clause=>`| ${clause.id} | ${escaped(clause.title)} | ${clause.status} | ${prose(evidence(clause))} | ${escaped(clause.gap)} |`),''].join('\n')
 for(const [path,expected] of [['ACCEPTANCE.md',acceptance],['docs/CLAIMS.md',claims]]){
