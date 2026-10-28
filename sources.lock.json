@@ -174,7 +174,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "ef8e39057539f70d63b1549916b94a8b9c23110c6cdd5f3cd6d8f19a7ddd5c88",
+      "sha256": "20c5d8ec7e6764e2012f298580aeb6cfadeafbb994c669804ebb0a7ae2d37bd4",
       "executable": false
     },
     "AGENTS.consumer.md": {
@@ -194,7 +194,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "c04ad235776ad13624d876ab97287875e719e4b5267553cd21abcab00f208260",
+      "sha256": "1674193d9cceca2906ac6e78dcc9868862fd9e512da4e375875a24df1f41c220",
       "executable": false
     },
     "DEMO.md": {
@@ -230,7 +230,7 @@
       "executable": false
     },
     "docs/CLAIMS.md": {
-      "sha256": "746a989588ea3191c1ff560e5c0e87017f4c7a9905486e98c3d16a8e94f9b18a",
+      "sha256": "b93068239de6e0b0cf1a5aa215799489fa266c0e65f48c411bb3a6c5a46eec1d",
       "executable": false
     },
     "docs/composition-baseline.json": {
@@ -998,7 +998,7 @@
       "executable": false
     },
     "scripts/contract-docs.mjs": {
-      "sha256": "8f61a47762c63b09db796632367bd00d4e41fa718fb923db450df35cd08a2ad3",
+      "sha256": "7d89b2ad844740224e2ba91254b62871afeb7aef4b2d9acc31426553170dc7bb",
       "executable": false
     },
     "scripts/delivery/base/artifact.mjs": {
@@ -5110,7 +5110,7 @@
       "executable": false
     },
     "tests/nectar/invoice-refund-preview.mjs": {
-      "sha256": "6c616e768315bb912ad10ef8863ac8dc98adde36e92b9a7010be24f4fc8cbe09",
+      "sha256": "2d21c384fc5336bffcbe6bccddc77e9628357e6063eb96f5efc4dc312a68de98",
       "executable": false
     },
     "tests/nectar/invoice-refund-sandbox.mjs": {

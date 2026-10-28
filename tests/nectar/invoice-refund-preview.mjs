@@ -364,8 +364,12 @@ export async function invoiceTaxRefundFlow(h,owner,{account,customerRef,processo
   const csv=await h.raw(`/app/exports/reports/tax.csv?period=${period}&customer=${customer}`,{cookie:owner})
   assert.equal(csv.status,200)
   const {csvRows}=await import('./financial-reports.mjs')
-  assert.equal(csvRows(await csv.text()).filter(row=>row.source!=='TOTAL').reduce((sum,row)=>sum+Math.round(Number(row.amount.replace(/[^0-9.-]/g,''))*100),0),0)
+  const csvEntries=csvRows(await csv.text()).filter(row=>row.source!=='TOTAL')
+  assert.deepEqual(csvEntries.map(row=>Math.round(Number(row.amount.replace(/[^0-9.-]/g,''))*100)).sort((a,b)=>a-b),[-17250,-17250,34500])
+  assert.equal(csvEntries.reduce((sum,row)=>sum+Math.round(Number(row.amount.replace(/[^0-9.-]/g,''))*100),0),0)
   const sources=await Promise.all(tax.entries.map(row=>api(row.href.replace('/app/',''))))
+  assert.equal(sources.length,3)
+  assert.deepEqual(sources.flatMap(source=>source.components.map(row=>row.amountCents)).sort((a,b)=>a-b),[-17250,-17250,34500])
   assert.equal(sources.reduce((sum,source)=>sum+source.components.reduce((n,row)=>n+row.amountCents,0),0),0)
   if(processor) {
     assert.deepEqual(processor.tax.calls.filter(c=>c.method==='POST').map(c=>[Number(c.fields.get('line_items[0][amount]')),Number(c.fields.get('line_items[0][amount_tax]'))]),[[-200000,-17250],[-200000,-17250]])
