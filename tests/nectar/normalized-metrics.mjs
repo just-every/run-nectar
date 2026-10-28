@@ -90,6 +90,8 @@ export async function normalizedMetricsFlow(h, owner, onState = async () => {}) 
   }
   const billed = await api(`reports/mrr?period=2026-07&customer=${customer}`)
   assert.equal(billed.totalCents,33000,'Billed recurring retains native 23000 cents plus the captured annual invoice allocation of 10000 cents')
+  await onState({label:'billed-recurring',path:`/app/reports/mrr?period=2026-07&customer=${customer}`,amount:33000})
+  await onState({label:'billed-recurring-source',path:billed.entries.find(entry=>entry.sourceProvider!=='stripe').href,amount:23000})
   await onState({label:'source-history',path:historical.entries[0].href,amount:23000})
 
   const nativeCustomer = (await api('customer.create', { external_id:'synthetic-nectar-normalized-native',name:'Evergreen Research',billing_email:['billing','evergreen.example'].join(String.fromCharCode(64)) })).id

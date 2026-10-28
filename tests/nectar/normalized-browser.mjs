@@ -9,7 +9,7 @@ const browser = await chromium.launch({ headless: true, args: ['--use-mock-keych
 try {
   for (const [file, name] of [['normalized-metrics','normalizedMetricsFlow'], ['draft-corrections','draftCorrectionsFlow'], ['credit-correction','creditCorrectionFlow']]) {
     const module = await import(`./${file}.mjs`)
-    await runIsolated(file, name, async () => ({ [name]: async (h, owner) => {
+    await runIsolated(file, name, async () => ({ harnessOptions: () => ({ assets: true }), [name]: async (h, owner) => {
       const context = await browser.newContext()
       try {
         await context.addCookies(owner.split('; ').map(part => { const at = part.indexOf('='); return { name: part.slice(0, at), value: part.slice(at+1), url: h.origin } }))
