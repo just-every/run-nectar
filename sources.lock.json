@@ -833,6 +833,10 @@
       "sha256": "bb1655b8eae9bc9365345d9ae809f47d71a3f1faa76d35c6dee086aaf66d053b",
       "executable": false
     },
+    "migrations/core/0110_native_reconfirmation.sql": {
+      "sha256": "fbec485e7313a5c156daee382cb255a414a17dcde94ea2be10b658b2badff6df",
+      "executable": false
+    },
     "ONBOARDING.md": {
       "sha256": "95bb235abff28ac36979868486caf2cb73bfbe4ab63037f3e301d189bb9398d9",
       "executable": false
@@ -3829,6 +3833,10 @@
       "sha256": "e47a0d5f442400c2453faadc4d1727a7bfc50e86e9761b21ef9fff9e5e2101e4",
       "executable": false
     },
+    "src/nectar/payments/reconfirmation.ts": {
+      "sha256": "159f4d0d409865ed8ab53d6e1b49992f4b37010e7556bd6ce81d1e07359528d0",
+      "executable": false
+    },
     "src/nectar/payments/refusal.ts": {
       "sha256": "0a7708082027a7484a7a6cf4dde2cbc96aaa5c9fbfd051c927fa6cdb5fc1e3ba",
       "executable": false
@@ -5278,7 +5286,7 @@
       "executable": false
     },
     "tests/nectar/native-collection.mjs": {
-      "sha256": "f5e7b2b6f0592cdad798f7525e290c810cfe2369783f058f958e7b39ae41bd6f",
+      "sha256": "e0a1ca5fea06e4ede8a3d91e821575a8eefd3e7a3a6c3e34fd378a345447ed3a",
       "executable": false
     },
     "tests/nectar/notes.mjs": {

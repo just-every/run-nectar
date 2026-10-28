@@ -60,6 +60,11 @@ export function nativeCollectionEdge() {
       assert.equal(form.get('payment_method'),customers.get(intent.customer).method)
       assert.equal(form.get('off_session'),'true')
       const charge=`synthetic-nectar-recovery-charge-${calls.length}`
+      if(refusalNext){
+        const code=refusalNext;refusalNext=null
+        Object.assign(intent,{status:'requires_payment_method',payment_method:null,amount_received:0,latest_charge:null,last_payment_error:{code,payment_method:{id:form.get('payment_method')}}})
+        return Response.json({error:{type:'card_error',code,payment_intent:intent}},{status:402})
+      }
       Object.assign(intent,{status:'succeeded',payment_method:form.get('payment_method'),amount_received:intent.amount,latest_charge:charge})
       delete intent.last_payment_error
       charges.set(charge,{account,value:{object:'charge',id:charge,status:'succeeded',paid:true,captured:true,customer:intent.customer,payment_method:intent.payment_method,payment_intent:intent.id,
@@ -457,7 +462,7 @@ export async function nativeCollectionFlow(h,owner,{onState=async()=>{},confirm,
     recoverySources.push(failed)
     return {source,failed}
   }
-  const success=await refuseSource(),lostRecovery=await refuseSource(),staleRecovery=await refuseSource(),heldRecovery=await refuseSource(),erasedRecovery=await refuseSource('processing_error',null,customers[1])
+  const success=await refuseSource(),lostRecovery=await refuseSource(),secondRefusal=await refuseSource(),staleRecovery=await refuseSource(),heldRecovery=await refuseSource(),erasedRecovery=await refuseSource('processing_error',null,customers[1])
   const hardStops=[]
   // Unknown reasons and explicit provider advice are also closed by default.
   for(const [code,decline,advice] of [['card_declined',null,false],['card_declined','stolen_card',false],['authentication_required',null,false],['processing_error',null,true]]){
@@ -481,7 +486,13 @@ export async function nativeCollectionFlow(h,owner,{onState=async()=>{},confirm,
   for(const {failed} of hardStops)await api('collection.recovery.prepare',{request:failed.id},409)
   assert.equal(postsNow(),beforeStaleFactor,'Expired factors, caps, unknown reasons, hard declines, authentication and provider advice never write Stripe')
   const frozenFirst=(await api('recovery')).invoices.find(r=>r.invoice===success.source.id)
-  const good=await reviewRecovery(success.failed.id)
+  let good=await reviewRecovery(success.failed.id)
+  const oldPolicyReview=good.instructions.reconfirm
+  await api('retry.policy.configure',{max_attempts:4,window_days:7,confirm:true})
+  await api('collection.recovery.confirm',oldPolicyReview,409)
+  await api('retry.policy.configure',{max_attempts:8,window_days:14,confirm:true})
+  await api('collection.recovery.confirm',oldPolicyReview,409)
+  good=await reviewRecovery(success.failed.id)
   assert.equal(postsNow(),beforeStaleFactor,'Preparing recovery performs provider reads only')
   assert.equal(good.reconfirmation.firstFailedAt,success.failed.reconciled_at)
   assert.equal(good.reconfirmation.firstFailure.errorCode,'processing_error')
@@ -575,9 +586,29 @@ export async function nativeCollectionFlow(h,owner,{onState=async()=>{},confirm,
   await api('collection.recovery.prepare',{request:factor.failed.id},409)
   await api('retry.policy.configure',{max_attempts:8,window_days:14,confirm:true})
   assert.equal(postsNow(),postExpiry,'Expired preparation is not revived by a new factor')
+  const refusalReview=await reviewRecovery(secondRefusal.failed.id)
+  edge.refuseNext('authentication_required')
+  const refusedAgain=await recoverReview(refusalReview.instructions.reconfirm)
+  assert.equal(refusedAgain.status,'customer_action_required')
+  assert.equal(refusedAgain.payment_intent_ref,secondRefusal.failed.payment_intent_ref)
+  const retained=(await api('recovery')).invoices.find(r=>r.invoice===secondRefusal.source.id)
+  assert.deepEqual([retained.firstFailedAt,retained.failedAmountCents,retained.declineCode,retained.recoveredAmountCents],[secondRefusal.failed.reconciled_at,10000,'processing_error',0])
+  assert.deepEqual(retained.attempts.map(r=>[r.attempt,r.outcome]),[[1,'failed'],[2,'failed']])
+  const attemptTwo=(await api('recovery')).byAttempt.find(r=>r.key==='2'&&r.currency==='USD')
+  assert.deepEqual([attemptTwo.failedInvoices,attemptTwo.recoveredInvoices,attemptTwo.failedAmountCents,attemptTwo.recoveredAmountCents,attemptTwo.recoveryRate,attemptTwo.amountRecoveryRate],[3,2,30000,20000,2/3,2/3])
+  assert.deepEqual([(await api(`invoices/${secondRefusal.source.id}`)).paidCents,(await api(`invoices/${secondRefusal.source.id}`)).balanceCents],[0,10000])
+  const finalPosts=postsNow()
+  await api('collection.recovery.prepare',{request:refusedAgain.id},409)
+  await api('collection.recovery.confirm',refusalReview.instructions.reconfirm,409)
+  assert.equal(postsNow(),finalPosts,'A refused recovery cannot be attempted a third time')
+  await onState({label:'recovery-authentication-stop',invoice:secondRefusal.source.id,request:refusedAgain})
+  instant+=15*86400000;await h.advanceClock(new Date(instant).toISOString())
+  await api('mfa.verify',{code:totp(secret,instant)})
+  assert.equal((await api('collection.recovery.prepare',{request:factor.failed.id},409)).error,'native_recovery_attempt_limit','The original failure window cannot be extended by a new preparation')
+  assert.equal(postsNow(),finalPosts)
   assert.equal(edge.calls.filter(c=>c.method==='POST'&&c.path==='/payment_intents').length,originalCreates+2,'Only the two independently issued later test invoices create intents; recovery never does')
   assert.equal(edge.intents.size,originalIntents+2)
-  assert.equal(edge.calls.filter(c=>c.method==='POST'&&c.path.endsWith('/confirm')).length,2,'Only the two explicitly confirmed recoveries reach the provider')
+  assert.equal(edge.calls.filter(c=>c.method==='POST'&&c.path.endsWith('/confirm')).length,3,'Only the three explicitly confirmed recoveries reach the provider')
   console.log('Same-intent recovery: one allocation, immutable first failure and exact recovery rates; replay, changed sources, holds, erasure, stale factors and prohibited declines remain closed')
   }
   console.log('Native collection: two frozen accounts, exact current balances, explicit owner confirmation, captured proof, atomic payment/allocation, read-only search/list recovery, definitive declined/authentication outcomes, concurrent confirmation, no second intent and erasure/factor boundaries')
