@@ -165,7 +165,20 @@ export async function processorCashImportedFlow(h,owner,{cashEdge=edge,keepFinan
   const report=await api(`reports/${metric}?period=2026-10&customer=${customer}`)
   assert.equal(report.totalCents,total)
   assert.equal(report.entries.reduce((sum,row)=>sum+row.amountCents,0),total)
-  for(const entry of report.entries){const detail=await api(entry.href.replace('/app/',''));assert.equal(detail.components.reduce((sum,row)=>sum+row.amountCents,0),entry.amountCents)}
+  for(const entry of report.entries){
+   const detail=await api(entry.href.replace('/app/',''))
+   assert.equal(detail.components.reduce((sum,row)=>sum+row.amountCents,0),entry.amountCents)
+   if(detail.processor){
+    const page=await h.page(entry.href,owner),evidence=page.match(/<section class="card" id="processor-evidence">([\s\S]*?)<\/section>/)
+    assert.ok(evidence,'The contribution shows its recorded processor source')
+    const links=[...evidence[1].matchAll(/href="([^"]+)"/g)].map(match=>match[1].replaceAll('&amp;','&'))
+    assert.ok(links.length,'The financial source has an ordinary navigation door')
+    for(const href of [...links,...detail.components.flatMap(row=>row.href?[row.href]:[])]){
+     const destination=await h.page(href,owner),target=new URL(href,h.origin)
+     if(target.hash)assert.ok(destination.includes(`id="${target.hash.slice(1)}"`),'Source navigation reaches the actual financial record')
+    }
+   }
+  }
   const csv=csvRows(await(await h.raw(`/app/exports/reports/${metric}.csv?period=2026-10&customer=${customer}`,{cookie:owner})).text())
   assert.equal(csv.find(row=>row.source==='TOTAL').amount,`${total<0?"'":''}${(total/100).toFixed(2)}`)
  }
