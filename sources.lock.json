@@ -833,6 +833,10 @@
       "sha256": "bb1655b8eae9bc9365345d9ae809f47d71a3f1faa76d35c6dee086aaf66d053b",
       "executable": false
     },
+    "migrations/core/0110_amendment_items.sql": {
+      "sha256": "db8c4aeb748a0925ac50deee6915da595d401d236839f3e904d0c533f4f33b04",
+      "executable": false
+    },
     "ONBOARDING.md": {
       "sha256": "95bb235abff28ac36979868486caf2cb73bfbe4ab63037f3e301d189bb9398d9",
       "executable": false
@@ -3298,7 +3302,7 @@
       "executable": false
     },
     "src/nectar/credit-correction.ts": {
-      "sha256": "fb5fb55933a47e07717dbcbb14744ffa1966f5cbaa939cd43edce4fc11e8c9fd",
+      "sha256": "a054a8d3ce9a6b39cc278902c862353b17ae78602af804da7355d3361aa009cc",
       "executable": false
     },
     "src/nectar/credit-policy.ts": {
@@ -3362,7 +3366,7 @@
       "executable": false
     },
     "src/nectar/draft-correction-plan.ts": {
-      "sha256": "1840312d9bc101e82f0ec6761322e48bbbb3ab1b89ff039349c5817972b7ba97",
+      "sha256": "910f59bb0c74c45cfb7d7d2e6ae6a7dc177788ac09fdc3aea662dafebc18b08d",
       "executable": false
     },
     "src/nectar/draft-correction-windows.ts": {
@@ -3498,7 +3502,7 @@
       "executable": false
     },
     "src/nectar/inputs.ts": {
-      "sha256": "5e7405badfebf89fa7590ceff5cea7f98bbbb3c2ca5fae03d04f98d73dfd6ef9",
+      "sha256": "96701273a55bba7f9d320b9374ec6b8df4f2399bacb3e0dd3a6e697101b2d9c9",
       "executable": false
     },
     "src/nectar/interval-cancel-plan.ts": {
@@ -3718,19 +3722,23 @@
       "executable": false
     },
     "src/nectar/movein/normalized-history.ts": {
-      "sha256": "abe3fed483660eb09ccb029202076b6dc85d3ae6bf215e4eec4225ae9faf2562",
+      "sha256": "929c26e72874d05b86e31517eab4f86730ba32ffc0e283c4df22a8d80f2ca575",
       "executable": false
     },
     "src/nectar/movein/stripe.ts": {
-      "sha256": "2f6d2aa88af6a2769400e193da9fc64e13e9f5c8f1a957f03ffdc054a067f91c",
+      "sha256": "d6a24ca3ff54f6be366ad21c9b179d813a5800f8f118dad93852a6734d849f28",
       "executable": false
     },
     "src/nectar/movein/target.ts": {
-      "sha256": "237f2d0f40db41ae2e7f2c06bfa10692a2cf0329a756f0f2f326d3dd45aac1e0",
+      "sha256": "262afd8b47c7438c5bdc5bd1c6ac6ac6a095bcc4a04d9218edd33adc5f620f7c",
+      "executable": false
+    },
+    "src/nectar/normalized-correction.ts": {
+      "sha256": "adda132a8175c4a7ba3c92f465017d206ee9556562edd9d8878285e53aa7f06e",
       "executable": false
     },
     "src/nectar/normalized-metrics.ts": {
-      "sha256": "bee71307137568047ff7e7b7ee1853a416adfab0dff5fbce7d262542e8899026",
+      "sha256": "88e794f200d2d72364bc855d09722fae0acabd892be179664cf75a66ca38c7e8",
       "executable": false
     },
     "src/nectar/normalized-notice.ts": {
@@ -3738,7 +3746,7 @@
       "executable": false
     },
     "src/nectar/normalized-reports.ts": {
-      "sha256": "e709111a65438e20414cdfb0104d7933cbf802ffb0962d07cea63a7a8b210e12",
+      "sha256": "c2c76313733f9c786ef2ea77420e2ab726640f8adf769e7dc1fb0ffe6bb7ecec",
       "executable": false
     },
     "src/nectar/note-records.ts": {
@@ -4162,7 +4170,7 @@
       "executable": false
     },
     "src/nectar/rating.ts": {
-      "sha256": "b8d5dd936c0af6d69ccbee3b7c5eed3c06d26d2be7421b322b48e7c8891737e0",
+      "sha256": "d063deae3f3c8668e513e1fe783a5616df8b75355f111af8c7da04f95bf17187",
       "executable": false
     },
     "src/nectar/receivables.ts": {
@@ -5110,7 +5118,7 @@
       "executable": false
     },
     "tests/nectar/draft-corrections.mjs": {
-      "sha256": "f6bedd9656a4ac325b68fe831b04143a580cf185e154af936116d2218ec49862",
+      "sha256": "8b605117657f6988c201c02a692e86ac4a8afd3f9feb49a4b4ff7aeb5754557d",
       "executable": false
     },
     "tests/nectar/dunning-browser.mjs": {
@@ -5305,8 +5313,12 @@
       "sha256": "a946bb4f696f9b8c346199cd33416a4c4075524389a7e61759c139ea14cbc518",
       "executable": false
     },
+    "tests/nectar/normalized-discount-capture.mjs": {
+      "sha256": "239f5bc442f0de7cd9d8e04e6096d776c8e337f1aea882e31fc420f48a74fc6e",
+      "executable": false
+    },
     "tests/nectar/normalized-metrics.mjs": {
-      "sha256": "b08aec86612f19fbc6f673a380e14f9057cace1fcef38bb7e4e7d694bcfbe6e8",
+      "sha256": "4c6b19937e51c9ebd75c8617956094fe5a57037272002f4b5e050f4e652f7258",
       "executable": false
     },
     "tests/nectar/notes.mjs": {

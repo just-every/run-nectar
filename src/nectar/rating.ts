@@ -33,7 +33,7 @@ export const RATING_VERSION = 'nectar-rating-1'
 
 export interface PriceIn { id: string; kind: 'flat' | 'seat' | 'unit'; unitAmount: string; meterId: string | null; taxable: boolean; label: string; unitLabel: string; pricing?: QuantityPrice; metric?:MetricPrice; billing?: BillingTerms; sourcePriceId?: string }
 export interface ItemIn { id: string; priceId: string; quantity: number; from: string; to: string | null }
-export interface AmendmentIn { id: string; kind: 'discount_percent' | 'fixed_credit' | 'price_override'; value: string; priceId: string | null; from: string; to: string | null; note: string }
+export interface AmendmentIn { id: string; itemId?: string; kind: 'discount_percent' | 'fixed_credit' | 'price_override'; value: string; priceId: string | null; from: string; to: string | null; note: string }
 export interface EventIn { eventId: string; meterId: string; quantity: string; occurredAt: number;properties?:Record<string,import('./metric-plan').PropertyValue>;invoiceId?:string|null }
 export interface RatingInput {
   version: string
@@ -117,7 +117,7 @@ function rateCore(input: RatingInput, presentCancellationCredits = true): Rating
     if (!price || price.kind === 'unit') continue
     const from = max(item.from, billFrom), to = min(item.to ?? FAR, activeTo)
     if (from >= to) continue
-    const boundaries=input.amendments.filter(amendment=>(amendment.kind==='discount_percent'||amendment.kind==='price_override')&&(!amendment.priceId||amendment.priceId===price.id||amendment.priceId===price.sourcePriceId)).flatMap(amendment=>[amendment.from,amendment.to])
+    const boundaries=input.amendments.filter(amendment=>(amendment.kind==='discount_percent'||amendment.kind==='price_override')&&(!amendment.itemId||amendment.itemId===item.id)&&(!amendment.priceId||amendment.priceId===price.id||amendment.priceId===price.sourcePriceId)).flatMap(amendment=>[amendment.from,amendment.to])
     for (const [activeStart, activeEnd] of activeSegments(from, to, input.lifecycle ?? [])) for (const [start, end] of split(activeStart, activeEnd, boundaries)) {
       const days = BigInt(daysBetween(start, end))
       const { unit, override } = unitFor(input, price, start, end)
@@ -137,7 +137,7 @@ function rateCore(input: RatingInput, presentCancellationCredits = true): Rating
 
   // Contract discounts on the fixed and seat lines they cover.
   for (const amendment of input.amendments.filter(a => a.kind === 'discount_percent')) {
-    const covered = recurring.filter(entry => covers(amendment, entry.from, entry.to) && (!amendment.priceId || entry.line.priceId === amendment.priceId || input.prices[entry.line.priceId!]?.sourcePriceId === amendment.priceId))
+    const covered = recurring.filter(entry => covers(amendment, entry.from, entry.to) && (!amendment.itemId || entry.line.evidence.item === amendment.itemId) && (!amendment.priceId || entry.line.priceId === amendment.priceId || input.prices[entry.line.priceId!]?.sourcePriceId === amendment.priceId))
     if (!covered.length) continue
     if (input.version === INTERVAL_RATING_VERSION) {
       for (const entry of covered) {

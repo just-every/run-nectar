@@ -45,7 +45,7 @@ export async function ratingInputs(env: Bindings, business: Business, subscripti
     .map(row => ({ id: row.id, priceId: row.price_id, quantity: row.quantity, from: row.effective_from, to: row.effective_to }))
   const amendments = (await all(env, `SELECT a.*,(SELECT scope.price_id FROM nc_amendment_scopes scope WHERE scope.amendment_id=a.id) AS scope_price_id FROM nc_amendments a WHERE a.subscription_id = ? AND a.status = 'approved'
     ${billing ? "AND (kind<>'fixed_credit' OR NOT EXISTS(SELECT 1 FROM nc_invoice_lines l JOIN nc_invoices i ON i.id=l.invoice_id WHERE i.subscription_id=a.subscription_id AND i.status='issued' AND l.kind='credit' AND json_extract(l.evidence_json,'$.amendment')=a.id))" : ''} ORDER BY effective_from, id`, sub.id))
-    .map(row => ({ id: row.id, kind: row.kind, value: row.value, priceId: row.scope_price_id ?? row.price_id, from: row.effective_from, to: row.effective_to, note: row.note }))
+    .map(row => ({ id: row.id, ...(row.item_id ? { itemId: row.item_id } : {}), kind: row.kind, value: row.value, priceId: row.scope_price_id ?? row.price_id, from: row.effective_from, to: row.effective_to, note: row.note }))
   const prices = await pricesById(env, [...new Set([...items.map(item => item.priceId), ...amendments.flatMap(a => a.priceId ? [a.priceId] : [])])])
   const selectedMeterIds = billing ? new Set(items.filter(item => billing.components.some(component => component.itemId === item.id)).map(item => prices[item.priceId]).filter(price => price.kind === 'unit').map(price => price.meterId)) : null
   const eventPrices = Object.values(prices).filter(price => !selectedMeterIds || selectedMeterIds.has(price.meterId))

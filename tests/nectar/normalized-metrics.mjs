@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { file } from './harness.mjs'
 import { stripeHistoryCapture } from '../fixtures/stripe-history.mjs'
+import { discountedCaptureFlow } from './normalized-discount-capture.mjs'
 import { csvRows } from './financial-reports.mjs'
 
 // The captured contract changes independently of its invoice consideration.
@@ -131,5 +132,6 @@ export async function normalizedMetricsFlow(h, owner, onState = async () => {}) 
   await api('import.apply',{...files,fingerprint:preview.fingerprint},409)
   const anonymous = await api('reports/normalized-mrr?period=2026-07')
   assert.equal(anonymous.entries.some(row=>row.customerId===customer),false,'Erasure and replay cannot expose retained contract operands')
+  await discountedCaptureFlow(h, owner, onState)
   console.log('Normalized native and captured history, adoption, independent MRR and ARR, fractions, sources, CSV and authority passed')
 }

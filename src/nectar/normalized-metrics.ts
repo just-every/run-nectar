@@ -8,7 +8,7 @@ import type { RatingInput } from './rating'
 import { renewalOperands } from './renewal-rating'
 
 export const NORMALIZED_POLICY = 'nectar-normalized-1'
-export const NORMALIZED_DEFINITION = 'Month-end USD simple fixed and seat subscription run rate, using retained dated contract operands, not billed revenue. Month intervals divide by their month count; weeks multiply by 52 then divide by 12 and the week count; days multiply by 365 then divide by 12 and the day count. Annual fees divide by 12. Active percentage discounts reduce each original fixed or seat fee additively, capped at zero, with dated price overrides and renewal uplifts applied first. One-time fixed credits, amount coupons, metered usage, minimum commitments, prepaid balances, tax, proration, credit notes and refunds do not change this run rate. Trials contribute zero until their end; cancellation or native pause contributes zero from its effective date; future period-end cancellation contributes until that date. Source active and past-due snapshots contribute; other source statuses contribute zero. Source pause_collection retains an active contract rate. Each item retains exact rational cents; displayed MRR rounds each item once, half away from zero. ARR multiplies each exact item MRR by 12 before its own cent rounding. Contributions sum those displayed item cents. Only complete captured subscription snapshots supply pre-adoption rates; invoices never stand in for missing contract history. Non-USD and nonsimple fixed or seat instruments are unsupported. Stripe analytics settings and its report are not imported: this published fixed definition, calendar month-end, 52-week and 365-day convention, additive discounts and per-item rounding can differ from that account’s analytics. Actual source-report comparison remains unqualified.'
+export const NORMALIZED_DEFINITION = 'Month-end USD simple fixed and seat subscription run rate, using retained dated contract operands, not billed revenue. Month intervals divide by their month count; weeks multiply by 52 then divide by 12 and the week count; days multiply by 365 then divide by 12 and the day count. Annual fees divide by 12. Active percentage discounts reduce each original fixed or seat fee additively within their subscription, product or item scope, capped at zero, with dated price overrides and renewal uplifts applied first. One-time fixed credits, amount coupons, metered usage, minimum commitments, prepaid balances, tax, proration, credit notes and refunds do not change this run rate. Trials contribute zero until their end; cancellation or native pause contributes zero from its effective date; future period-end cancellation contributes until that date. Source active and past-due snapshots contribute; other source statuses contribute zero. Source pause_collection retains an active contract rate. Each item retains exact rational cents; displayed MRR rounds each item once, half away from zero. ARR multiplies each exact item MRR by 12 before its own cent rounding. Contributions sum those displayed item cents. Native corrections affect native months only; retained pre-adoption months remain read-only, and correction previews use the same captured source snapshots as reports. Only complete captured subscription snapshots supply pre-adoption rates; invoices never stand in for missing contract history. Non-USD and nonsimple fixed or seat instruments are unsupported. Stripe analytics settings and its report are not imported: this published fixed definition, calendar month-end, 52-week and 365-day convention, additive discounts and per-item rounding can differ from that account’s analytics. Actual source-report comparison remains unqualified.'
 
 export interface ExactCents { numerator: string; denominator: string }
 export interface NormalizedComponent {
@@ -22,6 +22,7 @@ export interface NormalizedSnapshot {
   mrrCents: number; arrCents: number; exactMrrCents: ExactCents; components: NormalizedComponent[]
 }
 export interface NormalizedEffect {
+  source?: { provider: string; reference: string; href: string; eventCreated?: number; status?: string }
   policyVersion: string; before: NormalizedSnapshot; after: NormalizedSnapshot
   deltaMrrCents: number; deltaArrCents: number
 }
@@ -49,7 +50,7 @@ export async function normalizedSnapshot(source: RatingInput, asOf: string): Pro
     if (price.pricing) { exclusions.push('nonsimple_fixed_or_seat_price'); continue }
     if (!active) continue
     const scope = price.sourcePriceId ?? price.id
-    const amendments = input.amendments.filter(a => covers(a.from, a.to, asOf) && (!a.priceId || a.priceId === price.id || a.priceId === scope))
+    const amendments = input.amendments.filter(a => covers(a.from, a.to, asOf) && (!a.itemId || a.itemId === item.id) && (!a.priceId || a.priceId === price.id || a.priceId === scope))
     const override = amendments.find(a => a.kind === 'price_override')
     const unitAmount = override?.value ?? price.unitAmount
     insist(Number.isSafeInteger(item.quantity) && item.quantity >= 0 && micros(unitAmount) >= 0n, 'normalized_contract_evidence_required', 409)

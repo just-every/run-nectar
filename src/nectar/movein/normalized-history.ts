@@ -6,6 +6,8 @@ import { decimalText } from '../decimal'
 import type { RatingInput, PriceIn, AmendmentIn } from '../rating'
 import { historicalHref } from './history-reports'
 
+export const usesCapturedContract = (sub: Row, asOf: string) => sub.origin === 'import' && (!sub.cutover_start || asOf < sub.cutover_start)
+
 const ref = (value: any): string => typeof value === 'string' ? value : value?.id
 const day = (value: unknown, zone: string): string | null => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? localDate(value * 1000, zone) : null
 
@@ -42,17 +44,28 @@ export function capturedNormalizedInput(sub: Row, events: Row[], through: string
     insist(typeof item.id === 'string' && Number.isSafeInteger(quantity) && quantity >= 0, 'normalized_history_evidence_required', 409)
     items.push({ id: item.id, priceId: id, quantity, from: start, to: null })
   }
-  const discounts = [...(source.discount ? [source.discount] : []), ...(Array.isArray(source.discounts) ? source.discounts : [])]
-  for (const discount of discounts) {
-    insist(discount && typeof discount === 'object' && discount.coupon && typeof discount.coupon === 'object', 'normalized_source_discount_evidence_required', 409)
-    const coupon = discount.coupon
-    if (coupon.amount_off !== undefined && coupon.amount_off !== null) continue
-    insist(typeof coupon.percent_off === 'number' && Number.isFinite(coupon.percent_off) && coupon.percent_off >= 0 && coupon.percent_off <= 100, 'normalized_source_discount_evidence_required', 409)
-    const targets = coupon.applies_to?.products
-    const covered = targets ? source.items.data.filter((item: Row) => targets.includes(ref(item.price.product))).map((item: Row) => ref(item.price)) : [null]
-    for (const priceId of covered) amendments.push({ id: discount.id ?? coupon.id, kind: 'discount_percent', value: String(coupon.percent_off), priceId,
-      from: day(discount.start, zone) ?? start, to: day(discount.end, zone), note: '' })
+  const addDiscounts = (owner: Row, scopedItem: Row | null) => {
+    const seen = new Set<string>()
+    const discounts = [...(owner.discount ? [owner.discount] : []), ...(Array.isArray(owner.discounts) ? owner.discounts : [])]
+    for (const discount of discounts) {
+      const coupon = discount?.coupon ?? discount?.source?.coupon
+      insist(discount && typeof discount === 'object' && coupon && typeof coupon === 'object', 'normalized_source_discount_evidence_required', 409)
+      const id = discount.id ?? coupon.id
+      insist(typeof id === 'string', 'normalized_source_discount_evidence_required', 409)
+      if (seen.has(id)) continue
+      seen.add(id)
+      if (coupon.amount_off !== undefined && coupon.amount_off !== null) continue
+      insist(typeof coupon.percent_off === 'number' && Number.isFinite(coupon.percent_off) && coupon.percent_off >= 0 && coupon.percent_off <= 100, 'normalized_source_discount_evidence_required', 409)
+      const targets = coupon.applies_to?.products
+      insist(targets === undefined || Array.isArray(targets), 'normalized_source_discount_evidence_required', 409)
+      const covered = (scopedItem ? [scopedItem] : source.items.data).filter((item: Row) =>
+        items.some(operand => operand.id === item.id) && (!targets || targets.includes(ref(item.price.product))))
+      for (const item of covered) amendments.push({ id, itemId: item.id, kind: 'discount_percent', value: String(coupon.percent_off), priceId: ref(item.price),
+        from: day(discount.start, zone) ?? start, to: day(discount.end, zone), note: '' })
+    }
   }
+  addDiscounts(source, null)
+  for (const item of source.items.data) addDiscounts(item, item)
   const inactive = !['active', 'past_due'].includes(source.status)
   const ended = day(source.ended_at, zone) ?? (inactive ? row.occurred_on : null)
   const cancelAt = day(source.cancel_at ?? (source.cancel_at_period_end ? source.current_period_end : null), zone)
