@@ -432,5 +432,8 @@
   "dunning.invoice_only": "Please arrange payment using the instructions on your invoice. Your service remains active.",
   "dunning.update": "Update your payment method: {link}",
   "dunning.update_label": "Update payment method",
-  "dunning.note": "This link expires within fifteen minutes. Saving a card does not authorize a payment."
+  "dunning.note": "This link expires within fifteen minutes. Saving a card does not authorize a payment.",
+  "correction.mrr.heading": "Normalized subscription run rate under {policy}; month-end fixed and seat terms, excluding usage and one-time credits.",
+  "correction.mrr.period": "As of {date}: MRR before {before}, after {after}, change {change}; ARR before {arrBefore}, after {arrAfter}, change {arrChange}.",
+  "correction.mrr.unsupported": "These contract instruments are outside the supported USD simple fixed and seat run-rate definition; no normalized metric is claimed."
 }

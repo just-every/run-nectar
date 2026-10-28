@@ -1,3 +1,4 @@
+import { isNormalizedMetric, normalizedReport, normalizedReportSource } from './normalized-reports'
 import { requireUsdReporting } from './currency'
 import { processorReportSources, processorReportSource, type ProcessorReportEvidence } from './processor-reports'
 import { translateReportAmount, translateReportComponents, reportingTotal, type ReportCurrencyEvidence } from './currency-report-translation'
@@ -16,7 +17,7 @@ import { clockInstant } from './clock'
 import { daysBetween, isMonth, today } from './dates'
 import { openInvoices } from './receivables'
 
-export type ReportMetric = 'mrr' | 'billings' | 'ar' | 'collections' | 'credits' | 'tax' | 'unbilled' | 'credit-balances' | 'refunds' | 'settlements'
+export type ReportMetric = 'normalized-mrr' | 'normalized-arr' | 'mrr' | 'billings' | 'ar' | 'collections' | 'credits' | 'tax' | 'unbilled' | 'credit-balances' | 'refunds' | 'settlements'
 export interface ReportEntry extends ReportCurrencyEvidence {
   // invoiceId is the report source id; collections use the payment id here
   // for the shared detail route and identify it explicitly with sourceKind.
@@ -38,6 +39,7 @@ export interface ReportPayment {
   customerId: string; customerName: string; currency?: string; amountCents: number; recordedAt: number; recordedBy: string
 }
 export interface ReportInvoice extends ReportEntry {
+  normalized?: { policyVersion: string; snapshot: import('./normalized-metrics').NormalizedSnapshot; source: { provider: string; reference: string; href: string }; subscriptionHref: string }
   historical?: {provider:string;reference:string;href:string;original:Row}
   unbilled?: UnbilledReportEvidence
   credit?: {id:string;number:string;invoiceId:string;amountCents:number;reason:string;issuedAt:number;issuedOn:string;issuedBy:string}
@@ -52,7 +54,7 @@ export interface ReportInvoice extends ReportEntry {
 
 const RECURRING = new Set(['flat', 'seat', 'usage', 'overage', 'metric_usage', 'discount', 'cancellation_credit'])
 const BUCKETS = new Set(['current', '1-30', '31-60', '61-90', '90+', 'overdue'])
-const DEFINITIONS: Record<Exclude<ReportMetric,'credits'|'tax'|'unbilled'|'credit-balances'|'refunds'>, { title: string; definition: string }> = {
+const DEFINITIONS: Record<Exclude<ReportMetric,'normalized-mrr'|'normalized-arr'|'credits'|'tax'|'unbilled'|'credit-balances'|'refunds'>, { title: string; definition: string }> = {
   mrr: {
     title: 'Billed monthly recurring revenue',
     definition: 'Billed monthly recurring revenue for subscription periods starting in the selected month: issued flat, seat, metered usage, recurring discount and cancellation-credit lines, including actual proration. Excludes late usage, one-time charges, fixed credits, credit notes and tax. Native invoices use the current monthly catalogue; retained Stripe recurring lines contribute over their original service months, including annual fees allocated across twelve months. It is not a normalized current subscription run rate.',
@@ -94,6 +96,7 @@ function inBucket(due: string, day: string, selected: string | null) {
 /** Reads contributions without inventing recurring amounts or allocating AR to individual lines. */
 export async function report(env: Bindings, actor: Actor, metric: string, url: URL): Promise<Report> {
   requireRead(actor, 'reports')
+  if (isNormalizedMetric(metric)) return await normalizedReport(env, actor, metric, url)
   if (['credits','tax','unbilled','credit-balances','refunds'].includes(metric)) return await financialReport(env,actor,metric,url)
   if (metric === 'ar' || metric === 'mrr') await requireUsdReporting(env,url.searchParams.get('customer'))
   const selected = filters(metric, url)
@@ -161,6 +164,7 @@ export async function report(env: Bindings, actor: Actor, metric: string, url: U
 /** Original line and settlement components tie exactly to the selected invoice contribution. */
 export async function reportInvoice(env: Bindings, actor: Actor, metric: string, invoiceId: string, url: URL): Promise<ReportInvoice> {
   requireRead(actor, 'reports')
+  if (isNormalizedMetric(metric)) return await normalizedReportSource(env, actor, metric, invoiceId, url)
   if (['credits','tax','unbilled','credit-balances','refunds'].includes(metric)) return await financialReportSource(env,actor,metric,invoiceId,url)
   const view = await report(env, actor, metric, url)
   const entry = view.entries.find(row => row.invoiceId === invoiceId)

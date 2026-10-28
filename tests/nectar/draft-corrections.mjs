@@ -129,6 +129,13 @@ export async function draftCorrectionsFlow(h, owner, onState=async()=>{}) {
       assert.ok(!JSON.stringify(draft).includes('attacker@example.test') && !draft.body.includes('Caller-selected body'), 'caller-supplied drafts cannot replace the generated explanation')
       for (const row of impacts) {
         checkRevenue(row, fixture, draft)
+        const expectedMrr = proposal.kind === 'usage_correction' || proposal.payload.kind === 'fixed_credit' ? 10000 : proposal.payload.kind === 'price_override' ? 8000 : 9000
+        assert.ok(row.normalizedMrr.periods.length > 0)
+        for(const effect of row.normalizedMrr.periods) {
+          assert.deepEqual([effect.before.mrrCents,effect.after.mrrCents,effect.deltaMrrCents],[10000,expectedMrr,expectedMrr-10000])
+          assert.deepEqual([effect.before.arrCents,effect.after.arrCents],[120000,expectedMrr*12])
+          assert.ok(draft.citations.some(c=>c.fingerprint===effect.after.fingerprint&&c.recordPath.includes('normalizedMrr')))
+        }
         const longDate = day => new Date(`${day}T00:00:00Z`).toLocaleDateString('en-US', { dateStyle: 'long', timeZone: 'UTC' })
         assert.ok(draft.body.includes(longDate(row.period.start)) && draft.body.includes(longDate(row.period.end)), 'PORT-006 English notices name service days as long dates')
         assert.ok(draft.body.includes(fixture.subscription), 'the message identifies the actual subscription')
