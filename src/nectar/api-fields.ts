@@ -780,6 +780,11 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "decision": "text",
     "request": "text"
   },
+  "portal.change.policy": {
+    "minimum_seats": "integer",
+    "pause_allowed": "flag",
+    "prices": "list"
+  },
   "portal.configure": {
     "brand_color": "text",
     "brand_name": "text",

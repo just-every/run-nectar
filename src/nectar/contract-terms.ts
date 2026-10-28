@@ -12,6 +12,9 @@ import { requireSubscription, notIssuedGuard, startsInIssuedPeriod } from './sub
 import { earnedCents, minimumFor, type ContractBasis } from './commitment-rating'
 
 interface Terms { commitments:{from:string;to:string;minimum:string;taxable:boolean}[]; included:{price:string;quantity:string;from:string;to:string}[]; ramps:{item:string;effective_date:string;price:string;quantity:number}[] }
+// Correlated to the subscription alias s; pending customer requests retain
+// their exact approved terms without exposing the signed narrative.
+export const approvedPortalTermsSQL = `(SELECT COALESCE(json_group_array(json_object('id',id,'terms',terms_json,'decidedAt',decided_at)), '[]') FROM (SELECT id,terms_json,decided_at FROM nc_contracts WHERE subscription_id=s.id AND status='approved' ORDER BY id))`
 const array=(input:Input,key:string)=>{const value=input.has(key)?input.json(key):[];insist(Array.isArray(value)&&value.length<=120,`invalid_${key}`);return value as Row[]}
 export async function contractsFor(env:Bindings,id:string):Promise<(Row & {terms:Terms})[]> {
   return (await all(env,'SELECT * FROM nc_contracts WHERE subscription_id=? ORDER BY created_at,id',id)).map(r=>({...r,terms:parseJson<Terms>(r.terms_json,{commitments:[],included:[],ramps:[]}),terms_json:undefined}))

@@ -1,3 +1,4 @@
+import { portalChangeSettingsPage } from './portal-changes'
 import { processorEventsPage } from './processor-events'
 import { dunningPage } from './dunning'
 import { retryRecoveryPage } from './retry-report'
@@ -56,6 +57,7 @@ import { reportPage, reportInvoicePage, reportLinePage } from './reports'
 type Page = (env: Bindings, actor: Actor, request: Request, url: URL, id: string) => Promise<Response>
 
 export const pages: Record<string, Page> = {
+  portalChanges: (env,actor,_r,url) => portalChangeSettingsPage(env,actor,url),
   processorEvents:(env,actor,_r,url)=>processorEventsPage(env,actor,url),
   paymentLinks:async(env,actor,_r,url)=>page('Payment links',actor,await paymentLinksScreen(env,actor),{current:'/app/settings',url}),
   dunning:(env,actor,_r,url)=>dunningPage(env,actor,url),
