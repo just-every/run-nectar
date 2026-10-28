@@ -62,6 +62,17 @@ export async function planChangesFlow(h,owner,{onState=async()=>{},prepare,decid
   assert.equal(none.quote.delta.totalCents,0);assert.equal(none.quote.waivedDelta.totalCents,delta)
   const waived=await approve({change:none.change,decision:'approved'},finance);assert.equal(waived.invoice,null);assert.equal(waived.credit,null)
   await onState({label:'without-proration',subscription:fixtures[2].subscription})
+  // A waived upgrade never creates purchased consideration to credit later.
+  await h.advanceClock('2026-08-01T10:00:00Z')
+  const waivedItem=(await api(`subscriptions/${fixtures[2].subscription}`)).items.find(i=>i.price_id===high)
+  const waivedBefore=await api(`subscriptions/${fixtures[2].subscription}`),waivedInvoice=await api(`invoices/${fixtures[2].invoice}`)
+  await policy('invoice_now')
+  const unsupported=await api('plan.change.prepare',{subscription:fixtures[2].subscription,item:waivedItem.id,price:low,mode:'immediate'},409)
+  assert.equal(unsupported.error,'plan_change_waived_service_basis_pending')
+  assert.deepEqual((await api(`subscriptions/${fixtures[2].subscription}`)).items,waivedBefore.items)
+  assert.equal((await api(`subscriptions/${fixtures[2].subscription}`)).planChanges.length,waivedBefore.planChanges.length,'unbilled waived service creates no credit request')
+  assert.deepEqual(await api(`invoices/${fixtures[2].invoice}`),waivedInvoice)
+  await policy('none');await h.advanceClock('2026-07-01T10:00:00Z')
   // A paid downgrade issues a numbered carried credit, not a processor refund.
   await policy('invoice_now')
   const paid=(await api('payment.record',{customer:fixtures[3].customer,amount:'2400',received_on:'2026-01-02',method:'bank_transfer',reference:'synthetic-nectar-plan-paid'})).payment
