@@ -74,6 +74,10 @@ jobs:
   processor-archive:
     runs-on: ubuntu-24.04
     timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        phase: [processor, refunds]
     env:
       CI: 'true'
       WRANGLER_SEND_METRICS: 'false'
@@ -89,4 +93,4 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm run deps
       - run: pnpm exec vite build
-      - run: NECTAR_TEST_CHECKOUT=1 node tests/nectar/processor-archive.mjs
+      - run: NECTAR_TEST_CHECKOUT=1 node tests/nectar/processor-archive.mjs ${{ matrix.phase }}

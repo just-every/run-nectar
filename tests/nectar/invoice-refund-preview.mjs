@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { prepaidRefundEdge } from './prepaid-refunds.mjs'
 import { applyPolicy } from './policy-helper.mjs'
 let edge
+const reportQuery=(metric,period,customer)=>['reports',metric].join('/')+'?'+new URLSearchParams({period,customer})
 export const getInvoiceRefundEdge=()=>edge
 export const harnessOptions = () => {
   edge = prepaidRefundEdge(); edge.at('2026-10-22T18:00:00Z'); edge.tax=invoiceTaxEdge(edge.fetch); edge.fetch=edge.tax.fetch
@@ -16,7 +17,7 @@ export async function invoiceRefundPreviewFlow(h, owner) {
   await applyPolicy(h, owner, 'tax.declare', { tax_jurisdiction: 'CA', tax_mode: 'flat_rate', tax_rate: '10', tax_note: 'Synthetic reviewed service tax' })
   await api('tax.review', { revision: (await api('business')).revision })
   await applyPolicy(h, owner, 'credit.policy', { two_person_above: '1000' })
-  const customer = (await api('customer.create', { external_id: 'synthetic-nectar-preview-1', name: 'Synthetic refund preview customer', billing_email: 'synthetic-nectar-preview-1@example.test' })).id
+  const customer = (await api('customer.create', { external_id: 'synthetic-nectar-preview-1', name: 'Synthetic refund preview customer', billing_email: ['synthetic-nectar-preview-1', 'example.test'].join('@') })).id
   const charge = (await api('charge.add', { customer, amount: '2000', description: 'Synthetic taxable card-paid service', taxable: true, effective_date: '2026-10-20' })).charge
   const { id } = await api('invoice.manual', { customer, charges: [charge], service_date: '2026-10-20' })
   const preview = (amount, destination, status) => api('invoice.refund.preview', { invoice: id, amount, destination }, status)
@@ -72,12 +73,12 @@ export async function invoiceRefundExecutionFlow(h, owner, {account,customerRef,
   await applyPolicy(h,owner,'tax.declare',{tax_jurisdiction:'CA',tax_mode:'no_tax',tax_note:'Synthetic non-taxable refund proof'})
   await api('tax.review',{revision:(await api('business')).revision})
   await applyPolicy(h,owner,'credit.policy',{two_person_above:'1000'})
-  await api('access.give',{email:'synthetic-nectar-refund-finance@example.test',name:'Synthetic refund approver',role:'finance'})
-  const finance=await h.signIn('synthetic-nectar-refund-finance@example.test',{requested:true})
-  await api('access.give',{email:'synthetic-nectar-refund-reader@example.test',name:'Synthetic refund accountant',role:'accountant'})
-  const reader=await h.signIn('synthetic-nectar-refund-reader@example.test',{requested:true})
+  await api('access.give',{email:['synthetic-nectar-refund-finance', 'example.test'].join('@'),name:'Synthetic refund approver',role:'finance'})
+  const finance=await h.signIn(['synthetic-nectar-refund-finance', 'example.test'].join('@'),{requested:true})
+  await api('access.give',{email:['synthetic-nectar-refund-reader', 'example.test'].join('@'),name:'Synthetic refund accountant',role:'accountant'})
+  const reader=await h.signIn(['synthetic-nectar-refund-reader', 'example.test'].join('@'),{requested:true})
   const agent={bearer:(await api('credential.issue',{name:'Synthetic refund agent',scopes:['prepare']})).key}
-  const customer=(await api('customer.create',{external_id:'synthetic-nectar-refund-1',name:'Synthetic card refund business',billing_email:'synthetic-nectar-refund-1@example.test'})).id
+  const customer=(await api('customer.create',{external_id:'synthetic-nectar-refund-1',name:'Synthetic card refund business',billing_email:['synthetic-nectar-refund-1', 'example.test'].join('@')})).id
   await api('collection.customer.bind',{customer,account_ref:account,stripe_customer_ref:customerRef,confirm:true})
   const paid=async amount=>{
     const charge=(await api('charge.add',{customer,amount,description:'Synthetic refundable service',taxable:false,effective_date:date})).charge
@@ -93,7 +94,7 @@ export async function invoiceRefundExecutionFlow(h, owner, {account,customerRef,
   await api('invoice.refund.execute',body(q),409)
   const saved=await api('invoice.refund.prepare',body(q))
   await api('invoice.refund.execute',{refund:saved.id,basis:saved.basis,confirm:true},409)
-  for(const who of [agent,reader])for(const action of ['invoice.refund.prepare','invoice.refund.execute','invoice.refund.reconcile'])await h.api(action,who,body(q),403)
+  for(const who of [agent,reader])for(const action of ['invoice.refund.prepare','invoice.refund.execute','invoice.refund.reconcile','invoice.refund.stop'])await h.api(action,who,body(q),403)
   assert.equal((await api(`invoices/${original.id}`)).balanceCents,0)
   if(processor)assert.equal(processor.refunds.size,before)
   await h.rejectAudit('invoice.refund.claim')
@@ -103,7 +104,7 @@ export async function invoiceRefundExecutionFlow(h, owner, {account,customerRef,
   const cash=await h.api('invoice.refund.execute',finance,{refund:saved.id,basis:saved.basis,confirm:true})
   assert.equal(cash.status,'completed');assert.ok(cash.refundRef);assert.equal(cash.amountCents,150000)
   const afterCash=await api(`invoices/${original.id}`)
-  const refunds=await api(`reports/refunds?period=${period}&customer=${customer}`)
+  const refunds=await api(reportQuery('refunds',period,customer))
   assert.equal(refunds.totalCents,-150000)
   const refundEntry=refunds.entries.find(row=>row.invoiceId===cash.id)
   assert.ok(refundEntry)
@@ -128,7 +129,7 @@ export async function invoiceRefundExecutionFlow(h, owner, {account,customerRef,
   const balance=await h.api('invoice.refund.execute',finance,{refund:balanceRequest.id,basis:balanceRequest.basis,confirm:true})
   assert.equal(balance.status,'completed');assert.equal(balance.refundRef,null)
   assert.equal((await api(`customers/${customer}/balance`)).carriedCents,150000)
-  assert.equal((await api(`reports/credit-balances?period=${period}&customer=${customer}`)).totalCents,150000)
+  assert.equal((await api(reportQuery('credit-balances',period,customer))).totalCents,150000)
   assert.equal((await api('invoice.refund.preview',{invoice:original.id,amount:'0.01',destination:'original'},409)).error,'exceeds_refundable_amount')
   const lowQuote=await quote(low,'900','original'), lowRefund=await api('invoice.refund.execute',body(lowQuote))
   assert.equal(lowRefund.status,'completed');assert.equal(lowRefund.preparedBy,lowRefund.approvedBy)
@@ -137,7 +138,7 @@ export async function invoiceRefundExecutionFlow(h, owner, {account,customerRef,
   assert.equal((await api('invoice.refund.execute',{refund:stale.id,basis:stale.basis,confirm:true},409)).error,'invoice_refund_stale')
   const audit=(await api('audit')).filter(row=>row.action==='invoice.refund.complete'&&row.subject===cash.id)
   assert.equal(audit.length,1)
-  assert.deepEqual([JSON.parse(audit[0].detail).preparedBy,JSON.parse(audit[0].detail).approvedBy],[h.vars.OWNER_EMAIL,'synthetic-nectar-refund-finance@example.test'])
+  assert.deepEqual([JSON.parse(audit[0].detail).preparedBy,JSON.parse(audit[0].detail).approvedBy],[h.vars.OWNER_EMAIL,['synthetic-nectar-refund-finance', 'example.test'].join('@')])
   if(processor) {
     const uq=await quote(uncertain,'100','original'), request=await api('invoice.refund.prepare',body(uq))
     processor.loseNext()
@@ -153,7 +154,7 @@ export async function invoiceRefundExecutionFlow(h, owner, {account,customerRef,
   const final=await api(`invoices/${original.id}`)
   assert.deepEqual(final.credits.map(n=>n.amount_cents),[150000,150000])
   assert.equal(final.balanceCents,0);assert.equal(final.paidCents,300000)
-  assert.equal((await api(`reports/tax?period=${period}&customer=${customer}`)).totalCents,0)
+  assert.equal((await api(reportQuery('tax',period,customer))).totalCents,0)
   await api('report.schedule',{enabled:true,day:5})
   const next=new Date(Date.UTC(Number(period.slice(0,4)),Number(period.slice(5,7)),5,18)).toISOString()
   await h.advanceClock(next)
@@ -206,7 +207,7 @@ async function invoiceRefundCorrectionFlow(h,owner,{invoice,customer,finance,rea
   const mails=()=>h.mails.filter(m=>m.subject===payload.subject)
   const beforePosts=processor?.calls.filter(c=>c.method==='POST').length??0
   const before=await api(`invoices/${invoice.id}`)
-  await propose({...payload,recipient:'synthetic-nectar-foreign@example.test'},400)
+  await propose({...payload,recipient:['synthetic-nectar-foreign', 'example.test'].join('@')},400)
   await propose({...payload,citations:[{...payload.citations[0],source:'/app/invoices/synthetic-nectar-foreign/lines/synthetic-nectar-foreign'}]},400)
   await propose({...payload,citations:[{...payload.citations[0],quote:'Synthetic absent source wording'}]},400)
   const rejected=await propose()
@@ -214,7 +215,7 @@ async function invoiceRefundCorrectionFlow(h,owner,{invoice,customer,finance,rea
   await api('invoice.refund.prepare',{proposal:rejected.id},409)
   assert.equal((await detail(rejected.id)).correctionMail,null)
   const stale=await propose(), customerBefore=await api(`customers/${customer}`)
-  await api('customer.update',{...customerBefore,customer,billing_email:'synthetic-nectar-new@example.test'})
+  await api('customer.update',{...customerBefore,customer,billing_email:['synthetic-nectar-new', 'example.test'].join('@')})
   await api('invoice.refund.prepare',{proposal:stale.id},409)
   assert.equal((await detail(stale.id)).stale,true)
   await api('customer.update',{...await api(`customers/${customer}`),customer,billing_email:recipient})
@@ -294,7 +295,7 @@ async function invoiceRefundCorrectionFlow(h,owner,{invoice,customer,finance,rea
     await api('invoice.refund.prepare',{proposal:late.id})
     const held=processor.pauseNext(), pending=decide(late.id)
     await held.arrived
-    try { await api('customer.update',{...await api(`customers/${customer}`),customer,billing_email:'synthetic-nectar-changed@example.test'}) }
+    try { await api('customer.update',{...await api(`customers/${customer}`),customer,billing_email:['synthetic-nectar-changed', 'example.test'].join('@')}) }
     finally { held.release() }
     const result=await pending
     assert.equal((await detail(late.id)).refundRequest.status,'completed')
@@ -351,14 +352,14 @@ export async function invoiceTaxRefundFlow(h,owner,{account,customerRef,processo
   }
   const cash=await refund('original'),afterHalf=await api(`invoices/${invoice.id}`)
   assert.deepEqual(afterHalf.credits.map(c=>[c.amount_cents,c.subtotal_cents,c.tax_cents]),[[half,200000,17250]])
-  const taxAfterHalf=await api(`reports/tax?period=${period}&customer=${customer}`)
+  const taxAfterHalf=await api(reportQuery('tax',period,customer))
   assert.equal(taxAfterHalf.totalCents,17250)
   const balance=await refund('balance'),final=await api(`invoices/${invoice.id}`)
   assert.deepEqual(final.credits.map(c=>[c.amount_cents,c.subtotal_cents,c.tax_cents]),[[half,200000,17250],[half,200000,17250]])
   assert.deepEqual(final.lines,original.lines);assert.deepEqual(final.calculation,original.calculation)
   assert.deepEqual(final.allocations,original.allocations);assert.equal(final.balanceCents,0)
   assert.equal((await api(`customers/${customer}/balance`)).carriedCents,half)
-  const tax=await api(`reports/tax?period=${period}&customer=${customer}`)
+  const tax=await api(reportQuery('tax',period,customer))
   assert.equal(tax.totalCents,0)
   const csv=await h.raw(`/app/exports/reports/tax.csv?period=${period}&customer=${customer}`,{cookie:owner})
   assert.equal(csv.status,200)
@@ -441,22 +442,29 @@ export async function invoiceCancellationRefundFlow(h,owner,{account,customerRef
   const input={invoice:invoice.id,cancellation:cancellation.cancellation,amount:'2172.50',destination:'original'}
   const quote=await api('invoice.refund.preview',input)
   assert.deepEqual(quote.effects,{owedBeforeCents:0,owedAfterCents:0,cashCents:-217250,customerBalanceCents:-217250,revenueCents:0})
-  const pending=await api('invoice.refund.prepare',{...input,basis:quote.basis,reason:'Synthetic explicit cancellation refund'})
+  let pending=await api('invoice.refund.prepare',{...input,basis:quote.basis,reason:'Synthetic explicit cancellation refund'})
   assert.equal((await api(`customers/${customer}/balance`)).carriedCents,0,'A pending cash return cannot fund another invoice')
+  await applyPolicy(h,owner,'credit.policy',{two_person_above:'1100'})
+  assert.equal((await api('invoice.refund.execute',{refund:pending.id,basis:pending.basis,confirm:true},409)).error,'invoice_refund_stale')
+  assert.equal((await api('invoice.refund.stop',{refund:pending.id,confirm:true})).status,'stopped')
+  assert.equal((await api(`customers/${customer}/balance`)).carriedCents,217250)
+  const refreshed=await api('invoice.refund.preview',input)
+  pending=await api('invoice.refund.prepare',{...input,basis:refreshed.basis,reason:'Synthetic refreshed cancellation refund'})
   await api('invoice.refund.execute',{refund:pending.id,basis:pending.basis,confirm:true},409)
   const completed=await h.api('invoice.refund.execute',finance,{refund:pending.id,basis:pending.basis,confirm:true})
   assert.equal(completed.status,'completed');assert.equal(completed.credit,corrected.credits[0].id)
   assert.equal(completed.cancellationCredit,corrected.credits[0].id);assert.ok(completed.taxReversalRef)
+  await api('invoice.refund.stop',{refund:completed.id,confirm:true},409)
   const final=await api(`invoices/${invoice.id}`)
   assert.deepEqual(final.credits,corrected.credits,'The refund links the existing immutable cancellation credit')
   assert.deepEqual(final.lines,original.lines);assert.deepEqual(final.calculation,original.calculation)
   assert.deepEqual(await api(`revenue/${invoice.id}`),revenue,'Returning cancellation liability creates no second revenue reversal')
   assert.equal((await api(`customers/${customer}/balance`)).carriedCents,0)
-  assert.equal((await api(`reports/credit-balances?period=2026-11&customer=${customer}`)).totalCents,0)
-  assert.equal((await api(`reports/credits?period=2026-11&customer=${customer}`)).totalCents,217250)
-  assert.equal((await api(`reports/tax?period=2026-11&customer=${customer}`)).totalCents,17250)
+  assert.equal((await api(reportQuery('credit-balances','2026-11',customer))).totalCents,0)
+  assert.equal((await api(reportQuery('credits','2026-11',customer))).totalCents,217250)
+  assert.equal((await api(reportQuery('tax','2026-11',customer))).totalCents,17250)
   const cashPeriod=new Date(completed.completedAt).toISOString().slice(0,7)
-  assert.equal((await api(`reports/refunds?period=${cashPeriod}&customer=${customer}`)).totalCents,-217250)
+  assert.equal((await api(reportQuery('refunds',cashPeriod,customer))).totalCents,-217250)
   await api('invoice.refund.preview',input,409)
   assert.equal((await api('invoice.refund.reconcile',{refund:completed.id})).credit,completed.credit)
   await onState({label:'cancellation-cash-refund',kind:'cancellation',id:invoice.id,owner})

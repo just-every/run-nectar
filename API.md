@@ -832,3 +832,8 @@ changed during execution suppresses the frozen message. Uncertain messages are
 never resent. Financial archives retain receipts and numbered evidence but do
 not restore local refund execution consent. Provider refunds absent from restored
 local history prevent a new refund or carried credit until reconciled.
+
+`invoice.refund.stop` takes an unclaimed pending `refund` and `confirm: true`.
+A current human financial approver may release its held cancellation credit,
+including after its quote becomes stale. Claimed or completed provider actions
+cannot be stopped or retried through this door.

@@ -4,7 +4,8 @@ import { readFile } from 'node:fs/promises'
 import { join,relative } from 'node:path'
 import { readArchive } from '@runeditrun/rer/modules/portability'
 import { harness } from './harness.mjs'
-import { command } from './cli.mjs'
+import { command as rerCommand } from './cli.mjs'
+import { invoiceTaxEdge } from './invoice-tax-edge.mjs'
 import { prepaidRefundEdge } from './prepaid-refunds.mjs'
 import { processorSetup } from './processor-events.mjs'
 import { applyPolicy } from './policy-helper.mjs'
@@ -15,12 +16,19 @@ async function rows(path) {
   for await(const record of readArchive(new ReadableStream({start(controller){controller.enqueue(bytes);controller.close()}})))if(record.kind==='part')items.push(...record.items)
   return items.filter(item=>item.kind==='row')
 }
+const command=async(root,args,options)=>{
+  console.log('REFUND ARCHIVE',args[0],args[2]?.split('/').at(-1)??'')
+  return rerCommand(root,args,options)
+}
 export async function invoiceRefundArchivePhase(root,scratch,{persistence,databaseId}) {
   const file=name=>join(scratch,`invoice-refund-${name}.rer`),edge=prepaidRefundEdge(),date='2026-10-28',instant=`${date}T18:00:00Z`
   edge.at(instant)
+  edge.tax=invoiceTaxEdge(edge.fetch);edge.fetch=edge.tax.fetch
   let h,settings,owner,factor
   const reopen=async()=>{
     h=await harness({persistence,databaseId,applyMigrations:false,settings,localTime:instant,stripeFetch:edge.fetch,stripeSecret:'synthetic-nectar-1'})
+    const admission=await h.raw('/auth/bootstrap',{body:{token:h.vars.SETUP_TOKEN,displayName:'Nectar Owner'}})
+    assert.ok([303,409].includes(admission.status),'A restored installation requires its ordinary owner admission')
     owner=await h.signIn(h.vars.OWNER_EMAIL)
     if(factor)await h.api('mfa.verify',owner,{code:totp(factor,Date.parse(instant))})
   }
@@ -35,17 +43,25 @@ export async function invoiceRefundArchivePhase(root,scratch,{persistence,databa
     await applyPolicy(h,owner,'credit.policy',{two_person_above:'1000'})
     const customer=(await api('customer.create',{external_id:'synthetic-nectar-refund-archive',name:'Synthetic archived refunds',billing_email:['synthetic-nectar-refund-archive','example.test'].join('@')})).id
     await api('collection.customer.bind',{customer,account_ref:'synthetic-nectar-native-account-1',stripe_customer_ref:'synthetic-nectar-native-customer-3',confirm:true})
-    const paid=async()=>{
-      const charge=(await api('charge.add',{customer,amount:'900',description:'Synthetic archive service',taxable:false,effective_date:date})).charge
+    const paid=async(taxable=false)=>{
+      const charge=(await api('charge.add',{customer,amount:'900',description:'Synthetic archive service',taxable,effective_date:date})).charge
       const invoice=await api('invoice.manual',{customer,charges:[charge],service_date:date})
       await api('invoice.approve',{invoice:invoice.id,acknowledge:true});await api('invoice.finalise',{invoice:invoice.id,issue_date:date})
       const pending=await api('collection.prepare',{invoice:invoice.id});await api('collection.confirm',pending.instructions.confirm)
       return invoice.id
     }
     const invoice=await paid(),pendingInvoice=await paid()
+    await applyPolicy(h,owner,'tax.declare',{tax_jurisdiction:'CA',tax_mode:'flat_rate',tax_rate:'8.625',tax_note:'Synthetic archived provider tax'})
+    await api('tax.review',{revision:(await api('business')).revision})
+    const taxableInvoice=await paid(true),taxed=await api(`invoices/${taxableInvoice}`)
+    assert.deepEqual([taxed.subtotal_cents,taxed.tax_cents,taxed.total_cents],[90000,7763,97763])
+    await api('invoice.tax.bind',{invoice:taxableInvoice,transaction:edge.tax.attach(taxed,'synthetic-nectar-native-customer-3'),confirm:true})
     await close();await command(root,['export','--output',file('before')]);await reopen()
     const input={invoice,amount:'900',destination:'original'},quote=await api('invoice.refund.preview',input)
     const completed=await api('invoice.refund.execute',{...input,basis:quote.basis,reason:'Synthetic archived completed refund',confirm:true})
+    const taxInput={invoice:taxableInvoice,amount:'977.63',destination:'original'},taxQuote=await api('invoice.refund.preview',taxInput)
+    const taxRefund=await api('invoice.refund.execute',{...taxInput,basis:taxQuote.basis,reason:'Synthetic archived provider tax refund',confirm:true})
+    assert.equal(taxRefund.status,'completed');assert.ok(taxRefund.taxReversalRef)
     const pendingQuote=await api('invoice.refund.preview',{...input,invoice:pendingInvoice})
     const pending=await api('invoice.refund.prepare',{invoice:pendingInvoice,amount:'900',destination:'original',basis:pendingQuote.basis,reason:'Synthetic archived pending refund'})
     assert.equal(completed.status,'completed')
@@ -53,18 +69,20 @@ export async function invoiceRefundArchivePhase(root,scratch,{persistence,databa
     await close();await command(root,['export','--output',file('populated')])
     const captured=await rows(file('populated'))
     assert.equal(captured.some(item=>item.table==='nc_invoice_refund_authority'),false)
-    assert.equal(captured.filter(item=>item.table==='nc_invoice_refunds').length,2)
+    assert.equal(captured.filter(item=>item.table==='nc_invoice_refunds').length,3)
+    assert.equal(captured.filter(item=>item.table==='nc_invoice_tax').length,1)
     await command(root,['reset','--yes']);await command(root,['import','--input',file('populated'),'--yes'])
     await command(root,['export','--output',file('restored')])
     const restored=await rows(file('restored'))
-    const financial=items=>items.filter(item=>['nc_invoice_refunds','nc_credit_notes','nc_payments','nc_allocations'].includes(item.table)).map(({index,...row})=>row)
+    const financial=items=>items.filter(item=>['nc_invoice_tax','nc_invoice_refunds','nc_credit_notes','nc_payments','nc_allocations'].includes(item.table)).map(({index,...row})=>row)
     assert.deepEqual(financial(restored),financial(captured))
     await reopen()
     const posts=()=>edge.calls.filter(call=>call.method==='POST').length,beforePosts=posts()
     assert.equal((await api('invoice.refund.reconcile',{refund:completed.id})).credit,completed.credit)
+    assert.equal((await api('invoice.refund.reconcile',{refund:taxRefund.id})).taxReversalRef,taxRefund.taxReversalRef)
     assert.equal((await api('invoice.refund.execute',{refund:pending.id,basis:pending.basis,confirm:true},409)).error,'invoice_refund_authority_inactive')
     assert.deepEqual((await api(`invoices/${invoice}`)).lines,original.lines)
-    assert.equal((await api(`reports/refunds?period=2026-10&customer=${customer}`)).totalCents,-90000)
+    assert.equal((await api(['reports','refunds'].join('/')+'?'+new URLSearchParams({period:'2026-10',customer}))).totalCents,-187763)
     assert.equal(posts(),beforePosts)
     // A backup from before the cash write cannot create a new refund or credit.
     await close();await command(root,['reset','--yes']);await command(root,['import','--input',file('before'),'--yes']);await reopen()

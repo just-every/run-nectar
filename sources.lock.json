@@ -162,7 +162,7 @@
       "executable": false
     },
     ".github/workflows/verify.yml": {
-      "sha256": "c26492fc92e2cdee4f13eb61aa6deb72e20e52da64cff9c29972070656fd618c",
+      "sha256": "93ed1442c41b910af1d1a6279ee43632d1ae7f570daa1a1fe8845348ed87c96b",
       "executable": false
     },
     ".gitignore": {
@@ -186,7 +186,7 @@
       "executable": false
     },
     "API.md": {
-      "sha256": "bf56aea592aa50dd9350a00d8475e18e3971fe051e551ac812c1f0a5309edeb9",
+      "sha256": "003d859ab47b8e2d48d7f9cf90ba2cc276278ef235c620c221a195ddca9fe0a3",
       "executable": false
     },
     "base-copies.json": {
@@ -791,6 +791,10 @@
     },
     "migrations/core/0109_processor_cash_return.sql": {
       "sha256": "bb1655b8eae9bc9365345d9ae809f47d71a3f1faa76d35c6dee086aaf66d053b",
+      "executable": false
+    },
+    "migrations/core/0110_invoice_refund_tax.sql": {
+      "sha256": "c75d9bfcd65676e959c79abbf3abf8b8a988bb291ecad22e6307ded23a564912",
       "executable": false
     },
     "ONBOARDING.md": {
@@ -3002,7 +3006,7 @@
       "executable": false
     },
     "src/nectar/actions.ts": {
-      "sha256": "b5e7b6f9ed79700f0a5bfaa9d7906a04b130cb2537b4e3070ae11ae3e8f26417",
+      "sha256": "faffaae98d8eaccebaed375ee1598ec72198ac468d6748c2c691e4d5cda26675",
       "executable": false
     },
     "src/nectar/actor.ts": {
@@ -3018,7 +3022,7 @@
       "executable": false
     },
     "src/nectar/api-fields.ts": {
-      "sha256": "400ffef7cd7cfc4c5036c01f1a1cb97141f2a413883c488ded34d8e1eff98e58",
+      "sha256": "603371f01b43e1995d4ead14b958246d116c1a5b0d7c35eaeb308d7237424a40",
       "executable": false
     },
     "src/nectar/api-versions.ts": {
@@ -3477,8 +3481,12 @@
       "sha256": "dfe7899e11d8babfd2099e5de42ac351272b98288c8d708ab2de2409558fcbef",
       "executable": false
     },
+    "src/nectar/invoice-refund-tax.ts": {
+      "sha256": "e1865e28d4a6552d3956ee0b0e73beccb5adc52570ab3f4e324efd29afd3cf73",
+      "executable": false
+    },
     "src/nectar/invoice-refunds.ts": {
-      "sha256": "958d1aaa879465e7c81c7ba6c12ee322875af81ca606ca8a6c42fe5e0708450c",
+      "sha256": "7c8310a3eec3269356054edebb0cb83a70760d1ed63752be56d96d452e8245b1",
       "executable": false
     },
     "src/nectar/invoice-tax.ts": {
@@ -4378,7 +4386,7 @@
       "executable": false
     },
     "src/nectar/ui/home.ts": {
-      "sha256": "0f98202492a8ce9dc49885e400c5d5fda5172421b7d96cc00985ef73c64f0690",
+      "sha256": "8347a17be5186e7524d79f485d38a8102ecf7da08ad4ff77e464b645cf068ad3",
       "executable": false
     },
     "src/nectar/ui/html.ts": {
@@ -4410,7 +4418,7 @@
       "executable": false
     },
     "src/nectar/ui/lifecycle.ts": {
-      "sha256": "ab66daf2d490b05986990fc46c63b3a81b8b832d83c27ba1d48e4654bd5c9d73",
+      "sha256": "fcbf932eceda0cf62e52f6b91c64abbc38859a281a57addb1875f0c1cc5d0da3",
       "executable": false
     },
     "src/nectar/ui/metadata.ts": {
@@ -5097,12 +5105,20 @@
       "sha256": "f7f264407f5c766db36bec1cba28c99b4b3e3e929ed6dc9f119dc08af4558267",
       "executable": false
     },
+    "tests/nectar/invoice-refund-archive.mjs": {
+      "sha256": "a9eeec84370b6977e669c3061ddc42065ff44f2d3deec82e254868e48f5740f9",
+      "executable": false
+    },
     "tests/nectar/invoice-refund-preview.mjs": {
-      "sha256": "14fc0f7037cffde554ab18da63a30f29d941954f102da12d8897d785e8987c48",
+      "sha256": "6c616e768315bb912ad10ef8863ac8dc98adde36e92b9a7010be24f4fc8cbe09",
       "executable": false
     },
     "tests/nectar/invoice-refund-sandbox.mjs": {
       "sha256": "eed8f554ad998baef4f90677d62352f5ea0567711fce467bda4ea531e2477439",
+      "executable": false
+    },
+    "tests/nectar/invoice-tax-edge.mjs": {
+      "sha256": "1bd18f42f13fd6b76c3eee8094376fdd6a5c578bd6204596570eb26fe4c7c40e",
       "executable": false
     },
     "tests/nectar/invoice-void-browser.mjs": {
@@ -5378,7 +5394,7 @@
       "executable": false
     },
     "tests/nectar/processor-archive.mjs": {
-      "sha256": "61bb63bba04df15abba802d7ab753faaa7774a24f36bd9cced31e4b30eab1ba5",
+      "sha256": "560ff2e56754d9226ba8f6d6e2f5d167d13df71290183433a38f0f903c56aa65",
       "executable": false
     },
     "tests/nectar/processor-cash-imported-sandbox.mjs": {

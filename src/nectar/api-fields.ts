@@ -566,6 +566,10 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "refund": "text",
     "tax_reversal": "text"
   },
+  "invoice.refund.stop": {
+    "confirm": "flag",
+    "refund": "text"
+  },
   "invoice.series": {
     "customer": "text",
     "entity": "text",

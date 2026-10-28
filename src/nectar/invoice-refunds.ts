@@ -167,3 +167,12 @@ export async function invoiceRefunds(env: Bindings, actor: Actor, invoice: strin
   requireRead(actor,'invoices');requireRead(actor,'payments')
   return (await all(env,'SELECT * FROM nc_invoice_refunds WHERE invoice_id=? ORDER BY prepared_at,id',invoice)).map(view)
 }
+
+/** Releasing an unclaimed request cannot repeat or reverse a provider action. */
+export async function stopInvoiceRefund(env: Bindings, actor: Actor, input: Input) {
+  await authority(env,actor);insist(input.flag('confirm'),'confirmation_required')
+  const r=await stored(env,input.text('refund',{max:100}))
+  insist(r.status==='pending','invoice_refund_already_claimed',409)
+  await commit(env,[refundActorGuard(env,actor),state(env,r),stmt(env,"UPDATE nc_invoice_refunds SET status='stopped',revision=? WHERE id=?",newId(),r.id)],{actor:actorLabel(actor),action:'invoice.refund.stop',subject:r.id,detail:{invoice:r.invoice_id,cancellationCredit:r.cancellation_credit_id??null}})
+  return view(await stored(env,r.id))
+}

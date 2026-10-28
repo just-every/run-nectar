@@ -3,7 +3,7 @@ import { consumeProcessorEvent } from './processor-events'
 import { allocateProcessorCash } from './processor-cash-queue'
 import { prepareImportedCashTakeover, confirmImportedCashTakeover } from './processor-cash-imported'
 import { previewProcessorCashReturn, prepareProcessorCashReturn, executeProcessorCashReturn, reconcileProcessorCashReturn } from './processor-cash-return'
-import { prepareInvoiceRefund, executeInvoiceRefund, reconcileInvoiceRefund } from './invoice-refunds'
+import { prepareInvoiceRefund, executeInvoiceRefund, reconcileInvoiceRefund, stopInvoiceRefund } from './invoice-refunds'
 import { previewInvoiceRefund } from './invoice-refund-preview'
 import { prepareInvoiceVoid, voidInvoice } from './invoice-voids'
 import { createDunningPolicy, enrollDunning } from './dunning-policy'
@@ -307,6 +307,7 @@ export const actions: Record<string, Handler> = {
   'invoice.refund.prepare': prepareInvoiceRefund,
   'invoice.refund.execute': executeInvoiceRefund,
   'invoice.refund.reconcile': reconcileInvoiceRefund,
+  'invoice.refund.stop': stopInvoiceRefund,
   'invoice.void.prepare': prepareInvoiceVoid,
   'invoice.void': voidInvoice,
   'invoice.approve': approve,

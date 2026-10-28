@@ -123,7 +123,7 @@ export async function processorArchiveJourney() {
   const only=process.argv[2]
   const config=JSON.parse(await readFile(join(root,'wrangler.jsonc'),'utf8'))
   const persistence=join(root,'.wrangler/state/v3'),databaseId=config.d1_databases.find(binding=>binding.binding==='DB').database_id
-  if(!only){
+  if(!only||only==='processor'){
   await command(root,['export','--output',empty])
   const setup=await processorSetup(undefined,{persistence,databaseId,applyMigrations:false})
   h=setup.h
@@ -166,14 +166,14 @@ export async function processorArchiveJourney() {
   await command(root,['export','--output',restoredPurged])
   assert.deepEqual(sources(await archiveItems(restoredPurged)),sources(after),'Restoring the post-removal archive cannot resurrect purged processor custody')
   }
-  if(!only||only==='returns')await additionalArchivePhase(root,scratch,{label:'returns',persistence,databaseId,edge:processorCashReturnEdge(),requiredKinds:returnKinds,
+  if(!only||only==='processor'||only==='returns')await additionalArchivePhase(root,scratch,{label:'returns',persistence,databaseId,edge:processorCashReturnEdge(),requiredKinds:returnKinds,
    async populate(worker,who,provider){
     const result=await processorCashReturnFlow(worker,who,{cashReturnEdge:provider})
     const peer=await cashPeer(worker,who,provider)
     await erase(worker,who,result.customer)
     return {customer:result.customer,peer,financeEmail:'synthetic-nectar-return-finance@example.test'}
    }})
-  if(!only||only==='imported')await additionalArchivePhase(root,scratch,{label:'imported',persistence,databaseId,edge:importedCashEdge(),requiredKinds:importedKinds,localTime:'2026-10-28T10:00:00Z',
+  if(!only||only==='processor'||only==='imported')await additionalArchivePhase(root,scratch,{label:'imported',persistence,databaseId,edge:importedCashEdge(),requiredKinds:importedKinds,localTime:'2026-10-28T10:00:00Z',
    async populate(worker,who,provider){
     const result=await processorCashImportedFlow(worker,who,{cashEdge:provider,keepFinancial:true})
     await worker.api('access.give',who,{email:'synthetic-nectar-archive-finance@example.test',name:'Archive finance',role:'finance'})
