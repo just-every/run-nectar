@@ -4,18 +4,19 @@ import {nativeCollectionEdge} from './native-collection.mjs'
 const edge=nativeCollectionEdge()
 export const harnessOptions=()=>({stripeFetch:edge.fetch,stripeSecret:'synthetic-nectar-1'})
 const rounded=(n,d)=>Math.floor((n+Math.floor(d/2))/d)
+const contact=local=>[local,'example.test'].join('@')
 export async function planChangesFlow(h,owner,{onState=async()=>{},prepare,decide}={}) {
   const api=(path,body,status)=>h.api(path,owner,body,status)
   await h.advanceClock('2026-07-01T10:00:00Z');edge.capturedAt('2026-07-01T10:00:00Z')
   await api('business.configure',{...await api('business'),timezone:'UTC'})
-  await api('access.give',{email:'changes-finance@example.test',name:'Change Finance',role:'finance'})
-  const finance=await h.signIn('changes-finance@example.test',{requested:true}),agent={bearer:(await api('credential.issue',{name:'Change observer',scopes:['prepare']})).key}
+  await api('access.give',{email:contact('changes-finance'),name:'Change Finance',role:'finance'})
+  const finance=await h.signIn(contact('changes-finance'),{requested:true}),credential=await api('credential.issue',{name:'Change observer',scopes:['prepare']}),agent={bearer:credential.key}
   const product=(await api('product.create',{code:'synthetic-nectar-plan-1',name:'Annual plan'})).id
   const makePrice=async(n,amount)=>(await api('price.create',{product:(await api('product.create',{code:`synthetic-nectar-plan-${n}`,name:`Annual tier ${n}`})).id,kind:'flat',unit_amount:amount,interval_unit:'year',billing_timing:'advance',taxable:false})).id
   const low=await makePrice(2,'1200'),high=await makePrice(3,'2400')
   const fixtures=[]
   for(let n=1;n<=6;n++){
-    const customer=(await api('customer.create',{external_id:`synthetic-nectar-plan-customer-${n}`,name:`Plan account ${n}`,billing_email:`plan-${n}@example.test`})).id
+    const customer=(await api('customer.create',{external_id:`synthetic-nectar-plan-customer-${n}`,name:`Plan account ${n}`,billing_email:contact(`plan-${n}`)})).id
     const subscription=(await api('subscription.create',{customer,start_date:'2026-01-01',price:[n===2||n===4?high:low]})).id
     fixtures.push({customer,subscription})
   }
@@ -27,6 +28,10 @@ export async function planChangesFlow(h,owner,{onState=async()=>{},prepare,decid
   const preview=prepare??(payload=>api('plan.change.prepare',payload)),approve=decide??((payload,who)=>h.api('plan.change.decide',who,payload))
   await policy('invoice_now')
   const first=await preview({subscription:fixtures[0].subscription,item:fixtures[0].item,price:high,mode:'immediate'})
+  await h.api('plan.change.prepare',agent,{subscription:fixtures[0].subscription,item:fixtures[0].item,price:high,mode:'immediate'},403)
+  await api('credential.revoke',{key:credential.id})
+  await h.api(`subscriptions/${fixtures[0].subscription}`,agent,undefined,401)
+  await h.api('plan.change.decide',agent,{change:first.change,decision:'approved'},401)
   // July 1 through Jan 1 has 184 days; the existing engine rounds each
   // immutable old/new service piece independently, half away from zero.
   const after=rounded(120000*181,365)+rounded(240000*184,365),delta=after-120000
@@ -40,6 +45,7 @@ export async function planChangesFlow(h,owner,{onState=async()=>{},prepare,decid
   assert.equal((await api('billrun.prepare',{period:'2026-07'})).summary.invoices,0,'the changed current advance stub is covered once')
   await api('collection.customer.bind',{customer:fixtures[0].customer,account_ref:'synthetic-nectar-native-account-1',stripe_customer_ref:'synthetic-nectar-native-customer-1',confirm:true})
   const collection=await api('collection.prepare',{invoice:upgraded.invoice});await api('collection.confirm',collection.instructions.confirm)
+  await api('collection.confirm',collection.instructions.confirm,409)
   assert.equal((await api(`invoices/${upgraded.invoice}`)).balanceCents,0)
   assert.equal(edge.calls.filter(c=>c.method==='POST'&&c.path==='/payment_intents').length,1)
   await api('plan.change.decide',{change:first.change,decision:'approved'},409)
@@ -95,7 +101,7 @@ export async function planChangesFlow(h,owner,{onState=async()=>{},prepare,decid
   const taxLow=(await api('price.create',{product:taxProduct,kind:'flat',unit_amount:'1200',interval_unit:'year',billing_timing:'advance',taxable:true})).id
   const otherTaxProduct=(await api('product.create',{code:'synthetic-nectar-plan-tax-target',name:'Taxed annual upgrade'})).id
   const taxHigh=(await api('price.create',{product:otherTaxProduct,kind:'flat',unit_amount:'2400',interval_unit:'year',billing_timing:'advance',taxable:true})).id
-  const taxCustomer=(await api('customer.create',{external_id:'synthetic-nectar-plan-tax-customer',name:'Taxed plan account',billing_email:'tax-plan@example.test'})).id
+  const taxCustomer=(await api('customer.create',{external_id:'synthetic-nectar-plan-tax-customer',name:'Taxed plan account',billing_email:contact('tax-plan')})).id
   const taxSub=(await api('subscription.create',{customer:taxCustomer,start_date:'2028-01-01',price:[taxLow]})).id
   const taxRun=await api('billrun.prepare',{period:'2028-01'}),taxSource=(await api(`runs/${taxRun.id}`)).invoices.find(i=>i.customer_id===taxCustomer)
   await api('invoice.approve',{invoice:taxSource.id,acknowledge:true});await api('invoice.finalise',{invoice:taxSource.id,issue_date:'2028-01-01'})
@@ -126,7 +132,7 @@ export async function planChangesFlow(h,owner,{onState=async()=>{},prepare,decid
 async function repeatedPlanChanges(h,owner,finance,f,{low,high,makePrice,first,debit,preview,approve,policy,onState}){
   const api=(path,body,status)=>h.api(path,owner,body,status)
   const higher=await makePrice(4,'4800')
-  const visible=async()=>({items:(await api(`subscriptions/${f.subscription}`)).items,invoices:(await api(`invoices?customer=${f.customer}`)).data})
+  const visible=async()=>({items:(await api(`subscriptions/${f.subscription}`)).items,invoices:await Promise.all((await api(`invoices?customer=${f.customer}`)).data.map(i=>api(`invoices/${i.id}`)))})
   const immutable=i=>({number:i.number,subtotal:i.subtotal_cents,tax:i.tax_cents,total:i.total_cents,lines:i.lines,calculation:i.calculation})
   const original=immutable(await api(`invoices/${f.invoice}`)),firstDebit=immutable(debit)
   await h.advanceClock('2026-09-01T10:00:00Z')
@@ -192,12 +198,12 @@ export async function salesPlanChangesFlow(h,owner,{onState=async()=>{},prepare,
  const api=(path,body,status)=>h.api(path,owner,body,status)
  await h.advanceClock('2026-07-01T12:00:00Z');await api('business.configure',{...await api('business'),timezone:'UTC'})
  const people={}
- for(const role of ['sales','finance']){await api('access.give',{email:`plan-${role}@example.test`,name:`Plan ${role}`,role});people[role]=await h.signIn(`plan-${role}@example.test`,{requested:true})}
+ for(const role of ['sales','finance']){await api('access.give',{email:contact(`plan-${role}`),name:`Plan ${role}`,role});people[role]=await h.signIn(contact(`plan-${role}`),{requested:true})}
  await applyPolicy(h,owner,'credit.policy',{two_person_above:'1000'})
  await applyPolicy(h,owner,'lifecycle.policy',{credit_unused:true,reactivation_days:30,proration_policy:'invoice_now'})
  const price=async(n,amount)=>{const product=(await api('product.create',{code:`synthetic-nectar-sales-price-${n}`,name:`Annual sales tier ${n}`})).id;return(await api('price.create',{product,kind:'seat',unit_amount:amount,interval_unit:'year',billing_timing:'advance',taxable:false})).id}
  const low=await price(1,'1200'),high=await price(2,'4800'),fixtures=[]
- for(let n=0;n<2;n++){const customer=(await api('customer.create',{external_id:`synthetic-nectar-sales-plan-${n}`,name:`Quoted annual account ${n+1}`,billing_email:`sales-plan-${n}@example.test`})).id;const subscription=(await api('subscription.create',{customer,start_date:'2026-01-01',price:[n?high:low],quantity:['1']})).id;fixtures.push({customer,subscription})}
+ for(let n=0;n<2;n++){const customer=(await api('customer.create',{external_id:`synthetic-nectar-sales-plan-${n}`,name:`Quoted annual account ${n+1}`,billing_email:contact(`sales-plan-${n}`)})).id;const subscription=(await api('subscription.create',{customer,start_date:'2026-01-01',price:[n?high:low],quantity:['1']})).id;fixtures.push({customer,subscription})}
  const run=await api('billrun.prepare',{period:'2026-01'})
  for(const row of (await api(`runs/${run.id}`)).invoices){await api('invoice.approve',{invoice:row.id,acknowledge:true});await api('invoice.finalise',{invoice:row.id,issue_date:'2026-01-01'});const f=fixtures.find(f=>f.customer===row.customer_id);f.invoice=row.id;f.item=(await api(`subscriptions/${f.subscription}`)).items[0].id}
  const payment=(await api('payment.record',{customer:fixtures[1].customer,amount:'4800',received_on:'2026-01-02',method:'bank_transfer',reference:'synthetic-nectar-sales-paid'})).payment
@@ -255,6 +261,13 @@ export async function salesPlanChangesFlow(h,owner,{onState=async()=>{},prepare,
  assert.equal((await api(`invoices/${fixtures[0].invoice}`)).credits.find(c=>c.id===seatCredit.credit).amount_cents,seatTotal-reducedTotal)
  assert.equal((await api('billrun.prepare',{period:'2026-10'})).summary.invoices,0,'repeated seat changes cannot rebill current service')
  await onState({label:'sales-repeated-seat-credit',subscription:fixtures[0].subscription,sales:people.sales,finance:people.finance})
+ const afterCredit=(await api(`subscriptions/${fixtures[0].subscription}`)).items.find(i=>i.effective_from==='2026-10-01')
+ const more=await preview({subscription:fixtures[0].subscription,item:afterCredit.id,price:high,quantity:3,mode:'immediate'},people.sales)
+ const moreTotal=rounded(120000*181,365)+rounded(480000*62,365)+rounded(960000*30,365)+rounded(1440000*92,365)
+ assert.equal(more.quote.before.totalCents,reducedTotal);assert.equal(more.quote.after.totalCents,moreTotal)
+ const afterCreditDebit=await execute({change:more.change,decision:'approved'},people.finance)
+ assert.equal((await api(`invoices/${afterCreditDebit.invoice}`)).total_cents,moreTotal-reducedTotal,'a same-day change replays the earlier numbered credit and exact seat timeline')
+ assert.equal((await api('billrun.prepare',{period:'2026-10'})).summary.invoices,0)
  await api('erasure.request',{customer:fixtures[0].customer})
  const erasure=h.mails.at(-1),href=`${erasure.text??''} ${erasure.html??''}`.match(/https?:\/\/[^\s"<]+\/erase\/[a-f0-9]{64}/)[0]
  await h.raw(new URL(href).pathname,{form:new URLSearchParams({confirm:'yes'})})
