@@ -21,7 +21,11 @@ export async function portalBillingFlow(h,owner,hooks={}) {
   await hooks.state?.({name:'signin',path:'/portal/signin'})
   const request=async (external,email,extra={})=>h.raw('/portal/signin',{form:new URLSearchParams({customer:external,email}),...extra})
   const own=await h.api(`customers/${customer}`,owner),foreign=await h.api(`customers/${peer}`,owner)
+  const technicalEmail=mailbox('synthetic-nectar-technical')
+  await h.api('contact.add',owner,{customer:peer,name:'Technical contact',email:technicalEmail,role:'technical'})
   const count=h.mails.length
+  assert.equal((await request(foreign.external_id,technicalEmail)).status,200)
+  assert.equal(h.mails.length,count,'A non-billing contact receives no portal capability')
   const unknown=await request('synthetic-nectar-unknown',mailbox('synthetic-nectar-unknown'))
   const unknownText=await unknown.text()
   assert.equal(unknown.status,200);assert.equal(h.mails.length,count,'Unknown identity causes no outgoing message')
@@ -189,6 +193,13 @@ export async function portalBillingFlow(h,owner,hooks={}) {
   await request(own.external_id,own.billing_email)
   assert.equal(h.mails.length,afterEraseMails,'Erased mailbox receives no new portal credential')
   assert.equal((await h.raw(path('/portal/profile/data',foreignSession))).status,200,'Peer profile survives erasure')
+  const beforeExpiryMail=h.mails.length
+  await request(foreign.external_id,foreign.billing_email)
+  const expiring=new URL(h.mails.slice(beforeExpiryMail).find(mail=>String(mail.text).includes('/portal/signin/')).text.match(/https?:\/\/[^\s]+\/portal\/signin\/[\w-]+/)[0]).pathname
+  assert.equal((await h.raw(expiring)).status,200)
+  await h.advanceClock(new Date(Date.parse(at)+15*60*1000).toISOString())
+  assert.equal((await h.raw(expiring,{form:new URLSearchParams()})).status,400,'Unconsumed email proof expires at its exact deadline')
+  await hooks.state?.({name:'email-expired',path:expiring})
   console.log('Billing-contact email sign-in, profile, documents, isolated exact ACH settlement and replay custody passed')
   return {records,session,foreignSession}
 }

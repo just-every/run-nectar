@@ -5314,11 +5314,11 @@
       "executable": false
     },
     "tests/nectar/portal-billing-browser.mjs": {
-      "sha256": "d444e20059baebf20e0aa16061eb24796ee1f882780c6d81b4415be3f4e7ae67",
+      "sha256": "e84fb74f4404e19146a4f78717e79f852efe4ea485cec034f4c900c291637cd3",
       "executable": false
     },
     "tests/nectar/portal-billing.mjs": {
-      "sha256": "5665341c80e6c42107a35d995c4575e5aba6d0ab0617832888ea976ce9ed85b6",
+      "sha256": "6af74bcebf5da7dc68e881ebb80a5ddb59b219d5aa1669b1f0b882b8407e300d",
       "executable": false
     },
     "tests/nectar/portal-corrections.mjs": {

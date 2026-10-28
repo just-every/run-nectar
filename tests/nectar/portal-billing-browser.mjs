@@ -84,7 +84,7 @@ try {
     state:async({name,path,operator:asOperator})=>{
       const target=asOperator?operator:page
       const response=await target.goto(`${h.origin}${path}`)
-      assert.equal(response.status(),name==='revoked'?401:200)
+      assert.equal(response.status(),name==='revoked'?401:name==='email-expired'?400:200)
       await shot(target,name)
     },
   })
