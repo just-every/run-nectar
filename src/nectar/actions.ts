@@ -1,5 +1,6 @@
 import { capturePlaidRemittances } from './plaid-remittances'
 import { uploadRemittances, previewRemittance, confirmRemittance, previewRemittanceAllocation, allocateRemittance } from './remittances'
+import { preparePortalChangePolicy } from './portal-change-policy'
 import { consumeProcessorEvent } from './processor-events'
 import { allocateProcessorCash } from './processor-cash-queue'
 import { prepareImportedCashTakeover, confirmImportedCashTakeover } from './processor-cash-imported'
@@ -190,6 +191,7 @@ export const actions: Record<string, Handler> = {
   'prepaid.funding.confirm': confirmPrepaidFunding,
   'prepaid.consent.revoke': revokePrepaidConsent,
   'prepaid.settle': settlePrepaid,
+  'portal.change.policy': preparePortalChangePolicy,
   'portal.configure': configurePortal,
   'portal.session.issue': issuePortalSession,
   'portal.session.revoke': revokePortalSession,

@@ -863,3 +863,39 @@ Only posted USD deposits from that configured account are considered. Exact invo
 An observed paid automatic Stripe payout can reconcile a bank deposit by its exact payout reference, or by an unambiguous Stripe-labelled exact net amount. Constituent net values must equal the payout and bank deposit; this creates a bank reconciliation record and never records the gross customer payments again. A source already staged as a customer receipt requires separate review. Repeating a capture retains source custody; changed bank amounts, dates, references or advice are refused.
 
 The existing receivables queue and processor reconciliation view show cash age, the 75-day return date and days remaining. These are calculated from the observed funding date. They do not claim that Stripe has returned funds; processor application and return still use their separately confirmed doors.
+## Portal change requests (PORT-003, partial)
+
+The owner prepares `portal.change.policy` with `prices` (catalog price IDs),
+`minimum_seats` and `pause_allowed`. The existing `policy.decide` door requires
+independent approval, or its audited explicit sole-owner confirmation. These
+restrictions enable requests only. Pausing is unavailable in the current flow,
+including when a merchant records that its future policy would permit it.
+
+A signed own-customer session opens `/portal/changes` and
+`/portal/changes/ID`. With `Accept: application/json`, these return the same
+allowlisted subscriptions, approved compatible choices and pending status.
+The index retains request status independently of current change eligibility.
+Choices currently support one active simple monthly flat or seat item billed
+in arrears. Catalog descriptions are merchant text; interface labels use the
+customer's language. No proration or payment preview is claimed.
+
+`POST /portal/change.request?session=TOKEN` requires the exact session Origin
+and only `subscription`, `item`, `target_price`, `quantity`, `basis`,
+`policy_revision` and `confirm=true` (or `confirm=yes` on the native form).
+The displayed basis binds the subscription, approved signed terms, dated
+renewal and lifecycle sources, business-local day, customer revision, catalog
+choices and approved restriction revision. Changed sources require a fresh
+review. Only a lower recurring amount can be requested. A seat quantity below
+the configured minimum is refused. A downgrade below the active signed
+minimum remains pending for a person, with the existing minimum intact.
+Replays of the same exact request return its original identity, including
+concurrent submissions. Requests have no execution, collection or mail authority.
+
+Members with customer and subscription read capability can review the queue at
+`GET /api/nectar/portal-changes` and `/app/settings/portal-changes`.
+Configuration remains owner-only; ordinary governed subscription changes remain
+separate. Erasure deletes operational requests and invalidates sessions;
+archives may preserve non-executable pending evidence but never customer
+sessions, and a later erasure journal refuses older personal archives.
+Automatic upgrades, downgrades, seat changes, pauses, cancellation, exact
+proration and payment, and inherited renewal and retention flows remain owed.

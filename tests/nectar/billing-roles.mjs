@@ -29,13 +29,13 @@ const EXPECTED = {
   },
   sales: {
     actions: ['change.prepare', 'plan.change.prepare', 'amendment.propose', 'contract.prepare'],
-    api: ['customers', 'customer', 'catalog', 'promotions', 'subscription', 'upcoming', 'entitlement', 'metadata', 'metadataObjects'],
-    pages: ['customers', 'customer', 'certificateFile', 'catalog', 'subscription', 'metadata', 'metadataList'],
+    api: ['portalChanges', 'customers', 'customer', 'catalog', 'promotions', 'subscription', 'upcoming', 'entitlement', 'metadata', 'metadataObjects'],
+    pages: ['portalChanges', 'customers', 'customer', 'certificateFile', 'catalog', 'subscription', 'metadata', 'metadataList'],
   },
   support: {
     actions: ['invoice.refund.preview', 'prepaid.refund.request', 'note.add', 'credit.issue', 'answer.read'],
-    api: ['remittances','processorEvents','automaticCollections','paymentReceipt','prepaidRefunds', 'numberRegister', 'customers', 'customer', 'invoices', 'invoice', 'ageing', 'writeOffs', 'ledgerPostings', 'customerBalance', 'payments', 'notes', 'noteMembers', 'entitlement', 'subscription', 'upcoming', 'reportLine', 'metadataObjects', 'prepaid', 'prepaidSource'],
-    pages: ['processorEvents','paymentReceipt','prepaidRefundList', 'prepaidRefundSource', 'numberRegister', 'customers', 'customer', 'certificateFile', 'subscription', 'prepaid', 'prepaidSource', 'invoice', 'receivables', 'billingAnswers', 'reportLine', 'metadataList'],
+    api: ['remittances','portalChanges','processorEvents','automaticCollections','paymentReceipt','prepaidRefunds', 'numberRegister', 'customers', 'customer', 'invoices', 'invoice', 'ageing', 'writeOffs', 'ledgerPostings', 'customerBalance', 'payments', 'notes', 'noteMembers', 'entitlement', 'subscription', 'upcoming', 'reportLine', 'metadataObjects', 'prepaid', 'prepaidSource'],
+    pages: ['portalChanges','processorEvents','paymentReceipt','prepaidRefundList', 'prepaidRefundSource', 'numberRegister', 'customers', 'customer', 'certificateFile', 'subscription', 'prepaid', 'prepaidSource', 'invoice', 'receivables', 'billingAnswers', 'reportLine', 'metadataList'],
   },
   developer: {
     actions: ['invoice.refund.preview', 'credential.issue', 'credential.revoke', 'credential.version', 'webhook.stripe.consume', 'webhook.register', 'webhook.rotate', 'webhook.disable', 'webhook.replay', 'webhook.dispatch', 'answer.read', 'meter.preview', 'usage.correction.preview'],
