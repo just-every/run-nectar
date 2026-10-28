@@ -1,3 +1,4 @@
+import { uploadRemittances, previewRemittance, confirmRemittance, previewRemittanceAllocation, allocateRemittance } from './remittances'
 import { consumeProcessorEvent } from './processor-events'
 import { allocateProcessorCash } from './processor-cash-queue'
 import { prepareImportedCashTakeover, confirmImportedCashTakeover } from './processor-cash-imported'
@@ -329,6 +330,11 @@ export const actions: Record<string, Handler> = {
   'promotion.create': createPromotionCode,
   'trial.extend': extendTrial,
   'trial.resolve': resolveTrial,
+  'remittance.upload': uploadRemittances,
+  'remittance.preview': previewRemittance,
+  'remittance.confirm': confirmRemittance,
+  'remittance.allocate.preview': previewRemittanceAllocation,
+  'remittance.allocate': allocateRemittance,
   'payment.record': recordPayment,
   'payment.allocate': allocate,
   'reminder.prepare': prepareReminder,
