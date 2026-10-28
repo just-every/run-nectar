@@ -24,7 +24,7 @@ const pricesSQL = `SELECT p.id,p.product_id,p.kind,p.unit_amount,p.currency,p.ni
   WHERE p.status='active' AND p.kind IN ('flat','seat') AND p.pricing_model='simple'
   AND COALESCE(b.interval_unit,'month')='month' AND COALESCE(b.interval_count,1)=1 AND COALESCE(b.billing_timing,'arrears')='arrears' ORDER BY p.id`
 
-async function changeBasis(env: Bindings, session: CustomerSession, subscription: string) {
+export async function changeBasis(env: Bindings, session: CustomerSession, subscription: string) {
   const row = await one(env, SOURCE, subscription, session.customer)
   insist(row, 'not_found', 404)
   const source = JSON.parse(row.source), business = await requireBusiness(env), day = today(business.timezone, clockInstant(env))
@@ -34,9 +34,10 @@ async function changeBasis(env: Bindings, session: CustomerSession, subscription
   const prices = await all(env, pricesSQL), current = prices.find(p => p.id === active[0].price)
   insist(current, 'portal_change_requires_review', 409)
   const policy = await portalChangePolicy(env)
-  const targets = prices.filter(p => policy.prices.includes(p.id) && p.product_id === current.product_id && p.kind === current.kind && p.currency === current.currency && micros(p.unit_amount) <= micros(current.unit_amount))
-  const basis = await fingerprint({ source: row.source, day, current, targets, policy })
-  return { subscription, source: row.source as string, sourceData: source, day, item: active[0], current, targets, policy, basis }
+  const allowed = prices.filter(p => policy.prices.includes(p.id) && p.product_id === current.product_id && p.kind === current.kind && p.currency === current.currency)
+  const targets = allowed.filter(p => micros(p.unit_amount) <= micros(current.unit_amount))
+  const basis = await fingerprint({ source: row.source, day, current, targets, allowed, policy })
+  return { subscription, source: row.source as string, sourceData: source, day, item: active[0], current, targets, allowed, policy, basis }
 }
 
 const projection = (row: Row) => ({ id: row.id, subscription: row.subscription_id, item: row.item_id, targetPrice: row.target_price_id, quantity: row.quantity, targetName: row.target_label, unitAmount: row.unit_amount, currency: row.currency, status: 'pending', requestedOn: row.requested_on, belowContractMinimum: !!row.below_minimum })
