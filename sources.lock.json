@@ -3830,7 +3830,7 @@
       "executable": false
     },
     "src/nectar/portal-invoice-payment.ts": {
-      "sha256": "3f1cb0f15978be428eb3a568a67a6dcb1f5a7fdcbdb17d6af21b80885518b03e",
+      "sha256": "d4e0ff6ec035dea715993109b51bda5dbf01003de359e469bf3316379f581f39",
       "executable": false
     },
     "src/nectar/portal-method-actions-page.ts": {
@@ -5318,7 +5318,7 @@
       "executable": false
     },
     "tests/nectar/portal-billing.mjs": {
-      "sha256": "271468a757c0f51cb76d7e1064df97cd901abf5c192a8210a00f7fe9652feb0b",
+      "sha256": "88f2ef8672efb3a1d8472fa4bb8a1f314f10d9475e5b9f1ff4d22fd8f687b69e",
       "executable": false
     },
     "tests/nectar/portal-corrections.mjs": {
@@ -5342,7 +5342,7 @@
       "executable": false
     },
     "tests/nectar/portal-payment-edge.mjs": {
-      "sha256": "c2bde94625ce41225fcca3c36c1d9f4d8b82815dec750caedc9f0d1629e51677",
+      "sha256": "0859fbdd04e4cea71d40f775e20bd8657b93be5276daf55ce1741657407fc3aa",
       "executable": false
     },
     "tests/nectar/portal-prepaid-browser.mjs": {

@@ -7,7 +7,7 @@ import { localDate } from './dates'
 import type { Input } from './input'
 import { customerText } from './locale'
 import { nativeCollectionSource, nativeSourceGuard } from './payments/source'
-import { capturedPayment, providerReference, stripeForAccount, type PaymentIdentity, type StripeClient } from './payments/stripe'
+import { capturedPayment, providerReference, verifyIntent, stripeForAccount, type PaymentIdentity, type StripeClient } from './payments/stripe'
 import { portalProfileFence, requirePortalProfileSession } from './portal-profile-authority'
 import type { CustomerSession } from './portal-session'
 import { collectedPaymentStatements, issuedInvoice } from './receivables'
@@ -118,7 +118,9 @@ export async function reconcilePortalInvoicePayment(env: Bindings, session: Cust
   const identity:PaymentIdentity={accountRef:row.account_ref,customerRef:row.customer_ref,paymentMethodRef:providerReference(intent.payment_method),livemode:false,
     invoiceId:row.invoice_id,requestId:row.id,key:row.id,amountCents:row.amount_cents,currency:'USD'}
   const method=await stripe(`/payment_methods/${encodeURIComponent(identity.paymentMethodRef)}`)
-  insist(method.type==='us_bank_account'&&method.livemode===false&&providerReference(method.customer)===row.customer_ref,'portal_ach_method_mismatch',409)
+  insist(method.object==='payment_method'&&method.id===identity.paymentMethodRef&&method.type==='us_bank_account'&&method.livemode===false
+    &&(method.customer===null||providerReference(method.customer)===row.customer_ref),'portal_ach_method_mismatch',409)
+  verifyIntent(intent,identity)
   // Processing is never represented as cash or a paid invoice.
   if(intent.status==='processing')return {id,status:(await outcome(env,session,row,{session_ref:sessionRef,intent_ref:intentRef,status:'pending'})).status}
   const business=await requireBusiness(env),proof=await capturedPayment(stripe,intent,identity,business.timezone)

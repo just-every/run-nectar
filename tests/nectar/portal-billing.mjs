@@ -129,6 +129,9 @@ export async function portalBillingFlow(h,owner,hooks={}) {
   assert.equal((await json('/portal/data')).invoices[0].balance_cents,17500,'A mismatched provider amount changes no financial facts')
   checkout.amount_total=originalAmount
   edge.complete()
+  edge.bankMethod.customer='synthetic-nectar-foreign-customer'
+  await json('/portal/pay/reconcile',{body:{payment:started.id}},409)
+  edge.bankMethod.customer=null
   assert.equal((await json('/portal/pay/reconcile',{body:{payment:started.id}})).status,'pending')
   assert.deepEqual([...(await json('/portal/data')).invoices.map(row=>row.balance_cents)],[17500],'Processing ACH never becomes paid cash')
   await hooks.state?.({name:'payment-pending',path:path(`/portal/invoices/${invoice}`),session,customer,invoice})

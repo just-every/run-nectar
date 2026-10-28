@@ -4,6 +4,7 @@ export function portalPaymentEdge() {
   const sessions=new Map(),calls=[]
   let lost=false,settled=false,processing=false
   const account='synthetic-nectar-account',customer='synthetic-nectar-customer',method='synthetic-nectar-method'
+  const bankMethod={object:'payment_method',id:method,type:'us_bank_account',customer:null,livemode:false,us_bank_account:{last4:'6789'}}
   const fetch=async request=>{
     const url=new URL(request.url),path=url.pathname.slice(3),post=request.method==='POST'
     assert.equal(request.headers.get('authorization'),'Bearer synthetic-nectar-1')
@@ -30,7 +31,7 @@ export function portalPaymentEdge() {
     if(checkout)return Response.json(checkout)
     const row=[...sessions.values()].find(row=>path.endsWith('/'+row.payment_intent)||url.searchParams.get('payment_intent')===row.payment_intent
       ||path.endsWith('/'+row.payment_intent+'-charge')||path.endsWith('/'+row.payment_intent+'-balance'))
-    if(path===`/payment_methods/${method}`)return Response.json({object:'payment_method',id:method,type:'us_bank_account',customer,livemode:false,us_bank_account:{last4:'6789'}})
+    if(path===`/payment_methods/${method}`)return Response.json(bankMethod)
     if(row) {
       const charge={object:'charge',id:row.payment_intent+'-charge',customer,livemode:false,currency:'usd',payment_intent:row.payment_intent,payment_method:method,
         status:'succeeded',paid:true,captured:true,amount:row.amount_total,amount_captured:row.amount_total,amount_refunded:0,refunded:false,disputed:false,created:1793178000,balance_transaction:row.payment_intent+'-balance'}
@@ -43,5 +44,5 @@ export function portalPaymentEdge() {
     }
     assert.fail(`Unexpected Stripe operation ${request.method} ${path}`)
   }
-  return {fetch,calls,account,customer,sessions,lose:()=>{lost=true},complete:()=>{for(const row of sessions.values()){row.status='complete';row.payment_status='paid'}processing=true},settle:()=>{processing=false;settled=true}}
+  return {fetch,calls,account,customer,sessions,bankMethod,lose:()=>{lost=true},complete:()=>{for(const row of sessions.values()){row.status='complete';row.payment_status='paid'}processing=true},settle:()=>{processing=false;settled=true}}
 }
