@@ -132,6 +132,17 @@ export async function remittanceFilesFlow(h, owner) {
   const exported=csvRows(await csv.text());assert.equal(exported.find(row=>row.source==='TOTAL').amount,'681.06')
   assert.equal(exported.filter(row=>row.source!=='TOTAL').reduce((sum,row)=>sum+Math.round(Number(row.amount)*100),0),68106)
   const ar=await api(`./reports/ar?customer=${customer}`);assert.equal(ar.totalCents,4900)
+  const fullList=await api('remittances'),seen=[]
+  let page=await api('remittances?limit=2')
+  for(let count=0;;count++){
+    assert.ok(count<10,'Receipt pagination terminates')
+    seen.push(...page.data.map(row=>row.id))
+    if(!page.next_cursor)break
+    page=await api(`remittances?limit=2&cursor=${encodeURIComponent(page.next_cursor)}`)
+  }
+  assert.deepEqual(new Set(seen),new Set([wire,short,unknown,stale,ambiguous]),'Every staged and confirmed source remains reachable through paged receipt review')
+  assert.equal(seen.length,5,'No source repeats across pages')
+  assert.deepEqual(seen,fullList.map(row=>row.id),'Cursor pages preserve receipt order')
   await remittanceScreens(h,owner,{customer,invoice:invoices[4],rows})
   const erasedRequest=await api('erasure.request',{customer})
   await api('erasure.verify',{request:erasedRequest.id,reason:'Independent customer identity confirmed',evidence:file('synthetic-nectar-919.txt','Synthetic signed verification')})
