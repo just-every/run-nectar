@@ -562,6 +562,7 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "confirm": "flag",
     "destination": "text",
     "invoice": "text",
+    "proposal": "text",
     "reason": "text",
     "refund": "text"
   },
@@ -570,6 +571,7 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "basis": "text",
     "destination": "text",
     "invoice": "text",
+    "proposal": "text",
     "reason": "text"
   },
   "invoice.refund.preview": {
