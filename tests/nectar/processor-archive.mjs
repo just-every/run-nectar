@@ -182,7 +182,7 @@ export async function processorArchiveJourney() {
     await worker.signIn('synthetic-nectar-archive-finance@example.test',{requested:true})
     return {...result,financeEmail:'synthetic-nectar-archive-finance@example.test'}
    }})
-  if(!only||only==='remittances')await additionalArchivePhase(root,scratch,{label:'remittances',persistence,databaseId,edge:processorCashEdge(),requiredKinds:remittanceKinds,localTime:'2026-10-28T10:00:00Z',
+  if(only==='remittances')await additionalArchivePhase(root,scratch,{label:'remittances',persistence,databaseId,edge:processorCashEdge(),requiredKinds:remittanceKinds,localTime:'2026-10-28T10:00:00Z',
    async populate(worker,who){
     const api=(path,body,status)=>worker.api(path,who,body,status)
     const {customer,issue}=await remittanceFixtures(worker,who),invoice=await issue('10.00')

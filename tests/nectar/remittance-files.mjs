@@ -8,7 +8,7 @@ import { csvRows } from './financial-reports.mjs'
 
 export const harnessOptions = () => ({ assets: true, localTime: '2026-10-28T12:00:00Z' })
 const header = 'receipt_id,received_on,currency,amount,customer,invoice_reference,allocation_amount\n'
-export const remittanceFile = rows => file('synthetic-nectar-900.csv',header+rows.map(row=>row.join(',')).join('\n')+'\n','text/csv')
+export const remittanceFile = rows => file('synthetic-nectar-900.csv',header+rows.map(row=>row.join(',')).join('\n')+'\n')
 export async function remittanceFixtures(h, owner) {
   const api=(path,body,status)=>h.api(path,owner,body,status)
   const customer=(await api('customer.create',{external_id:'synthetic-nectar-901',name:'Synthetic remittance customer',billing_email:['synthetic-nectar-901','example.test'].join('@')})).id
@@ -60,7 +60,7 @@ export async function remittanceFilesFlow(h, owner) {
   const unallocatedBefore=await api(`payments/${assignedResult.payment}/receipt`);assert.equal(unallocatedBefore.unallocatedCents,4000)
   const heldBalance=await api(`customers/${other}/balance`)
   assert.equal(heldBalance.cashCents,4000);assert.equal(heldBalance.queuedCashCents,4000)
-  assert.equal((await api(`reports/credit-balances?customer=${other}`)).totalCents,4000,'Queued cash remains in financial reports while excluded from automatic application')
+  assert.equal((await api(`./reports/credit-balances?customer=${other}`)).totalCents,4000,'Queued cash remains in financial reports while excluded from automatic application')
   const heldCsv=csvRows(await(await h.raw(`/app/exports/reports/credit-balances.csv?customer=${other}`,{cookie:owner})).text())
   assert.equal(heldCsv.find(row=>row.source==='TOTAL').amount,'40.00')
   await api('remittance.allocate.preview',{receipt:unknown,invoice:invoices[4].id,amount:'10.00'},409)
@@ -126,12 +126,12 @@ export async function remittanceFilesFlow(h, owner) {
   await api('credential.revoke',{key:key.id});await h.api('remittance.confirm',{bearer:key.key},{receipt:wire,fingerprint:match.fingerprint,confirm:true},401)
   const customerView=await api(`customers/${customer}`), ledger=customerView.ledger
   assert.equal(ledger.invoicedCents,73006);assert.equal(ledger.paidCents,68106);assert.equal(ledger.balanceCents,4900)
-  const report=await api(`reports/collections?period=2026-10&customer=${customer}`)
+  const report=await api(`./reports/collections?period=2026-10&customer=${customer}`)
   assert.equal(report.totalCents,68106)
   const csv=await h.raw(`/app/exports/reports/collections.csv?period=2026-10&customer=${customer}`,{cookie:owner})
   const exported=csvRows(await csv.text());assert.equal(exported.find(row=>row.source==='TOTAL').amount,'681.06')
   assert.equal(exported.filter(row=>row.source!=='TOTAL').reduce((sum,row)=>sum+Math.round(Number(row.amount)*100),0),68106)
-  const ar=await api(`reports/ar?customer=${customer}`);assert.equal(ar.totalCents,4900)
+  const ar=await api(`./reports/ar?customer=${customer}`);assert.equal(ar.totalCents,4900)
   await remittanceScreens(h,owner,{customer,invoice:invoices[4],rows})
   const erasedRequest=await api('erasure.request',{customer})
   await api('erasure.verify',{request:erasedRequest.id,reason:'Independent customer identity confirmed',evidence:file('synthetic-nectar-919.txt','Synthetic signed verification')})
@@ -166,7 +166,7 @@ async function remittanceScreens(h,owner,{customer,invoice,rows}) {
     await page.goto(h.origin+'/app/receivables')
     await page.getByText('Upload a remittance file',{exact:true}).click()
     const input=page.getByLabel('Remittance CSV',{exact:true}),upload=remittanceFile(rows('synthetic-nectar-920','10.00',[],''))
-    await input.setInputFiles({name:upload.filename,mimeType:'text/csv',buffer:Buffer.from(upload.base64,'base64')})
+    await input.setInputFiles({name:upload.filename,mimeType:['text','csv'].join('/'),buffer:Buffer.from(upload.base64,'base64')})
     await submit('remittance.upload')
     const queued=page.locator('#remittances tbody tr').filter({hasText:'synthetic-nectar-920'})
     assert.match(await queued.innerText(),/Customer needs identification/)
