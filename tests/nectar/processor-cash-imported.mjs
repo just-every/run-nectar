@@ -167,7 +167,7 @@ export async function processorCashImportedFlow(h,owner,{cashEdge=edge,keepFinan
   assert.equal(report.entries.reduce((sum,row)=>sum+row.amountCents,0),total)
   for(const entry of report.entries){const detail=await api(entry.href.replace('/app/',''));assert.equal(detail.components.reduce((sum,row)=>sum+row.amountCents,0),entry.amountCents)}
   const csv=csvRows(await(await h.raw(`/app/exports/reports/${metric}.csv?period=2026-10&customer=${customer}`,{cookie:owner})).text())
-  assert.equal(csv.find(row=>row.source==='TOTAL').amount,(total/100).toFixed(2))
+  assert.equal(csv.find(row=>row.source==='TOTAL').amount,`${total<0?"'":''}${(total/100).toFixed(2)}`)
  }
  await onState({customer,label:'imported-cash-refunded'})
  await api('report.schedule',{enabled:true,day:1})
