@@ -1,6 +1,4 @@
-# Nectar implementation claims
-
-Generated from [CONTRACT.md](../CONTRACT.md). A partial or missing clause retains the work named in its Gap.
+Generated from [CONTRACT.md](https://github.com/just-every/run-nectar/blob/main/CONTRACT.md). A partial or missing clause retains the work named in its Gap.
 Status: **130 clauses: 60 done, 39 partial, 31 missing.**
 
 | Clause | Title | Status | Present proof | Gap |

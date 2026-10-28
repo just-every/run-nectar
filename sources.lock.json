@@ -230,7 +230,7 @@
       "executable": false
     },
     "docs/CLAIMS.md": {
-      "sha256": "75a93e059c28b06877ef863be8bceb20f88650b7955f689d0cbb8f63eac81f75",
+      "sha256": "f7e7ce6b4668281acabfe5a1d0be5e00174403bb318658533c46fe6b3aae52f6",
       "executable": false
     },
     "docs/composition-baseline.json": {
@@ -998,7 +998,7 @@
       "executable": false
     },
     "scripts/contract-docs.mjs": {
-      "sha256": "8f61a47762c63b09db796632367bd00d4e41fa718fb923db450df35cd08a2ad3",
+      "sha256": "87a3bbbb3add95cadbd6453010ab20e45ac54d6af019c49d4dfd16b3514ebd6e",
       "executable": false
     },
     "scripts/delivery/base/artifact.mjs": {
