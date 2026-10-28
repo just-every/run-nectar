@@ -174,7 +174,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "454e272da80798c1412f1f5c493c6bc8f2e6330053c1db87f202f72ffb5860a9",
+      "sha256": "0eedbd82c56b96c5c6b0d7f7b59db02719727bb55ae9a275b886fb24998bbf9b",
       "executable": false
     },
     "AGENTS.consumer.md": {
@@ -194,7 +194,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "97a63cb02ca881a12fc3e6646af381b94ca106f2079f3611d43a3eb48740edc3",
+      "sha256": "35c611fa6686274c7e934f222ed54244bd2a0d1c3f043222a9b5facf00e3b672",
       "executable": false
     },
     "DEMO.md": {
@@ -230,7 +230,7 @@
       "executable": false
     },
     "docs/CLAIMS.md": {
-      "sha256": "2d41c944e7d9f565ee6feb7b559999d7521c4b551afe6c90215052c9edb7f6ed",
+      "sha256": "da3851a37ca5e57208bc017cb016c6280a4f8e44b1117d4071d7cc934a575c91",
       "executable": false
     },
     "docs/composition-baseline.json": {
@@ -4634,7 +4634,7 @@
       "executable": false
     },
     "src/nectar/ui/reports.ts": {
-      "sha256": "4c2fbd08c91f1923c2fda214701fd042f7e467570cfe6cc6a4128c7759e21a9d",
+      "sha256": "04f3834c1a050cb54304175d1891988b3b70e845c1b14ae843641e3edbdf45e8",
       "executable": false
     },
     "src/nectar/ui/retention.ts": {
@@ -4922,7 +4922,7 @@
       "executable": false
     },
     "tests/fixtures/locales/fr.json": {
-      "sha256": "5d32ad97da0dd614fdce3988047f990a81835dfd8b5df82d3a225807f6e3e70a",
+      "sha256": "264b9a4959cc87b4f1d5136db8898220ee8aec4d3dfdea4e02bf69064985d7f5",
       "executable": false
     },
     "tests/fixtures/stripe-collection-edge.mjs": {
