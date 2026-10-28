@@ -282,7 +282,7 @@
       "executable": false
     },
     "docs/site.json": {
-      "sha256": "e08e29859889ffc49efb652444feadcc76f0db8ce2e027db9ca092062e8443f5",
+      "sha256": "f957417ca5955a6cb92b03fa047d739e8e1aedc756fd89551fb8148175c54c55",
       "executable": false
     },
     "docs/usage.md": {
@@ -3466,7 +3466,7 @@
       "executable": false
     },
     "src/nectar/invoice-pdf.ts": {
-      "sha256": "a6d57175c6a2daa52995dccacea059ce46a43b014dbb72675b560e90b7ce273c",
+      "sha256": "790cbf3874d7573c7651a4f38df43f569f897c75162f3f2307d385f28596d5a6",
       "executable": false
     },
     "src/nectar/invoice-refund-preview.ts": {
