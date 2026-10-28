@@ -14,7 +14,7 @@ function requireNoteAuthor(actor: Actor) {
   insist(actor.kind === 'member', 'person_required', 403)
 }
 
-const NOTE_FAMILIES: Record<string, RecordFamily> = { customer: 'customers', invoice: 'invoices', payment: 'payments' }
+const NOTE_FAMILIES: Record<string, RecordFamily> = Object.assign(Object.create(null), { customer: 'customers', invoice: 'invoices', payment: 'payments' })
 const requireNoteRead = (actor: Actor, kind: string) => { insist(kind in NOTE_FAMILIES, 'invalid_note_kind'); requireRead(actor, NOTE_FAMILIES[kind]) }
 
 // GOV-001: a mention is permitted only for an active member who can read the

@@ -31,7 +31,7 @@ export function validateBillingTerms(terms: BillingTerms): BillingTerms {
 export function readBillingTerms(input: Input, kind?: string): BillingTerms {
   const aliases: Record<string, [BillingTerms['unit'], number]> = { day: ['day', 1], daily: ['day', 1], week: ['week', 1], weekly: ['week', 1], month: ['month', 1], monthly: ['month', 1], quarter: ['month', 3], quarterly: ['month', 3], semiannual: ['month', 6], semiannually: ['month', 6], year: ['month', 12], annual: ['month', 12], annually: ['month', 12] }
   const name = input.text(input.has('interval_unit') ? 'interval_unit' : 'billing_interval', { max: 20, optional: true }) || 'month'
-  const value = aliases[name]; insist(value, 'invalid_billing_interval')
+  const value = Object.hasOwn(aliases, name) ? aliases[name] : undefined; insist(value, 'invalid_billing_interval')
   const count = (input.integer('interval_count', { min: 1, max: 1200, optional: true }) ?? 1) * value[1]
   const timing = input.text('billing_timing', { max: 10, optional: true }) || 'arrears'
   insist(timing === 'advance' || timing === 'arrears', 'invalid_billing_timing')

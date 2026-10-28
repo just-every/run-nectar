@@ -124,7 +124,7 @@ export async function issueKey(env: Bindings, actor: Actor, input: Input) {
   await requireFreshFactor(env, actor)
   const name = input.text('name', { max: 80 })
   const scopes = input.list('scopes')
-  insist(scopes.length > 0 && scopes.every(scope => scope in SCOPES), 'invalid_scopes')
+  insist(scopes.length > 0 && scopes.every(scope => Object.hasOwn(SCOPES, scope)), 'invalid_scopes')
   const version = checkVersion(input.text('api_version', { optional: true, max: 20 }) || LATEST_VERSION)
   const key = `nectar_${base64url(crypto.getRandomValues(new Uint8Array(32)))}`
   const id = newId()
