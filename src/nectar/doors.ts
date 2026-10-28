@@ -3,6 +3,7 @@
 // each role, so a new door cannot be added without being checked.
 // Patterns are relative to /api/nectar/ (API) or absolute (pages).
 export const API_DOORS: [string, string][] = [
+  ['^portal-changes$', 'portalChanges'],
   ['^processor-events$','processorEvents'],
   ['^assurance-cases$','assuranceCases'],
   ['^assurance-cases/([\\w-]+)$','assuranceCase'],
@@ -58,6 +59,7 @@ export const API_DOORS: [string, string][] = [
 export const LIST_DOORS = ['paymentLinks','automaticCollections','assuranceCases','assuranceRuns','currencyRates','trialCollections','prepaidRefunds','prepaidTopupAuthorizations','prepaidTopupClaims','nativeCollections', 'usageCorrections', 'erasures', 'noteMembers', 'customers', 'batches', 'runs', 'payments', 'notices', 'tasks', 'policies', 'proposals', 'imports', 'shadow', 'members', 'roles', 'credentials', 'audit', 'metadataObjects', 'notes']
 
 export const PAGE_DOORS: [string, string][] = [
+  ['^/app/settings/portal-changes$', 'portalChanges'],
   ['^/app/processor-events$','processorEvents'],
   ['^/app/payments/([\\w-]+)/receipt$','paymentReceipt'],
   ['^/app/reports/currency$','currencyReport'],

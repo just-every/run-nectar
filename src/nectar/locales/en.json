@@ -432,5 +432,21 @@
   "dunning.invoice_only": "Please arrange payment using the instructions on your invoice. Your service remains active.",
   "dunning.update": "Update your payment method: {link}",
   "dunning.update_label": "Update payment method",
-  "dunning.note": "This link expires within fifteen minutes. Saving a card does not authorize a payment."
+  "dunning.note": "This link expires within fifteen minutes. Saving a card does not authorize a payment.",
+  "portal.change.heading": "Plan change requests",
+  "portal.change.pendingOnly": "Request a downgrade for merchant review. Your plan, invoices and payments stay unchanged until a person uses the separate approved change process.",
+  "portal.change.subscription": "Subscription {number}",
+  "portal.change.current": "Current plan and unit price",
+  "portal.change.seats": "Seats",
+  "portal.change.minimum": "Minimum seats",
+  "portal.change.target": "Requested plan and unit price",
+  "portal.change.submit": "Request downgrade review",
+  "portal.change.unavailable": "No approved plan choices are available for a request.",
+  "portal.change.requests": "Your requests",
+  "portal.change.pending": "Pending merchant review",
+  "portal.change.date": "Requested on",
+  "portal.change.contractMinimum": "This is below your signed minimum. A person must review it; your approved terms remain in force.",
+  "portal.change.review": "A person must review this request before any change.",
+  "portal.change.stale": "The subscription or merchant policy has changed since this request. It grants no authority to apply the old choice.",
+  "portal.change.empty": "No requests yet."
 }

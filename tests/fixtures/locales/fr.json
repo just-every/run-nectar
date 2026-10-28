@@ -432,5 +432,21 @@
   "dunning.invoice_only": "Veuillez payer selon les instructions de votre facture. Votre service reste actif.",
   "dunning.update": "Mettez à jour votre moyen de paiement : {link}",
   "dunning.update_label": "Mettre à jour le moyen de paiement",
-  "dunning.note": "Ce lien expire dans quinze minutes au plus. Enregistrer une carte n’autorise pas un paiement."
+  "dunning.note": "Ce lien expire dans quinze minutes au plus. Enregistrer une carte n’autorise pas un paiement.",
+  "portal.change.heading": "Demandes de changement de forfait",
+  "portal.change.pendingOnly": "Demandez un forfait inférieur pour examen par le marchand. Votre forfait, vos factures et vos paiements restent inchangés avant une décision dans le processus approuvé.",
+  "portal.change.subscription": "Abonnement {number}",
+  "portal.change.current": "Forfait et prix unitaire actuels",
+  "portal.change.seats": "Places",
+  "portal.change.minimum": "Nombre minimum de places",
+  "portal.change.target": "Forfait et prix unitaire demandés",
+  "portal.change.submit": "Demander un examen",
+  "portal.change.unavailable": "Aucun forfait approuvé ne peut être demandé.",
+  "portal.change.requests": "Vos demandes",
+  "portal.change.pending": "En attente du marchand",
+  "portal.change.date": "Date de la demande",
+  "portal.change.contractMinimum": "Ce changement est inférieur au minimum signé. Une personne doit l’examiner ; vos conditions approuvées restent en vigueur.",
+  "portal.change.review": "Une personne doit examiner cette demande avant tout changement.",
+  "portal.change.stale": "L’abonnement ou la politique du marchand a changé depuis cette demande. Elle ne permet pas d’appliquer l’ancien choix.",
+  "portal.change.empty": "Aucune demande pour le moment."
 }
