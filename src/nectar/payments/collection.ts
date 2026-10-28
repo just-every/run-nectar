@@ -1,7 +1,7 @@
 import { unusableMethodGuard } from '../card-lifecycle'
 import { refusedPaymentWithLifecycle } from './refusal'
 // Explicit manual collection only. A durable invoice claim precedes the one
-// off-session confirmation; all recovery reads Stripe without another POST.
+// off-session confirmation. Uncertain outcomes are reconciled by reads only.
 import type { Bindings } from '../../auth.server'
 import { actorLabel, requireOwner, type Actor } from '../actor'
 import { requireBusiness } from '../business'
@@ -47,7 +47,7 @@ export async function prepareNativeCollection(env: Bindings, actor: Actor, input
   return nativeCollectionView(await storedNativeCollection(env, id))
 }
 
-async function changeOutcome(env: Bindings, actor: Actor, row: Row, values: Row, action: string) {
+export async function changeOutcome(env: Bindings, actor: Actor, row: Row, values: Row, action: string) {
   const entries = Object.entries({ ...values, revision: newId(), reconciled_at: clockInstant(env) })
   await commit(env, [collectionAuthority(env, actor),
     guard(env, 'native_collection_state_changed', "EXISTS(SELECT 1 FROM nc_native_collections WHERE id=? AND revision=? AND status IN ('claimed','uncertain'))", row.id, row.revision),
@@ -81,7 +81,7 @@ async function recordCaptured(env: Bindings, actor: Actor, row: Row, proof: Capt
   return nativeCollectionView(await storedNativeCollection(env, held.id))
 }
 
-async function recordIntentOutcome(env: Bindings, actor: Actor, row: Row, stripe: Awaited<ReturnType<typeof stripeForAccount>>['stripe'], intent: Row, identity: ReturnType<typeof paymentIdentity>) {
+export async function recordIntentOutcome(env: Bindings, actor: Actor, row: Row, stripe: Awaited<ReturnType<typeof stripeForAccount>>['stripe'], intent: Row, identity: ReturnType<typeof paymentIdentity>) {
   const intentRef = verifyIntent(intent, identity)
   const current = await changeOutcome(env, actor, row, { payment_intent_ref: intentRef }, 'intent.record')
   const refusal = await refusedPaymentWithLifecycle(env,stripe, intent, identity)

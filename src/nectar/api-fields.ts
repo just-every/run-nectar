@@ -260,6 +260,11 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
   "collection.prepare": {
     "invoice": "text"
   },
+  "collection.recovery.prepare": { "request": "text" },
+  "collection.recovery.confirm": {
+    "request": "text", "recovery": "text", "basis_hash": "text", "confirm": "flag", "amount_cents": "integer",
+    "account_ref": "text", "stripe_customer_ref": "text", "payment_method_ref": "text"
+  },
   "collection.reconcile": {
     "request": "text"
   },

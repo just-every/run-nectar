@@ -21,12 +21,23 @@ export interface RecoveryBucket extends RecoveryTotals { key: string; currency: 
 const definition = 'Each invoice enters once, at its first recorded failed attempt and for that failed amount. Recovery is actual payment allocations made after that failure, capped at the failed amount. A recovered invoice has its full failed amount allocated; partial recoveries contribute money but not a fully recovered invoice. Credits, pending charges and uncertain outcomes are not recovered cash. Rates use fully recovered invoices divided by failed invoices.'
 
 // One statement gives the cohort, attempts and immutable allocations one read snapshot.
-const sourceSql = `WITH attempts AS (
+const sourceSql = `WITH native_attempts AS (
+ SELECT id,invoice_id,customer_id,1,reconciled_at,'failed',COALESCE(json_extract(proof_json,'$.declineCode'),error_code),amount_cents,NULL,NULL
+ FROM nc_native_collections n WHERE status IN ('declined','customer_action_required') AND reconciled_at IS NOT NULL
+ AND NOT EXISTS(SELECT 1 FROM nc_native_reconfirmations r WHERE r.collection_id=n.id AND r.claimed_at IS NOT NULL)
+ UNION ALL
+ SELECT collection_id,invoice_id,customer_id,1,first_failed_at,'failed',COALESCE(json_extract(failure_json,'$.declineCode'),json_extract(failure_json,'$.errorCode')),amount_cents,NULL,NULL
+ FROM nc_native_reconfirmations WHERE claimed_at IS NOT NULL
+ UNION ALL
+ SELECT n.id,n.invoice_id,n.customer_id,2,n.reconciled_at,CASE WHEN n.status='collected' THEN 'collected' ELSE 'failed' END,
+ COALESCE(json_extract(n.proof_json,'$.declineCode'),n.error_code),n.amount_cents,n.payment_id,NULL
+ FROM nc_native_collections n JOIN nc_native_reconfirmations r ON r.collection_id=n.id AND r.claimed_at IS NOT NULL
+ WHERE n.status IN ('collected','declined','customer_action_required')
+
+), attempts AS (
  SELECT collection_id,invoice_id,customer_id,attempt,attempted_at,outcome,decline_code,amount_cents,payment_id,dunning_step FROM nc_retry_attempts
  UNION ALL
- SELECT id,invoice_id,customer_id,1,reconciled_at,'failed',COALESCE(json_extract(proof_json,'$.declineCode'),error_code),amount_cents,NULL,NULL
- FROM nc_native_collections WHERE status IN ('declined','customer_action_required') AND reconciled_at IS NOT NULL
- UNION ALL
+ SELECT * FROM native_attempts UNION ALL
  SELECT id,invoice_id,customer_id,1,attempted_at,'failed',decline_code,amount_cents,NULL,NULL FROM nc_processor_failures
  UNION ALL
  SELECT e.object_ref,e.invoice_id,e.customer_id,1,e.occurred_at,'collected',NULL,p.amount_cents,p.id,NULL FROM nc_processor_events e JOIN nc_payments p ON p.reference='stripe:'||e.account_ref||':'||e.object_ref AND p.customer_id=e.customer_id
