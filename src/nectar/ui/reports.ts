@@ -1,11 +1,11 @@
-import { normalizedSourceBody } from './normalized'
+import { normalizedSourceBody, saasBody } from './normalized'
 import type { ReportCurrencyEvidence } from '../currency-report-translation'
 // The existing table/card language, with every total leading to its sources.
 import type { Bindings } from '../../auth.server'
 import { canRead, can, type Actor } from '../actor'
 import { report, reportInvoice } from '../reports'
 import { reportLine } from '../report-lines'
-import { cents, details, h, hidden, page, table } from './html'
+import { cents, details, h, hidden, page, select, table } from './html'
 import { quantityText } from '../decimal'
 import { linePricing } from './pricing'
 
@@ -27,9 +27,10 @@ export async function reportPage(env: Bindings, actor: Actor, metric: string, ur
   return page(r.title, actor, h`${tabs(url.search, actor)}<h1>${r.title}</h1><p class="lede">${r.period}</p>
     ${can(actor,'export') ? h`<p><a href="/app/exports/reports/${metric}.csv${url.search}">Download CSV</a> · ${actor.kind==='member'?h`<a href="/app/report-schedule">Your monthly email schedule</a>`:''}</p>` : ''}
     <section class="card"><h2>Report basis</h2><p>${r.definition}</p>${translated?h`<p>Reporting currency: USD. Original transactions use their recorded daily source and rate, with one conversion per transaction.</p>`:''}
-      ${!['ar','credit-balances'].includes(metric) ? h`<form method="get">${url.searchParams.has('customer') ? hidden('customer', url.searchParams.get('customer')) : ''}<label>Month <input type="month" name="period" value="${r.period}" required></label><button type="submit">Show month</button></form>` : ''}
+      ${!['ar','credit-balances'].includes(metric) ? h`<form method="get">${url.searchParams.has('customer')?hidden('customer',url.searchParams.get('customer')):''}<label>Month <input type="month" name="period" value="${r.period}" required></label>${r.filterOptions ? h`${select('Plan price','plan',r.filterOptions.plans,r.filters?.plan ?? '',{required:false,blank:'All plan prices'})}${canRead(actor,'customers')?select('Customer segment','segment',r.filterOptions.segments,r.filters?.segment ?? '',{required:false,blank:'All segments'}):''}${select('Billing entity','entity',r.filterOptions.entities,r.filters?.entity ?? '',{required:false,blank:'All entities'})}`:''}<button type="submit">Show month</button></form>` : ''}
       <p><a href="#contributions">Total ${cents(r.totalCents)}</a></p></section>
-    ${r.series?.length?h`<section class="card"><h2>Recurring revenue history</h2>${table(['Month',normalized?r.title+'$':'Recurring revenue$',normalized?'Source subscriptions':'Source invoices'],r.series.map(month=>[h`<a href="/app/reports/${metric}?period=${month.period}${url.searchParams.has('customer')?`&customer=${url.searchParams.get('customer')}`:''}">${month.period}</a>`,cents(month.amountCents),month.sourceCount]))}</section>`:''}
+    ${r.saas ? saasBody(r.saas) : ''}
+    ${r.series?.length?h`<section class="card"><h2>Recurring revenue history</h2>${table(['Month',normalized?r.title+'$':'Recurring revenue$',normalized?'Source subscriptions':'Source invoices'],r.series.map(month=>[h`<a href="/app/reports/${metric}?period=${month.period}${r.filters?Object.entries(r.filters).filter(([,value])=>value!==null).map(([key,value])=>`&${key}=${encodeURIComponent(value!)}`).join(''):url.searchParams.has('customer')?`&customer=${url.searchParams.get('customer')}`:''}">${month.period}</a>`,cents(month.amountCents),month.sourceCount]))}</section>`:''}
     <section class="card" id="contributions"><h2>Contributing ${normalized ? 'subscriptions' : metric === 'settlements' ? 'processor settlements' : metric === 'refunds' ? 'cash refunds' : metric === 'collections' ? 'payments' : metric === 'unbilled' ? 'subscription periods' : metric==='credit-balances'?'credit notes and prepaid lots':metric==='credits'?'credit notes':'invoices'}</h2>
       ${table([normalized ? 'Subscription' : metric === 'settlements' ? 'Processor transaction' : metric === 'refunds' ? 'Cash refund' : metric === 'collections' ? 'Payment' : metric === 'unbilled' ? 'Subscription period' : metric==='credit-balances'?'Credit source':metric==='credits'?'Credit note':'Invoice', 'Customer', 'Contribution$',...(translated?['Original and daily rate']:[])], r.entries.map(e => [h`<a href="${e.href}">${e.sourceProvider?`${e.sourceProvider} · `:''}${e.number}</a>`, canRead(actor,'customers') ? h`<a href="/app/customers/${e.customerId}">${e.customerName}</a>` : e.customerName, h`<a href="${e.href}">${cents(e.amountCents)}</a>`,...(translated?[valuation(e)]:[])]), { empty: metric === 'collections' ? 'No recorded payments contribute to this figure.' : 'No source records contribute to this figure.' })}
       <p>Sum of contributions: ${cents(r.totalCents)}.</p></section>`, { current: '/app/billing', url })

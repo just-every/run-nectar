@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { file } from './harness.mjs'
 import { stripeHistoryCapture } from '../fixtures/stripe-history.mjs'
+import { capturedAnalytics, nativeSaasHistory } from './saas-history.mjs'
 import { discountedCaptureFlow } from './normalized-discount-capture.mjs'
 import { csvRows } from './financial-reports.mjs'
 
@@ -59,6 +60,7 @@ export async function normalizedMetricsFlow(h, owner, onState = async () => {}) 
     for (const [metric, value] of [['normalized-mrr', cents], ['normalized-arr', cents * 12]]) {
       const report = await api(`reports/${metric}?period=${month}&customer=${customer}`)
       assert.equal(report.totalCents, value, `${metric} ${month}: independent captured terms`)
+      capturedAnalytics(report, expected.slice(0,index+1))
       assert.equal(report.entries.length, 2,'Ended source subscriptions remain in the historical report')
       for(const entry of report.entries) {
         const source = await api(entry.href.replace('/app/', ''))
@@ -80,6 +82,7 @@ export async function normalizedMetricsFlow(h, owner, onState = async () => {}) 
   for (const [metric, amount] of [['normalized-mrr',23000],['normalized-arr',276000]]) {
     const report = await api(`reports/${metric}?period=2026-07&customer=${customer}`)
     assert.equal(report.totalCents, amount)
+    capturedAnalytics(report,[...expected,23000])
     assert.deepEqual(report.series.map(row=>row.amountCents), [...expected,23000].map(value=>metric==='normalized-mrr'?value:value*12), 'Adoption preserves all source months and continues with native terms')
     const source = await api(report.entries[0].href.replace('/app/', ''))
     assert.equal(source.sourceProvider, 'nectar')
@@ -133,5 +136,6 @@ export async function normalizedMetricsFlow(h, owner, onState = async () => {}) 
   const anonymous = await api('reports/normalized-mrr?period=2026-07')
   assert.equal(anonymous.entries.some(row=>row.customerId===customer),false,'Erasure and replay cannot expose retained contract operands')
   await discountedCaptureFlow(h, owner, onState)
+  await nativeSaasHistory(h, owner, onState)
   console.log('Normalized native and captured history, adoption, independent MRR and ARR, fractions, sources, CSV and authority passed')
 }

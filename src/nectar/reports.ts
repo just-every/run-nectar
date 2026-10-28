@@ -30,6 +30,9 @@ export interface ReportEntry extends ReportCurrencyEvidence {
   refund?: import('./financial-refunds').PrepaidReportRefund
 }
 export interface Report {
+  filterOptions?: { plans: { value: string; label: string }[]; segments: { value: string; label: string }[]; entities: { value: string; label: string }[] }
+  saas?: import('./saas-metrics').SaasMetrics
+  filters?: { customer: string | null; plan: string | null; segment: string | null; entity: string | null }
   reportingCurrency?: 'USD'
   metric: ReportMetric; title: string; definition: string; period: string; totalCents: number; entries: ReportEntry[]; series?:HistoricalMrrMonth[]
 }

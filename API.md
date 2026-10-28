@@ -840,3 +840,12 @@ This repository slice does not complete DEV-003. The other six language SDKs
 and samples, embedded components and live-catalog test purchase, and the unchanged
 metering journey across the full MOVE-010 relay and adoption boundary remain
 required. Current wrappers preserve those existing API and provider boundaries.
+
+
+### Normalized subscription analytics
+
+`GET /api/nectar/reports/normalized-mrr` and `normalized-arr` retain their source contribution and series fields and include `saas`: month-by-month customer movements, paying counts, logo and revenue churn, net and gross revenue retention, ARPA, customer cohorts and cumulative trial cohorts. All analytics monetary fields use normalized MRR, including on the ARR page. Ratios retain exact integer numerator and denominator fields; their `value` is null without an opening basis. Movement records retain both months' source contributions; cohorts retain their starting sources and each current cell, and trial members retain trial and first-positive sources.
+
+Optional `period`, `customer`, `plan`, `segment` and `entity` filters combine exactly and remain in drill-through links. Duplicate filter parameters are refused. A plan is a native price ID or its original source reference and selects whole subscriptions containing it at each month end. Segment means the customer's current exact `segment` metadata and additionally requires customer reads. Entity means its current billing-entity assignment. Current memberships apply to the whole selected history. Catalog choices require catalog reads; segment and entity choices require customer reads. These reports preserve current report authority and refuse revoked access on the next request.
+
+[Normalized subscription analytics](./docs/saas-metrics.md) publishes the complete normalization, movement, retention, cohort and filter definitions and the unqualified live-source comparison boundary. Source detail remains the ordinary report contribution door for the chosen metric, subscription and filters.

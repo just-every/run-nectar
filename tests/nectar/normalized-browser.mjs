@@ -32,6 +32,15 @@ try {
               if (await total.count()) assert.equal(await total.innerText(),`Total ${money}`,'The rendered report total equals independent contract cents')
               else assert.equal(await page.locator('section').filter({has:page.getByRole('heading',{name:'Calculation of this contribution',exact:true})}).locator('strong').innerText(),money,'The rendered source total equals its exact contribution')
             }
+            if (width === 1440 && state.analytics) {
+              for (const [label,key] of [['Paying customers','customers'],['Average revenue per account','arpa'],['Logo churn','logo'],['Net revenue retention','net'],['Gross revenue retention','gross']]) {
+                const row = page.getByRole('row').filter({has:page.getByRole('cell',{name:label,exact:true})})
+                assert.equal(await row.getByRole('cell').last().innerText(),state.analytics[key],`${label} renders the independently reconciled analytics`)
+              }
+              assert.equal(await page.getByLabel('Customer segment',{exact:true}).inputValue(),'Synthetic research cohort')
+              assert.ok(await page.getByRole('heading',{name:'Customer retention cohorts',exact:true}).count())
+              assert.ok(await page.getByRole('heading',{name:'Trial conversion cohorts',exact:true}).count())
+            }
             await page.screenshot({ path: `${directory}/${width}-${label}.jpg`, fullPage: true, type: 'jpeg', quality: 65 })
             console.log('BROWSER',width,label)
           }
