@@ -1,5 +1,6 @@
 // Explicit modules keep each isolated journey visible to Verify tooling.
 export const isolatedJourneys = [
+  { file: 'remittance-files', name: 'remittanceFilesFlow', load: () => import('./remittance-files.mjs') },
   { file: 'sdk-typescript', name: 'sdkTypescriptFlow', load: () => import('./sdk-typescript.mjs') },
   { file: 'invoice-refund-preview', name: 'invoiceRefundPreviewFlow', load: () => import('./invoice-refund-preview.mjs') },
   { file: 'one-time', name: 'invoiceVoidFlow', load: () => import('./one-time.mjs') },

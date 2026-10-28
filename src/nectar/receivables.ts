@@ -168,6 +168,7 @@ export async function allocate(env: Bindings, actor: Actor, input: Input) {
   requireCapability(actor, 'receivables')
   const payment = await one(env, `SELECT p.*, ${UNALLOCATED_SQL} AS unallocated FROM nc_payments p WHERE p.id = ?`, input.text('payment', { max: 100 }))
   insist(payment, 'payment_not_found', 404)
+  insist(!await one(env, 'SELECT 1 FROM nc_remittances WHERE payment_id=?', payment.id), 'remittance_confirmation_required', 409)
   const invoice = await issuedInvoice(env, input.text('invoice', { max: 100 }))
   insist(invoice.customer_id === payment.customer_id, 'different_customer', 409)
   assertSameCurrency(payment.currency, invoice.currency)

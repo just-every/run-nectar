@@ -4,6 +4,7 @@
 // Patterns are relative to /api/nectar/ (API) or absolute (pages).
 export const API_DOORS: [string, string][] = [
   ['^portal-changes$', 'portalChanges'],
+  ['^remittances$','remittances'],
   ['^processor-events$','processorEvents'],
   ['^assurance-cases$','assuranceCases'],
   ['^assurance-cases/([\\w-]+)$','assuranceCase'],

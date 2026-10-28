@@ -23,8 +23,8 @@ const READ_ALL_PAGES = PAGE_DOORS.map(([, name]) => name).filter(name => !['dunn
 const COMMON = { api: ['openapi', 'me', 'notifications', 'mfa'], pages: ['home', 'more', 'security', 'passkeyScript'] }
 const EXPECTED = {
   collections: {
-    actions: ['invoice.refund.preview', 'payment.record', 'payment.allocate', 'processor.cash.allocate', 'reminder.prepare', 'reminder.approve', 'reminder.discard', 'task.create', 'task.complete', 'cadence.enroll', 'cadence.promise', 'cadence.dispute', 'cadence.resolve', 'cadence.approve', 'cadence.run', 'note.add', 'answer.read'],
-    api: ['processorEvents','automaticCollections','paymentReceipt','prepaidRefunds', 'numberRegister', 'customers', 'customer', 'invoices', 'invoice', 'ageing', 'writeOffs', 'ledgerPostings', 'customerBalance', 'payments', 'notices', 'tasks', 'notes', 'noteMembers', 'entitlement', 'reportLine', 'cadences', 'metadataObjects'],
+    actions: ['remittance.upload','remittance.preview','remittance.confirm','remittance.allocate.preview','remittance.allocate','invoice.refund.preview', 'payment.record', 'payment.allocate', 'processor.cash.allocate', 'reminder.prepare', 'reminder.approve', 'reminder.discard', 'task.create', 'task.complete', 'cadence.enroll', 'cadence.promise', 'cadence.dispute', 'cadence.resolve', 'cadence.approve', 'cadence.run', 'note.add', 'answer.read'],
+    api: ['remittances','processorEvents','automaticCollections','paymentReceipt','prepaidRefunds', 'numberRegister', 'customers', 'customer', 'invoices', 'invoice', 'ageing', 'writeOffs', 'ledgerPostings', 'customerBalance', 'payments', 'notices', 'tasks', 'notes', 'noteMembers', 'entitlement', 'reportLine', 'cadences', 'metadataObjects'],
     pages: ['processorEvents','paymentReceipt','prepaidRefundList', 'prepaidRefundSource', 'numberRegister', 'customers', 'customer', 'certificateFile', 'invoice', 'receivables', 'noticeFile', 'cadences', 'billingAnswers', 'reportLine', 'metadataList'],
   },
   sales: {
@@ -34,7 +34,7 @@ const EXPECTED = {
   },
   support: {
     actions: ['invoice.refund.preview', 'prepaid.refund.request', 'note.add', 'credit.issue', 'answer.read'],
-    api: ['portalChanges','processorEvents','automaticCollections','paymentReceipt','prepaidRefunds', 'numberRegister', 'customers', 'customer', 'invoices', 'invoice', 'ageing', 'writeOffs', 'ledgerPostings', 'customerBalance', 'payments', 'notes', 'noteMembers', 'entitlement', 'subscription', 'upcoming', 'reportLine', 'metadataObjects', 'prepaid', 'prepaidSource'],
+    api: ['portalChanges','remittances','processorEvents','automaticCollections','paymentReceipt','prepaidRefunds', 'numberRegister', 'customers', 'customer', 'invoices', 'invoice', 'ageing', 'writeOffs', 'ledgerPostings', 'customerBalance', 'payments', 'notes', 'noteMembers', 'entitlement', 'subscription', 'upcoming', 'reportLine', 'metadataObjects', 'prepaid', 'prepaidSource'],
     pages: ['portalChanges','processorEvents','paymentReceipt','prepaidRefundList', 'prepaidRefundSource', 'numberRegister', 'customers', 'customer', 'certificateFile', 'subscription', 'prepaid', 'prepaidSource', 'invoice', 'receivables', 'billingAnswers', 'reportLine', 'metadataList'],
   },
   developer: {
