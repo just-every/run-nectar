@@ -174,7 +174,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "2a5b78e3bedf10adb515b041927298875daa33da38403600f3be980d8ed4d8ec",
+      "sha256": "d1424fbb21fdac46030ee1071cc5f1908e72fdb3e15072ad11492a3878e06a8c",
       "executable": false
     },
     "AGENTS.consumer.md": {
@@ -194,7 +194,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "6e98ac5f131938bd9a6d1533b4507eb44517512fa3c33e56b38bb96885ee5cc7",
+      "sha256": "fde9d936f7d47f14b6dbb3f7ec7fab51b9640351a9f07f8a2dd5820f84fb30c2",
       "executable": false
     },
     "DEMO.md": {
@@ -230,7 +230,7 @@
       "executable": false
     },
     "docs/CLAIMS.md": {
-      "sha256": "c7e47c956c6c42f227b6cd1a7e9c2270f6f68b575890ad0c75b1e695e45aaf6d",
+      "sha256": "9b025c1d38e327490d3bf5437f02c5b5a8ea99f5d96b16d57b8b0206e9cced8d",
       "executable": false
     },
     "docs/composition-baseline.json": {
@@ -5366,7 +5366,7 @@
       "executable": false
     },
     "tests/nectar/recovery.mjs": {
-      "sha256": "fa8a9f299bf0b096911b259b241de7ce54f669d2ea49958b2aa6d4384b952c86",
+      "sha256": "375621c7cbc32088ffed8bcc203608a93ce9ebe4017bc0aa37a56b7173f23b94",
       "executable": false
     },
     "tests/nectar/renewal-pricing.mjs": {
