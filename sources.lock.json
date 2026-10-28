@@ -5309,6 +5309,10 @@
       "sha256": "f3c2b8eae94cdfb35a61c869b7e736b67a26bd23ef78c2b2647e2ba2326e0f15",
       "executable": false
     },
+    "tests/nectar/portal-billing-browser.mjs": {
+      "sha256": "ce2070a9cbe241e475686fbfd835d093655354359272f534bbc1afd712f65943",
+      "executable": false
+    },
     "tests/nectar/portal-billing.mjs": {
       "sha256": "b0e140fac38cb3bfac4f27a07139cd97db8ad34b710f9cbc6aa96d6404019c85",
       "executable": false
