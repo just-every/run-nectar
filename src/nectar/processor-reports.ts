@@ -8,8 +8,9 @@ import type { Report, ReportComponent, ReportEntry, ReportInvoice } from './repo
 
 export interface ProcessorReportEvidence {
   accountRef: string; transactionRef: string; type: string; sourceRef: string
-  customerId: string; invoiceId: string; paymentId: string | null
+  customerId: string; invoiceId: string | null; paymentId: string | null
   invoiceHref?: string
+  transactionHref?: string
   grossCents: number; feeCents: number; netCents: number; currency: string
   status: 'pending' | 'available'; occurredAt: number; availableAt: number; payoutRef: string | null
   basis: 'gross_received' | 'available_net' | 'refund_cash'
@@ -45,10 +46,16 @@ export async function processorReportSources(env: Bindings, metric: ProcessorMet
   const entries: ProcessorEntry[] = [], receipts = new Map<string, ProcessorReportEvidence>(), refunds = new Map<string, ProcessorReportEvidence>()
   for (const row of rows) {
     insist(row.net_cents === row.amount_cents - row.fee_cents, 'processor_report_does_not_reconcile', 409)
+    const invoiceId = row.invoice_id ?? row.imported_invoice ?? null
     const processor: ProcessorReportEvidence = {
       accountRef: row.account_ref, transactionRef: row.transaction_ref, type: row.type, sourceRef: row.source_ref,
-      customerId: row.customer_id, invoiceId: row.invoice_id??row.imported_invoice, paymentId: row.payment_id,
-      ...(row.imported_invoice?{invoiceHref:`/app/customers/${encodeURIComponent(row.customer_id)}#history-${encodeURIComponent(row.imported_invoice)}`}:{ }),
+      customerId: row.customer_id, invoiceId, paymentId: row.payment_id,
+      ...(!row.erased_at ? {
+        transactionHref: `/app/processor-events?customer=${encodeURIComponent(row.customer_id)}#transaction-${encodeURIComponent(row.id)}`,
+        ...(invoiceId ? { invoiceHref: row.imported_invoice
+          ? `/app/customers/${encodeURIComponent(row.customer_id)}#history-${encodeURIComponent(invoiceId)}`
+          : `/app/invoices/${encodeURIComponent(invoiceId)}#recv` } : {}),
+      } : {}),
       grossCents: row.amount_cents, feeCents: row.fee_cents, netCents: row.net_cents, currency: row.currency,
       status: row.status, occurredAt: row.occurred_at, availableAt: row.available_at, payoutRef: row.payout_ref,
       basis: settlement ? 'available_net' : refund ? 'refund_cash' : 'gross_received',
@@ -76,7 +83,7 @@ export async function processorReportSources(env: Bindings, metric: ProcessorMet
 
 export function processorReportSource(view: Report, entry: ReportEntry, actor: Actor): ReportInvoice {
   const processor = entry.processor!
-  const href = canRead(actor, 'invoices') ? processor.invoiceHref??`/app/invoices/${encodeURIComponent(processor.invoiceId)}#recv` : undefined
+  const href = canRead(actor, 'invoices') ? processor.invoiceHref ?? (canRead(actor, 'payments') ? processor.transactionHref : undefined) : undefined
   const components: ReportComponent[] = processor.basis === 'available_net'
     ? [{ kind: 'processor_gross', label: 'Processor gross payment', amountCents: processor.grossCents, href },
       { kind: 'processor_fee', label: 'Processor fee', amountCents: -processor.feeCents }]

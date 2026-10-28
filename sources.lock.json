@@ -174,7 +174,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "bf191224f59692393d85cc471b1cabf1bd4424271f20bceeb1d3f93a597427d6",
+      "sha256": "1971ec58e1458d69b33d053181a403bb62d291f2d762733874641444d7b8aee3",
       "executable": false
     },
     "AGENTS.consumer.md": {
@@ -194,7 +194,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "b0b4cd0741278b52e0f6fbd217a8222d692e7a227a9650854b384a7615f7a830",
+      "sha256": "3c19560cad87b1525b82ebb2bbd172de375d9a5bd7e778ae9734c9f69933fa08",
       "executable": false
     },
     "DEMO.md": {
@@ -230,7 +230,7 @@
       "executable": false
     },
     "docs/CLAIMS.md": {
-      "sha256": "5f2a6e58827fff53a3aa955815d4ee807a6f696c99623aab6b61c51fedbd9074",
+      "sha256": "14148fe1bce2fc6ae520a83eaa18954f5be57e28af062fc48797b6433ad4eb59",
       "executable": false
     },
     "docs/composition-baseline.json": {
@@ -4030,7 +4030,7 @@
       "executable": false
     },
     "src/nectar/processor-reports.ts": {
-      "sha256": "8afe3986e4e3f47d37139e7807db27e20dad9a1ca27f432e932da55c74ac97a8",
+      "sha256": "afda0607ee2cdb328d4b7e84153df0ea708b8a72a4dcc48035830cef5186a4ff",
       "executable": false
     },
     "src/nectar/processor-returns.ts": {
@@ -4502,7 +4502,7 @@
       "executable": false
     },
     "src/nectar/ui/processor-events.ts": {
-      "sha256": "ab155f0d3ed0d4f2a5773fa2ca7e2e5f42366672b6570ebe1697751f9a05814f",
+      "sha256": "4e6c095fda72ff76e6a07131a884f80ae3c95640e1655a233af55995f662342c",
       "executable": false
     },
     "src/nectar/ui/promotions.ts": {
@@ -4522,7 +4522,7 @@
       "executable": false
     },
     "src/nectar/ui/reports.ts": {
-      "sha256": "1e3806bd8bd003a46e85ea3a5ab50c35ba4d175c6f49dbe5fd89dbe790453735",
+      "sha256": "631d509d95a31b91f3c223492a04ccc58810ec730426682f34a9fb3d1681edb4",
       "executable": false
     },
     "src/nectar/ui/retention.ts": {
@@ -5398,7 +5398,7 @@
       "executable": false
     },
     "tests/nectar/processor-events-browser.mjs": {
-      "sha256": "4f154c6c8b16756c51b59c06427ae0c8892136aa6738c3344bbd681a565747ad",
+      "sha256": "967aba45cfa9fc681b488813553a90519dd1c99221092659fe310615536c57b0",
       "executable": false
     },
     "tests/nectar/processor-events-sandbox.mjs": {

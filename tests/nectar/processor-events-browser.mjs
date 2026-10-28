@@ -19,6 +19,11 @@ try {
  const capture=async({label,customer,delivery,bankInvoice})=>{
   const paths=[`/app/processor-events?customer=${customer}`,...(label==='failure-resolved'?['/app/processor-events']:[]),...(label==='cash-applied'||label==='cash-returned'?['/app/receivables']:[]),...(label==='cash-returned'||label==='imported-cash-refunded'?[`/app/reports/refunds?period=2026-10&customer=${customer}`]:[]),...(label==='reconciled'?['/app/receivables','/app/reports/settlements?period=2026-10','/app/reports/refunds?period=2026-10','/app/reports/collections?period=2026-10','/app/report-schedule',`/app/report-deliveries/${delivery}`,`/app/invoices/${bankInvoice}`]:[])]
   if(label==='reconciled')for(const metric of ['settlements','refunds','collections']){const report=await h.api(`reports/${metric}?period=2026-10&customer=${customer}`,owner);assert.ok(report.entries.length);paths.push(report.entries[0].href)}
+  if(label==='imported-cash-refunded')for(const metric of ['settlements','refunds']){
+   const report=await h.api(`reports/${metric}?period=2026-10&customer=${customer}`,owner)
+   const entry=report.entries.find(row=>row.processor);assert.ok(entry)
+   paths.push(entry.href)
+  }
   for(const [index,path] of paths.entries()){
    for(const width of [1440,390]){
     await page.setViewportSize({width,height:1000})
