@@ -8,7 +8,7 @@ CREATE TABLE nc_portal_change_requests (
  id TEXT PRIMARY KEY, request_key TEXT NOT NULL UNIQUE,
  customer_id TEXT NOT NULL REFERENCES nc_customers(id), subscription_id TEXT NOT NULL REFERENCES nc_subscriptions(id),
  item_id TEXT NOT NULL REFERENCES nc_items(id), target_price_id TEXT NOT NULL REFERENCES nc_prices(id),
- quantity INTEGER NOT NULL CHECK(quantity BETWEEN 1 AND 1000000), status TEXT NOT NULL CHECK(status='pending'),
+ quantity INTEGER NOT NULL CHECK(quantity BETWEEN 1 AND 1000000), target_label TEXT NOT NULL, unit_amount TEXT NOT NULL, currency TEXT NOT NULL, status TEXT NOT NULL CHECK(status='pending'),
  source_json TEXT NOT NULL CHECK(json_valid(source_json)), basis_hash TEXT NOT NULL, policy_revision INTEGER NOT NULL,
  requested_at INTEGER NOT NULL, requested_on TEXT NOT NULL, below_minimum INTEGER NOT NULL CHECK(below_minimum IN (0,1))
 );

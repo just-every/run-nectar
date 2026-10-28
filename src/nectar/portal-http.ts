@@ -57,7 +57,7 @@ export async function portalResponse(request: Request, env: Bindings): Promise<R
       return new Response(request.method === 'HEAD' ? null : response.body, { headers: { ...Object.fromEntries(response.headers), ...headers, 'referrer-policy': 'strict-origin', 'content-security-policy': `default-src 'none'; style-src 'self'; font-src 'self'; form-action 'self'; frame-ancestors ${session.audience === 'embedded' ? session.parent : "'none'"}; base-uri 'none'` } })
     }
     if(url.pathname.startsWith('/portal/payment-methods')&&session.audience!=='hosted')throw new NectarError('forbidden',403)
-    if (['/portal/change.request','/portal/payment-methods/action','/portal/payment-methods/action/reconcile'].includes(url.pathname) && request.method==='POST') {
+    if (['/portal/payment-methods/action','/portal/payment-methods/action/reconcile'].includes(url.pathname) && request.method==='POST') {
       if(request.headers.get('origin')!==session.origin)throw new NectarError('forbidden',403)
       const result=await operatePortalMethodAction(env,session,await Input.from(request),url.pathname.endsWith('/reconcile')?'reconcile':'confirm')
       if(request.headers.get('content-type')?.startsWith('application/json'))return Response.json(result,{headers})

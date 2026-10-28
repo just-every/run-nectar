@@ -24,6 +24,6 @@ export async function preparePortalChangePolicy(env: Bindings, actor: Actor, inp
 export async function portalChangeSettings(env: Bindings, actor: Actor): Promise<Row> {
   requireRead(actor, 'subscriptions')
   requireRead(actor, 'customers')
-  return { policy: await portalChangePolicy(env), requests: await all(env, `SELECT r.id,r.customer_id,r.subscription_id,r.item_id,r.target_price_id,r.quantity,r.status,r.requested_on,r.below_minimum,c.name AS customer_name
+  return { policy: await portalChangePolicy(env), requests: await all(env, `SELECT r.id,r.customer_id,r.subscription_id,r.item_id,r.target_price_id,r.quantity,r.status,r.requested_on,r.below_minimum,r.target_label,r.unit_amount,r.currency,r.policy_revision,c.name AS customer_name
     FROM nc_portal_change_requests r JOIN nc_customers c ON c.id=r.customer_id WHERE c.erased_at IS NULL ORDER BY r.requested_at DESC,r.id LIMIT 200`) }
 }

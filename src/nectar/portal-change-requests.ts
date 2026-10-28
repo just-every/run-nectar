@@ -38,7 +38,7 @@ async function changeBasis(env: Bindings, session: CustomerSession, subscription
   return { subscription, source: row.source as string, sourceData: source, day, item: active[0], current, targets, policy, basis }
 }
 
-const projection = (row: Row) => ({ id: row.id, subscription: row.subscription_id, item: row.item_id, targetPrice: row.target_price_id, quantity: row.quantity, status: 'pending', requestedOn: row.requested_on, belowContractMinimum: !!row.below_minimum })
+const projection = (row: Row) => ({ id: row.id, subscription: row.subscription_id, item: row.item_id, targetPrice: row.target_price_id, quantity: row.quantity, targetName: row.target_label, unitAmount: row.unit_amount, currency: row.currency, status: 'pending', requestedOn: row.requested_on, belowContractMinimum: !!row.below_minimum })
 
 export async function portalChangeOptions(env: Bindings, session: CustomerSession, subscription: string) {
   const data = await changeBasis(env, session, subscription)
@@ -52,7 +52,7 @@ export async function portalChangeSubscriptions(env: Bindings, session: Customer
 }
 
 export async function portalChangeData(env: Bindings, session: CustomerSession, subscription?: string) {
-  return subscription ? portalChangeOptions(env, session, subscription) : { subscriptions: await portalChangeSubscriptions(env, session) }
+  return subscription ? portalChangeOptions(env, session, subscription) : { subscriptions: await portalChangeSubscriptions(env, session), requests: (await all(env, 'SELECT * FROM nc_portal_change_requests WHERE customer_id=? ORDER BY requested_at,id', session.customer)).map(projection) }
 }
 
 export async function requestPortalChange(env: Bindings, request: Request, session: CustomerSession, input: Input) {
@@ -85,7 +85,7 @@ export async function requestPortalChange(env: Bindings, request: Request, sessi
       guard(env, 'portal_change_stale', 'EXISTS(SELECT 1 FROM nc_portal_change_policy WHERE singleton=1 AND revision=?)', data.policy.revision),
       // Catalog changes also invalidate an already displayed request.
       guard(env, 'portal_change_stale', 'EXISTS(SELECT 1 FROM nc_prices WHERE id=? AND status=\'active\' AND unit_amount=?) AND EXISTS(SELECT 1 FROM nc_prices WHERE id=? AND status=\'active\' AND unit_amount=?)', data.current.id, data.current.unit_amount, target.id, target.unit_amount),
-      stmt(env, `INSERT INTO nc_portal_change_requests(id,request_key,customer_id,subscription_id,item_id,target_price_id,quantity,status,source_json,basis_hash,policy_revision,requested_at,requested_on,below_minimum) VALUES(?,?,?,?,?,?,?,'pending',?,?,?,?,?,?)`, id, key, session.customer, subscription, data.item.id, target.id, quantity, data.source, data.basis, data.policy.revision, at, data.day, belowMinimum ? 1 : 0),
+      stmt(env, `INSERT INTO nc_portal_change_requests(id,request_key,customer_id,subscription_id,item_id,target_price_id,quantity,target_label,unit_amount,currency,status,source_json,basis_hash,policy_revision,requested_at,requested_on,below_minimum) VALUES(?,?,?,?,?,?,?,?,?,?,'pending',?,?,?,?,?,?)`, id, key, session.customer, subscription, data.item.id, target.id, quantity, target.nickname || target.product_name, target.unit_amount, target.currency, data.source, data.basis, data.policy.revision, at, data.day, belowMinimum ? 1 : 0),
     ], { actor: `customer:portal:${session.customer}`, action: 'portal.change.request', subject: id, detail: { subscription, item: data.item.id, targetPrice: target.id, quantity, policyRevision: data.policy.revision, belowMinimum } })
   } catch (error) {
     if (!(error instanceof NectarError && error.code === 'already_exists') || !await existing()) throw error
