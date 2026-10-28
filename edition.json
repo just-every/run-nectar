@@ -128,6 +128,43 @@
           }
         ]
       }
+    },
+    {
+      "id": "runeditrun/base-agent-door",
+      "role": "module",
+      "source": {
+        "kind": "local",
+        "paths": [
+          "src/modules/agent-door",
+          "src/modules/business-settings",
+          "src/foundation/runtime"
+        ],
+        "origin": {
+          "repository": "https://github.com/runeditrun/base.git",
+          "revision": "d555e789cffb744a9f83d76ebe42a2e3bdd7a055",
+          "path": ".",
+          "paths": [
+            "modules/agent-door",
+            "modules/business-settings",
+            "foundation/runtime/theme-frame.ts",
+            "foundation/runtime/icon-head.ts"
+          ]
+        },
+        "mappings": [
+          {
+            "path": "src/modules/agent-door",
+            "originPath": "modules/agent-door"
+          },
+          {
+            "path": "src/modules/business-settings",
+            "originPath": "modules/business-settings"
+          },
+          {
+            "path": "src/foundation/runtime",
+            "originPath": "foundation/runtime"
+          }
+        ]
+      }
     }
   ]
 }
