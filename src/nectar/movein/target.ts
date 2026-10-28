@@ -210,7 +210,7 @@ const history: Kind = {
 }
 
 export const KINDS: Record<string, Kind> = { meter, product, price, customer, subscription, invoice: historicalDocument('invoice'), credit_note: historicalDocument('credit-note'), history }
-const kindOf = (name: string) => { const kind = KINDS[name]; if (!kind) throw new Error(`TARGET_KIND_UNKNOWN: ${name}`); return kind }
+const kindOf = (name: string) => { const kind = Object.hasOwn(KINDS, name) ? KINDS[name] : undefined; if (!kind) throw new Error(`TARGET_KIND_UNKNOWN: ${name}`); return kind }
 
 export const nectarTargets: D1TargetAdapter = {
   async read(db, destination, kind, id) {

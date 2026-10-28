@@ -84,7 +84,7 @@ async function apiResponse(env: Bindings, actor: Actor, request: Request, url: U
   const version = requestVersion(actor, request)
   const send = (body: unknown, extra: Record<string, string> = {}) => json(present(version, body), 200, { 'nectar-version': version, ...extra })
   if (request.method === 'POST') {
-    const action = actions[path]
+    const action = Object.hasOwn(actions, path) ? actions[path] : undefined
     if (!action) throw new NectarError('not_found', 404)
     const key = request.headers.get('idempotency-key')
     if (key === null) return send(await action(env, actor, await Input.from(request), request))
@@ -105,13 +105,13 @@ async function apiResponse(env: Bindings, actor: Actor, request: Request, url: U
 async function pageResponse(env: Bindings, actor: Actor, request: Request, url: URL): Promise<Response> {
   const path = url.pathname
   if (request.method === 'POST') {
-    const special = postPages[path]
+    const special = Object.hasOwn(postPages, path) ? postPages[path] : undefined
     if (special) {
       await loadShell(env, actor)
       return await special(env, actor, await Input.from(request), url, request)
     }
     const name = path.match(/^\/app\/do\/([\w.]+)$/)?.[1]
-    const action = name ? actions[name] : undefined
+    const action = name && Object.hasOwn(actions, name) ? actions[name] : undefined
     if (!action) throw new NectarError('not_found', 404)
     const input = await Input.from(request)
     const returnTo = safeReturnTo(input.text('returnTo', { optional: true, max: 300 }) || '/app', '/app')
