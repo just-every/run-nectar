@@ -52,6 +52,7 @@ export async function portalBillingFlow(h,owner,hooks={}) {
   const contact=(await json('/portal/profile/data')).contacts.find(row=>row.email===contactFields.email)
   assert.ok(contact);assert.equal(contact.name,'Morgan Billing')
   assert.equal((await h.raw(path('/portal/profile',foreignSession),{body:{operation:'contact.update',contact:contact.id,revision:contact.revision,name:'Foreign edit',email:foreign.billing_email}})).status,409,'A foreign contact ID cannot cross the write boundary')
+  assert.equal((await h.raw(path('/portal/profile',foreignSession),{body:{operation:'contact.remove',contact:contact.id,revision:contact.revision}})).status,409)
   assert.equal((await json('/portal/profile/data')).contacts[0].name,'Morgan Billing')
   await profile(contactFields,409)
   await hooks.state?.({name:'profile-contact',path:path('/portal/profile'),session,customer,invoice})
@@ -73,6 +74,7 @@ export async function portalBillingFlow(h,owner,hooks={}) {
   if(hooks.profile)await hooks.profile(tax);else await profile(tax)
   const taxId=(await json('/portal/profile/data')).taxIds[0]
   assert.deepEqual([taxId.type,taxId.value,taxId.status],['US EIN','synthetic-nectar-42','unverified'])
+  assert.equal((await h.raw(path('/portal/profile',foreignSession),{body:{operation:'tax.remove',tax:taxId.id}})).status,409)
   assert.equal((await h.api(`customers/${customer}`,owner)).tax_exempt,0,'A declared ID grants no tax exemption')
   await profile({operation:'tax.remove',tax:taxId.id})
   assert.deepEqual((await json('/portal/profile/data')).taxIds,[])

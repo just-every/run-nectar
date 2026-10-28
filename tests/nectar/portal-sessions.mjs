@@ -1,3 +1,4 @@
+import { portalCustomerSignIn } from './portal-signin-helper.mjs'
 // PORT-005 round A: real Worker/D1, operator public doors issue a customer-only
 // signed capability; all customer reads go through /portal, never an Actor.
 import assert from 'node:assert/strict'
@@ -150,7 +151,7 @@ export async function portalSessionsFlow(h, owner) {
   for (const dead of [empty,erased,erasedAgain]) assert.equal((await open(dead)).status, 401, 'PORT-005 erased customer session withdrawn')
   assert.equal((await open(rotate)).status, 200, 'PORT-005 unrelated session survives erasure')
   await h.api('portal.session.issue', owner, { customer: customers[2], origin: h.origin, audience: 'hosted' }, 404)
-  await portalCorrections(h,owner,rotate,invoice.id)
+  await portalCorrections(h,owner,await portalCustomerSignIn(h,owner,customers[0]),invoice.id)
   const expiry = await issue()
   await h.advanceClock(new Date(expiry.expiresAt - 1).toISOString())
   assert.equal((await open(expiry)).status, 200)

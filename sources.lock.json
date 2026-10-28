@@ -5318,7 +5318,7 @@
       "executable": false
     },
     "tests/nectar/portal-billing.mjs": {
-      "sha256": "bd40962ee26404e9811c582a0499f56118ff91657d116303810dbe762b8c3730",
+      "sha256": "12c283708fe0a5c2f8b3eb7db51d407c8b56134998026412260dd62c6d740d44",
       "executable": false
     },
     "tests/nectar/portal-corrections.mjs": {
@@ -5358,7 +5358,7 @@
       "executable": false
     },
     "tests/nectar/portal-sessions.mjs": {
-      "sha256": "10fac0805aa1aaa8534b24b78a97e3d17c9c761cb83dccf81e4aad3bad7fabca",
+      "sha256": "45a3d376ae22ba523eb9b48a3d36f093a2a8be8f2389c6f98d707a02a1f3257e",
       "executable": false
     },
     "tests/nectar/portal-signin-helper.mjs": {
