@@ -789,6 +789,10 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
   "portal.session.revoke": {
     "session": "text"
   },
+  "portal.w9.store": {
+    "confirm_share": "flag",
+    "file": "file"
+  },
   "prepaid.consent.revoke": {
     "consent": "text"
   },
