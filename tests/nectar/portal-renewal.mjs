@@ -141,6 +141,8 @@ export async function portalRenewalFlow(h,owner) {
     await capture('portal-renewal-cancelled-es')
     assert.deepEqual(await money(cancelled),cancelOriginal,'Cancelling renewal preserves issued financial facts')
     assert.equal((await get(cancelled,cancelSession)).term.cancelled,true)
+    const declined=(await api('retention')).offers.find(o=>o.subscription_id===cancelled.sub&&o.kind==='save')
+    assert.deepEqual([declined.status,declined.reason],['declined','not supplied'],'Cancelling without a reason records the optional offer outcome')
     await post(cancelled,cancelSession,{basis:cancelOffer.basis,confirm:'cancel'},409)
 
     // The existing customer form reaches the same estimate in both languages.

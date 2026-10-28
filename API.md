@@ -884,7 +884,9 @@ save's exact period totals without internal inputs or signed narratives.
 `confirm=cancel` or `confirm=save`, optional `reason`, and the save's `offer` ID.
 The same-origin, own-customer, live-session, current-source and policy guards
 run with the mutation and audit. Cancellation disables the next renewal at its
-existing boundary. It needs one confirmation, with no mandatory reason or save.
+existing boundary. It needs one confirmation, with no mandatory reason or save. When the displayed
+optional offer is declined, its outcome and optional reason are recorded with
+the cancellation in the same transaction.
 Save acceptance rechecks exact approved terms and changes billing atomically;
 it neither issues an invoice nor collects money. Discount saves last their
 quoted periods; pause saves suspend access and charges until the quoted date;
