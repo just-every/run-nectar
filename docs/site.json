@@ -25,6 +25,7 @@
       "pages": [
         { "slug": "move-in", "title": "Moving in from Stripe Billing", "file": "move-in.md", "summary": "Capture your Stripe records, preview the move, compare in shadow and cut over without billing a period twice." },
         { "slug": "backup-and-restore", "title": "Backup, export and restore", "file": "backup-and-restore.md", "summary": "Download invoices, usage and bill runs, and save or restore the whole installation." },
+        { "slug": "claims", "title": "Contract claims", "file": "CLAIMS.md", "summary": "Generated contract status and evidence." },
         { "slug": "limits", "title": "What Nectar does not do", "file": "limits.md", "summary": "Payments, sending, tax determination and the other things left out, stated plainly." }
       ]
     }
