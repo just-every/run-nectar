@@ -124,22 +124,25 @@ A definitive no-capture refusal leaves ordinary unpaid correction available.
 Review the replacement through the ordinary `invoice.approve` and
 `invoice.finalise` actions. Its copied service lines retain their original source
 evidence and receive a new invoice number. Issuing it does not consume the
-original sources again or reopen their recurring billing period. Taxed invoices,
-funding lines and credit-consumption lines are refused by this door.
+original sources again or reopen their recurring billing period. Saved-rate tax and unfunded prepaid purchases preserve their original tax and
+source terms. Funded purchases and consumed credits require their own governed
+correction doors.
 
 ## Read-only refund estimates
 
 `/api/nectar/invoice.refund.preview` requires permission to read invoices and
 payments. Send `invoice`, `amount` and `destination` (`original` or `balance`).
-The invoice must have one verified native Stripe test-mode card capture funding
+The invoice must have one verified native Stripe card capture funding
 its whole total. The estimate returns the issued original tax, the independently
 allocated reversing tax and pretax amount, the cash or customer-balance effect,
 the owner's second-approver requirement and a source-bound `basis`.
 
-The response always says `executionAvailable: false` and
-`providerOutcome: "not-attempted"`. It creates no refund, tax-provider transaction,
-credit, approval, balance entry or customer message. Processor refund execution,
-provider tax reversal and cancellation-refund integration remain unfinished.
+The estimate reports `providerOutcome: "not-attempted"` and creates no refund,
+provider transaction, credit, approval, balance entry or customer message.
+Execution is available for verified non-taxable captures, or after a real Stripe
+Tax transaction is attached to the exact issued customer, account, mode and
+lines. The API guide describes preparation, independent approval and read-only
+reconciliation. Unsupported or unverified sources are refused.
 
 
 ### Review an agent's invoice refund correction
@@ -168,7 +171,10 @@ message. Accepted mail means provider acceptance; it does not establish mailbox
 delivery. A pending reservation may be claimed once, while a claimed or uncertain
 send is never automatically retried.
 
-This door supports the existing non-taxable native card-capture refund scope.
-Provider tax reversal, cancellation-policy refunds and other source variants
-remain unproved. Closed revenue periods retain their frozen packet and CSV;
-a later refund adjustment appears in the open period.
+Taxed refunds reverse their exact Stripe Tax lines before the local adjustment
+completes. A missing tax response requires its verified provider receipt, never
+a second tax write. Frozen-policy cancellation refunds return the existing
+unused credit, preserving its numbered tax and revenue adjustment. Closed revenue
+periods retain their frozen packet and CSV; a later ordinary refund adjustment
+appears in the open period. Archives retain financial evidence but cannot restore
+refund execution consent.

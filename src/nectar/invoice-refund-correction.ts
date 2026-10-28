@@ -17,7 +17,7 @@ export async function planInvoiceRefundCorrection(env: Bindings, payload: Row) {
   const reason = input.text('reason', { max: 500 }), explanation = input.text('explanation', { max: 8000 })
   const subject = input.text('subject', { max: 200 }), body = input.text('body', { max: 12000 })
   insist(!/[\r\n]/.test(subject), 'invalid_subject')
-  const normalized = { invoice_refund: true, invoice: quote.invoice, amount: input.text('amount', { max: 20 }), destination: quote.destination,
+  const normalized = { invoice_refund: true, invoice: quote.invoice, amount: input.text('amount', { max: 20 }), destination: quote.destination, ...(quote.cancellation?{cancellation:quote.cancellation.id}:{}),
     reason, explanation, subject, body, citations, recipient: customer.billing_email }
   const mail = { recipient: customer.billing_email, subject, body, explanation, citations, language: customer.language,
     outcome: 'Reserved with the completed adjustment after human approval. Provider acceptance does not confirm mailbox delivery.' }

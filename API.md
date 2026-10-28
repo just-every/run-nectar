@@ -791,3 +791,44 @@ authority tables, and erasure withdraws this record family.
 Subscription reads preserve the ordinary subscription source record. Request `include_state=true` on the subscription detail URL to include the current observed state, its effective observation time and immutable transition history. The subscription page and customer history include that projection. Subscription readers without both invoice and payment read capabilities receive only the date and timezone in each cause; the internal schedule checkpoint is never part of the subscription source response.
 
 Native subscription creation retains its own `subscription.created` event alongside the initial `subscription.state_changed` event. Lifecycle observation does not turn creation into an update or repeat either event. A scheduled observer whose read basis loses a race leaves its page pending for the next tick and completes successfully; audit-storage failures still fail the tick and roll back the transition.
+
+### Verified invoice refunds (INV-005)
+
+`invoice.refund.preview` quotes an issued, fully captured native card invoice.
+Supply `invoice`, decimal `amount` and `destination` (`original` or `balance`).
+The quote binds the original payment, existing credits, tax and current approval
+policy. `invoice.refund.prepare` saves that exact `basis` and a private `reason`;
+`invoice.refund.execute` takes the saved `refund`, `basis` and `confirm: true`.
+Above the owner's GOV-002 limit a different current human approver must execute.
+Below it one current owner or finance approver may prepare and execute. Agents
+may propose and preview; they cannot authorize a refund.
+
+For a taxed invoice, first attach its actual Stripe Tax transaction with
+`invoice.tax.bind`: `invoice`, `transaction` and `confirm: true`. The transaction
+must belong to the captured account and customer, reference the invoice and
+match its immutable line identifiers, pretax amounts and exact tax. This action
+only reads the provider; it cannot determine tax or change an issued invoice.
+Refund execution reverses the exact attributed provider tax once. A missing
+provider response remains uncertain. `invoice.refund.reconcile` reads existing
+receipts; if the tax response was lost entirely, supply `tax_reversal` with the
+provider's actual reversal identifier. It must match this refund and its exact
+amounts. Reconciliation never repeats a claimed provider write.
+
+A separately approved `lifecycle.policy` may enable `refund_original` alongside
+`credit_unused`. Cancellation freezes that choice. After the ordinary governed
+cancellation issues its unused-service credit, supply its `cancellation` id to
+the refund quote and preparation. Only the exact, unused, fully paid credit can
+be returned to the original method. Preparation holds that credit against later
+spending; completion links the existing credit without repeating its tax or
+revenue adjustment. Changing the active policy does not rewrite a cancellation.
+
+Agents use an amendment proposal with `invoice_refund: true`, the same refund
+inputs, an explanation, subject, body and citations to the original lines.
+A human prepares the proposal through `invoice.refund.prepare`; the ordinary
+proposal decision executes the frozen quote. The numbered adjustment and
+customer message reservation commit together after confirmed provider outcomes.
+Changed sources or recipients invalidate preparation or approval; a recipient
+changed during execution suppresses the frozen message. Uncertain messages are
+never resent. Financial archives retain receipts and numbered evidence but do
+not restore local refund execution consent. Provider refunds absent from restored
+local history prevent a new refund or carried credit until reconciled.

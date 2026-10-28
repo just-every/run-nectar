@@ -7,6 +7,7 @@ import { preparePolicyChange } from './policy-changes'
 export async function lifecyclePolicy(env: Bindings) {
   const saved = await one(env, 'SELECT * FROM nc_lifecycle_policy WHERE singleton=1')
   return { creditUnused: saved ? !!saved.credit_unused : true,
+    refundOriginal: !!saved?.refund_original,
     prorationPolicy:saved?.proration_policy??null,reactivationDays: saved?.reactivation_days ?? 30, revision: saved?.revision ?? 0 }
 }
 
@@ -15,5 +16,6 @@ export async function configureLifecyclePolicy(env: Bindings, actor: Actor, inpu
   const reactivationDays = input.integer('reactivation_days', { min: 0, max: 3650 })!
   const prorationPolicy=input.text('proration_policy',{optional:true})||(await lifecyclePolicy(env)).prorationPolicy
   insist(prorationPolicy===null||['invoice_now','next_invoice','none'].includes(prorationPolicy),'invalid_proration_policy')
-  return await preparePolicyChange(env, actor, 'lifecycle', {creditUnused: input.flag('credit_unused'), reactivationDays,prorationPolicy})
+  insist(!input.flag('refund_original')||input.flag('credit_unused'),'cancellation_credit_required')
+  return await preparePolicyChange(env, actor, 'lifecycle', {refundOriginal:input.flag('refund_original'),creditUnused: input.flag('credit_unused'), reactivationDays,prorationPolicy})
 }

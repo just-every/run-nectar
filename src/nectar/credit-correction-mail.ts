@@ -10,7 +10,7 @@ export async function deliverCorrectionMail(env: Bindings, proposalId: string) {
   try{
     await commit(env,[guard(env,'stale',"EXISTS(SELECT 1 FROM nc_credit_correction_mail m JOIN nc_proposals p ON p.id=m.proposal_id WHERE m.proposal_id=? AND m.status='pending' AND p.status='approved')",proposalId),
       stmt(env,"UPDATE nc_credit_correction_mail SET status='sending',updated_at=? WHERE proposal_id=? AND status='pending'",now(),proposalId),
-      ...(row.refund_correction?[stmt(env,"UPDATE nc_credit_correction_mail SET status='suppressed',updated_at=? WHERE proposal_id=? AND status='sending' AND NOT EXISTS(SELECT 1 FROM nc_customers WHERE id=? AND billing_email=? AND erased_at IS NULL)",now(),proposalId,row.customer_id,row.recipient)]:[])],
+      ...(row.refund_correction?[stmt(env,"UPDATE nc_credit_correction_mail SET status='suppressed',updated_at=? WHERE proposal_id=? AND status='sending' AND (NOT EXISTS(SELECT 1 FROM nc_customers WHERE id=? AND billing_email=? AND erased_at IS NULL) OR NOT EXISTS(SELECT 1 FROM nc_invoice_refunds r JOIN nc_invoice_refund_authority a ON a.refund_id=r.id WHERE json_extract(r.quote_json,'$.correction.proposal.id')=?))",now(),proposalId,row.customer_id,row.recipient,proposalId)]:[])],
       {actor:'system:invoice-credit',action:'proposal.credit.mail.claim',subject:proposalId,detail:{credit:row.credit_id,customer:row.customer_id}})
   }catch(error){if(error instanceof NectarError&&error.code==='stale')return;throw error}
   if(row.refund_correction && (await one(env,'SELECT status FROM nc_credit_correction_mail WHERE proposal_id=?',proposalId))?.status==='suppressed') {

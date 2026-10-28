@@ -539,6 +539,7 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
   "invoice.refund.execute": {
     "amount": "text",
     "basis": "text",
+    "cancellation": "text",
     "confirm": "flag",
     "destination": "text",
     "invoice": "text",
@@ -549,6 +550,7 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
   "invoice.refund.prepare": {
     "amount": "text",
     "basis": "text",
+    "cancellation": "text",
     "destination": "text",
     "invoice": "text",
     "proposal": "text",
@@ -556,11 +558,13 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
   },
   "invoice.refund.preview": {
     "amount": "text",
+    "cancellation": "text",
     "destination": "text",
     "invoice": "text"
   },
   "invoice.refund.reconcile": {
-    "refund": "text"
+    "refund": "text",
+    "tax_reversal": "text"
   },
   "invoice.series": {
     "customer": "text",
@@ -589,6 +593,11 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "revision": "integer",
     "source_invoice": "text"
   },
+  "invoice.tax.bind": {
+    "confirm": "flag",
+    "invoice": "text",
+    "transaction": "text"
+  },
   "invoice.void": {
     "basis": "text",
     "confirm": "flag",
@@ -607,7 +616,8 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
   "lifecycle.policy": {
     "credit_unused": "flag",
     "proration_policy": "text",
-    "reactivation_days": "integer"
+    "reactivation_days": "integer",
+    "refund_original": "flag"
   },
   "metadata.write": {
     "kind": "text",

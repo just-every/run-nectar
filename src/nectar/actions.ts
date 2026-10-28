@@ -1,3 +1,4 @@
+import { bindInvoiceTax } from './invoice-refund-tax'
 import { consumeProcessorEvent } from './processor-events'
 import { allocateProcessorCash } from './processor-cash-queue'
 import { prepareImportedCashTakeover, confirmImportedCashTakeover } from './processor-cash-imported'
@@ -301,6 +302,7 @@ export const actions: Record<string, Handler> = {
   'processor.cash.return.prepare': prepareProcessorCashReturn,
   'processor.cash.return.execute': executeProcessorCashReturn,
   'processor.cash.return.reconcile': reconcileProcessorCashReturn,
+  'invoice.tax.bind': bindInvoiceTax,
   'invoice.refund.preview': previewInvoiceRefund,
   'invoice.refund.prepare': prepareInvoiceRefund,
   'invoice.refund.execute': executeInvoiceRefund,

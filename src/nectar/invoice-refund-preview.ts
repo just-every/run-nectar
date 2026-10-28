@@ -1,3 +1,4 @@
+import { invoiceTaxQuote } from './invoice-refund-tax'
 // A read-only source-bound quote. It grants no authority to move money.
 import type { Bindings } from '../auth.server'
 import { requireRead, type Actor } from './actor'
@@ -25,27 +26,41 @@ export async function invoiceRefundQuote(env: Bindings, input: Input) {
   insist(allocations.length === 1 && allocations[0].method === 'card_external' && allocations[0].amount_cents === invoice.total_cents, 'original_card_capture_required', 409)
   const receipt = await one(env, "SELECT id,proof_json FROM nc_native_collections WHERE payment_id=? AND invoice_id=? AND status='collected'", allocations[0].payment_id, invoice.id)
   const proof = parseJson<Row>(receipt?.proof_json, {})
-  insist(proof.proof === 'succeeded-payment-intent-and-captured-charge' && proof.amountCents === invoice.total_cents && proof.currency === 'usd' && proof.livemode === false, 'verified_test_card_capture_required', 409)
-  const credits = await all(env, 'SELECT id,amount_cents,subtotal_cents,tax_cents,issued_at FROM nc_credit_notes WHERE invoice_id=? ORDER BY issued_at,id', invoice.id)
+  insist(proof.proof === 'succeeded-payment-intent-and-captured-charge' && proof.amountCents === invoice.total_cents && proof.currency === 'usd' && typeof proof.livemode === 'boolean', 'verified_test_card_capture_required', 409)
+  let cancellation: { id: string; creditId: string; subtotalCents: number; taxCents: number; policy: Row } | null = null
+  if(input.has('cancellation')) {
+    const saved=await one(env,"SELECT * FROM nc_interval_cancellations WHERE id=? AND status='approved' AND customer_id=?",input.text('cancellation',{max:100}),invoice.customer_id)
+    const frozen=parseJson<Row>(saved?.plan_json,{})
+    insist(saved&&frozen.transition?.policy?.refundOriginal,'cancellation_refund_policy_required',409)
+    const credit=await one(env,'SELECT * FROM nc_credit_notes WHERE cancellation_id=? AND invoice_id=?',saved.id,invoice.id)
+    insist(credit&&credit.applied_cents===0&&credit.amount_cents===amountCents&&destination==='original'&&!await one(env,"SELECT 1 FROM nc_invoice_refunds WHERE cancellation_credit_id=? AND status='completed'",credit.id)&&!await one(env,'SELECT 1 FROM nc_usage_credit_applications WHERE credit_id=?',credit.id),'cancellation_refund_credit_unavailable',409)
+    cancellation={id:saved.id,creditId:credit.id,subtotalCents:credit.subtotal_cents,taxCents:credit.tax_cents,policy:frozen.transition.policy}
+  }
+  const credits = await all(env, 'SELECT id,amount_cents,subtotal_cents,tax_cents,issued_at FROM nc_credit_notes WHERE invoice_id=? AND id<>? ORDER BY issued_at,id', invoice.id,cancellation?.creditId??'')
   // An unattributed credit cannot acquire invented historical tax evidence.
   insist(credits.every(row => Number.isSafeInteger(row.subtotal_cents) && Number.isSafeInteger(row.tax_cents) && row.subtotal_cents + row.tax_cents === row.amount_cents), 'refund_tax_attribution_required', 409)
   const reversedCents = credits.reduce((sum, row) => sum + row.amount_cents, 0)
   const reversedTaxCents = credits.reduce((sum, row) => sum + row.tax_cents, 0)
   insist(amountCents > 0 && amountCents <= invoice.total_cents - reversedCents, 'exceeds_refundable_amount', 409)
   const roundedTax = (BigInt(invoice.tax_cents) * BigInt(reversedCents + amountCents) * 2n + BigInt(invoice.total_cents)) / (2n * BigInt(invoice.total_cents))
-  const taxCents = Number(roundedTax) - reversedTaxCents
+  const tax = await invoiceTaxQuote(env, invoice, reversedCents, amountCents)
+  if(tax&&cancellation) {
+    if(tax.reversing.length===1) tax.reversing[0]={...tax.reversing[0],subtotalCents:cancellation.subtotalCents,taxCents:cancellation.taxCents}
+    insist(tax.reversing.reduce((sum,line)=>sum+line.taxCents,0)===cancellation.taxCents,'cancellation_tax_attribution_required',409)
+  }
+  const taxCents = cancellation ? cancellation.taxCents : tax ? tax.reversing.reduce((sum, line) => sum + line.taxCents, 0) : Number(roundedTax) - reversedTaxCents
   insist(taxCents >= 0 && taxCents <= amountCents, 'refund_tax_attribution_required', 409)
   const policy = await creditPolicy(env)
-  const basis = await fingerprint({ invoice: invoice.id, source: invoice.source_fingerprint, allocations, credits, receipt: receipt!.id, proof, policyRevision: policy.revision, threshold: policy.two_person_above_cents, amountCents, destination })
+  const basis = await fingerprint({ cancellation, tax, invoice: invoice.id, source: invoice.source_fingerprint, allocations, credits, receipt: receipt!.id, proof, policyRevision: policy.revision, threshold: policy.two_person_above_cents, amountCents, destination })
   return {
     invoice: invoice.id, customer: invoice.customer_id, source: `/app/invoices/${invoice.id}`,
-    basis, currency: 'USD', amountCents, destination,
+    ...(tax ? { tax } : {}), ...(cancellation ? { cancellation } : {}), basis, currency: 'USD', amountCents, destination,
     original: { totalCents: invoice.total_cents, subtotalCents: invoice.subtotal_cents, taxCents: invoice.tax_cents, payment: allocations[0].payment_id, capture: proof.chargeRef },
     prior: { creditCents: reversedCents, taxCents: reversedTaxCents },
     reversing: { subtotalCents: amountCents - taxCents, taxCents, totalCents: amountCents },
-    effects: { owedBeforeCents: 0, owedAfterCents: 0, cashCents: destination === 'original' ? -amountCents : 0, customerBalanceCents: destination === 'balance' ? amountCents : 0, revenueCents: -(amountCents - taxCents) },
+    effects: { owedBeforeCents: 0, owedAfterCents: 0, cashCents: destination === 'original' ? -amountCents : 0, customerBalanceCents: cancellation ? -amountCents : destination === 'balance' ? amountCents : 0, revenueCents: cancellation ? 0 : -(amountCents - taxCents) },
     needsSecondApprover: policy.two_person_above_cents !== null && amountCents > policy.two_person_above_cents,
-    executionAvailable: invoice.tax_cents === 0,
+    executionAvailable: invoice.tax_cents === 0 || !!tax,
     providerOutcome: 'not-attempted',
     boundary: 'Read-only estimate from issued records. No processor refund, provider tax reversal, customer balance credit, approval or customer message is created.',
   }

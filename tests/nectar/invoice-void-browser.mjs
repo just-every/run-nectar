@@ -5,7 +5,7 @@ import { chromium } from '@playwright/test'
 import { harness } from './harness.mjs'
 import { applyPolicy } from './policy-helper.mjs'
 import { invoiceVoidFlow } from './one-time.mjs'
-import { harnessOptions,invoiceRefundExecutionFlow,getInvoiceRefundEdge } from './invoice-refund-preview.mjs'
+import { harnessOptions,invoiceRefundExecutionFlow,invoiceTaxRefundFlow,invoiceCancellationRefundFlow,getInvoiceRefundEdge } from './invoice-refund-preview.mjs'
 const directory = process.env.NECTAR_EVIDENCE_DIR ?? '.evidence/invoice-voids'
 await mkdir(directory, { recursive: true })
 console.log('INVOICE VOID BROWSER HEAD', execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim())
@@ -24,8 +24,13 @@ try {
   const page = await context.newPage()
   const onState = async ({ label, id, kind }) => {
     await page.setViewportSize({ width: 1440, height: 1000 })
-    await page.goto(h.origin + `/app/${kind==='proposal'?'proposals':'invoices'}/${id}`)
-    if(kind==='proposal') {
+    await page.goto(h.origin + (kind==='settings'?'/app/settings':`/app/${kind==='proposal'?'proposals':'invoices'}/${id}`))
+    if(kind==='settings') {
+      assert.equal(await page.getByLabel('Allow reviewed original-method cancellation refunds').count(),1)
+    } else if(kind==='cancellation') {
+      assert.equal(await page.getByRole('heading',{name:'Invoice refunds'}).count(),1)
+      assert.equal(await page.getByRole('columnheader',{name:'Tax reversal',exact:true}).count(),1)
+    } else if(kind==='proposal') {
       assert.equal(await page.getByRole('heading',{name:'Invoice refund simulation'}).count(),1)
     } else if(refunds) {
       assert.equal(await page.getByRole('heading',{name:'Invoice refunds'}).count(),1)
@@ -45,5 +50,7 @@ try {
   if(refunds) {
     // The edge assertions run in the HTTP journey; this mode records its screen.
     await invoiceRefundExecutionFlow(h,owner,{account:'synthetic-nectar-native-account-1',customerRef:'synthetic-nectar-native-customer-3',edge:getInvoiceRefundEdge(),onState})
+    await invoiceTaxRefundFlow(h,owner,{account:'synthetic-nectar-native-account-1',customerRef:'synthetic-nectar-native-customer-3',processor:getInvoiceRefundEdge(),onState})
+    await invoiceCancellationRefundFlow(h,owner,{account:'synthetic-nectar-native-account-1',customerRef:'synthetic-nectar-native-customer-5',processor:getInvoiceRefundEdge(),onState})
   } else await invoiceVoidFlow(h,owner,{onState})
 } finally { await browser?.close(); await h.close() }
