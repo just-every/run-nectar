@@ -3338,7 +3338,7 @@
       "executable": false
     },
     "src/nectar/erasure-records.ts": {
-      "sha256": "778ba314846783c61adde2d0e3cfac591d217da3275026305717e1d779a3637a",
+      "sha256": "cd40e176dbf35781d80baeb8f669fcf64c928f280868909af82bec5912de0549",
       "executable": false
     },
     "src/nectar/erasure-requests.ts": {
@@ -5318,7 +5318,7 @@
       "executable": false
     },
     "tests/nectar/portal-billing.mjs": {
-      "sha256": "fb5de5d473509b2abf45ed330f5f410b31bdfc58ab253b02510b22f1a110be24",
+      "sha256": "271468a757c0f51cb76d7e1064df97cd901abf5c192a8210a00f7fe9652feb0b",
       "executable": false
     },
     "tests/nectar/portal-corrections.mjs": {
