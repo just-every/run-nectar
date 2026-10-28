@@ -5314,7 +5314,7 @@
       "executable": false
     },
     "tests/nectar/portal-receipts-browser.mjs": {
-      "sha256": "c4933d03f8265512c606251a5161a2b023bc497b6cb41efdf0a7f34d2aec4ab3",
+      "sha256": "a1f5a04c796103f60d000cfc991c7adc78140fc34be3595c81c5f480b59e1f9d",
       "executable": false
     },
     "tests/nectar/portal-receipts.mjs": {

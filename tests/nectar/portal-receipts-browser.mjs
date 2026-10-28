@@ -25,6 +25,9 @@ try {
     for (const width of [1440, 390]) {
       await page.setViewportSize({ width, height: 1000 })
       assert.equal((await page.goto(h.origin + path)).status(), status)
+      for (const detail of await page.locator('details').all()) {
+        if (!(await detail.getAttribute('open'))) await detail.locator('summary').click()
+      }
       if (number) assert.ok((await page.locator('main').innerText()).includes(number))
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, `${label} fits at ${width}`)
       const small = await page.locator('main *').evaluateAll(nodes => nodes.filter(n => n.textContent.trim() && parseFloat(getComputedStyle(n).fontSize) < 13).map(n => n.tagName))
