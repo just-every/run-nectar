@@ -24,7 +24,7 @@ export async function planChangeQuote(env: Bindings, sub: Row, item: Row, target
   insist(expanded.items.length===1,'single_advance_component_required',409)
   insist(item.price_id!==target||item.quantity!==quantity,'nothing_changes')
   const period=billingPeriodContaining(billingAnchor(original),old.billing!,date),effective=mode==='period_end'?period.end:date
-  insist(effective>=item.effective_from&&(!item.effective_to||effective<item.effective_to)&&(!sub.end_date||effective<sub.end_date),'invalid_effective_date')
+  insist(effective>item.effective_from&&(!item.effective_to||effective<item.effective_to)&&(!sub.end_date||effective<sub.end_date),'invalid_effective_date')
   const issued=rate(original),before=history.length?rateIntervalService(current):issued
   insist(issued.subtotalCents===invoice.subtotal_cents&&issued.taxCents===invoice.tax_cents&&issued.totalCents===invoice.total_cents,'plan_change_original_mismatch',409)
   const changed:RatingInput={...current,prices:{...current.prices,[target]:price},items:[...current.items.map(i=>i.id===item.id?{...i,to:effective}:i),{id:newItem,priceId:target,quantity,from:effective,to:expanded.items[0].to}],events:[],charges:[],usageCredits:[],usageAdjustments:[]}

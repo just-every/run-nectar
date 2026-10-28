@@ -110,6 +110,7 @@ export async function decidePlanChange(env: Bindings, actor: Actor, input: Input
 export async function preparePlanChangeCredit(env:Bindings,actor:Actor,input:Input){
   requireMember(actor,'approve');await requireFreshFactor(env,actor)
   input.only(['change','returnTo'])
+  const generation=(await one(env,'SELECT value FROM nc_privacy_generation WHERE id=1'))!.value
   const row=await one(env,"SELECT * FROM nc_plan_changes WHERE id=? AND status='pending'",input.text('change'))
   insist(row,'pending_change_not_found',404)
   const saved=parseJson<Row>(row.quote_json,{}),sub=await requireSubscription(env,row.subscription_id),item=await one(env,'SELECT * FROM nc_items WHERE id=?',row.item_id),policy=await lifecyclePolicy(env)
@@ -120,7 +121,7 @@ export async function preparePlanChangeCredit(env:Bindings,actor:Actor,input:Inp
   insist(row.mode==='immediate'?date===row.effective_date:date<=row.effective_date,'plan_change_date_changed',409)
   const quote=await planChangeQuote(env,sub,item!,row.new_price_id,row.new_quantity,row.mode,row.mode==='period_end'?saved.period.start:row.effective_date,row.policy,row.new_item_id)
   insist(quote.basis===row.basis,'stale',409)
-  const invoice=await issuedInvoice(env,row.source_invoice_id),cp=await creditPolicy(env),request=newId(),generation=(await one(env,'SELECT value FROM nc_privacy_generation WHERE id=1'))!.value
+  const invoice=await issuedInvoice(env,row.source_invoice_id),cp=await creditPolicy(env),request=newId()
   await commit(env,[guard(env,'stale','(SELECT value FROM nc_privacy_generation WHERE id=1)=?',generation),guard(env,'plan_credit_already_prepared','NOT EXISTS(SELECT 1 FROM nc_plan_change_credit_requests WHERE change_id=?)',row.id),
     stmt(env,'INSERT INTO nc_credit_requests(id,invoice_id,amount_cents,reason,prepared_by,prepared_name,prepared_at,basis,policy_revision,balance_cents) VALUES(?,?,?,?,?,?,?,?,?,?)',request,invoice.id,-quote.delta.totalCents,reason,actor.id,actorLabel(actor),now(),await creditBasis(invoice,cp),cp.revision,invoice.balance_cents),
     stmt(env,'INSERT INTO nc_plan_change_credit_requests(request_id,change_id,invoice_id,customer_id) VALUES(?,?,?,?)',request,row.id,invoice.id,row.customer_id)],{actor:actorLabel(actor),action:'plan-change.credit.prepare',subject:row.id,detail:{request,invoice:invoice.id,amount:-quote.delta.totalCents,basis:row.basis}})
