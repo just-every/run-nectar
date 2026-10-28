@@ -44,7 +44,7 @@ const projection = (row: Row) => ({ id: row.id, subscription: row.subscription_i
 
 export async function portalChangeOptions(env: Bindings, session: CustomerSession, subscription: string) {
   const data = await changeBasis(env, session, subscription)
-  return { subscription, item: data.item.id as string, quantity: data.item.quantity as number, current: data.current, targets: data.targets,
+  return { subscription, item: data.item.id as string, quantity: data.item.quantity as number, current: data.current, targets: data.targets, previewTargets: data.allowed,
     policy: { revision: data.policy.revision, minimumSeats: data.policy.minimumSeats, pauseAllowed: data.policy.pauseAllowed }, basis: data.basis, day: data.day,
     requests: (await all(env, 'SELECT * FROM nc_portal_change_requests WHERE customer_id=? AND subscription_id=? ORDER BY requested_at,id', session.customer, subscription)).map(row => ({ ...projection(row), current: row.basis_hash === data.basis })) }
 }

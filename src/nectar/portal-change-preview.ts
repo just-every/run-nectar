@@ -1,7 +1,9 @@
 import type { Bindings } from '../auth.server'
 import { requireBusiness, taxReady } from './business'
 import { fingerprint, insist, one } from './core'
-import { periodContaining } from './dates'
+import { customerText } from './locale'
+import { h } from './ui/html'
+import { addDays, periodContaining } from './dates'
 import type { Input } from './input'
 import { pricesById, ratingInputs } from './inputs'
 import { changeBasis } from './portal-change-requests'
@@ -12,7 +14,7 @@ import { startsInIssuedPeriod } from './subscriptions'
 // An estimate is read-only. It never mints approval, an invoice or debit consent.
 export async function portalChangePreview(env: Bindings, request: Request, session: CustomerSession, input: Input) {
   insist(request.headers.get('origin')===session.origin,'forbidden',403)
-  input.only(['subscription','item','target_price','quantity','basis','policy_revision'])
+  input.only(['subscription','item','target_price','quantity','basis','policy_revision','confirm'])
   const subscription=input.text('subscription',{max:100}),data=await changeBasis(env,session,subscription)
   insist(input.text('basis',{max:64})===data.basis&&input.integer('policy_revision')===data.policy.revision,'portal_change_stale',409)
   insist(input.text('item',{max:100})===data.item.id,'not_found',404)
@@ -39,4 +41,15 @@ export async function portalChangePreview(env: Bindings, request: Request, sessi
   return {subscription,item:data.item.id,targetPrice:target.id,quantity,period,effectiveDate:data.day,
     before:amount(before),after:amount(after),difference:{subtotalCents:after.subtotalCents-before.subtotalCents,taxCents:after.taxCents-before.taxCents,totalCents:after.totalCents-before.totalCents},
     basis:await fingerprint({beforeInput,afterInput,policy:data.policy,source:data.source}),executionAuthority:false,paymentAuthority:false}
+}
+
+export function portalChangePreviewPage(session:CustomerSession,quote:Awaited<ReturnType<typeof portalChangePreview>>,back:string) {
+  const L=customerText(session.language,session.currency)
+  return h`<p><a href="${back}">${L.t('portal.change.heading')}</a></p><h1>${L.t('portal.change.previewHeading')}</h1><section class="card"><p>${L.day(quote.period.start)} – ${L.day(addDays(quote.period.end,-1))}</p><dl>
+    <dt>${L.t('portal.change.effective')}</dt><dd>${L.day(quote.effectiveDate)}</dd>
+    <dt>${L.t('portal.change.beforeAmount')}</dt><dd>${L.money(quote.before.totalCents)}</dd>
+    <dt>${L.t('portal.change.afterAmount')}</dt><dd>${L.money(quote.after.totalCents)}</dd>
+    <dt>${L.t('portal.tax')}</dt><dd>${L.money(quote.after.taxCents)}</dd>
+    <dt>${L.t('portal.change.difference')}</dt><dd>${L.money(quote.difference.totalCents)}</dd>
+  </dl><p>${L.t('portal.change.previewReadOnly')}</p></section>`
 }

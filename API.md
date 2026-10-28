@@ -909,8 +909,9 @@ calendars are refused. The answer projects the business-local effective day,
 service period, before and after subtotal, tax and total, and their exact
 difference. Its returned basis fingerprints the complete rating inputs and
 policy; it confers neither execution nor payment authority. No service, invoice,
-payment, audit event or outbound message is created. Customer preview forms,
-ordinary change confirmation and collection remain unfinished.
+payment, audit event or outbound message is created. The existing customer form also opens the estimate in the customer language;
+its optional hidden `confirm` field has no effect in this read-only door.
+Ordinary change confirmation and collection remain unfinished.
 
 ### Reviewed remittance receipts
 

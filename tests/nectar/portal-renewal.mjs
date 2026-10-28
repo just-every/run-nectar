@@ -143,6 +143,24 @@ export async function portalRenewalFlow(h,owner) {
     assert.equal((await get(cancelled,cancelSession)).term.cancelled,true)
     await post(cancelled,cancelSession,{basis:cancelOffer.basis,confirm:'cancel'},409)
 
+    // The existing customer form reaches the same estimate in both languages.
+    await applyPolicy(h,owner,'portal.change.policy',{prices:[price,cheap,expensive],minimum_seats:5,pause_allowed:false})
+    const nativeEstimateSession=await issue(estimated)
+    for(const language of ['en','es-US']) {
+      const customer=await api(`customers/${estimated.customer}`)
+      await api('customer.update',{customer:estimated.customer,revision:customer.revision,name:customer.name,billing_email:customer.billing_email,language})
+      await page.goto(`${h.origin}/portal/changes/${estimated.sub}?session=${nativeEstimateSession.token}`)
+      await page.locator('select[name="target_price"]').selectOption(expensive)
+      const facts=await estimatedFacts()
+      await page.locator('button[formaction]').click()
+      assert.equal(await page.locator('html').getAttribute('lang'),language)
+      assert.match(await page.locator('main').innerText(),/USD 150.00/)
+      assert.match(await page.locator('main').innerText(),/USD 50.00/)
+      assert.equal(await page.locator('form').count(),0,'An estimate confers no execution confirmation')
+      await capture(`portal-change-estimate-${language}`)
+      assert.deepEqual(await estimatedFacts(),facts,'The native estimate also leaves plans and money unchanged')
+    }
+
     // Stale source and approved policy changes refuse an old save without writes.
     const stale=await subscription(),staleSession=await issue(stale),staleOffer=await get(stale,staleSession)
     await page.goto(h.origin+path(stale,staleSession))
