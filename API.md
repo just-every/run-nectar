@@ -791,3 +791,46 @@ authority tables, and erasure withdraws this record family.
 Subscription reads preserve the ordinary subscription source record. Request `include_state=true` on the subscription detail URL to include the current observed state, its effective observation time and immutable transition history. The subscription page and customer history include that projection. Subscription readers without both invoice and payment read capabilities receive only the date and timezone in each cause; the internal schedule checkpoint is never part of the subscription source response.
 
 Native subscription creation retains its own `subscription.created` event alongside the initial `subscription.state_changed` event. Lifecycle observation does not turn creation into an update or repeat either event. A scheduled observer whose read basis loses a race leaves its page pending for the next tick and completes successfully; audit-storage failures still fail the tick and roll back the transition.
+
+## Repository TypeScript SDK
+
+The maintained [TypeScript SDK](sdks/typescript/README.md) provides typed native
+metering, explained entitlement decisions and DEV-005 metadata operations. The
+[runnable sample](examples/typescript-sdk/README.md) compiles the actual client,
+submits a caller-identified observation and gates access on the returned decision.
+It supports a usage credential paired with a separate prepare reader, or an
+existing authorized member session. Member writes retain the exact Origin check.
+No SDK permission is added: accountants and credentials still cannot replace
+metadata, and removing authority applies on the next SDK request.
+
+`NectarClient` takes the installation `baseUrl`, existing authentication `headers`
+and an optional dated `version`. Omit `version` to preserve native credential
+pinning. Every POST takes an explicit `idempotencyKey`; neither the client nor the
+sample retries or generates another event identifier. `requestResult` exposes
+the response version and replay header; `NectarApiError` retains the native status
+and error body. Exact decimal quantities remain strings. Usage responses with
+rejected events must be handled before treating an observation as recorded.
+
+`metadata.get`, `metadata.write` and `metadata.list` support customer,
+subscription, price, invoice, payment and credit-note records. Replacements name
+the current revision and carry the complete map. Maps preserve all 50 exact
+string pairs, including whitespace, Unicode, empty keys and own `__proto__`
+properties. Filters encode the exact current key and value; pagination retains
+both filter strings and the page size. SDK schemas follow the current
+[published schema implementation](src/nectar/openapi.ts) and the native handlers;
+the generic typed request method reaches other existing JSON operations under
+the same authority.
+
+The SDK also wraps native payment-link management and owner-issued portal
+sessions. Its server-side examples return an already approved, active checkout
+link and an explicitly requested hosted portal destination. They never accept
+customer terms, create processor subscriptions, debit a customer or expose an
+owner credential in browser code. A subscription payment link collects a card
+in provider setup mode; a one-time payment link uses the existing test-payment
+flow. Portal issuance requires the existing fresh owner session and approved
+host, and returns a short-lived private capability that must not be logged.
+
+This repository slice does not complete DEV-003. The other six language SDKs
+and samples, embedded components and live-catalog test purchase, and the unchanged
+metering journey across the full MOVE-010 relay and adoption boundary remain
+required. Current wrappers preserve those existing API and provider boundaries.

@@ -174,7 +174,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "bf191224f59692393d85cc471b1cabf1bd4424271f20bceeb1d3f93a597427d6",
+      "sha256": "52fcfd7075e60f55ed13796db1ac3c54049f89f81561d5f013fcb52c86d1b801",
       "executable": false
     },
     "AGENTS.consumer.md": {
@@ -186,7 +186,7 @@
       "executable": false
     },
     "API.md": {
-      "sha256": "caae3f8b98395e9d546b7c724fa133f90c6a9d13cdcef548862a97302d2b665b",
+      "sha256": "93e30f141bd1416e9bdad312181dd26b5e4ed9fe5f6685827ca0bb1d3bd35360",
       "executable": false
     },
     "base-copies.json": {
@@ -194,7 +194,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "b0b4cd0741278b52e0f6fbd217a8222d692e7a227a9650854b384a7615f7a830",
+      "sha256": "3d073011883dc919ef22f2ea93acda592c72b02c98effe7aa5c48ae8288bf793",
       "executable": false
     },
     "DEMO.md": {
@@ -230,7 +230,7 @@
       "executable": false
     },
     "docs/CLAIMS.md": {
-      "sha256": "875620ae9069f33892a10be6745d9c3ae1e2de0ac08f2e28495997481a475ee3",
+      "sha256": "9baa929706a7084fd48a90f1e9c4d4797a30e209cff03f12005097dce3129d54",
       "executable": false
     },
     "docs/composition-baseline.json": {
@@ -311,6 +311,46 @@
     },
     "examples/stripe-switch/README.md": {
       "sha256": "e4c656615871b9247598174907e37e471edd3c2be66db304c6958d7cee384f8b",
+      "executable": false
+    },
+    "examples/typescript-sdk/.gitignore": {
+      "sha256": "58aea3d6b4b0f8799c1e00c3b023898516997f6369ee8e13d8d4b4215f70a62b",
+      "executable": false
+    },
+    "examples/typescript-sdk/package.json": {
+      "sha256": "2fc5980fa1fe186a513bbab5382ca969ac64a3d91b5ab2b22706d7048ae2e913",
+      "executable": false
+    },
+    "examples/typescript-sdk/README.md": {
+      "sha256": "810847ab539371751cf4596893a0df219a13a2e099a009e55091cc5f2be4384b",
+      "executable": false
+    },
+    "examples/typescript-sdk/src/checkout-and-portal.ts": {
+      "sha256": "0c43a99cff28e46ac6716ed6f2ff52bed73294eba5022a560a4b169434e6ccc1",
+      "executable": false
+    },
+    "examples/typescript-sdk/src/cli.ts": {
+      "sha256": "9a37b6768d43360efc0e8f043915c18d60d0fcce3069f6b879d196ded2440841",
+      "executable": false
+    },
+    "examples/typescript-sdk/src/config.ts": {
+      "sha256": "a8d63f035063a5df3ef2e73093e305de847a8de9a7e3a690ee75405661a88d28",
+      "executable": false
+    },
+    "examples/typescript-sdk/src/index.ts": {
+      "sha256": "56e04b55e48b7049716b5b8230393ef3b39261415c8bb9abe41fbc28f0df2fe6",
+      "executable": false
+    },
+    "examples/typescript-sdk/src/metadata.ts": {
+      "sha256": "301226460c923f76cea94358ff1f222dace9a3f9ae475f058abc455eb58365a5",
+      "executable": false
+    },
+    "examples/typescript-sdk/src/meter-then-gate.ts": {
+      "sha256": "ea147775bdb18a5078f3a3c0c79bdd2a593ed9ab56efd462efaa0458350375ae",
+      "executable": false
+    },
+    "examples/typescript-sdk/tsconfig.json": {
+      "sha256": "fe54c087e52218a4ba4bd9090fc7530ec4451ff823a8411eeec9907b1a1ebe89",
       "executable": false
     },
     "examples/webhook-receiver/README.md": {
@@ -1159,6 +1199,58 @@
     },
     "scripts/operations-config.mjs": {
       "sha256": "decbd8619e40c741708b49639d54282bd19edc4581a782b240d96a423ad47f01",
+      "executable": false
+    },
+    "sdks/typescript/.gitignore": {
+      "sha256": "58aea3d6b4b0f8799c1e00c3b023898516997f6369ee8e13d8d4b4215f70a62b",
+      "executable": false
+    },
+    "sdks/typescript/package.json": {
+      "sha256": "d81acb1d05bc1df6c51cddb57643b4d30c848c0fda02dccef4d5adc3a6a0b0c3",
+      "executable": false
+    },
+    "sdks/typescript/README.md": {
+      "sha256": "2d3b25091fff1bb6fb732a37d8bc53f18b4dee00cdc6ec579889b317ef8f2f66",
+      "executable": false
+    },
+    "sdks/typescript/src/client.ts": {
+      "sha256": "8640d1b6a1c2db5da037a5f855e518383e3e11cf69d202ad8a8005a56a6d01bc",
+      "executable": false
+    },
+    "sdks/typescript/src/entitlements.ts": {
+      "sha256": "dec67216d15244bb8d9bd8e82a00c719131ea345fda4cd35117aa7ca47b1ea6a",
+      "executable": false
+    },
+    "sdks/typescript/src/errors.ts": {
+      "sha256": "63a3fd925e787d32fab16bf07862a6e753fafd82df7a294a89db233cb3691791",
+      "executable": false
+    },
+    "sdks/typescript/src/index.ts": {
+      "sha256": "1d86339bfa6414c15ad2f6733cfe7bd2f17886704c5b8d0b9f7d42471b5516c3",
+      "executable": false
+    },
+    "sdks/typescript/src/metadata.ts": {
+      "sha256": "ad72f18c21689becc3ba695479e4760bbdf965b3329dbdd1e449e7925b206ce4",
+      "executable": false
+    },
+    "sdks/typescript/src/payment-links.ts": {
+      "sha256": "8367262b1c714ac06cc9e438be14908f6a90845be8de2aa692d01550f775df5d",
+      "executable": false
+    },
+    "sdks/typescript/src/portal.ts": {
+      "sha256": "2d9bbf4355c041686dbdc73b44f3f5d6c6f52f6ca8a24efb076c19de942a606d",
+      "executable": false
+    },
+    "sdks/typescript/src/transport.ts": {
+      "sha256": "6fcce0e9db8da4c1644ce27272da132a5b493eb0e407dddc10e462a5bbf7f67f",
+      "executable": false
+    },
+    "sdks/typescript/src/usage.ts": {
+      "sha256": "5a14a0319bd3a21490de77edd19e338e6a47dbc5c07b9e530e20843512ce0ad0",
+      "executable": false
+    },
+    "sdks/typescript/tsconfig.json": {
+      "sha256": "7b324a7b11a26196b628e2a27b3302489bcf7ed2bd8a1be2094278fb86889b7b",
       "executable": false
     },
     "SEED-COMMAND-CONTRACT.md": {
@@ -5106,7 +5198,7 @@
       "executable": false
     },
     "tests/nectar/isolated-cases.mjs": {
-      "sha256": "b188b5dc6fa818cf4b77784791510ad38cd5dcfba87539ceede2863d04c32c92",
+      "sha256": "ec77f49515ffe9c71f8b458cbee309f565bf928dce461eb1014a2cbbc6d44d2c",
       "executable": false
     },
     "tests/nectar/isolated.mjs": {
@@ -5499,6 +5591,10 @@
     },
     "tests/nectar/saml-fixture.mjs": {
       "sha256": "71e246e3f68a7cc76cc6283a3c034de932696ee6978b04f06d4f43f194be81f2",
+      "executable": false
+    },
+    "tests/nectar/sdk-typescript.mjs": {
+      "sha256": "36e2c67aca879a8085813394857556554eae444b315a008b23f422f2a6e236e8",
       "executable": false
     },
     "tests/nectar/stripe-app.mjs": {
