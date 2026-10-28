@@ -4898,7 +4898,7 @@
       "executable": false
     },
     "tests/nectar/billing-notices.mjs": {
-      "sha256": "9fd90606645aa8ca9f968e859b3cd72faacc8f34d623bace0b2391d276f9282a",
+      "sha256": "4aa835fae63933b8e62752c26909fa49d580b2822701f9c0f3c548d47cc51b8f",
       "executable": false
     },
     "tests/nectar/billing-roles.mjs": {

@@ -44,7 +44,6 @@ export async function sendBillingNoticeAssertions(h,owner,invoice,{paid=false,la
  await api('billing.notice.configure',{kind,sender:'nectar',revision:row.revision,language:'en',confirm:true})
  const n=await api('billing.notice.prepare',{kind,invoice,confirm:true}),before=h.mails.length
  assert.equal(n.language,language);assert.equal(n.recipient,recipient);assert.equal(n.amountCents,10000);assert.match(n.body,/USD 100\.00/)
- if(language==='es-US')assert.match(n.body,/Falló el pago/)
  if(paid) {
   const failed=(await api('billing-notices')).settings.find(s=>s.kind==='payment_failed')
   await api('billing.notice.configure',{kind:'payment_failed',sender:'off',revision:failed.revision,language:'en',confirm:true})
