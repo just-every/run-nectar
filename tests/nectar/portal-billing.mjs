@@ -51,6 +51,8 @@ export async function portalBillingFlow(h,owner,hooks={}) {
   if(hooks.profile)await hooks.profile(contactFields);else await profile(contactFields)
   const contact=(await json('/portal/profile/data')).contacts.find(row=>row.email===contactFields.email)
   assert.ok(contact);assert.equal(contact.name,'Morgan Billing')
+  assert.equal((await h.raw(path('/portal/profile',foreignSession),{body:{operation:'contact.update',contact:contact.id,revision:contact.revision,name:'Foreign edit',email:foreign.billing_email}})).status,409,'A foreign contact ID cannot cross the write boundary')
+  assert.equal((await json('/portal/profile/data')).contacts[0].name,'Morgan Billing')
   await profile(contactFields,409)
   await hooks.state?.({name:'profile-contact',path:path('/portal/profile'),session,customer,invoice})
   const contactMail=h.mails.length
@@ -101,7 +103,13 @@ export async function portalBillingFlow(h,owner,hooks={}) {
   }
   const pdf=await h.raw(path(`/portal/invoices/${invoice}?format=pdf`))
   assert.equal(pdf.status,200);assert.equal(pdf.headers.get('content-type'),'application/pdf')
-  assert.match(await pdf.text(),/^%PDF-/)
+  const document=await pdf.text()
+  assert.match(document,/^%PDF-/)
+  const text=[...document.matchAll(/<([0-9a-f]+)> Tj/g)].map(match=>Buffer.from(match[1],'hex').toString('latin1')).join('\n')
+  assert.ok(text.includes('USD 300.00')&&text.includes('USD 25.00')&&text.includes('USD 100.00')&&text.includes('USD 175.00'),'Downloaded invoice preserves its exact original, credit, payment and open balance')
+  assert.doesNotMatch(text,/PRIVATE-|INTERNAL-/)
+  const peerProfile=await(await h.raw(path('/portal/profile/data',foreignSession))).json()
+  assert.deepEqual([peerProfile.name,peerProfile.contacts,peerProfile.taxIds,peerProfile.certificates],[foreign.name,[],[],[]],'A different billing contact sees none of the saved customer profile records')
   await h.api('collection.customer.bind',owner,{customer,account_ref:edge.account,stripe_customer_ref:edge.customer,confirm:true})
   const englishData=await json('/portal/data')
   await h.api('customer.update',owner,{customer,revision:(await h.api(`customers/${customer}`,owner)).revision,name:own.name,billing_email:own.billing_email,address:address.address,language:'es-US'})
