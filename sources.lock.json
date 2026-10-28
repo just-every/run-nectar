@@ -5162,7 +5162,7 @@
       "executable": false
     },
     "tests/nectar/isolated.mjs": {
-      "sha256": "84963202cc537c0d53606702cb9f8a5cdcb4db4996ac4f64a495cb52c92c32e3",
+      "sha256": "5c40aa9966b79975b9aea0406607035aaf83d14af908ee0f0dea6f23b0404824",
       "executable": false
     },
     "tests/nectar/journey.mjs": {
