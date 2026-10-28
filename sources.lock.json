@@ -5346,7 +5346,7 @@
       "executable": false
     },
     "tests/nectar/plan-changes.mjs": {
-      "sha256": "c44dadc7166023208be0b4c39bfdcb733cac60361b1e635d04220730ec60e5b0",
+      "sha256": "1fc07f1ac958cfff540b12849b246b11f7befbcdea0c832948de21425ba75104",
       "executable": false
     },
     "tests/nectar/policy-approvals.mjs": {

@@ -126,7 +126,7 @@ export async function planChangesFlow(h,owner,{onState=async()=>{},prepare,decid
 async function repeatedPlanChanges(h,owner,finance,f,{low,high,makePrice,first,debit,preview,approve,policy,onState}){
   const api=(path,body,status)=>h.api(path,owner,body,status)
   const higher=await makePrice(4,'4800')
-  const visible=async()=>({items:(await api(`subscriptions/${f.subscription}`)).items,invoices:(await api('invoices')).filter(i=>i.subscription_id===f.subscription)})
+  const visible=async()=>({items:(await api(`subscriptions/${f.subscription}`)).items,invoices:(await api(`invoices?customer=${f.customer}`)).data})
   const immutable=i=>({number:i.number,subtotal:i.subtotal_cents,tax:i.tax_cents,total:i.total_cents,lines:i.lines,calculation:i.calculation})
   const original=immutable(await api(`invoices/${f.invoice}`)),firstDebit=immutable(debit)
   await h.advanceClock('2026-09-01T10:00:00Z')
@@ -195,7 +195,7 @@ export async function salesPlanChangesFlow(h,owner,{onState=async()=>{},prepare,
  for(const role of ['sales','finance']){await api('access.give',{email:`plan-${role}@example.test`,name:`Plan ${role}`,role});people[role]=await h.signIn(`plan-${role}@example.test`,{requested:true})}
  await applyPolicy(h,owner,'credit.policy',{two_person_above:'1000'})
  await applyPolicy(h,owner,'lifecycle.policy',{credit_unused:true,reactivation_days:30,proration_policy:'invoice_now'})
- const price=async(n,amount)=>{const product=(await api('product.create',{code:`synthetic-nectar-sales-price-${n}`,name:`Annual sales tier ${n}`})).id;return(await api('price.create',{product,kind:'flat',unit_amount:amount,interval_unit:'year',billing_timing:'advance',taxable:false})).id}
+ const price=async(n,amount)=>{const product=(await api('product.create',{code:`synthetic-nectar-sales-price-${n}`,name:`Annual sales tier ${n}`})).id;return(await api('price.create',{product,kind:'seat',unit_amount:amount,interval_unit:'year',billing_timing:'advance',taxable:false})).id}
  const low=await price(1,'1200'),high=await price(2,'4800'),fixtures=[]
  for(let n=0;n<2;n++){const customer=(await api('customer.create',{external_id:`synthetic-nectar-sales-plan-${n}`,name:`Quoted annual account ${n+1}`,billing_email:`sales-plan-${n}@example.test`})).id;const subscription=(await api('subscription.create',{customer,start_date:'2026-01-01',price:[n?high:low]})).id;fixtures.push({customer,subscription})}
  const run=await api('billrun.prepare',{period:'2026-01'})
@@ -204,9 +204,9 @@ export async function salesPlanChangesFlow(h,owner,{onState=async()=>{},prepare,
  await api('payment.allocate',{payment,invoice:fixtures[1].invoice,amount:'4800'})
  const preview=prepare??((fields,who)=>h.api('plan.change.prepare',who,fields)),execute=decide??((fields,who)=>h.api('plan.change.decide',who,fields))
  const minimal=['after','before','delta','effectiveDate','mode','period','policy','waivedDelta'].sort()
- const ownerOtherQuote=await api('plan.change.prepare',{subscription:fixtures[0].subscription,item:fixtures[0].item,price:high,mode:'immediate'})
+ const ownerOtherQuote=await api('plan.change.prepare',{subscription:fixtures[0].subscription,item:fixtures[0].item,price:high,quantity:1,mode:'immediate'})
  assert.ok((await h.page(`/app/subscriptions/${fixtures[0].subscription}`,people.sales)).includes(`value="${high}"`),'sales can select their permitted catalogue price in the real plan form')
- const upgrade=await preview({subscription:fixtures[0].subscription,item:fixtures[0].item,price:high,mode:'immediate'},people.sales)
+ const upgrade=await preview({subscription:fixtures[0].subscription,item:fixtures[0].item,price:high,quantity:1,mode:'immediate'},people.sales)
  assert.deepEqual(Object.keys(upgrade.quote).sort(),minimal)
  assert.ok((await h.page(`/app/subscriptions/${fixtures[0].subscription}`,people.finance)).includes('Target plan: <strong>Annual sales tier 2 v1</strong>'),'the approver sees the saved target plan, not just a money delta')
  await h.api(`invoices/${fixtures[0].invoice}`,people.sales,undefined,403)
@@ -217,7 +217,7 @@ export async function salesPlanChangesFlow(h,owner,{onState=async()=>{},prepare,
  await onState({label:'sales-upgrade-preview',subscription:fixtures[0].subscription,sales:people.sales,finance:people.finance})
  const applied=await execute({change:upgrade.change,decision:'approved'},people.finance)
  assert.equal((await api(`invoices/${applied.invoice}`)).total_cents,upgrade.quote.delta.totalCents)
- const down=await preview({subscription:fixtures[1].subscription,item:fixtures[1].item,price:low,mode:'immediate'},people.sales)
+ const down=await preview({subscription:fixtures[1].subscription,item:fixtures[1].item,price:low,quantity:1,mode:'immediate'},people.sales)
  assert.deepEqual(Object.keys(down.quote).sort(),minimal);assert.ok(down.quote.delta.totalCents < -100000)
  await h.api('plan.change.credit.prepare',people.sales,{change:down.change},403)
  await h.api('plan.change.decide',people.finance,{change:down.change,decision:'approved'},409)
@@ -234,6 +234,27 @@ export async function salesPlanChangesFlow(h,owner,{onState=async()=>{},prepare,
  const projected=(await h.api(`subscriptions/${fixtures[1].subscription}`,people.sales)).planChanges[0]
  assert.equal(projected.status,'approved');assert.equal(projected.credit_id,undefined);assert.equal(projected.source_invoice_id,undefined)
  await onState({label:'sales-credit-approved',subscription:fixtures[1].subscription,sales:people.sales,finance:people.finance})
+ // The same immutable chain applies to seat quantities and scoped sales quotes.
+ await h.advanceClock('2026-09-01T12:00:00Z')
+ const seatItem=(await api(`subscriptions/${fixtures[0].subscription}`)).items.find(i=>i.price_id===high)
+ const seats=await preview({subscription:fixtures[0].subscription,item:seatItem.id,price:high,quantity:2,mode:'immediate'},people.sales)
+ const seatTotal=rounded(120000*181,365)+rounded(480000*62,365)+rounded(960000*122,365)
+ assert.deepEqual(Object.keys(seats.quote).sort(),minimal)
+ assert.equal(seats.quote.before.totalCents,upgrade.quote.after.totalCents);assert.equal(seats.quote.after.totalCents,seatTotal)
+ const seatDebit=await execute({change:seats.change,decision:'approved'},people.finance)
+ assert.equal((await api(`invoices/${seatDebit.invoice}`)).total_cents,seatTotal-upgrade.quote.after.totalCents)
+ await h.advanceClock('2026-10-01T12:00:00Z')
+ const twoSeats=(await api(`subscriptions/${fixtures[0].subscription}`)).items.find(i=>i.quantity===2)
+ const fewer=await preview({subscription:fixtures[0].subscription,item:twoSeats.id,price:high,quantity:1,mode:'immediate'},people.sales)
+ const reducedTotal=rounded(120000*181,365)+rounded(480000*62,365)+rounded(960000*30,365)+rounded(480000*92,365)
+ assert.equal(fewer.quote.delta.totalCents,reducedTotal-seatTotal)
+ await h.api('plan.change.decide',people.finance,{change:fewer.change,decision:'approved'},409)
+ await authorize({change:fewer.change},people.finance)
+ await h.api('plan.change.decide',people.finance,{change:fewer.change,decision:'approved'},409)
+ const seatCredit=await execute({change:fewer.change,decision:'approved'},owner)
+ assert.equal((await api(`invoices/${fixtures[0].invoice}`)).credits.find(c=>c.id===seatCredit.credit).amount_cents,seatTotal-reducedTotal)
+ assert.equal((await api('billrun.prepare',{period:'2026-10'})).summary.invoices,0,'repeated seat changes cannot rebill current service')
+ await onState({label:'sales-repeated-seat-credit',subscription:fixtures[0].subscription,sales:people.sales,finance:people.finance})
  await api('erasure.request',{customer:fixtures[0].customer})
  const erasure=h.mails.at(-1),href=`${erasure.text??''} ${erasure.html??''}`.match(/https?:\/\/[^\s"<]+\/erase\/[a-f0-9]{64}/)[0]
  await h.raw(new URL(href).pathname,{form:new URLSearchParams({confirm:'yes'})})
