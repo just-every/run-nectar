@@ -12,7 +12,7 @@ export async function purgeErasure(env: Bindings, actor: Actor) {
   requireOwner(actor)
   const b=await business(env),day=localDate(clockInstant(env),b?.timezone??'UTC'),removed=[]
   for(const request of await all(env,"SELECT * FROM nc_erasure_requests WHERE status='complete' AND purged_at IS NULL AND retain_until IS NOT NULL AND retain_until<=?",day)) {
-    const tables=await all(env,"SELECT name FROM sqlite_master WHERE type='table' AND name GLOB 'nc_*' AND name NOT IN ('nc_erasure_requests','nc_erased_records','nc_erasure_financial','nc_privacy_context','nc_guard','nc_audit')")
+    const tables=await all(env,"SELECT name FROM sqlite_master WHERE type='table' AND name GLOB 'nc_*' AND name NOT IN ('nc_remittance_source_keys','nc_erasure_requests','nc_erased_records','nc_erasure_financial','nc_privacy_context','nc_guard','nc_audit')")
     const ids=new Set((await all(env,'SELECT record_id FROM nc_erasure_financial WHERE request_id=?',request.id)).map(r=>r.record_id))
     for(const authorization of await all(env,'SELECT id FROM nc_prepaid_topup_authorizations WHERE customer_id=?',request.customer_id))ids.add(authorization.id)
     const selected=new Map<string,{row:Row;keys:string[]}[]>(),foreign=new Map<string,string[]>()

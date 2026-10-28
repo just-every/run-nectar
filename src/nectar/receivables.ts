@@ -189,7 +189,7 @@ export async function payments(env: Bindings, actor: Actor, customerId?: string,
 /** Callers authorize first: the payments door, or a customer record's own ledger (GOV-001). */
 async function paymentRows(env: Bindings, customerId?: string,url?:URL) {
   const filter=metadataPredicate('payment','p.id',url?metadataFilter(url):null)
-  const rows = await all(env, `SELECT p.*, c.name AS customer_name, ${UNALLOCATED_SQL} AS unallocated_cents FROM nc_payments p JOIN nc_customers c ON c.id = p.customer_id WHERE ${filter.sql} ${customerId ? 'AND p.customer_id = ?' : ''} ORDER BY p.received_on DESC, p.recorded_at DESC ${customerId ? '' : 'LIMIT 200'}`, ...filter.params,...(customerId ? [customerId] : []))
+  const rows = await all(env, `SELECT p.*, (SELECT r.id FROM nc_remittances r WHERE r.payment_id=p.id) AS remittance_id, c.name AS customer_name, ${UNALLOCATED_SQL} AS unallocated_cents FROM nc_payments p JOIN nc_customers c ON c.id = p.customer_id WHERE ${filter.sql} ${customerId ? 'AND p.customer_id = ?' : ''} ORDER BY p.received_on DESC, p.recorded_at DESC ${customerId ? '' : 'LIMIT 200'}`, ...filter.params,...(customerId ? [customerId] : []))
   return withMetadata(env, 'payment', await Promise.all(rows.map(row => currencyRecord(env, row, row.amount_cents, row.received_on))))
 }
 

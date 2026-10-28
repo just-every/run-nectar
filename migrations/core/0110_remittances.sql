@@ -1,3 +1,5 @@
+-- Non-personal replay tombstones survive financial expiry.
+CREATE TABLE nc_remittance_source_keys (source_key_hash TEXT PRIMARY KEY, payload_hash TEXT NOT NULL, record_id TEXT NOT NULL UNIQUE);
 -- Immutable uploaded receipt identity; received money shares the ordinary ledger.
 CREATE TABLE nc_remittances (
  id TEXT PRIMARY KEY, source_key_hash TEXT NOT NULL UNIQUE, payload_hash TEXT NOT NULL,
