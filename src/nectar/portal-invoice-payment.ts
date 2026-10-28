@@ -7,7 +7,7 @@ import { localDate } from './dates'
 import type { Input } from './input'
 import { customerText } from './locale'
 import { nativeCollectionSource, nativeSourceGuard } from './payments/source'
-import { capturedPayment, providerReference, verifyIntent, stripeForAccount, type PaymentIdentity, type StripeClient } from './payments/stripe'
+import { capturedPayment, providerReference, refusedPayment, verifyIntent, stripeForAccount, type PaymentIdentity, type StripeClient } from './payments/stripe'
 import { portalProfileFence, requirePortalProfileSession } from './portal-profile-authority'
 import type { CustomerSession } from './portal-session'
 import { collectedPaymentStatements, issuedInvoice } from './receivables'
@@ -78,7 +78,10 @@ export async function startPortalInvoicePayment(env: Bindings, session: Customer
   const customer=await stripe(`/customers/${encodeURIComponent(binding.stripe_customer_ref)}`)
   insist(customer.object==='customer'&&customer.id===binding.stripe_customer_ref&&customer.livemode===false&&!customer.deleted,'portal_payment_test_customer_required',409)
   const previous=await one(env,"SELECT id FROM nc_portal_invoice_payments WHERE invoice_id=? AND status NOT IN ('expired','failed')",invoice)
-  if(previous)return reconcilePortalInvoicePayment(env,session,previous.id)
+  if(previous) {
+    const reconciled=await reconcilePortalInvoicePayment(env,session,previous.id)
+    if(!['expired','failed'].includes(reconciled.status))return reconciled
+  }
   const id=newId(),at=clockInstant(env)
   await commit(env,[portalProfileFence(env,session),nativeSourceGuard(env,source),
     guard(env,'portal_payment_binding_changed','EXISTS(SELECT 1 FROM nc_stripe_customer_bindings WHERE id=? AND customer_id=? AND revision=? AND account_ref=? AND stripe_customer_ref=?)',binding.id,session.customer,binding.revision,account,binding.stripe_customer_ref),
@@ -115,12 +118,13 @@ export async function reconcilePortalInvoicePayment(env: Bindings, session: Cust
   }
   insist(checkout.status==='complete'&&checkout.payment_intent,'portal_checkout_unconfirmed',409)
   const intentRef=providerReference(checkout.payment_intent),intent=await stripe(`/payment_intents/${encodeURIComponent(intentRef)}`)
-  const identity:PaymentIdentity={accountRef:row.account_ref,customerRef:row.customer_ref,paymentMethodRef:providerReference(intent.payment_method),livemode:false,
+  const identity:PaymentIdentity={accountRef:row.account_ref,customerRef:row.customer_ref,paymentMethodRef:providerReference(intent.status==='requires_payment_method'?intent.last_payment_error?.payment_method??intent.payment_method:intent.payment_method),livemode:false,
     invoiceId:row.invoice_id,requestId:row.id,key:row.id,amountCents:row.amount_cents,currency:'USD'}
   const method=await stripe(`/payment_methods/${encodeURIComponent(identity.paymentMethodRef)}`)
   insist(method.object==='payment_method'&&method.id===identity.paymentMethodRef&&method.type==='us_bank_account'&&method.livemode===false
     &&(method.customer===null||providerReference(method.customer)===row.customer_ref),'portal_ach_method_mismatch',409)
   verifyIntent(intent,identity)
+  if(await refusedPayment(stripe,intent,identity))return {id,status:(await outcome(env,session,row,{session_ref:sessionRef,intent_ref:intentRef,status:'failed'})).status}
   // Processing is never represented as cash or a paid invoice.
   if(intent.status==='processing')return {id,status:(await outcome(env,session,row,{session_ref:sessionRef,intent_ref:intentRef,status:'pending'})).status}
   const business=await requireBusiness(env),proof=await capturedPayment(stripe,intent,identity,business.timezone)
@@ -131,7 +135,7 @@ export async function reconcilePortalInvoicePayment(env: Bindings, session: Cust
   if(balance.status!=='available'||balance.available_on*1000>clockInstant(env))return {id,status:(await outcome(env,session,row,{session_ref:sessionRef,intent_ref:intentRef,status:'pending'})).status}
   const invoice=await issuedInvoice(env,row.invoice_id)
   const system:Actor={id:`portal-payment:${id}`,kind:'agent',name:'Portal payment settlement',email:'',role:null,sessionId:null,capabilities:new Set(['receivables'])}
-  const financial=await collectedPaymentStatements(env,system,{customerId:session.customer,invoiceId:row.invoice_id,amountCents:row.amount_cents,balanceCents:invoice.balance_cents,
+  const financial=await collectedPaymentStatements(env,system,{customerId:session.customer,invoiceId:row.invoice_id,amountCents:row.amount_cents,balanceCents:invoice.balance_cents,allocationCents:Math.min(row.amount_cents,invoice.balance_cents),
     receivedOn:localDate(balance.available_on*1000,business.timezone),method:'bank_transfer',reference:`stripe:${row.account_ref}:${intentRef}`,evidence:canonical(proof)})
   await commit(env,[...paymentFence(env,session,row),...financial.statements,
     stmt(env,"UPDATE nc_portal_invoice_payments SET status='paid',session_ref=?,intent_ref=?,payment_id=?,revision=? WHERE id=?",sessionRef,intentRef,financial.paymentId,newId(),id)],
