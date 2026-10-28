@@ -138,6 +138,8 @@ Native-session/runtime evidence: https://github.com/runeditrun/base/tree/79f61fa
 
 CONTRACT.md is the acceptance and status source. After changing it, run
 `node scripts/contract-docs.mjs write` and `node scripts/contract-docs.mjs check`.
+Pass `--clause PORT-001` (or each touched clause ID) to synchronize its derived
+claim statuses as well; Status summary counts are always regenerated.
 Commit the generated ACCEPTANCE.md and docs/CLAIMS.md with the source.
 Regenerate the edition source lock last with
 `node scripts/edition-authoring/cli.mjs lock`, then run its `check`.

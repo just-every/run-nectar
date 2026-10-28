@@ -182,7 +182,7 @@
       "executable": false
     },
     "AGENTS.md": {
-      "sha256": "2a270b7a8bfb9270571953339b47a56fc007ca6709795d172f764f45263fdbcd",
+      "sha256": "39e2488e9d7bed2799f6c457bcc384b76c776f10f8b29f3136c75c644ea3fd9a",
       "executable": false
     },
     "API.md": {
@@ -1006,7 +1006,11 @@
       "executable": false
     },
     "scripts/contract-docs.mjs": {
-      "sha256": "230ec385fd69a1dc4eb901e52a7d997213e8dba840bbf4e8663bafa7ad648428",
+      "sha256": "9635954f2c2110885a8c1ef1babcea0f5467a4014fd1a916878dd5cf3a61b5c4",
+      "executable": false
+    },
+    "scripts/contract-status-counts.mjs": {
+      "sha256": "6f55dcd509746eb91d68ea4082952ff8beb99713270dc476c20d914431c5b554",
       "executable": false
     },
     "scripts/delivery/base/artifact.mjs": {

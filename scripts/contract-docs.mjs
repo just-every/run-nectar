@@ -1,9 +1,14 @@
 // Generate the derived contract records from the seed's current native parser.
 import { readFile, writeFile, mkdir } from 'node:fs/promises'
 import { parseContract } from '../src/base/seed-contract.mjs'
+import { synchronizeContractCounts } from './contract-status-counts.mjs'
 const mode=process.argv[2]
 if(!['write','check'].includes(mode))throw new Error('Usage: node scripts/contract-docs.mjs write or check')
-const source=await readFile('CONTRACT.md','utf8'),contract=parseContract(source),lines=source.split('\n')
+const touched=process.argv.slice(3).filter(value=>value!=='--clause')
+const before=await readFile('CONTRACT.md','utf8'),source=synchronizeContractCounts(before,touched)
+if(mode==='write'&&source!==before)await writeFile('CONTRACT.md',source)
+if(mode==='check'&&source!==before)throw new Error('CONTRACT.md counts are stale; run node scripts/contract-docs.mjs write')
+const contract=parseContract(source),lines=source.split('\n')
 const prose=value=>String(value).split(/(`[^`]*`)/g).map((part,index)=>index%2?part:part.replace(/(?<![A-Za-z0-9_.\/:@-])([A-Za-z][A-Za-z0-9_-]*)\/([A-Za-z][A-Za-z0-9_-]*)(?![A-Za-z0-9_.\/-])/g,'$1 and $2')).join('')
 const escaped=value=>prose(value).replaceAll('|','\\|').replaceAll('\n',' ')
 const evidence=clause=>lines[clause.row-1].trim().replace(/^\|/,'').replace(/\|$/,'').split(/(?<!\\)\|/)[4].trim()
