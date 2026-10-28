@@ -3078,7 +3078,7 @@
       "executable": false
     },
     "src/nectar/automatic-collection.ts": {
-      "sha256": "b57d718cc3b640195090b4ba53d684972c9dfc546b86b4f21034ba6389686fc9",
+      "sha256": "7d355d20b62989e8e6f7d885dcfed134609ef8320a6121b2e740f56e8f4b62c7",
       "executable": false
     },
     "src/nectar/balance-sql.ts": {
@@ -4822,7 +4822,7 @@
       "executable": false
     },
     "tests/fixtures/locales/fr.json": {
-      "sha256": "5d32ad97da0dd614fdce3988047f990a81835dfd8b5df82d3a225807f6e3e70a",
+      "sha256": "986998ad849648fab8effcc966835fdba1eb92f7544db5e0d258d618f00c0017",
       "executable": false
     },
     "tests/fixtures/stripe-collection-edge.mjs": {

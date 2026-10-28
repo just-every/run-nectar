@@ -73,6 +73,7 @@ export async function automaticDecision(env:Bindings,actor:Actor,input:Input,row
  audit:{actor:actorLabel(actor),action:`automatic.collection.${decision}`,subject:row.id,detail:{basis:row.basis_hash,approvalMode:single?'single-approver':'two-person'}}}
 }
 export async function decideAutomaticCollection(env:Bindings,actor:Actor,input:Input){
+ requireMember(actor,'approve');await requireFreshFactor(env,actor)
  const row=await storedAutomaticCollection(env,input.text('request',{max:100}))
  if(automaticQuote(row).schedule)return decideCollectionSchedule(env,actor,input,row)
  const plan=await automaticDecision(env,actor,input,row)
