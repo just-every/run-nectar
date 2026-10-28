@@ -263,6 +263,19 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
   "collection.reconcile": {
     "request": "text"
   },
+  "collection.recovery.confirm": {
+    "account_ref": "text",
+    "amount_cents": "integer",
+    "basis_hash": "text",
+    "confirm": "flag",
+    "payment_method_ref": "text",
+    "recovery": "text",
+    "request": "text",
+    "stripe_customer_ref": "text"
+  },
+  "collection.recovery.prepare": {
+    "request": "text"
+  },
   "contact.add": {
     "customer": "text",
     "email": "text",
