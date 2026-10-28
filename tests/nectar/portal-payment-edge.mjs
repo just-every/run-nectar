@@ -11,7 +11,7 @@ export function portalPaymentEdge() {
     if(path===`/customers/${customer}`)return Response.json({object:'customer',id:customer,livemode:false,invoice_settings:{default_payment_method:null}})
     if(path==='/checkout/sessions'&&post) {
       const body=new URLSearchParams(await request.text()),id=body.get('client_reference_id')
-      assert.equal(body.get('mode'),'payment');assert.equal(body.get('customer'),customer)
+      assert.equal(body.get('locale'),'es','Hosted payment follows the saved customer language');assert.equal(body.get('mode'),'payment');assert.equal(body.get('customer'),customer)
       assert.equal(body.get('payment_method_types[0]'),'us_bank_account')
       assert.equal(body.get('line_items[0][quantity]'),'1')
       assert.equal(request.headers.get('idempotency-key'),`nectar-portal-invoice-${id}`)

@@ -19,6 +19,8 @@ try {
   const context=await browser.newContext(),page=await context.newPage(),operatorContext=await browser.newContext(),operator=await operatorContext.newPage()
   await operatorContext.addCookies(owner.split('; ').map(value=>{const i=value.indexOf('=');return {name:value.slice(0,i),value:value.slice(i+1),url:h.origin}}))
   let session
+  page.on('console',message=>{if(message.type()==='error')console.error('Browser error',message.text().replace(/session=[^\s"'<>;]*/g,'session=[redacted]'))})
+  page.on('requestfailed',request=>console.error('Browser request failed',new URL(request.url()).pathname,request.failure()?.errorText))
   const shot=async(target,name)=>{
     for(const width of [1440,390]) {
       await target.setViewportSize({width,height:950})

@@ -172,7 +172,7 @@ export async function portalResponse(request: Request, env: Bindings): Promise<R
     // Match the ordinary erasure confirmation page: origin-only referrers let
     // native POST forms supply Origin without ever disclosing the session URL.
     if (session.audience==='hosted'||topupAuthorization||['/portal/payment-methods','/portal/prepaid','/portal/privacy','/portal/answers','/portal/upcoming','/portal/adjustments'].includes(url.pathname)) resultHeaders.set('referrer-policy', 'strict-origin')
-    resultHeaders.set('content-security-policy', `default-src 'none'; style-src 'self'; font-src 'self'; img-src 'self'; form-action 'self' ${url.pathname==='/portal/payment-methods'?'https://checkout.stripe.com':''}; frame-ancestors ${session.audience === 'embedded' ? session.parent : "'none'"}; base-uri 'none'`)
+    resultHeaders.set('content-security-policy', `default-src 'none'; style-src 'self'; font-src 'self'; img-src 'self'; form-action 'self' ${session.audience==='hosted'?'https://checkout.stripe.com':''}; frame-ancestors ${session.audience === 'embedded' ? session.parent : "'none'"}; base-uri 'none'`)
     return new Response(request.method === 'HEAD' ? null : response.body, { headers: resultHeaders })
   } catch (error) {
     if (!(error instanceof NectarError)) throw error

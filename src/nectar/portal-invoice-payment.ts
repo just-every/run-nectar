@@ -87,7 +87,7 @@ export async function startPortalInvoicePayment(env: Bindings, session: Customer
     stmt(env,'INSERT INTO nc_portal_invoice_payment_authority(id,customer_id,created_at) VALUES(?,?,?)',id,session.customer,at)],
     {actor:`customer:portal:${session.jti}`,action:'portal.invoice.payment.claim',subject:id,detail:{invoice,amountCents:source.collectibleCents,consentHash:consent.hash}})
   let row=await rowFor(env,session,id)
-  const fields=new URLSearchParams({mode:'payment',customer:binding.stripe_customer_ref,client_reference_id:id,
+  const fields=new URLSearchParams({mode:'payment',locale:session.language==='es-US'?'es':session.language,customer:binding.stripe_customer_ref,client_reference_id:id,
     'payment_method_types[0]':'us_bank_account','line_items[0][price_data][currency]':'usd',
     'line_items[0][price_data][unit_amount]':String(row.amount_cents),'line_items[0][price_data][product_data][name]':source.row.number,'line_items[0][quantity]':'1',
     'metadata[nectar_portal_payment]':id,'metadata[nectar_native_invoice]':invoice,
@@ -124,7 +124,7 @@ export async function reconcilePortalInvoicePayment(env: Bindings, session: Cust
   const business=await requireBusiness(env),proof=await capturedPayment(stripe,intent,identity,business.timezone)
   insist(checkout.payment_status==='paid','portal_checkout_unpaid',409)
   const charge=await stripe(`/charges/${encodeURIComponent(proof.chargeRef)}`),balance=await stripe(`/balance_transactions/${encodeURIComponent(providerReference(charge.balance_transaction))}`)
-  insist(balance.object==='balance_transaction'&&providerReference(balance.source)===proof.chargeRef&&balance.amount===row.amount_cents
+  insist(balance.object==='balance_transaction'&&balance.type==='payment'&&providerReference(balance.source)===proof.chargeRef&&balance.amount===row.amount_cents
     &&balance.currency==='usd'&&Number.isSafeInteger(balance.available_on),'portal_ach_settlement_unconfirmed',409)
   if(balance.status!=='available'||balance.available_on*1000>clockInstant(env))return {id,status:(await outcome(env,session,row,{session_ref:sessionRef,intent_ref:intentRef,status:'pending'})).status}
   const invoice=await issuedInvoice(env,row.invoice_id)
