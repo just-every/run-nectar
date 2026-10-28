@@ -1,7 +1,3 @@
-// A synthetic QuickBooks Online company at the network edge: query and journal
-// entry endpoints only, with request-id idempotency and injectable outages. It
-// asserts what Nectar sends (balanced lines, a customer on the receivable line,
-// the installation's bearer token) and records every created entry.
 import assert from 'node:assert/strict'
 
 export function quickbooksEdge({ company = 'synthetic-nectar-company', token = 'synthetic-nectar-qbo' } = {}) {

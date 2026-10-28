@@ -1,5 +1,3 @@
-// PAY-005's updater and hard-decline public doors. Only Stripe's paid edge is
-// faked; this does not establish genuine network-updater sandbox evidence.
 import assert from 'node:assert/strict'
 import { nativeCollectionEdge } from './native-collection.mjs'
 import { totp } from './mfa.mjs'
@@ -45,7 +43,9 @@ function lifecycleEdge() {
     stealNext(){stolen=true;base.refuseNext('card_declined')},
     posts:()=>base.calls.filter(call=>call.path==='/payment_intents'&&call.method==='POST').length}
 }
+
 let edge
+
 export const harnessOptions=()=>{
   edge=lifecycleEdge()
   return {localTime:'2026-10-22T10:00:00Z',stripeFetch:edge.fetch,stripeSecret:'synthetic-nectar-1',stripeSecondarySecret:'synthetic-nectar-2'}

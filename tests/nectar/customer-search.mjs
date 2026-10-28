@@ -1,8 +1,8 @@
 import { portalMethodActionsEdge, assertPortalMethodActions } from './portal-method-actions.mjs'
 import { assertCustomerFullCycle } from './customer-cycle.mjs'
 import { assertPaymentReceipts } from './payment-receipts.mjs'
-import { achPaymentEvidenceEdge,assertAchPaymentEvidence } from './ach-payment-evidence.mjs'
-import { customerPaymentMethodsEdge,assertCustomerPaymentMethods,hostedSetupEdge,assertHostedSetups } from './customer-payment-methods.mjs'
+import { achPaymentEvidenceEdge, assertAchPaymentEvidence } from './ach-payment-evidence.mjs'
+import { customerPaymentMethodsEdge, assertCustomerPaymentMethods, hostedSetupEdge, assertHostedSetups } from './customer-payment-methods.mjs'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { file } from './harness.mjs'
@@ -10,6 +10,7 @@ import { prepaidRefundEdge } from './prepaid-refunds.mjs'
 import { totp } from './mfa.mjs'
 
 let edge,methodEdge,achEdge,setupEdge
+
 export const harnessOptions = () => {
   edge = prepaidRefundEdge()
   methodEdge=customerPaymentMethodsEdge(edge.fetch)

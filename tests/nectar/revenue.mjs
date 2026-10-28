@@ -2,8 +2,11 @@ import assert from 'node:assert/strict'
 import { applyPolicy } from './policy-helper.mjs'
 
 const entries = schedule => schedule.entries.map(row => [row.period, row.amountCents])
+
 const sum = rows => rows.reduce((total, row) => total + row.amountCents, 0)
+
 const money = cents => (cents / 100).toFixed(2)
+
 const frozen = invoice => ({ lines: invoice.lines, calculation: invoice.calculation, subtotal: invoice.subtotal_cents, tax: invoice.tax_cents, total: invoice.total_cents, fingerprint: invoice.source_fingerprint })
 
 // Read the actual CSV, including customer names containing commas and quotes.

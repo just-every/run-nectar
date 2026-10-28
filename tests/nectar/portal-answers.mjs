@@ -1,12 +1,11 @@
-// PORT-005 / AGENT-007: signed customers use the same ten-topic evaluator,
-// but every cited operand resolves through a customer-scoped public door.
 import assert from 'node:assert/strict'
 import { applyPolicy } from './policy-helper.mjs'
 import { seedAnswerRecords } from './billing-answers.mjs'
 
 const pointer=(record,path)=>path.split('/').slice(1).reduce((value,key)=>value?.[key.replaceAll('~1','/').replaceAll('~0','~')],record)
-export async function portalAnswersFlow(h,owner,onState=async()=>{}) {
-  const fixture=await seedAnswerRecords(h,owner),{customer,otherCustomer,invoice,otherInvoice,previous}=fixture
+
+export async function portalAnswersFlow(h,owner,onState=async()=>{}, suppliedFixture) {
+  const fixture=suppliedFixture??await seedAnswerRecords(h,owner),{customer,otherCustomer,invoice,otherInvoice,previous}=fixture
   await h.api('portal.configure',owner,{hosts:[h.origin],parents:[h.origin]})
   const issue=async customer=>h.api('portal.session.issue',owner,{customer,origin:h.origin,audience:'hosted'})
   const session=await issue(customer),foreign=await issue(otherCustomer)

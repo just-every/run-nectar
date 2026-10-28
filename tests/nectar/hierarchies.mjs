@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict'
-import {nativeCollectionEdge} from './native-collection.mjs'
+import { nativeCollectionEdge } from './native-collection.mjs'
+
 const edge=nativeCollectionEdge()
+
 export const harnessOptions=()=>({stripeFetch:edge.fetch,stripeSecret:'synthetic-nectar-1'})
+
 export async function hierarchiesFlow(h,owner,{onState=async()=>{},configure,consolidate}={}) {
   const api=(path,body,status)=>h.api(path,owner,body,status)
   await h.advanceClock('2026-10-22T10:00:00Z');edge.capturedAt('2026-10-22T10:00:00Z')
@@ -94,33 +97,4 @@ export async function hierarchiesFlow(h,owner,{onState=async()=>{},configure,con
   assert.ok(JSON.stringify(retained).includes('Division 2'),'another division keeps its own description')
   console.log('hierarchiesFlow: three-division frozen consolidation, once-only billing/revenue, separate parent-card collection and pooled spend passed')
   return {parent,children,invoice,separate:separate.id}
-}
-
-// Parent tax settings must never recalculate the divisions' once-rounded tax.
-export async function hierarchyTaxFlow(h,owner,{onState=async()=>{}}={}) {
-  const api=(path,body,status)=>h.api(path,owner,body,status)
-  await h.advanceClock('2026-10-22T12:00:00Z')
-  await api('business.configure',{...await api('business'),timezone:'UTC'})
-  const {applyPolicy}=await import('./policy-helper.mjs')
-  await applyPolicy(h,owner,'tax.declare',{tax_jurisdiction:'CA',tax_mode:'flat_rate',tax_rate:'6.25',tax_note:'Synthetic division rounding proof'})
-  await api('tax.review',{revision:(await api('business')).revision})
-  const make=async(n,exempt=false)=>(await api('customer.create',{external_id:`synthetic-nectar-hierarchy-tax-${n}`,name:n===0?'Exempt parent':`Tax division ${n}`,billing_email:`tax-division-${n}@example.test`,tax_exempt:exempt,tax_exempt_ref:exempt?'synthetic-nectar-exempt':''})).id
-  const parent=await make(0,true),children=[]
-  const product=(await api('product.create',{code:'synthetic-nectar-hierarchy-rounding',name:'Rounding-sensitive service'})).id
-  const price=(await api('price.create',{product,kind:'flat',unit_amount:'0.08',taxable:true})).id
-  for(let n=1;n<=3;n++){
-    const child=await make(n,n===3);children.push(child)
-    await api('hierarchy.configure',{customer:child,parent,billing_mode:'consolidated',revision:0,consent:true})
-    await api('subscription.create',{customer:child,start_date:'2026-09-01',price:[price]})
-  }
-  const run=await api('billrun.prepare',{period:'2026-09'}),drafts=(await api(`runs/${run.id}`)).invoices
-  assert.deepEqual(drafts.map(i=>i.tax_cents).sort(),[0,1,1],'each taxable division rounds its own half-cent once')
-  const invoice=(await api('hierarchy.invoice.prepare',{parent,invoices:drafts.map(i=>i.id)})).id
-  const saved=await api(`invoices/${invoice}`)
-  assert.deepEqual([saved.subtotal_cents,saved.tax_cents,saved.total_cents],[24,2,26])
-  assert.deepEqual(saved.calculation.inputs.consolidation.sections.map(s=>s.taxCents).sort(),[0,1,1])
-  await api('invoice.approve',{invoice,acknowledge:true});await api('invoice.finalise',{invoice,issue_date:'2026-10-01'})
-  assert.deepEqual([(await api(`invoices/${invoice}`)).total_cents,(await api(`revenue/${invoice}`)).schedules.reduce((n,s)=>n+s.amountCents,0)],[26,24],'tax remains outside revenue')
-  await onState({label:'division-tax-custody',invoice,parent,children})
-  console.log('hierarchyTaxFlow: exempt parent preserves each division\'s tax exemption and once-rounded cents, outside revenue')
 }

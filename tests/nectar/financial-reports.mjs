@@ -2,9 +2,13 @@ import assert from 'node:assert/strict'
 import { applyPolicy } from './policy-helper.mjs'
 
 const metrics = ['billings', 'collections', 'settlements', 'refunds', 'ar', 'credits', 'tax', 'unbilled', 'credit-balances']
+
 const sum = rows => rows.reduce((total, row) => total + row.amountCents, 0)
+
 const money = cents => (cents / 100).toFixed(2)
+
 const content = mail => `${mail.subject} ${mail.text ?? ''} ${mail.html ?? ''}`
+
 const monthAfter = (period, count = 1) => {
   const date = new Date(`${period}-01T12:00:00Z`)
   date.setUTCMonth(date.getUTCMonth() + count)

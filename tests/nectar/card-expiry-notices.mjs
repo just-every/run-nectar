@@ -1,11 +1,10 @@
-// Owner-confirmed PAY-005 expiry notices through actual HTTP, auth, D1 and
-// mail transport. Only the Stripe and Resend network edges are simulated.
 import assert from 'node:assert/strict'
 import { nativeCollectionEdge } from './native-collection.mjs'
 import { publishPrice } from './price-helper.mjs'
 import { totp } from './mfa.mjs'
 
 let edge
+
 export const harnessOptions=()=>{
   const base=nativeCollectionEdge(),cards=new Map()
   for(let n=1;n<=7;n++){

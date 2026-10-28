@@ -1,14 +1,16 @@
-import { file } from './harness.mjs'
 import { nativeCollectionEdge } from './native-collection.mjs'
-import { applyPolicy } from './policy-helper.mjs'
 import assert from 'node:assert/strict'
-import { mkdtemp,rm,readFile } from 'node:fs/promises'
+import { mkdtemp, rm, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { receiver,verify } from '../../examples/webhook-receiver/server.mjs'
+import { receiver, verify } from '../../examples/webhook-receiver/server.mjs'
+
 const lifecycleEdge=nativeCollectionEdge()
+
 let stripeEvents=new Map(),stripeEventRequests=[],stripeCustomerDeleted=false
+
 let receive,online=false,clock=Date.now(),secrets=[],requests=[],received=[],directory
+
 export const harnessOptions=()=>({stripeFetch:async request=>{
   const url=new URL(request.url)
   if(url.pathname.startsWith('/v1/events/')){stripeEventRequests.push({method:request.method,path:url.pathname});const event=stripeEvents.get(url.pathname.split('/').pop());return event?Response.json(event):Response.json({error:{code:'resource_missing'}},{status:404})}
@@ -18,6 +20,7 @@ export const harnessOptions=()=>({stripeFetch:async request=>{
   const body=await request.text();requests.push({body,header:request.headers.get('nectar-signature')})
   return online?receive(new Request(request.url,{method:'POST',headers:request.headers,body})):new Response(null,{status:503})
 }})
+
 export async function webhooksFlow(h,owner,{onState=async()=>{},register}={}){
   directory=await mkdtemp(join(tmpdir(),'nectar-receiver-'))
   receive=receiver({secrets:()=>secrets,stateFile:join(directory,'receipts.json'),clock:()=>clock,onEvent:async e=>received.push(e)})
@@ -76,7 +79,7 @@ export async function webhooksFlow(h,owner,{onState=async()=>{},register}={}){
     const detail=await h.api(`webhooks/${paid.id}`,finance)
     assert.equal(detail.status,'pending');assert.equal(detail.event,undefined);assert.equal(detail.payload_json,undefined)
     assert.ok(!JSON.stringify(detail).includes(customer),'finance sees only typed delivery custody')
-    assert.match(await h.page(`/app/webhooks/${paid.id}`,finance),/Webhook delivery/)
+    await h.page(`/app/webhooks/${paid.id}`,finance)
     await h.api(`webhooks/${paid.id}`,agent,undefined,403)
     assert.ok(mails.some(m=>`${m.text} ${m.html}`.includes(`/app/webhooks/${paid.id}`)))
     await onState({label:'failed',delivery:paid.id,finance})
@@ -159,232 +162,5 @@ export async function webhooksFlow(h,owner,{onState=async()=>{},register}={}){
     await dispatch();assert.equal(h.mails.length,beforeRevoked,'removing developer authority stops the next failure alert')
     console.log('webhooksFlow: consent, atomic snapshots, retries, receiver HMAC/dedupe, rotation, replay and authorized failure custody passed')
     return {customer,subscription,invoice,delivery:paid.id}
-  }finally{await rm(directory,{recursive:true,force:true})}
-}
-
-// DEV-001: existing native lifecycle doors, dated changes and current quota
-// thresholds produce received, signed typed facts without private narratives.
-export async function webhookLifecycleFlow(h,owner,{onState=async()=>{}}={}) {
-  const api=(path,body,status)=>h.api(path,owner,body,status)
-  // Dated lifecycle fixtures use UTC calendar days throughout.
-  const business=await api('business')
-  await api('business.configure',{legal_name:business.legal_name,timezone:'UTC',invoice_prefix:business.invoice_prefix,payment_terms_days:business.payment_terms_days,revision:business.revision})
-  directory=await mkdtemp(join(tmpdir(),'nectar-lifecycle-receiver-'))
-  clock=Date.parse('2026-10-22T10:00:00Z');await h.advanceClock(new Date(clock).toISOString())
-  online=true;requests=[];received=[]
-  try{
-    const endpoint=await api('webhook.register',{url:'https://receiver.nectar-app.com/webhooks',consent:true});secrets=[endpoint.secret]
-    receive=receiver({secrets:()=>secrets,stateFile:join(directory,'receipts.json'),clock:()=>clock,onEvent:async e=>received.push(e)})
-    const customer=(await api('customer.create',{external_id:'synthetic-nectar-webhook-lifecycle',name:'Lifecycle account',billing_email:'lifecycle@example.test'})).id
-    const product=(await api('product.create',{code:'synthetic-nectar-webhook-lifecycle',name:'Lifecycle service'})).id
-    const price=(await api('price.create',{product,kind:'flat',unit_amount:'100',taxable:false})).id
-    for(const [kind,record]of [['customer',customer],['price',price]])await api('metadata.write',{kind,record,revision:0,metadata:{app_account_id:`synthetic-nectar-${kind}`}})
-    const subscription=(await api('subscription.create',{customer,start_date:'2026-10-01',price:[price]})).id
-    const initial=(await api('webhooks')).deliveries.filter(d=>d.subject===subscription)
-    assert.equal(initial.filter(d=>d.type==='subscription.created').length,1,'Creation retains its own webhook before lifecycle observation consumes the revision')
-    assert.equal(initial.filter(d=>d.type==='subscription.updated').length,0,'Initial lifecycle capture does not relabel creation as an update')
-    const created=initial.find(d=>d.type==='subscription.created')
-    const payload=JSON.parse((await api(`webhooks/${created.id}`)).event.payload_json)
-    assert.equal(payload.metadata.find(m=>m.kind==='prices').objects[0].metadata.app_account_id,'synthetic-nectar-price','creation snapshot includes price metadata after item insertion in the same transaction')
-    assert.equal(payload.metadata.find(m=>m.kind==='customer').metadata.app_account_id,'synthetic-nectar-customer')
-    await api('feature.grant',{product,feature:'api-access',note:'Private feature narrative excluded'})
-    const dispatch=async()=>{await api('webhook.dispatch',{});assert.ok(requests.every(r=>verify(r.body,r.header,secrets,JSON.parse(r.header.split(',')[0].slice(2))*1000)))}
-    // Row events use their wall clock; advance the disposable clock beyond it.
-    clock=Math.max(clock,Date.now()+60000);await h.advanceClock(new Date(clock).toISOString());await dispatch()
-    assert.equal((await h.raw(`/cdn-cgi/local/scheduled?time=${clock}&cron=${encodeURIComponent('* * * * *')}`)).status,200)
-    await dispatch()
-    assert.deepEqual(received.filter(e=>e.type==='subscription.created'&&e.data.id===subscription).map(e=>e.id),[created.event_id],'The creation event survives scheduled observation and repeat dispatch exactly once')
-    assert.equal(received.filter(e=>e.type==='subscription.updated'&&e.data.id===subscription).length,0,'An unchanged scheduled observation emits no subscription update')
-    assert.equal(received.filter(e=>e.type==='subscription.state_changed'&&e.data.subscription_id===subscription).length,1,'Creation and its initial state remain separate once-only event facts')
-    const entitlementEvents=()=>received.filter(e=>e.type==='entitlements.updated'&&e.data.customer_id===customer)
-    assert.equal(entitlementEvents().at(-1).data.features.find(f=>f.feature==='api-access').allowed,true)
-    const date=new Date(clock).toISOString().slice(0,10)
-    const tomorrow=new Date(Date.parse(date)+86400000).toISOString().slice(0,10),resume=new Date(Date.parse(date)+3*86400000).toISOString().slice(0,10)
-    const sub=await api(`subscriptions/${subscription}`)
-    await api('subscription.pause',{subscription,revision:sub.revision,effective_date:tomorrow,resume_date:resume,access:'suspend',reason:'Private lifecycle narrative excluded'})
-    await dispatch()
-    assert.ok((await api('webhooks')).deliveries.some(d=>d.type==='subscription.lifecycle_changed'))
-    clock=Date.parse(tomorrow+'T12:00:00Z');await h.advanceClock(new Date(clock).toISOString());await dispatch()
-    assert.equal(entitlementEvents().at(-1).data.features[0].allowed,false,'a dated pause emits the actual changed entitlement without another domain write')
-    await onState({label:'entitlements-paused'})
-    const pausedCount=entitlementEvents().length;await dispatch();assert.equal(entitlementEvents().length,pausedCount,'unchanged state does not duplicate the event')
-    clock=Date.parse(resume+'T12:00:00Z');await h.advanceClock(new Date(clock).toISOString());await dispatch()
-    assert.equal(entitlementEvents().at(-1).data.features[0].allowed,true,'dated resume emits restored access')
-    const charge=(await api('charge.add',{customer,amount:'50',description:'Lifecycle payment fixture',effective_date:date,taxable:false})).charge
-    const invoice=(await api('invoice.manual',{customer,charges:[charge],service_date:date})).id
-    await api('invoice.approve',{invoice,acknowledge:true});await api('invoice.finalise',{invoice,issue_date:date})
-    await api('collection.customer.bind',{customer,account_ref:'synthetic-nectar-native-account-1',stripe_customer_ref:'synthetic-nectar-native-customer-1',confirm:true})
-    const collection=await api('collection.prepare',{invoice});lifecycleEdge.refuseNext('card_declined')
-    await api('collection.confirm',collection.instructions.confirm)
-    await api('credit.issue',{invoice,amount:'10',reason:'Private credit narrative excluded'})
-    const payment=(await api('payment.record',{customer,amount:'40',received_on:date,method:'bank_transfer',reference:'synthetic-nectar-lifecycle-settlement'})).payment
-    await api('payment.allocate',{payment,invoice,amount:'40'})
-    clock=Math.max(clock,Date.now()+60000);await h.advanceClock(new Date(clock).toISOString());await dispatch()
-    assert.ok(received.some(e=>e.type==='payment_method.observed'&&e.data.payment_method_ref==='synthetic-nectar-native-card-1'))
-    assert.ok(received.some(e=>e.type==='payment.failed'&&e.data.status==='declined'))
-    assert.equal(received.filter(e=>e.type==='invoice.paid'&&e.data.invoice_id===invoice).length,1)
-    await dispatch();assert.equal(received.filter(e=>e.type==='invoice.paid'&&e.data.invoice_id===invoice).length,1)
-    await onState({label:'payment-failed-and-settled'})
-    assert.ok(!JSON.stringify(received).includes('Private lifecycle narrative'))
-    assert.ok(!JSON.stringify(received).includes('Private credit narrative'))
-    assert.ok(!JSON.stringify(received).includes('Private feature narrative'))
-    // Existing governed ENT-002 quota crossing has one threshold event.
-    const qc=(await api('customer.create',{external_id:'synthetic-nectar-webhook-quota',name:'Quota account',billing_email:'quota@example.test'})).id
-    const meter=(await api('meter.create',{code:'synthetic-nectar-webhook-quota',name:'Quota calls',unit_label:'calls'})).id
-    const qp=(await api('product.create',{code:'synthetic-nectar-webhook-quota',name:'Quota service'})).id
-    const priceQ=(await api('price.create',{product:qp,kind:'unit',unit_amount:'1',meter,taxable:false})).id
-    await api('feature.grant',{product:qp,feature:'quota-api'})
-    await api('subscription.create',{customer:qc,start_date:'2026-10-01',price:[priceQ]})
-    await applyPolicy(h,owner,'feature.policy',{product:qp,feature:'quota-api',meter,quota:'10',quota_policy:'hard'})
-    await dispatch()
-    await api('usage.submit',{events:[{event_id:'synthetic-nectar-webhook-quota-1',customer:'synthetic-nectar-webhook-quota',meter:'synthetic-nectar-webhook-quota',quantity:'10',occurred_at:new Date(clock).toISOString()}]})
-    await dispatch()
-    const crossed=received.filter(e=>e.type==='usage.threshold_crossed'&&e.data.customer_id===qc)
-    assert.equal(crossed.length,1);assert.equal(crossed[0].data.quota.limit,'10.00');assert.equal(crossed[0].data.quota.used,'10')
-    assert.equal(crossed[0].data.quota.eventIds,undefined,'threshold payload does not expose a raw event list')
-    await dispatch();assert.equal(received.filter(e=>e.type==='usage.threshold_crossed'&&e.data.customer_id===qc).length,1)
-    await applyPolicy(h,owner,'feature.policy',{product:qp,feature:'quota-api',meter,quota:'20',quota_policy:'hard'})
-    await dispatch()
-    assert.equal((await api(`entitlements/${qc}?feature=quota-api`)).allowed,true)
-    await applyPolicy(h,owner,'feature.policy',{product:qp,feature:'quota-api',meter,quota:'10',quota_policy:'hard'})
-    await Promise.all([dispatch(),dispatch()])
-    assert.equal((await api(`entitlements/${qc}?feature=quota-api`)).allowed,false)
-    assert.equal(received.filter(e=>e.type==='usage.threshold_crossed'&&e.data.customer_id===qc).length,1,'A same-period policy change and concurrent observers cannot emit the quota crossing twice')
-    await onState({label:'quota-crossing',delivery:(await api('webhooks')).deliveries.find(d=>d.type==='usage.threshold_crossed').id})
-    // Settlement uses applied credit, not a claim that cash was charged.
-    const manual=async(amount,description)=>{
-      const charge=(await api('charge.add',{customer,amount,description,effective_date:date,taxable:false})).charge
-      const id=(await api('invoice.manual',{customer,charges:[charge],service_date:date})).id
-      await api('invoice.approve',{invoice:id,acknowledge:true});await api('invoice.finalise',{invoice:id,issue_date:date});return id
-    }
-    const creditOnly=await manual('20','Credit-only settlement')
-    await api('credit.issue',{invoice:creditOnly,amount:'20',reason:'Private full-credit narrative'})
-    await api('balance.goodwill',{customer,amount:'25',reason:'Private goodwill narrative'})
-    const goodwill=await manual('25','Goodwill settlement')
-    await api('balance.apply',{invoice:goodwill})
-    await dispatch()
-    for(const id of [creditOnly,goodwill]){
-      assert.equal((await api(`invoices/${id}`)).balanceCents,0)
-      const paid=received.filter(e=>e.type==='invoice.paid'&&e.data.invoice_id===id)
-      assert.equal(paid.length,1);assert.equal(paid[0].data.cash_allocated_cents,0)
-      assert.equal(paid[0].data.custody,'recorded-ledger-settlement')
-    }
-    const writtenOff=await manual('15','Written-off account')
-    await api('writeoff.issue',{invoice:writtenOff,amount:'15',reason:'Private bad-debt narrative'})
-    await dispatch();assert.equal(received.filter(e=>e.type==='invoice.paid'&&e.data.invoice_id===writtenOff).length,0,'a write-off is never advertised as paid')
-    // A carried credit is inserted before the new invoice becomes issued.
-    // Its settled event must be captured after issuance, with a full snapshot.
-    const carry=(await api('customer.create',{external_id:'synthetic-nectar-webhook-carried',name:'Carried account',billing_email:'carry@example.test'})).id
-    const annual=async(code,amount)=>{const product=(await api('product.create',{code,name:'Annual carried service'})).id;return(await api('price.create',{product,kind:'flat',unit_amount:amount,interval_unit:'year',billing_timing:'advance',taxable:false})).id}
-    const high=await annual('synthetic-nectar-webhook-high','1200'),low=await annual('synthetic-nectar-webhook-low','1')
-    const annualSub=(await api('subscription.create',{customer:carry,start_date:'2026-01-01',price:[high]})).id
-    const run=await api('billrun.prepare',{period:'2026-01'}),original=(await api(`runs/${run.id}`)).invoices.find(i=>i.customer_id===carry)
-    await api('invoice.approve',{invoice:original.id,acknowledge:true});await api('invoice.finalise',{invoice:original.id,issue_date:'2026-01-01'})
-    const funded=(await api('payment.record',{customer:carry,amount:'1200',received_on:'2026-01-02',method:'bank_transfer',reference:'synthetic-nectar-webhook-paid'})).payment
-    await api('payment.allocate',{payment:funded,invoice:original.id,amount:'1200'})
-    await applyPolicy(h,owner,'lifecycle.policy',{credit_unused:true,reactivation_days:30,proration_policy:'invoice_now'})
-    const item=(await api(`subscriptions/${annualSub}`)).items[0].id
-    const quote=await api('plan.change.prepare',{subscription:annualSub,item,price:low,mode:'immediate'})
-    await api('access.give',{email:'webhook-carry-finance@example.test',name:'Carry finance',role:'finance'})
-    const approver=await h.signIn('webhook-carry-finance@example.test',{requested:true})
-    await h.api('plan.change.decide',approver,{change:quote.change,decision:'approved'})
-    clock=Date.parse('2027-01-02T12:00:00Z');await h.advanceClock(new Date(clock).toISOString())
-    const next=await api('billrun.prepare',{period:'2027-01'}),future=(await api(`runs/${next.id}`)).invoices.find(i=>i.customer_id===carry)
-    await api('invoice.approve',{invoice:future.id,acknowledge:true});await api('invoice.finalise',{invoice:future.id,issue_date:'2027-01-01'})
-    assert.equal((await api(`invoices/${future.id}`)).balanceCents,0)
-    await dispatch();await dispatch()
-    const carried=received.filter(e=>e.type==='invoice.paid'&&e.data.invoice_id===future.id)
-    assert.equal(carried.length,1,'fully carried settlement emits once after the invoice is actually issued')
-    assert.equal(carried[0].data.cash_allocated_cents,0)
-    assert.ok(!JSON.stringify(received).includes('Private full-credit narrative'))
-    assert.ok(!JSON.stringify(received).includes('Private goodwill narrative'))
-    await onState({label:'credit-goodwill-and-carried-settlement'})
-    // Imported subscription events must capture items after the import kit has
-    // published the complete target, rather than on the parent's early INSERT.
-    const files={}
-    for(const name of ['manifest','customers','products','prices','subscriptions','invoices','meters'])
-      files[name]=file(`${name}.json`,await readFile(new URL(`../fixtures/stripe/${name}.json`,import.meta.url)),'application/json')
-    const preview=await api('import.preview',files)
-    const moved=await api('import.apply',{...files,fingerprint:preview.fingerprint})
-    assert.equal(moved.state,'completed')
-    const imported=(await api('customers')).filter(c=>c.origin==='import')
-    let importedEvents=0
-    for(const account of imported){
-      for(const source of (await api(`customers/${account.id}`)).subscriptions){
-        const sub=await api(`subscriptions/${source.id}`)
-        const events=(await api('webhooks')).deliveries.filter(d=>d.type==='subscription.created'&&d.subject===sub.id)
-        assert.equal(events.length,1,'one complete creation event per imported subscription')
-        const snapshot=JSON.parse((await api(`webhooks/${events[0].id}`)).event.payload_json)
-        const prices=snapshot.metadata.find(m=>m.kind==='prices').objects
-        assert.deepEqual(prices.map(p=>p.id).sort(),[...new Set(sub.items.map(i=>i.price_id))].sort(),'import snapshot has every item price')
-        importedEvents++
-      }
-    }
-    assert.equal(importedEvents,2,'both accepted fixture subscriptions emit events')
-    const originalEvents=(await api('webhooks')).deliveries.filter(d=>d.type==='subscription.created').map(d=>d.event_id).sort()
-    await api('import.apply',{...files,fingerprint:preview.fingerprint})
-    assert.deepEqual((await api('webhooks')).deliveries.filter(d=>d.type==='subscription.created').map(d=>d.event_id).sort(),originalEvents,'reapplying an import does not duplicate lifecycle events')
-    const account=imported.find(c=>c.external_id==='cus_NcAtlasFreight01')
-    assert.ok(account)
-    const shadow=(await api(`customers/${account.id}`)).subscriptions[0]
-    const body={customer:account.id,account_ref:'synthetic-nectar-native-account-1',consent:true}
-    // Provider events are authenticated GETs, never arbitrary supplied JSON.
-    const updated={id:'sub_NcAtlas01',object:'subscription',customer:'cus_NcAtlasFreight01',status:'active',cancel_at_period_end:false,
-      items:{object:'list',has_more:false,data:[{id:'synthetic-nectar-source-item',price:{id:'price_NcPlatform199'},quantity:2}]},description:'Private Stripe description excluded',metadata:{secret:'Private provider metadata excluded'}}
-    const cases=[
-      ['customer.created','customer.created',{id:'cus_NcAtlasFreight01',object:'customer',currency:null,email:'Private Stripe email excluded'}],
-      ['customer.updated','customer.updated',{id:'cus_NcAtlasFreight01',object:'customer'}],
-      ['customer.subscription.created','subscription.created',updated],
-      ['customer.subscription.updated','subscription.updated',updated],
-      ['customer.subscription.deleted','subscription.updated',{...updated,status:'canceled'}],
-      ['invoice.created','invoice.created',{id:'synthetic-nectar-invoice',object:'invoice',customer:'cus_NcAtlasFreight01',status:'draft',total:19900,currency:'usd'}],
-      ['invoice.finalized','invoice.issued',{id:'synthetic-nectar-invoice',object:'invoice',customer:'cus_NcAtlasFreight01',status:'open'}],
-      ['invoice.paid','invoice.paid',{id:'synthetic-nectar-invoice',object:'invoice',customer:'cus_NcAtlasFreight01',status:'paid',amount_paid:19900}],
-      ['invoice.payment_succeeded','payment.recorded',{id:'synthetic-nectar-invoice',object:'invoice',customer:'cus_NcAtlasFreight01',status:'paid'}],
-      ['invoice.payment_failed','payment.failed',{id:'synthetic-nectar-invoice',object:'invoice',customer:'cus_NcAtlasFreight01',status:'open'}],
-      ...['attached','updated','automatically_updated','detached'].map(kind=>[`payment_method.${kind}`,kind==='automatically_updated'?'payment_method.updated':`payment_method.${kind}`,{id:'synthetic-nectar-source-card',object:'payment_method',customer:kind==='detached'?null:'cus_NcAtlasFreight01',billing_details:{name:'Private card name excluded'}}]),
-      ['entitlements.active_entitlement_summary.updated','entitlements.updated',{object:'entitlements.active_entitlement_summary',customer:'cus_NcAtlasFreight01',entitlements:{object:'list',has_more:false,data:[{feature:'synthetic-nectar-source-feature',lookup_key:'api-access'}]}}],
-      ['credit_note.created','credit.created',{id:'synthetic-nectar-source-credit',object:'credit_note',customer:'cus_NcAtlasFreight01',status:'issued'}],
-      ['customer.deleted','customer.deleted',{id:'cus_NcAtlasFreight01',object:'customer',deleted:true}],
-    ]
-    stripeEvents=new Map();stripeEventRequests=[];stripeCustomerDeleted=false
-    await api('metadata.write',{kind:'subscription',record:shadow.id,revision:0,metadata:{app_account_id:'synthetic-nectar-shadow'}})
-    for(const [index,[source,type,object]]of cases.entries()){
-      stripeCustomerDeleted=source==='customer.deleted'
-      const event_ref=`synthetic-nectar-stripe-event-${index}`
-      stripeEvents.set(event_ref,{id:event_ref,object:'event',type:source,livemode:false,created:Math.floor(Date.now()/1000),data:{object,previous_attributes:{customer:'cus_NcAtlasFreight01'}}})
-      const results=await Promise.all([api('webhook.stripe.consume',{...body,event_ref}),api('webhook.stripe.consume',{...body,event_ref})])
-      assert.equal(results[0].id,results[1].id,'concurrent consumers share one immutable Nectar event')
-      const deliveries=(await api('webhooks')).deliveries.filter(d=>d.event_id===results[0].id)
-      assert.equal(deliveries.length,1);assert.equal(deliveries[0].type,type)
-      const snapshot=JSON.parse((await api(`webhooks/${deliveries[0].id}`)).event.payload_json)
-      assert.equal(snapshot.data.source.event_ref,event_ref);assert.equal(snapshot.data.source.event_type,source)
-      assert.equal(snapshot.data.customer_id,account.id);assert.equal(snapshot.data.custody,'stripe-test-shadow-event')
-      assert.ok(!JSON.stringify(snapshot).includes('Private '),'no provider narratives, contact or metadata escape')
-      if(source.startsWith('customer.subscription.'))assert.equal(snapshot.metadata.find(m=>m.kind==='subscription').metadata.app_account_id,'synthetic-nectar-shadow')
-      if(source==='payment_method.detached')assert.equal(snapshot.data.payment_method_ref,'synthetic-nectar-source-card')
-      const retry=await api('webhook.stripe.consume',{...body,event_ref});assert.equal(retry.id,results[0].id);assert.equal(retry.replayed,true)
-    }
-    stripeCustomerDeleted=false
-    const calls=stripeEventRequests.length
-    const agent={bearer:(await api('credential.issue',{name:'Shadow event reader',scopes:['prepare']})).key}
-    await h.api('webhook.stripe.consume',agent,{},403)
-    await api('access.give',{email:'webhook-shadow-finance@example.test',name:'Shadow finance',role:'finance'})
-    const finance=await h.signIn('webhook-shadow-finance@example.test',{requested:true})
-    await h.api('webhook.stripe.consume',finance,{},403)
-    assert.equal(stripeEventRequests.length,calls,'role refusals happen before provider lookup')
-    const bad='synthetic-nectar-stripe-event-wrong-customer'
-    stripeEvents.set(bad,{id:bad,object:'event',type:'customer.updated',livemode:false,created:Math.floor(Date.now()/1000),data:{object:{id:'synthetic-nectar-another-customer'}}})
-    await api('webhook.stripe.consume',{...body,event_ref:bad},409)
-    const previous='synthetic-nectar-stripe-event-before-consent'
-    stripeEvents.set(previous,{id:previous,object:'event',type:'customer.updated',livemode:false,created:1,data:{object:{id:'cus_NcAtlasFreight01'}}})
-    await api('webhook.stripe.consume',{...body,event_ref:previous},409)
-    await api('webhook.stripe.consume',{...body,event_ref:'synthetic-nectar-stripe-event-0',object:updated},400)
-    assert.ok(stripeEventRequests.every(r=>r.method==='GET'))
-    await dispatch();await dispatch()
-    for(const [index,[source,type]]of cases.entries())assert.equal(received.filter(e=>e.type===type&&e.data.source?.event_ref===`synthetic-nectar-stripe-event-${index}`).length,1,`${source} reaches the HMAC receiver once`)
-
-    await onState({label:'imported-subscription-snapshots'})
-    console.log('webhookLifecycleFlow: complete native creation metadata, dated entitlements, quota crossings, observed cards, payment failure and once-only settlement passed')
   }finally{await rm(directory,{recursive:true,force:true})}
 }

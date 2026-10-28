@@ -1,4 +1,3 @@
-// Extend the existing event journey; only processor HTTP is faked.
 import assert from 'node:assert/strict'
 import { nativeCollectionEdge } from './native-collection.mjs'
 import { assertRecoveryBuckets } from './recovery-assertions.mjs'

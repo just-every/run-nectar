@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict'
 import { prepaidRefundEdge } from './prepaid-refunds.mjs'
 import { applyPolicy } from './policy-helper.mjs'
+
 let edge
-export const getInvoiceRefundEdge=()=>edge
+
 export const harnessOptions = () => {
   edge = prepaidRefundEdge(); edge.at('2026-10-22T18:00:00Z')
   return { stripeFetch: edge.fetch, stripeSecret: 'synthetic-nectar-1' }
@@ -59,7 +60,6 @@ export async function invoiceRefundPreviewFlow(h, owner) {
   await invoiceRefundExecutionFlow(h,owner,{account:'synthetic-nectar-native-account-1',customerRef:'synthetic-nectar-native-customer-3',edge})
   console.log('INV-005 refund preview: exact independent tax and pretax effects, original-method and balance destinations, thresholds, source basis, refused inputs and no provider, ledger or mail writes passed')
 }
-
 
 export async function invoiceRefundExecutionFlow(h, owner, {account,customerRef,edge:processor,onState=async()=>{}}) {
   const api=(path,body,status)=>h.api(path,owner,body,status)

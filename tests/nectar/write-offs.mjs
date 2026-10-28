@@ -1,12 +1,9 @@
-// AR-004 through public doors (JSON door, form door, pages, CSV): a 120-day
-// balance is written off, leaves ageing and the AR report, posts bad debt to
-// QuickBooks at the network edge and stops reminders; a partial recovery
-// reverses part of it; GOV-002's two-person limit governs every write-off door.
 import assert from 'node:assert/strict'
 import { quickbooksEdge } from './quickbooks-edge.mjs'
 import { applyPolicy } from './policy-helper.mjs'
 
 let edge
+
 export const harnessOptions = () => { edge = quickbooksEdge(); return { quickbooksFetch: edge.fetch, localTime: '2026-08-29T20:00:00Z' } }
 
 export async function writeOffFlow(h, owner, {onRecord=async()=>{}}={}) {

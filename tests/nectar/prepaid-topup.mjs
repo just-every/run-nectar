@@ -1,11 +1,12 @@
-// Real Worker, portal signatures, approval, purchase invoices, balances and
-// receipts. Only Stripe's network boundary is synthetic.
 import assert from 'node:assert/strict'
 import { applyPolicy } from './policy-helper.mjs'
 import { nativeCollectionEdge } from './native-collection.mjs'
 import { totp } from './mfa.mjs'
+
 const edge=nativeCollectionEdge()
+
 export const harnessOptions=()=>({stripeFetch:edge.fetch,stripeSecret:'synthetic-nectar-1',stripeSecondarySecret:'synthetic-nectar-2'})
+
 export async function prepaidTopupFlow(h,owner,{onState=async()=>{},acceptAuthorization,approveAuthorization,revokeAuthorization}={}){
   const api=(path,body,status)=>h.api(path,owner,body,status),posts=()=>edge.calls.filter(call=>call.method==='POST'&&call.path==='/payment_intents').length
   let instant='2026-11-02T18:00:00Z'

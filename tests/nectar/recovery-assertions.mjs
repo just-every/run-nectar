@@ -2,14 +2,17 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 
 const totalFields=['failedInvoices','recoveredInvoices','partiallyRecoveredInvoices','failedAmountCents','recoveredAmountCents','recoveryRate','amountRecoveryRate']
+
 export function recoveryTotals(rows){
  const failedAmountCents=rows.reduce((sum,r)=>sum+r.failedAmountCents,0),recoveredAmountCents=rows.reduce((sum,r)=>sum+r.recoveredAmountCents,0)
  const recoveredInvoices=rows.filter(r=>r.recoveredAmountCents===r.failedAmountCents).length
  return {failedInvoices:rows.length,recoveredInvoices,partiallyRecoveredInvoices:rows.filter(r=>r.recoveredAmountCents>0&&r.recoveredAmountCents<r.failedAmountCents).length,failedAmountCents,recoveredAmountCents,recoveryRate:rows.length?recoveredInvoices/rows.length:null,amountRecoveryRate:failedAmountCents?recoveredAmountCents/failedAmountCents:null}
 }
+
 export function assertRecoveryTotals(actual,expected){
  assert.deepEqual(Object.fromEntries(totalFields.map(k=>[k,actual[k]])),recoveryTotals(expected))
 }
+
 export function assertRecoveryBuckets(report,rows){
  assertRecoveryTotals(report.totals,rows)
  for(const [field,exposures,attribution] of [
@@ -32,6 +35,7 @@ export function assertRecoveryBuckets(report,rows){
 }
 
 export async function comparisonFixture(){return JSON.parse(await readFile(new URL('../../src/nectar/retry-comparison.json',import.meta.url),'utf8'))}
+
 export function comparisonOutcomes(payments,policy,schedules){
  const offsets=policy.attemptOffsetsHours,table=schedules.find(p=>p.intervalHoursByDecline)
  return payments.map(p=>{
@@ -41,12 +45,14 @@ export function comparisonOutcomes(payments,policy,schedules){
   return {id:p.id,attemptsHours,recoveredAtHours}
  })
 }
+
 function assertReplay(result,fixture,policy){
  const outcomes=comparisonOutcomes(fixture.payments,policy,fixture.policies),recovered=outcomes.filter(o=>o.recoveredAtHours!==null)
  const failedAmountCents=fixture.payments.reduce((sum,p)=>sum+p.amountCents,0),recoveredAmountCents=fixture.payments.filter(p=>recovered.some(o=>o.id===p.id)).reduce((sum,p)=>sum+p.amountCents,0)
  assert.deepEqual(result.outcomes,outcomes,'Every attempted offset and outcome matches the independently replayed fixture')
  assert.deepEqual(Object.fromEntries(['failedPayments','failedAmountCents','recoveredPayments','recoveredAmountCents','recoveryRate','amountRecoveryRate'].map(k=>[k,result[k]])),{failedPayments:fixture.payments.length,failedAmountCents,recoveredPayments:recovered.length,recoveredAmountCents,recoveryRate:recovered.length/fixture.payments.length,amountRecoveryRate:recoveredAmountCents/failedAmountCents})
 }
+
 export function retryPolicyWrites(api){
  const expected=new Map()
  return {expected,configure:async input=>{
@@ -55,6 +61,7 @@ export function retryPolicyWrites(api){
   expected.set(scope,{scope,maxAttempts:input.max_attempts,windowDays:input.window_days})
  }}
 }
+
 export async function assertComparisons(record,expectedPolicies){
  const fixture=await comparisonFixture(),fixed=fixture.policies.find(p=>p.attemptOffsetsHours),decline=fixture.policies.find(p=>p.intervalHoursByDecline)
  assert.deepEqual(record.payments,fixture.payments)

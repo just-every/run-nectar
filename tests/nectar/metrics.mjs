@@ -6,6 +6,7 @@ import { metricPricing } from './metric-pricing.mjs'
 import { metricsSql } from './metrics-sql.mjs'
 
 const months = ['2020-01', '2020-02', '2020-03']
+
 // Independent hand calculations, alpha then beta. Time-weighted values use
 // actual month lengths: January 31, leap February 29, March 31 days.
 const expected = {
@@ -16,6 +17,7 @@ const expected = {
   latest: [[[6,1],[5,1]], [[8,1],[7,1]], [[1,1],[2,1]]],
   time_weighted: [[[126,31],[85,31]], [[204,29],[105,29]], [[136,31],[137,31]]],
 }
+
 const checkPreview = (preview, values, label) => {
   assert.equal(preview.results.length, 2, `USE-002 ${label} returns both exact dimension groups`)
   for (const [index, model] of ['alpha', 'beta'].entries()) {
@@ -25,6 +27,7 @@ const checkPreview = (preview, values, label) => {
     assert.ok(Math.abs(Number(result.quantity) - values[index][0] / values[index][1]) <= 0.0000005, `USE-002 ${label} ${model} display agrees with exact quantity`)
   }
 }
+
 // Integer cents independently calculated from a rational and a six-place USD
 // price, with one positive half-up rounding at the financial boundary.
 const cents = ([n, d], rate) => Number((BigInt(n) * BigInt(rate) * 100n * 2n + BigInt(d) * 1000000n) / (2n * BigInt(d) * 1000000n))

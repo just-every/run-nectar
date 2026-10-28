@@ -1,5 +1,4 @@
 import { assertCurrencyAggregateReports } from './currency-aggregate-reports.mjs'
-// Public Worker, auth, catalogue, invoice, payment and report doors; fake only Stripe.
 import assert from 'node:assert/strict'
 import { applyPolicy, reviewer } from './policy-helper.mjs'
 import { totp } from './mfa.mjs'
@@ -33,7 +32,9 @@ export function currencyEdge() {
   }
   return { fetch, calls, intents, charges }
 }
+
 export const edge = currencyEdge()
+
 export const harnessOptions = () => ({ stripeFetch: edge.fetch, stripeSecret: 'synthetic-nectar-101', localTime: '2026-10-23T10:00:00Z' })
 
 export async function currencyFlow(h, owner,{onState=async()=>{},confirmCollection,recordRate}={}) {
