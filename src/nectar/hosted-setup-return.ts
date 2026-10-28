@@ -3,7 +3,7 @@ import type { Bindings } from '../auth.server'
 import { clockInstant } from './clock'
 import { guard, insist, one, sha256Hex, stmt, type Row } from './core'
 import { b64url } from './mfa-crypto'
-import { PORTAL_LIFETIME, type CustomerSession } from './portal-session'
+import { portalContactBinding, PORTAL_LIFETIME, type CustomerSession } from './portal-session'
 
 export type SetupReturn = { session: CustomerSession; setup: string; hash: string }
 
@@ -68,11 +68,12 @@ export async function resolveSetupReturn(env: Bindings, request: Request): Promi
   const hash = await sha256Hex(token), at = clockInstant(env), origin = new URL(request.url).origin
   insist(!request.headers.has('origin') || request.headers.get('origin') === origin, 'invalid_customer_session', 401)
   const row = await one<Row>(env, `SELECT r.setup_id,p.id AS portal_session_id,p.customer_id,p.origin,p.audience,
-    p.parent_origin,p.issued_at,p.expires_at,c.language,c.currency ${returnSource}
+    p.contact_id,p.email_hash,p.parent_origin,p.issued_at,p.expires_at,c.language,c.currency ${returnSource}
     WHERE ${liveReturn} AND ${currentBasis} AND p.origin=?`, hash, at, ...timeParams(at), origin)
   insist(row, 'invalid_customer_session', 401)
   // Claims are reconstructed solely from live, scoped rows after validation.
   const session: CustomerSession = {
+    ...await portalContactBinding(env,row),
     v: 1, iss: env.AUTH_ORIGIN, jti: row.portal_session_id, customer: row.customer_id,
     origin: row.origin, audience: row.audience, parent: row.parent_origin,
     iat: row.issued_at, exp: row.expires_at, language: row.language, currency: row.currency,

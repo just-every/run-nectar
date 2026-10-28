@@ -14,7 +14,7 @@ import { STEP_UP_MS } from './mfa'
 import { savedCollectionMethod } from './payments/default-method'
 import { readIntent, refusedPayment, stripeForAccount, type PaymentIdentity } from './payments/stripe'
 import { nativeCollectionSource, nativeSourceGuard } from './payments/source'
-import { customerSession, PORTAL_LIFETIME, type CustomerSession } from './portal-session'
+import { portalContactBinding, customerSession, PORTAL_LIFETIME, type CustomerSession } from './portal-session'
 import { DAY } from './retry-policy'
 
 const other="SELECT 1 FROM nc_members WHERE id<>? AND role IN ('owner','finance') AND status='active'"
@@ -104,7 +104,7 @@ export async function recoveryAuthority(env:Bindings,row:Row,quote:AutomaticQuot
  const guards=[automaticAuthority(env,row),nativeSourceGuard(env,source),proposalFence(env,row,proposal,'active'),
  factorFence(env,proposal.prepared_by,proposal.owner_session_id,proposal.owner_verified_at,true),
  factorFence(env,proposal.approved_by,proposal.approver_session_id,proposal.approver_verified_at),
- portalFence(env,{v:1,iss:env.AUTH_ORIGIN,jti:session.id,customer:row.customer_id,origin:proposal.customer_origin,audience:'hosted',parent:'',iat:session.issued_at,exp:session.expires_at,language:'',currency:'USD'}),
+ portalFence(env,{...await portalContactBinding(env,session),v:1,iss:env.AUTH_ORIGIN,jti:session.id,customer:row.customer_id,origin:proposal.customer_origin,audience:'hosted',parent:'',iat:session.issued_at,exp:session.expires_at,language:'',currency:'USD'}),
  recoveryMethodGuard(env,row,quote),
  guard(env,'payment_method_removal_claimed',`NOT EXISTS(SELECT 1 FROM nc_portal_method_action_history WHERE account_ref=? AND customer_ref=? AND method_ref=? AND operation='remove' AND status IN ('uncertain','complete'))`,quote.accountRef,quote.method.customerRef,quote.method.paymentMethodRef),
  guard(env,'retry_recovery_consent_changed',`EXISTS(SELECT 1 FROM nc_retry_method_recovery_events e WHERE e.recovery_id=? AND e.kind='accepted' AND json_extract(e.detail_json,'$.quoteHash')=?)

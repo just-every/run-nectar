@@ -1,3 +1,10 @@
+import { portalSigninResponse } from './portal-signin'
+import { portalProfileData, operatePortalProfile } from './portal-profile'
+import { portalProfilePage } from './portal-profile-page'
+import { portalCertificateFile, portalMerchantW9 } from './portal-documents'
+import { portalFinancialDocuments, portalFinancialDownload } from './portal-financial-documents'
+import { portalInvoiceConsent, portalInvoicePayment, startPortalInvoicePayment, reconcilePortalInvoicePayment } from './portal-invoice-payment'
+import { portalInvoicePaymentSection } from './portal-invoice-payment-page'
 import { customerPortalMethodActions, operatePortalMethodAction } from './portal-method-actions'
 import { resolveSetupReturn, clearSetupReturnCookie } from './hosted-setup-return'
 import { operateHostedSetup } from './hosted-setup'
@@ -28,11 +35,13 @@ import { portalPrivacy, portalPrivacyRequest } from './portal-privacy'
 export async function portalResponse(request: Request, env: Bindings): Promise<Response | null> {
   const url = new URL(request.url)
   if (url.pathname !== '/portal' && !url.pathname.startsWith('/portal/')) return null
+  const signin=await portalSigninResponse(request,env)
+  if(signin)return signin
   const headers: Record<string,string> = {...portalHeaders}
   let language: string | null = null
   // Public stylesheet for refusal pages has no customer or merchant data.
   if (url.pathname === '/portal/theme.css' && !url.search) return ['GET','HEAD'].includes(request.method) ? portalStyle() : new Response(null, { status: 405, headers: { ...headers, allow: 'GET, HEAD' } })
-  if (!['GET','HEAD'].includes(request.method) && !(['/portal/payment-methods/action','/portal/payment-methods/action/reconcile','/portal/payment-methods/start','/portal/payment-methods/finish','/portal/payment-methods/reconcile','/portal/prepaid-refund.request','/portal/privacy','/portal/answer-proposal','/portal/prepaid-topup.accept','/portal/prepaid-topup.revoke'].includes(url.pathname) && request.method === 'POST')) {
+  if (!['GET','HEAD'].includes(request.method) && !(['/portal/profile','/portal/pay','/portal/pay/reconcile','/portal/payment-methods/action','/portal/payment-methods/action/reconcile','/portal/payment-methods/start','/portal/payment-methods/finish','/portal/payment-methods/reconcile','/portal/prepaid-refund.request','/portal/privacy','/portal/answer-proposal','/portal/prepaid-topup.accept','/portal/prepaid-topup.revoke'].includes(url.pathname) && request.method === 'POST')) {
     if (request.body) await request.arrayBuffer()
     return new Response(null, { status: 405, headers: { ...headers, allow: 'GET, HEAD' } })
   }
@@ -41,8 +50,34 @@ export async function portalResponse(request: Request, env: Bindings): Promise<R
     const returned=isSetup && (!url.searchParams.has('session') || url.pathname.endsWith('/finish') || url.pathname.endsWith('/reconcile'))?await resolveSetupReturn(env,request):null
     const session = url.searchParams.has('session')?await customerSession(env, request):returned?.session??await customerSession(env,request)
     language = session.language
+    const portalLink = (path: string) => `${path}?session=${encodeURIComponent(url.searchParams.get('session')!)}`
+    if(url.pathname==='/portal/profile'&&request.method==='POST') {
+      if(request.headers.get('origin')!==session.origin)throw new NectarError('forbidden',403)
+      const result=await operatePortalProfile(env,session,await Input.from(request))
+      if(request.headers.get('content-type')?.startsWith('application/json'))return Response.json(result,{headers})
+      return new Response(null,{status:303,headers:{...headers,location:portalLink('/portal/profile')}})
+    }
+    if(url.pathname==='/portal/profile/data')return Response.json(await portalProfileData(env,session),{headers})
+    if(url.pathname==='/portal/profile/merchant-w9')return portalMerchantW9(env,session)
+    const certificate=url.pathname.match(/^\/portal\/profile\/certificates\/([\w-]+)$/)?.[1]
+    if(certificate)return portalCertificateFile(env,session,certificate)
+    const download=url.pathname.match(/^\/portal\/(receipts|credits)\/([\w-]+)$/)
+    if(download)return portalFinancialDownload(env,session,download[1] as 'receipts'|'credits',download[2])
+    if(url.pathname==='/portal/pay'||url.pathname==='/portal/pay/reconcile') {
+      if(request.headers.get('origin')!==session.origin||request.method!=='POST')throw new NectarError('forbidden',403)
+      const input=await Input.from(request)
+      if(url.pathname.endsWith('/reconcile'))input.only(['payment'])
+      const result=url.pathname.endsWith('/reconcile')?await reconcilePortalInvoicePayment(env,session,input.text('payment')):await startPortalInvoicePayment(env,session,input)
+      if(request.headers.get('content-type')?.startsWith('application/json'))return Response.json(result,{headers})
+      return new Response(null,{status:303,headers:{...headers,location:typeof result.url==='string'?result.url:portalLink('/portal')}})
+    }
+    if(url.pathname==='/portal/payment') {
+      const invoice=url.searchParams.get('invoice')??''
+      const attempt=await portalInvoicePayment(env,session,invoice)
+      return Response.json({attempt,...(!attempt?{consent:(await portalInvoiceConsent(env,session,invoice)).hash}:{})},{headers})
+    }
     if(url.pathname.startsWith('/portal/payment-methods')&&session.audience!=='hosted')throw new NectarError('forbidden',403)
-    if (['/portal/payment-methods/action','/portal/payment-methods/action/reconcile'].includes(url.pathname) && request.method==='POST') {
+    if (['/portal/profile','/portal/pay','/portal/pay/reconcile','/portal/payment-methods/action','/portal/payment-methods/action/reconcile'].includes(url.pathname) && request.method==='POST') {
       if(request.headers.get('origin')!==session.origin)throw new NectarError('forbidden',403)
       const result=await operatePortalMethodAction(env,session,await Input.from(request),url.pathname.endsWith('/reconcile')?'reconcile':'confirm')
       if(request.headers.get('content-type')?.startsWith('application/json'))return Response.json(result,{headers})
@@ -114,14 +149,17 @@ export async function portalResponse(request: Request, env: Bindings): Promise<R
     if (url.pathname === '/portal/answer') return Response.json(await portalAnswer(env,session,input), { headers })
     const proposal = url.pathname.match(/^\/portal\/proposals\/([\w-]+)$/)?.[1]
     const invoice = url.pathname.match(/^\/portal\/invoices\/([\w-]+)$/)?.[1]
-    if (!['/portal/payment-methods','/portal','/portal/data','/portal/privacy','/portal/answers','/portal/upcoming','/portal/adjustments','/portal/prepaid'].includes(url.pathname) && !invoice && !proposal && !prepaidSource && !topupAuthorization) throw new NectarError('not_found', 404)
+    if (!['/portal/profile','/portal/payment-methods','/portal','/portal/data','/portal/privacy','/portal/answers','/portal/upcoming','/portal/adjustments','/portal/prepaid'].includes(url.pathname) && !invoice && !proposal && !prepaidSource && !topupAuthorization) throw new NectarError('not_found', 404)
     const data = await portalData(env, session, invoice), L = customerText(data.customer.language,data.customer.currency)
     if (url.pathname === '/portal/data') return Response.json(data, { headers: { ...headers, 'content-security-policy': "default-src 'none'; frame-ancestors 'none'" } })
     if(invoice&&url.searchParams.get('format')==='pdf')return new Response(request.method==='HEAD'?null:invoicePdf(data).buffer as ArrayBuffer,{headers:{...headers,'content-type':'application/pdf','content-disposition':'attachment; filename=invoice.pdf','content-security-policy':"default-src 'none'; frame-ancestors 'none'"}})
     if(invoice&&url.searchParams.get('format')==='logo')return new Response(request.method==='HEAD'?null:Uint8Array.from(atob(data.content!.branding.logo),c=>c.charCodeAt(0)),{headers:{...headers,'content-type':'image/jpeg'}})
     const token = url.searchParams.get('session')!
     const link = (path: string) => `${path}?session=${encodeURIComponent(token)}`
-    const body = topupAuthorization?await portalTopupPage(env,request,session,topupAuthorization,link):url.pathname==='/portal/prepaid'?await portalPrepaidPage(env,session,link):prepaidSource?await portalPrepaidSourcePage(env,session,prepaidSource,link):url.pathname==='/portal/upcoming' ? await portalUpcomingPage(env,session,url,link) : url.pathname==='/portal/adjustments' ? await portalAdjustmentsPage(env,session,link) : proposal ? portalCreditProposalPage(session,await portalCreditProposal(env,session,proposal),link) : url.pathname === '/portal/answers' ? await portalAnswersPage(env,session,input,link) : url.pathname === '/portal/privacy' ? await portalPrivacy(env, session, link) : h`<header><h1>${L.t('portal.heading')}</h1><p>${data.customer.name}</p><p>${L.t('portal.readonly')}</p><a href="${link('/portal/payment-methods')}">${L.t('checkout.heading')}</a> · <a href="${link('/portal/privacy')}">${L.t('portal.privacy.heading')}</a> · <a href="${link('/portal/upcoming')}">${L.t('portal.upcoming.heading')}</a> · <a href="${link('/portal/adjustments')}">${L.t('portal.adjustments.heading')}</a> · <a href="${link('/portal/prepaid')}">${L.t('portal.prepaid.heading')}</a></header>
+    const documents=!invoice?await portalFinancialDocuments(env,session):null
+    const body = url.pathname==='/portal/profile'?await portalProfilePage(env,session,link):topupAuthorization?await portalTopupPage(env,request,session,topupAuthorization,link):url.pathname==='/portal/prepaid'?await portalPrepaidPage(env,session,link):prepaidSource?await portalPrepaidSourcePage(env,session,prepaidSource,link):url.pathname==='/portal/upcoming' ? await portalUpcomingPage(env,session,url,link) : url.pathname==='/portal/adjustments' ? await portalAdjustmentsPage(env,session,link) : proposal ? portalCreditProposalPage(session,await portalCreditProposal(env,session,proposal),link) : url.pathname === '/portal/answers' ? await portalAnswersPage(env,session,input,link) : url.pathname === '/portal/privacy' ? await portalPrivacy(env, session, link) : h`<header><h1>${L.t('portal.heading')}</h1><p>${data.customer.name}</p><a href="${link('/portal/profile')}">${L.t('profile.heading')}</a> · <a href="${link('/portal/answers')}">${L.t('portal.answer.heading')}</a> · <a href="${link('/portal/payment-methods')}">${L.t('checkout.heading')}</a> · <a href="${link('/portal/privacy')}">${L.t('portal.privacy.heading')}</a> · <a href="${link('/portal/upcoming')}">${L.t('portal.upcoming.heading')}</a> · <a href="${link('/portal/adjustments')}">${L.t('portal.adjustments.heading')}</a> · <a href="${link('/portal/prepaid')}">${L.t('portal.prepaid.heading')}</a></header>
+      ${invoice?await portalInvoicePaymentSection(env,session,invoice,link):''}
+      ${documents?h`<section class="card"><h2>${L.t('portal.documents.heading')}</h2>${documents.receipts.map(receipt=>h`<p><a href="${link(`/portal/receipts/${receipt.id}`)}">${L.t('portal.documents.receipt')} ${receipt.number}</a> · ${L.money(receipt.amount_cents,receipt.currency)}</p>`)}${documents.credits.map(credit=>h`<p><a href="${link(`/portal/credits/${credit.id}`)}">${L.t('portal.documents.credit')} ${credit.number}</a> · ${L.money(credit.amount_cents,credit.currency)}</p>`)}</section>`:''}
       ${invoice ? h`<p><a href="${link('/portal')}">${L.t('portal.back')}</a></p>` : ''}
       ${data.invoices.length ? data.invoices.map(row => h`<section class="card"><h2>${invoice ? row.number : h`<a href="${link(`/portal/invoices/${row.id}`)}">${row.number}</a>`}</h2>
         <dl><dt>${L.t('portal.issued')}</dt><dd>${L.day(row.issue_date)}</dd><dt>${L.t('portal.due')}</dt><dd>${L.day(row.due_date)}</dd>
@@ -133,12 +171,12 @@ export async function portalResponse(request: Request, env: Bindings): Promise<R
     Object.entries(headers).forEach(([key,value]) => resultHeaders.set(key,value))
     // Match the ordinary erasure confirmation page: origin-only referrers let
     // native POST forms supply Origin without ever disclosing the session URL.
-    if (topupAuthorization||['/portal/payment-methods','/portal/prepaid','/portal/privacy','/portal/answers','/portal/upcoming','/portal/adjustments'].includes(url.pathname)) resultHeaders.set('referrer-policy', 'strict-origin')
+    if (session.audience==='hosted'||topupAuthorization||['/portal/payment-methods','/portal/prepaid','/portal/privacy','/portal/answers','/portal/upcoming','/portal/adjustments'].includes(url.pathname)) resultHeaders.set('referrer-policy', 'strict-origin')
     resultHeaders.set('content-security-policy', `default-src 'none'; style-src 'self'; font-src 'self'; img-src 'self'; form-action 'self' ${url.pathname==='/portal/payment-methods'?'https://checkout.stripe.com':''}; frame-ancestors ${session.audience === 'embedded' ? session.parent : "'none'"}; base-uri 'none'`)
     return new Response(request.method === 'HEAD' ? null : response.body, { headers: resultHeaders })
   } catch (error) {
     if (!(error instanceof NectarError)) throw error
-    if(['/portal/payment-methods/action','/portal/payment-methods/action/reconcile','/portal/payment-methods/start','/portal/payment-methods/finish','/portal/payment-methods/reconcile','/portal/prepaid-refund.request','/portal/answer-proposal','/portal/prepaid-topup.accept','/portal/prepaid-topup.revoke'].includes(url.pathname) && request.headers.get('content-type')?.startsWith('application/json')) return Response.json({error:error.code},{status:error.status,headers})
+    if(['/portal/profile','/portal/pay','/portal/pay/reconcile','/portal/payment-methods/action','/portal/payment-methods/action/reconcile','/portal/payment-methods/start','/portal/payment-methods/finish','/portal/payment-methods/reconcile','/portal/prepaid-refund.request','/portal/answer-proposal','/portal/prepaid-topup.accept','/portal/prepaid-topup.revoke'].includes(url.pathname) && request.headers.get('content-type')?.startsWith('application/json')) return Response.json({error:error.code},{status:error.status,headers})
     const known = language !== null && ![401,403].includes(error.status)
     const L = customerText(known ? language : null)
     const title = L.t(known ? 'portal.request.unavailable' : 'portal.unavailable')

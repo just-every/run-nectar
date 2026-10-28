@@ -1,3 +1,4 @@
+import { portalCustomerSignIn } from './portal-signin-helper.mjs'
 import assert from 'node:assert/strict'
 import { performance } from 'node:perf_hooks'
 import { applyPolicy, reviewer } from './policy-helper.mjs'
@@ -84,7 +85,7 @@ async function nextInvoiceCorrections(h, owner, foreignSession, issuedOriginal,o
       price=(await api('price.create',{product:usageProduct,kind:'unit',meter,unit_amount:'0.01',taxable:true})).id
     }
     const subscription=(await api('subscription.create',{customer,start_date:'2026-09-01',anchor_day:1,price:[base,...(price?[price]:[])]})).id
-    const session=await api('portal.session.issue',{customer,origin:h.origin,audience:'hosted'})
+    const session=await portalCustomerSignIn(h,owner,customer)
     const event=(event_id,quantity,billable=true)=>({event_id,quantity,customer:external,meter:code,occurred_at:'2026-09-10T12:00:00-07:00',
       ...(kind==='metric'?{properties:{billable,internal_note:'PRIVATE-METRIC-PROPERTY'}}:{})})
     fixtures.push({kind,customer,subscription,session,event,email,price})

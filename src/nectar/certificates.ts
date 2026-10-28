@@ -25,6 +25,12 @@ export async function claimExemption(env: Bindings, actor: Actor, input: Input) 
 export async function collectCertificate(env: Bindings, actor: Actor, input: Input) {
   requireCapability(actor, 'records')
   const customer = await requireCustomer(env, input.text('customer', { max: 100 }))
+  return collectCustomerCertificate(env, customer.id, actorLabel(actor), input, () => [])
+}
+
+/** Shared custody primitive. The caller establishes the customer and authority;
+ * customer capabilities supply their live fences here, never an operator Actor. */
+export async function collectCustomerCertificate(env: Bindings, customerId: string, identity: string, input: Input, fences: () => D1PreparedStatement[]) {
   const state = stateOf(input), reference = input.text('reference', { max: 120 })
   const from = requireDate(input.text('valid_from', { max: 10 }), 'valid_from')
   const expires = requireDate(input.text('expires_on', { max: 10 }), 'expires_on')
@@ -38,10 +44,11 @@ export async function collectCertificate(env: Bindings, actor: Actor, input: Inp
   const digest = await sha256Hex(bytes), id = newId()
   let binary = ''; for (const byte of bytes) binary += String.fromCharCode(byte)
   await commit(env, [
-    stmt(env, 'INSERT OR IGNORE INTO nc_exemption_claims (customer_id,state,created_by,created_at) VALUES (?,?,?,?)', customer.id, state, actorLabel(actor), now()),
-    stmt(env, 'INSERT INTO nc_certificates (id,customer_id,state,reference,valid_from,expires_on,filename,media_type,content_base64,sha256,collected_by,collected_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)', id, customer.id, state, reference, from, expires, file.filename, type, btoa(binary), digest, actorLabel(actor), now()),
-  ], { actor: actorLabel(actor), action: 'certificate.collect', subject: id, detail: { customer: customer.id, state, reference, from, expires, sha256: digest } })
-  return { id: customer.id, certificate: id }
+    ...fences(),
+    stmt(env, 'INSERT OR IGNORE INTO nc_exemption_claims (customer_id,state,created_by,created_at) VALUES (?,?,?,?)', customerId, state, identity, now()),
+    stmt(env, 'INSERT INTO nc_certificates (id,customer_id,state,reference,valid_from,expires_on,filename,media_type,content_base64,sha256,collected_by,collected_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)', id, customerId, state, reference, from, expires, file.filename, type, btoa(binary), digest, identity, now()),
+  ], { actor: identity, action: 'certificate.collect', subject: id, detail: { customer: customerId, state, reference, from, expires, sha256: digest } })
+  return { id: customerId, certificate: id }
 }
 
 export async function validateCertificate(env: Bindings, actor: Actor, input: Input) {

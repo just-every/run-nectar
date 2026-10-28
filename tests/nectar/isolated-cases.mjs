@@ -87,4 +87,5 @@ export const isolatedJourneys = [
   { file: 'reconciliation', name: 'reconciliationFlow', load: () => import('./reconciliation.mjs') },
   { file: 'assurance-detectors', name: 'assuranceDetectorsFlow', load: () => import('./assurance-detectors.mjs') },
   { file: 'assurance-detectors', name: 'assuranceScheduleFlow', load: () => import('./assurance-detectors.mjs') },
+  { file: 'portal-billing', name: 'portalBillingFlow', load: () => import('./portal-billing.mjs') },
 ]

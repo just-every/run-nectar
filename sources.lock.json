@@ -1142,7 +1142,7 @@
       "executable": false
     },
     "scripts/installer/local.mjs": {
-      "sha256": "dfd7868f59a512910683cf0dcad3d1660653e9bb034aeba9fa415caf467c6b97",
+      "sha256": "3617ac701a8dae6194691eaaaea04f82776a153f152c80ab145b064e2f460820",
       "executable": false
     },
     "scripts/installer/seed.mjs": {
@@ -3002,7 +3002,7 @@
       "executable": false
     },
     "src/nectar/actions.ts": {
-      "sha256": "b6730eff98cde9bf0bbf38aa70adb535a48b8cd0d78355a33736bacfb2ea658d",
+      "sha256": "05eed3dc113cc84c8673275a5ee89d5d220c0f5b3ec04284465c2632f0f26f37",
       "executable": false
     },
     "src/nectar/actor.ts": {
@@ -3174,7 +3174,7 @@
       "executable": false
     },
     "src/nectar/certificates.ts": {
-      "sha256": "f70abb1f7db098ebb1591410dca9e08adf3d23e0796973bd1abf50112ee1ee14",
+      "sha256": "937d9652ceaa727c60b4dcbfe5ea529d100cad521bcaa87a8150d3379334c6bd",
       "executable": false
     },
     "src/nectar/charge-lines.ts": {
@@ -3322,7 +3322,7 @@
       "executable": false
     },
     "src/nectar/erasure-records.ts": {
-      "sha256": "1e485bb57578cb7a04e180842e514fdeec09eb45b1a3254a05fab34e3fd9dea5",
+      "sha256": "778ba314846783c61adde2d0e3cfac591d217da3275026305717e1d779a3637a",
       "executable": false
     },
     "src/nectar/erasure-requests.ts": {
@@ -3382,7 +3382,7 @@
       "executable": false
     },
     "src/nectar/hosted-setup-return.ts": {
-      "sha256": "0bf29c4710b44592c08a7733c3dd098a88a5196442ca04d56f582350d45e571b",
+      "sha256": "8c9e4a19948661876bdeb8a3fdd6aca9e0c87dbca675d531e62cb70296e22a22",
       "executable": false
     },
     "src/nectar/hosted-setup.ts": {
@@ -3482,7 +3482,7 @@
       "executable": false
     },
     "src/nectar/invoice-voids.ts": {
-      "sha256": "c1b7ecf033d4ffa02f449f4916c4cc375963eed34d8a3e24b69d47169c89cd29",
+      "sha256": "93039e6bd70de74a35d40ae5075a45caabc9a67bdb5f0da87cfe195f419fb5a6",
       "executable": false
     },
     "src/nectar/ledger-postings.ts": {
@@ -3534,11 +3534,11 @@
       "executable": false
     },
     "src/nectar/locales/en.json": {
-      "sha256": "d166ef8f810272d5bcffd5f439cc4376dcfe7cbb18f6fcce84e8cead108f1888",
+      "sha256": "580a296068eface92b6b473b8b14c578876274cb7b621aa6532e0c6ee6810cf0",
       "executable": false
     },
     "src/nectar/locales/es-US.json": {
-      "sha256": "adb8b9caa5c236081dd298f4fe2ff92af1b6956f721e7dad4f27a3bae135a2b4",
+      "sha256": "89ffd5971d6b4986e838eb7611e4c346efd4915b71d5b715b928054e6109d253",
       "executable": false
     },
     "src/nectar/manual-invoices.ts": {
@@ -3798,7 +3798,7 @@
       "executable": false
     },
     "src/nectar/portal-http.ts": {
-      "sha256": "f33e0703e66670e94e193b6656b607add4c969f671a24818d73f932795dfffe4",
+      "sha256": "a2815828e6ff5acdef4327e279846b54a0d979f10c0c4de1d306553b8c7050d5",
       "executable": false
     },
     "src/nectar/portal-method-actions-page.ts": {
@@ -3810,11 +3810,11 @@
       "executable": false
     },
     "src/nectar/portal-page.ts": {
-      "sha256": "b2a92444bc577c97f05b67c9c853dd2886ca9206ecaf55d1d65121a0af2f0ab2",
+      "sha256": "52c14abff2d2f5027d981df0179723e370220c613c4458695b090e3e29527cee",
       "executable": false
     },
     "src/nectar/portal-policy.ts": {
-      "sha256": "f091a4c6f7873b9db2f0776db9d1baa63fb189a32ec2bd7a8a672d562b697e3b",
+      "sha256": "7166fadb15794021ea98f70a4d7eb7da77efffe7bafcb77d81334bbb16fa3d87",
       "executable": false
     },
     "src/nectar/portal-prepaid-refunds.ts": {
@@ -3834,7 +3834,7 @@
       "executable": false
     },
     "src/nectar/portal-session.ts": {
-      "sha256": "b7674f2a152f5755a15d1e99f236ca5ff385c1b8c68d9ea57dbf21e2a23ec3d8",
+      "sha256": "4985bb0487ff1b5a16d14252c0a41b20f722c87e29440882c25c6ec59bb83c0a",
       "executable": false
     },
     "src/nectar/portal-upcoming.ts": {
@@ -4162,7 +4162,7 @@
       "executable": false
     },
     "src/nectar/retry-method-recovery.ts": {
-      "sha256": "59325713b037d773a224887d89dda7ece97c4254368bf05a75d2cddbcb8076e5",
+      "sha256": "7c48422890b968f1b7d0eea2ba13e21b42a75d64cc1f30d17c34e62f28d06cea",
       "executable": false
     },
     "src/nectar/retry-policy.ts": {
@@ -4374,7 +4374,7 @@
       "executable": false
     },
     "src/nectar/ui/home.ts": {
-      "sha256": "0f98202492a8ce9dc49885e400c5d5fda5172421b7d96cc00985ef73c64f0690",
+      "sha256": "bfaee7db1b76e704a534ed43622b48089fef3694afdd1ad63c6ae9a31340b86c",
       "executable": false
     },
     "src/nectar/ui/html.ts": {
@@ -5106,7 +5106,7 @@
       "executable": false
     },
     "tests/nectar/isolated-cases.mjs": {
-      "sha256": "b188b5dc6fa818cf4b77784791510ad38cd5dcfba87539ceede2863d04c32c92",
+      "sha256": "affb1ebbae298fba89e4a2cd9db1379bd1085017dfbefa0e240b65bc295267e6",
       "executable": false
     },
     "tests/nectar/isolated.mjs": {
@@ -5258,11 +5258,11 @@
       "executable": false
     },
     "tests/nectar/portal-answers.mjs": {
-      "sha256": "606a3924f837ff44cd67b9cce4bb86fe51064247678e125ce2c279398319dc58",
+      "sha256": "f3c2b8eae94cdfb35a61c869b7e736b67a26bd23ef78c2b2647e2ba2326e0f15",
       "executable": false
     },
     "tests/nectar/portal-corrections.mjs": {
-      "sha256": "5d7883bfd96de242ad60d4533a0fc6fa3831d5640a44105d19b056833e377315",
+      "sha256": "8d0912f70da440ee99cd52ffc0e6ec96f3aa4dcf41eb0ddce9b46f520ac04abf",
       "executable": false
     },
     "tests/nectar/portal-embedding.mjs": {
@@ -5290,7 +5290,7 @@
       "executable": false
     },
     "tests/nectar/portal-privacy-retention.mjs": {
-      "sha256": "63a2124fae9312e5d5cc2deff5875fa2fc16468038c61eb3fa926231ab68a84b",
+      "sha256": "35eff92b22ffb539bf8fef299eedf24a5591360f16d44584c6de2ae5da9871de",
       "executable": false
     },
     "tests/nectar/portal-sessions.mjs": {

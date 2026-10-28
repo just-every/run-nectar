@@ -36,11 +36,23 @@ export async function issuePortalSession(env: Bindings, actor: Actor, input: Inp
   const policy = await one(env, 'SELECT * FROM nc_portal_policy WHERE singleton=1')
   insist(policy && parseJson<string[]>(policy.hosts_json, []).includes(origin), 'portal_host_not_approved', 403)
   insist(audience === 'embedded' ? parseJson<string[]>(policy.parents_json, []).includes(parent) : parent === '', 'portal_parent_not_approved', 403)
+  const prepared = await preparePortalSession(env, { customer: customer.id, origin, audience, parent, policyRevision: policy.revision })
+  await commit(env, [guard(env, 'stale', 'EXISTS(SELECT 1 FROM nc_portal_policy WHERE singleton=1 AND revision=?) AND EXISTS(SELECT 1 FROM nc_customers WHERE id=? AND erased_at IS NULL)', policy.revision, customer.id), prepared.statement], { actor: actorLabel(actor), action: 'portal.session.issue', subject: prepared.id, detail: { customer: customer.id, origin, audience, parent, expiresAt: prepared.expiresAt } })
+  return { id: prepared.id, token: prepared.token, url: prepared.url, expiresAt: prepared.expiresAt }
+}
+
+/** Prepares a capability without persisting authority. The caller must commit
+ * its current authorization fence and this statement in one atomic batch. */
+export async function preparePortalSession(env: Bindings, source: {
+  customer: string; origin: string; audience: 'hosted' | 'embedded'; parent: string;
+  policyRevision: string; contactId?: string | null; emailHash?: string | null
+}) {
+  approvedOrigin(env, source.origin)
   const iat = clockInstant(env), id = newId(), exp = iat + PORTAL_LIFETIME
-  const claims: PortalClaims = { v: 1, iss: env.AUTH_ORIGIN, jti: id, customer: customer.id, origin, audience, parent, iat, exp }
+  const claims: PortalClaims = { v: 1, iss: env.AUTH_ORIGIN, jti: id, customer: source.customer, origin: source.origin, audience: source.audience, parent: source.parent, iat, exp }
   const token = await signPortalSession(env, claims)
-  await commit(env, [guard(env, 'stale', 'EXISTS(SELECT 1 FROM nc_portal_policy WHERE singleton=1 AND revision=?) AND EXISTS(SELECT 1 FROM nc_customers WHERE id=? AND erased_at IS NULL)', policy.revision, customer.id), stmt(env, 'INSERT INTO nc_portal_sessions(id,customer_id,token_hash,origin,audience,parent_origin,policy_revision,issued_at,expires_at) VALUES(?,?,?,?,?,?,?,?,?)', id, customer.id, await sha256Hex(token), origin, audience, parent, policy.revision, iat, exp)], { actor: actorLabel(actor), action: 'portal.session.issue', subject: id, detail: { customer: customer.id, origin, audience, parent, expiresAt: exp } })
-  return { id, token, url: `${origin}/portal?session=${encodeURIComponent(token)}`, expiresAt: exp }
+  const statement = stmt(env, 'INSERT INTO nc_portal_sessions(id,customer_id,token_hash,origin,audience,parent_origin,policy_revision,issued_at,expires_at,contact_id,email_hash) VALUES(?,?,?,?,?,?,?,?,?,?,?)', id, source.customer, await sha256Hex(token), source.origin, source.audience, source.parent, source.policyRevision, iat, exp, source.contactId ?? null, source.emailHash ?? null)
+  return { id, token, statement, url: `${source.origin}/portal?session=${encodeURIComponent(token)}`, expiresAt: exp }
 }
 
 export async function revokePortalSession(env: Bindings, actor: Actor, input: Input) {

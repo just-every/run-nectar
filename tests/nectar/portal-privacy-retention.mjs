@@ -1,3 +1,4 @@
+import { portalCustomerSignIn } from './portal-signin-helper.mjs'
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { populateErasureKinds } from './erasure-record-kinds.mjs'
@@ -17,7 +18,7 @@ export async function portalPrivacyRetention(h, owner) {
     external_id: `PORT005-PRIVACY-${suffix}`, name: `Juniper ${suffix} Legal LLC`,
     billing_email: `${suffix.toLowerCase()}@portal-privacy.example`, address: `Private Juniper address ${suffix}`,
   })).id
-  const issue = customer => api('portal.session.issue', { customer, origin: h.origin, audience: 'hosted' })
+  const issue = customer => portalCustomerSignIn(h,owner,customer)
   const portal = (session, path = '/portal/data', options) => h.raw(`${path}?session=${encodeURIComponent(session.token)}`, options)
   const request = async session => {
     const before = await api('erasures'), mailCount = h.mails.length
