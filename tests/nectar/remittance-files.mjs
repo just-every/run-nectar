@@ -10,8 +10,8 @@ const header = 'receipt_id,received_on,currency,amount,customer,invoice_referenc
 export const remittanceFile = rows => file('synthetic-nectar-900.csv',header+rows.map(row=>row.join(',')).join('\n')+'\n','text/csv')
 export async function remittanceFixtures(h, owner) {
   const api=(path,body,status)=>h.api(path,owner,body,status)
-  const customer=(await api('customer.create',{external_id:'synthetic-nectar-901',name:'Synthetic remittance customer'})).id
-  const other=(await api('customer.create',{external_id:'synthetic-nectar-902',name:'Synthetic other customer'})).id
+  const customer=(await api('customer.create',{external_id:'synthetic-nectar-901',name:'Synthetic remittance customer',billing_email:['synthetic-nectar-901','example.test'].join('@')})).id
+  const other=(await api('customer.create',{external_id:'synthetic-nectar-902',name:'Synthetic other customer',billing_email:['synthetic-nectar-902','example.test'].join('@')})).id
   const issue=async(amount,customerId=customer)=>{
     const charge=await api('charge.add',{customer:customerId,amount,description:'Synthetic service',effective_date:'2026-10-01',taxable:false})
     const draft=await api('invoice.manual',{customer:customerId,charges:[charge.charge],service_date:'2026-10-01'})
@@ -84,6 +84,24 @@ export async function remittanceFilesFlow(h, owner) {
   await api('remittance.upload',{file:remittanceFile(rows('synthetic-nectar-915','1.00',[],'synthetic-nectar-901','CAD'))},400)
   await api('remittance.upload',{file:remittanceFile(rows('synthetic-nectar-916','10.00',[[foreign.number,'10.00']]))},409)
   await api('remittance.upload',{file:remittanceFile(rows('synthetic-nectar-917','1.001'))},400)
+  const ambiguousInvoices=[await issue('12.00',other),await issue('12.00',other)]
+  const ambiguous=await upload(rows('synthetic-nectar-921','12.00',[],'synthetic-nectar-902'))
+  const ambiguousPreview=await preview(ambiguous)
+  assert.equal(ambiguousPreview.reason,'ambiguous_amount');assert.deepEqual(ambiguousPreview.allocations,[])
+  const ambiguousPayment=(await confirm(ambiguous,ambiguousPreview)).payment
+  const stagedAllocation=await api('remittance.allocate.preview',{receipt:ambiguous,invoice:ambiguousInvoices[0].id,amount:'5.00'})
+  const reducingPayment=(await api('payment.record',{customer:other,amount:'1.00',received_on:'2026-10-15',method:'check',reference:'synthetic-nectar-922'})).payment
+  await api('payment.allocate',{payment:reducingPayment,invoice:ambiguousInvoices[0].id,amount:'1.00'})
+  const beforeStale=await api(`payments/${ambiguousPayment}/receipt`)
+  await api('remittance.allocate',{receipt:ambiguous,invoice:ambiguousInvoices[0].id,amount:'5.00',fingerprint:stagedAllocation.fingerprint,confirm:true},409)
+  assert.deepEqual(await api(`payments/${ambiguousPayment}/receipt`),beforeStale)
+  const freshAllocation=await api('remittance.allocate.preview',{receipt:ambiguous,invoice:ambiguousInvoices[0].id,amount:'5.00'})
+  const concurrentAllocation=await Promise.all([1,2].map(()=>h.raw('/api/nectar/remittance.allocate',{cookie:owner,body:{receipt:ambiguous,invoice:ambiguousInvoices[0].id,amount:'5.00',fingerprint:freshAllocation.fingerprint,confirm:true}})))
+  assert.ok(concurrentAllocation.every(r=>[200,409].includes(r.status)))
+  assert.ok(concurrentAllocation.some(r=>r.status===200));for(const r of concurrentAllocation)await r.text()
+  assert.equal((await api(`payments/${ambiguousPayment}/receipt`)).allocatedCents,500)
+  await api('customer.create',{external_id:'synthetic-nectar-923',name:'Synthetic Canadian customer',billing_email:['synthetic-nectar-923','example.test'].join('@'),currency:'CAD'})
+  await api('remittance.upload',{file:remittanceFile(rows('synthetic-nectar-924','1.00',[],'synthetic-nectar-923'))},409)
   const outsider=['synthetic-nectar-918','example.test'].join('@')
   await api('access.give',{email:outsider,name:'Read only member',role:'accountant'})
   const readOnly=await h.signIn(outsider,{requested:true})
@@ -110,6 +128,7 @@ export async function remittanceFilesFlow(h, owner) {
   await confirm(wire,match,409)
   await api('remittance.allocate.preview',{receipt:wire,invoice:invoices[4].id,amount:'1.00'},409)
   await h.assertStorageExcludes(['synthetic-nectar-901','synthetic-nectar-910','synthetic-nectar-911','synthetic-nectar-913'])
+  console.log('Remittance public-door money, refusal, reconciliation, erasure and browser journey passed')
 }
 
 async function remittanceScreens(h,owner,{customer,invoice,rows}) {
@@ -126,7 +145,7 @@ async function remittanceScreens(h,owner,{customer,invoice,rows}) {
     }
     const submit=async action=>{
       const form=page.locator(`form[action="/app/do/${action}"]`)
-      await Promise.all([page.waitForNavigation({waitUntil:'load'}),form.getByRole('button').click()])
+      await Promise.all([page.waitForNavigation({waitUntil:'load'}),form.locator('button[type=submit]').click()])
       assert.equal(new URL(page.url()).searchParams.get('error'),null)
     }
     await page.goto(h.origin+'/app/receivables')

@@ -79,7 +79,7 @@ export async function invoicePage(env: Bindings, actor: Actor, id: string, url: 
   const i=await currencyRecord(env,original,original.total_cents,original.issue_date??original.period_start)
   const cents=(value:number|null|undefined)=>value===null||value===undefined?'—':money(value,i.currency)
   const approver = actor.kind === 'member' && can(actor, 'approve')
-  const pays = i.status === 'issued' && can(actor, 'receivables') && canRead(actor, 'payments') ? (await payments(env, actor, i.customer_id)).filter((p: any) => p.unallocated_cents > 0) : []
+  const pays = i.status === 'issued' && can(actor, 'receivables') && canRead(actor, 'payments') ? (await payments(env, actor, i.customer_id)).filter((p: any) => p.unallocated_cents > 0 && !p.remittance_id) : []
   const title = i.number ? `Invoice ${i.number}` : i.status === 'shadow' ? 'Shadow draft' : 'Draft invoice'
   const incumbent = i.comparison.incumbent
   const entity = i.status === 'issued' ? parseJson<Row>(i.billing_route_json, {}) : i.calculation.inputs?.invoiceContent?.billingEntity?.route
@@ -112,7 +112,7 @@ export async function invoicePage(env: Bindings, actor: Actor, id: string, url: 
     ${i.status === 'issued' ? h`<section class="card" aria-labelledby="recv"><h2 id="recv">Credits and payments</h2>
       ${table(['Credit note', 'Reason', 'Face amount$', 'Applied here$'], i.credits.map((c: any) => [h`<span id="credit-${c.id}">${c.number}</span> ${metadataLink('credit-note',c.id)}`, c.reason, cents(c.amount_cents), cents(c.applied_cents??c.amount_cents)]), { empty: 'No credit notes.' })}
       ${table(['Carried correction credit','Applied$'],i.carriedApplications.map((a:any)=>[a.number,cents(a.amount_cents)]),{empty:'No carried correction credit applied.'})}
-      ${table(['Payment', 'Received', 'Allocated$'], i.allocations.map((a: any) => [a.reference, formatDate(a.received_on), cents(a.amount_cents)]), { empty: 'No payments allocated.' })}
+      ${table(['Payment', 'Received', 'Allocated$'], i.allocations.map((a: any) => [a.reference, formatDate(a.received_on), cents(a.amount_cents)]), { empty: 'No payments allocated.' })}<p class="hint">Uploaded remittance funds are reviewed and confirmed on <a href="/app/receivables#remittances">Receivables</a>.</p>
       <p>Invoiced ${importedCents(i.total_cents,i.currency)} = credited ${cents(i.creditedCents)} + paid ${cents(i.paidCents)}${i.writtenOffCents ? ` + written off ${cents(i.writtenOffCents)}` : ''} + owed ${cents(i.balanceCents)}.</p>
       ${approver && i.balanceCents > 0 ? form('credit.issue', `/app/invoices/${i.id}`, h`${hidden('invoice', i.id)}${field('Credit amount ($)', 'amount')}${field('Reason', 'reason')}`, 'Issue credit note', { layout: 'columns', secondary: true }) : ''}
       ${!approver && actor.kind === 'member' && can(actor, 'credits.limited') && i.status === 'issued' && i.balanceCents > 0 ? form('credit.issue', `/app/invoices/${i.id}`, h`${hidden('invoice', i.id)}${field('Credit amount ($)', 'amount', { hint: `Support credits go up to ${money(supportLimitCents(i.creditPolicy))}, the limit the owner set.` })}${field('Reason', 'reason')}`, 'Issue support credit', { layout: 'columns', secondary: true }) : ''}

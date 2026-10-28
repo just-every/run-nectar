@@ -871,3 +871,21 @@ archives may preserve non-executable pending evidence but never customer
 sessions, and a later erasure journal refuses older personal archives.
 Automatic upgrades, downgrades, seat changes, pauses, cancellation, exact
 proration and payment, and inherited renewal and retention flows remain owed.
+
+### Reviewed remittance receipts
+
+Members with receivables authority and customer, invoice and payment reads upload a USD CSV with `remittance.upload` (`file`, using the ordinary multipart or JSON file representation). No funds are recorded by upload or preview. Each row uses these ordered columns:
+
+```csv
+receipt_id,received_on,currency,amount,customer,invoice_reference,allocation_amount
+synthetic-nectar-1,2026-10-15,USD,150.00,synthetic-nectar-2,CD-000001,100.00
+synthetic-nectar-1,2026-10-15,USD,150.00,synthetic-nectar-2,CD-000002,50.00
+```
+
+Repeat the deposit amount and date for each invoice row. Receipt IDs are immutable across all uploads in this installation. Use exact dollars and cents and full invoice numbers. Customer is an exact external customer ID or native ID. Leave customer and both invoice cells empty for an unknown deposit; a person must identify its customer before confirming received funds. Conflicting or unresolved references are never partly guessed. Several equal invoice balances remain ambiguous.
+
+`remittance.preview` takes `receipt` and an optional explicitly identified `customer`. It returns proposed allocations, current balances, remaining funds, review reason and `fingerprint`. `remittance.confirm` takes that receipt, identified customer, fingerprint and `confirm: true`; it records one ordinary numbered received-funds receipt and every supported allocation atomically with the audit. Changed balances require a new preview. An exact repeated confirmation returns the existing payment.
+
+`GET /api/nectar/remittances` lists staged sources, short payments and unallocated funds under the same read authority. For received funds awaiting allocation, call `remittance.allocate.preview` with `receipt`, `invoice` and `amount`, then `remittance.allocate` with the same values, returned fingerprint and `confirm: true`. Ordinary `payment.allocate` refuses these sources so the separate review cannot be bypassed. Both confirmation doors require a person; application credentials and read-only members cannot move money. Replays, changed source payloads, stale balances, foreign customers, other currencies and erased sources cannot create another payment or allocation. Source-identity tombstones survive financial removal; restored receipts confer no automatic execution authority.
+
+These doors record an operator-confirmed USD receipt from a file. They do not charge a processor, attest bank verification, claim processor settlement or complete the Plaid and PAY-007 acceptance still named in AR-002.

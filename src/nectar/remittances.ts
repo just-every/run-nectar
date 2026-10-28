@@ -23,7 +23,9 @@ export async function uploadRemittances(env: Bindings, actor: Actor, input: Inpu
   const sources = remittanceSources(file.bytes), ids: string[] = [], statements: D1PreparedStatement[] = []
   for (const source of sources) {
     const sourceKey = await fingerprint({ kind: 'usd-remittance', receiptId: source.receiptId }), payloadHash = await fingerprint(source)
-    const existing = await one(env, 'SELECT * FROM nc_remittances WHERE source_key_hash=?', sourceKey)
+    const key = await one(env, 'SELECT * FROM nc_remittance_source_keys WHERE source_key_hash=?', sourceKey)
+    const existing = key ? await one(env, 'SELECT * FROM nc_remittances WHERE id=?', key.record_id) : null
+    insist(!key || existing, 'remittance_erased', 409)
     if (existing) {
       insist(existing.status !== 'erased', 'remittance_erased', 409)
       insist(existing.payload_hash === payloadHash, 'remittance_source_changed', 409)
@@ -34,6 +36,7 @@ export async function uploadRemittances(env: Bindings, actor: Actor, input: Inpu
     if (match.customer) statements.push(customerGuard(env, match.customer, match.customerRevision))
     statements.push(stmt(env, `INSERT INTO nc_remittances(id,source_key_hash,payload_hash,source_json,amount_cents,currency,received_on,customer_id,status,created_by,created_at) VALUES(?,?,?,?,?,?,?,?,'staged',?,?)`,
       id, sourceKey, payloadHash, row.source_json, source.amountCents, source.currency, source.receivedOn, match.customer, actorLabel(actor), clockInstant(env)))
+    statements.push(stmt(env, 'INSERT INTO nc_remittance_source_keys(source_key_hash,payload_hash,record_id) VALUES(?,?,?)', sourceKey, payloadHash, id))
     ids.push(id)
   }
   if (statements.length) await commit(env, statements, { actor: actorLabel(actor), action: 'remittance.upload', subject: ids[0], detail: { receipts: ids } })
