@@ -62,7 +62,9 @@ jobs:
 
       - name: Hosted receipt browser proof
         if: ${{ matrix.shard == 0 }}
-        run: node tests/nectar/portal-receipts-browser.mjs
+        run: |
+          node tests/nectar/portal-receipts-browser.mjs
+          node tests/nectar/portal-receipts-browser.mjs calculations
 
       - name: Processor reconciliation journeys
         if: ${{ matrix.shard == 0 }}

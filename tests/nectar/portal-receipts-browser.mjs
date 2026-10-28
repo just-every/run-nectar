@@ -3,8 +3,10 @@ import { mkdir } from 'node:fs/promises'
 import { chromium } from '@playwright/test'
 import { harness } from './harness.mjs'
 import { applyPolicy } from './policy-helper.mjs'
+import { invoiceContentFlow } from './invoice-content.mjs'
 import { portalReceiptsFlow } from './portal-receipts.mjs'
 
+const calculations = process.argv.includes('calculations')
 const directory = process.env.NECTAR_EVIDENCE_DIR ?? '.evidence/portal-receipts'
 await mkdir(directory, { recursive: true })
 const h = await harness({ assets: true })
@@ -18,7 +20,8 @@ try {
   await h.api('tax.review', owner, { revision: (await h.api('business', owner)).revision })
   browser = await chromium.launch({ headless: true, args: ['--no-sandbox', '--use-mock-keychain', '--password-store=basic'] })
   const context = await browser.newContext(), page = await context.newPage()
-  await portalReceiptsFlow(h, owner, { onState: async ({ label, path, number, pdfPath, status = 200 }) => {
+  await (calculations ? invoiceContentFlow : portalReceiptsFlow)(h, owner, { onState: async ({ label, path, number, pdfPath, status = 200 }) => {
+    if (!path.startsWith('/portal')) return
     for (const width of [1440, 390]) {
       await page.setViewportSize({ width, height: 1000 })
       assert.equal((await page.goto(h.origin + path)).status(), status)
@@ -33,7 +36,8 @@ try {
         const download = page.waitForEvent('download')
         await page.locator('a[href*="format=pdf"]').click()
         const downloaded = await download
-        assert.match(downloaded.suggestedFilename(), /^RCT-\d+\.pdf$/)
+        if (calculations) assert.equal(downloaded.suggestedFilename(), 'invoice.pdf')
+        else assert.match(downloaded.suggestedFilename(), /^RCT-\d+\.pdf$/)
         await downloaded.saveAs(`${directory}/${label}.pdf`)
       }
       console.log('BROWSER', width, label)
