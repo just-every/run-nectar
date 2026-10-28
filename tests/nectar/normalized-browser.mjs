@@ -23,6 +23,11 @@ try {
             await page.setViewportSize({ width, height: 1000 })
             const response = await page.goto(h.origin + path)
             assert.equal(response.status(), 200)
+            if (state.select) {
+              await page.getByLabel(state.select.label,{exact:true}).selectOption(state.select.value)
+              await Promise.all([page.waitForURL(url=>url.searchParams.get('plan')===state.select.value),page.getByRole('button',{name:'Show month',exact:true}).click()])
+            }
+            if (state.analytics) await page.getByText('Monthly cohort retention',{exact:true}).first().click()
             assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, `${label} fits ${width}`)
             assert.deepEqual(await page.locator('a,button,[role=button]').evaluateAll(nodes=>nodes.filter(node=>!node.textContent.trim()&&node.querySelector('svg,img')&&!node.getAttribute('aria-describedby')).map(node=>node.outerHTML)), [], 'Icon controls have tooltips')
             assert.ok((await page.locator('main').innerText()).length > 100)
@@ -40,6 +45,11 @@ try {
               assert.equal(await page.getByLabel('Customer segment',{exact:true}).inputValue(),'Synthetic research cohort')
               assert.ok(await page.getByRole('heading',{name:'Customer retention cohorts',exact:true}).count())
               assert.ok(await page.getByRole('heading',{name:'Trial conversion cohorts',exact:true}).count())
+              const cohort = page.locator('details[open]').filter({has:page.getByText('Monthly cohort retention',{exact:true})})
+              const april = cohort.getByRole('row').filter({has:page.getByRole('cell',{name:'2026-04',exact:true})})
+              const may = cohort.getByRole('row').filter({has:page.getByRole('cell',{name:'2026-05',exact:true})})
+              assert.deepEqual((await april.getByRole('cell').allInnerTexts()).slice(0,6),['2026-04','0','$0.00','0.00%','0.00%','0.00%'])
+              assert.deepEqual((await may.getByRole('cell').allInnerTexts()).slice(0,6),['2026-05','1','$150.00','100.00%','150.00%','100.00%'])
             }
             await page.screenshot({ path: `${directory}/${width}-${label}.jpg`, fullPage: true, type: 'jpeg', quality: 65 })
             console.log('BROWSER',width,label)

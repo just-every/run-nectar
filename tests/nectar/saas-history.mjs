@@ -106,7 +106,7 @@ export async function nativeSaasHistory(h, owner, onState) {
   await api(`reports/normalized-arr?${query}`)
   assert.deepEqual(await api(`subscriptions/${first}`),before,'Reading analytics never mutates billing sources')
   await onState({analytics:{customers:'1',arpa:'$150.00',logo:'50.00%',net:'42.86%',gross:'42.86%'},label:'customer-movements',path:`/app/reports/normalized-mrr?${query}`,amount:15000})
-  await onState({label:'plan-cohort',path:`/app/reports/normalized-mrr?${query}&plan=${base}`,amount:10000})
+  await onState({label:'plan-cohort',path:`/app/reports/normalized-mrr?${query}`,select:{label:'Plan price',value:base},amount:10000})
   await onState({label:'entity-cohort',path:`/app/reports/normalized-mrr?${query}&entity=${entity.id}`,amount:15000})
   console.log('Native multi-subscription customer movements, churn, retention, ARPA, trial and customer cohorts, exact filters and source reconciliation passed')
 }

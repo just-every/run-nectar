@@ -92,6 +92,12 @@ export async function normalizedMetricsFlow(h, owner, onState = async () => {}) 
     await onState({ label: metric, path: `/app/reports/${metric}?period=2026-07&customer=${customer}`, amount })
     await onState({ label: `${metric}-source`, path: report.entries[0].href, amount })
   }
+  const nativeSeat = (await api(`subscriptions/${subscription}`)).items.find(item=>item.kind==='seat').price_id
+  for (const plan of [nativeSeat,'synthetic-nectar-normalized-seat']) {
+    const selected = await api(`reports/normalized-mrr?period=2026-07&customer=${customer}&plan=${plan}`)
+    assert.deepEqual(selected.series.map(row=>row.amountCents),[...expected.map((value,index)=>value-(index<2?5000:0)),23000],'Native and original source plan identities select uninterrupted subscription history')
+    for (const entry of selected.entries) assert.equal((await api(entry.href.replace('/app/',''))).totalCents,entry.amountCents)
+  }
   const billed = await api(`reports/mrr?period=2026-07&customer=${customer}`)
   assert.equal(billed.totalCents,33000,'Billed recurring retains native 23000 cents plus the captured annual invoice allocation of 10000 cents')
   await onState({label:'billed-recurring',path:`/app/reports/mrr?period=2026-07&customer=${customer}`,amount:33000})
@@ -135,6 +141,7 @@ export async function normalizedMetricsFlow(h, owner, onState = async () => {}) 
   await api('import.apply',{...files,fingerprint:preview.fingerprint},409)
   const anonymous = await api('reports/normalized-mrr?period=2026-07')
   assert.equal(anonymous.entries.some(row=>row.customerId===customer),false,'Erasure and replay cannot expose retained contract operands')
+  assert.equal(JSON.stringify(anonymous.saas).includes(customer),false,'Erasure removes the customer from movement, cohort and trial source projections as well')
   await discountedCaptureFlow(h, owner, onState)
   await nativeSaasHistory(h, owner, onState)
   console.log('Normalized native and captured history, adoption, independent MRR and ARR, fractions, sources, CSV and authority passed')
