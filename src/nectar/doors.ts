@@ -57,7 +57,7 @@ export const API_DOORS: [string, string][] = [
 ]
 
 /** API doors whose rows page by cursor (DEV-002, list-cursor.ts); `invoices` keeps its own issuance-journal snapshot. */
-export const LIST_DOORS = ['paymentLinks','automaticCollections','assuranceCases','assuranceRuns','currencyRates','trialCollections','prepaidRefunds','prepaidTopupAuthorizations','prepaidTopupClaims','nativeCollections', 'usageCorrections', 'erasures', 'noteMembers', 'customers', 'batches', 'runs', 'payments', 'notices', 'tasks', 'policies', 'proposals', 'imports', 'shadow', 'members', 'roles', 'credentials', 'audit', 'metadataObjects', 'notes']
+export const LIST_DOORS = ['remittances','paymentLinks','automaticCollections','assuranceCases','assuranceRuns','currencyRates','trialCollections','prepaidRefunds','prepaidTopupAuthorizations','prepaidTopupClaims','nativeCollections', 'usageCorrections', 'erasures', 'noteMembers', 'customers', 'batches', 'runs', 'payments', 'notices', 'tasks', 'policies', 'proposals', 'imports', 'shadow', 'members', 'roles', 'credentials', 'audit', 'metadataObjects', 'notes']
 
 export const PAGE_DOORS: [string, string][] = [
   ['^/app/settings/portal-changes$', 'portalChanges'],

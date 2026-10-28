@@ -106,7 +106,7 @@ export async function allocateRemittance(env: Bindings, actor: Actor, input: Inp
 }
 export async function readRemittances(env: Bindings, actor: Actor): Promise<Row[]> {
   readable(actor)
-  const rows = await all(env, `SELECT r.*,c.name AS customer_name,${UNALLOCATED_SQL} AS available_cents FROM nc_remittances r LEFT JOIN nc_customers c ON c.id=r.customer_id LEFT JOIN nc_payments p ON p.id=r.payment_id WHERE r.status<>'erased' ORDER BY r.created_at DESC,r.id LIMIT 200`)
+  const rows = await all(env, `SELECT r.*,c.name AS customer_name,${UNALLOCATED_SQL} AS available_cents FROM nc_remittances r LEFT JOIN nc_customers c ON c.id=r.customer_id LEFT JOIN nc_payments p ON p.id=r.payment_id WHERE r.status<>'erased' ORDER BY r.created_at DESC,r.id`)
   return Promise.all(rows.map(async row => {
     const source = parseJson<Row>(row.source_json, {})
     if (row.status === 'staged') {
