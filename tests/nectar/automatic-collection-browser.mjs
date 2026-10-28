@@ -54,7 +54,16 @@ try{
    await Promise.all([page.waitForNavigation(),form.getByRole('button').click()]);assert.equal(new URL(page.url()).searchParams.has('error'),false)
    return (await h.api('automatic-collections',owner)).find(r=>r.id===input.request)
   },
-  onState:async({state,invoice,customer,session,request})=>{
+  onState:async({state,invoice,customer,session,request,subscription})=>{
+   if(subscription){
+    await page.setViewportSize({width:1440,height:950})
+    await page.goto(h.origin+`/app/subscriptions/${subscription}`)
+    const history=page.locator('section[aria-labelledby="state-history"]')
+    const states=await h.api(`subscriptions/${subscription}?include_state=true`,owner)
+    assert.equal(await history.getByRole('row').count(),states.stateHistory.length+1)
+    assert.ok((await history.getByRole('row').last().innerText()).includes(states.state.replaceAll('_',' ')))
+    await shot(page,`subscription-${state}`)
+   }
    if(state==='collected'&&request.payment){await page.goto(h.origin+`/app/payments/${request.payment}/receipt`);await shot(page,`${request.method}-receipt-${request.id.slice(0,8)}`)}
    for(const [target,path,kind] of [[page,`/app/invoices/${invoice}`,'invoice'],[page,`/app/customers/${customer}`,'customer'],[customerPage,`/portal/automatic-collections/${request.id}?session=${encodeURIComponent(session.token)}`,'portal']]){
     assert.equal((await target.goto(h.origin+path)).status(),200)

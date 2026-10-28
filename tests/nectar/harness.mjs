@@ -12,7 +12,7 @@ import { httpListener } from './http-listener.mjs'
 const wrangler = createRequire(import.meta.url)('wrangler')
 const { Miniflare, convertV4MiniflareOptions } = createRequire(createRequire(import.meta.url).resolve('wrangler'))('miniflare')
 
-export async function harness({ assets = false, localTime, hostname = '127.0.0.1', stripeFetch, stripeSecret, stripeSecondarySecret, stripeWebhookSecret, quickbooksFetch, webhookFetch, persistence, databaseId='nectar', applyMigrations=true, settings={} } = {}) {
+export async function harness({ assets = false, localTime, hostname = '127.0.0.1', stripeFetch, stripeSecret, stripeSecondarySecret, stripeWebhookSecret, stripePaymentWebhookSecret, quickbooksFetch, webhookFetch, persistence, databaseId='nectar', applyMigrations=true, settings={} } = {}) {
   const secret = () => randomBytes(32).toString('base64url')
   const vars = { AUTH_LOCAL: 'true', OWNER_EMAIL: 'owner@example.test', SESSION_SECRET: secret(), SETUP_TOKEN: secret(), MFA_KEY: secret(), PORTAL_KEY: secret(), MAIL_PROVIDER: 'resend', MAIL_API_KEY: 'test-only-resend-key', MAIL_FROM: 'auth@example.test' }
   // Persistent journeys keep their private runtime keys in memory across
@@ -20,6 +20,7 @@ export async function harness({ assets = false, localTime, hostname = '127.0.0.1
   Object.assign(vars,settings)
   if(localTime)vars.NECTAR_LOCAL_TIME=localTime
   if(stripeWebhookSecret)vars.STRIPE_WEBHOOK_SECRET=stripeWebhookSecret
+  if(stripePaymentWebhookSecret)vars.STRIPE_PAYMENT_WEBHOOK_SECRET=stripePaymentWebhookSecret
   if(stripeSecret)vars.STRIPE_BILLING_SECRET=stripeSecret
   if(stripeSecondarySecret)vars.STRIPE_SECONDARY_SECRET_KEY=stripeSecondarySecret
   if(quickbooksFetch)Object.assign(vars,{QUICKBOOKS_ACCESS_TOKEN:'synthetic-nectar-qbo',QUICKBOOKS_ENVIRONMENT:'sandbox',QUICKBOOKS_COMPANY_ID:'synthetic-nectar-company'})

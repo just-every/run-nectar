@@ -2,6 +2,7 @@ import { processorWebhook } from './nectar/processor-http'
 import { escalateProcessorCash } from './nectar/processor-cash-queue'
 import { observeSubscriptionStates } from './nectar/subscription-states'
 import { retryMethodRecoveryResponse } from './nectar/retry-method-http'
+import { automaticCollectionWebhook } from './nectar/automatic-collection-webhook'
 import { cardLifecycleWebhook } from './nectar/card-lifecycle-webhook'
 import { samlResponse } from './nectar/saml'
 import { scimResponse } from './nectar/scim'
@@ -84,6 +85,9 @@ export default withDemo({
   },
   async fetch(request, env, execution) {
     const paymentEvent=await processorWebhook(request,runtimeBindings(env))
+    if(paymentEvent)return paymentEvent
+    const automaticEvent=await automaticCollectionWebhook(request,runtimeBindings(env))
+    if(automaticEvent)return automaticEvent
     if(paymentEvent)return paymentEvent
     const cardEvent=await cardLifecycleWebhook(request,runtimeBindings(env))
     if(cardEvent)return cardEvent

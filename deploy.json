@@ -43,6 +43,16 @@
       "optional": true
     },
     {
+      "binding": "STRIPE_WEBHOOK_SECRET",
+      "environment": "STRIPE_WEBHOOK_SECRET",
+      "optional": true
+    },
+    {
+      "binding": "STRIPE_PAYMENT_WEBHOOK_SECRET",
+      "environment": "STRIPE_PAYMENT_WEBHOOK_SECRET",
+      "optional": true
+    },
+    {
       "binding": "QUICKBOOKS_ACCESS_TOKEN",
       "environment": "QUICKBOOKS_ACCESS_TOKEN",
       "optional": true

@@ -27,12 +27,12 @@ import { creditPolicy } from './credit-policy.mjs'
 import { exemptionCertificates } from './certificates.mjs'
 import { pricingModels } from './pricing-models.mjs'
 
-// The two CI jobs partition isolated installations; shard 0 also runs the
+// The four CI jobs partition isolated installations; shard 0 also runs the
 // shared core sequence below. An ordinary local invocation still runs all.
 const verifyShard=process.env.NECTAR_VERIFY_SHARD
-assert.ok(verifyShard===undefined||verifyShard==='0'||verifyShard==='1','invalid NECTAR_VERIFY_SHARD')
+assert.ok(verifyShard===undefined||['0','1','2','3'].includes(verifyShard),'invalid NECTAR_VERIFY_SHARD')
 let isolatedIndex=0
-const runIsolated=async(...args)=>{const index=isolatedIndex++;if(verifyShard===undefined||index%2===Number(verifyShard))await runIsolatedJourney(...args)}
+const runIsolated=async(...args)=>{const index=isolatedIndex++;if(verifyShard===undefined||index%4===Number(verifyShard))await runIsolatedJourney(...args)}
 
 const ACTIONS = [...(await readFile(new URL('../../src/nectar/actions.ts', import.meta.url), 'utf8')).matchAll(/^  '([\w.]+)':/gm)].map(match => match[1])
 // Keep the default CI wall intact; local changes to the core billing cycle
@@ -44,7 +44,7 @@ for (const { file, name, load } of isolatedJourneys) {
   if (name === 'customerLanguageFlow') await (await import('./customer-language.mjs')).translationFiles()
 }
 }
-if(verifyShard==='1'){console.log('All isolated shard 1 journeys passed; core sequence belongs to shard 0');process.exit(0)}
+if(verifyShard!==undefined&&verifyShard!=='0'){console.log(`All isolated shard ${verifyShard} journeys passed; core sequence belongs to shard 0`);process.exit(0)}
 const h = await harness()
 const check = async (id, run) => { await run(); console.log(`${id} passed`) }
 const ids = {}, cookie = {}

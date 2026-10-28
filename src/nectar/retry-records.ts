@@ -31,7 +31,9 @@ export async function recordRetryFailure(env:Bindings,row:Row,code:string){
  stmt(env,'INSERT INTO nc_webhook_events(id,type,customer_id,subject,payload_json,created_at) VALUES(?,?,?,?,?,?)',event,'invoice.payment_failed',row.customer_id,row.invoice_id,canonical({type:'invoice.payment_failed',data}),at)],
  {actor:'system:retries',action:'retry.failure',subject:row.invoice_id,detail:data})
 }
+// An external capture of a failed original intent preserves that failure.
+// Only a durably claimed retry can acquire collected-attempt attribution.
 export async function recordRetrySuccess(env:Bindings,row:Row){
  const series=await one(env,'SELECT * FROM nc_retry_series WHERE collection_id=?',row.id);if(!series||series.status==='collected')return
- await commit(env,[stmt(env,"UPDATE nc_retry_series SET status='collected',next_at=NULL,revision=? WHERE collection_id=?",newId(),row.id),stmt(env,"UPDATE nc_retry_attempts SET outcome='collected',payment_id=? WHERE collection_id=? AND attempt=?",row.payment_id,row.id,series.attempts)],{actor:'system:retries',action:'retry.collected',subject:row.invoice_id,detail:{payment:row.payment_id,attempt:series.attempts}})
+ await commit(env,[stmt(env,"UPDATE nc_retry_series SET status='collected',next_at=NULL,revision=? WHERE collection_id=?",newId(),row.id),stmt(env,"UPDATE nc_retry_attempts SET outcome='collected',payment_id=? WHERE collection_id=? AND attempt=? AND outcome='claimed'",row.payment_id,row.id,series.attempts)],{actor:'system:retries',action:'retry.collected',subject:row.invoice_id,detail:{payment:row.payment_id,attempt:series.attempts}})
 }

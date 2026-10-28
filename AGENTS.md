@@ -141,3 +141,11 @@ CONTRACT.md is the acceptance and status source. After changing it, run
 Commit the generated ACCEPTANCE.md and docs/CLAIMS.md with the source.
 Regenerate the edition source lock last with
 `node scripts/edition-authoring/cli.mjs lock`, then run its `check`.
+
+## Stripe observation endpoint secrets
+
+Configure `STRIPE_WEBHOOK_SECRET` for `POST ./api/nectar/stripe/card-events` and
+`STRIPE_PAYMENT_WEBHOOK_SECRET` for `POST ./api/nectar/stripe/automatic-events`.
+Stripe gives each endpoint a separate signing secret. Supply both through the
+private setup answers or the optional deployment secret bindings; see `API.md`.
+Neither observation endpoint grants debit authority.

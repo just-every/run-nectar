@@ -9,13 +9,50 @@ permissions:
   contents: read
 
 jobs:
-  verify:
+  build:
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 10
+    env:
+      CI: 'true'
+      WRANGLER_SEND_METRICS: 'false'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1; action runtime Node 24
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0; action runtime Node 24
+        with:
+          node-version: '22.20.0'
+          package-manager-cache: false
+      - name: Check edition source lock freshness
+        if: ${{ hashFiles('edition.json', 'sources.lock.json') != '' }}
+        run: node scripts/edition-authoring/cli.mjs check
+      - run: npm install --global pnpm@10.12.4
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run deps
+      - run: pnpm exec playwright install chromium
+      - run: pnpm run build
+      - run: pnpm run typecheck
+      - run: pnpm run test:runtime
+      - name: Verify hosted output and hydration with pinned RER
+        run: |
+          node node_modules/@runeditrun/rer/cli/hosted-output.mjs . deploy.json
+          node node_modules/@runeditrun/rer/cli/hydration/check.mjs .
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7; action runtime Node 24
+        with:
+          name: nectar-production
+          path: dist
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
+
+  verify:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
-        shard: [0, 1]
+        shard: [0, 1, 2, 3]
     env:
       CI: 'true'
       NECTAR_VERIFY_SHARD: ${{ matrix.shard }}
@@ -38,24 +75,24 @@ jobs:
       - run: npm install --global pnpm@10.12.4
       - run: pnpm install --frozen-lockfile
       - run: pnpm run deps
-      # ubuntu-24.04 provides Chromium libraries; the real browser journeys
-      # still fail if runtime support is missing. Avoid an unbounded apt mirror.
       - run: pnpm exec playwright install chromium
-      - run: pnpm run verify
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8; action runtime Node 24
+        with:
+          name: nectar-production
+          path: dist
+      - run: pnpm run test:flows
       - name: Recovery reporting browser journeys
-        if: ${{ matrix.shard == 0 }}
+        if: ${{ matrix.shard == 1 }}
         run: |
           node tests/nectar/payment-retries-browser.mjs
           node tests/nectar/payment-retries-browser.mjs churn
-
       - name: Dunning sequence browser journeys
-        if: ${{ matrix.shard == 0 }}
+        if: ${{ matrix.shard == 2 }}
         run: |
           node tests/nectar/dunning-browser.mjs
           node tests/nectar/dunning-browser.mjs custody
-
       - name: Invoice void and replacement browser proof
-        if: ${{ matrix.shard == 0 }}
+        if: ${{ matrix.shard == 3 }}
         run: |
           node tests/nectar/invoice-void-browser.mjs
           node tests/nectar/invoice-void-browser.mjs refunds
