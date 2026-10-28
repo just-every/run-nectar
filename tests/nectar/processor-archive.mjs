@@ -199,12 +199,12 @@ export async function processorArchiveJourney() {
     await api('erasure.verify',{request:request.id,reason:'Independent archive customer verification',evidence:file('synthetic-nectar-932.txt','Synthetic signed verification')})
     await api('erasure.approve',{request:request.id,confirm:true})
     await worker.assertStorageExcludes(['synthetic-nectar-901','synthetic-nectar-930'])
-    return {customer,financeEmail,async restoreCheck(restored,owner){
+    return {customer,financeEmail,async restoreCheck(restored,owner,removed=false){
      await restored.api('remittance.upload',owner,{file:source},409)
-     await restored.api('remittance.confirm',owner,{receipt,fingerprint:prepared.fingerprint,confirm:true},409)
+     await restored.api('remittance.confirm',owner,{receipt,fingerprint:prepared.fingerprint,confirm:true},removed?404:409)
      const payments=await restored.api('payments',owner)
-     assert.equal(payments.filter(p=>p.customer_id===customer).length,1)
-     assert.equal(payments.find(p=>p.id===confirmed.payment).amount_cents,2500)
+     assert.equal(payments.filter(p=>p.customer_id===customer).length,removed?0:1)
+     if(!removed)assert.equal(payments.find(p=>p.id===confirmed.payment).amount_cents,2500)
     }}
    }})
   console.log(`Processor archive${only?` ${only} phase`:''}: public capture, exact rer restore, owner-only due removal, unchanged peers and older-archive refusal passed`)
@@ -231,6 +231,7 @@ async function additionalArchivePhase(root,scratch,{label,persistence,databaseId
   h=await harness({assets:true,persistence,databaseId,applyMigrations:false,settings,localTime:'2026-11-02T12:00:00Z'})
   const owner=await restoredOwner(h,enrollment,'2026-11-02T12:00:00Z'),finance=await h.signIn(target.financeEmail)
   await processorFinancialRemovalFlow(h,owner,{finance,peer:target.peer,targets:[{customer:target.customer,kinds:requiredKinds}]})
+  if(target.restoreCheck)await target.restoreCheck(h,owner,true)
   await h.close();h=null
   await command(root,['export','--output',path('purged')])
   const removed=sources(await archiveItems(path('purged')))
@@ -242,6 +243,7 @@ async function additionalArchivePhase(root,scratch,{label,persistence,databaseId
   assert.deepEqual(sources(await archiveItems(path('restored'))),captured,`Actual rer restore preserves every populated ${label} processor source`)
   if(target.restoreCheck){
    h=await harness({assets:true,persistence,databaseId,applyMigrations:false,settings,localTime:'2026-11-02T12:00:00Z'})
+   assert.equal((await h.raw('/auth/bootstrap',{body:{token:h.vars.SETUP_TOKEN,displayName:'Restored owner'}})).status,303)
    await target.restoreCheck(h,await restoredOwner(h,enrollment,'2026-11-02T12:00:00Z'))
   }
  } finally {await h?.close()}
