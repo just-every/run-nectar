@@ -339,7 +339,13 @@ export async function applyImport(env: Bindings, actor: Actor, input: Input) {
   const undone = (await one<{ n: number }>(env, "SELECT COUNT(*) AS n FROM ik_jobs WHERE destination = ? AND fingerprint = ? AND state IN ('undone', 'rolled_back')", destination, reviewed))!.n
   const reviewedContext = { ...context, reviewedFingerprint: reviewed, ...(undone ? { operationKey: `${reviewed}:${undone}` } : {}) }
   const job = await createD1ImportJob(plan, reviewedContext)
-  const result = await applyD1ImportBatches(job.id, reviewedContext)
+  let result
+  try { result = await applyD1ImportBatches(job.id, reviewedContext) }
+  catch (error) {
+    // A retained job cannot regain its earlier source custody after erasure.
+    if (error instanceof Error && error.message === 'REVIEW_FINGERPRINT_MISMATCH') insist(false, 'reviewed_fingerprint_changed', 409)
+    throw error
+  }
   await commit(env, [], { actor: actorLabel(actor), action: 'import.apply', subject: job.id, detail: { kit: 'stripe', fingerprint: reviewed, counts: plan.counts } })
   return { job: job.id, state: result.state }
 }

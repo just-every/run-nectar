@@ -1,3 +1,6 @@
+import { correctionMrr, NORMALIZED_POLICY } from './normalized-metrics'
+import { normalizedCorrectionText } from './normalized-notice'
+import { ratingInputs } from './inputs'
 // Invoice corrections are proposals: preparing them never changes an issued bill.
 import type { Bindings } from '../auth.server'
 import { actorLabel, requireMember, type Actor } from './actor'
@@ -102,6 +105,8 @@ async function invoiceCreditPlan(env: Bindings, business: Business, payload: Row
   const revenueDeltas = revenuePeriodDeltas(beforeRevenue, afterRevenue)
   insist(revenueDeltas.reduce((sum, entry) => sum + BigInt(entry.deltaCents), 0n) === (prepaid ? 0n : -BigInt(amount))
     && revenueDeltas.every(entry => entry.period === issueMonth || entry.deltaCents === 0), 'invoice_credit_revenue_mismatch', 409)
+  const contractInput = invoice.subscription_id ? await ratingInputs(env, business, invoice.subscription_id, { start: invoice.period_start, end: invoice.period_end }) : null
+  const normalizedMrr = contractInput ? await correctionMrr(contractInput, contractInput) : { policyVersion: NORMALIZED_POLICY, periods: [] }
   const L = customerText(customer.language)
   const creditText = prepaid ? 'correction.revenue.prepaidCredit' : 'correction.revenue.credit'
   const revenueExplanation = [L.t('correction.revenue.heading'), L.t('correction.revenue.policy', { policy: REVENUE_POLICY_VERSION }),
@@ -126,10 +131,14 @@ async function invoiceCreditPlan(env: Bindings, business: Business, payload: Row
     policyVersion: REVENUE_POLICY_VERSION, fingerprint: beforeRevenue.fingerprint, recordPath: `/revenue/before/schedules/${originalSchedules.length + index}` }))
   revenueCitations.push({ source: invoiceSource, quote: L.t(creditText, { amount: L.money(amount), from: L.day(`${issueMonth}-01`) }),
     policyVersion: REVENUE_POLICY_VERSION, fingerprint: afterRevenue.fingerprint, recordPath: '/revenue/adjustment', amountCents: prepaid ? 0 : -amount, period: issueMonth })
+  const mrrExplanation = normalizedCorrectionText(normalizedMrr, L)
+  const mailBody = `${body}\n\n${revenueExplanation}\n\n${mrrExplanation}`, mailExplanation = `${explanation}\n\n${revenueExplanation}\n\n${mrrExplanation}`
+  const mrrCitations = normalizedMrr.periods.flatMap((effect, index) => (['before', 'after'] as const).map(side => ({
+    source: `/app/subscriptions/${invoice.subscription_id}`, quote: mrrExplanation, policyVersion: NORMALIZED_POLICY,
+    fingerprint: effect[side].fingerprint, recordPath: `/normalizedMrr/periods/${index}/${side}` })))
   const normalized = { invoice_credit: true, invoice: invoice.id, amount: plainMoney(amount), reason, explanation, recipient, subject, body, citations,
-    revenueIssueMonth: issueMonth, revenueNotice: { explanation: revenueExplanation, citations: revenueCitations } }
-  const mailBody = `${body}\n\n${revenueExplanation}`, mailExplanation = `${explanation}\n\n${revenueExplanation}`
-  const mailCitations = [...citations, ...revenueCitations]
+    revenueIssueMonth: issueMonth, revenueNotice: { explanation: revenueExplanation, citations: revenueCitations }, normalizedMrrNotice: { explanation: mrrExplanation, citations: mrrCitations } }
+  const mailCitations = [...citations, ...revenueCitations, ...mrrCitations]
   const impact = {
     invoice: { id: invoice.id, number: invoice.number, customer: invoice.customer_id, currency: invoice.currency,
       subtotalCents: computed.subtotalCents, taxCents: computed.taxCents, totalCents: computed.totalCents, balanceCents: invoice.balance_cents },
@@ -142,7 +151,7 @@ async function invoiceCreditPlan(env: Bindings, business: Business, payload: Row
       ...(prepaid ? { billings: { beforeCents: prepaidBillings, afterCents: prepaidBillings - amount, deltaCents: -amount },
         liability: { beforeCents: prepaidBillings, afterCents: prepaidBillings - amount, deltaCents: -amount } } : {}),
       adjustment: { kind: prepaid ? 'prepaid-liability-reversal' : 'contra-revenue', amountCents: prepaid ? 0 : -amount, ...(prepaid ? { billingsDeltaCents: -amount, liabilityDeltaCents: -amount } : {}), period: issueMonth, invoiceId: invoice.id }, citations: revenueCitations },
-    mrr: 'This proposal does not change subscription terms or compute normalized MRR.',
+    normalizedMrr,
     portal: 'No customer portal visibility or delivery is asserted by this proposal.',
     mail: { recipient, subject, body: mailBody, explanation: mailExplanation, citations: mailCitations, outcome: 'Queued only after human approval; provider acceptance does not confirm mailbox delivery.',
       // PORT-006: the author writes in the customer's language; Nectar never translates this text.
@@ -152,7 +161,7 @@ async function invoiceCreditPlan(env: Bindings, business: Business, payload: Row
     invoice: { id: invoice.id, status: invoice.status, customer: invoice.customer_id, calculation: invoice.calculation_json,
       fingerprint: invoice.source_fingerprint, version: invoice.calc_version, subtotal: invoice.subtotal_cents,
       tax: invoice.tax_cents, total: invoice.total_cents, balance: invoice.balance_cents, currency: invoice.currency },
-    lines, policy, recipient, normalized, revenue: impact.revenue, creditHistory,
+    lines, policy, recipient, normalized, revenue: impact.revenue, normalizedMrr, creditHistory,
   }) }
   return { normalized, impact, basis, source: { invoice, lines, policy, creditHistory, generation: generation.value, issueMonth, timezone: business.timezone } }
 }
