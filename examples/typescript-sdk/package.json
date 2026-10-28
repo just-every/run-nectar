@@ -1,0 +1,13 @@
+{
+  "name": "nectar-typescript-example",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "start": "node dist/examples/typescript-sdk/src/cli.js"
+  },
+  "devDependencies": { "typescript": "5.9.3", "@types/node": "22.20.5" }
+}
