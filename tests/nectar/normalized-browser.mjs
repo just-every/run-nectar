@@ -26,6 +26,12 @@ try {
             assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, `${label} fits ${width}`)
             assert.deepEqual(await page.locator('a,button,[role=button]').evaluateAll(nodes=>nodes.filter(node=>!node.textContent.trim()&&node.querySelector('svg,img')&&!node.getAttribute('aria-describedby')).map(node=>node.outerHTML)), [], 'Icon controls have tooltips')
             assert.ok((await page.locator('main').innerText()).length > 100)
+            if (state.amount !== undefined) {
+              const money = new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(state.amount/100)
+              const total = page.locator('main a[href="#contributions"]')
+              if (await total.count()) assert.equal(await total.innerText(),`Total ${money}`,'The rendered report total equals independent contract cents')
+              else assert.equal(await page.locator('section').filter({has:page.getByRole('heading',{name:'Calculation of this contribution',exact:true})}).locator('strong').innerText(),money,'The rendered source total equals its exact contribution')
+            }
             await page.screenshot({ path: `${directory}/${width}-${label}.jpg`, fullPage: true, type: 'jpeg', quality: 65 })
             console.log('BROWSER',width,label)
           }
