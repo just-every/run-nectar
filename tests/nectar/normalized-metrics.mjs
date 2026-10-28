@@ -19,6 +19,9 @@ function capture() {
   const states = [
     ['2025-01-01', 1, flat, { trial_end: unix('2025-02-15') }],
     ['2025-04-01', 1, flat, { discount: { id: 'synthetic-nectar-normalized-discount', start: unix('2025-04-01'), end: unix('2025-07-01'), coupon: { id: 'synthetic-nectar-normalized-coupon', percent_off: 10 } } }],
+    ['2025-05-01', 1, flat, { discounts: [{ id: 'synthetic-nectar-normalized-modern', start: unix('2025-05-01'), source: { type: 'coupon', coupon: { id: 'synthetic-nectar-normalized-modern-coupon', percent_off: 10, duration: 'forever' } } }] }],
+    ['2025-06-01', 1, flat, {}],
+    ['2025-07-01', 1, flat, {}],
     ['2025-09-01', 2, flat, {}],
     ['2025-11-01', 2, flat, { status: 'canceled', ended_at: unix('2025-11-01') }],
     ['2025-12-01', 2, flat, {}],
@@ -28,7 +31,7 @@ function capture() {
   data.subscription_events.data = states.map(([date, quantity, price, extra], index) => ({
     id: `synthetic-nectar-normalized-event-${index}`, object: 'event', type: index ? 'customer.subscription.updated' : 'customer.subscription.created', created: unix(date),
     data: { object: { ...structuredClone(subscription), ...extra, items: { object: 'list', has_more: false, data: [
-      { id: subscription.items.data[0].id, price, quantity }, subscription.items.data[1],
+      { id: subscription.items.data[0].id, price, quantity, ...(date === '2025-06-01' ? { discounts: [{ id: 'synthetic-nectar-normalized-item-discount', start: unix(date), source: { type: 'coupon', coupon: { id: 'synthetic-nectar-normalized-item-coupon', percent_off: 10, duration: 'forever' } } }] } : {}) }, subscription.items.data[1],
     ] } } },
   }))
   const ended = { ...structuredClone(subscription), id: 'synthetic-nectar-ended-subscription', items: {object:'list',has_more:false,data:[{id:'synthetic-nectar-ended-item',quantity:1,price:{...flat,id:'synthetic-nectar-ended-price',unit_amount:5000}}]} }
@@ -52,7 +55,7 @@ export async function normalizedMetricsFlow(h, owner, onState = async () => {}) 
   const subscription = (await api(`customers/${customer}`)).subscriptions[0].id
   // Independent cents from the captured contracts: $100 + three $10 seats,
   // then a 10% discount, two platforms, a cancellation, and an annual fee.
-  const expected = [5000,18000,13000,11700,11700,11700,13000,13000,23000,23000,0,23000,23000,23000,23000,23000,23000,23000]
+  const expected = [5000,18000,13000,11700,11700,12000,13000,13000,23000,23000,0,23000,23000,23000,23000,23000,23000,23000]
   for (const [index, cents] of expected.entries()) {
     const month = new Date(Date.UTC(2025, index, 1)).toISOString().slice(0, 7)
     for (const [metric, value] of [['normalized-mrr', cents], ['normalized-arr', cents * 12]]) {
@@ -71,6 +74,33 @@ export async function normalizedMetricsFlow(h, owner, onState = async () => {}) 
   }
   const historical = await api(`reports/normalized-mrr?period=2026-06&customer=${customer}`)
   assert.deepEqual(historical.series.map(row => row.amountCents), expected)
+  // Native correction approval cannot rewrite the source-owned calendar.
+  const correction = await api('proposal.create', { kind: 'amendment', title: 'Reviewed historical recurring discount', payload: {
+    subscription, kind: 'discount_percent', value: '10', effective_from: '2025-04-01', effective_to: '2025-06-01', note: 'Executed historical terms',
+  }, evidence: { clauses: [{ quote: 'The platform fee is reduced ten percent for April and May.', reference: 'Executed commercial amendment' }] } })
+  const frozen = await api(`proposals/${correction.id}`)
+  for (const row of frozen.impact) for (const effect of row.normalizedMrr.periods) {
+    assert.deepEqual([effect.before.mrrCents, effect.after.mrrCents, effect.deltaMrrCents], [11700,11700,0], 'The frozen correction uses captured source terms on both sides before adoption')
+    assert.deepEqual([effect.before.arrCents, effect.after.arrCents], [140400,140400])
+    const report = await api(`reports/normalized-mrr?period=${effect.before.asOf.slice(0,7)}&customer=${customer}`)
+    const source = await api(report.entries.find(entry => entry.invoiceId === subscription).href.replace('/app/', ''))
+    assert.equal(source.normalized.snapshot.fingerprint, effect.before.fingerprint, 'Review binds the exact retained report operands')
+  }
+  assert.ok(frozen.payload.noticeDrafts[0].body.includes('MRR before USD 117.00, after USD 117.00'))
+  await onState({ label: 'source-correction-prepared', path: `/app/proposals/${correction.id}` })
+  const mailedBefore = h.mails.length
+  await api('proposal.decide', { proposal: correction.id, decision: 'approved' })
+  const approved = await api(`proposals/${correction.id}`)
+  assert.deepEqual(approved.impact, frozen.impact, 'Approval preserves the reviewed source effect')
+  for (const row of approved.impact) for (const effect of row.normalizedMrr.periods) {
+    const report = await api(`reports/normalized-mrr?period=${effect.after.asOf.slice(0,7)}&customer=${customer}`)
+    assert.equal(report.totalCents, effect.after.mrrCents, 'The approved report equals the frozen source-owned correction')
+  }
+  assert.equal(h.mails.length, mailedBefore + 1)
+  assert.equal(h.mails.at(-1).text, frozen.payload.noticeDrafts[0].body)
+  await api('proposal.decide', { proposal: correction.id, decision: 'approved' }, 409)
+  assert.equal(h.mails.length, mailedBefore + 1, 'Replayed approval cannot send a second frozen explanation')
+  await onState({ label: 'source-correction-approved', path: `/app/proposals/${correction.id}` })
   await api('subscription.adopt', { subscription, cutover_start: '2026-07-01', acknowledge_unreconciled: true })
   const run = await api('billrun.prepare', { period: '2026-07' })
   const invoice = (await api(`runs/${run.id}`)).invoices.find(row => row.subscription_id === subscription)

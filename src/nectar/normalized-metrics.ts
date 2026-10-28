@@ -1,6 +1,6 @@
 // Contract run rates are independent of invoice proration, usage and cash.
 import { fingerprint, insist } from './core'
-import { addDays, addMonths, isDate } from './dates'
+import { isDate } from './dates'
 import { micros, roundHalfAway } from './decimal'
 import { blockedAt } from './lifecycle-math'
 import { addRational, multiplyRational, rational, type Rational } from './metric-plan'
@@ -81,12 +81,4 @@ export async function normalizedSnapshot(source: RatingInput, asOf: string): Pro
 export async function normalizedEffect(before: RatingInput, after: RatingInput, asOf: string): Promise<NormalizedEffect> {
   const [a, b] = await Promise.all([normalizedSnapshot(before, asOf), normalizedSnapshot(after, asOf)])
   return { policyVersion: NORMALIZED_POLICY, before: a, after: b, deltaMrrCents: b.mrrCents - a.mrrCents, deltaArrCents: b.arrCents - a.arrCents }
-}
-
-export async function correctionMrr(before: RatingInput, after: RatingInput): Promise<NormalizedCorrection> {
-  const periods: NormalizedEffect[] = []
-  for (let month = before.period.start.slice(0, 7); `${month}-01` < before.period.end; month = addMonths(`${month}-01`, 1).slice(0, 7)) {
-    periods.push(await normalizedEffect(before, after, addDays(addMonths(`${month}-01`, 1), -1)))
-  }
-  return { policyVersion: NORMALIZED_POLICY, periods }
 }

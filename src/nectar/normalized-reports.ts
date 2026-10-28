@@ -6,7 +6,7 @@ import { clockInstant } from './clock'
 import { addDays, addMonths, isMonth, localDate, today } from './dates'
 import { ratingInputs } from './inputs'
 import { normalizedSnapshot, NORMALIZED_DEFINITION, NORMALIZED_POLICY, type NormalizedSnapshot } from './normalized-metrics'
-import { capturedNormalizedInput } from './movein/normalized-history'
+import { capturedNormalizedInput, capturedOwnsDate } from './movein/normalized-history'
 import type { Report, ReportEntry, ReportInvoice } from './reports'
 
 export type NormalizedMetric = 'normalized-mrr' | 'normalized-arr'
@@ -47,7 +47,7 @@ async function contributions(data: Awaited<ReturnType<typeof sources>>, month: s
   const asOf = monthEnd(month), through = addDays(asOf, 1), result: Contribution[] = []
   for (const sub of data.subs) {
     if (sub.start_date > asOf) continue
-    const useSource = sub.origin === 'import' && (!sub.cutover_start || asOf < sub.cutover_start)
+    const useSource = capturedOwnsDate(sub, asOf)
     const captured = useSource ? capturedNormalizedInput(sub, data.history, through, data.business.timezone) : null
     const input = captured?.input ?? data.native.get(sub.id)!
     insist(input, 'normalized_contract_evidence_required', 409)

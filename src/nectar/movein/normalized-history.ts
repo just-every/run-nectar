@@ -9,6 +9,8 @@ import { historicalHref } from './history-reports'
 const ref = (value: any): string => typeof value === 'string' ? value : value?.id
 const day = (value: unknown, zone: string): string | null => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? localDate(value * 1000, zone) : null
 
+export const capturedOwnsDate = (sub: Row, asOf: string) => sub.origin === 'import' && (!sub.cutover_start || asOf < sub.cutover_start)
+
 export function capturedNormalizedInput(sub: Row, events: Row[], through: string, zone: string) {
   const snapshots = events.filter(row => row.customer_id === sub.customer_id && row.subscription_ref === sub.provider_ref)
     .map(row => ({ row, event: parseJson<Row>(row.payload_json, {}) }))
@@ -28,31 +30,40 @@ export function capturedNormalizedInput(sub: Row, events: Row[], through: string
     insist(price && typeof price === 'object' && price.currency === 'usd' && price.recurring, 'normalized_source_price_unsupported', 409)
     if (price.recurring.usage_type === 'metered') continue
     insist(price.billing_scheme !== 'tiered', 'normalized_source_price_unsupported', 409)
-    const id = ref(price), unit = price.recurring.interval, count = price.recurring.interval_count ?? 1
-    insist(typeof id === 'string' && ['day', 'week', 'month', 'year'].includes(unit) && Number.isSafeInteger(count) && count > 0, 'normalized_history_evidence_required', 409)
+    const sourcePriceId = ref(price), id = `${sourcePriceId}:${item.id}`, unit = price.recurring.interval, count = price.recurring.interval_count ?? 1
+    insist(typeof sourcePriceId === 'string' && ['day', 'week', 'month', 'year'].includes(unit) && Number.isSafeInteger(count) && count > 0, 'normalized_history_evidence_required', 409)
     const amount = price.unit_amount_decimal ?? price.unit_amount
     insist(typeof amount === 'number' && Number.isSafeInteger(amount) || typeof amount === 'string' && /^\d+(?:\.\d{1,4})?$/.test(amount), 'normalized_history_evidence_required', 409)
     // Stripe unit_amount_decimal is cents, while native unitAmount is dollars.
     const [whole, fraction = ''] = String(amount).split('.')
     const unitAmount = decimalText(BigInt(whole) * 10_000n + BigInt(fraction.padEnd(4, '0')))
     const kind = price.recurring.usage_type === 'metered' ? 'unit' : price.metadata?.nectar_kind === 'seat' ? 'seat' : 'flat'
-    prices[id] = { id, kind, unitAmount, meterId: null, taxable: false, label: id, unitLabel: '',
+    prices[id] = { id, sourcePriceId, kind, unitAmount, meterId: null, taxable: false, label: id, unitLabel: '',
       billing: { unit: unit === 'year' ? 'month' : unit, count: count * (unit === 'year' ? 12 : 1), timing: 'arrears' } }
     const quantity = item.quantity ?? 1
     insist(typeof item.id === 'string' && Number.isSafeInteger(quantity) && quantity >= 0, 'normalized_history_evidence_required', 409)
     items.push({ id: item.id, priceId: id, quantity, from: start, to: null })
   }
-  const discounts = [...(source.discount ? [source.discount] : []), ...(Array.isArray(source.discounts) ? source.discounts : [])]
-  for (const discount of discounts) {
-    insist(discount && typeof discount === 'object' && discount.coupon && typeof discount.coupon === 'object', 'normalized_source_discount_evidence_required', 409)
-    const coupon = discount.coupon
-    if (coupon.amount_off !== undefined && coupon.amount_off !== null) continue
+  const discountList = (owner: Row) => [...new Map([...(owner.discount ? [owner.discount] : []), ...(Array.isArray(owner.discounts) ? owner.discounts : [])]
+    .map(discount => [ref(discount), discount])).values()]
+  const addDiscount = (discount: Row, itemId: string | null) => {
+    const coupon = discount?.coupon ?? discount?.source?.coupon
+    insist(discount && typeof discount === 'object' && coupon && typeof coupon === 'object', 'normalized_source_discount_evidence_required', 409)
+    if (coupon.amount_off !== undefined && coupon.amount_off !== null) return
     insist(typeof coupon.percent_off === 'number' && Number.isFinite(coupon.percent_off) && coupon.percent_off >= 0 && coupon.percent_off <= 100, 'normalized_source_discount_evidence_required', 409)
     const targets = coupon.applies_to?.products
-    const covered = targets ? source.items.data.filter((item: Row) => targets.includes(ref(item.price.product))).map((item: Row) => ref(item.price)) : [null]
-    for (const priceId of covered) amendments.push({ id: discount.id ?? coupon.id, kind: 'discount_percent', value: String(coupon.percent_off), priceId,
-      from: day(discount.start, zone) ?? start, to: day(discount.end, zone), note: '' })
+    insist(targets === undefined || Array.isArray(targets), 'normalized_source_discount_evidence_required', 409)
+    for (const item of source.items.data) {
+      if (itemId && item.id !== itemId || discount.subscription_item && ref(discount.subscription_item) !== item.id) continue
+      if (targets && !targets.includes(ref(item.price.product))) continue
+      const priceId = `${ref(item.price)}:${item.id}`
+      if (!prices[priceId]) continue // Metered items are outside this metric.
+      amendments.push({ id: discount.id ?? coupon.id, kind: 'discount_percent', value: String(coupon.percent_off), priceId,
+        from: day(discount.start, zone) ?? start, to: day(discount.end, zone), note: '' })
+    }
   }
+  for (const discount of discountList(source)) addDiscount(discount, null)
+  for (const item of source.items.data) for (const discount of discountList(item)) addDiscount(discount, item.id)
   const inactive = !['active', 'past_due'].includes(source.status)
   const ended = day(source.ended_at, zone) ?? (inactive ? row.occurred_on : null)
   const cancelAt = day(source.cancel_at ?? (source.cancel_at_period_end ? source.current_period_end : null), zone)

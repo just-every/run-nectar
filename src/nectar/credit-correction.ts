@@ -1,4 +1,5 @@
-import { correctionMrr, NORMALIZED_POLICY } from './normalized-metrics'
+import { NORMALIZED_POLICY } from './normalized-metrics'
+import { correctionMrr } from './normalized-correction'
 import { normalizedCorrectionText } from './normalized-notice'
 import { ratingInputs } from './inputs'
 // Invoice corrections are proposals: preparing them never changes an issued bill.
@@ -106,7 +107,7 @@ async function invoiceCreditPlan(env: Bindings, business: Business, payload: Row
   insist(revenueDeltas.reduce((sum, entry) => sum + BigInt(entry.deltaCents), 0n) === (prepaid ? 0n : -BigInt(amount))
     && revenueDeltas.every(entry => entry.period === issueMonth || entry.deltaCents === 0), 'invoice_credit_revenue_mismatch', 409)
   const contractInput = invoice.subscription_id ? await ratingInputs(env, business, invoice.subscription_id, { start: invoice.period_start, end: invoice.period_end }) : null
-  const normalizedMrr = contractInput ? await correctionMrr(contractInput, contractInput) : { policyVersion: NORMALIZED_POLICY, periods: [] }
+  const normalizedMrr = contractInput ? await correctionMrr(env, business, contractInput, contractInput) : { policyVersion: NORMALIZED_POLICY, periods: [] }
   const L = customerText(customer.language)
   const creditText = prepaid ? 'correction.revenue.prepaidCredit' : 'correction.revenue.credit'
   const revenueExplanation = [L.t('correction.revenue.heading'), L.t('correction.revenue.policy', { policy: REVENUE_POLICY_VERSION }),
