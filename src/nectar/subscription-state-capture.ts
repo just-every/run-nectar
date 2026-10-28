@@ -7,7 +7,7 @@ import { today, zonedStart } from './dates'
 import { subscriptionState } from './subscription-states'
 import { BALANCE_SQL } from './balance-sql'
 
-const changesState = /^(subscription\.(?!state\.)|trial\.|automatic\.collection\.|collection\.|retry\.|dunning\.end\.|payment\.allocate|credit\.|invoice\.|balance\.|writeoff\.|usage\.correction\.approve|renewal\.)/
+const changesState = /^(subscription\.(?!state\.)|trial\.|automatic\.collection\.|collection\.|retry\.|dunning\.end\.|payment\.allocate|processor\.event\.apply|credit\.|invoice\.|balance\.|writeoff\.|usage\.correction\.approve|renewal\.)/
 
 
 const sources = `WITH refs AS MATERIALIZED (SELECT value FROM json_each(?)), invoices AS MATERIALIZED (

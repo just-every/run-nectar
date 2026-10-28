@@ -1,3 +1,4 @@
+import { runCollectionScheduleEnds, runCollectionScheduleInvoices } from './nectar/collection-schedule'
 import { processorWebhook } from './nectar/processor-http'
 import { escalateProcessorCash } from './nectar/processor-cash-queue'
 import { observeSubscriptionStates } from './nectar/subscription-states'
@@ -61,8 +62,10 @@ export default withDemo({
     await observeSubscriptionStates(runtimeBindings(env))
     await dispatchWebhooks(runtimeBindings(env))
     await expirePaymentLinkAttempts(runtimeBindings(env))
+    await runCollectionScheduleInvoices(runtimeBindings(env))
     await runAutomaticCollections(runtimeBindings(env))
     await runPaymentRetries(runtimeBindings(env))
+    await runCollectionScheduleEnds(runtimeBindings(env))
     await runInvoiceAutomation(runtimeBindings(env),controller.scheduledTime)
     await observeSubscriptionStates(runtimeBindings(env))
     if(controller.cron==='* * * * *')return

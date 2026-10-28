@@ -15,7 +15,7 @@ try{
  await h.api('business.configure',owner,{legal_name:'Cedar Software Inc',timezone:'UTC',invoice_prefix:'AUTO',payment_terms_days:30})
  await applyPolicy(h,owner,'tax.declare',{tax_jurisdiction:'CA',tax_mode:'no_tax',tax_note:'Reviewed test billing'})
  await h.api('tax.review',owner,{revision:(await h.api('business',owner)).revision})
- browser=await chromium.launch({headless:true,args:['--use-mock-keychain','--password-store=basic']})
+ browser=await chromium.launch({headless:true,...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?{executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH}:{}),args:['--no-sandbox','--use-mock-keychain','--password-store=basic']})
  const context=await browser.newContext();await context.addCookies(owner.split('; ').map(part=>{const at=part.indexOf('=');return {name:part.slice(0,at),value:part.slice(at+1),url:h.origin}}))
  const page=await context.newPage(),customerPage=await (await browser.newContext()).newPage()
  const shot=async(target,label)=>{
@@ -54,7 +54,9 @@ try{
    await Promise.all([page.waitForNavigation(),form.getByRole('button').click()]);assert.equal(new URL(page.url()).searchParams.has('error'),false)
    return (await h.api('automatic-collections',owner)).find(r=>r.id===input.request)
   },
-  onState:async({state,invoice,customer,session,request,subscription})=>{
+  onState:async({state,invoice,customer,session,request,subscription,target})=>{
+   if(target){await customerPage.goto(h.origin+target);await shot(customerPage,state);return}
+   if(state.startsWith('scheduled-')){await page.goto(h.origin+`/app/subscriptions/${subscription}`);await shot(page,state);return}
    if(subscription){
     await page.setViewportSize({width:1440,height:950})
     await page.goto(h.origin+`/app/subscriptions/${subscription}`)

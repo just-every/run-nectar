@@ -49,7 +49,7 @@ export async function erasurePlan(env: Bindings, customer: Row): Promise<Erasure
   for (const image of images) {
     const { table,row,key,required,foreignKeys } = image
     // Customer capabilities and investigations are operational custody, not retained financial facts.
-    if (['nc_subscription_states','nc_dunning_recoveries','nc_dunning_mail_authority','nc_dunning_deliveries','nc_dunning_authority','nc_dunning_series','nc_retry_segments','nc_retry_method_recovery_authorizations','nc_retry_method_recovery_events','nc_retry_method_recoveries','nc_retry_churn','nc_retry_series','nc_retry_attempts','nc_card_expiry_notices','nc_card_expiry_notice_authority','nc_portal_method_actions','nc_portal_method_action_history','nc_automatic_collection_authorizations','nc_payment_link_attempts','nc_hosted_setup_returns','nc_hosted_setup_history','nc_hosted_setups','nc_portal_sessions','nc_assurance_cases','nc_assurance_observations'].includes(table) && image.scoped) {
+    if (['nc_collection_schedule_authority','nc_collection_schedules','nc_subscription_states','nc_dunning_recoveries','nc_dunning_mail_authority','nc_dunning_deliveries','nc_dunning_authority','nc_dunning_series','nc_retry_segments','nc_retry_method_recovery_authorizations','nc_retry_method_recovery_events','nc_retry_method_recoveries','nc_retry_churn','nc_retry_series','nc_retry_attempts','nc_card_expiry_notices','nc_card_expiry_notice_authority','nc_portal_method_actions','nc_portal_method_action_history','nc_automatic_collection_authorizations','nc_payment_link_attempts','nc_hosted_setup_returns','nc_hosted_setup_history','nc_hosted_setups','nc_portal_sessions','nc_assurance_cases','nc_assurance_observations'].includes(table) && image.scoped) {
       mutations.push({ table, row, key, updates: null })
       const entry = changes.get(table) ?? { kind: table, fields: new Set<string>(), records: 0 }
       Object.keys(row).forEach(field => entry.fields.add(field)); entry.records++; changes.set(table, entry)
@@ -65,7 +65,7 @@ export async function erasurePlan(env: Bindings, customer: Row): Promise<Erasure
       if (column === 'csv') { updates[column] = affected ? '' : redactSnapshotCsv(String(value),personal); continue }
       if (!affected || typeof value !== 'string') continue
       if (column === 'token_hash') { updates[column] = null; continue }
-      if (table==='nc_subscriptions'&&column==='trial_payment') { updates[column]=null; continue }
+      if (table==='nc_subscriptions'&&['trial_payment','trial_outcome'].includes(column)) { updates[column]=null; continue }
       if (foreignKeys.has(column) || (column.endsWith('_id') && !['external_id','event_id'].includes(column)) || column === 'id' || column === 'subject' || keep.has(column) || financialIdentifier(table,column) || typedPlanField(table,column) || /(?:_at|_on|_date|_from|_to|_start|_end)$/.test(column)) continue
       if (column === 'external_id' || column === 'event_id' || column === 'reference') updates[column] = `erased-${row.id ?? customer.id}`
       else if (column === 'name' && table === 'nc_customers') updates[column] = 'Erased customer'
@@ -94,5 +94,5 @@ export async function erasurePlan(env: Bindings, customer: Row): Promise<Erasure
     mutations.push({ table, row, key, updates: Object.fromEntries(fields.map(field => [field, updates[field]])) })
     const entry=changes.get(table)??{kind:table,fields:new Set<string>(),records:0};fields.forEach(f=>entry.fields.add(f));entry.records++;changes.set(table,entry)
   }
-  return { generation,personalValues:personal, statements:erasureMutationStatements(mutations.sort((a,b)=>{const order=['nc_dunning_recoveries','nc_dunning_mail_authority','nc_dunning_deliveries','nc_dunning_authority','nc_dunning_series','nc_retry_method_recovery_authorizations','nc_retry_method_recovery_events','nc_retry_method_recoveries','nc_card_expiry_notice_authority','nc_card_expiry_notices','nc_portal_method_actions'];const rank=(table:string)=>{const i=order.indexOf(table);return i<0?order.length:i};return rank(a.table)-rank(b.table)})), changes:[...changes.values()].map(v=>({...v,fields:[...v.fields].sort()})),ids:[...ids] }
+  return { generation,personalValues:personal, statements:erasureMutationStatements(mutations.sort((a,b)=>{const order=['nc_collection_schedule_authority','nc_collection_schedules','nc_dunning_recoveries','nc_dunning_mail_authority','nc_dunning_deliveries','nc_dunning_authority','nc_dunning_series','nc_retry_method_recovery_authorizations','nc_retry_method_recovery_events','nc_retry_method_recoveries','nc_card_expiry_notice_authority','nc_card_expiry_notices','nc_portal_method_actions'];const rank=(table:string)=>{const i=order.indexOf(table);return i<0?order.length:i};return rank(a.table)-rank(b.table)})), changes:[...changes.values()].map(v=>({...v,fields:[...v.fields].sort()})),ids:[...ids] }
 }

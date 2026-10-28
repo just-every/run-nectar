@@ -1,3 +1,4 @@
+import { prepareCollectionSchedule, stopCollectionSchedule } from './collection-schedule'
 import { consumeProcessorEvent } from './processor-events'
 import { allocateProcessorCash } from './processor-cash-queue'
 import { prepareImportedCashTakeover, confirmImportedCashTakeover } from './processor-cash-imported'
@@ -18,7 +19,7 @@ import { configureSso } from './sso-config'
 import { approvePaymentLink } from './payment-links-approval'
 import { createPaymentLink,deactivatePaymentLink,activatePaymentLink } from './payment-links'
 import { configureRetryPolicy } from './retry-policy'
-import { prepareAutomaticCollection,decideAutomaticCollection,revokeAutomaticCollection } from './automatic-collection'
+import { prepareAutomaticCollectionDoor,decideAutomaticCollection,revokeAutomaticCollection } from './automatic-collection'
 import { checkAutomaticCollection,consumeAutomaticEvent } from './automatic-collection-events'
 import { prepareHostedSetup } from './hosted-setup'
 import { scanAssurance,assignAssurance,approveAssurance,recheckAssurance } from './assurance'
@@ -152,7 +153,9 @@ export const actions: Record<string, Handler> = {
   'retry.churn.record': recordRetryChurn,
   'retry.policy.configure': configureRetryPolicy,
   'retry.segment.assign': assignRetrySegment,
-  'automatic.collection.prepare': prepareAutomaticCollection,
+  'collection.schedule.prepare': prepareCollectionSchedule,
+  'collection.schedule.withdraw': stopCollectionSchedule,
+  'automatic.collection.prepare': prepareAutomaticCollectionDoor,
   'automatic.collection.decide': decideAutomaticCollection,
   'automatic.collection.revoke': revokeAutomaticCollection,
   'automatic.collection.reconcile': checkAutomaticCollection,

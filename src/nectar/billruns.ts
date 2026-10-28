@@ -90,6 +90,13 @@ export async function draftFor(env: Bindings, business: Business, sub: Row, peri
 
 /** Prepares (or prepares again) the draft run for a month. Earlier drafts for that month are discarded, never edited. */
 export async function prepareRun(env: Bindings, actor: Actor, input: Input) {
+  return prepareRunCore(env,actor,input)
+}
+// An exact finite schedule can quote one future subscription without issuing it.
+export async function prepareScheduleRun(env:Bindings,actor:Actor,subscription:string,period:string) {
+  return prepareRunCore(env,actor,Input.of({period}),subscription)
+}
+async function prepareRunCore(env: Bindings, actor: Actor, input: Input, scheduledSubscription?:string) {
   requireCapability(actor, 'records')
   const business = await requireBusiness(env)
   const month = input.text('period', { max: 7 })
@@ -98,10 +105,11 @@ export async function prepareRun(env: Bindings, actor: Actor, input: Input) {
   const subs = await all(env, 'SELECT s.*, c.name AS customer_name, c.billing_email FROM nc_subscriptions s JOIN nc_customers c ON c.id = s.customer_id WHERE c.erased_at IS NULL ORDER BY c.name, s.created_at')
   const drafts: Draft[] = [], skipped: Row[] = [], open: Row[] = []
   for (const sub of subs) {
+    if(scheduledSubscription&&sub.id!==scheduledSubscription)continue
     const windows=await billingWindowsForMonth(env,sub,month)
     if(windows) {
       for(const window of windows) {
-        if(window.dueDate>day){open.push({subscription:sub.id,customer:sub.customer_name,periodEnd:window.period.end,dueDate:window.dueDate});continue}
+        if(window.dueDate>day&&!scheduledSubscription){open.push({subscription:sub.id,customer:sub.customer_name,periodEnd:window.period.end,dueDate:window.dueDate});continue}
         drafts.push(await draftFor(env,business,sub,window.period,window))
       }
       if(!windows.length)skipped.push({subscription:sub.id,customer:sub.customer_name,reason:'No unbilled component is due in this month'})
@@ -112,7 +120,7 @@ export async function prepareRun(env: Bindings, actor: Actor, input: Input) {
     if (sub.start_date >= period.end || (sub.end_date && sub.end_date <= period.start)) continue
     if (sub.cutover_start && period.end <= sub.cutover_start) { skipped.push({ subscription: sub.id, customer: sub.customer_name, reason: `billed by the previous biller before cutover on ${sub.cutover_start}` }); continue }
     if (await one(env, "SELECT 1 FROM nc_invoices WHERE subscription_id = ? AND invoice_kind = 'recurring' AND period_start = ? AND status = 'issued'", sub.id, period.start)) { skipped.push({ subscription: sub.id, customer: sub.customer_name, reason: 'already invoiced' }); continue }
-    if (period.end > day) { open.push({ subscription: sub.id, customer: sub.customer_name, periodEnd: period.end }); continue }
+    if (period.end > day&&!scheduledSubscription) { open.push({ subscription: sub.id, customer: sub.customer_name, periodEnd: period.end }); continue }
     drafts.push(await draftFor(env, business, sub, period))
   }
   const previousRun = await one(env, "SELECT id, period, summary_json FROM nc_bill_runs WHERE status = 'finalised' AND kind = 'recurring' AND period < ? ORDER BY period DESC, finalised_at DESC LIMIT 1", month)

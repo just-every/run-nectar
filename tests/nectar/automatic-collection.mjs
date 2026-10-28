@@ -272,5 +272,119 @@ export async function automaticCollectionFlow(h,owner,{onState=async()=>{},prepa
  assert.equal(recoveredCohort.firstFailedAt,failedCohort.firstFailedAt)
  assert.equal(recoveredCohort.declineCode,'processing_error');assert.equal(recoveredCohort.attempts[0].outcome,'failed')
  assert.equal(recoveredCohort.recoveries[0].attempt,null,'A provider observation cannot invent a new retry attempt')
+ await scheduledLifecycleFlow(h,owner,{finance,onState,endpointReady:true})
  console.log('automaticCollectionFlow: exact consent, approval, immediate card cash, pending ACH and four-business-day edge settlement, send-invoice wait, event and issue replay, once-only uncertainty recovery, source and receipt parity and erasure')
+}
+
+// The existing money journey also proves one pre-approved finite lifecycle.
+export async function scheduledLifecycleFlow(h,owner,{finance,onState=async()=>{},endpointReady=false}={}) {
+ const api=(path,body,status)=>h.api(path,owner,body,status)
+ let instant=Date.parse('2026-10-28T10:00:00Z')
+ await h.advanceClock(new Date(instant).toISOString())
+ const factor=await api('mfa.totp.start',{});await api('mfa.totp.confirm',{factor:factor.factor,code:totp(factor.secret,instant)})
+ let financeFactor
+ if(finance){financeFactor=await h.api('mfa.totp.start',finance,{});await h.api('mfa.totp.confirm',finance,{factor:financeFactor.factor,code:totp(financeFactor.secret,instant)})}
+ const move=async date=>{instant=Date.parse(date+'T10:00:00Z');edge.capturedAt(new Date(instant).toISOString());await h.advanceClock(new Date(instant).toISOString())}
+ const tick=async()=>{const response=await h.raw(`/cdn-cgi/local/scheduled?time=${instant}&cron=${encodeURIComponent('0 14 * * *')}`);assert.equal(response.status,200,await response.text())}
+ const refresh=async()=>{await api('mfa.verify',{code:totp(factor.secret,instant)});if(finance)await h.api('mfa.verify',finance,{code:totp(financeFactor.secret,instant)})}
+ const existing=(await api('customers')).find(c=>c.external_id==='synthetic-nectar-late-customer')
+ const customer=existing?.id??(await api('customer.create',{external_id:'synthetic-nectar-scheduled-customer',name:'Synthetic scheduled customer',billing_email:h.vars.OWNER_EMAIL})).id
+ const provider=existing?'synthetic-nectar-late-provider-customer':'synthetic-nectar-scheduled-provider',method='synthetic-nectar-scheduled-card'
+ if(!existing)edge.customers.set(provider,{account:1,method})
+ if(!existing)await api('collection.customer.bind',{customer,account_ref:'synthetic-nectar-native-account-1',stripe_customer_ref:provider,confirm:true})
+ await api('portal.configure',{hosts:[h.origin],parents:[]})
+ if(!endpointReady)await api('webhook.register',{url:'https://receiver.nectar-app.com/events',consent:true})
+ await api('retry.policy.configure',{max_attempts:1,window_days:2,confirm:true})
+ const product=(await api('product.create',{code:'synthetic-nectar-scheduled-service',name:'Synthetic scheduled service'})).id
+ const price=(await api('price.create',{product,kind:'flat',unit_amount:'12',taxable:false,billing_timing:'advance'})).id
+ const subscription=(await api('subscription.create',{customer,start_date:'2026-10-28',billing_anchor_date:'2026-10-01',anchor_day:1,trial_end:'2026-11-01',trial_payment:'card',price:[price],quantity:['1']})).id
+ const schedule=await api('collection.schedule.prepare',{subscription,periods:['2026-11','2026-12'],issue_dates:['2026-11-01','2026-12-01'],unpaid_days:2,confirm:true})
+ assert.deepEqual(schedule.requests.map(r=>r.amountCents),[1200,1200])
+ const portal=await api('portal.session.issue',{customer,origin:h.origin,audience:'hosted'})
+ const target=`/portal/automatic-collections/${schedule.id}?session=${encodeURIComponent(portal.token)}`
+ await onState({state:'scheduled-consent',target,request:schedule,subscription,customer})
+ const before=edge.posts()
+ const consent={request:schedule.id,basis_hash:schedule.basis,accept:true}
+ assert.equal((await h.raw(target,{body:{...consent,basis_hash:'synthetic-nectar-wrong-basis'}})).status,409)
+ assert.equal((await h.raw(target,{body:consent,headers:{origin:'https://unrelated.invalid'}})).status,403)
+ assert.equal(edge.posts(),before)
+ assert.equal((await h.raw(target,{body:consent})).status,200)
+ const decision={request:schedule.id,basis_hash:schedule.basis,decision:'approved',confirm:true,confirm_single:!finance}
+ if(finance)await api('automatic.collection.decide',{...decision,confirm_single:true},409)
+ await h.api('automatic.collection.decide',finance??owner,decision)
+ assert.equal(edge.posts(),before,'Accepting and approving a future schedule charges nothing')
+ const read=()=>api(`subscriptions/${subscription}?include_state=true`)
+ await tick();let current=await read();assert.equal(current.state,'trialing')
+ const states=[structuredClone(current.stateHistory)]
+ const checkState=async expected=>{await tick();await tick();current=await read();assert.equal(current.state,expected);assert.deepEqual(current.stateHistory.slice(0,states.at(-1).length),states.at(-1));states.push(structuredClone(current.stateHistory));await onState({state:`scheduled-${expected}`,subscription,customer,request:schedule});return current}
+ await move('2026-11-01');await checkState('active')
+ assert.equal((await api('invoices/'+schedule.requests[0].invoice)).balanceCents,0,JSON.stringify((await api('automatic-collections')).filter(r=>r.quote.schedule?.id===schedule.schedule).map(r=>({status:r.status,error:r.errorCode}))))
+ assert.equal(edge.posts(),before+1)
+ await move('2026-12-01');edge.refuseNext('generic_decline');await checkState('past_due')
+ const failed=(await api('automatic-collections')).find(r=>r.id===schedule.requests[1].id)
+ assert.equal(failed.status,'refused');assert.equal((await api('invoices/'+failed.invoice)).balanceCents,1200)
+ await move('2026-12-03');await checkState('unpaid')
+ assert.equal(edge.posts(),before+2,'Exhaustion makes no unapproved processor attempt')
+ const intent=edge.intents.get(failed.paymentIntentRef).value,charge='synthetic-nectar-scheduled-recovery-charge'
+ Object.assign(intent,{status:'succeeded',payment_method:failed.quote.method.paymentMethodRef,amount_received:1200,latest_charge:charge});delete intent.last_payment_error
+ edge.charges.set(charge,{account:1,value:{object:'charge',id:charge,status:'succeeded',paid:true,captured:true,customer:intent.customer,payment_method:intent.payment_method,payment_intent:intent.id,currency:'usd',amount:1200,amount_captured:1200,amount_refunded:0,refunded:false,disputed:false,created:instant/1000,livemode:false}})
+ const event={object:'event',id:'synthetic-nectar-scheduled-recovery-event',type:'payment_intent.succeeded',livemode:false,data:{object:structuredClone(intent)}};edge.events.set(event.id,event)
+ const text=JSON.stringify(event),seconds=instant/1000,signature=`t=${seconds},v1=${createHmac('sha256',webhookSecret).update(`${seconds}.${text}`).digest('hex')}`
+ const deliver=()=>h.raw('/api/nectar/stripe/automatic-events',{form:text,headers:{'content-type':'application/json','stripe-signature':signature}})
+ assert.equal((await deliver()).status,200);assert.equal((await deliver()).status,200)
+ await checkState('active')
+ const paid=await api('invoices/'+failed.invoice);assert.equal(paid.paidCents,1200);assert.equal(paid.balanceCents,0);assert.equal(paid.allocations.length,1)
+ assert.equal(edge.posts(),before+2,'Authenticated capture observation does not create another charge')
+ await refresh()
+ const cancellation=await api('subscription.cancel',{subscription,revision:current.revision,mode:'term_end',effective_date:'2026-12-03',reason:'Synthetic scheduled lifecycle cancellation'})
+ if(cancellation.status==='pending')await h.api('subscription.cancel.decide',finance??owner,{cancellation:cancellation.cancellation,decision:'approved',confirm_single:!finance})
+ await checkState('canceled');await move('2027-01-01');await checkState('ended')
+ assert.deepEqual(current.stateHistory.map(r=>r.state),['trialing','active','past_due','unpaid','active','canceled','ended'])
+ for(const transition of current.stateHistory){const sent=delivered.filter(e=>e.type==='subscription.state_changed'&&e.id===transition.id);assert.equal(sent.length,1);assert.deepEqual(sent[0].data.cause,transition.cause)}
+ await refresh()
+ const another=(await api('subscription.create',{customer,start_date:'2027-01-01',price:[price],quantity:['1']})).id
+ const revoked=await api('collection.schedule.prepare',{subscription:another,periods:['2027-02','2027-03'],issue_dates:['2027-02-01','2027-03-01'],unpaid_days:2,confirm:true})
+ const session=await api('portal.session.issue',{customer,origin:h.origin,audience:'hosted'}),withdrawal=`/portal/automatic-collections/${revoked.id}?session=${encodeURIComponent(session.token)}`
+ assert.equal((await h.raw(withdrawal,{body:{request:revoked.id,basis_hash:revoked.basis,accept:true}})).status,200)
+ await h.api('automatic.collection.decide',finance??owner,{request:revoked.id,basis_hash:revoked.basis,decision:'approved',confirm:true,confirm_single:!finance})
+ assert.equal((await h.raw(withdrawal,{body:{request:revoked.id,withdraw:true}})).status,200)
+ await move('2027-02-01');await tick();await tick()
+ assert.equal(edge.posts(),before+2,'A withdrawn future schedule creates no debit')
+ assert.equal((await api('invoices/'+revoked.invoice)).status,'draft','Withdrawal leaves the unissued financial source unchanged')
+ await refresh()
+ const guarded=await api('collection.schedule.prepare',{subscription:another,periods:['2027-04','2027-05'],issue_dates:['2027-04-01','2027-05-01'],unpaid_days:2,confirm:true})
+ const acceptAndApprove=async plan=>{
+  const capability=await api('portal.session.issue',{customer,origin:h.origin,audience:'hosted'})
+  const path=`/portal/automatic-collections/${plan.id}?session=${encodeURIComponent(capability.token)}`
+  assert.equal((await h.raw(path,{body:{request:plan.id,basis_hash:plan.basis,accept:true}})).status,200)
+  await h.api('automatic.collection.decide',finance??owner,{request:plan.id,basis_hash:plan.basis,decision:'approved',confirm:true,confirm_single:!finance})
+ }
+ await acceptAndApprove(guarded)
+ const authorizedMethod=edge.customers.get(provider).method
+ edge.customers.get(provider).method='synthetic-nectar-changed-schedule-method'
+ await move('2027-04-01');await tick()
+ assert.equal((await api('invoices/'+guarded.invoice)).status,'draft','A changed method refuses both issuance and collection')
+ assert.equal(edge.posts(),before+2)
+ edge.customers.get(provider).method=authorizedMethod
+ await refresh();await api('collection.schedule.withdraw',{schedule:guarded.schedule,confirm:true})
+ if(finance) {
+  const authority=await api('collection.schedule.prepare',{subscription:another,periods:['2027-06'],issue_dates:['2027-06-01'],unpaid_days:2,confirm:true})
+  await acceptAndApprove(authority)
+  const member=(await api('members')).find(m=>m.role==='finance'&&m.status==='active')
+  await api('access.end',{member:member.id});finance=undefined
+  await move('2027-06-01');await tick()
+  assert.equal((await api('invoices/'+authority.invoice)).status,'draft','A revoked approver cannot issue or collect a scheduled invoice')
+  assert.equal(edge.posts(),before+2)
+ }
+ await refresh()
+ const removal=await api('erasure.request',{customer})
+ await api('erasure.verify',{request:removal.id,reason:'Independently verified synthetic scheduled customer',evidence:file('identity.txt','Synthetic independent identity proof','text/plain')})
+ await api('erasure.approve',{request:removal.id,confirm:true})
+ await api('collection.schedule.withdraw',{schedule:revoked.schedule,confirm:true},404)
+ await api('automatic.collection.reconcile',{request:failed.id},404)
+ // Refresh only the delivery signature; event identity stays the old capture.
+ const replaySeconds=instant/1000,replaySignature=`t=${replaySeconds},v1=${createHmac('sha256',webhookSecret).update(`${replaySeconds}.${text}`).digest('hex')}`
+ assert.equal((await h.raw('/api/nectar/stripe/automatic-events',{form:text,headers:{'content-type':'application/json','stripe-signature':replaySignature}})).status,409)
+ await tick();assert.equal(edge.posts(),before+2,'Erasure and replay cannot restore collection authority')
+ console.log('Finite scheduled lifecycle: trial, two exact approved invoices, failure, unattended unpaid, signed recovery, cancellation and withdrawal passed')
 }

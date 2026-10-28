@@ -326,6 +326,7 @@
   "checkout.choice.unchanged": "Tu método predeterminado anterior no ha cambiado.",
   "checkout.mandate.unavailable": "El texto de autorización no está disponible aquí. Guardar esta cuenta no permite a Nectar realizar adeudos.",
   "checkout.status.failed": "El proceso original caducó sin una configuración utilizable. Contacta con la empresa para preparar una nueva configuración.",
+  "automatic.scheduleConsent": "Autorizo a {merchant} a emitir y cobrar las siguientes facturas exactas con mi tarjeta terminada en {last4} en estas fechas: {entries}. Vence después de la última factura indicada. No se autoriza otro importe, fecha ni método de pago. Si una factura fallida sigue pendiente durante {days} días y los reintentos permitidos han terminado, la suscripción se marca como impagada automáticamente. Puedo retirar futuros intentos en esta página.",
   "automatic.heading": "Autorizar el pago de esta factura",
   "automatic.consent": "Autorizo a {merchant} a cobrar {amount} una vez el {date} por esta factura, usando mi {method} terminada en {last4}. Esto no autoriza reintentos, otras facturas ni cobros futuros. Puedo retirar la autorización antes del intento.",
   "automatic.card": "tarjeta",

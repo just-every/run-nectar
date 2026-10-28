@@ -1,3 +1,4 @@
+import type { CollectionSchedule } from './collection-schedule'
 import type { RetryPolicy } from './retry-policy'
 import type { Bindings } from '../auth.server'
 import type { Actor } from './actor'
@@ -9,7 +10,7 @@ export interface AutomaticQuote {
  invoice: string; customer: string; customerRevision: string; fingerprint: string; calculation: string;
  amountCents: number; currency: 'usd'; accountRef: string; bindingId: string; bindingRevision: string;
  method: Awaited<ReturnType<typeof savedCollectionMethod>>; owner: string; issueDate: string; businessRevision: number;
- wording: string; wordingVersion: string; attempts: 1; retryPolicy?: RetryPolicy; retryFactor?: {verifiedAt:number;reference:string}
+ wording: string; wordingVersion: string; attempts: 1; schedule?: CollectionSchedule; retryPolicy?: RetryPolicy; retryFactor?: {verifiedAt:number;reference:string}
 }
 export const automaticQuote = (row: Row) => parseJson<AutomaticQuote>(row.basis_json, null as never)
 export async function storedAutomaticCollection(env: Bindings, id: string) {
@@ -29,7 +30,8 @@ export function automaticAuthority(env: Bindings, row: Row, approved = true) {
  AND b.customer_id=c.id AND b.revision=? AND b.account_ref=? AND b.stripe_customer_ref=?
  AND EXISTS(SELECT 1 FROM nc_business WHERE singleton=1 AND revision=?)
  ${approved ? "AND a.accepted_at IS NOT NULL AND a.approved_at IS NOT NULL AND EXISTS(SELECT 1 FROM nc_members f JOIN oa_operators fo ON lower(fo.email)=f.email WHERE f.id=a.approved_by AND f.role IN ('owner','finance') AND f.status='active' AND fo.status='active' AND ((f.role='owner' AND fo.role='owner') OR (f.role='finance' AND fo.role IN ('owner','member'))))" : ''})
- AND NOT EXISTS(SELECT 1 FROM nc_erased_records WHERE record_id IN (?,?,?))`, q.bindingId,row.id,row.revision,row.status,row.basis_hash,q.fingerprint,q.calculation,q.customerRevision,q.bindingRevision,q.accountRef,q.method.customerRef,q.businessRevision,row.id,row.customer_id,row.invoice_id)
+ AND NOT EXISTS(SELECT 1 FROM nc_erased_records WHERE record_id IN (?,?,?))
+ ${approved&&q.schedule?`AND EXISTS(SELECT 1 FROM nc_collection_schedules p JOIN nc_collection_schedule_authority z ON z.id=p.id WHERE p.id=? AND p.status='active')`:''}`, q.bindingId,row.id,row.revision,row.status,row.basis_hash,q.fingerprint,q.calculation,q.customerRevision,q.bindingRevision,q.accountRef,q.method.customerRef,q.businessRevision,row.id,row.customer_id,row.invoice_id,...(approved&&q.schedule?[q.schedule.id]:[]))
 }
 export async function validateAutomaticBasis(row: Row) {
  const q=automaticQuote(row)

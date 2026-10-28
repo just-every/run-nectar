@@ -263,6 +263,18 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
   "collection.reconcile": {
     "request": "text"
   },
+  "collection.schedule.prepare": {
+    "confirm": "flag",
+    "invoices": "list",
+    "issue_dates": "list",
+    "periods": "list",
+    "subscription": "text",
+    "unpaid_days": "integer"
+  },
+  "collection.schedule.withdraw": {
+    "confirm": "flag",
+    "schedule": "text"
+  },
   "contact.add": {
     "customer": "text",
     "email": "text",
