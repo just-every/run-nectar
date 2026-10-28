@@ -432,5 +432,8 @@
   "dunning.invoice_only": "Realice el pago siguiendo las instrucciones de su factura. Su servicio permanece activo.",
   "dunning.update": "Actualice su método de pago: {link}",
   "dunning.update_label": "Actualizar método de pago",
-  "dunning.note": "Este enlace vence en quince minutos como máximo. Guardar una tarjeta no autoriza un pago."
+  "dunning.note": "Este enlace vence en quince minutos como máximo. Guardar una tarjeta no autoriza un pago.",
+  "correction.mrr.heading": "Importe recurrente normalizado de la suscripción según {policy}; condiciones fijas y por asiento al cierre del mes, sin consumo ni créditos únicos.",
+  "correction.mrr.period": "Al {date}: MRR anterior {before}, posterior {after}, cambio {change}; ARR anterior {arrBefore}, posterior {arrAfter}, cambio {arrChange}.",
+  "correction.mrr.unsupported": "Estos instrumentos contractuales no están incluidos en la definición admitida de importes simples fijos y por asiento en USD; no se afirma una métrica normalizada."
 }

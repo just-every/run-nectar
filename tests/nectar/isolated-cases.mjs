@@ -50,6 +50,7 @@ export const isolatedJourneys = [
   { file: 'native-collection', name: 'nativeCollectionFlow', load: () => import('./native-collection.mjs') },
   { file: 'retention', name: 'retentionIntervalFlow', load: () => import('./retention.mjs') },
   { file: 'erasure', name: 'nativeIntervalErasureFlow', load: () => import('./erasure.mjs') },
+  { file: 'normalized-metrics', name: 'normalizedMetricsFlow', load: () => import('./normalized-metrics.mjs') },
   { file: 'move-history', name: 'moveHistoryFlow', load: () => import('./move-history.mjs') },
   { file: 'import-originals', name: 'importOriginalsFlow', load: () => import('./import-originals.mjs') },
   { file: 'move-collection', name: 'moveCollectionFlow', load: () => import('./move-collection.mjs') },

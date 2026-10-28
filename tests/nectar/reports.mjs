@@ -56,6 +56,14 @@ export async function reportsFlow(h, owner) {
   await h.api(`invoices/${invoiceId}?expand=customer,private`, owner, undefined, 400)
   await h.api(`invoices/${invoiceId}?expand=lines.price`, undefined, undefined, 401)
   await h.api(`invoices/no-such-invoice?expand=customer`, owner, undefined, 404)
+
+  for (const [metric,expected] of [['normalized-mrr',12600],['normalized-arr',151200]]) {
+    const view = await h.api(`reports/${metric}?period=2026-02&customer=${customer}`,owner)
+    assert.equal(view.totalCents,expected,'Normalized rates continue without an issued invoice and exclude usage, tax and one-time credit')
+    const source = await h.api(view.entries[0].href.replace('/app/',''),owner)
+    assert.equal(source.components.reduce((sum,c)=>sum+c.amountCents,0),expected)
+    assert.deepEqual(source.normalized.snapshot.components.map(c=>c.quantity).sort(),[1,2])
+  }
   const original = structuredClone(invoice.calculation)
   await h.api('credit.issue', owner, { invoice: invoiceId, amount: '10', reason: 'January service adjustment' })
   const payment = await h.api('payment.record', owner, { customer, amount: '20', received_on: '2026-02-05', method: 'bank_transfer', reference: 'RPT003-WIRE', evidence: 'Bank statement February 5' })

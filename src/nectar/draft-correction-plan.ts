@@ -1,3 +1,4 @@
+import { correctionMrr } from './normalized-metrics'
 // Read-only engine simulations for existing draft-correction proposal kinds.
 import { closedPeriods, type ClosedPeriods } from './period-close-keys'
 import type { Bindings } from '../auth.server'
@@ -81,7 +82,7 @@ export async function amendmentPlan(env: Bindings, business: Business, payload: 
   for (const inputs of await amendmentCorrectionInputs(env,business,sub,amendment.from)) {
     const period=inputs.period
     const [before, after] = await Promise.all([total(inputs), total({ ...inputs, amendments: [...inputs.amendments, amendment] })])
-    impact.push({ period, ...(inputs.billing?{billingWindow:inputs.billing}:{}), before, after, revenueDeltas: revenuePeriodDeltas(before.revenue, after.revenue, closed) })
+    impact.push({ period, ...(inputs.billing?{billingWindow:inputs.billing}:{}), before, after, normalizedMrr: await correctionMrr(inputs, { ...inputs, amendments: [...inputs.amendments, amendment] }), revenueDeltas: revenuePeriodDeltas(before.revenue, after.revenue, closed) })
   }
   return { normalized: { ...payload, subscription: sub.id, kind, value, price: priceId, effective_to: payload.effective_to || null }, impact, basis: { subscription: [sub.id, sub.revision], revenuePolicy: REVENUE_POLICY_VERSION } }
 }
@@ -130,7 +131,7 @@ export async function correctionPlan(env: Bindings, business: Business, payload:
       const added = (screened?.accepted ?? []).filter(event => event.customerId === sub.customer_id && meters.has(event.meterId) && event.occurredAt < end && correctionEventInInput(inputs,{meterId:event.meterId,occurredAt:event.occurredAt}))
         .map(event => ({ eventId: event.eventId, meterId: event.meterId, quantity: event.quantity, occurredAt: event.occurredAt, ...(event.properties?{properties:event.properties}:{}) }))
       const [before, after] = await Promise.all([total(inputs), total({ ...inputs, events: [...inputs.events.filter(event => !voided.has(event.eventId)), ...added] })])
-      invoices.push({ subscription: sub.id, customer: sub.customer_name, period, ...(inputs.billing?{billingWindow:inputs.billing}:{}), before, after, revenueDeltas: revenuePeriodDeltas(before.revenue, after.revenue, closed) })
+      invoices.push({ subscription: sub.id, customer: sub.customer_name, period, ...(inputs.billing?{billingWindow:inputs.billing}:{}), before, after, normalizedMrr: await correctionMrr(inputs, inputs), revenueDeltas: revenuePeriodDeltas(before.revenue, after.revenue, closed) })
     }
   }
   return { normalized: { void: voids.map((entry: Row) => ({ event_id: String(entry.event_id), reason: String(entry.reason).slice(0, 300) })), add: adds, run: run?.id ?? null, period: run?.period ?? null }, impact: { rows, invoices }, basis: { ...basis, revenuePolicy: REVENUE_POLICY_VERSION } }

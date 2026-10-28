@@ -84,6 +84,15 @@ export async function creditCorrectionFlow(h, owner, onState=async()=>{}) {
       const html=await h.page(`/app/proposals/${saved.id}`,owner)
       for(const r of revenue.periods)assert.ok(html.includes(`data-revenue-period="${r.period}" data-before-cents="${r.beforeCents}" data-after-cents="${r.afterCents}" data-delta-cents="${r.deltaCents}"`),'REV-001 the operator sees exact reviewed monthly recognition deltas')
       assert.ok(!html.includes('[object Object]'),'REV-001 recognition is readable in the operator preview')
+      const normalized = saved.impact.normalizedMrr
+      assert.ok(normalized.periods.length > 0)
+      for (const effect of normalized.periods) {
+        const report = await api(`reports/normalized-mrr?period=${effect.before.asOf.slice(0,7)}&customer=${fixture.customer}`)
+        assert.equal(effect.before.mrrCents, report.totalCents)
+        assert.deepEqual(effect.before, effect.after, 'A one-time credit preserves every normalized contract operand')
+        assert.deepEqual([effect.deltaMrrCents,effect.deltaArrCents], [0,0])
+        assert.ok(saved.payload.normalizedMrrNotice.citations.some(c=>c.fingerprint===effect.before.fingerprint))
+      }
       const amount = saved.impact.credit.amountCents
       assert.deepEqual(revenue.before.schedules.slice(0, source.schedules.length).sort((a, b) => a.lineId.localeCompare(b.lineId)), [...source.schedules].sort((a, b) => a.lineId.localeCompare(b.lineId)), 'REV-001 credit preview uses the immutable issued line schedules')
       assert.deepEqual(revenue.before.schedules.slice(source.schedules.length).map(row => [row.lineId, row.amountCents, row.entries.map(entry => [entry.period, entry.amountCents])]),
@@ -105,8 +114,8 @@ export async function creditCorrectionFlow(h, owner, onState=async()=>{}) {
         assert.ok(revenue.citations.some(citation => citation.line_id === schedule.lineId && citation.source === `/app/invoices/${fixture.id}/lines/${schedule.lineId}#calculation`
           && citation.recordPath === `/revenue/before/schedules/${index}/entries/${entryIndex}` && citation.fingerprint === revenue.before.fingerprint && citation.policyVersion === revenue.policyVersion), 'REV-001 each issued schedule entry cites its actual line and frozen preview')
       }
-      assert.deepEqual(saved.impact.mail.citations, [...saved.payload.citations, ...revenue.citations], 'REV-001 the reviewed customer explanation includes the revenue source citations')
-      assert.equal(saved.impact.mail.body, `${saved.payload.body}\n\n${saved.payload.revenueNotice.explanation}`)
+      assert.deepEqual(saved.impact.mail.citations, [...saved.payload.citations, ...revenue.citations, ...saved.payload.normalizedMrrNotice.citations], 'REV-001 the reviewed customer explanation includes the revenue source citations')
+      assert.equal(saved.impact.mail.body, `${saved.payload.body}\n\n${saved.payload.revenueNotice.explanation}\n\n${saved.payload.normalizedMrrNotice.explanation}`)
       return revenue
     }
     const checkBooked = async (saved, fixture, credit) => {
