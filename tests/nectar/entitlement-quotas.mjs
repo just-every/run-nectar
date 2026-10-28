@@ -541,4 +541,5 @@ export async function thresholdVolumeCredit(h,owner,{onState=async()=>{}}={}) {
   await onState({label:'volume-remainder',invoice:remainder.id,subscription,customer})
   const revenue=await api(`revenue?from=2027-01&to=2027-02&customer=${customer}`)
   assert.deepEqual([revenue.recognizedCents,revenue.netBillingsCents,revenue.closingCents],[50050,50050,0],'The credit and final settlement neither duplicate nor lose revenue')
+  assert.deepEqual(revenue.months.map(row=>[row.period,row.recognizedCents]),[['2027-01',50050],['2027-02',0]],'Settlement reverses the threshold and its credit in their saved recognition months')
 }
