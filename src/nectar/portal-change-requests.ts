@@ -49,7 +49,7 @@ export async function portalChangeOptions(env: Bindings, session: CustomerSessio
 }
 
 export async function portalChangeSubscriptions(env: Bindings, session: CustomerSession) {
-  return await all(env, `SELECT s.id FROM nc_subscriptions s JOIN nc_customers c ON c.id=s.customer_id WHERE s.customer_id=? AND s.billing_mode='live' AND c.erased_at IS NULL ORDER BY s.created_at,s.id`, session.customer)
+  return await all(env, `SELECT s.id,EXISTS(SELECT 1 FROM nc_renewal_terms t WHERE t.subscription_id=s.id AND t.status='active') AS has_term,EXISTS(SELECT 1 FROM nc_retention_offers o WHERE o.subscription_id=s.id AND o.kind='winback' AND o.status='offered' AND o.token_hash IS NOT NULL) AS has_return FROM nc_subscriptions s JOIN nc_customers c ON c.id=s.customer_id WHERE s.customer_id=? AND s.billing_mode='live' AND c.erased_at IS NULL ORDER BY s.created_at,s.id`, session.customer)
 }
 
 export async function portalChangeData(env: Bindings, session: CustomerSession, subscription?: string) {
