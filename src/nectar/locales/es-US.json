@@ -432,5 +432,15 @@
   "dunning.invoice_only": "Realice el pago siguiendo las instrucciones de su factura. Su servicio permanece activo.",
   "dunning.update": "Actualice su método de pago: {link}",
   "dunning.update_label": "Actualizar método de pago",
-  "dunning.note": "Este enlace vence en quince minutos como máximo. Guardar una tarjeta no autoriza un pago."
+  "dunning.note": "Este enlace vence en quince minutos como máximo. Guardar una tarjeta no autoriza un pago.",
+  "portal.receipts.heading": "Recibos anteriores",
+  "portal.receipts.recorded": "Recibo de efectivo registrado. Esto no confirma la liquidación del procesador.",
+  "portal.receipts.received": "Recibido",
+  "portal.receipts.allocated": "Total aplicado",
+  "portal.receipts.returned": "Devuelto",
+  "portal.receipts.unallocated": "Sin aplicar",
+  "portal.receipts.allocations": "Aplicaciones a facturas",
+  "portal.receipts.emptyAllocations": "No hay aplicaciones a facturas en esta vista.",
+  "portal.receipts.download": "Descargar recibo PDF",
+  "portal.receipts.empty": "No hay recibos registrados."
 }

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
+import { invoiceCalculations } from './invoice-calculations.mjs'
 
 // INV-004: invoice content, customer presentation and downloadable PDF. All writes use public JSON or ordinary HTML forms.
 export async function invoiceContentFlow(h, owner, { onState } = {}) {
@@ -230,6 +231,7 @@ async function invoicePresentation(h,owner,{first,second,invoice,otherInvoice,br
   const english=await checkPdf(draft.id,hidden)
   assert.match(english.text,/USD 250.00/);assert.match(await h.page(path(draft.id,hidden)),/Download PDF/)
   await onState?.({label:'hidden-usage-english',path:path(draft.id,hidden),pdfPath:path(draft.id,hidden,'pdf')})
+  await invoiceCalculations(h,owner,{sessions,path,checkPdf,onState})
   await api('portal.session.revoke',{session:sessionIds.get(first)})
   assert.equal((await h.raw(path(invoice,first,'pdf'))).status,401,'revocation withdraws the PDF too')
 }

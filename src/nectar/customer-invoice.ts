@@ -11,9 +11,11 @@ export function customerInvoiceContent(calculation: string) {
 export function customerInvoiceLines(lines: Row[], hide: boolean, prices: Record<string,Row>={}) {
   if(!hide)return lines.map(line=>{
     const evidence=parseJson<Row>(line.evidence_json,{})
+    const tiers=Array.isArray(evidence.tiers)?evidence.tiers:Array.isArray(evidence.metricPricingTiers)?evidence.metricPricingTiers:[]
     return {description:line.description,quantity:line.quantity,unit_amount:line.unit_amount,amount_cents:line.amount_cents,period_start:line.period_start,period_end:line.period_end,
-      days:evidence.days,periodDays:evidence.periodDays,amountExact:evidence.amountExact,
-      tiers:(Array.isArray(evidence.tiers)?evidence.tiers:[]).map((tier:Row)=>({tier:tier.tier,quantity:tier.quantity,unitAmount:tier.unitAmount,flatAmount:tier.flatAmount,amountExact:tier.amountExact}))}
+      days:evidence.days,periodDays:evidence.periodDays,amountExact:evidence.amountExact??rationalFact(evidence.exactDollars),exactQuantity:rationalFact(evidence.exactQuantity),
+      tiers:tiers.map((tier:Row)=>({tier:tier.tier,quantity:typeof tier.quantity==='string'?tier.quantity:rationalFact(tier.quantity),unitAmount:tier.unitAmount,flatAmount:tier.flatAmount,
+        amountExact:tier.amountExact??rationalFact(tier.amount),blocks:tier.blocks,packageSize:tier.packageSize??(tier.blocks===undefined?undefined:prices[line.price_id]?.pricing?.packageSize)}))}
   })
   const result:Row[]=[],groups=new Map<string,Row>()
   for(const line of lines){
@@ -25,12 +27,18 @@ export function customerInvoiceLines(lines: Row[], hide: boolean, prices: Record
   return result
 }
 
+// Preserve non-terminating metric quantities without decimal approximation.
+function rationalFact(value: Row | undefined): string | undefined {
+  if(!value)return undefined
+  return value.denominator==='1'?value.numerator:`${value.numerator} ÷ ${value.denominator}`
+}
+
 export function customerLineFacts(line: Row, L: CustomerText, currency='USD'): string[] {
   if(line.quantity===undefined)return []
-  const facts=[`${L.t('invoice.quantity')}: ${line.quantity}`]
+  const facts=[`${L.t('invoice.quantity')}: ${line.quantity}${line.exactQuantity?` (${line.exactQuantity})`:''}`]
   if(line.unit_amount)facts.push(`${L.t('invoice.unit')}: ${L.amount(line.unit_amount,currency)}`)
   if(line.days!==undefined&&line.periodDays!==undefined)facts.push(L.t('invoice.days',{days:line.days,total:line.periodDays}))
-  for(const tier of line.tiers??[])facts.push(`${L.t('invoice.tier')} ${tier.tier}: ${L.t('invoice.quantity')} ${tier.quantity}; ${L.t('invoice.unit')} ${L.amount(tier.unitAmount,currency)}; ${L.t('invoice.fee')} ${L.amount(tier.flatAmount,currency)}; ${L.t('invoice.exact')} ${currency} ${tier.amountExact}`)
+  for(const tier of line.tiers??[])facts.push(`${L.t('invoice.tier')} ${tier.tier}: ${L.t('invoice.quantity')} ${tier.quantity}${tier.blocks===undefined?'':` (${tier.blocks} × ${tier.packageSize})`}; ${L.t('invoice.unit')} ${L.amount(tier.unitAmount,currency)}; ${L.t('invoice.fee')} ${L.amount(tier.flatAmount,currency)}; ${L.t('invoice.exact')} ${currency} ${tier.amountExact}`)
   if(line.amountExact)facts.push(`${L.t('invoice.exact')}: ${currency} ${line.amountExact}`)
   return facts
 }

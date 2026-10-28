@@ -1,0 +1,34 @@
+// Small PDF writer with byte-accurate offsets and separate text and image objects.
+import { insist } from './core'
+import { jpegSize, type InvoiceBranding } from './invoice-branding'
+
+export function pdfDocument(rows: unknown[], brand: Pick<InvoiceBranding, 'color' | 'logo'>, fontSize = 11): Uint8Array {
+  const wrap=(line:string)=>{
+    const wrapped:string[]=[];let current=''
+    for(const word of line.split(/\s+/)){
+      if(current&&current.length+word.length+1>Math.floor(86*11/fontSize)){wrapped.push(current);current=''}
+      current+=(current?' ':'')+word
+    }
+    return [...wrapped,current]
+  }
+  const lines=rows.filter(Boolean).flatMap(value=>String(value).split(/\r?\n/).flatMap(wrap))
+  const extra:Record<string,number>={'€':128,'‘':145,'’':146,'“':147,'”':148,'–':150,'—':151,'…':133,'™':153,'œ':156,'Œ':140,'Ÿ':159}
+  const encode=(text:string)=>Array.from(text,c=>{const code=extra[c]??c.codePointAt(0)!;insist(code>=32&&code<=255,'invoice_pdf_character_unsupported',409);return code}).map(c=>c.toString(16).padStart(2,'0')).join('')
+  const objects:string[]=[],add=(value:string)=>{objects.push(value);return objects.length}
+  const catalog=add(''),pages=add(''),font=add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>')
+  let image=0,dimensions={width:1,height:1}
+  if(brand.logo){const bytes=Uint8Array.from(atob(brand.logo),c=>c.charCodeAt(0));dimensions=jpegSize(bytes);const binary=Array.from(bytes,b=>String.fromCharCode(b)).join('');image=add(`<< /Type /XObject /Subtype /Image /Width ${dimensions.width} /Height ${dimensions.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${binary.length} >>\nstream\n${binary}\nendstream`)}
+  const color=brand.color.slice(1).match(/../g)!.map((c:string)=>(parseInt(c,16)/255).toFixed(4)).join(' '),kids=[]
+  for(let start=0;start<lines.length;start+=42){
+    const logo=image?`q 72 0 0 ${Math.min(60,72*dimensions.height/dimensions.width)} 480 732 cm /Logo Do Q\n`:''
+    const text=lines.slice(start,start+42).map((line,index)=>`${index?'0 -16 Td ':''}<${encode(line)}> Tj`).join('\n')
+    const stream=`${logo}BT /F1 ${fontSize} Tf ${color} rg 48 720 Td\n${text}\nET`
+    const contents=add(`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`)
+    kids.push(add(`<< /Type /Page /Parent ${pages} 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 ${font} 0 R >> ${image?`/XObject << /Logo ${image} 0 R >>`:''} >> /Contents ${contents} 0 R >>`))
+  }
+  objects[catalog-1]=`<< /Type /Catalog /Pages ${pages} 0 R >>`;objects[pages-1]=`<< /Type /Pages /Kids [${kids.map(id=>`${id} 0 R`).join(' ')}] /Count ${kids.length} >>`
+  let output='%PDF-1.4\n',offsets=[0]
+  objects.forEach((object,index)=>{offsets.push(output.length);output+=`${index+1} 0 obj\n${object}\nendobj\n`})
+  const xref=output.length;output+=`xref\n0 ${objects.length+1}\n0000000000 65535 f \n${offsets.slice(1).map(offset=>String(offset).padStart(10,'0')+' 00000 n \n').join('')}trailer\n<< /Size ${objects.length+1} /Root ${catalog} 0 R >>\nstartxref\n${xref}\n%%EOF\n`
+  return Uint8Array.from(output,c=>c.charCodeAt(0))
+}

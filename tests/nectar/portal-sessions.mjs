@@ -1,3 +1,4 @@
+import { portalReceiptsFlow } from './portal-receipts.mjs'
 // PORT-005 round A: real Worker/D1, operator public doors issue a customer-only
 // signed capability; all customer reads go through /portal, never an Actor.
 import assert from 'node:assert/strict'
@@ -156,6 +157,7 @@ export async function portalSessionsFlow(h, owner) {
   assert.equal((await open(expiry)).status, 200)
   await h.advanceClock(new Date(expiry.expiresAt).toISOString())
   assert.equal((await open(expiry)).status, 401, 'PORT-005 expired at the exact deadline')
+  await portalReceiptsFlow(h,owner)
   await portalPrivacyRetention(h,owner)
   await h.api('mfa.policy', owner, { scope: 'all' })
   const factor = await h.api('mfa.totp.start', owner, {})

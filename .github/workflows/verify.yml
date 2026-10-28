@@ -60,6 +60,10 @@ jobs:
           node tests/nectar/invoice-void-browser.mjs
           node tests/nectar/invoice-void-browser.mjs refunds
 
+      - name: Hosted receipt browser proof
+        if: ${{ matrix.shard == 0 }}
+        run: node tests/nectar/portal-receipts-browser.mjs
+
       - name: Processor reconciliation journeys
         if: ${{ matrix.shard == 0 }}
         run: |
