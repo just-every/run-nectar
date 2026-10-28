@@ -794,7 +794,7 @@
       "executable": false
     },
     "migrations/core/0110_portal_signin.sql": {
-      "sha256": "612f8ff1ed2306ab5c9c35b49cc96222cc6f29e4db0e81ab896b90d61c67ee5f",
+      "sha256": "a47bcbe33f7db7fd3b0b67e1665270a94338b8972e4d4a85ffdfe05466d73791",
       "executable": false
     },
     "migrations/core/0111_portal_profile.sql": {

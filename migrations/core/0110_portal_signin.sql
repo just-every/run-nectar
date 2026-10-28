@@ -25,3 +25,6 @@ CREATE INDEX nc_portal_signin_subject ON nc_portal_signins(purpose,rate_subject,
 CREATE INDEX nc_portal_signin_customer ON nc_portal_signins(customer_id);
 ALTER TABLE nc_portal_sessions ADD COLUMN contact_id TEXT;
 ALTER TABLE nc_portal_sessions ADD COLUMN email_hash TEXT;
+CREATE TRIGGER nc_portal_signins_generation_insert AFTER INSERT ON nc_portal_signins BEGIN UPDATE nc_privacy_generation SET value=value+1 WHERE id=1; END;
+CREATE TRIGGER nc_portal_signins_generation_update AFTER UPDATE ON nc_portal_signins BEGIN UPDATE nc_privacy_generation SET value=value+1 WHERE id=1; END;
+CREATE TRIGGER nc_portal_signins_generation_delete AFTER DELETE ON nc_portal_signins BEGIN UPDATE nc_privacy_generation SET value=value+1 WHERE id=1; END;
