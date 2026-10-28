@@ -144,5 +144,5 @@ export async function portalBillingFlow(h,owner,hooks={}) {
 
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href) {
   const {runIsolated}=await import('./isolated.mjs')
-  await runIsolated('portal-billing','portalBillingFlow',()=>import('./portal-billing.mjs'))
+  await runIsolated('portal-billing','portalBillingFlow',async()=>({portalBillingFlow,harnessOptions}))
 }

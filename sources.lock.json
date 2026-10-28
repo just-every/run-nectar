@@ -162,7 +162,7 @@
       "executable": false
     },
     ".github/workflows/verify.yml": {
-      "sha256": "c26492fc92e2cdee4f13eb61aa6deb72e20e52da64cff9c29972070656fd618c",
+      "sha256": "57fab8659c71496bcbdbda7252b18ff4eba963a59871cf59458def82002d1e40",
       "executable": false
     },
     ".gitignore": {
@@ -791,6 +791,18 @@
     },
     "migrations/core/0109_processor_cash_return.sql": {
       "sha256": "bb1655b8eae9bc9365345d9ae809f47d71a3f1faa76d35c6dee086aaf66d053b",
+      "executable": false
+    },
+    "migrations/core/0110_portal_signin.sql": {
+      "sha256": "612f8ff1ed2306ab5c9c35b49cc96222cc6f29e4db0e81ab896b90d61c67ee5f",
+      "executable": false
+    },
+    "migrations/core/0111_portal_profile.sql": {
+      "sha256": "4173fb96c677ef62bd42d57a2af6fd7f03697697d18f008e5d8ea404f652c801",
+      "executable": false
+    },
+    "migrations/core/0112_portal_invoice_payments.sql": {
+      "sha256": "1aa1fbd2836dcc5ba82ab7a3e1ad1f044633b5b760e74a3181bf574b34ff7b11",
       "executable": false
     },
     "ONBOARDING.md": {
@@ -3797,8 +3809,24 @@
       "sha256": "8da5a092ea655f82feccb61827c06e4a6d472a40065332595b421eecd8ae9e37",
       "executable": false
     },
+    "src/nectar/portal-documents.ts": {
+      "sha256": "aeab7bd3dc76d12b0843465acfb085dd11031ee83193bbc4c948e5c756f4ce41",
+      "executable": false
+    },
+    "src/nectar/portal-financial-documents.ts": {
+      "sha256": "4754c1fe3ecce6bfe61493f0ff3f4fa229f295c55b4e346acc2798bb28fa52dd",
+      "executable": false
+    },
     "src/nectar/portal-http.ts": {
       "sha256": "a2815828e6ff5acdef4327e279846b54a0d979f10c0c4de1d306553b8c7050d5",
+      "executable": false
+    },
+    "src/nectar/portal-invoice-payment-page.ts": {
+      "sha256": "ee0e2d60dec5c155b2ab6ec4eeca4aef70de364af77cb27ebda0d3d66900f5de",
+      "executable": false
+    },
+    "src/nectar/portal-invoice-payment.ts": {
+      "sha256": "abe9220116efd9d2c707e51b8eba7697180be5fb6933e5141f9cc1b290ab816a",
       "executable": false
     },
     "src/nectar/portal-method-actions-page.ts": {
@@ -3833,8 +3861,28 @@
       "sha256": "be42999fb98146e085e85df0ef7d0b9e1bc4a706db00f098695e80f6fa14b412",
       "executable": false
     },
+    "src/nectar/portal-profile-authority.ts": {
+      "sha256": "18c9931b9d9cc2bd34c494b5178593850d5afb2d3b4aa47c402125b2a10b9845",
+      "executable": false
+    },
+    "src/nectar/portal-profile-page.ts": {
+      "sha256": "44df0eab1db41319baeb00c5c808e84c6162f3dbedad99c76898b9bfd7725db8",
+      "executable": false
+    },
+    "src/nectar/portal-profile.ts": {
+      "sha256": "05ba491209f653f3ae3ec69ff1971049ee4c25d662de753ebea9e6d32cf4019b",
+      "executable": false
+    },
     "src/nectar/portal-session.ts": {
       "sha256": "4985bb0487ff1b5a16d14252c0a41b20f722c87e29440882c25c6ec59bb83c0a",
+      "executable": false
+    },
+    "src/nectar/portal-signin-page.ts": {
+      "sha256": "c10df4a6449f78c5a7e2e653ac3143bf5366e4ca4d802947acb475dd348d465a",
+      "executable": false
+    },
+    "src/nectar/portal-signin.ts": {
+      "sha256": "850aeb5c9d8d4a73c09ee1b4d0223627f1a8aef7d34b8d5c12371e209da36865",
       "executable": false
     },
     "src/nectar/portal-upcoming.ts": {
@@ -5261,6 +5309,10 @@
       "sha256": "f3c2b8eae94cdfb35a61c869b7e736b67a26bd23ef78c2b2647e2ba2326e0f15",
       "executable": false
     },
+    "tests/nectar/portal-billing.mjs": {
+      "sha256": "b0e140fac38cb3bfac4f27a07139cd97db8ad34b710f9cbc6aa96d6404019c85",
+      "executable": false
+    },
     "tests/nectar/portal-corrections.mjs": {
       "sha256": "8d0912f70da440ee99cd52ffc0e6ec96f3aa4dcf41eb0ddce9b46f520ac04abf",
       "executable": false
@@ -5281,6 +5333,10 @@
       "sha256": "06a5eb05ef2191f0cbf00a1223cd13f0f778a4a5b40cb613dbfb7b2689c953c4",
       "executable": false
     },
+    "tests/nectar/portal-payment-edge.mjs": {
+      "sha256": "c534c1adb233946d0fbb2a786eaa5fa9500840e82b8fe4f37191469eb3b82984",
+      "executable": false
+    },
     "tests/nectar/portal-prepaid-browser.mjs": {
       "sha256": "0db1c692b1548120abdf3445ed26b7b3fe22dd866c480536112f4a884618475d",
       "executable": false
@@ -5295,6 +5351,10 @@
     },
     "tests/nectar/portal-sessions.mjs": {
       "sha256": "10fac0805aa1aaa8534b24b78a97e3d17c9c761cb83dccf81e4aad3bad7fabca",
+      "executable": false
+    },
+    "tests/nectar/portal-signin-helper.mjs": {
+      "sha256": "2fc478e131b96f78f7f46bedcccc088c158f4836436f9bca00d1cfc771906acb",
       "executable": false
     },
     "tests/nectar/prepaid-agent-corrections.mjs": {
