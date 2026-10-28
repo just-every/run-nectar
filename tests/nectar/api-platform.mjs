@@ -9,6 +9,29 @@ const ORIGINAL = '2026-10-01'
 // write replays by Idempotency-Key; every list door pages by cursor; and dated
 // versions follow the credential unless a request header names one.
 export async function apiPlatformFlow(h, owner) {
+  // Dispatch accepts registered own names only, even for an ordinary member.
+  // Keep bodies and planted binding values out of assertion diagnostics.
+  await h.api('access.give', owner, { email: 'dispatch-member@example.test', name: 'Dispatch Member', role: 'developer' })
+  const member = await h.signIn('dispatch-member@example.test', { requested: true })
+  const unknown = await h.raw('/api/nectar/unknown.dispatch', { cookie: member, body: {} })
+  const unknownBody = await unknown.text()
+  assert.equal(unknown.status, 404)
+  assert.ok(unknownBody === '{"error":"not_found"}', 'unknown action has the stable refusal')
+  const refusals = []
+  for (const name of ['constructor', '__proto__', 'hasOwnProperty']) {
+    const response = await h.raw(`/api/nectar/${name}`, { cookie: member, body: {} })
+    const body = await response.text()
+    const privateContent = ['SESSION_SECRET', 'SETUP_TOKEN', 'MAIL_API_KEY', 'MFA_KEY', 'PORTAL_KEY']
+      .some(key => body.includes(key) || body.includes(h.vars[key]))
+    refusals.push({ name, status: response.status, unknown: body === unknownBody, privateContent })
+  }
+  assert.ok(refusals.every(r => r.status === unknown.status && r.unknown && !r.privateContent),
+    `inherited action names use the unknown-name refusal: ${JSON.stringify(refusals)}`)
+  const registered = await h.raw('/api/nectar/notification.preferences', { cookie: member, body: { mentions: true } })
+  assert.equal(registered.status, 200, 'registered action still executes for the member')
+  assert.ok((await registered.json()).preferences?.mentions === true, 'registered action returns its saved result')
+  console.log('Dispatch sanity passed: member constructor, __proto__, hasOwnProperty refused; registered action works; no binding content')
+
   assert.equal(spawnSync(process.execPath, ['scripts/api-fields.mjs', '--check'], { encoding: 'utf8' }).status, 0, 'DEV-002 action body fields are generated from the current handlers')
   assert.equal((await h.raw('/api/nectar/openapi')).status, 401, 'DEV-002 the document is for signed-in members and credentials')
   const document = await h.api('openapi', owner)

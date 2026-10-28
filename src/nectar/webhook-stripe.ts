@@ -39,7 +39,7 @@ export async function consumeStripeWebhookEvent(env: Bindings, actor: Actor, inp
   insist(event.object==='event'&&event.id===eventRef&&event.livemode===false&&Number.isSafeInteger(event.created)&&event.created>0,'stripe_event_invalid',409)
   insist(sourceCustomer.object==='customer'&&sourceCustomer.id===customer.provider_ref&&
     (sourceCustomer.deleted===true?event.type==='customer.deleted':sourceCustomer.livemode===false),'stripe_test_shadow_customer_required',409)
-  const type=STRIPE_EVENT_MAP[event.type],object=event.data?.object
+  const type=Object.hasOwn(STRIPE_EVENT_MAP,event.type)?STRIPE_EVENT_MAP[event.type]:undefined,object=event.data?.object
   insist(type&&object&&typeof object==='object'&&!Array.isArray(object),'stripe_event_unmapped',409)
   const sourceCustomerRef=event.type.startsWith('customer.')&&!event.type.startsWith('customer.subscription.')?ref(object.id):
     ref(object.customer)||(event.type==='payment_method.detached'?ref(event.data.previous_attributes?.customer):'')
