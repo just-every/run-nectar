@@ -37,7 +37,7 @@ export async function processorReportSources(env: Bindings, metric: ProcessorMet
     (SELECT r.id FROM nc_prepaid_refunds r WHERE r.refund_ref=t.source_ref AND r.status='refunded' LIMIT 1) AS prepaid_refund
     FROM nc_processor_transactions t JOIN nc_customers c ON c.id=t.customer_id
     LEFT JOIN nc_payments p ON p.id=t.payment_id AND p.customer_id=t.customer_id
-    WHERE (t.invoice_id IS NOT NULL OR EXISTS(SELECT 1 FROM nc_processor_cash_imported_applications a WHERE a.account_ref=t.account_ref AND a.charge_ref=t.source_ref AND a.status='collected')) AND t.${dateColumn}>=? AND t.${dateColumn}<?
+    WHERE (t.type='refund' OR t.invoice_id IS NOT NULL OR EXISTS(SELECT 1 FROM nc_processor_cash_imported_applications a WHERE a.account_ref=t.account_ref AND a.charge_ref=t.source_ref AND a.status='collected')) AND t.${dateColumn}>=? AND t.${dateColumn}<?
       AND ${refund ? "t.type='refund' AND t.amount_cents<0" : "t.type IN ('charge','payment') AND t.amount_cents>0"}
       ${settlement ? "AND t.status='available'" : ''}
       ${customer ? 'AND t.customer_id=?' : ''}

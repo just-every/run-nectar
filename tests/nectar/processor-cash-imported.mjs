@@ -7,12 +7,14 @@ import { csvRows } from './financial-reports.mjs'
 
 export function importedCashEdge() {
  const base=stripeCollectionEdge(),cash=processorCashEdge(base)
- const balanceTransactions=new Map(),cashCharges=new Map(),payouts=new Map(),payoutMembers=new Map()
+ const balanceTransactions=new Map(),cashCharges=new Map(),payouts=new Map(),payoutMembers=new Map(),refunds=new Map()
  let loseDisable=false,attempted=false
  const readCashCharges=async request=>{
   const listed=await(await cash.fetch(request)).json()
   for(const charge of listed.data){
    charge.balance_transaction=`${charge.id}-balance`
+   charge.amount_refunded=[...refunds.values()].filter(row=>row.charge===charge.id).reduce((sum,row)=>sum+row.amount,0)
+   charge.refunded=charge.amount_refunded===charge.amount
    cashCharges.set(charge.id,charge)
    balanceTransactions.set(charge.balance_transaction,{object:'balance_transaction',id:charge.balance_transaction,source:charge.id,type:'charge',amount:charge.amount,fee:17,net:charge.amount-17,currency:'usd',status:'available',created:charge.created,available_on:charge.created})
   }
@@ -40,6 +42,7 @@ export function importedCashEdge() {
    if(intent){const listed=await readCashCharges(new Request(`https://api.stripe.com/v1/charges?payment_intent=${intent.id}`,{headers:request.headers}));return Response.json(listed.data.find(row=>row.id===intent.latest_charge))}
   }
   if(path.startsWith('/payouts/'))return Response.json(payouts.get(path.split('/').at(-1)))
+  if(path.startsWith('/refunds/'))return Response.json(refunds.get(path.split('/').at(-1)))
   if(path==='/balance_transactions')return Response.json({object:'list',has_more:false,data:payoutMembers.get(url.searchParams.get('payout')).map(id=>{
    const row=balanceTransactions.get(id);return {...row,source:cashCharges.get(row.source)??payouts.get(row.source)??row.source}
   })})
@@ -53,7 +56,14 @@ export function importedCashEdge() {
   }
   return cash.fetch(request)
  }
- return {...cash,fetch,imported:base,loseDisableResponse(){loseDisable=true},attemptInvoicePayment(value){attempted=value},async cashPayout(intent){
+ return {...cash,fetch,imported:base,loseDisableResponse(){loseDisable=true},attemptInvoicePayment(value){attempted=value},async cashRefund(intent,amount){
+  const refund={object:'refund',id:'synthetic-nectar-imported-refund',charge:intent.latest_charge,payment_intent:intent.id,status:'succeeded',amount,currency:'usd',created:intent.created,livemode:false,balance_transaction:'synthetic-nectar-imported-refund-balance'}
+  refunds.set(refund.id,refund)
+  balanceTransactions.set(refund.balance_transaction,{object:'balance_transaction',id:refund.balance_transaction,source:refund.id,type:'refund',amount:-amount,fee:0,net:-amount,currency:'usd',status:'available',created:intent.created,available_on:intent.created})
+  const id='synthetic-nectar-imported-refund-event'
+  cash.cashEvents.set(id,{object:'event',id,type:'refund.created',created:intent.created,livemode:false,data:{object:refund}})
+  return {id,refund}
+ },async cashPayout(intent){
   const charge=(await readCashCharges(new Request(`https://api.stripe.com/v1/charges?payment_intent=${intent.id}`,{headers:{authorization:'Bearer synthetic-nectar-1'}}))).data[0]
   const payout={object:'payout',id:'synthetic-nectar-imported-payout',amount:5983,currency:'usd',livemode:false,automatic:true,status:'paid',balance_transaction:'synthetic-nectar-imported-payout-debit'}
   payouts.set(payout.id,payout)
@@ -147,7 +157,11 @@ export async function processorCashImportedFlow(h,owner,{cashEdge=edge,keepFinan
  assert.deepEqual([typed.total_cents,typed.paid_cents,typed.remaining_cents],[11000,0,11000],'Captured originals remain immutable')
  assert.deepEqual((await api(`invoices?customer=${customer}`)).data.map(row=>row.id),nativeBefore,'Imported settlements never manufacture native invoices')
  assert.equal((await api('payments')).filter(row=>row.customer_id===customer).length,0,'Imported collections retain their original financial custody')
- for(const [metric,total]of [['collections',11000],['ar',33000],['settlements',10966]]){
+ const refunded=await cashEdge.cashRefund(firstIntent,1000)
+ await consume(refunded.id);assert.equal((await consume(refunded.id)).replayed,true)
+ const refundTransactions=(await api(`processor-events?customer=${customer}`)).transactions.filter(row=>row.type==='refund')
+ assert.deepEqual(refundTransactions.map(row=>[row.source_ref,row.amount_cents,row.invoice_id]),[[refunded.refund.id,-1000,null]],'An imported partial cash refund is recorded once without a native invoice')
+ for(const [metric,total]of [['collections',11000],['ar',33000],['settlements',10966],['refunds',-1000]]){
   const report=await api(`reports/${metric}?period=2026-10&customer=${customer}`)
   assert.equal(report.totalCents,total)
   assert.equal(report.entries.reduce((sum,row)=>sum+row.amountCents,0),total)
@@ -155,17 +169,18 @@ export async function processorCashImportedFlow(h,owner,{cashEdge=edge,keepFinan
   const csv=csvRows(await(await h.raw(`/app/exports/reports/${metric}.csv?period=2026-10&customer=${customer}`,{cookie:owner})).text())
   assert.equal(csv.find(row=>row.source==='TOTAL').amount,(total/100).toFixed(2))
  }
+ await onState({customer,label:'imported-cash-refunded'})
  await api('report.schedule',{enabled:true,day:1})
  await h.advanceClock('2026-11-01T12:00:00Z')
  assert.equal((await h.raw(`/cdn-cgi/local/scheduled?time=${Date.parse('2026-11-01T12:00:00Z')}&cron=${encodeURIComponent('0 14 * * *')}`)).status,200)
  const delivery=(await api('report-schedule')).deliveries[0],frozen=await api(`report-deliveries/${delivery.id}`)
- for(const [metric,total]of [['collections',11000],['ar',33000],['settlements',10966]])assert.equal(frozen.reports.find(row=>row.metric===metric).totalCents,total)
+ for(const [metric,total]of [['collections',11000],['ar',33000],['settlements',10966],['refunds',-1000]])assert.equal(frozen.reports.find(row=>row.metric===metric).totalCents,total)
  const request=await api('erasure.request',{customer})
  const verify=new URL(h.mails.at(-1).text.match(/https?:\/\/[^\s"<]+\/erase\/[a-f0-9]{64}/)[0]).pathname
  assert.equal((await h.raw(verify,{form:new URLSearchParams({confirm:'yes'})})).status,200)
  const erased=await api('erasure.approve',{request:request.id,confirm:true})
  assert.ok(erased.receipt.changed.some(row=>row.kind==='nc_processor_cash_imported_applications'))
- for(const [metric,total]of [['collections',11000],['ar',33000],['settlements',10966]])assert.equal((await api(`reports/${metric}?period=2026-10&customer=${customer}`)).totalCents,total)
+ for(const [metric,total]of [['collections',11000],['ar',33000],['settlements',10966],['refunds',-1000]])assert.equal((await api(`reports/${metric}?period=2026-10&customer=${customer}`)).totalCents,total)
  assert.deepEqual((await history()).incumbentHistory,{documents:[],records:[]})
  assert.deepEqual((await api('erasure.purge',{})).removed,[])
  if(!keepFinancial){

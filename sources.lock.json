@@ -4030,7 +4030,7 @@
       "executable": false
     },
     "src/nectar/processor-reports.ts": {
-      "sha256": "881897727b83e094636b5bf1af98d8d16dfddd0251035f5c87730dc8e1e173fd",
+      "sha256": "8afe3986e4e3f47d37139e7807db27e20dad9a1ca27f432e932da55c74ac97a8",
       "executable": false
     },
     "src/nectar/processor-returns.ts": {
@@ -4882,7 +4882,7 @@
       "executable": false
     },
     "tests/nectar/billing-roles.mjs": {
-      "sha256": "6bde6379f9ca3973f8d08a0d39e97e6bb4292c8dce8a72c5fd69eaecfd2083b8",
+      "sha256": "653fec404501c731f657f407fe7bf1cf00d3e5326fb0258b1ba6a419acdee20a",
       "executable": false
     },
     "tests/nectar/cadences.mjs": {
@@ -5382,7 +5382,7 @@
       "executable": false
     },
     "tests/nectar/processor-cash-imported.mjs": {
-      "sha256": "558700be6c53441e42d6a47c705a263ccbca6e85a568b6879666600ae132dd86",
+      "sha256": "2ff89782e15755635c9cd8540d853437fc1016f42a84355165ba94306aeed4b7",
       "executable": false
     },
     "tests/nectar/processor-cash-return.mjs": {
@@ -5398,7 +5398,7 @@
       "executable": false
     },
     "tests/nectar/processor-events-browser.mjs": {
-      "sha256": "8e51a59b35a9ea639d4b0225bd30f7d92b28bc9361c83226f1e85aa2c6c649ae",
+      "sha256": "4f154c6c8b16756c51b59c06427ae0c8892136aa6738c3344bbd681a565747ad",
       "executable": false
     },
     "tests/nectar/processor-events-sandbox.mjs": {

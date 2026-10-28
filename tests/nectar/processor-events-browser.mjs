@@ -17,7 +17,7 @@ try {
  await context.addCookies(owner.split('; ').map(part=>{const at=part.indexOf('=');return {name:part.slice(0,at),value:part.slice(at+1),url:h.origin}}))
  const page=await context.newPage()
  const capture=async({label,customer,delivery,bankInvoice})=>{
-  const paths=[`/app/processor-events?customer=${customer}`,...(label==='failure-resolved'?['/app/processor-events']:[]),...(label==='cash-applied'||label==='cash-returned'?['/app/receivables']:[]),...(label==='cash-returned'?[`/app/reports/refunds?period=2026-10&customer=${customer}`]:[]),...(label==='reconciled'?['/app/receivables','/app/reports/settlements?period=2026-10','/app/reports/refunds?period=2026-10','/app/reports/collections?period=2026-10','/app/report-schedule',`/app/report-deliveries/${delivery}`,`/app/invoices/${bankInvoice}`]:[])]
+  const paths=[`/app/processor-events?customer=${customer}`,...(label==='failure-resolved'?['/app/processor-events']:[]),...(label==='cash-applied'||label==='cash-returned'?['/app/receivables']:[]),...(label==='cash-returned'||label==='imported-cash-refunded'?[`/app/reports/refunds?period=2026-10&customer=${customer}`]:[]),...(label==='reconciled'?['/app/receivables','/app/reports/settlements?period=2026-10','/app/reports/refunds?period=2026-10','/app/reports/collections?period=2026-10','/app/report-schedule',`/app/report-deliveries/${delivery}`,`/app/invoices/${bankInvoice}`]:[])]
   if(label==='reconciled')for(const metric of ['settlements','refunds','collections']){const report=await h.api(`reports/${metric}?period=2026-10&customer=${customer}`,owner);assert.ok(report.entries.length);paths.push(report.entries[0].href)}
   for(const [index,path] of paths.entries()){
    for(const width of [1440,390]){
