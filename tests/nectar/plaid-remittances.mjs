@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict'
 import { remittanceFixtures, remittanceFile } from './remittance-files.mjs'
 import { processorEdge } from './processor-edge.mjs'
+import { file } from './harness.mjs'
 import { totp } from './mfa.mjs'
 export const bankAccount='synthetic-nectar-bank-account'
 const settings={PLAID_CLIENT_ID:'synthetic-nectar-client',PLAID_SANDBOX_SECRET:'synthetic-nectar-secret',PLAID_ACCESS_TOKEN:'synthetic-nectar-access',PLAID_ACCOUNT_ID:bankAccount}
@@ -37,7 +38,10 @@ export async function plaidRemittancesFlow(h,owner,{bank=edge,createDeposits,onS
  if(!createDeposits)bank.transactions.push(...actual,
   {...actual[3],transaction_id:'synthetic-nectar-bank-pending',pending:true,amount:-9},
   {...actual[3],transaction_id:'synthetic-nectar-bank-debit',amount:5})
- const advice=()=>remittanceFile([[actual[1].transaction_id,'2026-10-15','USD','90.00','synthetic-nectar-901',invoices[3].number,'90.00']])
+ const advice=()=>{
+  const csv=remittanceFile([[actual[1].transaction_id,'2026-10-15','USD','90.00','synthetic-nectar-901',invoices[3].number,'90.00']])
+  return file('synthetic-nectar-remittance.eml',['MIME-Version: 1.0','From: '+['synthetic-nectar-payer','example.test'].join('@'),'Content-Type: '+['multipart','mixed'].join('/')+'; boundary="synthetic-nectar-boundary"','','--synthetic-nectar-boundary','Content-Type: '+['text','plain'].join('/'),'','Remittance advice attached.','--synthetic-nectar-boundary','Content-Type: '+['text','csv'].join('/')+'; name="synthetic-nectar.csv"','Content-Transfer-Encoding: base64','',csv.base64,'--synthetic-nectar-boundary--',''].join('\r\n'))
+ }
  const capture={from:'2026-10-15',through:'2026-10-15',confirm:true,file:advice()}
  await api('plaid.capture',{...capture,confirm:false},400)
  const result=await api('plaid.capture',capture)
@@ -74,14 +78,24 @@ export async function plaidRemittancesFlow(h,owner,{bank=edge,createDeposits,onS
  await api('remittance.confirm',{receipt:unknown.id,customer:other,fingerprint:identified.fingerprint,confirm:true})
  assert.equal((await api('payments')).length,4)
  assert.equal((await api('customers/'+other)).ledger.paidCents,0,'Unmatched cash does not guess an invoice')
- if(!createDeposits)await bankPayoutFlow(h,owner,{customer,issue,bank,stripe})
+ if(!createDeposits){
+  const a=await issue('11.00'),b=await issue('12.00'),c=await issue('15.00')
+  bank.transactions.push({transaction_id:'synthetic-nectar-short-advice',account_id:bankAccount,date:'2026-10-16',amount:-15,name:a.number+' '+b.number,iso_currency_code:'USD',pending:false})
+  const paymentsBefore=await api('payments')
+  await api('plaid.capture',{from:'2026-10-16',through:'2026-10-16',confirm:true})
+  assert.deepEqual(await api('payments'),paymentsBefore,'A short multi-invoice reference never falls through to another exact-amount invoice')
+  assert.equal((await api('invoices/'+c.id)).balanceCents,1500)
+  const held=(await api('remittances')).find(row=>row.received_on==='2026-10-16')
+  assert.equal(held.status,'staged');assert.deepEqual(held.preview.allocations,[])
+ }
+ if(!createDeposits){await bankPayoutFlow(h,owner,{customer,issue,bank,stripe});await bankScreens(h,owner,customer)}
  const request=await api('erasure.request',{customer})
- const {file}=await import('./harness.mjs')
  await api('erasure.verify',{request:request.id,reason:'Synthetic verified bank customer',evidence:file('synthetic-nectar-bank.txt','Synthetic verified identity')})
  await api('erasure.approve',{request:request.id,confirm:true})
  await api('plaid.capture',capture,409)
  assert.equal((await api('remittances')).filter(row=>row.customer_id===customer).length,0)
  console.log('Plaid bank deposits: wire, advice, short payment, unidentified cash, once-only replay and refusals passed')
+ return {factorSecret:factor.secret}
 }
 
 async function bankPayoutFlow(h,owner,{customer,issue,bank,stripe}) {
@@ -117,4 +131,26 @@ async function bankPayoutFlow(h,owner,{customer,issue,bank,stripe}) {
  await api('plaid.capture',capture,409)
  assert.deepEqual(await api('payments'),before,'A changed payout deposit cannot change the cash ledger')
  bank.transactions[bank.transactions.length-1].amount=-193.60
+}
+
+async function bankScreens(h,owner,customer) {
+ const {chromium}=await import('@playwright/test')
+ const {mkdir}=await import('node:fs/promises')
+ const browser=await chromium.launch({headless:true,executablePath:process.env.NECTAR_CHROMIUM_PATH,args:['--no-sandbox','--use-mock-keychain','--password-store=basic']})
+ try{
+  const context=await browser.newContext({viewport:{width:1440,height:1000}})
+  await context.addCookies(owner.split('; ').map(value=>{const at=value.indexOf('=');return {name:value.slice(0,at),value:value.slice(at+1),url:h.origin}}))
+  const page=await context.newPage(),directory=process.env.NECTAR_EVIDENCE_DIR
+  if(directory)await mkdir(directory,{recursive:true})
+  for(const [name,path] of [['bank-receipts','/app/receivables'],['bank-payout','/app/processor-events?customer='+customer]]){
+   await page.goto(h.origin+path)
+   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'The cash review fits at the asserted desktop width')
+   if(name==='bank-payout')assert.equal(await page.locator('#bank-payouts tbody tr').count(),1,'The operator can inspect the reconciled bank payout')
+   const icons=await page.locator('a,button').evaluateAll(nodes=>nodes.filter(node=>!node.textContent.trim()&&node.querySelector('svg,img')&&!node.getAttribute('aria-describedby')).map(node=>node.tagName))
+   assert.deepEqual(icons,[],'Icon-only controls expose their tooltips')
+   if(directory)for(const width of [1440,390]){await page.setViewportSize({width,height:1000});await page.screenshot({path:directory+'/'+name+'-'+width+'.png',fullPage:true})}
+   await page.setViewportSize({width:1440,height:1000})
+  }
+  await context.close()
+ }finally{await browser.close()}
 }

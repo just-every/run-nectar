@@ -9,6 +9,7 @@ import { parseCsv } from './usage'
 export interface RemittanceSource {
   receiptId: string; amountCents: number; receivedOn: string; currency: string; customerReference: string
   lines: { invoiceReference: string; amountCents: number }[]
+  reviewRequired?: boolean
   bank?: { accountHash: string; transactionHash: string; reference: string }
 }
 export function remittanceSources(bytes: Uint8Array): RemittanceSource[] {
@@ -58,7 +59,7 @@ export async function remittanceMatch(env: Bindings, row: Row, customerId = '') 
     insist(!customerId || !customer || customer.id === customerId, 'different_customer', 409)
   }
   const referenced: Row[] = []
-  let unresolved = false
+  let unresolved = source.reviewRequired === true
   for (const line of source.lines) {
     const invoices = await all(env, `SELECT i.*, ${BALANCE_SQL} AS balance_cents FROM nc_invoices i WHERE i.number=? AND i.status='issued'`, line.invoiceReference)
     if (invoices.length !== 1) { unresolved = true; continue }

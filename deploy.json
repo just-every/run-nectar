@@ -56,6 +56,26 @@
       "binding": "QUICKBOOKS_COMPANY_ID",
       "environment": "QUICKBOOKS_COMPANY_ID",
       "optional": true
+    },
+    {
+      "binding": "PLAID_CLIENT_ID",
+      "environment": "PLAID_CLIENT_ID",
+      "optional": true
+    },
+    {
+      "binding": "PLAID_SANDBOX_SECRET",
+      "environment": "PLAID_SANDBOX_SECRET",
+      "optional": true
+    },
+    {
+      "binding": "PLAID_ACCESS_TOKEN",
+      "environment": "PLAID_ACCESS_TOKEN",
+      "optional": true
+    },
+    {
+      "binding": "PLAID_ACCOUNT_ID",
+      "environment": "PLAID_ACCOUNT_ID",
+      "optional": true
     }
   ],
   "platforms": [

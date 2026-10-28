@@ -237,6 +237,46 @@
         "field": "MAIL_PROVIDER",
         "equals": "cloudflare"
       }
+    },
+    {
+      "name": "PLAID_CLIENT_ID",
+      "label": "Plaid sandbox client ID",
+      "help": "Optional. Configures explicitly confirmed USD bank-feed capture against Plaid sandbox only. Kept in private installation settings and excluded from archives.",
+      "kind": "secret",
+      "required": false,
+      "ownerVisible": true,
+      "group": "owner",
+      "input": "entered"
+    },
+    {
+      "name": "PLAID_SANDBOX_SECRET",
+      "label": "Plaid sandbox secret",
+      "help": "Optional. Configures explicitly confirmed USD bank-feed capture against Plaid sandbox only. Kept in private installation settings and excluded from archives.",
+      "kind": "secret",
+      "required": false,
+      "ownerVisible": true,
+      "group": "owner",
+      "input": "entered"
+    },
+    {
+      "name": "PLAID_ACCESS_TOKEN",
+      "label": "Plaid sandbox Item access token",
+      "help": "Optional. Configures explicitly confirmed USD bank-feed capture against Plaid sandbox only. Kept in private installation settings and excluded from archives.",
+      "kind": "secret",
+      "required": false,
+      "ownerVisible": true,
+      "group": "owner",
+      "input": "entered"
+    },
+    {
+      "name": "PLAID_ACCOUNT_ID",
+      "label": "Plaid sandbox deposit account ID",
+      "help": "Optional. Configures explicitly confirmed USD bank-feed capture against Plaid sandbox only. Kept in private installation settings and excluded from archives.",
+      "kind": "secret",
+      "required": false,
+      "ownerVisible": true,
+      "group": "owner",
+      "input": "entered"
     }
   ],
   "steps": [

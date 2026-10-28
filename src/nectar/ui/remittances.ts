@@ -7,6 +7,7 @@ import { previewRemittance, previewRemittanceAllocation, readRemittances } from 
 import { plainMoney } from '../decimal'
 import { cents, check, field, fileField, form, h, hidden, select, table } from './html'
 
+const sourceLabel = (source: any) => source.bank ? 'Bank deposit '+source.bank.transactionHash.slice(0,12) : source.receiptId
 const reasons: Record<string,string> = { unidentified_customer: 'Customer needs identification', unmatched_reference: 'Invoice reference needs review',
   balance_requires_review: 'Advice exceeds a current invoice balance', short_payment: 'Short payment: invoice balance remains', unallocated_funds: 'Received funds await allocation',
   ambiguous_amount: 'Several invoices have this amount', unmatched_amount: 'No exact invoice amount', source_requires_review: 'Source needs review', allocated: 'Allocated' }
@@ -19,7 +20,7 @@ export async function remittancesPanel(env: Bindings, actor: Actor, url: URL) {
     if (row.status === 'staged') {
       const customer = url.searchParams.get('remittance_customer') ?? ''
       const preview = await previewRemittance(env, actor, Input.of({ receipt: row.id, customer }))
-      review = h`<article class="notice" id="remittance-review"><h3>Review receipt ${preview.source.receiptId}</h3>
+      review = h`<article class="notice" id="remittance-review"><h3>Review receipt ${sourceLabel(preview.source)}</h3>
         <p>${cents(preview.source.amountCents)} received ${preview.source.receivedOn}. ${reasons[preview.reason] ?? 'Exact remittance match'}. Nothing is recorded until you confirm.</p>
         ${table(['Invoice','Apply','Current balance','Balance after'], preview.allocations.map(a => [a.number,cents(a.amountCents),cents(a.balanceCents),cents(a.balanceCents-a.amountCents)]), {empty:'No invoice allocation is proposed.'})}
         <p>Unallocated after confirmation: ${cents(preview.unallocatedCents)}.</p>
@@ -33,7 +34,7 @@ export async function remittancesPanel(env: Bindings, actor: Actor, url: URL) {
         confirmation = h`<p>Apply ${cents(preview.amountCents)} to ${preview.number}; balance after ${cents(preview.balanceCents-preview.amountCents)}. Unallocated after ${cents(preview.availableCents-preview.amountCents)}.</p>
           ${form('remittance.allocate', back, h`${hidden('receipt',row.id)}${hidden('invoice',invoice)}${hidden('amount',amount)}${hidden('fingerprint',preview.fingerprint)}${check('I confirm this exact allocation','confirm')}`, 'Confirm allocation')}`
       }
-      review = h`<article class="notice" id="remittance-review"><h3>Allocate receipt ${row.source.receiptId}</h3><p>${row.customer_name}: ${cents(row.available_cents)} unallocated.</p>
+      review = h`<article class="notice" id="remittance-review"><h3>Allocate receipt ${sourceLabel(row.source)}</h3><p>${row.customer_name}: ${cents(row.available_cents)} unallocated.</p>
         <form method="get" action="/app/receivables">${hidden('remittance',row.id)}${select('Invoice','remittance_invoice',invoices.map(i=>({value:i.id,label:`${i.number} · ${plainMoney(i.balance_cents)} owed`})),invoice??'')}${field('Amount ($)','remittance_amount',{value:amount})}<button type="submit" class="secondary">Preview allocation</button></form>${confirmation}</article>`
     }
   }
@@ -41,6 +42,6 @@ export async function remittancesPanel(env: Bindings, actor: Actor, url: URL) {
     ${operator ? h`<details><summary>Upload a remittance file</summary><p>CSV columns: receipt_id, received_on, currency, amount, customer, invoice_reference, allocation_amount. Use a stable receipt ID, USD, an exact dollar amount and a YYYY-MM-DD date. Repeat the receipt total for each invoice row. Customer is its exact customer ID; invoice reference is the full invoice number. Leave the last two cells empty for an unidentified deposit.</p>
       ${form('remittance.upload',back,fileField('Remittance CSV','file',{required:true,accept:'.csv'}),'Upload for review',{multipart:true})}</details>` : ''}
     ${review}
-    ${table(['Source receipt','Received','Customer','Amount','State','Review'],rows.map(row=>[row.source.receiptId,row.received_on,row.customer_name??'Unidentified',cents(row.amount_cents),row.status==='staged'?reasons[row.preview?.reason??row.reason]??'Ready for confirmation':reasons[row.reason],
+    ${table(['Source receipt','Received','Customer','Amount','State','Review'],rows.map(row=>[h`<span title="${row.source.receiptId}">${sourceLabel(row.source)}</span>`,row.received_on,row.customer_name??'Unidentified',cents(row.amount_cents),row.status==='staged'?reasons[row.preview?.reason??row.reason]??'Ready for confirmation':reasons[row.reason],
       operator&&(row.status==='staged'||row.available_cents>0)?h`<a href="/app/receivables?remittance=${row.id}#remittance-review">Review receipt</a>`:h`${(row.short??[]).map((i:any)=>h`<p>${i.number}: ${cents(i.balance_cents)} still owed</p>`)}`]),{empty:'No remittance receipts uploaded.'})}</section>`
 }

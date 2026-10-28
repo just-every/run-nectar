@@ -42,6 +42,11 @@ export interface Bindings {
  MAIL_FROM?: string
  /** Owner-authorized original Stripe invoice collection; runtime secret, never archived. */
  STRIPE_BILLING_SECRET?: string
+ /** Owner-confirmed Plaid sandbox cash capture; private configuration, never archived. */
+ PLAID_CLIENT_ID?: string
+ PLAID_SANDBOX_SECRET?: string
+ PLAID_ACCESS_TOKEN?: string
+ PLAID_ACCOUNT_ID?: string
  STRIPE_SECONDARY_SECRET_KEY?: string
  /** Signature secret for observation-only card updater delivery; never archived. */
  STRIPE_WEBHOOK_SECRET?: string

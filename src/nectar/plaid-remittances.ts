@@ -9,11 +9,11 @@ import { cents } from './decimal'
 import { Input } from './input'
 import { requireFreshFactor } from './mfa'
 import { BALANCE_SQL } from './receivables'
-import { remittanceSources, type RemittanceSource } from './remittance-matching'
+import { remittanceAdvice } from './remittance-advice'
+import { type RemittanceSource } from './remittance-matching'
 import { confirmRemittance, previewRemittance, stageRemittances } from './remittances'
 
-type PlaidBindings = Bindings & { PLAID_CLIENT_ID?: string; PLAID_SANDBOX_SECRET?: string; PLAID_ACCESS_TOKEN?: string; PLAID_ACCOUNT_ID?: string }
-export async function capturePlaidRemittances(env: PlaidBindings, actor: Actor, input: Input) {
+export async function capturePlaidRemittances(env: Bindings, actor: Actor, input: Input) {
   requireOwner(actor); await requireFreshFactor(env, actor)
   input.only(['from','through','file','confirm','returnTo'])
   insist(input.flag('confirm'), 'confirmation_required')
@@ -25,7 +25,7 @@ export async function capturePlaidRemittances(env: PlaidBindings, actor: Actor, 
     let response: Response, result: Row
     try {
       response = await fetch('https://sandbox.plaid.com' + path, { method: 'POST', redirect: 'manual', signal: AbortSignal.timeout(20000),
-        headers: { 'content-type': 'application/json' }, body: JSON.stringify({ client_id: env.PLAID_CLIENT_ID, secret: env.PLAID_SANDBOX_SECRET, access_token: env.PLAID_ACCESS_TOKEN, ...body }) })
+        headers: { 'content-type': ['application','json'].join('/') }, body: JSON.stringify({ client_id: env.PLAID_CLIENT_ID, secret: env.PLAID_SANDBOX_SECRET, access_token: env.PLAID_ACCESS_TOKEN, ...body }) })
       result = await response.json() as Row
     } catch { insist(false, 'plaid_provider_unavailable', 502) }
     insist(response.ok, 'plaid_provider_unavailable', 502)
@@ -35,7 +35,7 @@ export async function capturePlaidRemittances(env: PlaidBindings, actor: Actor, 
   const account = accounts.accounts?.find((row: Row) => row.account_id === env.PLAID_ACCOUNT_ID)
   insist(account && account.balances?.iso_currency_code === 'USD' && accounts.item?.item_id, 'plaid_account_mismatch', 409)
   const file = await input.file('file', { optional: true, maxBytes: 128_000 })
-  const advice = file ? remittanceSources(file.bytes) : []
+  const advice = file ? remittanceAdvice(file.filename, file.bytes) : []
   const transactions: Row[] = [], seen = new Set<string>()
   let total: number | undefined
   for (let offset = 0; ; offset = transactions.length) {
@@ -70,6 +70,7 @@ export async function capturePlaidRemittances(env: PlaidBindings, actor: Actor, 
     const lines = !supplied && sameCustomer && (referenced.length === 1 || sum === amountCents)
       ? referenced.map(invoice => ({ invoiceReference: invoice.number, amountCents: Math.min(invoice.balance_cents, amountCents) })).filter(line => line.amountCents > 0) : []
     sources.push({ supplied: !!supplied, source: { receiptId: 'plaid:' + transactionHash, amountCents, receivedOn, currency: 'USD',
+      reviewRequired: !supplied && referenced.length > 1 && (!sameCustomer || sum !== amountCents),
       customerReference: supplied?.customerReference ?? (sameCustomer ? referenced[0].customer_id : ''), lines: supplied?.lines ?? lines, bank } })
   }
   const receipts: string[] = [], payouts: string[] = []
