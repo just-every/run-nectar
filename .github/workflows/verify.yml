@@ -60,6 +60,10 @@ jobs:
           node tests/nectar/invoice-void-browser.mjs
           node tests/nectar/invoice-void-browser.mjs refunds
 
+      - name: Governed plan change browser journey
+        if: ${{ matrix.shard == 0 }}
+        run: node tests/nectar/plan-changes-browser.mjs
+
       - name: Processor reconciliation journeys
         if: ${{ matrix.shard == 0 }}
         run: |

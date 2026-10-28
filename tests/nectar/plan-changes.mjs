@@ -44,6 +44,7 @@ export async function planChangesFlow(h,owner,{onState=async()=>{},prepare,decid
   assert.equal(edge.calls.filter(c=>c.method==='POST'&&c.path==='/payment_intents').length,1)
   await api('plan.change.decide',{change:first.change,decision:'approved'},409)
   await onState({label:'upgrade-issued-paid',subscription:fixtures[0].subscription,invoice:upgraded.invoice})
+  const repeated=await repeatedPlanChanges(h,owner,finance,fixtures[0],{low,high,makePrice,first,debit,preview,approve,policy,onState})
   const scheduled=await preview({subscription:fixtures[1].subscription,item:fixtures[1].item,price:low,mode:'period_end'})
   assert.equal(scheduled.quote.effectiveDate,'2027-01-01');assert.equal(scheduled.quote.delta.totalCents,0)
   await approve({change:scheduled.change,decision:'approved'},finance)
@@ -75,14 +76,17 @@ export async function planChangesFlow(h,owner,{onState=async()=>{},prepare,decid
   assert.equal((await api(`subscriptions/${fixtures[5].subscription}`)).items.length,1)
   await h.advanceClock('2027-01-02T10:00:00Z')
   const future=await api('billrun.prepare',{period:'2027-01'}),futureInvoices=(await api(`runs/${future.id}`)).invoices
-  const endInvoice=futureInvoices.find(i=>i.customer_id===fixtures[1].customer),noneInvoice=futureInvoices.find(i=>i.customer_id===fixtures[2].customer),nextInvoice=futureInvoices.find(i=>i.customer_id===fixtures[4].customer),carryInvoice=futureInvoices.find(i=>i.customer_id===fixtures[3].customer)
+  const endInvoice=futureInvoices.find(i=>i.customer_id===fixtures[1].customer),noneInvoice=futureInvoices.find(i=>i.customer_id===fixtures[2].customer),nextInvoice=futureInvoices.find(i=>i.customer_id===fixtures[4].customer),carryInvoice=futureInvoices.find(i=>i.customer_id===fixtures[3].customer),repeatedInvoice=futureInvoices.find(i=>i.customer_id===fixtures[0].customer)
   assert.equal(endInvoice.total_cents,120000);assert.equal(noneInvoice.total_cents,240000);assert.equal(nextInvoice.total_cents,240000+delta)
-  for(const draft of [nextInvoice,carryInvoice]){await api('invoice.approve',{invoice:draft.id,acknowledge:true});await api('invoice.finalise',{invoice:draft.id,issue_date:'2027-01-01'})}
+  assert.equal(repeatedInvoice.total_cents,120000,'the next full service uses only the final approved plan')
+  for(const draft of [nextInvoice,carryInvoice,repeatedInvoice]){await api('invoice.approve',{invoice:draft.id,acknowledge:true});await api('invoice.finalise',{invoice:draft.id,issue_date:'2027-01-01'})}
+  assert.equal((await api(`invoices/${repeatedInvoice.id}`)).balanceCents,120000-repeated.creditAmount,'the numbered cumulative credit applies once')
+  await onState({label:'repeated-next-service-credit-applied',subscription:fixtures[0].subscription,invoice:repeatedInvoice.id})
   assert.equal((await api(`invoices/${carryInvoice.id}`)).balanceCents,120000-creditAmount)
   assert.equal((await api(`invoices/${nextInvoice.id}`)).lines.filter(l=>l.kind==='plan_change').length,1)
   const remaining=await api('billrun.prepare',{period:'2027-01'})
-  assert.equal(remaining.summary.invoices,4,'only the four still-unissued annual services are drafted')
-  assert.ok((await api(`runs/${remaining.id}`)).invoices.every(i=>i.customer_id!==fixtures[3].customer&&i.customer_id!==fixtures[4].customer),'issued service and deferred delta never duplicate')
+  assert.equal(remaining.summary.invoices,3,'only the three still-unissued annual services are drafted')
+  assert.ok((await api(`runs/${remaining.id}`)).invoices.every(i=>![fixtures[0].customer,fixtures[3].customer,fixtures[4].customer].includes(i.customer_id)),'issued service, carried credit and deferred delta never duplicate')
   // Historical source tax, not today's rate, controls the debit difference.
   await h.advanceClock('2028-07-01T10:00:00Z');await policy('invoice_now')
   await applyPolicy(h,owner,'tax.declare',{tax_jurisdiction:'CA',tax_mode:'flat_rate',tax_rate:'10',tax_note:'Synthetic reviewed historical rate'})
@@ -117,6 +121,70 @@ export async function planChangesFlow(h,owner,{onState=async()=>{},prepare,decid
   assert.equal((await api(`revenue/${fixtures[3].invoice}`)).credits.find(c=>c.id===changed.credit).amountCents,-creditAmount)
   console.log('planChangesFlow: annual upgrade exact preview/debit/PAY-008, period-end downgrade, no proration, paid carried credit, next-invoice delta and stale/duplicate refusal passed')
   return {fixtures,upgraded,changed}
+}
+
+async function repeatedPlanChanges(h,owner,finance,f,{low,high,makePrice,first,debit,preview,approve,policy,onState}){
+  const api=(path,body,status)=>h.api(path,owner,body,status)
+  const higher=await makePrice(4,'4800')
+  const visible=async()=>({items:(await api(`subscriptions/${f.subscription}`)).items,invoices:(await api('invoices')).filter(i=>i.subscription_id===f.subscription)})
+  const immutable=i=>({number:i.number,subtotal:i.subtotal_cents,tax:i.tax_cents,total:i.total_cents,lines:i.lines,calculation:i.calculation})
+  const original=immutable(await api(`invoices/${f.invoice}`)),firstDebit=immutable(debit)
+  await h.advanceClock('2026-09-01T10:00:00Z')
+  const current=(await api(`subscriptions/${f.subscription}`)).items.find(i=>i.price_id===high)
+  const fields={subscription:f.subscription,item:current.id,price:higher,mode:'immediate'}
+  const staleSource=await preview(fields)
+  const payment=(await api('payment.record',{customer:f.customer,amount:'1200',received_on:'2026-09-01',method:'bank_transfer',reference:'synthetic-nectar-repeated-original'})).payment
+  await api('payment.allocate',{payment,invoice:f.invoice,amount:'1200'})
+  let before=await visible()
+  await h.api('plan.change.decide',finance,{change:staleSource.change,decision:'approved'},409)
+  assert.deepEqual(await visible(),before,'a changed source balance invalidates the old exact quote without changing money or service')
+  const second=await preview(fields),competing=await preview({...fields,price:low})
+  const secondTotal=rounded(120000*181,365)+rounded(240000*62,365)+rounded(480000*122,365)
+  assert.equal(second.quote.before.totalCents,first.quote.after.totalCents)
+  assert.equal(second.quote.after.totalCents,secondTotal)
+  assert.equal(second.quote.delta.totalCents,secondTotal-first.quote.after.totalCents)
+  before=await visible()
+  await api('plan.change.decide',{change:second.change,decision:'approved'},409)
+  assert.deepEqual(await visible(),before,'a preparer cannot approve their own second change')
+  await onState({label:'repeated-second-upgrade-preview',subscription:f.subscription})
+  const result=await approve({change:second.change,decision:'approved'},finance)
+  const secondDebit=await api(`invoices/${result.invoice}`)
+  assert.equal(secondDebit.total_cents,second.quote.delta.totalCents)
+  before=await visible()
+  for(const change of [second.change,competing.change])await h.api('plan.change.decide',finance,{change,decision:'approved'},409)
+  await api('plan.change.prepare',fields,409)
+  assert.deepEqual(await visible(),before,'duplicate and superseded source-item requests change no money or plan')
+  const settlement=(await api('payment.record',{customer:f.customer,amount:String(secondDebit.total_cents/100),received_on:'2026-09-01',method:'bank_transfer',reference:'synthetic-nectar-repeated-second'})).payment
+  await api('payment.allocate',{payment:settlement,invoice:result.invoice,amount:String(secondDebit.total_cents/100)})
+  assert.equal((await api('billrun.prepare',{period:'2026-09'})).summary.invoices,0,'the second replacement stub is already claimed')
+  await onState({label:'repeated-second-upgrade-issued',subscription:f.subscription,invoice:result.invoice})
+  await h.advanceClock('2026-10-01T10:00:00Z')
+  const latest=(await api(`subscriptions/${f.subscription}`)).items.find(i=>i.price_id===higher)
+  const downgrade={subscription:f.subscription,item:latest.id,price:low,mode:'immediate'}
+  const stalePolicy=await preview(downgrade)
+  await policy('none');before=await visible()
+  await h.api('plan.change.decide',finance,{change:stalePolicy.change,decision:'approved'},409)
+  assert.deepEqual(await visible(),before,'a policy revision invalidates a repeated-change credit without mutation')
+  await policy('invoice_now')
+  await applyPolicy(h,owner,'credit.policy',{two_person_above:'500'})
+  const down=await preview(downgrade)
+  const finalTotal=rounded(120000*181,365)+rounded(240000*62,365)+rounded(480000*30,365)+rounded(120000*92,365)
+  const creditAmount=secondTotal-finalTotal
+  assert.equal(down.quote.before.totalCents,secondTotal);assert.equal(down.quote.after.totalCents,finalTotal);assert.equal(down.quote.delta.totalCents,-creditAmount)
+  await onState({label:'repeated-downgrade-credit-preview',subscription:f.subscription})
+  const races=await Promise.all([1,2].map(()=>h.raw('/api/nectar/plan.change.decide',{cookie:finance,body:{change:down.change,decision:'approved'}})))
+  assert.deepEqual(races.map(r=>r.status).sort(),[200,409],'concurrent repeated-credit approvals execute once')
+  const applied=await races.find(r=>r.status===200).json(),source=await api(`invoices/${f.invoice}`),credit=source.credits.find(c=>c.id===applied.credit)
+  assert.ok(credit.number);assert.equal(credit.amount_cents,creditAmount);assert.equal(credit.applied_cents,0);assert.equal(source.balanceCents,0)
+  assert.equal(120000+debit.total_cents+secondDebit.total_cents-creditAmount,finalTotal,'net debit and numbered credit equal independently rated chronological service')
+  assert.deepEqual(immutable(source),original);assert.deepEqual(immutable(await api(`invoices/${debit.id}`)),firstDebit)
+  assert.deepEqual(immutable(await api(`invoices/${result.invoice}`)),immutable(secondDebit),'all issued source documents retain their evidence')
+  before=await visible();await h.api('plan.change.decide',finance,{change:down.change,decision:'approved'},409)
+  assert.deepEqual(await visible(),before,'replayed credit approval cannot issue a second credit')
+  assert.equal((await api('billrun.prepare',{period:'2026-10'})).summary.invoices,0,'the downgraded current service is claimed once')
+  await onState({label:'repeated-downgrade-numbered-credit',subscription:f.subscription,invoice:f.invoice})
+  await h.advanceClock('2026-07-01T10:00:00Z')
+  return {creditAmount}
 }
 
 // GOV-001 already permits sales quotes; invoice and credit custody stay gated.

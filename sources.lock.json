@@ -162,7 +162,7 @@
       "executable": false
     },
     ".github/workflows/verify.yml": {
-      "sha256": "c26492fc92e2cdee4f13eb61aa6deb72e20e52da64cff9c29972070656fd618c",
+      "sha256": "ad61d7e3993a336318ab215de4569fec424321edfada7325f2e0b434a87980c7",
       "executable": false
     },
     ".gitignore": {
@@ -3853,12 +3853,16 @@
       "sha256": "ea8daa965ad835e6645206af9966e0a3cd56ed05943c12e74a721c3a9c16f5a0",
       "executable": false
     },
+    "src/nectar/plan-change-history.ts": {
+      "sha256": "b2cbf13edfe82a05e3cbd39f7426847723095fa4543411e08f449f79c32d9e4b",
+      "executable": false
+    },
     "src/nectar/plan-change-preview.ts": {
-      "sha256": "2d17a30ed3fdd0aa293543af4d8acb1e4c69607ee1f14a46c7178a9b46d802ea",
+      "sha256": "191159ad2b84868d91877015cac2dfa9205e517778d4d8d7d311cfdb31c4926c",
       "executable": false
     },
     "src/nectar/plan-changes.ts": {
-      "sha256": "9704ae0a21aa54714312662fe6fb0b05939d65913549ec22eaa7bd249e053cd3",
+      "sha256": "8f417a1a6632d635ce565154ced4a11832c0669495415e4f43dd7bf0733e750f",
       "executable": false
     },
     "src/nectar/policy-changes.ts": {
@@ -4554,7 +4558,7 @@
       "executable": false
     },
     "src/nectar/ui/plan-changes.ts": {
-      "sha256": "4693235f5111f12d5e725b50dbf0d07746dbcc6bc60da28bda76f6eca1957248",
+      "sha256": "e659e7af30f3dca35a44331b4bee39eab837d38acd2079167b4e1aa1d5a7d297",
       "executable": false
     },
     "src/nectar/ui/policies.ts": {
@@ -5337,8 +5341,12 @@
       "sha256": "ae20120c6b0d30a48bc9fca1415d911a913a2124a1f8a88a809bb5c015dbae3b",
       "executable": false
     },
+    "tests/nectar/plan-changes-browser.mjs": {
+      "sha256": "890bdf7831ace40790259ebd0b0d044b4384046bcbace2b2ee44214898efba49",
+      "executable": false
+    },
     "tests/nectar/plan-changes.mjs": {
-      "sha256": "f8478a195eceec79b9508d71bc6803e4fcad0fa2c6dbd851bd50647e26dbf3d5",
+      "sha256": "c44dadc7166023208be0b4c39bfdcb733cac60361b1e635d04220730ec60e5b0",
       "executable": false
     },
     "tests/nectar/policy-approvals.mjs": {
