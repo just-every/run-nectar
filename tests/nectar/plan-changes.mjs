@@ -72,6 +72,7 @@ export async function planChangesFlow(h,owner,{onState=async()=>{},prepare,decid
   assert.deepEqual((await api(`subscriptions/${fixtures[2].subscription}`)).items,waivedBefore.items)
   assert.equal((await api(`subscriptions/${fixtures[2].subscription}`)).planChanges.length,waivedBefore.planChanges.length,'unbilled waived service creates no credit request')
   assert.deepEqual(await api(`invoices/${fixtures[2].invoice}`),waivedInvoice)
+  await onState({label:'waived-paid-basis-refused',subscription:fixtures[2].subscription})
   await policy('none');await h.advanceClock('2026-07-01T10:00:00Z')
   // A paid downgrade issues a numbered carried credit, not a processor refund.
   await policy('invoice_now')

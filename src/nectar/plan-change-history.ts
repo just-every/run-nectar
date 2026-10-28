@@ -9,6 +9,7 @@ const totals=(r:Row)=>({subtotalCents:r.subtotalCents,taxCents:r.taxCents,totalC
 // rather than reconstructing historical prices from today's mutable items.
 export async function planChangeHistory(env:Bindings,invoice:Row,original:RatingInput,expanded:RatingInput,item:Row){
   const remaining=await all(env,"SELECT * FROM nc_plan_changes WHERE source_invoice_id=? AND status='approved'",invoice.id)
+  const waivedService=remaining.some(change=>parseJson<Row>(change.quote_json,{}).waivedDelta?.totalCents)
   const credits=await all(env,'SELECT * FROM nc_credit_notes WHERE invoice_id=?',invoice.id)
   insist(credits.every(c=>remaining.some(r=>r.id===c.plan_change_id&&r.credit_id===c.id)),'plan_change_source_already_adjusted',409)
   let current=expanded,head=expanded.items[0].id
@@ -34,5 +35,5 @@ export async function planChangeHistory(env:Bindings,invoice:Row,original:Rating
   insist(head===item.id&&active&&active.priceId===item.price_id&&active.quantity===item.quantity&&(history.length?active.from:original.items.find(i=>i.id===item.id)?.from)===item.effective_from,'plan_change_history_changed',409)
   // The saved original may have been a co-termed stub. Its live item began
   // before that service window, so only replacement items bind their start.
-  return {input:current,history}
+  return {input:current,history,waivedService}
 }

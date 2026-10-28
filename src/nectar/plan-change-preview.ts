@@ -18,7 +18,10 @@ export async function planChangeQuote(env: Bindings, sub: Row, item: Row, target
   insist(original?.billing&&original.billing.terms.timing==='advance'&&!original.billing.mixed&&original.billing.components.length===1,'single_advance_component_required',409)
   insist(!original.prepaid&&!original.charges?.length&&!original.contracts&&!original.usageAdjustments?.length&&!original.usageCredits?.length&&!original.renewals?.length&&!original.lifecycle?.length,'plan_change_special_terms_pending',409)
   const expanded=expandBillingWindows(original)[0]
-  const {input:current,history}=await planChangeHistory(env,invoice,original,expanded,item)
+  const {input:current,history,waivedService}=await planChangeHistory(env,invoice,original,expanded,item)
+  // A waived price difference is not purchased consideration. Until an exact
+  // paid-service basis is approved, it cannot become a later debit or credit.
+  insist(!waivedService||mode==='period_end'||policy==='none','plan_change_waived_service_basis_pending',409)
   const old=current.prices[item.price_id],price=(await pricesById(env,[target]))[target]
   insist(old&&price&&['flat','seat'].includes(old.kind)&&price.kind===old.kind&&canonical(old.billing)===canonical(price.billing)&&old.taxable===price.taxable,'plan_change_compatible_price_required',409)
   insist(expanded.items.length===1,'single_advance_component_required',409)
