@@ -793,3 +793,23 @@ Subscription reads preserve the ordinary subscription source record. Request `in
 Signed test-mode payment observations post JSON to `/api/nectar/stripe/automatic-events` with Stripe's exact-body `Stripe-Signature` header and the installation's `STRIPE_PAYMENT_WEBHOOK_SECRET`. This separate endpoint must use its own Stripe signing secret; `STRIPE_WEBHOOK_SECRET` remains exclusive to card events. Configure each optional secret through private setup answers or `rer deploy --set-secret NAME --env-file /private/mode-0600.env`, substituting the binding name. Neither endpoint accepts the other's secret. Only processing, success and failure events for an already claimed automatic collection are accepted. The event is fetched again from the claim's frozen account; current identity-matched PaymentIntent and captured-charge reads determine cash. Delivered amounts and status are never financial evidence. Unknown claims, foreign accounts, erased customers, live-mode envelopes and stale or invalid signatures are refused. Repeated and concurrent deliveries retain one cash allocation, audit and state transition; an older failure cannot reverse a captured payment. A failed provider read preserves a definitive refusal and returns a non-success response so Stripe can redeliver. Scheduled reconciliation also reads failed original claims whose retry series is disabled; this observes provider cash without enabling another charge. This door sends no processor write and grants no standing renewal or dunning authority. Other collection families and the original unattended, clock-aligned lifecycle journey remain unproved.
 
 Native subscription creation retains its own `subscription.created` event alongside the initial `subscription.state_changed` event. Lifecycle observation does not turn creation into an update or repeat either event. A scheduled observer whose read basis loses a race leaves its page pending for the next tick and completes successfully; audit-storage failures still fail the tick and roll back the transition.
+
+Finite card collection schedules use `collection.schedule.prepare` with one
+`subscription`, up to twelve `periods`, matching `issue_dates`, `unpaid_days`
+and explicit `confirm`. Existing native draft `invoices` may be supplied instead
+of periods. Future periods are quoted without numbering or issuing them. The
+response includes the primary request, the complete exact scope and every child
+request. The customer accepts that primary request through the existing hosted
+payment page; `automatic.collection.decide` approves the complete accepted scope
+atomically with the existing independent-approver rule. `collection.schedule.withdraw`
+withdraws the whole schedule. The customer may also withdraw future attempts
+from its hosted payment page after an earlier invoice was collected.
+
+Only the quoted card, dated invoices and amounts are authorized. Source or method
+changes and inactive approvers refuse issuance and debit. Each due invoice uses
+the ordinary approval, numbering and financial source guards; missed dates do
+not catch up. The accepted unpaid window applies only after permitted retries
+have stopped and the original invoice remains collectible without a dispute or
+hold. No unattended messages, automatic cancellation, open-ended renewal or
+restored executable authority is granted. The finite authority is an adopted
+conservative default pending ct under RL-107 and the standing scope policy.

@@ -165,7 +165,7 @@ export async function runCollectionScheduleInvoices(env:Bindings) {
   const source=await one(env,'SELECT timezone FROM nc_business WHERE singleton=1')
   if(!source||today(source.timezone,clockInstant(env))!==q.issueDate)continue
   const actor:Actor={id:item.approved_by,kind:'member',role:'owner',name:'Exact invoice scheduler',email:'system:collection-schedule',sessionId:null,capabilities:memberCapabilities('owner',null)}
-  const authority=()=>scheduleFence(env,item.schedule_id)
+  const authority=()=>automaticAuthority(env,collection)
   try {
    const {stripe}=await stripeForAccount(env,q.accountRef)
    insist(canonical(await savedCollectionMethod(stripe,q.method.customerRef,q.method.mandateRef??undefined))===canonical(q.method),'automatic_collection_method_changed',409)

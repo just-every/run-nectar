@@ -326,6 +326,8 @@
   "checkout.choice.unchanged": "Your previous default method is unchanged.",
   "checkout.mandate.unavailable": "The authorization wording is unavailable here. Saving this account does not permit Nectar to debit it.",
   "checkout.status.failed": "The original checkout expired without a usable setup. Contact the business for a newly prepared setup.",
+  "automatic.scheduleHeading": "Authorize scheduled invoice payments",
+  "automatic.scheduleAccept": "I accept these exact invoices and their bounded payment attempts.",
   "automatic.scheduleConsent": "I authorize {merchant} to issue and collect the following exact invoices using my card ending {last4} on these dates: {entries}. It expires after the final listed invoice. No other amount, date or payment method is authorized. After a failed invoice remains unpaid for {days} days and permitted retries have stopped, its subscription is marked unpaid automatically. I may withdraw future attempts using this page.",
   "automatic.heading": "Authorize this invoice payment",
   "automatic.consent": "I authorize {merchant} to collect {amount} once on {date} for this invoice, using my {method} ending {last4}. This does not authorize retries, other invoices or future charges. I can withdraw before the attempt.",

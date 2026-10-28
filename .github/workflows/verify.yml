@@ -91,6 +91,7 @@ jobs:
         run: |
           node tests/nectar/dunning-browser.mjs
           node tests/nectar/dunning-browser.mjs custody
+          node tests/nectar/automatic-collection-browser.mjs --schedule
       - name: Invoice void and replacement browser proof
         if: ${{ matrix.shard == 3 }}
         run: |

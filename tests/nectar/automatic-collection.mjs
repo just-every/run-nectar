@@ -286,7 +286,8 @@ export async function scheduledLifecycleFlow(h,owner,{finance,onState=async()=>{
  if(finance){financeFactor=await h.api('mfa.totp.start',finance,{});await h.api('mfa.totp.confirm',finance,{factor:financeFactor.factor,code:totp(financeFactor.secret,instant)})}
  const move=async date=>{instant=Date.parse(date+'T10:00:00Z');edge.capturedAt(new Date(instant).toISOString());await h.advanceClock(new Date(instant).toISOString())}
  const tick=async()=>{const response=await h.raw(`/cdn-cgi/local/scheduled?time=${instant}&cron=${encodeURIComponent('0 14 * * *')}`);assert.equal(response.status,200,await response.text())}
- const refresh=async()=>{await api('mfa.verify',{code:totp(factor.secret,instant)});if(finance)await h.api('mfa.verify',finance,{code:totp(financeFactor.secret,instant)})}
+ let lastVerification=instant
+ const refresh=async()=>{if(lastVerification===instant)return;await api('mfa.verify',{code:totp(factor.secret,instant)});if(finance)await h.api('mfa.verify',finance,{code:totp(financeFactor.secret,instant)});lastVerification=instant}
  const existing=(await api('customers')).find(c=>c.external_id==='synthetic-nectar-late-customer')
  const customer=existing?.id??(await api('customer.create',{external_id:'synthetic-nectar-scheduled-customer',name:'Synthetic scheduled customer',billing_email:h.vars.OWNER_EMAIL})).id
  const provider=existing?'synthetic-nectar-late-provider-customer':'synthetic-nectar-scheduled-provider',method='synthetic-nectar-scheduled-card'

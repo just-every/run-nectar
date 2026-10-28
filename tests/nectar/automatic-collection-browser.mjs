@@ -3,7 +3,7 @@ import { mkdir } from 'node:fs/promises'
 import { chromium } from '@playwright/test'
 import { harness } from './harness.mjs'
 import { applyPolicy } from './policy-helper.mjs'
-import { automaticCollectionFlow,harnessOptions } from './automatic-collection.mjs'
+import { automaticCollectionFlow,scheduledLifecycleFlow,harnessOptions } from './automatic-collection.mjs'
 const directory=process.env.NECTAR_EVIDENCE_DIR??'.evidence/automatic-collection'
 await mkdir(directory,{recursive:true})
 const h=await harness({assets:true,...harnessOptions()})
@@ -30,7 +30,8 @@ try{
    console.log('BROWSER',width,label)
   }
  }
- await automaticCollectionFlow(h,owner,{
+ const journey=process.argv.includes('--schedule')?scheduledLifecycleFlow:automaticCollectionFlow
+ await journey(h,owner,{
   prepareCollection:async input=>{
    await page.goto(h.origin+`/app/invoices/${input.invoice}`)
    const detail=page.locator('#automatic-collection details');await detail.locator('summary').click()
@@ -56,7 +57,7 @@ try{
   },
   onState:async({state,invoice,customer,session,request,subscription,target})=>{
    if(target){await customerPage.goto(h.origin+target);await shot(customerPage,state);return}
-   if(state.startsWith('scheduled-')){await page.goto(h.origin+`/app/subscriptions/${subscription}`);await shot(page,state);return}
+   if(state.startsWith('scheduled-')){await page.setViewportSize({width:1440,height:950});await page.goto(h.origin+`/app/subscriptions/${subscription}`);const history=page.locator('section[aria-labelledby="state-history"]');const view=await h.api(`subscriptions/${subscription}?include_state=true`,owner);assert.equal(await history.getByRole('row').count(),view.stateHistory.length+1);await shot(page,state);return}
    if(subscription){
     await page.setViewportSize({width:1440,height:950})
     await page.goto(h.origin+`/app/subscriptions/${subscription}`)
