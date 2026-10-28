@@ -7,7 +7,8 @@ import { renderMarkdown, type Rendered } from './render'
 export interface DocsPage { slug: string; title: string; file: string; summary: string }
 export interface DocsSection { title: string; pages: DocsPage[] }
 
-const files = import.meta.glob('../../../docs/*.md', { query: '?raw', import: 'default', eager: true }) as Record<string, string>
+// Generated contract evidence has its own source and is not an owner guide.
+const files = import.meta.glob(['../../../docs/*.md', '!../../../docs/CLAIMS.md'], { query: '?raw', import: 'default', eager: true }) as Record<string, string>
 
 export const docsSections: DocsSection[] = site.sections
 export const docsPages: DocsPage[] = docsSections.flatMap(section => section.pages)
