@@ -131,6 +131,13 @@ async function bankPayoutFlow(h,owner,{customer,issue,bank,stripe}) {
  await api('plaid.capture',capture,409)
  assert.deepEqual(await api('payments'),before,'A changed payout deposit cannot change the cash ledger')
  bank.transactions[bank.transactions.length-1].amount=-193.60
+ bank.transactions.push({transaction_id:'synthetic-nectar-unidentified-stripe-label',account_id:bankAccount,date:'2026-10-27',amount:-193.60,name:'Stripe',iso_currency_code:'USD',pending:false})
+ const unknown=await api('plaid.capture',{from:'2026-10-27',through:'2026-10-27',confirm:true})
+ assert.deepEqual(unknown.payouts,[],'A provider name and amount do not identify a payout')
+ assert.equal(unknown.receipts.length,1)
+ const held=(await api('remittances')).find(row=>row.id===unknown.receipts[0])
+ assert.equal(held.status,'staged');assert.equal(held.customer_id,null)
+ assert.deepEqual(await api('payments'),before,'An unidentified source remains reviewable without creating or duplicating cash')
 }
 
 async function bankScreens(h,owner,customer) {

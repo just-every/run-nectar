@@ -15,7 +15,7 @@ export async function matchBankPayout(env: Bindings, actor: Actor, source: Remit
   const tokens = bank.reference.split(/[^A-Za-z0-9_-]+/)
   const payouts = await all(env, "SELECT * FROM nc_processor_objects WHERE kind='payout' AND status='paid' AND currency='usd' AND code IS NULL")
   const referenced = payouts.filter(row => tokens.includes(row.object_ref))
-  const candidates = referenced.length ? referenced : /\bstripe\b/i.test(bank.reference) ? payouts.filter(row => row.amount_cents === source.amountCents) : []
+  const candidates = referenced
   if (!candidates.length) return null
   insist(candidates.length === 1 && candidates[0].amount_cents === source.amountCents, 'bank_payout_requires_review', 409)
   const payout = candidates[0]
