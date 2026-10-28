@@ -108,5 +108,5 @@ try{
  assert.equal((await h.raw(renewalPath(restoredSession),{body:{basis:restoredView.basis,confirm:'save',offer:liveOffer.save.id}})).status,409)
  assert.equal((await h.raw(renewalPath(restoredSession),{body:{basis:restoredView.basis,confirm:'cancel'}})).status,200,'Retention reapproval is never required to cancel renewal')
  assert.equal((await api(`subscriptions/${peerSub}`,cookie)).renewal.terms[0].auto_renew,0)
- console.log('GOV-005 real rer export/reset/import, old-archive refusal, anonymous restore and inactive portal retention authority passed')
+ console.log('GOV-005 real rer export, reset and import, old-archive refusal, anonymous restore and inactive portal retention authority passed')
 }finally{await stop();await rm(scratch,{recursive:true,force:true})}

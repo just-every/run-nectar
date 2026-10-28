@@ -449,5 +449,12 @@
   "portal.change.review": "Une personne doit examiner cette demande avant tout changement.",
   "portal.change.stale": "L’abonnement ou la politique du marchand a changé depuis cette demande. Elle ne permet pas d’appliquer l’ancien choix.",
   "portal.change.empty": "Aucune demande pour le moment.",
-  "portal.change.quantity": "Quantité"
+  "portal.change.quantity": "Quantité",
+  "portal.change.previewButton": "Aperçu du changement",
+  "portal.change.previewHeading": "Estimation du changement de forfait",
+  "portal.change.beforeAmount": "Total actuel de la période",
+  "portal.change.afterAmount": "Total proposé de la période",
+  "portal.change.difference": "Différence au prorata",
+  "portal.change.effective": "Date d’effet",
+  "portal.change.previewReadOnly": "Cette estimation ne modifie pas votre abonnement et ne vous facture rien. Les demandes de réduction peuvent être envoyées séparément au marchand pour examen."
 }
