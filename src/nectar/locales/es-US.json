@@ -432,5 +432,9 @@
   "dunning.invoice_only": "Realice el pago siguiendo las instrucciones de su factura. Su servicio permanece activo.",
   "dunning.update": "Actualice su método de pago: {link}",
   "dunning.update_label": "Actualizar método de pago",
-  "dunning.note": "Este enlace vence en quince minutos como máximo. Guardar una tarjeta no autoriza un pago."
+  "dunning.note": "Este enlace vence en quince minutos como máximo. Guardar una tarjeta no autoriza un pago.",
+  "billing_notice.payment_receipt.subject": "Pago registrado para la factura {invoice}",
+  "billing_notice.payment_receipt.body": "{merchant} registró un pago de {amount} el {date} para la factura {invoice}.",
+  "billing_notice.payment_failed.subject": "Falló el pago de la factura {invoice}",
+  "billing_notice.payment_failed.body": "Falló el pago de la factura {invoice} de {merchant} el {date}. El importe cobrable actual es {amount}. Este mensaje no confirma ningún pago."
 }

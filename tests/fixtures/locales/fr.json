@@ -432,5 +432,9 @@
   "dunning.invoice_only": "Veuillez payer selon les instructions de votre facture. Votre service reste actif.",
   "dunning.update": "Mettez à jour votre moyen de paiement : {link}",
   "dunning.update_label": "Mettre à jour le moyen de paiement",
-  "dunning.note": "Ce lien expire dans quinze minutes au plus. Enregistrer une carte n’autorise pas un paiement."
+  "dunning.note": "Ce lien expire dans quinze minutes au plus. Enregistrer une carte n’autorise pas un paiement.",
+  "billing_notice.payment_receipt.subject": "Paiement enregistré pour la facture {invoice}",
+  "billing_notice.payment_receipt.body": "{merchant} a enregistré un paiement de {amount} le {date} pour la facture {invoice}.",
+  "billing_notice.payment_failed.subject": "Échec du paiement de la facture {invoice}",
+  "billing_notice.payment_failed.body": "Le paiement de la facture {invoice} de {merchant} a échoué le {date}. Le montant actuellement recouvrable est de {amount}. Ce message ne confirme aucun paiement."
 }

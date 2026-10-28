@@ -791,3 +791,19 @@ authority tables, and erasure withdraws this record family.
 Subscription reads preserve the ordinary subscription source record. Request `include_state=true` on the subscription detail URL to include the current observed state, its effective observation time and immutable transition history. The subscription page and customer history include that projection. Subscription readers without both invoice and payment read capabilities receive only the date and timezone in each cause; the internal schedule checkpoint is never part of the subscription source response.
 
 Native subscription creation retains its own `subscription.created` event alongside the initial `subscription.state_changed` event. Lifecycle observation does not turn creation into an update or repeat either event. A scheduled observer whose read basis loses a race leaves its page pending for the next tick and completes successfully; audit-storage failures still fail the tick and roll back the transition.
+
+## Explicit billing notices
+
+The current interim notice commands are owner-only and require a fresh
+authenticator or passkey verification. No notice runs unattended.
+`GET /api/nectar/billing-notices` returns sender settings and delivery outcomes.
+
+- `billing.notice.configure`: `kind`, `sender` (`off`, `nectar` or `processor`), current `revision`, `language`, `confirm:true`; optional paired `subject` and `body` edit that language's template. Empty templates restore the translation defaults. Supported placeholders are `{invoice}`, `{merchant}`, `{amount}` and `{date}`; an edited body must retain every fact.
+- `billing.notice.prepare`: `kind`, `invoice`, `confirm:true`; optionally `event` selects a specific positive allocation for a receipt. Current send kinds are `payment_failed` and `payment_receipt`. The other four settings reserve their sender choices but their send doors remain unavailable.
+- `billing.notice.send`: the prepared `notice`, its `basis_hash` and a separate `confirm:true`.
+
+A notice is informational: it grants no payment authority. Sender settings,
+recipient, language, source or wording changes invalidate its frozen basis.
+A prepared event cannot be replaced, including after expiry, provider refusal
+or uncertainty. Acceptance records provider acceptance rather than mailbox
+delivery. A receipt records an allocation, without claiming settlement.
