@@ -748,6 +748,12 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "received_on": "text",
     "reference": "text"
   },
+  "plaid.capture": {
+    "confirm": "flag",
+    "file": "file",
+    "from": "text",
+    "through": "text"
+  },
   "plan.change.credit.prepare": {
     "change": "text"
   },

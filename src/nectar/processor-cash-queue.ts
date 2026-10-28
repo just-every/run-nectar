@@ -52,10 +52,12 @@ export async function allocateProcessorCash(env:Bindings,actor:Actor,input:Input
  return {id:customer,application:application.id,status:application.status,replayed:false}
 }
 
-export async function unmatchedProcessorCash(env:Bindings,actor:Actor,customer?:string) {
+export async function unmatchedProcessorCash(env:Bindings,actor:Actor,customer?:string): Promise<Row[]> {
  requireRead(actor,'payments');requireRead(actor,'invoices')
- return all(env,`SELECT u.* FROM nc_processor_cash_unmatched u JOIN nc_customers c ON c.id=u.customer_id WHERE u.amount_cents>0 AND c.erased_at IS NULL
+ const rows=await all(env,`SELECT u.* FROM nc_processor_cash_unmatched u JOIN nc_customers c ON c.id=u.customer_id WHERE u.amount_cents>0 AND c.erased_at IS NULL
   AND NOT EXISTS(SELECT 1 FROM nc_erased_records WHERE record_id=c.id) ${customer?'AND u.customer_id=?':''} ORDER BY u.occurred_at,u.id`,...(customer?[customer]:[]))
+ const at=clockInstant(env)
+ return rows.map(row=>{const ageDays=Math.max(0,Math.floor((at-row.occurred_at)/86400000));return {...row,ageDays,daysLeft:Math.max(0,75-ageDays),returnDeadline:row.occurred_at+75*86400000}})
 }
 
 /** An escalation is a once-only assigned owner task, never an automatic return. */

@@ -9,6 +9,7 @@ import { parseCsv } from './usage'
 export interface RemittanceSource {
   receiptId: string; amountCents: number; receivedOn: string; currency: string; customerReference: string
   lines: { invoiceReference: string; amountCents: number }[]
+  bank?: { accountHash: string; transactionHash: string; reference: string }
 }
 export function remittanceSources(bytes: Uint8Array): RemittanceSource[] {
   let text: string
@@ -24,6 +25,7 @@ export function remittanceSources(bytes: Uint8Array): RemittanceSource[] {
   for (const cells of rows) {
     insist(cells.length === columns.length, 'remittance_csv_columns')
     const [receiptId, date, currency, amount, customerReference, invoiceReference, allocated] = cells.map(cell => cell.trim())
+    insist(!/^plaid:/i.test(receiptId), 'remittance_reserved_receipt_id')
     insist(receiptId.length > 0 && receiptId.length <= 120 && customerReference.length <= 120 && invoiceReference.length <= 120, 'remittance_invalid_reference')
     insist(currency === 'USD', 'remittance_usd_required')
     const amountCents = cents(amount), receivedOn = requireDate(date, 'received_on')

@@ -1,3 +1,4 @@
+import { capturePlaidRemittances } from './plaid-remittances'
 import { uploadRemittances, previewRemittance, confirmRemittance, previewRemittanceAllocation, allocateRemittance } from './remittances'
 import { consumeProcessorEvent } from './processor-events'
 import { allocateProcessorCash } from './processor-cash-queue'
@@ -330,6 +331,7 @@ export const actions: Record<string, Handler> = {
   'promotion.create': createPromotionCode,
   'trial.extend': extendTrial,
   'trial.resolve': resolveTrial,
+  'plaid.capture': capturePlaidRemittances,
   'remittance.upload': uploadRemittances,
   'remittance.preview': previewRemittance,
   'remittance.confirm': confirmRemittance,

@@ -4,6 +4,7 @@ import { all, commit, fingerprint, guard, insist, newId, one, parseJson, stmt, t
 import { clockInstant } from './clock'
 import { cents } from './decimal'
 import { Input } from './input'
+import type { RemittanceSource } from './remittance-matching'
 import { allocationFactStatements, BALANCE_SQL, paymentFactStatement, UNALLOCATED_SQL } from './receivables'
 import { remittanceAllocation, remittanceMatch, remittanceSources } from './remittance-matching'
 
@@ -20,7 +21,12 @@ async function receipt(env: Bindings, input: Input) {
 export async function uploadRemittances(env: Bindings, actor: Actor, input: Input) {
   operator(actor)
   const file = (await input.file('file', { maxBytes: 128_000 }))!
-  const sources = remittanceSources(file.bytes), ids: string[] = [], statements: D1PreparedStatement[] = []
+  return stageRemittances(env, actor, remittanceSources(file.bytes))
+}
+
+export async function stageRemittances(env: Bindings, actor: Actor, sources: RemittanceSource[]) {
+  operator(actor)
+  const ids: string[] = [], statements: D1PreparedStatement[] = []
   for (const source of sources) {
     const sourceKey = await fingerprint({ kind: 'usd-remittance', receiptId: source.receiptId }), payloadHash = await fingerprint(source)
     const key = await one(env, 'SELECT * FROM nc_remittance_source_keys WHERE source_key_hash=?', sourceKey)

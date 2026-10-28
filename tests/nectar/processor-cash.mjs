@@ -166,6 +166,7 @@ export async function processorCashFlow(h, owner, { cashEdge = edge, onState=asy
   const transfer=unmatchedState.unmatched.find(row=>row.amount_cents===8000)
   assert.equal(transfer.reference,(await api(`invoices/${otherInvoice}`)).number)
   assert.equal(transfer.sender,'Synthetic transfer sender');assert.equal(transfer.occurred_at,instant)
+  assert.deepEqual([transfer.ageDays,transfer.daysLeft,transfer.returnDeadline],[0,75,instant+75*86400000])
   const desk=await h.page('/app/receivables',owner)
   assert.ok(desk.includes(transfer.id),'The ordinary receivables desk links to the exact unmatched transfer')
   const allocation={customer,account_ref:account,transfer_ref:transfer.transfer_ref,invoice:newer.id,amount:'45',confirm:true}
@@ -189,6 +190,9 @@ export async function processorCashFlow(h, owner, { cashEdge = edge, onState=asy
     const clock=`${day}T10:00:00Z`;await h.advanceClock(clock)
     for(let repeat=0;repeat<2;repeat++)assert.equal((await h.raw(`/cdn-cgi/local/scheduled?time=${Date.parse(clock)}&cron=${encodeURIComponent('0 14 * * *')}`)).status,200)
     const tasks=(await api('tasks')).slice(0).filter(row=>row.customer_id===customer&&row.title.startsWith('Unapplied bank transfer:'))
+    const queued=(await api('processor-events?customer='+customer)).unmatched
+    const age=Math.floor((Date.parse(clock)-instant)/86400000)
+    assert.ok(queued.length);assert.ok(queued.every(row=>row.ageDays===age&&row.daysLeft===75-age))
     assert.equal(tasks.length,expected,'Each due escalation produces exactly one owner task despite repeated ticks')
   }
   assert.ok((await api('tasks')).length>=taskStart+3)
