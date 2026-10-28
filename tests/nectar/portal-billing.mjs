@@ -13,6 +13,7 @@ export const harnessOptions=()=>{edge=portalPaymentEdge();return {stripeFetch:ed
 export async function portalBillingFlow(h,owner,hooks={}) {
   const at='2026-10-28T09:00:00Z'
   await h.advanceClock(at)
+  await h.api('portal.w9.store',owner,{file:file('private-w9.pdf','%PDF-1.4\nUnshared document','application/pdf'),confirm_share:true},403)
   const factor=await h.api('mfa.totp.start',owner,{})
   await h.api('mfa.totp.confirm',owner,{factor:factor.factor,code:totp(factor.secret,Date.parse(at))})
   const records=await seedPortalRecords(h,owner),customer=records.customers[0],peer=records.customers[1],invoice=records.invoice.id
@@ -88,6 +89,7 @@ export async function portalBillingFlow(h,owner,hooks={}) {
   await profile({...certificate,state:'XX'},400)
   await profile({...certificate,file:file('bad.pdf','not a PDF','application/pdf')},400)
   const w9='%PDF-1.4\nSynthetic merchant W-9\n%%EOF'
+  await h.api('portal.w9.store',owner,{file:file('merchant-w9.pdf',w9,'application/pdf'),confirm_share:false},400)
   await h.api('portal.w9.store',owner,{file:file('merchant-w9.pdf',w9,'application/pdf'),confirm_share:true})
   assert.equal(await(await h.raw(path('/portal/profile/merchant-w9'))).text(),w9)
   assert.equal((await h.raw('/portal/profile/merchant-w9')).status,401)
