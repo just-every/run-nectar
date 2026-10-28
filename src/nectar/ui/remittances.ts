@@ -39,7 +39,7 @@ export async function remittancesPanel(env: Bindings, actor: Actor, url: URL) {
   }
   return h`<section class="card" id="remittances"><h2>Remittance receipts</h2><p class="hint">Upload received USD lockbox funds, review matches, then confirm. This records cash received outside Nectar; it does not verify a bank transfer or charge a processor.</p>
     ${operator ? h`<details><summary>Upload a remittance file</summary><p>CSV columns: receipt_id, received_on, currency, amount, customer, invoice_reference, allocation_amount. Use a stable receipt ID, USD, an exact dollar amount and a YYYY-MM-DD date. Repeat the receipt total for each invoice row. Customer is its exact customer ID; invoice reference is the full invoice number. Leave the last two cells empty for an unidentified deposit.</p>
-      ${form('remittance.upload',back,fileField('Remittance CSV','file',{required:true,accept:'.csv,text/csv'}),'Upload for review',{multipart:true})}</details>` : ''}
+      ${form('remittance.upload',back,fileField('Remittance CSV','file',{required:true,accept:'.csv'}),'Upload for review',{multipart:true})}</details>` : ''}
     ${review}
     ${table(['Source receipt','Received','Customer','Amount','State','Review'],rows.map(row=>[row.source.receiptId,row.received_on,row.customer_name??'Unidentified',cents(row.amount_cents),row.status==='staged'?reasons[row.preview?.reason??row.reason]??'Ready for confirmation':reasons[row.reason],
       operator&&(row.status==='staged'||row.available_cents>0)?h`<a href="/app/receivables?remittance=${row.id}#remittance-review">Review receipt</a>`:h`${(row.short??[]).map((i:any)=>h`<p>${i.number}: ${cents(i.balance_cents)} still owed</p>`)}`]),{empty:'No remittance receipts uploaded.'})}</section>`
