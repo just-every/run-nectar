@@ -18,7 +18,10 @@ export async function planChangeQuote(env: Bindings, sub: Row, item: Row, target
   insist(!item.effective_to||date<item.effective_to,'plan_change_history_changed',409)
   const saved=parseJson<Row>(invoice.calculation_json,{}),original=saved.inputs as RatingInput
   insist(original?.billing,'issued_advance_component_required',409)
-  insist(!original.prepaid&&!original.charges?.length&&!original.contracts&&!original.usageAdjustments?.length&&!original.usageCredits?.length&&!original.renewals?.length&&!original.lifecycle?.length,'plan_change_special_terms_pending',409)
+  // Carried numbered credit is a balance application after the invoice total,
+  // not a discount to service consideration. Replay retains its saved evidence;
+  // a new debit can spend only the live remainder through ordinary issue.
+  insist(!original.prepaid&&!original.charges?.length&&!original.contracts&&!original.usageAdjustments?.length&&!original.renewals?.length&&!original.lifecycle?.length,'plan_change_special_terms_pending',409)
   const expanded=expandBillingWindows(original)
   const {input:current,services,service,items,prices,history,waivedService}=await planChangeHistory(env,invoice,original,expanded,item)
   insist(billingServiceWindows(original.billing)[service].terms.timing==='advance','issued_advance_component_required',409)

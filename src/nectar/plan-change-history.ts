@@ -1,9 +1,22 @@
 import type { Bindings } from '../auth.server'
-import { all,canonical,insist,parseJson,type Row } from './core'
+import { all,canonical,guard,insist,parseJson,type Row } from './core'
 import { rateIntervalInvoiceService,type RatingInput } from './rating'
 import { BALANCE_SQL } from './balance-sql'
 
 const totals=(r:Row)=>({subtotalCents:r.subtotalCents,taxCents:r.taxCents,totalCents:r.totalCents})
+
+// Rechecking a quote and writing it are separate awaits. Fence every financial
+// source again inside the atomic batch, including paid sources whose balance
+// stays zero when an unrelated carried credit is issued concurrently.
+export function planChangeSourceGuards(env:Bindings,quote:Row){
+  const sources=[{id:quote.sourceInvoice,balance_cents:quote.sourceBalance,credits:quote.history.flatMap((h:Row)=>h.credit?[h.credit.id]:[])},
+    ...quote.history.flatMap((h:Row)=>h.debit?[{...h.debit,credits:[]}]:[])]
+  return [guard(env,'plan_change_source_changed',"EXISTS(SELECT 1 FROM nc_invoices WHERE id=? AND status='issued' AND source_fingerprint=?)",quote.sourceInvoice,quote.sourceFingerprint),
+    ...sources.flatMap(source=>[
+      guard(env,'plan_change_source_changed',`(SELECT ${BALANCE_SQL} FROM nc_invoices i WHERE i.id=? AND i.status='issued')=?`,source.id,source.balance_cents),
+      guard(env,'plan_change_source_already_adjusted','(SELECT COUNT(*) FROM nc_credit_notes WHERE invoice_id=?)=? AND NOT EXISTS(SELECT 1 FROM nc_credit_notes WHERE invoice_id=? AND id NOT IN (SELECT value FROM json_each(?)))',source.id,source.credits.length,source.id,JSON.stringify(source.credits)),
+    ])]
+}
 
 // Quotes and replacement item identities are immutable. Follow their chain,
 // rather than reconstructing historical prices from today's mutable items.

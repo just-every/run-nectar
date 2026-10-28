@@ -235,6 +235,23 @@ async function mixedPlanChanges(h,owner,finance,{preview,approve,onState}){
   assert.equal(renewal.balanceCents,Math.max(0,renewal.total_cents-(credit.amount_cents-77)),'the numbered credit is conserved across ordinary invoices')
   assert.deepEqual(immutable(await api(`invoices/${source.id}`)),original)
   await onState({label:'mixed-next-service',subscription,invoice:renewal.id})
+  // A prior credit paid part of this original. It must neither suppress its
+  // later service delta nor be recreated as spendable credit on the debit.
+  await h.advanceClock('2032-07-01T10:00:00Z')
+  const fundedOriginal=immutable(renewal),funded=await quote(low,high)
+  const fundedSubtotal=rounded(120003*182,366)+rounded(240007*184,366)+12007+35
+  assert.equal(funded.quote.before.totalCents,total(renewalSubtotal));assert.equal(funded.quote.after.totalCents,total(fundedSubtotal))
+  const fundedChange=await approve({change:funded.change,decision:'approved'},finance),fundedDebit=await api(`invoices/${fundedChange.invoice}`)
+  assert.equal(fundedDebit.total_cents,total(fundedSubtotal)-total(renewalSubtotal))
+  assert.equal(fundedDebit.balanceCents,fundedDebit.total_cents,'spent carried credit is not recreated on the new debit')
+  assert.deepEqual(immutable(await api(`invoices/${renewal.id}`)),fundedOriginal,'original carried-credit application evidence remains immutable')
+  await onState({label:'mixed-credit-funded-upgrade',subscription,invoice:fundedChange.invoice})
+  const stale=await quote(seat,seat,2)
+  await api('credit.issue',{invoice:renewal.id,amount:'0.01',reason:'Synthetic separately approved service correction'})
+  const beforeCredit=await api(`invoices/${renewal.id}`),beforeItems=(await api(`subscriptions/${subscription}`)).items
+  await h.api('plan.change.decide',finance,{change:stale.change,decision:'approved'},409)
+  assert.deepEqual(await api(`invoices/${renewal.id}`),beforeCredit,'a separately adjusted source cannot execute its old money quote')
+  assert.deepEqual((await api(`subscriptions/${subscription}`)).items,beforeItems)
 }
 
 async function repeatedPlanChanges(h,owner,finance,f,{low,high,makePrice,first,debit,preview,approve,policy,onState}){
