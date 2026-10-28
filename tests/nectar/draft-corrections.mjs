@@ -149,7 +149,13 @@ export async function draftCorrectionsFlow(h, owner, onState=async()=>{}) {
       return draft
     }
     const checkSent = async (id, saved, fixture, start) => {
-      const approved = await detail(id), draft = saved.payload.noticeDrafts[0]
+      const approved = await detail(id)
+      const periods = approved.kind === 'amendment' ? approved.impact : approved.impact.invoices
+      for (const row of periods) for (const effect of row.normalizedMrr.periods) {
+        const month = effect.after.asOf.slice(0,7)
+        assert.equal((await api(`reports/normalized-mrr?period=${month}&customer=${fixture.customer}`)).totalCents,effect.after.mrrCents,'Executed normalized MRR equals the reviewed correction')
+        assert.equal((await api(`reports/normalized-arr?period=${month}&customer=${fixture.customer}`)).totalCents,effect.after.arrCents,'Executed normalized ARR equals the reviewed correction')
+      }, draft = saved.payload.noticeDrafts[0]
       assert.equal(approved.status, 'approved')
       await onState({label:`${approved.kind}-approved`,id})
       assert.deepEqual(approved.payload, saved.payload, 'approval preserves the reviewed interpretation and generated message')
