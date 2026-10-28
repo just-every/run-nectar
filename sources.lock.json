@@ -174,7 +174,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "16138e447f3f96f1a2560c6b729b219d301c36072415d0e0419f58bf8ba264ff",
+      "sha256": "866ab2b91eb19809d8dd9f905e2f27b2ee54f992f5f5078ee2e840679f952b29",
       "executable": false
     },
     "AGENTS.consumer.md": {
@@ -194,7 +194,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "b1145d54a3c5406ff9a140b70220d5950d354465151427e8b228f6c4f3378f12",
+      "sha256": "b005c6c4d328f38b1a7a6b622d1f00506bd81a1b8aa43fae3605aa09fd839975",
       "executable": false
     },
     "DEMO.md": {
@@ -230,7 +230,7 @@
       "executable": false
     },
     "docs/CLAIMS.md": {
-      "sha256": "6c78d13da3b3d2d1bfa437f6a4aef9404e44f15d0ba3ec2257a57e18ecf67732",
+      "sha256": "62cfaf4a71fe9943b0225a307215a5c4a8540f8f924bc2ae1217b6511609484c",
       "executable": false
     },
     "docs/composition-baseline.json": {
@@ -3526,7 +3526,7 @@
       "executable": false
     },
     "src/nectar/interval-rating.ts": {
-      "sha256": "0da1888d0ab9a97efd3795021b84e901d42645c0e328dacf243a35e8abd0b961",
+      "sha256": "4d690b938ddc560a77ee16df7392295ccc31babbcd0aeaccfb0b281986a66405",
       "executable": false
     },
     "src/nectar/interval-reactivate.ts": {
@@ -3858,15 +3858,15 @@
       "executable": false
     },
     "src/nectar/plan-change-history.ts": {
-      "sha256": "f4f9a123fac5322c5703260cd40fc93b1f0017a81f951bfaa88aaf6a90b19d42",
+      "sha256": "22714207d0fea0b1bcaa4eb9b23b7e531cc43a5a1cfbe1cdc0d5886982f7d59b",
       "executable": false
     },
     "src/nectar/plan-change-preview.ts": {
-      "sha256": "41d68e71053387f28abfe12b666ba9b22a76c4c1e5c3f7ce83d942b89d58d5c2",
+      "sha256": "d1c6ddcced3930af552f236eee444d3b4d607ebf8f1c5f78e6bbb58465b2a9a0",
       "executable": false
     },
     "src/nectar/plan-changes.ts": {
-      "sha256": "776b27f3d07a870cb9bfcc875db0603a5df0f2b0423d51035bdac82f42f8322c",
+      "sha256": "227c20186fd03f602de099d8f110a56d65e221b4406b9ff1c414f437c53f244c",
       "executable": false
     },
     "src/nectar/policy-changes.ts": {
@@ -4162,7 +4162,7 @@
       "executable": false
     },
     "src/nectar/rating.ts": {
-      "sha256": "b8d5dd936c0af6d69ccbee3b7c5eed3c06d26d2be7421b322b48e7c8891737e0",
+      "sha256": "293df3c1670a9c00bcbd00b29a482a95c4ac850674dc24cfb2d80645604b4809",
       "executable": false
     },
     "src/nectar/receivables.ts": {
@@ -4574,7 +4574,7 @@
       "executable": false
     },
     "src/nectar/ui/plan-changes.ts": {
-      "sha256": "9c9d8ee5e48412242a5e195222843bbf5486e5c590963472654918a4f81cb876",
+      "sha256": "1ee9dfac003ea21ffd57b53c06b562713c678fa6a6fe681aa49bcf83055f752e",
       "executable": false
     },
     "src/nectar/ui/policies.ts": {
@@ -5366,7 +5366,7 @@
       "executable": false
     },
     "tests/nectar/plan-changes.mjs": {
-      "sha256": "73a009d1fd88a0e0f67309612da4c788b4d65d2eb6ce628fcfa320fbf8634217",
+      "sha256": "e84e815a609c4fb7d543c49957b5e280e249dcfddb44b3c8b1d4f27cdc037fe1",
       "executable": false
     },
     "tests/nectar/policy-approvals.mjs": {

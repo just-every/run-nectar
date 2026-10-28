@@ -137,8 +137,121 @@ export async function planChangesFlow(h,owner,{onState=async()=>{},prepare,decid
   await api('erasure.approve',{request:(await api('erasures')).find(r=>r.customer_id===fixtures[3].customer).id,confirm:true})
   assert.equal((await api(`invoices/${fixtures[3].invoice}`)).total_cents,240000)
   assert.equal((await api(`revenue/${fixtures[3].invoice}`)).credits.find(c=>c.id===changed.credit).amountCents,-creditAmount)
+  await mixedPlanChanges(h,owner,finance,{preview,approve,onState})
   console.log('planChangesFlow: annual upgrade exact preview/debit/PAY-008, period-end downgrade, no proration, paid carried credit, next-invoice delta and stale/duplicate refusal passed')
   return {fixtures,upgraded,changed}
+}
+
+async function mixedPlanChanges(h,owner,finance,{preview,approve,onState}){
+  const api=(path,body,status)=>h.api(path,owner,body,status)
+  await h.advanceClock('2030-01-01T10:00:00Z')
+  await applyPolicy(h,owner,'lifecycle.policy',{credit_unused:true,reactivation_days:30,proration_policy:'invoice_now'})
+  await applyPolicy(h,owner,'tax.declare',{tax_jurisdiction:'CA',tax_mode:'flat_rate',tax_rate:'10',tax_note:'Mixed issued-service replay'})
+  await api('tax.review',{revision:(await api('business')).revision})
+  const external='synthetic-nectar-mixed-plan',meterCode='synthetic-nectar-mixed-plan-units'
+  const customer=(await api('customer.create',{external_id:external,name:'Mixed service account',billing_email:contact('mixed-plan')})).id
+  const meter=(await api('meter.create',{code:meterCode,name:'Mixed service units',unit_label:'units'})).id
+  const price=async(n,fields)=>(await api('price.create',{product:(await api('product.create',{code:`synthetic-nectar-mixed-plan-${n}`,name:`Mixed service tier ${n}`})).id,taxable:true,...fields})).id
+  const low=await price(1,{kind:'flat',unit_amount:'1200.03',interval_unit:'year',billing_timing:'advance'})
+  const high=await price(2,{kind:'flat',unit_amount:'2400.07',interval_unit:'year',billing_timing:'advance'})
+  const seat=await price(3,{kind:'seat',unit_amount:'120.07',interval_unit:'year',billing_timing:'advance'})
+  const units=await price(4,{kind:'unit',unit_amount:'0.07',meter})
+  const subscription=(await api('subscription.create',{customer,start_date:'2030-01-01',price:[low,seat,units],quantity:['1','2','']})).id
+  const issue=async(period)=>{
+    const run=await api('billrun.prepare',{period}),rows=(await api(`runs/${run.id}`)).invoices.filter(i=>i.customer_id===customer)
+    assert.equal(rows.length,1,'each due date has one mixed-service invoice')
+    const invoice=rows[0]
+    await api('invoice.approve',{invoice:invoice.id,acknowledge:true})
+    await api('invoice.finalise',{invoice:invoice.id,issue_date:`${period}-01`})
+    return api(`invoices/${invoice.id}`)
+  }
+  await issue('2030-01')
+  const usage=async(id,quantity,date)=>api('usage.submit',{events:[{event_id:`synthetic-nectar-mixed-plan-${id}`,customer:external,meter:meterCode,quantity,occurred_at:`${date}T12:00:00Z`}]})
+  await usage('original','3','2030-12-15')
+  await h.advanceClock('2031-01-01T10:00:00Z')
+  const source=await issue('2031-01'),originalSubtotal=120003+2*12007+21,total=n=>n+rounded(n,10)
+  assert.equal(source.calculation.inputs.billing.serviceWindows.length,2)
+  assert.equal(source.subtotal_cents,originalSubtotal);assert.equal(source.total_cents,total(originalSubtotal))
+  const immutable=i=>({number:i.number,subtotal:i.subtotal_cents,tax:i.tax_cents,total:i.total_cents,lines:i.lines,calculation:i.calculation})
+  const original=immutable(source)
+  const paid=(await api('payment.record',{customer,amount:String(source.total_cents/100),received_on:'2031-01-02',method:'bank_transfer',reference:'synthetic-nectar-mixed-plan-paid'})).payment
+  await api('payment.allocate',{payment:paid,invoice:source.id,amount:String(source.total_cents/100)})
+  const item=async priceId=>(await api(`subscriptions/${subscription}`)).items.find(i=>i.price_id===priceId&&!i.effective_to)
+  const quote=async(priceId,target,quantity=1,mode='immediate')=>preview({subscription,item:(await item(priceId)).id,price:target,quantity,mode})
+  await h.advanceClock('2031-07-01T10:00:00Z')
+  const upgrade=await quote(low,high),competing=await quote(seat,seat,4)
+  const flatAfter=rounded(120003*181,365)+rounded(240007*184,365),firstSubtotal=flatAfter+2*12007+21
+  assert.equal(upgrade.quote.before.totalCents,total(originalSubtotal));assert.equal(upgrade.quote.after.totalCents,total(firstSubtotal))
+  const debit=await approve({change:upgrade.change,decision:'approved'},finance)
+  assert.equal((await api(`invoices/${debit.invoice}`)).total_cents,total(firstSubtotal)-source.total_cents)
+  const unchanged=await api(`subscriptions/${subscription}`),money=await api(`invoices/${source.id}`)
+  await h.api('plan.change.decide',finance,{change:competing.change,decision:'approved'},409)
+  assert.deepEqual((await api(`subscriptions/${subscription}`)).items,unchanged.items)
+  assert.deepEqual(await api(`invoices/${source.id}`),money,'a stale sibling-component approval changes no money')
+  await onState({label:'mixed-annual-upgrade',subscription,invoice:debit.invoice})
+  await h.advanceClock('2031-08-01T10:00:00Z')
+  const seats=await quote(seat,seat,4),seatAfter=rounded(2*12007*212,365)+rounded(4*12007*153,365),secondSubtotal=flatAfter+seatAfter+21
+  assert.equal(seats.quote.before.totalCents,total(firstSubtotal));assert.equal(seats.quote.after.totalCents,total(secondSubtotal))
+  const seatDebit=await approve({change:seats.change,decision:'approved'},finance)
+  assert.equal((await api(`invoices/${seatDebit.invoice}`)).total_cents,total(secondSubtotal)-total(firstSubtotal))
+  await onState({label:'mixed-independent-seat-upgrade',subscription,invoice:seatDebit.invoice})
+  await h.advanceClock('2031-09-01T10:00:00Z')
+  const down=await quote(high,low),finalFlat=rounded(120003*181,365)+rounded(240007*62,365)+rounded(120003*122,365),finalSubtotal=finalFlat+seatAfter+21
+  assert.equal(down.quote.before.totalCents,total(secondSubtotal));assert.equal(down.quote.after.totalCents,total(finalSubtotal))
+  const reduced=await approve({change:down.change,decision:'approved'},finance),credited=await api(`invoices/${source.id}`),credit=credited.credits.find(c=>c.id===reduced.credit)
+  assert.ok(credit.number);assert.equal(credit.amount_cents,total(secondSubtotal)-total(finalSubtotal));assert.equal(credit.applied_cents,0)
+  assert.equal(credit.subtotal_cents,secondSubtotal-finalSubtotal)
+  assert.equal(credit.tax_cents,rounded(secondSubtotal,10)-rounded(finalSubtotal,10),'tax is the whole-invoice difference, including unchanged metered service')
+  assert.deepEqual(immutable(credited),original,'all original service calendars, usage and issued amounts remain immutable')
+  const revenue=(await api(`revenue/${debit.invoice}`)).schedules.flatMap(s=>s.entries)
+  assert.equal(revenue.reduce((sum,e)=>sum+e.amountCents,0),firstSubtotal-originalSubtotal,'the revenue schedule reconciles the exact tax-exclusive debit')
+  const share=(amount,index,count)=>rounded(amount*(index+1),count)-rounded(amount*index,count)
+  const expectedRevenue=Array.from({length:12},(_,index)=>[
+    `2031-${String(index+1).padStart(2,'0')}`,
+    (index<6?share(rounded(120003*181,365),index,6):share(rounded(240007*184,365),index-6,6))-share(120003,index,12),
+  ]).filter(([,amount])=>amount!==0)
+  assert.deepEqual(revenue.map(e=>[e.period,e.amountCents]),expectedRevenue,'equal service-month recognition reconciles each changed fee segment; unchanged usage and seats cancel')
+  const beforeReplay=await api(`subscriptions/${subscription}`)
+  await h.api('plan.change.decide',finance,{change:down.change,decision:'approved'},409)
+  await api('plan.change.prepare',{subscription,item:(await item(units)).id,price:units,mode:'immediate'},409)
+  assert.deepEqual((await api(`subscriptions/${subscription}`)).items,beforeReplay.items)
+  await onState({label:'mixed-numbered-credit',subscription,invoice:source.id})
+  // Replacement claims cover only the changed advance item. The independently
+  // metered component remains billable exactly once at its ordinary due date.
+  await usage('later','10','2031-08-15')
+  const monthly=await issue('2031-09')
+  assert.equal(monthly.total_cents,77);assert.equal(monthly.lines.filter(l=>l.kind==='usage').length,1)
+  assert.equal(monthly.lines.filter(l=>l.kind==='flat'||l.kind==='seat').length,0,'neither replacement advance component is billed again')
+  assert.equal(monthly.balanceCents,0)
+  const repeat=await api('billrun.prepare',{period:'2031-09'})
+  assert.equal((await api(`runs/${repeat.id}`)).invoices.filter(i=>i.customer_id===customer).length,0)
+  const scheduled=await quote(seat,seat,1,'period_end')
+  assert.equal(scheduled.quote.effectiveDate,'2032-01-01');assert.equal(scheduled.quote.delta.totalCents,0)
+  await approve({change:scheduled.change,decision:'approved'},finance)
+  await h.advanceClock('2032-01-01T10:00:00Z')
+  await usage('renewal','5','2031-12-15')
+  const renewal=await issue('2032-01'),renewalSubtotal=120003+12007+35
+  assert.equal(renewal.total_cents,total(renewalSubtotal),'the next mixed invoice uses only final approved plans and exact new usage')
+  assert.equal(renewal.balanceCents,Math.max(0,renewal.total_cents-(credit.amount_cents-77)),'the numbered credit is conserved across ordinary invoices')
+  assert.deepEqual(immutable(await api(`invoices/${source.id}`)),original)
+  await onState({label:'mixed-next-service',subscription,invoice:renewal.id})
+  // A prior credit paid part of this original. It must neither suppress its
+  // later service delta nor be recreated as spendable credit on the debit.
+  await h.advanceClock('2032-07-01T10:00:00Z')
+  const fundedOriginal=immutable(renewal),funded=await quote(low,high)
+  const fundedSubtotal=rounded(120003*182,366)+rounded(240007*184,366)+12007+35
+  assert.equal(funded.quote.before.totalCents,total(renewalSubtotal));assert.equal(funded.quote.after.totalCents,total(fundedSubtotal))
+  const fundedChange=await approve({change:funded.change,decision:'approved'},finance),fundedDebit=await api(`invoices/${fundedChange.invoice}`)
+  assert.equal(fundedDebit.total_cents,total(fundedSubtotal)-total(renewalSubtotal))
+  assert.equal(fundedDebit.balanceCents,fundedDebit.total_cents,'spent carried credit is not recreated on the new debit')
+  assert.deepEqual(immutable(await api(`invoices/${renewal.id}`)),fundedOriginal,'original carried-credit application evidence remains immutable')
+  await onState({label:'mixed-credit-funded-upgrade',subscription,invoice:fundedChange.invoice})
+  const stale=await quote(seat,seat,2)
+  await api('credit.issue',{invoice:renewal.id,amount:'0.01',reason:'Synthetic separately approved service correction'})
+  const beforeCredit=await api(`invoices/${renewal.id}`),beforeItems=(await api(`subscriptions/${subscription}`)).items
+  await h.api('plan.change.decide',finance,{change:stale.change,decision:'approved'},409)
+  assert.deepEqual(await api(`invoices/${renewal.id}`),beforeCredit,'a separately adjusted source cannot execute its old money quote')
+  assert.deepEqual((await api(`subscriptions/${subscription}`)).items,beforeItems)
 }
 
 async function repeatedPlanChanges(h,owner,finance,f,{low,high,makePrice,first,debit,preview,approve,policy,onState}){

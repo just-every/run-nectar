@@ -25,7 +25,7 @@ import { invoiceTotals } from './invoice-tax'
 import { CHARGE_RATING_VERSION, chargeLines, type ChargeIn } from './charge-lines'
 import { PRICE_MODEL_RATING_VERSION, rateQuantityPrice, type QuantityPrice } from './price-model'
 import { billingAnchor, billingPeriodContaining, INTERVAL_RATING_VERSION, MONTHLY_ARREARS, nonMonthlyArrears, type BillingTerms, type BillingWindow, type CalendarBasis } from './billing-calendar'
-import { rateBillingWindow } from './interval-rating'
+import { rateBillingServices, rateBillingWindow } from './interval-rating'
 import { intervalMetricUsage } from './interval-metrics'
 import { prepaidLines } from './prepaid-rating'
 
@@ -241,4 +241,8 @@ function rateCore(input: RatingInput, presentCancellationCredits = true): Rating
 export function rateIntervalService(input: RatingInput, presentCancellationCredits = false): Rating {
   insist(input.version === INTERVAL_RATING_VERSION && !input.billing, 'interval_service_input_required')
   return rateCore(input, presentCancellationCredits)
+}
+
+export function rateIntervalInvoiceService(original: RatingInput, services: RatingInput[]): Rating {
+  return rateBillingServices(original, services, input => rateIntervalService(input))
 }
