@@ -849,7 +849,7 @@ allowlisted subscriptions, approved compatible choices and pending status.
 The index retains request status independently of current change eligibility.
 Choices currently support one active simple monthly flat or seat item billed
 in arrears. Catalog descriptions are merchant text; interface labels use the
-customer's language. No proration or payment preview is claimed.
+customer's language. No payment execution is authorized.
 
 `POST /portal/change.request?session=TOKEN` requires the exact session Origin
 and only `subscription`, `item`, `target_price`, `quantity`, `basis`,
@@ -897,3 +897,17 @@ its owner preparer and approver must remain active with their original authority
 Restoring policy and offer evidence alone cannot reactivate portal retention;
 a fresh owner-prepared and approved policy is required. Renewal cancellation
 remains available independently of the retention grant.
+
+
+`POST /portal/change.preview?session=TOKEN` is a read-only same-engine estimate
+for one current simple monthly flat or seat item billed in arrears. It takes
+`subscription`, `item`, `target_price`, `quantity`, the options' `basis` and
+`policy_revision`, and requires the exact session Origin. Only compatible
+approved prices and quantities above the seat floor are accepted. Issued
+periods, scheduled future items, changed sources and unsupported billing
+calendars are refused. The answer projects the business-local effective day,
+service period, before and after subtotal, tax and total, and their exact
+difference. Its returned basis fingerprints the complete rating inputs and
+policy; it confers neither execution nor payment authority. No service, invoice,
+payment, audit event or outbound message is created. Customer preview forms,
+ordinary change confirmation and collection remain unfinished.

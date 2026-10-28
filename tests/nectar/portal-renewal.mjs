@@ -46,6 +46,29 @@ export async function portalRenewalFlow(h,owner) {
     assert.equal(response.status,status,`Portal ${kind}: ${response.status} ${await response.clone().text()}`)
     return status===200?response.json():response.text()
   }
+  // The same engine estimates an ordinary mid-month change without writing.
+  await h.advanceClock('2026-01-16T16:00:00Z')
+  const estimated=await subscription({start:'2026-01-01',term:false}),estimateSession=await issue(estimated)
+  const expensive=(await publishPrice(h,owner,{product,kind:'flat',unit_amount:'150',taxable:false})).id
+  await applyPolicy(h,owner,'portal.change.policy',{prices:[price,cheap,expensive],minimum_seats:5,pause_allowed:false})
+  const estimateOptions=await (await h.raw(`/portal/changes/${estimated.sub}?session=${estimateSession.token}`,{headers:{accept:'application/json'}})).json()
+  const estimateBody={subscription:estimated.sub,item:estimateOptions.item,target_price:expensive,quantity:1,basis:estimateOptions.basis,policy_revision:estimateOptions.policy.revision}
+  const estimatedFacts=async()=>({subscription:await api(`subscriptions/${estimated.sub}`),ledger:(await api(`customers/${estimated.customer}`)).ledger,audit:await api('audit'),mails:h.mails.length})
+  const beforeEstimate=await estimatedFacts()
+  const preview=await h.raw(`/portal/change.preview?session=${estimateSession.token}`,{body:estimateBody})
+  assert.equal(preview.status,200)
+  const estimate=await preview.json()
+  // January has 31 days: 15 old-price days and 16 new-price days, each
+  // independently rounded half away from zero as ordinary invoice lines are.
+  assert.deepEqual([estimate.before.totalCents,estimate.after.totalCents,estimate.difference.totalCents],[10000,12581,2581])
+  assert.deepEqual([estimate.period,estimate.effectiveDate,estimate.executionAuthority,estimate.paymentAuthority],[{start:'2026-01-01',end:'2026-02-01'},'2026-01-16',false,false])
+  assert.deepEqual(await estimatedFacts(),beforeEstimate,'Preview changes no service, invoice, payment, audit or mail')
+  const unsafe=await h.raw(`/portal/change.preview?session=${estimateSession.token}`,{body:estimateBody,headers:{origin:'https://synthetic-nectar.example.test'}})
+  assert.equal(unsafe.status,403)
+  await restrict(false)
+  const staleEstimate=await h.raw(`/portal/change.preview?session=${estimateSession.token}`,{body:estimateBody})
+  assert.equal(staleEstimate.status,409)
+  await h.advanceClock('2026-01-01T16:00:00Z')
   const saved=await subscription(),cancelled=await subscription({language:'es-US'})
   const savedSession=await issue(saved),cancelSession=await issue(cancelled)
   const beforeAudit=await api('audit'),beforeMail=h.mails.length
@@ -122,7 +145,12 @@ export async function portalRenewalFlow(h,owner) {
 
     // Stale source and approved policy changes refuse an old save without writes.
     const stale=await subscription(),staleSession=await issue(stale),staleOffer=await get(stale,staleSession)
+    await page.goto(h.origin+path(stale,staleSession))
     await policy({save_percent:25})
+    const refused=page.waitForResponse(r=>r.request().method()==='POST'&&new URL(r.url()).pathname===`/portal/renewal/${stale.sub}`)
+    await page.locator('button[value="save"]').click()
+    assert.equal((await refused).status(),409)
+    await capture('portal-stale-save-refused')
     await post(stale,staleSession,{basis:staleOffer.basis,confirm:'save',offer:staleOffer.save.id},409)
     const fresh=await get(stale,staleSession)
     await api('subscription.pause',{subscription:stale.sub,revision:(await api(`subscriptions/${stale.sub}`)).revision,effective_date:'2026-02-01',resume_date:'2026-03-01',access:'suspend',reason:'Merchant reviewed service change'})
@@ -134,6 +162,9 @@ export async function portalRenewalFlow(h,owner) {
     await policy({save_kind:'pause',pause_months:1,winback_enabled:false})
     const paused=await subscription({start:'2025-01-01',months:24}),pauseSession=await issue(paused)
     assert.equal((await get(paused,pauseSession)).save,null)
+    await page.goto(h.origin+path(paused,pauseSession))
+    assert.equal(await page.locator('button[value="save"]').count(),0,'Forbidden pause has no customer option')
+    await capture('portal-pause-forbidden')
     await restrict(true)
     const pause=await get(paused,pauseSession)
     assert.deepEqual([pause.save.kind,pause.save.from,pause.save.to],['pause','2026-01-01','2026-02-01'])
@@ -152,6 +183,22 @@ export async function portalRenewalFlow(h,owner) {
     await page.locator('button[value="save"]').click()
     assert.equal((await api(`subscriptions/${downgraded.sub}/upcoming?period=2026-01`)).calculation.totalCents,6000)
     assert.equal((await api(`subscriptions/${downgraded.sub}/upcoming?period=2025-12`)).calculation.totalCents,10000)
+
+    const minimum=await subscription({start:'2025-01-01',months:24}),minimumSession=await issue(minimum)
+    // Create the additional approver through the ordinary member door.
+    const reviewerEmail=`reviewer-${h.vars.OWNER_EMAIL}`
+    await api('access.give',{email:reviewerEmail,name:'Portal policy reviewer',role:'finance'})
+    const reviewer=await h.signIn(reviewerEmail,{requested:true})
+    const contract=await api('contract.prepare',{subscription:minimum.sub,revision:(await api(`subscriptions/${minimum.sub}`)).revision,clause:'synthetic-nectar-approved-minimum',commitments:[{from:'2026-01-01',to:'2026-03-01',minimum:'200',taxable:false}]})
+    await h.api('contract.decide',reviewer,{contract:contract.contract,decision:'approved'})
+    assert.equal((await get(minimum,minimumSession)).save,null,'A downgrade below signed minimum cannot execute as a save')
+    const restrictions=await h.raw(`/portal/changes/${minimum.sub}?session=${minimumSession.token}`,{headers:{accept:'application/json'}})
+    const requestOptions=await restrictions.json()
+    const pending=await h.raw(`/portal/change.request?session=${minimumSession.token}`,{body:{subscription:minimum.sub,item:requestOptions.item,target_price:cheap,quantity:1,basis:requestOptions.basis,policy_revision:requestOptions.policy.revision,confirm:true}})
+    assert.equal(pending.status,200)
+    assert.equal((await pending.json()).belowContractMinimum,true,'The same customer still has a pending human-review door')
+    const member=(await api('members')).find(m=>m.email===reviewerEmail)
+    await api('access.end',{member:member.id})
 
     // Actual invoices prove the two saved periods and the unchanged following one.
     await h.advanceClock('2026-04-01T16:00:00Z')
@@ -200,5 +247,23 @@ export async function portalRenewalFlow(h,owner) {
   await get(saved,erasing,401)
   await post(saved,erasing,{basis:eraseData.basis,confirm:'cancel'},401)
   assert.ok((await api('retention')).offers.filter(o=>o.subscription_id===saved.sub).every(o=>o.status==='expired'))
+  // A current approval cannot be replaced by a departed approver's old grant.
+  const authorityCustomer=await subscription({start:'2026-01-01',months:24})
+  const authoritySession=await issue(authorityCustomer)
+  const departingEmail=`departing-${h.vars.OWNER_EMAIL}`
+  await api('access.give',{email:departingEmail,name:'Departing reviewer',role:'finance'})
+  const departing=await h.signIn(departingEmail,{requested:true})
+  const active=(await api('retention')).policy
+  const proposal=await api('retention.policy.prepare',{...active,revision:active.revision,enabled:true,save_kind:'discount',save_percent:20,save_months:2})
+  await h.api('retention.policy.decide',departing,{request:proposal.request,decision:'approved'})
+  const approved=await get(authorityCustomer,authoritySession)
+  assert.equal(approved.save.percent,20)
+  const member=(await api('members')).find(m=>m.email===departingEmail)
+  await api('access.end',{member:member.id})
+  assert.equal((await get(authorityCustomer,authoritySession)).save,null)
+  const facts=await money(authorityCustomer)
+  await post(authorityCustomer,authoritySession,{basis:approved.basis,confirm:'save',offer:approved.save.id},409)
+  assert.deepEqual(await money(authorityCustomer),facts,'Revoked approval cannot change billing')
+  await post(authorityCustomer,authoritySession,{basis:(await get(authorityCustomer,authoritySession)).basis,confirm:'cancel'})
   console.log('PORT-003 portal cancellation, optional saves, dated win-back, exact invoices and capability custody passed')
 }
