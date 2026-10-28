@@ -174,7 +174,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "c3f772ad55764c9a4e6548bd31500dac97fe165f4433f680a5688680384c4ad1",
+      "sha256": "de0077223f342afc416f37c256a1e7b6fd215bd31e58294344f21fc39f2011ac",
       "executable": false
     },
     "AGENTS.consumer.md": {
@@ -186,7 +186,7 @@
       "executable": false
     },
     "API.md": {
-      "sha256": "9a1ae21a90842f5394c5f7ee5d06cb41c0da3c6d8c0eead82edd003c2b924bd6",
+      "sha256": "55afb211ef884e0cd087959a6d32076d624ff47f81943e6accc6006d0833072b",
       "executable": false
     },
     "base-copies.json": {
@@ -194,7 +194,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "4ed6102dd57d24614f1d8eac32b65be14f1590dca3d243b7c09592057155c26a",
+      "sha256": "abf3ac7b6c6bebbaecdb8611c9361d26e7581aecfe21cb5234ebd0263e316b54",
       "executable": false
     },
     "DEMO.md": {
@@ -230,7 +230,7 @@
       "executable": false
     },
     "docs/CLAIMS.md": {
-      "sha256": "d2d4b4259c3cab5f23c0f781a381f840e522b5761682fd045f8f670dc682f68d",
+      "sha256": "0c4d937ab0696bb3509b3cb1db7a942528324041522e919750304de80d93c9a9",
       "executable": false
     },
     "docs/composition-baseline.json": {
@@ -3642,11 +3642,11 @@
       "executable": false
     },
     "src/nectar/locales/en.json": {
-      "sha256": "f2a54831d18cc8686a82efa3122e1a98f1a417cb66a164c1940523196377b254",
+      "sha256": "7cf4094ee44ea6fa80a2fb59a44de66bec9d01e95ceec4feb5186f0558ec9b83",
       "executable": false
     },
     "src/nectar/locales/es-US.json": {
-      "sha256": "676b1da10e24ae5c7cd4d2f558b58d38fa166c74b5163e4e380920d8738daf24",
+      "sha256": "3f38b0f6b407fdb9f6977acdfebbcc639553c4143d73b8658d6b3c2d90e36b31",
       "executable": false
     },
     "src/nectar/manual-invoices.ts": {
@@ -3906,7 +3906,7 @@
       "executable": false
     },
     "src/nectar/portal-change-page.ts": {
-      "sha256": "726aaeaffb59486c143a45495b211e32c6c7b2906306024d4f6e8ed9ca47e780",
+      "sha256": "519d4c3fd3b1097fc10ead4e04bf7ebf10ea7bfa8b535f6cf082f7b1969eb542",
       "executable": false
     },
     "src/nectar/portal-change-policy.ts": {
@@ -3914,11 +3914,11 @@
       "executable": false
     },
     "src/nectar/portal-change-preview.ts": {
-      "sha256": "75f7d6edd31b166f2eec25e4755e129595b246429e6eefd5b3e597cdaa870ff5",
+      "sha256": "0335c9814ecdd41b8118e1b6a37dee565151cdca2ccd6a5baf9075acc595bb8e",
       "executable": false
     },
     "src/nectar/portal-change-requests.ts": {
-      "sha256": "b0aa861cce0c240937dc561977f7c2e491056af82ce3e965d9f533c25d4330dc",
+      "sha256": "796f400d7aa187d21c30618a15d3eb7bb2f5c225fa3615044cbabe9467de9d44",
       "executable": false
     },
     "src/nectar/portal-correction-data.ts": {
@@ -3930,7 +3930,7 @@
       "executable": false
     },
     "src/nectar/portal-http.ts": {
-      "sha256": "559a52f656a0c482eba57966a3edf61093480e05573ac9f8845283f5d633d390",
+      "sha256": "58bf3addda56d89dde8695799bdb597641defe0e2622ff1b3bc15c92b459486b",
       "executable": false
     },
     "src/nectar/portal-method-actions-page.ts": {
@@ -4974,7 +4974,7 @@
       "executable": false
     },
     "tests/fixtures/locales/fr.json": {
-      "sha256": "3e2c10016fc70c47dd51a0943fb94467dc34e0b21a9af7fbd0a625d147ee04ef",
+      "sha256": "1f9fb0b982a18fdec4171ab0c3cfe58215636a7bcdbfa7f7058bccf468fbae39",
       "executable": false
     },
     "tests/fixtures/stripe-collection-edge.mjs": {
@@ -5194,7 +5194,7 @@
       "executable": false
     },
     "tests/nectar/erasure-archive.mjs": {
-      "sha256": "4d9abb8d5f5d4b754923edf57d96a1783ca4a4dde9e9f43ae8252bff53890cea",
+      "sha256": "4364002c8cf68757fa8e69b3998ef14f804374c0cd65694428621781693fef4b",
       "executable": false
     },
     "tests/nectar/erasure-record-kinds.mjs": {
@@ -5466,7 +5466,7 @@
       "executable": false
     },
     "tests/nectar/portal-renewal.mjs": {
-      "sha256": "09d1da9f905326dc33e1e89a8a6031eab26074bce18cea6dac05604a067e0c3f",
+      "sha256": "5ea0278cd3a5f5cd69248869c67d3ffb827f3e8838629374262c94413389a23e",
       "executable": false
     },
     "tests/nectar/portal-sessions.mjs": {
