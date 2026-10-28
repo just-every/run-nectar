@@ -448,5 +448,6 @@
   "portal.change.contractMinimum": "Ce changement est inférieur au minimum signé. Une personne doit l’examiner ; vos conditions approuvées restent en vigueur.",
   "portal.change.review": "Une personne doit examiner cette demande avant tout changement.",
   "portal.change.stale": "L’abonnement ou la politique du marchand a changé depuis cette demande. Elle ne permet pas d’appliquer l’ancien choix.",
-  "portal.change.empty": "Aucune demande pour le moment."
+  "portal.change.empty": "Aucune demande pour le moment.",
+  "portal.change.quantity": "Quantité"
 }

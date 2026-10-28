@@ -448,5 +448,6 @@
   "portal.change.contractMinimum": "This is below your signed minimum. A person must review it; your approved terms remain in force.",
   "portal.change.review": "A person must review this request before any change.",
   "portal.change.stale": "The subscription or merchant policy has changed since this request. It grants no authority to apply the old choice.",
-  "portal.change.empty": "No requests yet."
+  "portal.change.empty": "No requests yet.",
+  "portal.change.quantity": "Quantity"
 }

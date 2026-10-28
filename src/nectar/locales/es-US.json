@@ -448,5 +448,6 @@
   "portal.change.contractMinimum": "El cambio queda por debajo de su mínimo firmado. Una persona debe revisarlo; sus condiciones aprobadas siguen vigentes.",
   "portal.change.review": "Una persona debe revisar esta solicitud antes de cualquier cambio.",
   "portal.change.stale": "La suscripción o la política del comercio cambió desde esta solicitud. No autoriza aplicar la opción anterior.",
-  "portal.change.empty": "Todavía no hay solicitudes."
+  "portal.change.empty": "Todavía no hay solicitudes.",
+  "portal.change.quantity": "Cantidad"
 }

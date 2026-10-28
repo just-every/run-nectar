@@ -114,7 +114,7 @@ export async function portalChangeRequestsFlow(h, owner) {
   assert.deepEqual(await money(), before, 'Requests and all refusals change no plan or money')
   assert.equal(h.mails.length, mailsBefore, 'Requests send no message')
 
-  let browser
+  let browser, peerRequest, peerSubscription
   const evidence = process.env.NECTAR_EVIDENCE_DIR
   if (evidence) await mkdir(evidence, { recursive: true })
   try {
@@ -128,7 +128,12 @@ export async function portalChangeRequestsFlow(h, owner) {
       }
       await page.setViewportSize({ width: 1440, height: 950 })
     }
-    await page.goto(`${h.origin}/portal/changes/${subscription}?session=${session.token}`)
+    await page.goto(session.url)
+    await page.getByRole('link', { name: 'Plan change requests' }).click()
+    await page.getByRole('heading', { name: 'Plan change requests' }).waitFor()
+    assert.equal(await page.getByRole('heading', { name: 'Pending merchant review' }).count(), 1)
+    await capture('customer-request-index')
+    await page.getByRole('link', { name: 'Subscription 1', exact: true }).click()
     await page.getByRole('heading', { name: 'Plan change requests' }).waitFor()
     assert.equal(await page.getByRole('button', { name: /(?:pause|cancel)/i }).count(), 0, 'Forbidden pause has no option')
     assert.match(await page.locator('main').innerText(), /Below|below your signed minimum/)
@@ -156,10 +161,53 @@ export async function portalChangeRequestsFlow(h, owner) {
     assert.equal(await operatorPage.getByRole('heading', { name: /Cedar customer/ }).count(), 2)
     if (evidence) for (const width of [1440,390]) { await operatorPage.setViewportSize({ width, height: 950 }); await operatorPage.screenshot({ path: `${evidence}/merchant-review-${width}.png`, fullPage: true }) }
     assert.equal((await h.api('portal-changes', finance)).requests.length, 2)
+    // Save real restrictions in Settings, then independently approve them.
+    await operatorPage.getByLabel('Minimum seats', { exact: true }).fill('6')
+    await Promise.all([operatorPage.waitForNavigation(), operatorPage.getByRole('button', { name: 'Prepare restrictions' }).click()])
+    assert.equal((await options()).policy.minimumSeats, 5, 'Native preparation changes no active restrictions')
+    const financeContext = await browser.newContext({ viewport: { width: 1440, height: 950 } })
+    await financeContext.addCookies(finance.split('; ').map(pair => { const [name,...value] = pair.split('='); return { name, value: value.join('='), url: h.origin } }))
+    const financePage = await financeContext.newPage()
+    await financePage.goto(`${h.origin}/app/settings#policy-changes`)
+    const review = financePage.locator('article').filter({ has: financePage.getByRole('heading', { name: 'Portal change restrictions' }) })
+    if (evidence) { for (const width of [1440,390]) { await financePage.setViewportSize({ width, height: 950 }); await financePage.screenshot({ path: `${evidence}/finance-policy-review-${width}.png`, fullPage: true }) }; await financePage.setViewportSize({ width: 1440, height: 950 }) }
+    await Promise.all([financePage.waitForNavigation(), review.getByRole('button', { name: 'Approve policy change' }).click()])
+    assert.equal((await options()).policy.minimumSeats, 6, 'Independent native approval applies the exact restrictions')
     await h.api('access.give', owner, { email: email('collections'), name: 'Collection operator', role: 'collections' })
     const collections = await h.signIn(email('collections'), { requested: true })
     await h.api('portal-changes', collections, undefined, 403)
     assert.equal((await h.raw('/app/settings/portal-changes', { cookie: collections })).status, 403)
+    await h.api('access.give', owner, { email: email('support'), name: 'Support operator', role: 'support' })
+    const support = await h.signIn(email('support'), { requested: true })
+    const supportQueue = await h.api('portal-changes', support)
+    assert.equal(supportQueue.requests.length,2,'Subscription support can read the pending customer requests')
+    assert.deepEqual(supportQueue.policy.prices,[],'Subscription access does not expose the global catalog allowlist')
+    await h.api('portal.change.policy',support,restriction,403)
+
+    // Flat plans use their own unit, without inventing a seat floor or a charge.
+    const flatProduct = (await h.api('product.create', owner, { code: 'synthetic-nectar-flat-request', name: 'Flat workspace' })).id
+    const flatPrices = []
+    for (const unit_amount of ['300','100']) flatPrices.push((await publishPrice(h, owner, { product: flatProduct, kind: 'flat', unit_amount, taxable: false })).id)
+    peerSubscription = (await h.api('subscription.create', owner, { customer: other, start_date: '2020-01-01', price: [flatPrices[0]] })).id
+    await applyPolicy(h, owner, 'portal.change.policy', { prices: [...prices,...flatPrices], minimum_seats: 6, pause_allowed: false })
+    const flat = await options(foreign, peerSubscription)
+    const flatFacts = async () => { const sub = await h.api(`subscriptions/${peerSubscription}`,owner); return { items: sub.items, changes: sub.changes, planChanges: sub.planChanges, invoices: sub.invoices, ledger: (await h.api(`customers/${other}`,owner)).ledger } }
+    const flatBefore = await flatFacts()
+    const flatBody = { subscription: peerSubscription, item: flat.item, target_price: flatPrices[1], quantity: 1, basis: flat.basis, policy_revision: flat.policy.revision, confirm: true }
+    await post(flatBody, 404, session)
+    await post({ ...flatBody, quantity: 2 }, 409, foreign)
+    await page.goto(`${h.origin}/portal/changes/${peerSubscription}?session=${foreign.token}`)
+    assert.equal(await page.getByLabel('Seats', { exact: true }).count(), 0, 'A flat plan has no editable seat quantity')
+    await page.getByLabel('Requested plan and unit price').selectOption(flatPrices[1])
+    await page.getByRole('button', { name: 'Request downgrade review' }).click()
+    await page.getByRole('heading', { name: 'Plan change requests' }).waitFor()
+    const flatStatus = await options(foreign, peerSubscription)
+    assert.equal(flatStatus.requests.length, 1)
+    peerRequest = flatStatus.requests[0].id
+    assert.deepEqual([flatStatus.requests[0].quantity,Number(flatStatus.requests[0].unitAmount)*100,flatStatus.requests[0].belowContractMinimum], [1,10000,false])
+    assert.deepEqual(await flatFacts(),flatBefore,'Flat request and refused alternatives change no plan, invoice or money')
+    await capture('flat-plan-pending')
+
   } finally { if (browser) await browser.close() }
   assert.deepEqual(await money(), before, 'The customer form also changes no plan or money')
 
@@ -187,7 +235,10 @@ export async function portalChangeRequestsFlow(h, owner) {
   const erased = await h.api('erasure.approve', owner, { request: erasure.id, confirm: true })
   assert.equal(erased.receipt.changed.find(r => r.kind === 'nc_portal_change_requests').records, 2)
   await post(body, 401, fresh)
-  assert.equal((await h.api('portal-changes', owner)).requests.length, 0)
+  const surviving = (await h.api('portal-changes', owner)).requests
+  assert.deepEqual(surviving.map(r => [r.id,r.customer_id]), [[peerRequest,other]], 'Erasing one requester preserves the other customer request')
+  const peerSession = await issue(other)
+  assert.equal((await options(peerSession,peerSubscription)).requests[0].id,peerRequest)
   assert.equal((await h.api(`invoices/${invoice.id}`, owner)).total_cents, before.invoices.total_cents, 'Erasure retains original financial facts')
   console.log('PORT-003 pending requests, exact source and approved restrictions, replay, native bilingual forms, refusal and erasure custody passed')
 }
