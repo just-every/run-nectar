@@ -2,7 +2,7 @@ import { portalRetentionActive, portalRetentionGuard } from './portal-retention-
 import type { Bindings } from '../auth.server'
 import { requireBusiness } from './business'
 import { clockInstant } from './clock'
-import { all, fingerprint, guard, insist, one, parseJson, type Row } from './core'
+import { all, fingerprint, guard, insist, now, one, parseJson, stmt, type Row } from './core'
 import { micros } from './decimal'
 import { addDays, localDate } from './dates'
 import type { Input } from './input'
@@ -84,6 +84,10 @@ export async function operatePortalRenewal(env: Bindings, request: Request, sess
     guard(env,'portal_change_stale',"EXISTS(SELECT 1 FROM nc_subscriptions WHERE id=? AND customer_id=? AND revision=? AND billing_mode='live') AND COALESCE((SELECT revision FROM nc_portal_change_policy WHERE singleton=1),0)=?",subscription,session.customer,data.sub.revision,data.policy.revision)]
   const operation=input.text('confirm',{max:10})
   if(operation==='cancel') {
+    // An optional offer read never writes; explicit cancellation records the
+    // displayed offer's decline atomically, without making a save mandatory.
+    const offered=input.text('offer',{max:100,optional:true}),save=offered?await optionalSave(env,data):null
+    if(save?.prepared&&save.offer.id===offered)guards.push(stmt(env,"INSERT INTO nc_retention_offers(id,subscription_id,kind,policy_id,source_revision,terms_json,from_date,to_date,status,reason,created_at,decided_at) VALUES(?,?,'save',?,?,?,?,?,'declined',?,?,?)",save.offer.id,subscription,save.offer.policy_id,save.offer.source_revision,save.offer.terms_json,save.offer.from_date,save.offer.to_date,reason,now(),now()))
     await cancelRenewal(env,data.term,reason,guards,`customer:portal:${session.customer}`)
     return {subscription,status:'cancelled',end:data.term.end_date}
   }

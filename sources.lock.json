@@ -174,7 +174,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "8c32cdd8957d6404d8ec7ae0399009ebbeca482db779aa9e97662aa0cd3796f1",
+      "sha256": "b218e45c0396e532d0a656c07bdbe56b040d7e0e8d2781bd70e61d94cdba531f",
       "executable": false
     },
     "AGENTS.consumer.md": {
@@ -186,7 +186,7 @@
       "executable": false
     },
     "API.md": {
-      "sha256": "1cf3415c361f53a8799889424c975065ce1b88f4b75581c21e218b34c9403016",
+      "sha256": "c3ca4f51600795920d92efbfe5ef8b7ea17cbdd161ceb69f78f87f19de92e2e9",
       "executable": false
     },
     "base-copies.json": {
@@ -194,7 +194,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "19eb30f54b2310da9eda1c899c46268ad3aee4ceb93361f82942142699f277d7",
+      "sha256": "cd15a5afaaff1892344d4008c0e2b54779cd806b0fe0e78b9bee9278cadb0c5a",
       "executable": false
     },
     "DEMO.md": {
@@ -230,7 +230,7 @@
       "executable": false
     },
     "docs/CLAIMS.md": {
-      "sha256": "946cd2cf661113ed9118fd7b6ceaee1a82fc463e428b7041cbbfe2aee89c86be",
+      "sha256": "034f6d2ab49d365247edb27dc8d13059a2e421f3a72b39eafc56e69faf9755e4",
       "executable": false
     },
     "docs/composition-baseline.json": {
@@ -3954,7 +3954,7 @@
       "executable": false
     },
     "src/nectar/portal-renewal.ts": {
-      "sha256": "ed425a8508428a7b3ceb8bee0bc80dfbec8a90f446571e038523aa288eece124",
+      "sha256": "abed41c68e6e6ddab170ff3f165c16b609d7b837a45eec2023682eb22c6f2ebc",
       "executable": false
     },
     "src/nectar/portal-retention-authority.ts": {
@@ -5442,7 +5442,7 @@
       "executable": false
     },
     "tests/nectar/portal-renewal.mjs": {
-      "sha256": "5ea0278cd3a5f5cd69248869c67d3ffb827f3e8838629374262c94413389a23e",
+      "sha256": "2efff29b708d98bb5a0133d09e185641e583c4560ce77d00d4f2667cbb4e9ada",
       "executable": false
     },
     "tests/nectar/portal-sessions.mjs": {
