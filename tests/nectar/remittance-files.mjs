@@ -1,3 +1,4 @@
+import { applyPolicy } from './policy-helper.mjs'
 // Real Worker and D1; cash, matching and refusal use only public doors.
 import assert from 'node:assert/strict'
 import { chromium } from '@playwright/test'
@@ -57,6 +58,11 @@ export async function remittanceFilesFlow(h, owner) {
   // A person may identify an unknown deposit, but foreign invoices remain unavailable.
   const assignedResult=await confirm(unknown,assigned)
   const unallocatedBefore=await api(`payments/${assignedResult.payment}/receipt`);assert.equal(unallocatedBefore.unallocatedCents,4000)
+  const heldBalance=await api(`customers/${other}/balance`)
+  assert.equal(heldBalance.cashCents,4000);assert.equal(heldBalance.queuedCashCents,4000)
+  assert.equal((await api(`reports/credit-balances?customer=${other}`)).totalCents,4000,'Queued cash remains in financial reports while excluded from automatic application')
+  const heldCsv=csvRows(await(await h.raw(`/app/exports/reports/credit-balances.csv?customer=${other}`,{cookie:owner})).text())
+  assert.equal(heldCsv.find(row=>row.source==='TOTAL').amount,'40.00')
   await api('remittance.allocate.preview',{receipt:unknown,invoice:invoices[4].id,amount:'10.00'},409)
   const allocation=await api('remittance.allocate.preview',{receipt:unknown,invoice:foreign.id,amount:'10.00'})
   const allocationBody={receipt:unknown,invoice:foreign.id,amount:'10.00',fingerprint:allocation.fingerprint,confirm:true}
@@ -66,10 +72,19 @@ export async function remittanceFilesFlow(h, owner) {
   assert.equal((await h.raw('/api/nectar/remittance.allocate',{cookie:owner,body:allocationBody})).status,500)
   await h.rejectAudit(null)
   assert.deepEqual(await api(`payments/${assignedResult.payment}/receipt`),unallocatedBefore,'An audit failure rolls back every allocation')
+  await api('balance.apply',{invoice:foreign.id},409)
+  assert.deepEqual(await api(`payments/${assignedResult.payment}/receipt`),unallocatedBefore,'Customer balance application cannot bypass receipt review')
   const allocated=await api('remittance.allocate',allocationBody)
   assert.equal((await api('remittance.allocate',allocationBody)).allocation,allocated.allocation)
   assert.equal((await api(`payments/${assignedResult.payment}/receipt`)).unallocatedCents,3000)
   assert.equal((await api(`invoices/${foreign.id}`)).balanceCents,0)
+  await applyPolicy(h,owner,'credit.policy',{balance_application:'automatic'})
+  const automatic=await issue('5.00',other)
+  assert.equal(automatic.balanceCents,500,'An automatic customer-balance policy leaves queued remittance cash for its separately confirmed door')
+  assert.equal((await api(`payments/${assignedResult.payment}/receipt`)).unallocatedCents,3000)
+  const written=await api('writeoff.issue',{invoice:automatic.id,amount:'5.00',reason:'Synthetic receivable review'})
+  await api('writeoff.recover',{write_off:written.writeOff,payment:assignedResult.payment,amount:'1.00'},409)
+  assert.equal((await api(`payments/${assignedResult.payment}/receipt`)).unallocatedCents,3000,'Write-off recovery cannot consume queued cash')
   // A different payment changes a reviewed balance before source confirmation.
   const stale=await upload(rows('synthetic-nectar-913','20.00',[[invoices[3].number,'20.00']]))
   const old=await preview(stale)
@@ -162,6 +177,13 @@ async function remittanceScreens(h,owner,{customer,invoice,rows}) {
     await capture('remittance-confirmation')
     await page.getByLabel('I confirm these received funds and the listed allocations').check()
     await submit('remittance.confirm')
+    await page.goto(`${h.origin}/app/customers/${customer}`)
+    assert.match(await page.locator('section[aria-labelledby="balance"]').innerText(),/\$10.00/,'The customer sees the cash awaiting allocation')
+    await capture('customer-remittance-balance')
+    await page.goto(`${h.origin}/app/invoices/${invoice.id}`)
+    assert.equal(await page.locator('form[action="/app/do/payment.allocate"]').count(),0,'The invoice directs held receipt funds to their separate review')
+    await capture('invoice-remittance-review')
+    await page.locator('a[href="/app/receivables#remittances"]').click()
     await page.locator('#remittances tbody tr').filter({hasText:'synthetic-nectar-920'}).getByRole('link',{name:'Review receipt'}).click()
     await page.getByLabel('Invoice',{exact:true}).selectOption(invoice.id)
     await page.getByLabel('Amount ($)',{exact:true}).first().fill('10.00')
