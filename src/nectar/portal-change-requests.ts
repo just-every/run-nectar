@@ -15,7 +15,8 @@ const SOURCE = `SELECT json_object('revision',s.revision,'customerRevision',c.re
   'start',s.start_date,'end',s.end_date,'contractEnd',s.contract_end_date,
   'items',json((SELECT json_group_array(json_object('id',id,'price',price_id,'quantity',quantity,'from',effective_from,'to',effective_to)) FROM (SELECT * FROM nc_items WHERE subscription_id=s.id ORDER BY id))),
   'contracts',json(${approvedPortalTermsSQL}),
-  'lifecycle',json((SELECT json_group_array(json_object('id',id,'kind',kind,'date',effective_date)) FROM (SELECT * FROM nc_subscription_lifecycle WHERE subscription_id=s.id ORDER BY id))),
+  'amendments',json((SELECT json_group_array(json_object('id',id,'kind',kind,'value',value,'price',price_id,'from',effective_from,'to',effective_to)) FROM (SELECT * FROM nc_amendments WHERE subscription_id=s.id AND status='approved' ORDER BY id))),
+  'lifecycle',json((SELECT json_group_array(json_object('id',id,'kind',kind,'date',effective_date,'until',until_date,'access',access)) FROM (SELECT * FROM nc_subscription_lifecycle WHERE subscription_id=s.id ORDER BY id))),
   'renewals',json((SELECT json_group_array(json_object('id',id,'status',status,'start',start_date,'end',end_date,'auto',auto_renew,'revision',revision)) FROM (SELECT * FROM nc_renewal_terms WHERE subscription_id=s.id ORDER BY id)))) AS source
   FROM nc_subscriptions s JOIN nc_customers c ON c.id=s.customer_id WHERE s.id=? AND s.customer_id=? AND s.billing_mode='live' AND c.erased_at IS NULL`
 
