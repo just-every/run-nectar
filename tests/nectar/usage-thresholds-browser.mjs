@@ -67,7 +67,9 @@ try{
     }else{
       assert.equal((await page.goto(h.origin+`/app/invoices/${state.invoice}`)).status(),200)
       if(state.label==='threshold-invoice')assert.equal(await page.getByText('$5,050.00',{exact:true}).count()>0,true)
-      else assert.equal(await page.getByText('$950.00',{exact:true}).count()>0,true)
+      else if(state.label==='remainder-invoice')assert.equal(await page.getByText('$950.00',{exact:true}).count()>0,true)
+      else if(state.label==='credited-threshold')assert.equal(await page.getByText('$499.50',{exact:true}).count()>0,true)
+      else assert.equal(await page.getByText('$0.00',{exact:true}).count()>0,true)
       await capture(page,state.label)
     }
   }})

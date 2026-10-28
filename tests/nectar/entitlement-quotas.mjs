@@ -431,6 +431,8 @@ export async function usageThresholdFlow(h,owner,{onState=async()=>{}}={}) {
   assert.equal((await api('usage.threshold.invoice',{crossing:spending.id})).id,draft.id)
   await onState({label:'remainder-invoice',invoice:final.id,subscription,customer})
   await thresholdPricingRemainders(h,owner)
+  await thresholdDeferredRemainder(h,owner,{onState})
+  await thresholdVolumeCredit(h,owner,{onState})
 }
 
 async function thresholdPricingRemainders(h,owner) {
@@ -466,4 +468,77 @@ async function thresholdPricingRemainders(h,owner) {
   assert.equal(issued.reduce((n,i)=>n+i.tax_cents,0)+final.tax_cents,99)
   const revenue=await api(`revenue?from=2026-11&to=2026-12&customer=${customer}`)
   assert.deepEqual([revenue.recognizedCents,revenue.netBillingsCents,revenue.closingCents],[1202,1202,0],'Threshold recognition and final cumulative consideration reconcile without double recognition')
+}
+
+export async function thresholdDeferredRemainder(h,owner,{onState=async()=>{}}={}) {
+  const api=(path,body,status)=>h.api(path,owner,body,status)
+  await h.advanceClock('2026-09-15T12:00:00Z')
+  await api('business.configure',{...await api('business'),timezone:'UTC'})
+  const customer=(await api('customer.create',{external_id:'synthetic-nectar-deferred-1',name:'Deferred usage account',billing_email:h.vars.OWNER_EMAIL})).id
+  await api('contact.add',{customer,name:'Billing contact',email:h.vars.OWNER_EMAIL,role:'billing'})
+  const product=(await api('product.create',{code:'synthetic-nectar-deferred-1',name:'Deferred calls'})).id
+  const meter=await api('meter.create',{code:'synthetic-nectar-deferred-1',name:'Deferred calls',unit_label:'calls'})
+  const price=(await publishPrice(h,owner,{product,kind:'unit',meter:meter.id,unit_amount:'1',taxable:false})).id
+  const subscription=(await api('subscription.create',{customer,start_date:'2026-09-01',anchor_day:1,price:[price]})).id
+  const threshold=await api('usage.threshold.configure',{subscription,kind:'spend',threshold:'5000',name:'Deferred spend',recipient:h.vars.OWNER_EMAIL,confirm_mail:true})
+  await api('usage.submit',{events:[{event_id:'synthetic-nectar-deferred-1',customer:'synthetic-nectar-deferred-1',meter:meter.code,quantity:'6000',occurred_at:'2026-09-15T10:00:00Z'}]})
+  const crossing=(await api('usage'+'/thresholds')).crossings.find(row=>row.threshold_id===threshold.id)
+  const draft=await api('usage.threshold.invoice',{crossing:crossing.id})
+  await api('invoice.approve',{invoice:draft.id,acknowledge:true});await api('invoice.finalise',{invoice:draft.id,issue_date:'2026-09-15'})
+  const payment=await api('payment.record',{customer,amount:'6000',received_on:'2026-09-15',method:'bank_transfer',reference:'synthetic-nectar-deferred-1',evidence:'Recorded threshold settlement'})
+  await api('payment.allocate',{payment:payment.payment,invoice:draft.id,amount:'6000'})
+  assert.equal((await api(`invoices/${draft.id}`)).balanceCents,0)
+  await h.advanceClock('2026-11-02T12:00:00Z')
+  const run=await api('billrun.prepare',{period:'2026-10'}),remainder=(await api(`runs/${run.id}`)).invoices.find(row=>row.subscription_id===subscription)
+  assert.equal(remainder.total_cents,0,'A later bill run deducts the paid September threshold instead of billing its usage twice')
+  const detail=await api(`invoices/${remainder.id}`)
+  assert.equal(detail.lines.find(row=>row.kind==='threshold_settlement').amount_cents,-600000)
+  await api('invoice.approve',{invoice:remainder.id,acknowledge:true});await api('invoice.finalise',{invoice:remainder.id,issue_date:'2026-11-02'})
+  await onState({label:'deferred-remainder',invoice:remainder.id,subscription,customer})
+  assert.deepEqual([...(await api(`customers/${customer}`)).ledger.invoices].map(row=>row.total_cents).sort((a,b)=>a-b),[0,600000])
+  await h.advanceClock('2026-12-02T12:00:00Z')
+  const next=await api('billrun.prepare',{period:'2026-11'}),nextInvoice=(await api(`runs/${next.id}`)).invoices.find(row=>row.subscription_id===subscription)
+  assert.equal(nextInvoice.total_cents,0,'Consumed catch-up usage and consideration cannot reappear in another run')
+  const revenue=await api(`revenue?from=2026-09&to=2026-11&customer=${customer}`)
+  assert.deepEqual([revenue.recognizedCents,revenue.netBillingsCents,revenue.closingCents],[600000,600000,0])
+}
+
+export async function thresholdVolumeCredit(h,owner,{onState=async()=>{}}={}) {
+  const api=(path,body,status)=>h.api(path,owner,body,status)
+  await h.advanceClock('2027-01-15T12:00:00Z')
+  await api('business.configure',{...await api('business'),timezone:'UTC'})
+  const customer=(await api('customer.create',{external_id:'synthetic-nectar-reprice-1',name:'Volume repricing account',billing_email:h.vars.OWNER_EMAIL})).id
+  await api('contact.add',{customer,name:'Billing contact',email:h.vars.OWNER_EMAIL,role:'billing'})
+  const product=(await api('product.create',{code:'synthetic-nectar-reprice-1',name:'Volume repricing'})).id
+  const meter=await api('meter.create',{code:'synthetic-nectar-reprice-1',name:'Volume repricing',unit_label:'units'})
+  const price=(await publishPrice(h,owner,{product,kind:'unit',meter:meter.id,pricing_model:'volume',tiers:[{up_to:'1000',unit_amount:'1'},{up_to:null,unit_amount:'0.50'}],taxable:false})).id
+  const subscription=(await api('subscription.create',{customer,start_date:'2027-01-01',anchor_day:1,price:[price]})).id
+  const threshold=await api('usage.threshold.configure',{subscription,kind:'spend',threshold:'1000',name:'Volume spend',recipient:h.vars.OWNER_EMAIL,confirm_mail:true})
+  const ingest=(id,quantity)=>api('usage.submit',{events:[{event_id:id,customer:'synthetic-nectar-reprice-1',meter:meter.code,quantity,occurred_at:'2027-01-15T10:00:00Z'}]})
+  await ingest('synthetic-nectar-reprice-1','1000')
+  const crossing=(await api('usage'+'/thresholds')).crossings.find(row=>row.threshold_id===threshold.id)
+  const draft=await api('usage.threshold.invoice',{crossing:crossing.id})
+  await api('invoice.approve',{invoice:draft.id,acknowledge:true});await api('invoice.finalise',{invoice:draft.id,issue_date:'2027-01-15'})
+  const original=await api(`invoices/${draft.id}`)
+  assert.equal(original.total_cents,100000)
+  await ingest('synthetic-nectar-reprice-2','1')
+  await h.advanceClock('2027-02-02T12:00:00Z')
+  const blocked=await api('billrun.prepare',{period:'2027-01'}),negative=(await api(`runs/${blocked.id}`)).invoices.find(row=>row.subscription_id===subscription)
+  assert.equal(negative.total_cents,-49950)
+  await api('invoice.approve',{invoice:negative.id,acknowledge:true},409)
+  await api('credit.issue',{invoice:draft.id,amount:'499.50',reason:'Volume repricing from 1000 to 1001 units'})
+  const run=await api('billrun.prepare',{period:'2027-01'}),remainder=(await api(`runs/${run.id}`)).invoices.find(row=>row.subscription_id===subscription)
+  assert.equal(remainder.total_cents,0,'An issued overpayment credit reduces threshold consideration so the final invoice can complete')
+  const detail=await api(`invoices/${remainder.id}`)
+  assert.equal(detail.lines.find(row=>row.kind==='threshold_settlement').amount_cents,-50050)
+  await api('invoice.approve',{invoice:remainder.id,acknowledge:true});await api('invoice.finalise',{invoice:remainder.id,issue_date:'2027-02-02'})
+  await api('invoice.finalise',{invoice:remainder.id},409)
+  const credited=await api(`invoices/${draft.id}`)
+  assert.equal(credited.total_cents,original.total_cents,'The issued threshold invoice remains immutable')
+  assert.equal(credited.balanceCents,50050)
+  assert.deepEqual(credited.lines,original.lines)
+  await onState({label:'credited-threshold',invoice:draft.id,subscription,customer})
+  await onState({label:'volume-remainder',invoice:remainder.id,subscription,customer})
+  const revenue=await api(`revenue?from=2027-01&to=2027-02&customer=${customer}`)
+  assert.deepEqual([revenue.recognizedCents,revenue.netBillingsCents,revenue.closingCents],[50050,50050,0],'The credit and final settlement neither duplicate nor lose revenue')
 }

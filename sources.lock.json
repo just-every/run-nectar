@@ -174,7 +174,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "9c4e160d5eaa24e9430b5dd83ce5c1e541f8d16808d09b68eacdad2158fc1141",
+      "sha256": "7317b85b36d1260e2f6db2cbc74651c5af9dfc0bf7b9f458a273fa0913af1ef9",
       "executable": false
     },
     "AGENTS.consumer.md": {
@@ -194,7 +194,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "10aaa73d03310950ea4253ef0856105331024638d8671bc95633f4a4741e9dd7",
+      "sha256": "7d726c64b59438c0859c7ebcb0a270964ad8a2fdfbdc012abd479cb38b601975",
       "executable": false
     },
     "DEMO.md": {
@@ -230,7 +230,7 @@
       "executable": false
     },
     "docs/CLAIMS.md": {
-      "sha256": "86c2b1b0b1da972b6ceb998ea89e8e54ae53facf541bb8e63a59a551ec71460b",
+      "sha256": "8e189ef8a465889a3d9ae2513f06fa2cb70508dc8120424041fe3fdc128f372c",
       "executable": false
     },
     "docs/composition-baseline.json": {
@@ -4210,11 +4210,11 @@
       "executable": false
     },
     "src/nectar/threshold-invoice-rating.ts": {
-      "sha256": "c3ae4e0374ec1dc89059da0abe225000a66a10c9f2679ab2f957f610277c60fb",
+      "sha256": "b328f43ea230e23cf559a7556168d3737b8a497d8bc6b20a2b9bab878f0ef231",
       "executable": false
     },
     "src/nectar/threshold-invoices.ts": {
-      "sha256": "dccbe27875164a43dcc7c73f2de68af6b70de83afce85145c4101b7c02dd54a1",
+      "sha256": "8708716ddd7ea04fcb6e89b744f1b998ab7e3aa879f74d26791ce1239f556334",
       "executable": false
     },
     "src/nectar/trial-collection-invoice.ts": {
@@ -4978,7 +4978,7 @@
       "executable": false
     },
     "tests/nectar/entitlement-quotas.mjs": {
-      "sha256": "f8a34ec362ee760663f983ebb873724a273b3749d106d0bc16c04cef67b5db40",
+      "sha256": "bac0ac3634cfcf3b8b034e2b256079f8eb132c76733f9b4bf6aef84e1289a062",
       "executable": false
     },
     "tests/nectar/entity-revenue.mjs": {
@@ -5438,7 +5438,7 @@
       "executable": false
     },
     "tests/nectar/usage-thresholds-browser.mjs": {
-      "sha256": "c52bf3ca28640a117c2d19f5b68c0dddeeaff14da2bc35921c0036e13895f221",
+      "sha256": "06f5520199468c40857f3e0aa68da74ff45836a32f91bd68bec63e372f8a707a",
       "executable": false
     },
     "tests/nectar/webhook-restore.mjs": {

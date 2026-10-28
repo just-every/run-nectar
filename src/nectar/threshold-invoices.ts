@@ -13,7 +13,7 @@ import { ratingInputs } from './inputs'
 import { rate, type RatingInput } from './rating'
 import { reconciliationFor } from './reconciliation'
 import { recognitionForRating } from './revenue-allocation'
-import type { ThresholdInvoiceBasis, ThresholdSettlement } from './threshold-invoice-rating'
+import { priorSettlementGuards, type ThresholdInvoiceBasis } from './threshold-invoice-rating'
 
 async function thresholdCalculation(env: Bindings, business: Business, crossingId: string, saved?: ThresholdInvoiceBasis) {
   const crossing = await one(env, `SELECT c.*,t.kind AS definition_kind,t.meter_id,t.contract_id,t.threshold AS current_threshold,t.revision AS threshold_revision,t.enabled
@@ -64,6 +64,9 @@ async function thresholdCalculation(env: Bindings, business: Business, crossingI
   const meteredItems = full.items.filter(item => full.prices[item.priceId].kind === 'unit')
   insist(meteredItems.length, 'threshold_invoice_requires_metered_usage', 409)
   const input: RatingInput = { ...full, thresholdInvoice: basis, events,
+    // This draft accrues only this crossing's window, unlike an ordinary bill
+    // run that also rates earlier unconsumed usage.
+    thresholdSettlements: full.thresholdSettlements?.filter(prior => prior.from >= period.start),
     items: meteredItems, charges: [], amendments: full.amendments.filter(amendment => amendment.kind === 'price_override'),
     // Actual usage earns against the minimum. An unused future minimum is not
     // accrued usage and cannot be invoiced at a spend crossing.
@@ -120,13 +123,6 @@ export async function thresholdInvoiceFingerprint(env: Bindings, business: Busin
   return (await thresholdCalculation(env, business, saved.crossing, saved)).fingerprint
 }
 
-function priorSettlementGuards(env: Bindings, subscription: string, period: { start: string; end: string }, saved: ThresholdSettlement[]) {
-  return [guard(env, 'source_changed', `SELECT COUNT(*)=? FROM nc_threshold_settlements WHERE subscription_id=? AND remainder_invoice_id IS NULL
-    AND period_start<? AND period_end>?`, saved.length, subscription, period.end, period.start),
-  ...saved.map(prior => guard(env, 'source_changed', `EXISTS(SELECT 1 FROM nc_threshold_settlements WHERE invoice_id=? AND source_fingerprint=?
-    AND subtotal_cents=? AND tax_cents=? AND remainder_invoice_id IS NULL)`, prior.invoice, prior.sourceFingerprint, prior.subtotalCents, prior.taxCents))]
-}
-
 function thresholdSourceGuards(env: Bindings, input: RatingInput) {
   const basis = input.thresholdInvoice!, scope = basis.scope
   return [
@@ -136,7 +132,7 @@ function thresholdSourceGuards(env: Bindings, input: RatingInput) {
       AND EXISTS(SELECT 1 FROM nc_usage_thresholds WHERE id=? AND revision=? AND enabled=1)`,
     basis.businessRevision, scope.customer, basis.customerRevision, scope.subscription, basis.subscriptionRevision, basis.threshold, basis.thresholdRevision),
     guard(env, 'source_changed', "NOT EXISTS(SELECT 1 FROM nc_invoices WHERE subscription_id=? AND invoice_kind='recurring' AND status='issued' AND period_start<? AND period_end>?)", scope.subscription, scope.to, scope.from),
-    ...priorSettlementGuards(env, scope.subscription, input.period, input.thresholdSettlements ?? []),
+    ...priorSettlementGuards(env, scope.subscription, input.period, input.thresholdSettlements ?? [], true),
     ...Array.from({ length: Math.ceil(input.events.length / 90) }, (_, index) => input.events.slice(index * 90, (index + 1) * 90))
       .map(events => guard(env, 'source_changed', `(SELECT COUNT(*) FROM nc_usage_events e WHERE e.event_id IN (${events.map(() => '?').join(',')})
         AND e.customer_id=? AND e.status='active' AND e.invoice_id IS NULL AND NOT EXISTS(SELECT 1 FROM nc_usage_voids v WHERE v.event_id=e.event_id))=?`,
