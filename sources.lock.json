@@ -3318,7 +3318,7 @@
       "executable": false
     },
     "src/nectar/erasure-checkpoint.ts": {
-      "sha256": "6d540eb5bfaed9a7c81ccae002500451c833d4fb951810eb58ac8933e30167e6",
+      "sha256": "42d2e24004f4bceab1be4d871fecc47328c638f799936415dca3fc56152a3d1e",
       "executable": false
     },
     "src/nectar/erasure-import.ts": {
@@ -3818,7 +3818,7 @@
       "executable": false
     },
     "src/nectar/portal-http.ts": {
-      "sha256": "a2815828e6ff5acdef4327e279846b54a0d979f10c0c4de1d306553b8c7050d5",
+      "sha256": "099b962b2345b036391e976be22ec7743bf4dd4c42578c61669d5daf48d2442e",
       "executable": false
     },
     "src/nectar/portal-invoice-payment-page.ts": {
@@ -5314,7 +5314,7 @@
       "executable": false
     },
     "tests/nectar/portal-billing.mjs": {
-      "sha256": "b0e140fac38cb3bfac4f27a07139cd97db8ad34b710f9cbc6aa96d6404019c85",
+      "sha256": "fb5de5d473509b2abf45ed330f5f410b31bdfc58ab253b02510b22f1a110be24",
       "executable": false
     },
     "tests/nectar/portal-corrections.mjs": {

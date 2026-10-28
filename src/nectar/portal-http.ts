@@ -58,11 +58,11 @@ export async function portalResponse(request: Request, env: Bindings): Promise<R
       return new Response(null,{status:303,headers:{...headers,location:portalLink('/portal/profile')}})
     }
     if(url.pathname==='/portal/profile/data')return Response.json(await portalProfileData(env,session),{headers})
-    if(url.pathname==='/portal/profile/merchant-w9')return portalMerchantW9(env,session)
+    if(url.pathname==='/portal/profile/merchant-w9')return await portalMerchantW9(env,session)
     const certificate=url.pathname.match(/^\/portal\/profile\/certificates\/([\w-]+)$/)?.[1]
-    if(certificate)return portalCertificateFile(env,session,certificate)
+    if(certificate)return await portalCertificateFile(env,session,certificate)
     const download=url.pathname.match(/^\/portal\/(receipts|credits)\/([\w-]+)$/)
-    if(download)return portalFinancialDownload(env,session,download[1] as 'receipts'|'credits',download[2])
+    if(download)return await portalFinancialDownload(env,session,download[1] as 'receipts'|'credits',download[2])
     if(url.pathname==='/portal/pay'||url.pathname==='/portal/pay/reconcile') {
       if(request.headers.get('origin')!==session.origin||request.method!=='POST')throw new NectarError('forbidden',403)
       const input=await Input.from(request)

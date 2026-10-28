@@ -103,6 +103,12 @@ export async function portalBillingFlow(h,owner,hooks={}) {
   assert.equal(pdf.status,200);assert.equal(pdf.headers.get('content-type'),'application/pdf')
   assert.match(await pdf.text(),/^%PDF-/)
   await h.api('collection.customer.bind',owner,{customer,account_ref:edge.account,stripe_customer_ref:edge.customer,confirm:true})
+  const englishData=await json('/portal/data')
+  await h.api('customer.update',owner,{customer,revision:(await h.api(`customers/${customer}`,owner)).revision,name:own.name,billing_email:own.billing_email,address:address.address,language:'es-US'})
+  const spanishData=await json('/portal/data')
+  assert.deepEqual(spanishData.invoices,englishData.invoices,'Spanish preserves every exact invoice figure')
+  assert.match(await(await h.raw(path('/portal/profile'))).text(),/lang="es-US"/)
+  await hooks.state?.({name:'profile-spanish',path:path('/portal/profile'),session,customer,invoice})
   const paymentInfo=await json(`/portal/payment?invoice=${invoice}`),consent=paymentInfo.consent
   const pay={invoice,consent_hash:consent,confirm:true}
   await json('/portal/pay',{body:{...pay,amount:'1'}},400)
@@ -117,6 +123,11 @@ export async function portalBillingFlow(h,owner,hooks={}) {
   assert.equal(started.status,'open');assert.equal(edge.calls.length,1);assert.equal(edge.calls[0].amount,17500)
   await json('/portal/pay',{body:pay});assert.equal(edge.calls.length,1,'Repeated confirmation never creates a second checkout')
   assert.equal((await h.raw(path('/portal/pay/reconcile',foreignSession),{body:{payment:started.id}})).status,404)
+  const checkout=[...edge.sessions.values()][0],originalAmount=checkout.amount_total
+  checkout.amount_total=1
+  await json('/portal/pay/reconcile',{body:{payment:started.id}},409)
+  assert.equal((await json('/portal/data')).invoices[0].balance_cents,17500,'A mismatched provider amount changes no financial facts')
+  checkout.amount_total=originalAmount
   edge.complete()
   assert.equal((await json('/portal/pay/reconcile',{body:{payment:started.id}})).status,'pending')
   assert.deepEqual([...(await json('/portal/data')).invoices.map(row=>row.balance_cents)],[17500],'Processing ACH never becomes paid cash')
@@ -138,6 +149,29 @@ export async function portalBillingFlow(h,owner,hooks={}) {
   assert.equal((await h.raw(path('/portal/pay/reconcile'),{body:{payment:started.id}})).status,401)
   assert.equal((await h.raw(path('/portal/data',foreignSession))).status,200)
   await hooks.state?.({name:'revoked',path:path('/portal/profile'),session,customer,invoice})
+  const fresh=await portalCustomerSignIn(h,owner,customer)
+  const freshPath=p=>path(p,fresh)
+  const secondContact=await h.raw(freshPath('/portal/profile'),{body:{operation:'contact.add',name:'Jordan Billing',email:mailbox('synthetic-nectar-jordan')}})
+  assert.equal(secondContact.status,200)
+  const beforeErasure=await h.api('erasures',owner)
+  assert.equal((await h.raw(freshPath('/portal/privacy'),{form:new URLSearchParams({confirm:'yes',customer:peer})})).status,400)
+  assert.equal((await h.raw(freshPath('/portal/privacy'),{form:new URLSearchParams({confirm:'yes'})})).status,303)
+  const erasure=(await h.api('erasures',owner)).find(row=>!beforeErasure.some(old=>old.id===row.id))
+  assert.equal(erasure.customer_id,customer)
+  await h.api('erasure.approve',owner,{request:erasure.id,confirm:true},409)
+  const verification=new URL(h.mails.findLast(mail=>String(mail.text).includes('/erase/')).text.match(/https?:\/\/[^\s]+\/erase\/[a-f0-9]+/)[0]).pathname
+  assert.equal((await h.raw(verification,{form:new URLSearchParams({confirm:'yes'})})).status,200)
+  const erased=await h.api('erasure.approve',owner,{request:erasure.id,confirm:true})
+  for(const kind of ['nc_contacts','nc_customer_tax_ids','nc_certificates','nc_portal_signins','nc_portal_invoice_payments','nc_portal_invoice_payment_authority'])assert.ok(erased.receipt.changed.some(row=>row.kind===kind&&row.records>0),`Erasure receipt enumerates ${kind}`)
+  assert.equal((await h.raw(freshPath('/portal/profile/data'))).status,401)
+  assert.equal((await h.raw(fresh.signinPath,{form:new URLSearchParams()})).status,400,'Erased person cannot replay sign-in proof')
+  assert.equal((await h.raw(freshPath('/portal/pay/reconcile'),{body:{payment:started.id}})).status,401,'Captured payment replay cannot recreate an erased customer')
+  const retained=await h.api(`invoices/${invoice}`,owner)
+  assert.deepEqual([retained.total_cents,retained.paidCents,retained.balanceCents],[30000,27500,0])
+  const afterEraseMails=h.mails.length
+  await request(own.external_id,own.billing_email)
+  assert.equal(h.mails.length,afterEraseMails,'Erased mailbox receives no new portal credential')
+  assert.equal((await h.raw(path('/portal/profile/data',foreignSession))).status,200,'Peer profile survives erasure')
   console.log('Billing-contact email sign-in, profile, documents, isolated exact ACH settlement and replay custody passed')
   return {records,session,foreignSession}
 }
