@@ -24,7 +24,7 @@ const pricesSQL = `SELECT p.id,p.product_id,p.kind,p.unit_amount,p.currency,p.ni
   WHERE p.status='active' AND p.kind IN ('flat','seat') AND p.pricing_model='simple'
   AND COALESCE(b.interval_unit,'month')='month' AND COALESCE(b.interval_count,1)=1 AND COALESCE(b.billing_timing,'arrears')='arrears' ORDER BY p.id`
 
-async function changeBasis(env: Bindings, session: CustomerSession, subscription: string) {
+export async function changeBasis(env: Bindings, session: CustomerSession, subscription: string) {
   const row = await one(env, SOURCE, subscription, session.customer)
   insist(row, 'not_found', 404)
   const source = JSON.parse(row.source), business = await requireBusiness(env), day = today(business.timezone, clockInstant(env))
@@ -34,22 +34,23 @@ async function changeBasis(env: Bindings, session: CustomerSession, subscription
   const prices = await all(env, pricesSQL), current = prices.find(p => p.id === active[0].price)
   insist(current, 'portal_change_requires_review', 409)
   const policy = await portalChangePolicy(env)
-  const targets = prices.filter(p => policy.prices.includes(p.id) && p.product_id === current.product_id && p.kind === current.kind && p.currency === current.currency && micros(p.unit_amount) <= micros(current.unit_amount))
-  const basis = await fingerprint({ source: row.source, day, current, targets, policy })
-  return { subscription, source: row.source as string, sourceData: source, day, item: active[0], current, targets, policy, basis }
+  const allowed = prices.filter(p => policy.prices.includes(p.id) && p.product_id === current.product_id && p.kind === current.kind && p.currency === current.currency)
+  const targets = allowed.filter(p => micros(p.unit_amount) <= micros(current.unit_amount))
+  const basis = await fingerprint({ source: row.source, day, current, targets, allowed, policy })
+  return { subscription, source: row.source as string, sourceData: source, day, item: active[0], current, targets, allowed, policy, basis }
 }
 
 const projection = (row: Row) => ({ id: row.id, subscription: row.subscription_id, item: row.item_id, targetPrice: row.target_price_id, quantity: row.quantity, targetName: row.target_label, unitAmount: row.unit_amount, currency: row.currency, status: 'pending', requestedOn: row.requested_on, belowContractMinimum: !!row.below_minimum })
 
 export async function portalChangeOptions(env: Bindings, session: CustomerSession, subscription: string) {
   const data = await changeBasis(env, session, subscription)
-  return { subscription, item: data.item.id as string, quantity: data.item.quantity as number, current: data.current, targets: data.targets,
+  return { subscription, item: data.item.id as string, quantity: data.item.quantity as number, current: data.current, targets: data.targets, previewTargets: data.allowed,
     policy: { revision: data.policy.revision, minimumSeats: data.policy.minimumSeats, pauseAllowed: data.policy.pauseAllowed }, basis: data.basis, day: data.day,
     requests: (await all(env, 'SELECT * FROM nc_portal_change_requests WHERE customer_id=? AND subscription_id=? ORDER BY requested_at,id', session.customer, subscription)).map(row => ({ ...projection(row), current: row.basis_hash === data.basis })) }
 }
 
 export async function portalChangeSubscriptions(env: Bindings, session: CustomerSession) {
-  return await all(env, `SELECT s.id FROM nc_subscriptions s JOIN nc_customers c ON c.id=s.customer_id WHERE s.customer_id=? AND s.billing_mode='live' AND c.erased_at IS NULL ORDER BY s.created_at,s.id`, session.customer)
+  return await all(env, `SELECT s.id,EXISTS(SELECT 1 FROM nc_renewal_terms t WHERE t.subscription_id=s.id AND t.status='active') AS has_term,EXISTS(SELECT 1 FROM nc_retention_offers o WHERE o.subscription_id=s.id AND o.kind='winback' AND o.status='offered' AND o.token_hash IS NOT NULL) AS has_return FROM nc_subscriptions s JOIN nc_customers c ON c.id=s.customer_id WHERE s.customer_id=? AND s.billing_mode='live' AND c.erased_at IS NULL ORDER BY s.created_at,s.id`, session.customer)
 }
 
 export async function portalChangeData(env: Bindings, session: CustomerSession, subscription?: string) {

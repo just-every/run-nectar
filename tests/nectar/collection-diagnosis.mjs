@@ -1,13 +1,16 @@
 // Public Worker and D1 journey; only Stripe's network boundary is simulated.
 import assert from 'node:assert/strict'
 import { nativeCollectionEdge } from './native-collection.mjs'
+import { processorEdge } from './processor-edge.mjs'
 import { file } from './harness.mjs'
 import { totp } from './mfa.mjs'
 
-const edge = nativeCollectionEdge()
+const edge = nativeCollectionEdge(), processor = processorEdge()
 let inventory = 'expired', observedMethod = 'synthetic-nectar-native-card-1'
 const fetch = async request => {
   const path = new URL(request.url).pathname
+  if (processor.objects.has(path.split('/').at(-1)) || processor.events.has(path.split('/').at(-1))
+    || processor.transactions.has(path.split('/').at(-1))) return processor.fetch(request)
   if (path === '/v1/payment_methods') {
     const type = new URL(request.url).searchParams.get('type')
     return Response.json({ object: 'list', has_more: false, data: type === 'card' ? [{ object: 'payment_method', id: observedMethod,
@@ -160,6 +163,41 @@ export async function collectionDiagnosisFlow(h, owner, { onState = async () => 
   await h.page(`/app/notices/${notice.id}.txt`, owner, 409)
   assert.equal(await noticeCount(), beforeHold)
   await api('cadence.resolve', { dispute: dispute.dispute, outcome: 'Synthetic authorized resolution' })
+
+  // A known account's external payment can be disputed without an invoice allocation.
+  const externalCustomer = (await api('customer.create', { external_id: 'synthetic-nectar-305', name: 'Synthetic external payment account', billing_email: address(305) })).id
+  const externalInvoice = await invoice(externalCustomer)
+  await api('collection.customer.bind', { customer: externalCustomer, account_ref: 'synthetic-nectar-native-account-1', stripe_customer_ref: 'synthetic-nectar-native-customer-3', confirm: true })
+  const external = processor.seed(null, 10000, 'external')
+  external.intent.customer = external.charge.customer = 'synthetic-nectar-native-customer-3'
+  const cash = await api('payment.record', { customer: externalCustomer, amount: '100', received_on: '2026-10-22', method: 'card_external', reference: `stripe:synthetic-nectar-native-account-1:${external.intent.id}` })
+  const externalProposal = await propose(externalCustomer)
+  const externalApproval = await api('proposal.decide', { proposal: externalProposal.id, decision: 'approved' })
+  const download = `/app/notices/${externalApproval.notice}.txt`
+  await h.page(download, owner)
+  const externalDispute = { object: 'dispute', id: 'synthetic-nectar-external-dispute', charge: external.charge.id, status: 'needs_response', amount: 10000, currency: 'usd', reason: 'fraudulent', livemode: false, balance_transactions: [] }
+  processor.objects.set(externalDispute.id, externalDispute)
+  const observe = async (id, type) => {
+    const event = processor.event(id, type, externalDispute)
+    return api('processor.event.consume', { account_ref: 'synthetic-nectar-native-account-1', event_ref: event.id })
+  }
+  await observe('synthetic-nectar-external-open', 'charge.dispute.created')
+  const observed = (await api(`processor-events?customer=${externalCustomer}`)).objects.find(row => row.object_ref === externalDispute.id)
+  assert.equal(observed.customer_id, externalCustomer)
+  assert.equal(observed.invoice_id, null, 'The dispute belongs to the customer without an invoice join')
+  const beforeExternalHold = [await api('proposals'), await api('notices'), await api('tasks'), await api(`invoices/${externalInvoice.id}`), await api('payments'), writes(), h.mails.length]
+  const refusedPreparation = await h.raw('/api/nectar/proposal.create', { ...agent, body: { kind: 'collection', title: 'Disputed external payment', payload: { customer: externalCustomer } } })
+  const refusedDownload = await h.raw(download, { cookie: owner })
+  assert.deepEqual([refusedPreparation.status, refusedDownload.status], [409, 409], 'Unallocated external dispute refuses preparation and reminder download')
+  assert.equal((await refusedPreparation.json()).error, 'collection_account_disputed')
+  assert.equal((await api(`invoices/${externalInvoice.id}`)).balanceCents, 10000, 'The unallocated payment never reduces this invoice')
+  assert.ok((await api('payments')).some(row => row.id === cash.payment))
+  assert.deepEqual([await api('proposals'), await api('notices'), await api('tasks'), await api(`invoices/${externalInvoice.id}`), await api('payments'), writes(), h.mails.length], beforeExternalHold, 'Refused contact changes no records and sends nothing')
+  await propose(customer)
+  externalDispute.status = 'won'
+  await observe('synthetic-nectar-external-closed', 'charge.dispute.closed')
+  await propose(externalCustomer)
+  await h.page(download, owner)
 
   // An unknown processor result is never presented as an expired-card cause.
   const pending = await api('collection.prepare', { invoice: unproved.id })

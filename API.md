@@ -845,8 +845,8 @@ required. Current wrappers preserve those existing API and provider boundaries.
 The owner prepares `portal.change.policy` with `prices` (catalog price IDs),
 `minimum_seats` and `pause_allowed`. The existing `policy.decide` door requires
 independent approval, or its audited explicit sole-owner confirmation. These
-restrictions enable requests only. Pausing is unavailable in the current flow,
-including when a merchant records that its future policy would permit it.
+restrictions enable pending requests. A separately approved SUB-005 pause save
+also requires `pause_allowed`; signed commitment overlaps refuse a pause save.
 
 A signed own-customer session opens `/portal/changes` and
 `/portal/changes/ID`. With `Accept: application/json`, these return the same
@@ -854,7 +854,7 @@ allowlisted subscriptions, approved compatible choices and pending status.
 The index retains request status independently of current change eligibility.
 Choices currently support one active simple monthly flat or seat item billed
 in arrears. Catalog descriptions are merchant text; interface labels use the
-customer's language. No proration or payment preview is claimed.
+customer's language. No payment execution is authorized.
 
 `POST /portal/change.request?session=TOKEN` requires the exact session Origin
 and only `subscription`, `item`, `target_price`, `quantity`, `basis`,
@@ -874,8 +874,51 @@ Configuration remains owner-only; ordinary governed subscription changes remain
 separate. Erasure deletes operational requests and invalidates sessions;
 archives may preserve non-executable pending evidence but never customer
 sessions, and a later erasure journal refuses older personal archives.
-Automatic upgrades, downgrades, seat changes, pauses, cancellation, exact
-proration and payment, and inherited renewal and retention flows remain owed.
+Ordinary upgrades, downgrades, seat changes, non-term cancellation and complete
+proration and payment remain owed.
+
+The same signed customer session opens `GET /portal/renewal/ID` to review the
+current approved term and one optional approved save, with Cancel renewal always
+available. GET is read-only and creates no offer or link. JSON reads use
+`Accept: application/json` and project term dates, renewal state, uplift and the
+save's exact period totals without internal inputs or signed narratives.
+`POST /portal/renewal/ID?session=TOKEN` accepts only the displayed `basis`,
+`confirm=cancel` or `confirm=save`, optional `reason`, and the save's `offer` ID.
+The same-origin, own-customer, live-session, current-source and policy guards
+run with the mutation and audit. Cancellation disables the next renewal at its
+existing boundary. It needs one confirmation, with no mandatory reason or save. When the displayed
+optional offer is declined, its outcome and optional reason are recorded with
+the cancellation in the same transaction.
+Save acceptance rechecks exact approved terms and changes billing atomically;
+it neither issues an invoice nor collects money. Discount saves last their
+quoted periods; pause saves suspend access and charges until the quoted date;
+compatible downgrade saves retain existing item end dates, seat floors and
+signed minimums. A below-minimum downgrade stays a pending human request.
+
+`GET /portal/return/ID` shows an existing, unexpired own-subscription win-back
+under the current approved policy. `POST` accepts only its `offer` and
+`confirm=accept`, consumes it once and reactivates under its quoted discount.
+No new message or offer is sent by opening the portal. A policy approval records
+an operational portal-retention grant, which is excluded from archives. Both
+its owner preparer and approver must remain active with their original authority.
+Restoring policy and offer evidence alone cannot reactivate portal retention;
+a fresh owner-prepared and approved policy is required. Renewal cancellation
+remains available independently of the retention grant.
+
+
+`POST /portal/change.preview?session=TOKEN` is a read-only same-engine estimate
+for one current simple monthly flat or seat item billed in arrears. It takes
+`subscription`, `item`, `target_price`, `quantity`, the options' `basis` and
+`policy_revision`, and requires the exact session Origin. Only compatible
+approved prices and quantities above the seat floor are accepted. Issued
+periods, scheduled future items, changed sources and unsupported billing
+calendars are refused. The answer projects the business-local effective day,
+service period, before and after subtotal, tax and total, and their exact
+difference. Its returned basis fingerprints the complete rating inputs and
+policy; it confers neither execution nor payment authority. No service, invoice,
+payment, audit event or outbound message is created. The existing customer form also opens the estimate in the customer language;
+its optional hidden `confirm` field has no effect in this read-only door.
+Ordinary change confirmation and collection remain unfinished.
 
 ### Reviewed remittance receipts
 
