@@ -13,7 +13,39 @@
       },
       "originFiles": [
         "export/run-demo.yml"
-      ]
+      ],
+      "adapted": {
+        ".github/workflows/run-demo.yml": "f96363bf919ea3e7ed1837daba6894810a50e4a6"
+      },
+      "acknowledged": {
+        ".github/workflows/run-demo.yml": {
+          "sha256": "cd478e5acaa5b7ecac7c8d93069a928886b59bc48e72c495700e42aa3c1b5232",
+          "mode": "100644"
+        }
+      }
+    },
+    {
+      "path": ".github/workflows/verify.yml",
+      "originPath": "export/verify.yml",
+      "revision": "f96363bf919ea3e7ed1837daba6894810a50e4a6",
+      "files": {
+        ".github/workflows/verify.yml": "09fe6d2a0b274d4925950ef0ddde9c8c7099e15edb5333a601ead2bbcec73a86"
+      },
+      "modes": {
+        ".github/workflows/verify.yml": "100644"
+      },
+      "originFiles": [
+        "export/verify.yml"
+      ],
+      "adapted": {
+        ".github/workflows/verify.yml": "f96363bf919ea3e7ed1837daba6894810a50e4a6"
+      },
+      "acknowledged": {
+        ".github/workflows/verify.yml": {
+          "sha256": "0f504df577e4f05fa8816b859c75ba3301bb2de91a4503a3c446b91d00ebb740",
+          "mode": "100644"
+        }
+      }
     },
     {
       "path": "migrations/core/0001_owner.sql",
@@ -2553,6 +2585,20 @@
       ]
     },
     {
+      "path": "scripts/install-chromium-deps.py",
+      "originPath": "export/install-chromium-deps.py",
+      "revision": "f96363bf919ea3e7ed1837daba6894810a50e4a6",
+      "files": {
+        "scripts/install-chromium-deps.py": "d3027108ad8e08ceeddb0ed477d967b1207e40bb6bf5ae941854c534c2cf4004"
+      },
+      "modes": {
+        "scripts/install-chromium-deps.py": "100644"
+      },
+      "originFiles": [
+        "export/install-chromium-deps.py"
+      ]
+    },
+    {
       "path": "scripts/installer/seed.mjs",
       "originPath": "foundation/template/scripts/installer/seed.mjs",
       "revision": "f96363bf919ea3e7ed1837daba6894810a50e4a6",
@@ -2592,6 +2638,85 @@
       },
       "originFiles": [
         "foundation/template/scripts/operations-config.mjs"
+      ]
+    },
+    {
+      "path": "scripts/verify-app.mjs",
+      "originPath": "export/verify-app.mjs",
+      "revision": "f96363bf919ea3e7ed1837daba6894810a50e4a6",
+      "files": {
+        "scripts/verify-app.mjs": "4c3a87c809e2b671a555dc36171b60675f87be96362de7d2269d9f5e1c3100b6"
+      },
+      "modes": {
+        "scripts/verify-app.mjs": "100644"
+      },
+      "originFiles": [
+        "export/verify-app.mjs"
+      ]
+    },
+    {
+      "path": "scripts/verify-ci.mjs",
+      "originPath": "export/verify-ci.mjs",
+      "revision": "f96363bf919ea3e7ed1837daba6894810a50e4a6",
+      "files": {
+        "scripts/verify-ci.mjs": "cf1ceb8773ed276f82245fb8fb4c4bdc95bff40ecc0e8ca8ac9e776978b17340"
+      },
+      "modes": {
+        "scripts/verify-ci.mjs": "100644"
+      },
+      "originFiles": [
+        "export/verify-ci.mjs"
+      ]
+    },
+    {
+      "path": "scripts/verify-evidence.mjs",
+      "originPath": "export/verify-evidence.mjs",
+      "revision": "f96363bf919ea3e7ed1837daba6894810a50e4a6",
+      "files": {
+        "scripts/verify-evidence.mjs": "9224f772d6a17f043448694eca3c149df83070417b995a2840497e36a9ad0100"
+      },
+      "modes": {
+        "scripts/verify-evidence.mjs": "100644"
+      },
+      "originFiles": [
+        "export/verify-evidence.mjs"
+      ]
+    },
+    {
+      "path": "scripts/verify-light.mjs",
+      "originPath": "export/verify-light.mjs",
+      "revision": "f96363bf919ea3e7ed1837daba6894810a50e4a6",
+      "files": {
+        "scripts/verify-light.mjs": "f9b126130837144e43a65d10d370d602b63daad2be7ff66c93178d461a7521d9"
+      },
+      "modes": {
+        "scripts/verify-light.mjs": "100644"
+      },
+      "originFiles": [
+        "export/verify-light.mjs"
+      ],
+      "adapted": {
+        "scripts/verify-light.mjs": "f96363bf919ea3e7ed1837daba6894810a50e4a6"
+      },
+      "acknowledged": {
+        "scripts/verify-light.mjs": {
+          "sha256": "8fc63119d18d63fac2d3b3ffc4e08089f1002c72e15563739c7b1b6270076df9",
+          "mode": "100644"
+        }
+      }
+    },
+    {
+      "path": "scripts/verify-plan.mjs",
+      "originPath": "export/verify-plan.mjs",
+      "revision": "f96363bf919ea3e7ed1837daba6894810a50e4a6",
+      "files": {
+        "scripts/verify-plan.mjs": "45fe2ab9c5cbc72d0186bf77fab32c985605caae6ecee50676dd618612c3e78f"
+      },
+      "modes": {
+        "scripts/verify-plan.mjs": "100644"
+      },
+      "originFiles": [
+        "export/verify-plan.mjs"
       ]
     },
     {
@@ -8229,19 +8354,10 @@
       "originPath": "export/VERIFY-WORKFLOW.md",
       "revision": "f96363bf919ea3e7ed1837daba6894810a50e4a6",
       "files": {
-        "VERIFY-WORKFLOW.md": "97d25a60dabe02ab4c30efbe226c8967b8fbac25b39f61467c2ef5a26186261d"
+        "VERIFY-WORKFLOW.md": "dc9d4cf979d29c2217d5250edf5fa5d84e89683de5fe0bd11ecdab868c6aa6c8"
       },
       "modes": {
         "VERIFY-WORKFLOW.md": "100644"
-      },
-      "adapted": {
-        "VERIFY-WORKFLOW.md": "4280971d7c0295b8a88c3e1179048efcbbe14f30"
-      },
-      "acknowledged": {
-        "VERIFY-WORKFLOW.md": {
-          "sha256": "dfcd729a5ac6d3387b0e0e94d73852f0a07addd26e7a51c4fc8c608412e2ceaf",
-          "mode": "100644"
-        }
       },
       "originFiles": [
         "export/VERIFY-WORKFLOW.md"
