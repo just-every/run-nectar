@@ -1,4 +1,3 @@
-// Extends the native Stripe network edge; application code and storage stay real.
 import assert from 'node:assert/strict'
 
 export function customerPaymentMethodsEdge(baseFetch) {

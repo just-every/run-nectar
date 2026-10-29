@@ -1,0 +1,51 @@
+{
+  "shards": [
+    {
+      "name": "sanity-1",
+      "browser": false,
+      "commands": [
+        "node tests/nectar/flows.mjs",
+        "node tests/runtime.mjs",
+        "node tests/nectar/sanity.mjs intervalsFlow cadencesFlow promotionsFlow retentionFlow commitments portalPrepaidFlow invoiceAutomationFlow invoiceRefundPreviewFlow periodCloseFlow mfaFlow"
+      ]
+    },
+    {
+      "name": "sanity-2",
+      "browser": false,
+      "commands": [
+        "node tests/nectar/processor-journey.mjs",
+        "node tests/nectar/sanity.mjs paymentRetriesFlow dunning-sequences portalSessionsFlow planChangesFlow financialReportsFlow metricsFlow contractSetup upcomingFlow assuranceScheduleFlow invoiceContentFlow card-lifecycle enterprise-identity"
+      ]
+    },
+    {
+      "name": "sanity-3",
+      "browser": false,
+      "commands": [
+        "node tests/nectar/sanity.mjs usageReplayFlow renewalsFlow draftCorrectionsFlow customerLanguageFlow hierarchiesFlow billingAnswersFlow writeOffFlow billingRolesFlow currencyFlow intervalCancellationFlow"
+      ]
+    },
+    {
+      "name": "sanity-4",
+      "browser": false,
+      "commands": [
+        "node tests/nectar/sanity.mjs prepaidRefundFlow erasureFlow customerSearchFlow priceMigrations processorCashFlow apiPlatformFlow nativeCollectionFlow cardExpiryNoticesFlow revenueFlow webhooks reconciliationFlow"
+      ]
+    },
+    {
+      "name": "browser",
+      "browser": true,
+      "commands": [
+        "node tests/nectar/journey.mjs",
+        "node tests/nectar/mfa-passkey.mjs",
+        "node tests/nectar/sanity.mjs entitlementQuotasFlow moveHistoryFlow assuranceDetectorsFlow paymentLinksFlow creditCorrectionFlow processorCashImportedFlow prepaidTopupFlow numberingEntitiesFlow lifecycleFlow"
+      ]
+    },
+    {
+      "name": "recovery",
+      "browser": false,
+      "commands": [
+        "node scripts/verify-checkout.mjs"
+      ]
+    }
+  ]
+}

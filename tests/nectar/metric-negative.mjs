@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+
 // USE-002: signed SQL is visible, never a route around credit governance.
 export async function metricNegative(h,owner,{source}) {
   const api=(path,body,status)=>h.api(path,owner,body,status)

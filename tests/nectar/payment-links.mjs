@@ -1,4 +1,3 @@
-// PAY-006 public HTTP and D1 journey. Only the paid Stripe network edge is faked.
 import assert from 'node:assert/strict'
 import { totp } from './mfa.mjs'
 import { applyPolicy } from './policy-helper.mjs'
@@ -72,6 +71,7 @@ export function paymentLinksEdge(baseFetch=async()=>new Response(null,{status:59
 }
 
 let edge
+
 export const harnessOptions=()=>{edge=paymentLinksEdge();return {stripeFetch:edge.fetch,stripeSecret:'synthetic-nectar-1',localTime:'2026-10-26T10:00:00Z'}}
 
 export async function paymentLinksFlow(h,owner,{onState=async()=>{},interaction={}}={}) {

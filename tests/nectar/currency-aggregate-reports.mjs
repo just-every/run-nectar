@@ -2,7 +2,9 @@ import assert from 'node:assert/strict'
 import { csvRows } from './financial-reports.mjs'
 
 const sum = rows => rows.reduce((total, row) => total + row.amountCents, 0)
+
 const amount = cents => (cents / 100).toFixed(2)
+
 const idOf = value => typeof value === 'string' ? value : value?.id
 
 // Fold into currencyFlow after its CAD receipt and credit exist. All writes use

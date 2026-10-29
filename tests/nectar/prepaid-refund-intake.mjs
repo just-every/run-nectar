@@ -1,11 +1,10 @@
-// CAT-012's new behaviour extends the existing paid-lot journey, preserving
-// the real Worker, D1, native sessions and original processor capture.
 import assert from 'node:assert/strict'
 
 export async function configureNotices(h,owner,{refunded='nectar',failed='nectar',language='en'}={}){
   const saved=await h.api('prepaid/refund-notices',owner),t=saved.templates[language]
   return h.api('prepaid.refund.notice.configure',owner,{revision:saved.revision,language,refunded_sender:refunded,failed_sender:failed,refunded_subject:t.refunded.subject,refunded_body:t.refunded.body,failed_subject:t.failed.subject,failed_body:t.failed.body})
 }
+
 export async function supportIntake(h,owner,support,row,{onIntakeState=async()=>{},requestIntake}={}){
   const before=await h.api(`prepaid/${row.subscription}`,owner),request=()=>h.api('prepaid.refund.request',support,{grant:row.grant})
   await onIntakeState({label:'support-request-form',row,support})
@@ -21,6 +20,7 @@ export async function supportIntake(h,owner,support,row,{onIntakeState=async()=>
   await onIntakeState({label:'support-pending',row,refund:facts[0],support})
   return first
 }
+
 export async function portalIntake(h,owner,row,foreign,{onIntakeState=async()=>{},requestPortalIntake}={}){
   const customer=await h.api(`customers/${row.customer}`,owner)
   await h.api('customer.update',owner,{customer:customer.id,revision:customer.revision,name:customer.name,billing_email:customer.billing_email,address:customer.address,language:'es-US'})
@@ -43,6 +43,7 @@ export async function portalIntake(h,owner,row,foreign,{onIntakeState=async()=>{
   await onIntakeState({label:'portal-pending',row,session,refund:facts})
   return first
 }
+
 export async function assertNotice(h,owner,refund,expectedStatus,{outcome='refunded',language='en'}={}){
   const state=await h.api('prepaid/refund-notices',owner),rows=state.deliveries.filter(r=>r.refund===refund.id)
   assert.equal(rows.length,1);const row=rows[0]

@@ -1,4 +1,3 @@
-// Only the paid network edge is synthetic; public action, ledger and D1 are real.
 import assert from 'node:assert/strict'
 
 export function achPaymentEvidenceEdge(baseFetch) {

@@ -4,6 +4,7 @@ import { populateErasureKinds } from './erasure-record-kinds.mjs'
 import { file } from './harness.mjs'
 
 const confirmation = mail => new URL(mail.text.match(/https?:\/\/[^\s]+\/erase\/[a-f0-9]+/)[0]).pathname
+
 const fields = ['number', 'issue_date', 'subtotal_cents', 'tax_cents', 'total_cents', 'paidCents', 'balanceCents']
 
 // PORT-005 inherits GOV-005 through the customer request door. Receipts remain

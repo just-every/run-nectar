@@ -4,118 +4,138 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      full:
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
+concurrency:
+  group: verify-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  verify:
+  plan:
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [0, 1]
-    env:
-      CI: 'true'
-      NECTAR_VERIFY_SHARD: ${{ matrix.shard }}
-      WRANGLER_SEND_METRICS: 'false'
+    outputs:
+      tier: ${{ steps.plan.outputs.tier }}
+      matrix: ${{ steps.plan.outputs.matrix }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1; action runtime Node 24
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0; action runtime Node 24
+          fetch-depth: 2
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
           node-version: '22.20.0'
           package-manager-cache: false
+      - id: plan
+        run: node scripts/verify-plan.mjs
       - name: Check generated contract documents
         run: node scripts/contract-docs.mjs check
       - name: Check edition source lock freshness
-        # Technical foundation exports use composition.lock.json or reference-export.json.
-        # Edition-owned seeds must commit both edition.json and sources.lock.json.
         if: ${{ hashFiles('edition.json', 'sources.lock.json') != '' }}
         run: node scripts/edition-authoring/cli.mjs check
+
+  build:
+    needs: plan
+    if: needs.plan.outputs.tier == 'full'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      CI: 'true'
+      WRANGLER_SEND_METRICS: 'false'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22.20.0'
+          package-manager-cache: false
       - run: npm install --global pnpm@10.12.4
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: ~/.local/share/pnpm/store
+          key: nectar-pnpm-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
       - run: pnpm install --frozen-lockfile
       - run: pnpm run deps
-      # ubuntu-24.04 provides Chromium libraries; the real browser journeys
-      # still fail if runtime support is missing. Avoid an unbounded apt mirror.
+      - run: pnpm run typecheck
+      - run: node scripts/check-locales.mjs
+      - run: pnpm exec rer check --profile first-party
+      - run: pnpm run build
+      - run: pnpm check:deployment-spec
       - run: pnpm exec playwright install chromium
       - run: pnpm run verify
-      - name: Native same-intent collection browser journey
-        if: ${{ matrix.shard == 1 }}
-        run: node tests/nectar/clause-browser.mjs native-collection
+        env:
+          NECTAR_BUILD_READY: '1'
+          NECTAR_VERIFY_GROUP: build
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: nectar-worker
+          path: dist/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
 
-      - name: Recovery reporting browser journeys
-        if: ${{ matrix.shard == 0 }}
-        run: |
-          node tests/nectar/payment-retries-browser.mjs
-          node tests/nectar/payment-retries-browser.mjs churn
-
-      - name: Dunning sequence browser journeys
-        if: ${{ matrix.shard == 0 }}
-        run: |
-          node tests/nectar/dunning-browser.mjs
-          node tests/nectar/dunning-browser.mjs custody
-
-      - name: Invoice void and replacement browser proof
-        if: ${{ matrix.shard == 0 }}
-        run: |
-          node tests/nectar/invoice-void-browser.mjs
-          node tests/nectar/invoice-void-browser.mjs refunds
-
-      - name: Governed plan change browser journey
-        if: ${{ matrix.shard == 0 }}
-        run: node tests/nectar/plan-changes-browser.mjs
-
-      - name: Processor reconciliation journeys
-        if: ${{ matrix.shard == 0 }}
-        run: |
-          node tests/nectar/processor-events.mjs
-          node tests/nectar/processor-cash.mjs
-          node tests/nectar/processor-cash-imported.mjs
-          node tests/nectar/processor-events-browser.mjs
-          node tests/nectar/processor-events-browser.mjs cash
-          node tests/nectar/processor-events-browser.mjs imported
-
-  # The real rer export, restore and removal journey needs a fresh checkout and its own wall.
-  processor-archive:
+  journeys:
+    needs: [plan, build]
+    if: needs.plan.outputs.tier == 'full'
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: ${{ inputs.full && 25 || 12 }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
     env:
       CI: 'true'
       WRANGLER_SEND_METRICS: 'false'
+      NECTAR_BUILD_READY: '1'
+      NECTAR_RECOVERY_FULL: ${{ inputs.full && '1' || '0' }}
+      NECTAR_VERIFY_GROUP: ${{ matrix.name }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1; action runtime Node 24
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0; action runtime Node 24
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
           node-version: '22.20.0'
           package-manager-cache: false
       - run: npm install --global pnpm@10.12.4
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: ~/.local/share/pnpm/store
+          key: nectar-pnpm-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
       - run: pnpm install --frozen-lockfile
       - run: pnpm run deps
-      - run: pnpm exec vite build
-      - run: NECTAR_TEST_CHECKOUT=1 node tests/nectar/processor-archive.mjs
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: nectar-worker
+          path: dist/
+      - if: matrix.browser
+        run: pnpm exec playwright install chromium
+      - run: pnpm run verify:app
 
-
-  remittance-archive:
+  verify:
+    needs: [plan, build, journeys]
+    if: always()
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    env:
-      CI: 'true'
-      WRANGLER_SEND_METRICS: 'false'
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1; action runtime Node 24
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0; action runtime Node 24
-        with:
-          node-version: '22.20.0'
-          package-manager-cache: false
-      - run: npm install --global pnpm@10.12.4
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm run deps
-      - run: pnpm exec vite build
-      - run: NECTAR_TEST_CHECKOUT=1 node tests/nectar/processor-archive.mjs remittances
+      - name: Require every selected check
+        env:
+          PLAN: ${{ needs.plan.result }}
+          TIER: ${{ needs.plan.outputs.tier }}
+          BUILD: ${{ needs.build.result }}
+          JOURNEYS: ${{ needs.journeys.result }}
+        run: |
+          test "$PLAN" = success
+          if [ "$TIER" = full ]; then
+            test "$BUILD" = success
+            test "$JOURNEYS" = success
+          else
+            test "$TIER" = light
+            test "$BUILD" = skipped
+            test "$JOURNEYS" = skipped
+          fi

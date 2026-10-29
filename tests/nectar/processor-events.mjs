@@ -6,7 +6,9 @@ import { applyPolicy } from './policy-helper.mjs'
 import { csvRows } from './financial-reports.mjs'
 import { processorRecoveryEdge, processorRecoveryFlow } from './processor-recovery.mjs'
 import { processorReturnFlow } from './processor-returns.mjs'
+
 export const webhookSecret='synthetic-nectar-webhook'
+
 export async function processorSetup(edge=processorRecoveryEdge(processorEdge()),options={}) {
  const h=await harness({assets:true,localTime:'2026-10-22T12:00:00Z',stripeFetch:edge.fetch,stripeSecret:'synthetic-nectar-1',stripeWebhookSecret:webhookSecret,...options})
  await h.raw('/auth/bootstrap',{body:{token:h.vars.SETUP_TOKEN,displayName:'Nectar Owner'}})
@@ -17,6 +19,7 @@ export async function processorSetup(edge=processorRecoveryEdge(processorEdge())
  await h.api('tax.review',owner,{revision:(await h.api('business',owner)).revision})
  return {h,owner,edge}
 }
+
 export async function processorEventFlow(h,owner,edge,{onState=async()=>{}}={}) {
  const api=(path,body,status)=>h.api(path,owner,body,status)
  const customer=(await api('customer.create',{external_id:'synthetic-nectar-pay004',name:'Cedar Finance',billing_email:'finance@cedar.example'})).id
@@ -161,6 +164,7 @@ export async function processorEventFlow(h,owner,edge,{onState=async()=>{}}={}) 
  await processorReturnFlow(h,owner,edge)
  return {customer,invoice,source,deliver,manual,people}
 }
+
 async function payoutArrivalFlow(api,edge,deliver,manual) {
  const customer=(await api('customer.create',{external_id:'synthetic-nectar-payout-order',name:'Payout attribution',billing_email:'payout@example.test'})).id
  const remote='synthetic-nectar-payout-customer'
@@ -221,8 +225,4 @@ async function payoutArrivalFlow(api,edge,deliver,manual) {
  assert.deepEqual((await api(`invoices?customer=${customer}`)).data.map(row=>row.id).sort(),invoicesBefore)
  assert.equal(observed.transactions.find(row=>row.transaction_ref===unrelated.id).source_ref,'')
  assert.deepEqual((await api('payments')).filter(row=>row.customer_id===customer).map(row=>row.amount_cents).sort((a,b)=>a-b),[7300,12000])
-}
-if(process.argv[1]===new URL(import.meta.url).pathname){
- const {h,owner,edge}=await processorSetup()
- try{await processorEventFlow(h,owner,edge);console.log('Processor events: signed intake, out-of-order refund and recovery, exactly-once cash, fees, reports, CSV and authorized failure alerts passed')}finally{await h.close()}
 }

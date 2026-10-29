@@ -1,13 +1,9 @@
-import { populateErasureKinds } from './erasure-record-kinds.mjs'
-export { nativeIntervalErasureFlow } from './erasure-record-kinds.mjs'
-import assert from 'node:assert/strict'
-import { createHash } from 'node:crypto'
-import { file } from './harness.mjs'
 import { csvRows } from './financial-reports.mjs'
+import { nativeIntervalErasureFlow } from './erasure-record-kinds.mjs'
 
-// A real customer graph large enough to exceed the former per-row erasure batch.
-// Run outside push Verify through the ordinary isolated Worker harness.
-export async function erasureScaleFlow(h, owner) {
+export const businessTimezone='UTC'
+
+async function erasureScaleFlow(h, owner) {
   await h.advanceClock('2026-02-01T16:00:00Z')
   const api = (path, body) => h.api(path, owner, body)
   const external = 'synthetic-nectar-erasure-scale-1', peerExternal = 'synthetic-nectar-erasure-scale-2'
@@ -78,6 +74,10 @@ export async function erasureScaleFlow(h, owner) {
   assert.equal(retained.retainedFinancial.legal_name, person)
   console.log('GOV-005 10,000-event atomic erasure, exact retention and unchanged peer passed')
 }
+import { populateErasureKinds } from './erasure-record-kinds.mjs'
+import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
+import { file } from './harness.mjs'
 
 // GOV-005: real request, verification, approval and financial-removal doors.
 export async function erasureFlow(h, owner, onState = async () => {}) {
@@ -314,5 +314,7 @@ export async function erasureFlow(h, owner, onState = async () => {}) {
   await h.api(`invoices/${altInvoice}`,owner,undefined,404)
   assert.ok(!(await h.api(`customers/${alternate}`,owner)).ledger.credits.some(r=>r.id===altCredit.credit),'GOV-005 due removal deletes retained credit notes too')
   await onState({ h, owner, customer, request: request.id, path: '/app/erasures', label: 'financial-removal' })
+  await nativeIntervalErasureFlow(h,owner)
+  await erasureScaleFlow(h,owner)
   console.log('GOV-005 verified owner erasure, alternative evidence, roles, personal-data removal and seven-year financial retention passed')
 }

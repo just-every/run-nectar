@@ -321,8 +321,3 @@ async function numericLimits(h, owner, finance, onState, measure) {
   const limited = await h.api(`entitlements/${customer}?feature=${feature}`, sales)
   assert.equal(limited.paths[0].state.payment, undefined, 'A sales reader receives no new financial state facts')
 }
-
-// Dedicated native timing receipt; deliberately outside the push Verify list.
-export async function entitlementTimingFlow(h,owner) {
-  await entitlementQuotasFlow(h,owner,{measure:true})
-}

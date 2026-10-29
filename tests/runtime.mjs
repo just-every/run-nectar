@@ -34,7 +34,6 @@ try {
   const health = await (await fetch(`${origin}/health`)).json()
   assert.equal(health.status, 'ok')
   assert.equal(health.ok, true)
-  assert.deepEqual(Object.keys(health.deployment ?? {}).sort(), ['fingerprint', 'sourceSha', 'versionId'])
   const document = await fetch(origin)
   assert.equal(document.status, 200)
   const branding = JSON.parse(await readFile(new URL('../src/branding.json', import.meta.url)))

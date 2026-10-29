@@ -1,7 +1,3 @@
-// Runs the built Worker (dist/) on Miniflare with its own in-memory D1, and
-// drives it only through public HTTP doors: the JSON API, the HTML form door
-// and pages, signed in through ordinary email links. Mail is the network edge:
-// the Worker sends through Resend's API, which this fake answers and records.
 import assert from 'node:assert/strict'
 import { randomBytes } from 'node:crypto'
 import { readFile, readdir } from 'node:fs/promises'
@@ -10,6 +6,7 @@ import { httpListener } from './http-listener.mjs'
 
 // Wrangler's own Miniflare and SQL splitter, so the runtime matches `rer build`.
 const wrangler = createRequire(import.meta.url)('wrangler')
+
 const { Miniflare, convertV4MiniflareOptions } = createRequire(createRequire(import.meta.url).resolve('wrangler'))('miniflare')
 
 export async function harness({ assets = false, localTime, hostname = '127.0.0.1', stripeFetch, stripeSecret, stripeSecondarySecret, stripeWebhookSecret, quickbooksFetch, webhookFetch, persistence, databaseId='nectar', applyMigrations=true, settings={} } = {}) {

@@ -4,8 +4,11 @@ import { hostedSetupEdge } from './customer-payment-methods.mjs'
 import { assertRecoveryBuckets } from './recovery-assertions.mjs'
 import { totp } from './mfa.mjs'
 import { file } from './harness.mjs'
+
 let edge,setup,received
+
 const first=Date.parse('2026-10-22T10:00:00Z'),day=86400000
+
 export const harnessOptions=()=>{
  received=[]
  edge=retryEdge()
@@ -28,6 +31,7 @@ export const harnessOptions=()=>{
  }
  return {webhookFetch:async request=>{received.push(await request.json());return new Response(null,{status:200})},assets:true,localTime:new Date(first).toISOString(),stripeFetch:fetch,stripeSecret:'synthetic-nectar-1'}
 }
+
 export async function dunningSequenceFlow(h,owner,{onState=async()=>{},createPolicy,enroll,prepareMail,sendMail,finish,updateMethod,prepareRecovery,acceptRecovery,approveRecovery,cancelSubscription}={}) {
  const api=(p,b,status)=>h.api(p.startsWith('subscriptions/')?p+'?include_state=true':p,owner,b,status)
  let instant=first

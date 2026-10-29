@@ -1,5 +1,5 @@
-// Fake only the paid network edge. Worker, authentication, D1 and reports are real.
 import assert from 'node:assert/strict'
+
 export function processorEdge() {
  const account='synthetic-nectar-account',customerRef='synthetic-nectar-customer',calls=[],events=new Map(),objects=new Map(),transactions=new Map(),payoutMembers=new Map()
  let fail=false
