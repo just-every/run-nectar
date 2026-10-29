@@ -92,6 +92,18 @@ export async function subscriptionStatesFlow(h,owner,{onState=async()=>{}}={}) {
  await observe('canceled','schedule_or_lifecycle')
  await move('2026-11-15T10:00:00Z');await observe('ended','schedule_or_lifecycle')
  assert.deepEqual((await read(foreign)).map(row=>row.state),['active'])
+ // A review transaction still captures every elapsed lifecycle boundary,
+ // even though approval itself changes no issued debt or collection outcome.
+ const foreignBefore=await read(foreign)
+ await api('subscription.pause',{subscription:foreign,revision:(await api(`subscriptions/${foreign}`)).revision,effective_date:'2026-11-16',resume_date:'2026-11-17',access:'suspend',reason:'Synthetic review boundary'})
+ const reviewRun=await api('billrun.prepare',{period:'2026-09'})
+ await move('2026-11-18T10:00:00Z')
+ const foreignDraft=(await api(`runs/${reviewRun.id}`)).invoices.find(row=>row.subscription_id===foreign)
+ await api('invoice.approve',{invoice:foreignDraft.id,acknowledge:true})
+ const reviewed=await read(foreign)
+ assert.deepEqual(reviewed.map(row=>row.state),['active','paused','active'])
+ assert.deepEqual(reviewed.slice(0,foreignBefore.length),foreignBefore)
+ assert.deepEqual(reviewed.slice(-2).map(row=>[row.cause.day,row.observed_at]),[['2026-11-16',Date.parse('2026-11-16T00:00:00Z')],['2026-11-17',Date.parse('2026-11-17T00:00:00Z')]])
  assert.equal((await api(`invoices/${invoice}`)).balanceCents,0)
  await h.api(`subscriptions/${subscription}`,undefined,undefined,401)
  await api('access.give',{email:'state-reader@example.test',name:'State reader',role:'accountant'})

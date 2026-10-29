@@ -9,6 +9,16 @@ import { BALANCE_SQL } from './balance-sql'
 
 const changesState = /^(subscription\.(?!state\.)|trial\.|automatic\.collection\.|collection\.|retry\.|dunning\.end\.|payment\.allocate|credit\.|invoice\.|balance\.|writeoff\.|usage\.correction\.approve|renewal\.)/
 
+// These review and initial-claim transitions change neither issued debt nor a
+// lifecycle or an observed failure. Due date boundaries still run before every
+// source transaction below. Avoid rebuilding the full after-source projection
+// for facts those transactions cannot change; unknown actions keep that work.
+const reviewOnly = new Set([
+  'invoice.approve', 'automatic.collection.prepare',
+  'automatic.collection.accept', 'automatic.collection.approved',
+  'automatic.collection.rejected', 'automatic.collection.claim',
+])
+
 
 const sources = `WITH refs AS MATERIALIZED (SELECT value FROM json_each(?)), invoices AS MATERIALIZED (
     SELECT i.id,i.subscription_id FROM nc_invoices i WHERE i.id IN (SELECT value FROM refs) OR i.number IN (SELECT value FROM refs)
@@ -38,7 +48,7 @@ function sourceReferences(events: Audit[]) {
 }
 
 export async function captureSubscriptionStates(env: Bindings, events: Audit[]) {
-  if (!events.some(event => changesState.test(event.action))) return []
+  if (!events.some(event => changesState.test(event.action) && !reviewOnly.has(event.action))) return []
   const business = (await all(env, 'SELECT timezone FROM nc_business WHERE singleton=1'))[0]
   if (!business) return []
   const at = clockInstant(env), day = today(business.timezone, at), batch = newId()

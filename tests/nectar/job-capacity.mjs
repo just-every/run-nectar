@@ -3,6 +3,7 @@
 // is not qualification of unattended billing or live processor capacity.
 import assert from 'node:assert/strict'
 import {execFileSync} from 'node:child_process'
+import {request} from 'node:http'
 import {mkdtempSync} from 'node:fs'
 import {rm} from 'node:fs/promises'
 import {tmpdir} from 'node:os'
@@ -25,6 +26,25 @@ export function harnessOptions(){
   }}
 }
 async function parallel(items,run){let next=0;await Promise.all(Array.from({length:4},async()=>{while(next<items.length){const index=next++;await run(items[index],index)}}))}
+// A billing day can outlast fetch's five-minute header timer. Keep the real
+// authenticated HTTP door and the journey's hard twenty-minute process limit.
+function continueDay(h,owner,body){
+  return new Promise((resolve,reject)=>{
+    const req=request(new URL('/api/nectar/invoice.automation.resume',h.origin),{
+      method:'POST',headers:{cookie:owner,origin:h.origin,'content-type':'application/json','CF-Connecting-IP':'127.0.0.1'},
+    },response=>{
+      const chunks=[]
+      response.on('data',chunk=>chunks.push(chunk));response.on('error',reject)
+      response.on('end',()=>{try{
+        const text=Buffer.concat(chunks).toString()
+        assert.equal(response.statusCode,200,text.slice(0,400));resolve(JSON.parse(text))
+      }catch(error){reject(error)}})
+    })
+    req.on('error',reject)
+    req.setTimeout(15*60_000,()=>req.destroy(new Error('Invoice continuation exceeded fifteen minutes')))
+    req.end(JSON.stringify(body))
+  })
+}
 function csvRows(text){
   const rows=[];let row=[],cell='',quoted=false
   for(let i=0;i<text.length;i++){
@@ -94,7 +114,7 @@ export async function nativeJobCapacityFlow(h,owner){
   const consentedAt=performance.now()
   captureGate={entered:deferred(),release:deferred()};const capture=captureGate
   const [prepared]=(await api('invoice-automation')).runs
-  const issuing=api('invoice.automation.resume',{run:prepared.id,revision:prepared.execution_revision,confirm:true}).catch(()=>null)
+  const issuing=continueDay(h,owner,{run:prepared.id,revision:prepared.execution_revision,confirm:true}).catch(()=>null)
   await waitFor(capture.entered.promise,'capacity collection did not reach its capture')
   assert.equal(edge.intents.size,100)
   assert.equal((await api('invoice-automation')).runs[0].status,'running')
@@ -106,7 +126,7 @@ export async function nativeJobCapacityFlow(h,owner){
   await api('mfa.verify',{code:totp(factor.secret,instant)})
   const [interrupted]=(await api('invoice-automation')).runs
   assert.equal(interrupted.resumable,true)
-  const result=await api('invoice.automation.resume',{run:interrupted.id,revision:interrupted.execution_revision,confirm:true})
+  const result=await continueDay(h,owner,{run:interrupted.id,revision:interrupted.execution_revision,confirm:true})
   const completedAt=performance.now()
   assert.equal(result.status,'completed');assert.equal(result.issued.length,count);assert.equal(new Set(result.issued).size,count)
   assert.equal(edge.intents.size,count);assert.equal(edge.charges.size,count)
@@ -144,7 +164,8 @@ export async function nativeJobCapacityFlow(h,owner){
   assert.equal(new Set(collections.entries.map(row=>row.paymentId)).size,count,'One recorded receipt per captured payment')
   assert.deepEqual(new Set(collections.entries.map(row=>row.number)),new Set([...captures.values()].map(id=>`stripe:synthetic-nectar-native-account-1:${id}`)))
   assert.ok(collections.entries.every(row=>row.sourceKind==='payment'&&row.amountCents===100))
-  const billings=await api('reports/billings?period=2026-11'),ar=await api('reports/ar')
+  const readReport=async path=>{const response=await h.raw(path,{cookie:owner});assert.equal(response.status,200);return response.json()}
+  const billings=await readReport('/api/nectar/reports/billings?period=2026-11'),ar=await readReport('/api/nectar/reports/ar')
   assert.equal(billings.totalCents,1000000);assert.deepEqual(new Set(billings.entries.map(row=>row.invoiceId)),invoiceIds)
   assert.equal(ar.totalCents,0);assert.deepEqual(ar.entries,[])
   const revenue=await api('revenue?from=2026-10&to=2026-11')
@@ -168,7 +189,7 @@ export async function nativeJobCapacityFlow(h,owner){
   const receipt={head,activeSubscriptions:subscriptions.size,issuedInvoices:issued.length,capturedPayments:captures.size,allocatedCents,
     recordedReceipts:collections.entries.length,revenueSchedules:revenue.contributions.filter(row=>row.kind==='recognition').length,reconciled:true,
     realWorkerRestart:true,workerRestarts:2,preparationMs:Math.round(preparedAt-started),explicitConsentMs:Math.round(consentedAt-preparedAt),
-    completionMs,nativeTimingPassed:completionMs<15*60_000,processingMs:Math.round(preparedAt-started+completedAt-consentedAt),
+    seedCreationMs:Math.round(started-seedStart),completionMs,nativeTimingPassed:completionMs<15*60_000,processingMs:Math.round(preparedAt-started+completedAt-consentedAt),
     qualified:false,boundary:'native processor edge; explicit invoice consent and owner-confirmed continuation; unattended and live provider capacity remain unqualified'}
   console.log('NATIVE CAPACITY RESULT',JSON.stringify(receipt))
   assert.ok(receipt.nativeTimingPassed,'The native billing day, including explicit consents and real restarts, finishes within fifteen minutes')
