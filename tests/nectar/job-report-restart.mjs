@@ -26,10 +26,10 @@ export async function reportJobRestartFlow(h,owner){
   await api('report.schedule',{enabled:true,day:1})
   const mails=[]
   let gate
-  await h.configureMail({provider:'sendgrid',apiKey:'synthetic-nectar-report-mail',from:h.vars.OWNER_EMAIL},async request=>{
+  await h.configureMail({provider:'sendgrid',apiKey:'synthetic-nectar-4',from:h.vars.OWNER_EMAIL},async request=>{
     const active=gate;mails.push(await request.text())
     if(active){active.entered.resolve();await active.release.promise}
-    return new Response(null,{status:202,headers:{'x-message-id':'synthetic-nectar-report-mail'}})
+    return new Response(null,{status:202,headers:{'x-message-id':'synthetic-nectar-4'}})
   })
   const financial=JSON.stringify([await api('payments'),await api(`invoices/${invoice}`)])
   await h.rejectAudit('report.snapshot')
@@ -56,7 +56,7 @@ export async function reportJobRestartFlow(h,owner){
   await h.api('report.schedule',finance,{enabled:true,day:1})
   instant+=31*60_000
   await h.restart(new Date(instant).toISOString());gate=null;active.release.resolve();await Promise.all(pending)
-  assert.equal((await tick()).status,200)
+  for(const response of await Promise.all([tick(),tick()]))assert.equal(response.status,200)
   assert.equal((await tick()).status,200)
   const ownerDelivery=(await api('report-schedule')).deliveries
   const financeDelivery=(await h.api('report-schedule',finance)).deliveries

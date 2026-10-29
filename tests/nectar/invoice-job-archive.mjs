@@ -60,7 +60,7 @@ export async function invoiceJobArchiveJourney() {
     assert.equal(reportPreparation.status,'failed')
     const financial=async who=>{const invoices=await h.api('invoices',who),payments=await h.api('payments',who);invoices.data.sort((a,b)=>a.id.localeCompare(b.id));payments.sort((a,b)=>a.id.localeCompare(b.id));return {invoices,payments}}
     const before=await financial(owner)
-    await h.configureMail({provider:'resend',apiKey:'synthetic-nectar-archive-mail',from:h.vars.OWNER_EMAIL},null)
+    await h.configureMail({provider:'resend',apiKey:'synthetic-nectar-5',from:h.vars.OWNER_EMAIL},null)
     const settings={...h.vars},instant=new Date(Date.parse(settings.NECTAR_LOCAL_TIME)+30_000).toISOString()
     await h.close();h=null
     await command(root,['export','--output',path('populated')])

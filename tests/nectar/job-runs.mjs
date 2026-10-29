@@ -268,9 +268,9 @@ async function invoiceJobResumption(h, owner, { finance, factor, financeFactor, 
   await api('notification.preferences',{billrun_exceptions:true})
   const mailCalls=[]
   const mailGate={entered:deferred(),release:deferred()}
-  await h.configureMail({provider:'sendgrid',apiKey:'synthetic-nectar-operations-mail',from:(await api('me')).email},async request=>{
+  await h.configureMail({provider:'sendgrid',apiKey:'synthetic-nectar-3',from:(await api('me')).email},async request=>{
     mailCalls.push(await request.text());mailGate.entered.resolve();await mailGate.release.promise
-    return new Response(null,{status:202,headers:{'x-message-id':'synthetic-nectar-operations-mail'}})
+    return new Response(null,{status:202,headers:{'x-message-id':'synthetic-nectar-3'}})
   })
   const scheduled=tick().catch(()=>null)
   const wait=promise=>Promise.race([promise,new Promise((_,reject)=>setTimeout(()=>reject(new Error('scheduled invoice edge did not pause')),15000))])

@@ -174,7 +174,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "00541b16065fa8245814f5e828b71acd1f43d89c7c71d90ec6365d929c1ecb8f",
+      "sha256": "0881e9126d6adbca4f1a27b4546e5392a13be5cd3a139cbd8ede7f649ea2b856",
       "executable": false
     },
     "AGENTS.consumer.md": {
@@ -194,7 +194,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "e169e695e02042231d7441b9b05facf5d3458a8de2b4b9551905fd253b7a1922",
+      "sha256": "08414d6c2bfd188160b3a410a87ec40ec00c2dca67dde7128356fff9dcf6f2c8",
       "executable": false
     },
     "DEMO.md": {
@@ -230,7 +230,7 @@
       "executable": false
     },
     "docs/CLAIMS.md": {
-      "sha256": "d7eff6065bd26556a4bff8b99304313bacfae0bcea3a5340a6c62821742bceda",
+      "sha256": "bf27fe57d295d7fdb84edbfe20ea3182da0705ff2a4e98203ecafc7e0d844261",
       "executable": false
     },
     "docs/composition-baseline.json": {
@@ -4282,7 +4282,7 @@
       "executable": false
     },
     "src/nectar/report-mail.ts": {
-      "sha256": "ac1c1aed9a0c95ef7ef4c56e5fcd5f0ae2a2fe6903eacde0924ae9d253446096",
+      "sha256": "9989cdcdaa67876a9de4e42ab6fa519cead1944fb07487ea939cd8b9562eb03d",
       "executable": false
     },
     "src/nectar/report-schedules.ts": {
@@ -5294,7 +5294,7 @@
       "executable": false
     },
     "tests/nectar/invoice-job-archive.mjs": {
-      "sha256": "70657794d4a177d7f50928b94866cfb989ea6b409dd11652ecd0ffc3d46a7732",
+      "sha256": "5ddc91ff1b711e3025399b238f47c4313e23ae128c4a81c7f56f6e53ffd3e573",
       "executable": false
     },
     "tests/nectar/invoice-pagination.mjs": {
@@ -5322,11 +5322,11 @@
       "executable": false
     },
     "tests/nectar/job-capacity.mjs": {
-      "sha256": "65f96f244db23bc806e1c3621dacf1e72fd61954a140c8b8df8991afd1862f43",
+      "sha256": "5c9550acf034b4e3778ada844c8b24d52a0b8283e81a80eab4f2971cad55c45c",
       "executable": false
     },
     "tests/nectar/job-report-restart.mjs": {
-      "sha256": "d2d942e3b795e182e84ca16a5c9e339c6556761922473b2194b6fa29b7289728",
+      "sha256": "5eaec18bd65407a58e646459122ba8e8b7f6acd4e28309ffc3919964ec2e54b7",
       "executable": false
     },
     "tests/nectar/job-retry-restart.mjs": {
@@ -5334,7 +5334,7 @@
       "executable": false
     },
     "tests/nectar/job-runs.mjs": {
-      "sha256": "bcf0e5366c70331102fd8438f7a28983d401ce021724bf3ea4a01acc545b8cee",
+      "sha256": "a6f90bd2a3302d94d189ec0b6caa163910d5a453e555feda4603347666e278af",
       "executable": false
     },
     "tests/nectar/journey.mjs": {

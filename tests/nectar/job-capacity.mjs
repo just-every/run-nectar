@@ -69,18 +69,27 @@ export async function nativeJobCapacityFlow(h,owner){
   await api('invoice.automation.decide',{request:policy.request,decision:'approved',confirm_single:true})
   await api('notification.preferences',{billrun_exceptions:true})
   const alert={entered:deferred(),release:deferred()}
-  await h.configureMail({provider:'sendgrid',apiKey:'synthetic-nectar-capacity-mail',from:h.vars.OWNER_EMAIL},async()=>{
+  await h.configureMail({provider:'sendgrid',apiKey:'synthetic-nectar-6',from:h.vars.OWNER_EMAIL},async()=>{
     alert.entered.resolve();await alert.release.promise
     return new Response(null,{status:202})
   })
   const tick=()=>h.raw(`/cdn-cgi/local/scheduled?time=${instant}&cron=${encodeURIComponent('* * * * *')}`)
   const started=performance.now(),pending=tick().catch(()=>null)
   await waitFor(alert.entered.promise,'capacity preparation did not reach its alert')
+  const originalDispatch=(await api('job-runs')).runs[0]
+  assert.equal(originalDispatch.jobs.find(job=>job.job==='invoice-automation').status,'running')
   const [execution]=(await api('invoice-automation')).runs,run=execution.periods[0].bill_run_id
   const drafts=(await api(`runs/${run}`)).invoices.filter(invoice=>subscriptions.has(invoice.subscription_id))
   assert.equal(drafts.length,count);assert.ok(drafts.every(invoice=>invoice.status==='draft'&&invoice.total_cents===100))
   const preparedAt=performance.now(),byCustomer=new Map(customers.map(id=>[id,[]]))
   for(const draft of drafts)byCustomer.get(draft.customer_id).push(draft.id)
+  // Stop preparation before the real provider timeout can let issue continue.
+  instant+=31*60_000
+  await h.restart(new Date(instant).toISOString());alert.release.resolve();await pending
+  assert.equal((await tick()).status,200)
+  assert.equal(edge.intents.size,0)
+  await api('mfa.verify',{code:totp(factor.secret,instant)})
+  edge.capturedAt(new Date(instant).toISOString())
   let consented=0
   await parallel(customers,async customer=>{
     const session=await api('portal.session.issue',{customer,origin:h.origin,audience:'hosted'})
@@ -93,13 +102,13 @@ export async function nativeJobCapacityFlow(h,owner){
   })
   const consentedAt=performance.now()
   captureGate={entered:deferred(),release:deferred()};const capture=captureGate
-  alert.release.resolve()
+  const [prepared]=(await api('invoice-automation')).runs
+  const issuing=api('invoice.automation.resume',{run:prepared.id,revision:prepared.execution_revision,confirm:true}).catch(()=>null)
   await waitFor(capture.entered.promise,'capacity collection did not reach its capture')
   assert.equal(edge.intents.size,100)
-  const [running]=(await api('job-runs')).runs
-  assert.equal(running.jobs.find(job=>job.job==='invoice-automation').status,'running')
+  assert.equal((await api('invoice-automation')).runs[0].status,'running')
   instant+=31*60_000
-  await h.restart(new Date(instant).toISOString());captureGate=null;capture.release.resolve();await pending
+  await h.restart(new Date(instant).toISOString());captureGate=null;capture.release.resolve();await issuing
   edge.capturedAt(new Date(instant).toISOString())
   assert.equal((await tick()).status,200)
   assert.equal(edge.intents.size,100,'ordinary ticks reconcile the claimed payment without recovering the invoice day')
@@ -120,12 +129,12 @@ export async function nativeJobCapacityFlow(h,owner){
   assert.ok(csv.every(row=>row.total==='1.00'&&row.paid==='1.00'&&row.balance==='0.00'))
   const collections=await api('reports/collections?period=2026-11')
   assert.equal(collections.entries.length,count);assert.equal(collections.totalCents,count*100)
-  const dispatch=(await api('job-runs')).runs.find(row=>row.id===running.id)
+  const dispatch=(await api('job-runs')).runs.find(row=>row.id===originalDispatch.id)
   assert.equal(dispatch.status,'interrupted')
   assert.equal((await tick()).status,200)
   assert.equal(edge.intents.size,count);assert.equal(edge.calls.filter(call=>call.method==='POST'&&call.path==='/payment_intents').length,count)
   const receipt={head,activeSubscriptions:count,issuedInvoices:count,capturedPayments:count,allocatedCents:count*100,
-    realWorkerRestart:true,preparationMs:Math.round(preparedAt-started),explicitConsentMs:Math.round(consentedAt-preparedAt),
+    realWorkerRestart:true,workerRestarts:2,preparationMs:Math.round(preparedAt-started),explicitConsentMs:Math.round(consentedAt-preparedAt),
     completionMs:Math.round(completedAt-started),processingMs:Math.round(preparedAt-started+completedAt-consentedAt),
     qualified:false,boundary:'native processor edge; explicit invoice consent and owner-confirmed continuation; unattended and live provider capacity remain unqualified'}
   console.log('NATIVE CAPACITY RESULT',JSON.stringify(receipt))

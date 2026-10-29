@@ -59,9 +59,12 @@ export async function sendScheduledReports(env: Bindings, instant=Date.now()) {
   // A stopped sender has an unknown outcome, never permission to send again.
   for(const interrupted of await all(env,`SELECT d.id,d.period FROM nc_report_deliveries d JOIN nc_report_preparations p ON p.delivery_id=d.id
     WHERE d.status='sending' AND p.claimed_at IS NOT NULL AND p.heartbeat_at<=?`,clockInstant(env)-PREPARATION_LEASE_MS)){
-    await commit(env,[stmt(env,"UPDATE nc_report_deliveries SET status='uncertain' WHERE id=? AND status='sending'",interrupted.id)],
-      {actor:'system:reports',action:'report.delivery.interrupted',subject:interrupted.id,detail:{period:interrupted.period}})
-    failed=true
+    try {
+      await commit(env,[guard(env,'stale',"EXISTS(SELECT 1 FROM nc_report_deliveries WHERE id=? AND status='sending')",interrupted.id),
+        stmt(env,"UPDATE nc_report_deliveries SET status='uncertain' WHERE id=? AND status='sending'",interrupted.id)],
+        {actor:'system:reports',action:'report.delivery.interrupted',subject:interrupted.id,detail:{period:interrupted.period}})
+      failed=true
+    }catch(error){if(!(error instanceof NectarError&&error.code==='stale'))throw error}
   }
   for(const member of rows){
     const reservation=await reserveReport(env,member,period)
