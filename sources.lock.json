@@ -174,7 +174,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "013414a98fce17aa23e75764c76ce07df63042b3dd367bb2bd0633321b313fa9",
+      "sha256": "2a610912b23e56e464ecde3344be796ccea960be8a99e6b8187aaebb895d38f4",
       "executable": false
     },
     "AGENTS.consumer.md": {
@@ -194,7 +194,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "ea795d0836b06439d6d52e21c9d40b5b818f7ba3edb8003e68ecbe908c636546",
+      "sha256": "4fafefd1b0890bf1703f29505defa05a2b5d8e9f7912cd703db264752c90ae57",
       "executable": false
     },
     "DEMO.md": {
@@ -230,7 +230,7 @@
       "executable": false
     },
     "docs/CLAIMS.md": {
-      "sha256": "c19eae7a6e51ce800da84043deea4585170156734b630fe0a1e55d1273f5da69",
+      "sha256": "788f2a8df0572e8a1da8a924b35bcbdc0f1b793d265d545f8bf964d1def0378e",
       "executable": false
     },
     "docs/composition-baseline.json": {
@@ -3298,7 +3298,7 @@
       "executable": false
     },
     "src/nectar/close-tieout.ts": {
-      "sha256": "5845387d9aa1fabf53764f9dafff837e9962ed5ade393450ac64f757b4af93da",
+      "sha256": "19f314990c01db5cbd64fd3e78bbc62813dca7a8ce658495245cbbab80be7159",
       "executable": false
     },
     "src/nectar/collections.ts": {
@@ -5114,7 +5114,7 @@
       "executable": false
     },
     "tests/nectar/close-tieout.mjs": {
-      "sha256": "58effa0d8e6d83016dcb7063c5b54ad077c6e70aa57155352e4af6d4ea2b35a1",
+      "sha256": "7ed318232f31e0dd923d41de742f9fc56f8918f48f323dd065692c00073d79d8",
       "executable": false
     },
     "tests/nectar/commitments.mjs": {
