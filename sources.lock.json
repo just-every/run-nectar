@@ -4990,7 +4990,7 @@
       "executable": false
     },
     "tests/fixtures/locales/fr.json": {
-      "sha256": "1f9fb0b982a18fdec4171ab0c3cfe58215636a7bcdbfa7f7058bccf468fbae39",
+      "sha256": "6c987ea084cebaa2d751ec09f8701e061366780e08fdd393dec565521a023cec",
       "executable": false
     },
     "tests/fixtures/stripe-collection-edge.mjs": {

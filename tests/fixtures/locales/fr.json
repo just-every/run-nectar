@@ -456,5 +456,9 @@
   "portal.change.afterAmount": "Total proposé de la période",
   "portal.change.difference": "Différence au prorata",
   "portal.change.effective": "Date d’effet",
-  "portal.change.previewReadOnly": "Cette estimation ne modifie pas votre abonnement et ne vous facture rien. Les demandes de réduction peuvent être envoyées séparément au marchand pour examen."
+  "portal.change.previewReadOnly": "Cette estimation ne modifie pas votre abonnement et ne vous facture rien. Les demandes de réduction peuvent être envoyées séparément au marchand pour examen.",
+  "billing_notice.payment_receipt.subject": "Paiement enregistré pour la facture {invoice}",
+  "billing_notice.payment_receipt.body": "{merchant} a enregistré un paiement de {amount} le {date} pour la facture {invoice}.",
+  "billing_notice.payment_failed.subject": "Échec du paiement de la facture {invoice}",
+  "billing_notice.payment_failed.body": "Le paiement de la facture {invoice} de {merchant} a échoué le {date}. Le montant actuellement recouvrable est de {amount}. Ce message ne confirme aucun paiement."
 }
