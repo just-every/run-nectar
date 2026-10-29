@@ -1,6 +1,6 @@
 import { operatorAuth, type Bindings } from '../auth.server'
 import { discover, exchange, readJson } from './oidc-protocol.mjs'
-import { parseIdToken, verifyIdToken } from './oidc-protocol.mjs'
+import { parseIdToken, verifyIdToken, refuseInProduction } from './oidc-protocol.mjs'
 import { digest, random, isRandom, seal, unseal } from './oidc-protocol.mjs'
 import { commit, guard, insist, now, one, sha256Hex, stmt } from './core'
 import { mappedRole, ssoConfig } from './sso-config'
@@ -57,6 +57,7 @@ export async function oidcResponse(request: Request, env: Bindings): Promise<Res
     const tokens = await exchange(fetch, pin, provider, settings, code, proof.verifier, now())
     const parsed = parseIdToken(tokens.id_token, pin), keys = await readJson(fetch, pin.jwks, settings, {}, 262144)
     const claims = await verifyIdToken(parsed, keys, pin, provider, settings, proof, { ...tokens, code }, now())
+    refuseInProduction({ email: claims.email, amr: claims.amr }, settings)
     const authenticatedAt = claims.auth_time * 1000
     insist(Number.isSafeInteger(claims.auth_time) && authenticatedAt <= now() && authenticatedAt > now() - 300000 && now() < proof.expiresAt, 'stale_authentication', 403)
     const mfa = Array.isArray(claims.amr) && claims.amr.includes('mfa') || ['https://refeds.org/profile/mfa', 'urn:oasis:names:tc:SAML:2.0:ac:classes:TimeSyncToken', 'urn:oasis:names:tc:SAML:2.0:ac:classes:SmartcardPKI'].includes(claims.acr)

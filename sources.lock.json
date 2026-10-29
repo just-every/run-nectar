@@ -174,7 +174,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "4465f80ffc965631113da1623f48772af4d30acb1b16ace9363cb37ca399894f",
+      "sha256": "8d70cfd3d85e3409e478324f2aa2877ef6eddd4093307a3415b51ae472d5fa45",
       "executable": false
     },
     "AGENTS.consumer.md": {
@@ -194,7 +194,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "846f4bc25124e3da518ac156368bb91a4f2f019137d164b7a606414b0bd500e1",
+      "sha256": "5094cadc89fa0bcc8d8c8abc30e029f28cbd4b1f8e31f4070d36f38e877cd1f5",
       "executable": false
     },
     "DEMO.md": {
@@ -230,7 +230,7 @@
       "executable": false
     },
     "docs/CLAIMS.md": {
-      "sha256": "8699308d5551c545f8ca405235cfd554d7f8edf91326f0a38f3af0bbf74d9990",
+      "sha256": "1d5215d4d526a91271a030339755f2c5bc7eeeb6768d8bdfc36061cf4850c964",
       "executable": false
     },
     "docs/composition-baseline.json": {
@@ -3790,15 +3790,15 @@
       "executable": false
     },
     "src/nectar/oidc-protocol.d.mts": {
-      "sha256": "43275d85fd2323a565e4ecabf8778681c90d99d3adc5ebcf99860ada249e432e",
+      "sha256": "ee778203720fa505a746cc1daf29abf65f65c8b0a971a9d32fa6b6a889392a4e",
       "executable": false
     },
     "src/nectar/oidc-protocol.mjs": {
-      "sha256": "b9e54a1619b1431dea4f361a1bceede6292e7bbaeb934903e15cb878d624c3ca",
+      "sha256": "5009e9e72b8084ffea47188c3899f1362cd256f7739c47557ae82f9047d0962d",
       "executable": false
     },
     "src/nectar/oidc.ts": {
-      "sha256": "db8e05aa76b62389a5e0b4d0e152f37b6c265c4a312fd8b0d768266197240891",
+      "sha256": "c960d3e3e5e2830b818741b773048f101c2abc3f7e6fa43d630a15569437d776",
       "executable": false
     },
     "src/nectar/one-time-charges.ts": {

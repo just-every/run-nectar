@@ -10,3 +10,4 @@ export function isRandom(value: unknown): boolean
 export function seal(secret: string, hash: string, value: unknown): Promise<string>
 export function unseal(secret: string, hash: string, value: string): Promise<any>
 export function keyedHash(secret: string, purpose: string, value: string): Promise<string>
+export function refuseInProduction(principal: unknown, config: unknown): void
