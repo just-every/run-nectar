@@ -13,6 +13,7 @@ import {runIsolated} from './isolated.mjs'
 let edge,persistence,captureGate
 const deferred=()=>{let resolve;const promise=new Promise(done=>{resolve=done});return {promise,resolve}}
 const count=10000,perCustomer=10
+async function waitFor(promise,message){let timer;try{return await Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error(message)),600_000)})])}finally{clearTimeout(timer)}}
 export function harnessOptions(){
   edge=nativeCollectionEdge();captureGate=null;persistence=mkdtempSync(join(tmpdir(),'nectar-native-capacity-'))
   return {persistence,localTime:'2026-11-01T10:00:00Z',stripeSecret:'synthetic-nectar-1',stripeFetch:async request=>{
@@ -74,7 +75,7 @@ export async function nativeJobCapacityFlow(h,owner){
   })
   const tick=()=>h.raw(`/cdn-cgi/local/scheduled?time=${instant}&cron=${encodeURIComponent('* * * * *')}`)
   const started=performance.now(),pending=tick().catch(()=>null)
-  await Promise.race([alert.entered.promise,new Promise((_,reject)=>setTimeout(()=>reject(new Error('capacity preparation did not reach its alert')),600_000))])
+  await waitFor(alert.entered.promise,'capacity preparation did not reach its alert')
   const [execution]=(await api('invoice-automation')).runs,run=execution.periods[0].bill_run_id
   const drafts=(await api(`runs/${run}`)).invoices.filter(invoice=>subscriptions.has(invoice.subscription_id))
   assert.equal(drafts.length,count);assert.ok(drafts.every(invoice=>invoice.status==='draft'&&invoice.total_cents===100))
@@ -93,7 +94,7 @@ export async function nativeJobCapacityFlow(h,owner){
   const consentedAt=performance.now()
   captureGate={entered:deferred(),release:deferred()};const capture=captureGate
   alert.release.resolve()
-  await Promise.race([capture.entered.promise,new Promise((_,reject)=>setTimeout(()=>reject(new Error('capacity collection did not reach its capture')),600_000))])
+  await waitFor(capture.entered.promise,'capacity collection did not reach its capture')
   assert.equal(edge.intents.size,100)
   const [running]=(await api('job-runs')).runs
   assert.equal(running.jobs.find(job=>job.job==='invoice-automation').status,'running')
@@ -113,7 +114,8 @@ export async function nativeJobCapacityFlow(h,owner){
   const issued=(await api(`runs/${run}`)).invoices.filter(invoice=>subscriptions.has(invoice.subscription_id))
   assert.equal(issued.length,count);assert.ok(issued.every(invoice=>invoice.status==='issued'&&invoice.total_cents===100))
   const response=await h.raw('/app/exports/invoices.csv',{cookie:owner});assert.equal(response.status,200)
-  const csv=csvRows(await response.text()).filter(row=>subscriptions.has(issued.find(invoice=>invoice.id===row.invoice_id)?.subscription_id))
+  const invoiceIds=new Set(issued.map(invoice=>invoice.id))
+  const csv=csvRows(await response.text()).filter(row=>invoiceIds.has(row.invoice_id))
   assert.equal(csv.length,count);assert.equal(new Set(csv.map(row=>row.invoice_id)).size,count)
   assert.ok(csv.every(row=>row.total==='1.00'&&row.paid==='1.00'&&row.balance==='0.00'))
   const collections=await api('reports/collections?period=2026-11')
@@ -128,4 +130,4 @@ export async function nativeJobCapacityFlow(h,owner){
     qualified:false,boundary:'native processor edge; explicit invoice consent and owner-confirmed continuation; unattended and live provider capacity remain unqualified'}
   console.log('NATIVE CAPACITY RESULT',JSON.stringify(receipt))
 }
-if(process.argv[1]===new URL(import.meta.url).pathname)await runIsolated('job-capacity','nativeJobCapacityFlow',()=>import('./job-capacity.mjs'))
+if(process.argv[1]===new URL(import.meta.url).pathname)await runIsolated('job-capacity','nativeJobCapacityFlow',async()=>({harnessOptions,nativeJobCapacityFlow}))

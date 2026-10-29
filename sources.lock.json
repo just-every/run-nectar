@@ -5322,7 +5322,7 @@
       "executable": false
     },
     "tests/nectar/job-capacity.mjs": {
-      "sha256": "67c1d47f682ea9f7eb6154de30c16ba733efa3f7ec9570788f77711bff0e3570",
+      "sha256": "65f96f244db23bc806e1c3621dacf1e72fd61954a140c8b8df8991afd1862f43",
       "executable": false
     },
     "tests/nectar/job-report-restart.mjs": {
