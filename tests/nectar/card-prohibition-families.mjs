@@ -8,7 +8,7 @@ import { totp } from './mfa.mjs'
 
 function prohibitionEdge() {
   const base=nativeCollectionEdge(),rules=new Map(),events=new Map(),invoices=new Map(),calls=[]
-  let loseRefusal=false
+  let loseRefusal=false,mismatchRefusal=false
   const fetch=async request=>{
     const url=new URL(request.url),path=url.pathname.slice(3),method=request.method
     const form=method==='POST'?new URLSearchParams(await request.clone().text()):null
@@ -32,15 +32,17 @@ function prohibitionEdge() {
         Object.assign(charge,{status:'failed',paid:false,captured:false,amount_captured:0})
         Object.assign(intent,{status:'requires_payment_method',payment_method:null,amount_received:0,
           last_payment_error:{code:'card_declined',decline_code:code,payment_method:{id:form.get('payment_method')}}})
+        const embedded=structuredClone(intent)
+        if(mismatchRefusal){mismatchRefusal=false;intent.customer='synthetic-nectar-foreign-intent-customer'}
         Object.assign(base.intents.get(intent.id).value,intent)
         if(loseRefusal){loseRefusal=false;return new Response(null,{status:503})}
-        return Response.json({error:{payment_intent:intent}},{status:402})
+        return Response.json({error:{payment_intent:embedded}},{status:402})
       }
       return Response.json(intent)
     }
     return response
   }
-  return {...base,fetch,rules,events,invoices,traffic:calls,loseRefusal(){loseRefusal=true},
+  return {...base,fetch,rules,events,invoices,traffic:calls,loseRefusal(){loseRefusal=true},mismatchRefusal(){mismatchRefusal=true},
     writes:()=>calls.filter(call=>call.method==='POST'&&(call.path==='/payment_intents'||call.path.endsWith('/confirm')))}
 }
 let edge
@@ -157,6 +159,14 @@ export async function cardProhibitionFamiliesFlow(h,owner) {
       pending=await api('imported.collection.prepare',{invoice:documents[1].id})
     }
     edge.rules.set(method,code)
+    if(family==='imported'){
+      // An error payload is not proof. Its matching embedded object cannot
+      // override the wrong customer returned by the current authenticated read.
+      const mismatched=await api('imported.collection.prepare',{invoice:documents[3].id})
+      edge.mismatchRefusal()
+      assert.equal((await api('imported.collection.execute',mismatched.instructions.execute)).status,'uncertain')
+      assert.deepEqual(await lifecycle(row),[],'Mismatched provider identity grants no prohibition')
+    }
     const mails=h.mails.length,before=edge.writes().length
     if(family==='native')assert.equal((await api('collection.confirm',prepared.instructions.confirm)).status,'declined')
     if(family==='reconfirmation')assert.equal((await api('collection.recovery.confirm',recovery.instructions.reconfirm)).status,'declined')
@@ -227,17 +237,21 @@ export async function cardProhibitionFamiliesFlow(h,owner) {
     // Equal method references on a different customer, and on a different
     // account, remain independently collectible under explicit new authority.
     for(const account of [1,2]) {
-      const controlProvider=`synthetic-nectar-control-${index}-${account}`
+      const external=`synthetic-nectar-control-${index}-${account}`
+      const controlProvider=account===1?external:row.provider,prior=edge.customers.get(controlProvider)
       edge.customers.set(controlProvider,{account,method})
-      const control={customer:(await api('customer.create',{external_id:controlProvider,name:'Independent authorized customer',billing_email:h.vars.OWNER_EMAIL.replace('owner',controlProvider)})).id}
+      const control={customer:(await api('customer.create',{external_id:external,name:'Independent authorized customer',billing_email:h.vars.OWNER_EMAIL.replace('owner',external)})).id}
       if(account===2)await api('customer.entity',{revision:(await api('business')).revision,customer:control.customer,entity:secondary,confirm:true})
-      // Resolve equal opaque method ids only within the selected customer.
-      const saved=edge.customers.get(row.provider).method;edge.customers.get(row.provider).method=`${method}-unselected`
+      // Equal opaque ids resolve within the selected processor account. For
+      // the same account, a separate customer owns its own method observation.
+      if(account===1)edge.customers.get(row.provider).method=`${method}-unselected`
       await api('collection.customer.bind',{customer:control.customer,account_ref:`synthetic-nectar-native-account-${account}`,stripe_customer_ref:controlProvider,confirm:true})
       const request=await native(control)
       assert.equal((await api('collection.confirm',request.instructions.confirm)).status,'collected')
-      edge.customers.get(row.provider).method=saved
+      if(account===1)edge.customers.get(row.provider).method=method
+      if(prior)edge.customers.set(controlProvider,prior)
     }
+    await refused(row,code)
     console.log('PROHIBITION PASSED',code,family)
   }
 }
