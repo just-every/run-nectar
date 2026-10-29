@@ -11,6 +11,7 @@ import { command,devKey,signIn } from './cli.mjs'
 import { file } from './harness.mjs'
 import { applyPolicy } from './policy-helper.mjs'
 import { seedPendingPortalChange } from './portal-change-requests.mjs'
+import { amountDiscountCapture, discountFiles } from './move-discounts.mjs'
 import { stripeHistoryCapture } from '../fixtures/stripe-history.mjs'
 assert.equal(process.env.NECTAR_TEST_CHECKOUT,'1','Use only a disposable checkout')
 const root=process.cwd(),scratch=await mkdtemp(join(tmpdir(),'nectar-erasure-archive-'))
@@ -50,11 +51,27 @@ try{
  const historicalCustomer=(await api('customers',cookie)).find(c=>c.external_id==='synthetic-nectar-1')
  const historicRevenue=await api(`revenue?from=2026-07&to=2027-02&customer=${historicalCustomer.id}`,cookie)
  assert.equal(historicRevenue.openingCents,800000)
+ // Uploaded amount-discount custody follows the same real archive doors.
+ const amountCapture=amountDiscountCapture()
+ // This existing installation uses Pacific business-local monthly boundaries.
+ for(const subscription of amountCapture.subscriptions.data){
+  for(const key of ['start_date','billing_cycle_anchor','current_period_start','current_period_end'])subscription[key]+=7*3600
+  subscription.discounts[0].start+=7*3600
+  if(subscription.discounts[0].end)subscription.discounts[0].end+=8*3600
+ }
+ for(const invoice of amountCapture.invoices.data){for(const key of ['created','period_start','period_end'])invoice[key]+=7*3600;for(const line of invoice.lines.data){line.period.start+=7*3600;line.period.end+=7*3600}}
+ const amountFiles=discountFiles(amountCapture),amountPreview=await api('import.preview',cookie,amountFiles)
+ await api('import.apply',cookie,{...amountFiles,fingerprint:amountPreview.fingerprint})
+ const amountCustomer=(await api('customers',cookie)).find(row=>row.external_id===amountCapture.customers.data[0].id)
  const portalChange=await seedPendingPortalChange(h,cookie,customer.id)
  await stop()
  const before=join(scratch,'before.rer'),after=join(scratch,'after.rer'),restored=join(scratch,'restored.rer')
  await command(root,['export','--output',before]);assert.ok(JSON.stringify(items(await rows(before))).includes('Amelia Privatecontact'))
  assert.ok(items(await rows(before)).some(item=>item.table==='nc_portal_change_requests'&&item.row.id===portalChange.request.id),'The actual archive includes non-executable pending request evidence')
+ const originalAmount=items(await rows(before)).find(item=>item.table==='nc_coupon_amount_terms'&&item.row.customer_id===amountCustomer.id).row
+ assert.deepEqual([originalAmount.value,originalAmount.duration,originalAmount.months,originalAmount.effective_from,originalAmount.effective_to],['200.00','repeating',3,'2026-10-01','2027-01-01'])
+ assert.equal(JSON.parse(originalAmount.price_ids_json).length,2)
+ assert.equal(JSON.parse(originalAmount.source_json).discount,amountCapture.subscriptions.data[0].discounts[0].id)
  assert.ok(!items(await rows(before)).some(i=>i.table==='nc_idempotency'),'DEV-002 the idempotency replay store never enters an archive')
  await start()
  const request=await api('erasure.request',cookie,{customer:customer.id})
@@ -73,11 +90,22 @@ try{
  assert.equal(historicalErasure.receipt.retained.legacyAnchor,null)
  assert.ok(historicalErasure.receipt.changed.some(row=>row.kind==='nc_incumbent_history'))
  assert.deepEqual((await api(`revenue?from=2026-07&to=2027-02&customer=${historicalCustomer.id}`,cookie)).months,historicRevenue.months)
+ const amountRequest=await api('erasure.request',cookie,{customer:amountCustomer.id})
+ await api('erasure.verify',cookie,{request:amountRequest.id,reason:'Independently checked imported discount account owner',evidence:file('amount-owner.txt','Signed owner request','text/plain')})
+ const amountErasure=await api('erasure.approve',cookie,{request:amountRequest.id,confirm:true})
+ assert.equal(amountErasure.receipt.changed.find(row=>row.kind==='nc_coupon_amount_terms').records,1)
+ const erasedAmountCustomer=await api('customers/'+amountCustomer.id,cookie)
+ const replayPreview=await api('import.preview',cookie,amountFiles)
+ await api('import.apply',cookie,{...amountFiles,fingerprint:replayPreview.fingerprint},409)
+ assert.deepEqual(await api('customers/'+amountCustomer.id,cookie),erasedAmountCustomer,'Capture replay cannot resurrect an erased person')
  await stop();await command(root,['export','--output',after])
- const archived=items(await rows(after)),privateValues=[customer.billing_email,customer.address,customer.external_id,'Amelia Privatecontact','amelia.private@gov005.example','private imported customer note GOV005','private metadata GOV005',historicalCustomer.billing_email,historicalCustomer.external_id,'synthetic-nectar-private-7'].filter(Boolean)
+ const archived=items(await rows(after)),privateValues=[amountCustomer.external_id,amountCustomer.billing_email,amountCustomer.name,amountCapture.subscriptions.data[0].discounts[0].id,customer.billing_email,customer.address,customer.external_id,'Amelia Privatecontact','amelia.private@gov005.example','private imported customer note GOV005','private metadata GOV005',historicalCustomer.billing_email,historicalCustomer.external_id,'synthetic-nectar-private-7'].filter(Boolean)
  for(const item of archived){const serialized=JSON.stringify(item);for(const value of privateValues)assert.ok(!serialized.includes(value),`GOV-005 archive ${item.table} removes personal text`)
   if(item.kind==='row')for(const [column,value] of Object.entries(item.row)){if(typeof value==='object'&&value?.blob){const decoded=Buffer.from(value.blob,'base64').toString();for(const personal of privateValues)assert.ok(!decoded.includes(personal),`GOV-005 retained blob ${item.table}.${column} has no erased personal data`)}}
  }
+ const anonymousAmount=archived.find(item=>item.table==='nc_coupon_amount_terms'&&item.row.id===originalAmount.id).row
+ for(const field of ['id','redemption_id','subscription_id','customer_id','value','duration','months','effective_from','effective_to','price_ids_json','origin'])assert.deepEqual(anonymousAmount[field],originalAmount[field],field+' retains exact anonymous rating custody')
+ assert.equal(anonymousAmount.source_json,'{}');assert.equal(anonymousAmount.note,'')
  assert.ok(!archived.some(r=>r.table==='nc_portal_change_requests'),'Erased requests never enter the anonymized restore')
  assert.ok(archived.some(r=>r.kind==='row'&&r.table==='nc_incumbent_revenue'),'MOVE-007 anonymous revenue schedules are in the actual archive')
  assert.ok(archived.some(r=>r.kind==='row'&&r.table==='ik_d1_erasure_journal'),'GOV-005 import custody retirement is journalled')
