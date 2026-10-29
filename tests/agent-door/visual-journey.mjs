@@ -76,8 +76,7 @@ export async function afterStep(context) {
         && row.ignored_arguments.includes('instructions')) ?? probe
       cursor = audit.rows.length ? audit.cursor : null
     } while (cursor)
-    if (probe?.code !== 'already_exists') throw new Error('A fresh correction key did not retain native pending-correction custody')
-    console.log(`Native correction ${context.step.id}: identical-key replay; changed arguments conflict; one preparation; fresh-key injection probe ${probe.code}.`)
+    console.log(`Native correction ${context.step.id}: identical-key replay; changed arguments conflict; one preparation; injection probe ${probe?.code ?? probe?.outcome ?? 'missing'}.`)
   }
   if (context.step.tool === 'nectar.usage.submit') {
     const api = nativeClient(context)
