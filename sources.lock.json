@@ -254,7 +254,7 @@
       "executable": false
     },
     "docs/getting-started.md": {
-      "sha256": "d60dd0e5a26004129862e48a23dc21e6d692f6de336ac45c5b441c26e755f268",
+      "sha256": "e7725b91b394037b2bdfaa381c8e92741e6a41a7dcf361da4ec785c073ee042e",
       "executable": false
     },
     "docs/limits.md": {
@@ -5538,7 +5538,7 @@
       "executable": false
     },
     "src/site/docs/pages.ts": {
-      "sha256": "fe00e420488d481c4193b3402f43bf952b3b92ae7d495ec367b55aab894dbfc2",
+      "sha256": "69e38a6d6d4a407a139a2c2fb397d6fa1bb912d7d88edde2ae51bf1bb87fea7c",
       "executable": false
     },
     "src/site/docs/render.ts": {
@@ -5662,7 +5662,7 @@
       "executable": false
     },
     "src/site/pages.ts": {
-      "sha256": "aedd870dab6d39ce46238536a045ccd608d9a94410b3b58a6af6ec781241b0e9",
+      "sha256": "f8795749db0d0960e3864cf613c9f8f9fa4169361ade3364e1c9601d8cd7f5fe",
       "executable": false
     },
     "src/site/run.json": {
