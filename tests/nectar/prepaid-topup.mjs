@@ -5,7 +5,18 @@ import { applyPolicy } from './policy-helper.mjs'
 import { nativeCollectionEdge } from './native-collection.mjs'
 import { totp } from './mfa.mjs'
 const edge=nativeCollectionEdge()
-export const harnessOptions=()=>({stripeFetch:edge.fetch,stripeSecret:'synthetic-nectar-1',stripeSecondarySecret:'synthetic-nectar-2'})
+const transferFields={bankName:'Synthetic Remittance Bank',accountHolderName:'Synthetic Merchant Treasury',accountNumber:'990000123456',routingNumber:'110000000',accountType:'checking',networks:['ach','domestic_wire_us'],currency:'USD',country:'US',testMode:true}
+const stripeFetch=async request=>{
+  const path=new URL(request.url).pathname
+  if(path==='/v1/customers/synthetic-nectar-native-customer-1/cash_balance')return Response.json({object:'cash_balance',customer:'synthetic-nectar-native-customer-1',livemode:false,settings:{reconciliation_mode:'manual'}})
+  if(path==='/v1/customers/synthetic-nectar-native-customer-1/funding_instructions'){
+    assert.equal(request.method,'POST')
+    assert.deepEqual(Object.fromEntries(new URLSearchParams(await request.text())),{funding_type:'bank_transfer',currency:'usd','bank_transfer[type]':'us_bank_transfer'})
+    return Response.json({object:'funding_instructions',funding_type:'bank_transfer',currency:'usd',livemode:false,bank_transfer:{type:'us_bank_transfer',country:'US',financial_addresses:[{type:'aba',supported_networks:['ach','domestic_wire_us'],aba:{bank_name:'Synthetic Remittance Bank',account_holder_name:'Synthetic Merchant Treasury',account_number:'990000123456',routing_number:'110000000',account_type:'checking'}}]}})
+  }
+  return edge.fetch(request)
+}
+export const harnessOptions=()=>({stripeFetch,stripeSecret:'synthetic-nectar-1',stripeSecondarySecret:'synthetic-nectar-2'})
 export async function prepaidTopupFlow(h,owner,{onState=async()=>{},acceptAuthorization,approveAuthorization,revokeAuthorization}={}){
   const api=(path,body,status)=>h.api(path,owner,body,status),posts=()=>edge.calls.filter(call=>call.method==='POST'&&call.path==='/payment_intents').length
   let instant='2026-11-02T18:00:00Z'
@@ -52,6 +63,8 @@ export async function prepaidTopupFlow(h,owner,{onState=async()=>{},acceptAuthor
   await api('portal.configure',{hosts:[h.origin],parents:[]})
   const factor=await api('mfa.totp.start',{})
   await api('mfa.totp.confirm',{factor:factor.factor,code:totp(factor.secret,Date.parse(instant))});await api('mfa.policy',{scope:'roles',roles:['owner']})
+  const funding=await api('transfer.instructions.prepare',{customer:rows[0].customer,account_ref:rows[0].account})
+  assert.deepEqual((await api('transfer.instructions.confirm',funding.confirm)).instructions,transferFields)
   const portal=async row=>api('portal.session.issue',{customer:row.customer,origin:h.origin,audience:'hosted'})
   const portalPost=async(path,session,body,status=200)=>{const response=await h.raw(`${path}?session=${encodeURIComponent(session.token)}`,{body});assert.equal(response.status,status);return response.status===200?response.json():null}
   for(const row of rows){
@@ -89,6 +102,15 @@ export async function prepaidTopupFlow(h,owner,{onState=async()=>{},acceptAuthor
   assert.ok(attempts.every(response=>[200,409].includes(response.status)))
   assert.equal(posts(),before+1,'Concurrent jobs own one durable crossing and one off-session PaymentIntent')
   const claims=await api(`prepaid/topup-claims?subscription=${first.subscription}`),claim=claims[0]
+  const topupInvoice=await api(`invoices/${claim.invoice_id}`)
+  assert.deepEqual(JSON.parse(topupInvoice.transfer_instructions_json).fields,transferFields,'The automatic native top-up issue door freezes the same retained instructions')
+  const topupSession=await portal(first)
+  const topupHtml=await h.page(`/portal/invoices/${claim.invoice_id}?session=${encodeURIComponent(topupSession.token)}`)
+  const topupPdf=await h.raw(`/portal/invoices/${claim.invoice_id}?session=${encodeURIComponent(topupSession.token)}&format=pdf`)
+  assert.equal(topupPdf.status,200)
+  const topupText=[...Buffer.from(await topupPdf.arrayBuffer()).toString('latin1').matchAll(/<([0-9a-f]+)> Tj/g)].map(match=>Buffer.from(match[1],'hex').toString('latin1')).join(' ')
+  for(const value of ['Synthetic Remittance Bank','Synthetic Merchant Treasury','990000123456','110000000']){assert.ok(topupHtml.includes(value));assert.ok(topupText.includes(value))}
+
   assert.equal(claim.status,'collected');assert.equal(claim.amount_cents,500000);assert.ok(claim.payment_id)
   assert.equal((await api(`prepaid/${first.subscription}`)).balances[0].remainingN,590000)
   assert.equal((await api(`invoices/${claim.invoice_id}`)).balanceCents,0)
