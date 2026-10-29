@@ -1,3 +1,5 @@
+import { portalChangeSettings } from './portal-change-policy'
+import { readRemittances } from './remittances'
 import { processorEvents } from './processor-events'
 import { dunningReport } from './dunning'
 import { retryComparisonReport } from './retry-comparison'
@@ -95,6 +97,7 @@ export async function customerView(env: Bindings, actor: Actor, id: string, url?
 }
 
 export const views: Record<string, View> = {
+  portalChanges: (env,actor) => portalChangeSettings(env,actor),
   processorEvents:(env,actor,_r,_id,url)=>processorEvents(env,actor,url.searchParams.get('customer')??undefined),
   assuranceCases: (env,actor)=>assuranceCases(env,actor),
   assuranceRuns: (env,actor)=>assuranceRuns(env,actor),
@@ -155,6 +158,7 @@ export const views: Record<string, View> = {
   promotions: (env, actor) => promotionsView(env, actor),
   writeOffs: (env, actor) => writeOffList(env, actor),
   ledgerPostings: async (env, actor) => ({ postings: await ledgerPostings(env, actor) }),
+  remittances: (env, actor) => readRemittances(env, actor),
   payments: (env, actor,_r,_id,url) => payments(env, actor,undefined,url),
   notices: (env, actor) => notices(env, actor),
   tasks: (env, actor) => tasks(env, actor),

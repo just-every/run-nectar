@@ -1,3 +1,5 @@
+import { preparePortalChangePolicy } from './portal-change-policy'
+import { uploadRemittances, previewRemittance, confirmRemittance, previewRemittanceAllocation, allocateRemittance } from './remittances'
 import { consumeProcessorEvent } from './processor-events'
 import { allocateProcessorCash } from './processor-cash-queue'
 import { prepareImportedCashTakeover, confirmImportedCashTakeover } from './processor-cash-imported'
@@ -44,6 +46,7 @@ import { preparePrepaidRefund, decidePrepaidRefund, reconcilePrepaidRefund } fro
 import { preparePrepaidTopupAuthorization, decidePrepaidTopupAuthorization, revokePrepaidTopupAuthorization } from './prepaid-topup-authorization'
 import { reconcilePrepaidTopup } from './prepaid-topup-charge'
 import { runPrepaidTopupFromDoor } from './prepaid-topup-actions'
+import { prepareNativeReconfirmation, confirmNativeReconfirmation } from './payments/reconfirmation'
 import { bindNativeCollectionCustomer, prepareNativeCollection, confirmNativeCollection, reconcileNativeCollection } from './payments/collection'
 import { preparePrepaid, decidePrepaid, revokePrepaidConsent } from './prepaid-terms'
 import { preparePrepaidPurchase } from './prepaid-purchase'
@@ -160,6 +163,8 @@ export const actions: Record<string, Handler> = {
   'collection.prepare': prepareNativeCollection,
   'collection.confirm': confirmNativeCollection,
   'collection.reconcile': reconcileNativeCollection,
+  'collection.recovery.prepare': prepareNativeReconfirmation,
+  'collection.recovery.confirm': confirmNativeReconfirmation,
   'payment.ach_evidence.record':recordAchPaymentEvidence,
   'customer.payment_methods.refresh':refreshCustomerPaymentMethods,
   'checkout.setup.prepare':prepareHostedSetup,
@@ -188,6 +193,7 @@ export const actions: Record<string, Handler> = {
   'prepaid.funding.confirm': confirmPrepaidFunding,
   'prepaid.consent.revoke': revokePrepaidConsent,
   'prepaid.settle': settlePrepaid,
+  'portal.change.policy': preparePortalChangePolicy,
   'portal.configure': configurePortal,
   'portal.session.issue': issuePortalSession,
   'portal.session.revoke': revokePortalSession,
@@ -329,6 +335,11 @@ export const actions: Record<string, Handler> = {
   'promotion.create': createPromotionCode,
   'trial.extend': extendTrial,
   'trial.resolve': resolveTrial,
+  'remittance.upload': uploadRemittances,
+  'remittance.preview': previewRemittance,
+  'remittance.confirm': confirmRemittance,
+  'remittance.allocate.preview': previewRemittanceAllocation,
+  'remittance.allocate': allocateRemittance,
   'payment.record': recordPayment,
   'payment.allocate': allocate,
   'reminder.prepare': prepareReminder,

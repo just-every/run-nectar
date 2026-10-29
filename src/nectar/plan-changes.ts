@@ -16,12 +16,14 @@ import { REVENUE_POLICY_VERSION } from './revenue-allocation'
 import { billingComponentClaimStatements } from './billing-components'
 import { invoiceContent } from './invoice-content'
 import { carriedUsageCredits,usageCreditApplicationLines } from './usage-correction-records'
+import { planChangeSourceGuards } from './plan-change-history'
 
 const reason='Unused advance service from approved plan change'
 const quoteView=(q:Row)=>({effectiveDate:q.effectiveDate,period:q.period,policy:q.policy,mode:q.mode,before:q.before,after:q.after,delta:q.delta,waivedDelta:q.waivedDelta})
 export async function preparePlanChange(env: Bindings, actor: Actor, input: Input) {
   requireAny(actor,['records','draft']);requireRead(actor,'subscriptions')
   input.only(['subscription','item','price','quantity','mode','returnTo'])
+  const generation=(await one(env,'SELECT value FROM nc_privacy_generation WHERE id=1'))!.value
   const sub=await requireSubscription(env,input.text('subscription')),item=await one(env,'SELECT * FROM nc_items WHERE id=? AND subscription_id=?',input.text('item'),sub.id)
   insist(item&&sub.billing_mode==='live'&&!sub.erased_at,'item_not_found',404)
   const mode=input.text('mode');insist(['immediate','period_end'].includes(mode),'invalid_change_mode')
@@ -29,8 +31,10 @@ export async function preparePlanChange(env: Bindings, actor: Actor, input: Inpu
   const price=await one(env,"SELECT * FROM nc_prices WHERE id=? AND status='active'",input.text('price'));insist(price,'price_not_found',404)
   const quantity=price.kind==='seat'?input.integer('quantity',{min:1,max:1000000})!:1,id=newId(),newItem=newId(),b=await requireBusiness(env),date=localDate(clockInstant(env),b.timezone)
   const quote=await planChangeQuote(env,sub,item,price.id,quantity,mode,date,policy.prorationPolicy,newItem),cp=await creditPolicy(env),statements=[
+    guard(env,'stale','(SELECT value FROM nc_privacy_generation WHERE id=1)=?',generation),
     guard(env,'stale','EXISTS(SELECT 1 FROM nc_subscriptions WHERE id=? AND revision=?)',sub.id,sub.revision),
     guard(env,'policy_changed','COALESCE((SELECT revision FROM nc_lifecycle_policy WHERE singleton=1),0)=?',policy.revision),
+    ...planChangeSourceGuards(env,quote),
     stmt(env,'INSERT INTO nc_plan_changes(id,subscription_id,customer_id,item_id,new_item_id,new_price_id,new_quantity,effective_date,mode,policy,policy_revision,subscription_revision,source_invoice_id,quote_json,basis,prepared_by,prepared_name,prepared_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',id,sub.id,sub.customer_id,item.id,newItem,price.id,quantity,quote.effectiveDate,mode,policy.prorationPolicy,policy.revision,sub.revision,quote.sourceInvoice,JSON.stringify(quote),quote.basis,actor.id,actorLabel(actor),now()),
   ]
   if(quote.delta.totalCents<0&&can(actor,'approve')){
@@ -71,6 +75,7 @@ export async function decidePlanChange(env: Bindings, actor: Actor, input: Input
     await commit(env,[pending,stmt(env,"UPDATE nc_plan_changes SET status='rejected',decided_by=?,decided_at=? WHERE id=?",actor.id,now(),row.id)],{actor:actorLabel(actor),action:'plan-change.reject',subject:row.id});return {id:row.subscription_id,status:'rejected'}
   }
   insist(row.prepared_by!==actor.id,'second_approver_required',409)
+  const generation=(await one(env,'SELECT value FROM nc_privacy_generation WHERE id=1'))!.value
   const sub=await requireSubscription(env,row.subscription_id),item=await one(env,'SELECT * FROM nc_items WHERE id=?',row.item_id),policy=await lifecyclePolicy(env)
   insist(!sub.erased_at,'customer_erased',410)
   insist(sub.revision===row.subscription_revision&&policy.revision===row.policy_revision,'stale',409)
@@ -78,11 +83,10 @@ export async function decidePlanChange(env: Bindings, actor: Actor, input: Input
   // An immediate quote names its actual business-local date; approval tomorrow
   // must be prepared again rather than silently changing its proration.
   insist(row.mode==='immediate'?row.effective_date===date:date<=row.effective_date,'plan_change_date_changed',409)
-  insist(!await one(env,"SELECT 1 FROM nc_invoices WHERE subscription_id=? AND status='issued' AND period_end>? AND id<>?",sub.id,row.effective_date,row.source_invoice_id),'plan_change_source_already_adjusted',409)
+  insist(!await one(env,"SELECT 1 FROM nc_invoices i WHERE i.subscription_id=? AND i.status='issued' AND i.period_end>? AND i.id<>? AND NOT EXISTS(SELECT 1 FROM nc_plan_changes c WHERE c.invoice_id=i.id AND c.status='approved' AND c.source_invoice_id=?)",sub.id,row.effective_date,row.source_invoice_id,row.source_invoice_id),'plan_change_source_already_adjusted',409)
   const quote=await planChangeQuote(env,sub,item!,row.new_price_id,row.new_quantity,row.mode,saved.mode==='period_end'?saved.period.start:row.effective_date,row.policy,row.new_item_id)
   insist(quote.basis===row.basis,'stale',409)
-  const generation=(await one(env,'SELECT value FROM nc_privacy_generation WHERE id=1'))!.value
-  const statements=[pending,guard(env,'stale','(SELECT value FROM nc_privacy_generation WHERE id=1)=?',generation),guard(env,'stale','EXISTS(SELECT 1 FROM nc_subscriptions WHERE id=? AND revision=?)',sub.id,sub.revision),guard(env,'policy_changed','COALESCE((SELECT revision FROM nc_lifecycle_policy WHERE singleton=1),0)=?',row.policy_revision)]
+  const statements=[pending,guard(env,'stale','(SELECT value FROM nc_privacy_generation WHERE id=1)=?',generation),guard(env,'stale','EXISTS(SELECT 1 FROM nc_subscriptions WHERE id=? AND revision=?)',sub.id,sub.revision),guard(env,'policy_changed','COALESCE((SELECT revision FROM nc_lifecycle_policy WHERE singleton=1),0)=?',row.policy_revision),...planChangeSourceGuards(env,quote)]
   let debit:string|null=null,credit:string|null=null
   if(quote.delta.totalCents>0&&row.policy==='invoice_now'){
     const prepared=await debitInvoice(env,actor,row,quote,date);debit=prepared.invoice;statements.push(...prepared.statements)
@@ -108,6 +112,7 @@ export async function decidePlanChange(env: Bindings, actor: Actor, input: Input
 export async function preparePlanChangeCredit(env:Bindings,actor:Actor,input:Input){
   requireMember(actor,'approve');await requireFreshFactor(env,actor)
   input.only(['change','returnTo'])
+  const generation=(await one(env,'SELECT value FROM nc_privacy_generation WHERE id=1'))!.value
   const row=await one(env,"SELECT * FROM nc_plan_changes WHERE id=? AND status='pending'",input.text('change'))
   insist(row,'pending_change_not_found',404)
   const saved=parseJson<Row>(row.quote_json,{}),sub=await requireSubscription(env,row.subscription_id),item=await one(env,'SELECT * FROM nc_items WHERE id=?',row.item_id),policy=await lifecyclePolicy(env)
@@ -118,8 +123,8 @@ export async function preparePlanChangeCredit(env:Bindings,actor:Actor,input:Inp
   insist(row.mode==='immediate'?date===row.effective_date:date<=row.effective_date,'plan_change_date_changed',409)
   const quote=await planChangeQuote(env,sub,item!,row.new_price_id,row.new_quantity,row.mode,row.mode==='period_end'?saved.period.start:row.effective_date,row.policy,row.new_item_id)
   insist(quote.basis===row.basis,'stale',409)
-  const invoice=await issuedInvoice(env,row.source_invoice_id),cp=await creditPolicy(env),request=newId(),generation=(await one(env,'SELECT value FROM nc_privacy_generation WHERE id=1'))!.value
-  await commit(env,[guard(env,'stale','(SELECT value FROM nc_privacy_generation WHERE id=1)=?',generation),guard(env,'plan_credit_already_prepared','NOT EXISTS(SELECT 1 FROM nc_plan_change_credit_requests WHERE change_id=?)',row.id),
+  const invoice=await issuedInvoice(env,row.source_invoice_id),cp=await creditPolicy(env),request=newId()
+  await commit(env,[guard(env,'stale','(SELECT value FROM nc_privacy_generation WHERE id=1)=?',generation),...planChangeSourceGuards(env,quote),guard(env,'plan_credit_already_prepared','NOT EXISTS(SELECT 1 FROM nc_plan_change_credit_requests WHERE change_id=?)',row.id),
     stmt(env,'INSERT INTO nc_credit_requests(id,invoice_id,amount_cents,reason,prepared_by,prepared_name,prepared_at,basis,policy_revision,balance_cents) VALUES(?,?,?,?,?,?,?,?,?,?)',request,invoice.id,-quote.delta.totalCents,reason,actor.id,actorLabel(actor),now(),await creditBasis(invoice,cp),cp.revision,invoice.balance_cents),
     stmt(env,'INSERT INTO nc_plan_change_credit_requests(request_id,change_id,invoice_id,customer_id) VALUES(?,?,?,?)',request,row.id,invoice.id,row.customer_id)],{actor:actorLabel(actor),action:'plan-change.credit.prepare',subject:row.id,detail:{request,invoice:invoice.id,amount:-quote.delta.totalCents,basis:row.basis}})
   return {id:row.subscription_id,change:row.id,request}

@@ -263,6 +263,19 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
   "collection.reconcile": {
     "request": "text"
   },
+  "collection.recovery.confirm": {
+    "account_ref": "text",
+    "amount_cents": "integer",
+    "basis_hash": "text",
+    "confirm": "flag",
+    "payment_method_ref": "text",
+    "recovery": "text",
+    "request": "text",
+    "stripe_customer_ref": "text"
+  },
+  "collection.recovery.prepare": {
+    "request": "text"
+  },
   "contact.add": {
     "customer": "text",
     "email": "text",
@@ -767,6 +780,11 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "decision": "text",
     "request": "text"
   },
+  "portal.change.policy": {
+    "minimum_seats": "integer",
+    "pause_allowed": "flag",
+    "prices": "list"
+  },
   "portal.configure": {
     "brand_color": "text",
     "brand_name": "text",
@@ -983,6 +1001,31 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
   },
   "reminder.prepare": {
     "customer": "text"
+  },
+  "remittance.allocate": {
+    "amount": "text",
+    "confirm": "flag",
+    "fingerprint": "text",
+    "invoice": "text",
+    "receipt": "text"
+  },
+  "remittance.allocate.preview": {
+    "amount": "text",
+    "invoice": "text",
+    "receipt": "text"
+  },
+  "remittance.confirm": {
+    "confirm": "flag",
+    "customer": "text",
+    "fingerprint": "text",
+    "receipt": "text"
+  },
+  "remittance.preview": {
+    "customer": "text",
+    "receipt": "text"
+  },
+  "remittance.upload": {
+    "file": "file"
   },
   "report.schedule": {
     "day": "integer",

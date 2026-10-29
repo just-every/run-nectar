@@ -31,7 +31,7 @@ try {
   await h.api('business.configure',owner,{legal_name:'Alder Research Software',timezone:'UTC',invoice_prefix:'ALDER',payment_terms_days:30})
   await applyPolicy(h,owner,'tax.declare',{tax_jurisdiction:'CA',tax_mode:'no_tax',tax_note:'Reviewed focused browser journey'})
   await h.api('tax.review',owner,{revision:(await h.api('business',owner)).revision})
-  browser=await chromium.launch({headless:true,args:['--use-mock-keychain','--password-store=basic']})
+  browser=await chromium.launch({headless:true,...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?{executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH}:{}),args:['--use-mock-keychain','--password-store=basic','--no-sandbox']})
   const context=await browser.newContext()
   await context.addCookies(owner.split('; ').map(value=>{const i=value.indexOf('=');return {name:value.slice(0,i),value:value.slice(i+1),url:h.origin}}))
   const page=await context.newPage()
@@ -134,7 +134,7 @@ try {
     })
   }
   else if(kind==='prepaid')await prepaidBrowser({h,owner,page,context,both,form,submit})
-  else if(kind==='native-collection')await nativeCollectionFlow(h,owner,{confirm:async payload=>{await page.goto(h.origin+`/app/invoices/${(await h.api('native-collections',owner)).find(row=>row.id===payload.request).invoice_id}`);const consent=form('collection.confirm').filter({has:page.locator(`input[name="request"][value="${payload.request}"]`)}).filter({has:page.locator('button')});await consent.locator('input[name="confirm"]').check();await submit(consent);return (await h.api('native-collections',owner)).find(row=>row.id===payload.request)},onState:async state=>{await both(`native-${state.label}-${state.request?.id??state.invoice}`,`/app/invoices/${state.invoice}#collection`)}})
+  else if(kind==='native-collection')await nativeCollectionFlow(h,owner,{prepareRecovery:async request=>{const row=(await h.api('native-collections',owner)).find(r=>r.id===request);await page.goto(h.origin+`/app/invoices/${row.invoice_id}`);const review=form('collection.recovery.prepare').filter({has:page.locator(`input[name="request"][value="${request}"]`)});await submit(review);return (await h.api('native-collections',owner)).find(r=>r.id===request)},confirmRecovery:async payload=>{const row=(await h.api('native-collections',owner)).find(r=>r.id===payload.request);await page.goto(h.origin+`/app/invoices/${row.invoice_id}`);const review=form('collection.recovery.confirm').filter({has:page.locator(`input[name="recovery"][value="${payload.recovery}"]`)});await review.locator('input[name="confirm"]').check();await submit(review);return (await h.api('native-collections',owner)).find(r=>r.id===row.id)},confirm:async payload=>{await page.goto(h.origin+`/app/invoices/${(await h.api('native-collections',owner)).find(row=>row.id===payload.request).invoice_id}`);const consent=form('collection.confirm').filter({has:page.locator(`input[name="request"][value="${payload.request}"]`)}).filter({has:page.locator('button')});await consent.locator('input[name="confirm"]').check();await submit(consent);return (await h.api('native-collections',owner)).find(row=>row.id===payload.request)},onState:async state=>{await both(`native-${state.label}-${state.request?.id??state.invoice}`,`/app/invoices/${state.invoice}#collection`)}})
   else if(kind==='entity-setup')await contractEntitySetup(h,owner,{
     decideSetup:async(payload,actor)=>{
       assert.equal(actor,owner)

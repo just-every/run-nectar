@@ -153,7 +153,7 @@ const ERRORS: Record<string, string> = {
   mfa_key_missing: 'this installation has no MFA key, so authenticator apps cannot be set up. Use a passkey, or ask the owner to set MFA_KEY.',
   mfa_key_changed: 'this installation’s MFA key cannot open that authenticator secret. Set it up again.',
 }
-export const describeError = (code: string) => ERRORS[code] ?? code.replace(/_/g, ' ') + '.'
+export const describeError = (code: string) => (Object.hasOwn(ERRORS, code) ? ERRORS[code] : undefined) ?? code.replace(/_/g, ' ') + '.'
 
 export const hidden = (name: string, value: unknown) => h`<input type="hidden" name="${name}" value="${value}">`
 

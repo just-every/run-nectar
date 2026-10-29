@@ -12,8 +12,8 @@ const relation = new Set(['customer_id','subscription_id','invoice_id','payment_
 const keep = new Set(['purpose','correction_kind','intent_key','billing_key','interval_unit','billing_timing','numbering_mode','capture_kind','account_ref','custody','basis_hash','error_code','occurred_text','number','kind','document_kind','status','origin','language','currency','method','method_kind','billing_mode','invoice_kind','calc_version','version','revision','quantity','unit_amount','value','tax_rate','tax_mode','tax_jurisdiction','anchor_day','billing_interval','access','scope','scopes','pricing_model','action','state','approval_mode','mail_status','verified_method','event','created_by_kind','prepared_by_kind','requested_by_kind','source','proposal_kind'])
 // The processor refund identifier is retained cash custody under ct batch11 I.
 const typedPlanField=(table:string,column:string)=>table.startsWith('nc_processor_')&&['type','event_type','code','decline_code','source_hash'].includes(column)||table==='nc_plan_changes'&&['mode','policy'].includes(column)||table==='nc_invoice_refunds'&&column==='destination'
-const financialIdentifier=(table:string,column:string)=>(['nc_prepaid_refunds','nc_invoice_refunds'].includes(table)&&column==='refund_ref')||(table.startsWith('nc_processor_')&&['transaction_ref','source_ref','payout_ref','event_ref','object_ref','intent_ref','transfer_ref','stripe_customer_ref','payment_intent_ref','charge_ref','refund_ref'].includes(column))
-const reserved = new Set(['nc_incumbent_revenue','nc_erased_records','nc_guard','nc_privacy_generation','nc_privacy_context','nc_erasure_requests','nc_erasure_financial','nc_business','nc_members','nc_agent_keys'])
+const financialIdentifier=(table:string,column:string)=>(table==='nc_remittances'&&['source_key_hash','payload_hash','confirmation_hash'].includes(column))||(['nc_prepaid_refunds','nc_invoice_refunds'].includes(table)&&column==='refund_ref')||(table.startsWith('nc_processor_')&&['transaction_ref','source_ref','payout_ref','event_ref','object_ref','intent_ref','transfer_ref','stripe_customer_ref','payment_intent_ref','charge_ref','refund_ref'].includes(column))
+const reserved = new Set(['nc_remittance_source_keys','nc_incumbent_revenue','nc_erased_records','nc_guard','nc_privacy_generation','nc_privacy_context','nc_erasure_requests','nc_erasure_financial','nc_business','nc_members','nc_agent_keys'])
 const keyed = (value: unknown, ids: Set<string>): boolean => typeof value === 'string' ? ids.has(value) : Array.isArray(value) ? value.some(v => keyed(v, ids)) : !!value && typeof value === 'object' && Object.values(value).some(v => keyed(v, ids))
 const json = (text: unknown) => { try { return JSON.parse(String(text)) } catch { return null } }
 const blankJson = (value: string) => Array.isArray(json(value)) ? '[]' : '{}'
@@ -36,7 +36,7 @@ export async function erasurePlan(env: Bindings, customer: Row): Promise<Erasure
     changed = false
     for (const image of images) {
       if (image.table === 'nc_audit' || image.table === 'nc_bill_runs' || image.table === 'nc_report_deliveries') continue
-      const owns = image.scoped || Object.entries(image.row).some(([k,v]) => relation.has(k) && typeof v === 'string' && ids.has(v)) || (image.table === 'nc_proposals' && keyed(json(image.row.payload_json),ids))
+      const owns = image.scoped || (image.table==='nc_remittances' && keyed(json(image.row.source_json),new Set([...ids,customer.external_id,customer.provider_ref,customer.billing_email].filter(Boolean)))) || Object.entries(image.row).some(([k,v]) => relation.has(k) && typeof v === 'string' && ids.has(v)) || (image.table === 'nc_proposals' && keyed(json(image.row.payload_json),ids))
       if (!owns) continue
       if (!image.scoped) { image.scoped = true; changed = true }
       if (image.row.id && !ids.has(image.row.id)) { ids.add(image.row.id); changed = true }
@@ -49,7 +49,7 @@ export async function erasurePlan(env: Bindings, customer: Row): Promise<Erasure
   for (const image of images) {
     const { table,row,key,required,foreignKeys } = image
     // Customer capabilities and investigations are operational custody, not retained financial facts.
-    if (['nc_subscription_states','nc_dunning_recoveries','nc_dunning_mail_authority','nc_dunning_deliveries','nc_dunning_authority','nc_dunning_series','nc_retry_segments','nc_retry_method_recovery_authorizations','nc_retry_method_recovery_events','nc_retry_method_recoveries','nc_retry_churn','nc_retry_series','nc_retry_attempts','nc_card_expiry_notices','nc_card_expiry_notice_authority','nc_portal_method_actions','nc_portal_method_action_history','nc_automatic_collection_authorizations','nc_payment_link_attempts','nc_hosted_setup_returns','nc_hosted_setup_history','nc_hosted_setups','nc_portal_sessions','nc_assurance_cases','nc_assurance_observations'].includes(table) && image.scoped) {
+    if (['nc_native_reconfirmation_authority','nc_native_reconfirmations','nc_subscription_states','nc_dunning_recoveries','nc_dunning_mail_authority','nc_dunning_deliveries','nc_dunning_authority','nc_dunning_series','nc_retry_segments','nc_retry_method_recovery_authorizations','nc_retry_method_recovery_events','nc_retry_method_recoveries','nc_retry_churn','nc_retry_series','nc_retry_attempts','nc_card_expiry_notices','nc_card_expiry_notice_authority','nc_portal_method_actions','nc_portal_method_action_history','nc_automatic_collection_authorizations','nc_payment_link_attempts','nc_hosted_setup_returns','nc_hosted_setup_history','nc_hosted_setups','nc_portal_sessions','nc_portal_change_requests','nc_assurance_cases','nc_assurance_observations'].includes(table) && image.scoped) {
       mutations.push({ table, row, key, updates: null })
       const entry = changes.get(table) ?? { kind: table, fields: new Set<string>(), records: 0 }
       Object.keys(row).forEach(field => entry.fields.add(field)); entry.records++; changes.set(table, entry)
@@ -79,6 +79,7 @@ export async function erasurePlan(env: Bindings, customer: Row): Promise<Erasure
       if (['nc_usage_correction_mail','nc_credit_correction_mail','nc_draft_correction_mail','nc_notifications','nc_note_mentions','nc_renewal_notices','nc_card_expiry_notices'].includes(table)) updates.status='suppressed'
       if (table==='nc_cadence_deliveries') updates.status='superseded'
       if (table==='nc_webhook_deliveries') {updates.status='suppressed';updates.claim=null}
+      if (table==='nc_remittances') updates.status='erased'
       if (table==='nc_notices') updates.status='discarded'
       if (table==='nc_tasks') updates.status='done'
       if (table==='nc_renewal_terms') {updates.auto_renew=0;updates.token_hash=null;updates.status='ended'}
@@ -94,5 +95,5 @@ export async function erasurePlan(env: Bindings, customer: Row): Promise<Erasure
     mutations.push({ table, row, key, updates: Object.fromEntries(fields.map(field => [field, updates[field]])) })
     const entry=changes.get(table)??{kind:table,fields:new Set<string>(),records:0};fields.forEach(f=>entry.fields.add(f));entry.records++;changes.set(table,entry)
   }
-  return { generation,personalValues:personal, statements:erasureMutationStatements(mutations.sort((a,b)=>{const order=['nc_dunning_recoveries','nc_dunning_mail_authority','nc_dunning_deliveries','nc_dunning_authority','nc_dunning_series','nc_retry_method_recovery_authorizations','nc_retry_method_recovery_events','nc_retry_method_recoveries','nc_card_expiry_notice_authority','nc_card_expiry_notices','nc_portal_method_actions'];const rank=(table:string)=>{const i=order.indexOf(table);return i<0?order.length:i};return rank(a.table)-rank(b.table)})), changes:[...changes.values()].map(v=>({...v,fields:[...v.fields].sort()})),ids:[...ids] }
+  return { generation,personalValues:personal, statements:erasureMutationStatements(mutations.sort((a,b)=>{const order=['nc_native_reconfirmation_authority','nc_native_reconfirmations','nc_dunning_recoveries','nc_dunning_mail_authority','nc_dunning_deliveries','nc_dunning_authority','nc_dunning_series','nc_retry_method_recovery_authorizations','nc_retry_method_recovery_events','nc_retry_method_recoveries','nc_card_expiry_notice_authority','nc_card_expiry_notices','nc_portal_method_actions'];const rank=(table:string)=>{const i=order.indexOf(table);return i<0?order.length:i};return rank(a.table)-rank(b.table)})), changes:[...changes.values()].map(v=>({...v,fields:[...v.fields].sort()})),ids:[...ids] }
 }

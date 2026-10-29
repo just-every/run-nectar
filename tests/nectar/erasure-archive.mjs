@@ -3,13 +3,14 @@
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
 import { createServer } from 'node:net'
-import { access,mkdir,mkdtemp,readFile,rm,writeFile } from 'node:fs/promises'
+import { access,appendFile,mkdir,mkdtemp,readFile,rm,writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { readArchive } from '@runeditrun/rer/modules/portability'
 import { command,devKey,signIn } from './cli.mjs'
 import { file } from './harness.mjs'
 import { applyPolicy } from './policy-helper.mjs'
+import { seedPendingPortalChange } from './portal-change-requests.mjs'
 import { stripeHistoryCapture } from '../fixtures/stripe-history.mjs'
 assert.equal(process.env.NECTAR_TEST_CHECKOUT,'1','Use only a disposable checkout')
 const root=process.cwd(),scratch=await mkdtemp(join(tmpdir(),'nectar-erasure-archive-'))
@@ -32,10 +33,11 @@ const items=records=>records.filter(r=>r.kind==='part').flatMap(r=>r.items).map(
 try{
  await mkdir('exports',{recursive:true});await writeFile('exports/erasure-answers.json',JSON.stringify({OWNER_EMAIL:'owner@example.test'}),{mode:0o600})
  await command(root,['setup','--answers','exports/erasure-answers.json','--non-interactive','--port',String(port)])
+ await appendFile(join(root,'.dev.vars'),'\nNECTAR_LOCAL_TIME=2026-10-28T09:00:00Z\n')
  await start()
  await fetch(origin+'/setup',{method:'POST',redirect:'manual',headers:{cookie,origin,'content-type':'application/x-www-form-urlencoded'},body:'confirm=yes'})
  await api('business.configure',cookie,{legal_name:'Cedar Software Inc',timezone:'America/Los_Angeles',invoice_prefix:'CD',payment_terms_days:30})
- const h={api};await applyPolicy(h,cookie,'tax.declare',{tax_jurisdiction:'CA',tax_mode:'no_tax',tax_note:'Reviewed GOV-005 archive journey'})
+ const h={api,origin,raw:(path,{body,headers={}}={})=>fetch(origin+path,{method:body===undefined?'GET':'POST',redirect:'manual',headers:{...(body===undefined?{}:{origin,'content-type':'application/json'}),...headers},body:body===undefined?undefined:JSON.stringify(body)})};await applyPolicy(h,cookie,'tax.declare',{tax_jurisdiction:'CA',tax_mode:'no_tax',tax_note:'Reviewed GOV-005 archive journey'})
  await api('tax.review',cookie,{revision:(await api('business',cookie)).revision})
  const capture=Object.fromEntries(await Promise.all(['manifest','customers','products','prices','subscriptions','invoices','meters'].map(async name=>[name,file(`${name}.json`,await readFile(new URL(`../fixtures/stripe/${name}.json`,import.meta.url)),'application/json')])))
  const preview=await api('import.preview',cookie,capture);await api('import.apply',cookie,{...capture,fingerprint:preview.fingerprint})
@@ -49,15 +51,33 @@ try{
  const historicalCustomer=(await api('customers',cookie)).find(c=>c.external_id==='synthetic-nectar-1')
  const historicRevenue=await api(`revenue?from=2026-07&to=2027-02&customer=${historicalCustomer.id}`,cookie)
  assert.equal(historicRevenue.openingCents,800000)
+ const portalChange=await seedPendingPortalChange(h,cookie,customer.id)
+ const currentPolicy=(await api('retention',cookie)).policy
+ const policy=await api('retention.policy.prepare',cookie,{...currentPolicy,revision:currentPolicy.revision,enabled:true,save_kind:'discount',save_percent:50,save_months:2,winback_enabled:false})
+ await api('retention.policy.decide',cookie,{request:policy.request,decision:'approved',confirm_single:true})
+ const peer=(await api('customer.create',cookie,{external_id:'synthetic-nectar-archive-peer',name:'Retained peer',billing_email:(await api('me',cookie)).email})).id
+ const peerSub=(await api('subscription.create',cookie,{customer:peer,start_date:'2026-01-01',price:[portalChange.prices[0]],quantity:['10']})).id
+ const term=await api('term.prepare',cookie,{subscription:peerSub,revision:(await api(`subscriptions/${peerSub}`,cookie)).revision,term_start:'2026-01-01',months:24,auto_renew:true,notice_days:30,uplift_percent:'0'})
+ await api('term.decide',cookie,{term:term.term,decision:'approved',confirm_single:true})
+ const portalSession=()=>api('portal.session.issue',cookie,{customer:peer,origin,audience:'hosted'})
+ const liveSession=await portalSession()
+ const renewalPath=session=>`/portal/renewal/${peerSub}?session=${session.token}`
+ const view=async session=>{const r=await h.raw(renewalPath(session),{headers:{accept:'application/json'}});assert.equal(r.status,200);return r.json()}
+ const liveOffer=await view(liveSession)
+ assert.equal(liveOffer.save.percent,50,'A real approved policy permits the live portal save before export')
  await stop()
  const before=join(scratch,'before.rer'),after=join(scratch,'after.rer'),restored=join(scratch,'restored.rer')
  await command(root,['export','--output',before]);assert.ok(JSON.stringify(items(await rows(before))).includes('Amelia Privatecontact'))
+ assert.ok(items(await rows(before)).some(item=>item.table==='nc_portal_change_requests'&&item.row.id===portalChange.request.id),'The actual archive includes non-executable pending request evidence')
+ assert.ok(!items(await rows(before)).some(i=>i.table==='nc_portal_retention_authority'),'Policy evidence exports without executable portal retention authority')
  assert.ok(!items(await rows(before)).some(i=>i.table==='nc_idempotency'),'DEV-002 the idempotency replay store never enters an archive')
  await start()
  const request=await api('erasure.request',cookie,{customer:customer.id})
  await api('erasure.verify',cookie,{request:request.id,reason:'Billing mailbox unreachable; independently compared signed company records',evidence:file('independent-check.txt','Independent verification of the owner request','text/plain')})
  const erased=await api('erasure.approve',cookie,{request:request.id,confirm:true})
  assert.ok(erased.receipt.changed.some(r=>r.kind==='nc_incumbent_invoices'))
+ assert.equal(erased.receipt.changed.find(r=>r.kind==='nc_portal_change_requests').records,1)
+ assert.equal((await h.raw(`/portal/change.request?session=${portalChange.session.token}`,{body:portalChange.body})).status,401,'Erasure withdraws the real request capability')
  const day=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Los_Angeles',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(erased.receipt.approvedAt))
  assert.equal(erased.receipt.retained.legacyAnchor,day,'GOV-005 missing legacy issue/payment dates use the approval business-local date')
  assert.match(erased.receipt.retained.legacyDateRule,/unavailable/,'GOV-005 the receipt identifies missing legacy date evidence')
@@ -73,6 +93,7 @@ try{
  for(const item of archived){const serialized=JSON.stringify(item);for(const value of privateValues)assert.ok(!serialized.includes(value),`GOV-005 archive ${item.table} removes personal text`)
   if(item.kind==='row')for(const [column,value] of Object.entries(item.row)){if(typeof value==='object'&&value?.blob){const decoded=Buffer.from(value.blob,'base64').toString();for(const personal of privateValues)assert.ok(!decoded.includes(personal),`GOV-005 retained blob ${item.table}.${column} has no erased personal data`)}}
  }
+ assert.ok(!archived.some(r=>r.table==='nc_portal_change_requests'),'Erased requests never enter the anonymized restore')
  assert.ok(archived.some(r=>r.kind==='row'&&r.table==='nc_incumbent_revenue'),'MOVE-007 anonymous revenue schedules are in the actual archive')
  assert.ok(archived.some(r=>r.kind==='row'&&r.table==='ik_d1_erasure_journal'),'GOV-005 import custody retirement is journalled')
  await command(root,['reset','--yes'])
@@ -80,5 +101,12 @@ try{
  await command(root,['import','--input',after,'--yes'])
  await command(root,['export','--output',restored])
  assert.deepEqual(items(await rows(restored)),archived,'GOV-005 the post-erasure archive restores only anonymized records and exact retained financial custody')
- console.log('GOV-005 real rer export/reset/import, old-archive refusal with later journal, and anonymous restore passed')
+ await start()
+ assert.equal((await h.raw(renewalPath(liveSession),{headers:{accept:'application/json'}})).status,401,'An archived installation never restores its old customer session')
+ const restoredSession=await portalSession(),restoredView=await view(restoredSession)
+ assert.equal(restoredView.save,null,'Retained policy evidence cannot restore portal save execution authority')
+ assert.equal((await h.raw(renewalPath(restoredSession),{body:{basis:restoredView.basis,confirm:'save',offer:liveOffer.save.id}})).status,409)
+ assert.equal((await h.raw(renewalPath(restoredSession),{body:{basis:restoredView.basis,confirm:'cancel'}})).status,200,'Retention reapproval is never required to cancel renewal')
+ assert.equal((await api(`subscriptions/${peerSub}`,cookie)).renewal.terms[0].auto_renew,0)
+ console.log('GOV-005 real rer export, reset and import, old-archive refusal, anonymous restore and inactive portal retention authority passed')
 }finally{await stop();await rm(scratch,{recursive:true,force:true})}

@@ -100,13 +100,19 @@ function withCalendar(line: Line, window: BillingWindow): Line {
 }
 
 export function rateBillingWindow(input: RatingInput, core: (input: RatingInput) => Rating): Rating {
-  const parts = validatedServiceWindows(input)
+  return rateBillingServices(input, expandBillingWindows(input), core)
+}
+
+/** Recompose validated, immutable service inputs after a governed timeline
+ * replay. Each component retains its own calendar; invoice tax rounds once. */
+export function rateBillingServices(input: RatingInput, serviceInputs: RatingInput[], core: (input: RatingInput) => Rating): Rating {
+  const parts = billingServiceWindows(input.billing!)
+  insist(parts.length === serviceInputs.length, 'billing_service_inputs_required', 409)
   if (parts.length === 1) {
-    const result = core(expandServiceWindow(input, parts[0]))
+    const result = core(serviceInputs[0])
     return { ...result, lines: result.lines.map(line => withCalendar(line, parts[0])) }
   }
   const representative = parts.filter(part => part.terms.timing === 'arrears').at(-1) ?? parts.at(-1)!
-  const serviceInputs = parts.map(part => expandServiceWindow(input, part))
   const results = serviceInputs.map((expanded, index) => {
     const owner = parts[index].key === representative.key
     const current: RatingInput = { ...expanded, prepaid: undefined, usageCredits: [], amountCoupons: [],

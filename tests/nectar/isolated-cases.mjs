@@ -1,5 +1,8 @@
 // Explicit modules keep each isolated journey visible to Verify tooling.
 export const isolatedJourneys = [
+  { file: 'remittance-files', name: 'remittanceFilesFlow', load: () => import('./remittance-files.mjs') },
+  { file: 'portal-renewal', name: 'portalRenewalFlow', load: () => import('./portal-renewal.mjs') },
+  { file: 'sdk-typescript', name: 'sdkTypescriptFlow', load: () => import('./sdk-typescript.mjs') },
   { file: 'invoice-refund-preview', name: 'invoiceRefundPreviewFlow', load: () => import('./invoice-refund-preview.mjs') },
   { file: 'one-time', name: 'invoiceVoidFlow', load: () => import('./one-time.mjs') },
   { file: 'retry-methods', name: 'retryAuthenticationFlow', load: () => import('./retry-methods.mjs') },
@@ -87,4 +90,5 @@ export const isolatedJourneys = [
   { file: 'reconciliation', name: 'reconciliationFlow', load: () => import('./reconciliation.mjs') },
   { file: 'assurance-detectors', name: 'assuranceDetectorsFlow', load: () => import('./assurance-detectors.mjs') },
   { file: 'assurance-detectors', name: 'assuranceScheduleFlow', load: () => import('./assurance-detectors.mjs') },
+  { file: 'portal-change-requests', name: 'portalChangeRequestsFlow', load: () => import('./portal-change-requests.mjs') },
 ]
