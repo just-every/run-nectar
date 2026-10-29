@@ -1005,3 +1005,19 @@ tick. There is no operational activation, resend or retry action.
 
 Capacity remains unmeasured in `seed.json`. This history does not qualify the
 required ten-thousand-subscription billing day or its timing and restart proof.
+
+## Explicit billing notices
+
+The current interim notice commands are owner-only and require a fresh
+authenticator or passkey verification. No notice runs unattended.
+`GET /api/nectar/billing-notices` returns sender settings and delivery outcomes.
+
+- `billing.notice.configure`: `kind`, `sender` (`off`, `nectar` or `processor`), current `revision`, `language`, `confirm:true`; optional paired `subject` and `body` edit that language's template. Empty templates restore the translation defaults. Supported placeholders are `{invoice}`, `{merchant}`, `{amount}` and `{date}`; an edited body must retain every fact.
+- `billing.notice.prepare`: `kind`, `invoice`, `confirm:true`; optionally `event` selects a specific positive allocation for a receipt. Current send kinds are `payment_failed` and `payment_receipt`. The other four settings reserve their sender choices but their send doors remain unavailable.
+- `billing.notice.send`: the prepared `notice`, its `basis_hash` and a separate `confirm:true`.
+
+A notice is informational: it grants no payment authority. Sender settings,
+recipient, language, source or wording changes invalidate its frozen basis.
+A prepared event cannot be replaced, including after expiry, provider refusal
+or uncertainty. Acceptance records provider acceptance rather than mailbox
+delivery. A receipt records an allocation, without claiming settlement.

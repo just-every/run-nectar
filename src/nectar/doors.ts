@@ -29,6 +29,7 @@ export const API_DOORS: [string, string][] = [
   ['^prepaid/topup-claims$','prepaidTopupClaims'],
   ['^payment-links$','paymentLinks'],
   ['^retry-comparison$', 'retryComparison'],
+  ['^billing-notices$','billingNotices'],
   ['^dunning$', 'dunning'],
   ['^recovery$', 'retryRecovery'],
   ['^automatic-collections$','automaticCollections'],
