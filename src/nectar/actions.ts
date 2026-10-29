@@ -1,3 +1,4 @@
+import { scanCloseTieout } from './close-tieout'
 import { preparePortalChangePolicy } from './portal-change-policy'
 import { uploadBankDeposit, uploadRemittances, previewRemittance, confirmRemittance, previewRemittanceAllocation, allocateRemittance } from './remittances'
 import { consumeProcessorEvent } from './processor-events'
@@ -118,6 +119,7 @@ type Handler = (env: Bindings, actor: Actor, input: Input, request: Request) => 
 
 export const actions: Record<string, Handler> = {
   'sso.configure': configureSso,
+  'close.scan': scanCloseTieout,
   'assurance.scan': scanAssurance,
   'assurance.assign': assignAssurance,
   'assurance.approve': approveAssurance,

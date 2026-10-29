@@ -42,6 +42,10 @@ jobs:
       # still fail if runtime support is missing. Avoid an unbounded apt mirror.
       - run: pnpm exec playwright install chromium
       - run: pnpm run verify
+      - name: Native close preparation browser journey
+        if: ${{ matrix.shard == 1 }}
+        run: node tests/nectar/close-tieout-browser.mjs
+
       - name: Native same-intent collection browser journey
         if: ${{ matrix.shard == 1 }}
         run: node tests/nectar/clause-browser.mjs native-collection

@@ -91,4 +91,5 @@ export const isolatedJourneys = [
   { file: 'assurance-detectors', name: 'assuranceDetectorsFlow', load: () => import('./assurance-detectors.mjs') },
   { file: 'assurance-detectors', name: 'assuranceScheduleFlow', load: () => import('./assurance-detectors.mjs') },
   { file: 'portal-change-requests', name: 'portalChangeRequestsFlow', load: () => import('./portal-change-requests.mjs') },
+  { file: 'close-tieout', name: 'closeTieoutFlow', load: () => import('./close-tieout.mjs') },
 ]
