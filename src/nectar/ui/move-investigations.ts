@@ -5,8 +5,8 @@ import { assuranceCases } from '../assurance'
 import { MOVE_KIND, moveInvestigationEvidence } from '../movein/investigations'
 import { cents, details, form, h, hidden, page, select, table, tag } from './html'
 
-const labels:Record<string,string>={quantity:'Quantity',unitAmount:'Unit price',from:'Service starts',to:'Service ends',amountCents:'Line amount',missing_line:'Missing engine line',additional_lines:'Additional engine lines'}
-const value=(field:string,item:unknown)=>field==='amountCents'&&typeof item==='number'?cents(item):typeof item==='object'?'Requires review':String(item??'Unavailable')
+const labels:Record<string,string>={quantity:'Quantity',unitAmount:'Unit price',from:'Service starts',to:'Service ends',amountCents:'Line amount',subtotalCents:'Subtotal',missing_line:'Missing engine line',additional_lines:'Additional engine lines'}
+const value=(field:string,item:unknown)=>['amountCents','subtotalCents'].includes(field)&&typeof item==='number'?cents(item):typeof item==='object'?'Requires review':String(item??'Unavailable')
 export async function moveInvestigationsPage(env:Bindings,actor:Actor,url:URL) {
   requireCapability(actor,'read')
   const proofs=await moveInvestigationEvidence(env),cases=(await assuranceCases(env,actor)).filter(row=>row.kind===MOVE_KIND)
