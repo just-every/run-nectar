@@ -3607,7 +3607,7 @@
       "executable": false
     },
     "src/nectar/agent-door/index.ts": {
-      "sha256": "ae9398d4867f699a11ac92dd408704d879f83d06a4811129a4dff3de7f00f036",
+      "sha256": "7cb1d54890da98d28457c4f3707b32c945cecc3b04ea298b3758727c51ac599d",
       "executable": false
     },
     "src/nectar/agent-door/native.ts": {
@@ -5327,7 +5327,7 @@
       "executable": false
     },
     "src/server.ts": {
-      "sha256": "50250bc19df2547e5e86f345437c809cbb27de2ed5f77e4f08bc8e598dcc5617",
+      "sha256": "e9167ba52e8c36912296b9e4a2ef8b0839c86bc40f1a14ad41f25ff23fac2197",
       "executable": false
     },
     "src/site/docs/docs.css": {

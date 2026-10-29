@@ -47,6 +47,19 @@ export function nectarDoor(env: Bindings) {
   })
 }
 
+/** An installation without its canonical origin cannot advertise or admit agents. */
+export async function nectarAgentResponse(request: Request, env: Bindings): Promise<Response | null> {
+  if (!env.AUTH_ORIGIN) {
+    const path = new URL(request.url).pathname
+    if (path === '/mcp' || path === '/api/rer/agent-policy' || path === '/agents' || path.startsWith('/agents/')
+      || path === '/.well-known/oauth-protected-resource' || path === '/.well-known/oauth-protected-resource/mcp') {
+      return Response.json({ code: 'installation_not_configured' }, { status: 503, headers: { 'cache-control': 'no-store' } })
+    }
+    return null
+  }
+  return nectarDoor(env).handle(request)
+}
+
 export function nectarBusinessSettings(env: Bindings) {
   return createBusinessSettings({ db: env.DB, trust: env.RER_BUSINESS_TRUST,
     business: { settings: 1, values: ['display_name'], team: { roles: { admin: 'finance', member: 'accountant' } } }, team: nectarTeam(env) })
