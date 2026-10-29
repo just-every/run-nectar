@@ -136,7 +136,17 @@ export async function harness({ assets = false, localTime, hostname = '127.0.0.1
     Object.assign(vars,{MAIL_PROVIDER:provider,MAIL_API_KEY:apiKey,MAIL_FROM:from});nativeMailFetch=transport
     await mf.setOptions(convertV4MiniflareOptions({...options,bindings:{...vars}}));await mf.ready;db=await mf.getD1Database('DB')
   }
-  return { configureMail,origin, vars, raw, api, submit, page, signIn, close, mails, mailResponses,advanceClock,rejectAudit,assertStorageExcludes, dispatch: async request => mf.dispatchFetch(request.url, { redirect: 'manual', method: request.method, headers: Object.fromEntries(request.headers), ...(!['GET','HEAD'].includes(request.method) ? { body: await request.arrayBuffer() } : {}) }) }
+  // Dispose the real workerd process and reopen the same persisted D1. This
+  // interrupts pending scheduled work rather than fabricating unfinished rows.
+  async function restart(instant) {
+    assert.ok(persistence, 'restart journeys require durable D1')
+    await mf.dispose()
+    if (instant) vars.NECTAR_LOCAL_TIME = instant
+    mf = new Miniflare(convertV4MiniflareOptions({...options, bindings: {...vars}}))
+    await mf.ready
+    db = await mf.getD1Database('DB')
+  }
+  return { restart,configureMail,origin, vars, raw, api, submit, page, signIn, close, mails, mailResponses,advanceClock,rejectAudit,assertStorageExcludes, dispatch: async request => mf.dispatchFetch(request.url, { redirect: 'manual', method: request.method, headers: Object.fromEntries(request.headers), ...(!['GET','HEAD'].includes(request.method) ? { body: await request.arrayBuffer() } : {}) }) }
 }
 
 export const file = (filename, content, type = 'application/octet-stream') => ({ filename, base64: Buffer.from(content).toString('base64'), type })
