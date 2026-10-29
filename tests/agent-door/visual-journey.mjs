@@ -52,6 +52,19 @@ async function screenshots(context, pages) {
 }
 
 export async function afterStep(context) {
+  if (context.step.tool === 'nectar.usage.submit') {
+    const api = nativeClient(context)
+    const native = (await api('audit')).find(row => row.action === 'usage.ingest' && row.subject === context.result.batch)
+    let cursor, matched
+    do {
+      const audit = await person(context, `/agents/api/audit${cursor ? `?after=${encodeURIComponent(cursor)}` : ''}`)
+      matched = audit.rows.find(row => row.tool === context.step.tool && row.idempotency_key === context.args.idempotency_key)
+      cursor = matched ? null : audit.cursor
+    } while (cursor)
+    if (!native || !matched || native.actor !== matched.label || context.result.accepted !== 1) {
+      throw new Error('Native usage effect and door attribution disagree')
+    }
+  }
   if (captured || context.phase !== 'held' || context.step.id !== 'protected-answers-get') return
   const extra = await context.tool(context.step.tool, context.args)
   const pending = extra.result?._meta?.['com.runeditrun/approval']
