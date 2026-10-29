@@ -215,7 +215,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "4640fa81b75aed8bff99fa18f6319f5a14f2a13d322075a1e8e48c620172f9ae",
+      "sha256": "b554470002fa34b1fd4840e3ece02a775041a2d71a831ef5a1371a055e525251",
       "executable": false
     },
     "agent-surface.json": {
@@ -239,7 +239,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "0ba6ec5e7a6c29042bc4f687664e0d31d5b6e5ee2c6097b8c997a0785ad01ce2",
+      "sha256": "1ef5c0034eb337d41876617e16068e9be361cb923ba9154084bb08b069416ebd",
       "executable": false
     },
     "DEMO.md": {
@@ -259,7 +259,7 @@
       "executable": false
     },
     "docs/agent-door.md": {
-      "sha256": "708951c204ab32d90279a088939ab9c6d895c8e179a0489a8bb2e1204f88d49b",
+      "sha256": "a5eab05e9890a2ae7fb965c38ac2441097669fa4d40b8e9836970b8b8f2d533d",
       "executable": false
     },
     "docs/agents-and-access.md": {
@@ -279,7 +279,7 @@
       "executable": false
     },
     "docs/CLAIMS.md": {
-      "sha256": "e6c8adf93523f9d339e23e8fc5ca10a128b219b5992c497fe1df87f26d658902",
+      "sha256": "8caa3326a444c68eea2cd553943d836ad5e2632d7acc3f64eb3c51e6d4e5878c",
       "executable": false
     },
     "docs/composition-baseline.json": {
@@ -3599,7 +3599,7 @@
       "executable": false
     },
     "src/nectar/actor.ts": {
-      "sha256": "a748b3599ec61a811bc076f75562db071ad23ce956d4758a16425fd82cb349ef",
+      "sha256": "5bf80647cf98f5e765d4c7e4d39e0fc417ae154d69ec310c82b41820e787b718",
       "executable": false
     },
     "src/nectar/addons.ts": {
@@ -3611,7 +3611,7 @@
       "executable": false
     },
     "src/nectar/agent-door/native.ts": {
-      "sha256": "8b7d7989f5dd243c12c99cd811ccadff68a64bde464dc00521d4a849cb89c118",
+      "sha256": "68c0654d3462f459a778447465ee513b3500eb2f74ef7f0fdbb2d3bc329d679d",
       "executable": false
     },
     "src/nectar/agent-door/people.ts": {
@@ -3667,7 +3667,7 @@
       "executable": false
     },
     "src/nectar/assurance.ts": {
-      "sha256": "b3d2198faa2bff24dd887e315b8ccf7d45a3bce2e8ad20daa2b332b405b933a5",
+      "sha256": "021c7ed180ff44f0bc2d5d49e823d325f1cf359231eb2721f5f943c014dea49e",
       "executable": false
     },
     "src/nectar/automatic-collection-events.ts": {
@@ -4179,7 +4179,7 @@
       "executable": false
     },
     "src/nectar/meter-definitions.ts": {
-      "sha256": "35da34358cfc75aa365de33bc1053351b86a978909952df35c425a7330548b1f",
+      "sha256": "11f7c7d01daa4715cea6596f3e1350812f1d46a348e542b0837154a8ad6ceeeb",
       "executable": false
     },
     "src/nectar/meter-sql.ts": {
@@ -4699,7 +4699,7 @@
       "executable": false
     },
     "src/nectar/proposals.ts": {
-      "sha256": "daa188768f31d64a7129aee47988de16541b2b010870a0f323111d954d4c21f1",
+      "sha256": "3bb5f3420723f7184c979c760932b95945d5009019a77ff9faaaee2d337a4e6e",
       "executable": false
     },
     "src/nectar/rating.ts": {
@@ -4711,7 +4711,7 @@
       "executable": false
     },
     "src/nectar/reconciliation.ts": {
-      "sha256": "1b60b6c266129f692688c6fb4bbee2e5e63bf73f2747a2300f1b291682612409",
+      "sha256": "729f4c3c948fd486339f8c22bff0b191bf8a87b4fbb2504ab14dbabb527d63c8",
       "executable": false
     },
     "src/nectar/remittance-matching.ts": {
@@ -5275,7 +5275,7 @@
       "executable": false
     },
     "src/nectar/usage-dispositions.ts": {
-      "sha256": "63e06d415d26c7d8de37069f967e231c01bc8d72b3fd558631134d95074323eb",
+      "sha256": "f362a4d50b67db1018cc929cc31a9b8e86398b2a2f865a3152f0a615939c3d7d",
       "executable": false
     },
     "src/nectar/usage-replay.ts": {
@@ -5283,7 +5283,7 @@
       "executable": false
     },
     "src/nectar/usage.ts": {
-      "sha256": "196972c41421a166870126a82609e1b3ce8c86b9ee5aa5b86acbd163e6f6bf34",
+      "sha256": "ec433f6d0cc5d56db84a80d5509187b91ca73440e9b54ec9c6d9d91a9334d9b4",
       "executable": false
     },
     "src/nectar/views.ts": {
@@ -5491,7 +5491,7 @@
       "executable": false
     },
     "tests/agent-door/visual-journey.mjs": {
-      "sha256": "603c9ef408e835b30bafdde8b24e78944002e8c78e9596f26304b89f09cff769",
+      "sha256": "df75267e516a76f9328c21bcfcd609a566fe7996bc9360c07ec7142b91f22610",
       "executable": false
     },
     "tests/fixtures/invoice-logo.jpg": {

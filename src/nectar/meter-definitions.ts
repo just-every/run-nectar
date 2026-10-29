@@ -1,7 +1,7 @@
 // Meter previews evaluate only projected customer/source events. Caller SQL is
 // parsed into the same exact engine as a native meter, never executed in D1.
 import type { Bindings } from '../auth.server'
-import { requireRead, actorLabel, requireCapability, requireMember, type Actor } from './actor'
+import { requireRead, actorLabel, companyAgentDetail, requireCapability, requireMember, type Actor } from './actor'
 import { all, commit, fingerprint, guard, insist, newId, now, one, parseJson, stmt, type Row } from './core'
 import { isMonth, periodStartingIn, today, zonedStart } from './dates'
 import { requireBusiness } from './business'
@@ -65,7 +65,7 @@ export async function previewMetric(env:Bindings,actor:Actor,input:Input) {
   requireCapability(actor,'read')
   const r=await one(env,'SELECT * FROM nc_metric_requests WHERE id=?',input.text('request',{max:100}));insist(r,'metric_request_not_found',404)
   const month=input.text('period',{max:7}),result=await previewBasis(env,r,input.text('customer',{max:100}),month),id=newId()
-  await commit(env,[stmt(env,'INSERT INTO nc_metric_previews(id,request_id,customer_id,period,source_fingerprint,result_json,prepared_by,prepared_at) VALUES(?,?,?,?,?,?,?,?)',id,r.id,result.customer,month,result.fingerprint,JSON.stringify(result.result),actorLabel(actor),now())],{actor:actorLabel(actor),action:'meter.preview',subject:id,detail:{request:r.id,period:month,fingerprint:result.fingerprint}})
+  await commit(env,[stmt(env,'INSERT INTO nc_metric_previews(id,request_id,customer_id,period,source_fingerprint,result_json,prepared_by,prepared_at) VALUES(?,?,?,?,?,?,?,?)',id,r.id,result.customer,month,result.fingerprint,JSON.stringify(result.result),actorLabel(actor),now())],{actor:actorLabel(actor),action:'meter.preview',subject:id,detail:{request:r.id,period:month,fingerprint:result.fingerprint,...companyAgentDetail(actor)}})
   return {preview:id,period:result.period,fingerprint:result.fingerprint,results:result.result}
 }
 export async function activateMetric(env:Bindings,actor:Actor,input:Input) {

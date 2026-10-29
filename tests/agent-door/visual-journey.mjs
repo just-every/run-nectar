@@ -56,10 +56,14 @@ export async function afterStep(context) {
   if (context.step.tool === 'nectar.usage.submit') {
     const api = nativeClient(context)
     const native = (await api('audit')).find(row => row.action === 'usage.ingest' && row.subject === context.result.batch)
+    const attribution = native && JSON.parse(native.detail).companyAgent
     let cursor, matched
     do {
       const audit = await person(context, `/agents/api/audit${cursor ? `?after=${encodeURIComponent(cursor)}` : ''}`)
-      matched = audit.rows.find(row => row.tool === context.step.tool && row.idempotency_key === context.args.idempotency_key)
+      matched = attribution && audit.rows.find(row => row.tool === context.step.tool && row.idempotency_key === context.args.idempotency_key
+        && row.operation_id === attribution.operationId && row.agent.id === attribution.agent.id
+        && row.sponsor.id === attribution.sponsor.id && row.client_id === attribution.clientId
+        && JSON.stringify([...(row.approval?.by ?? [])].sort()) === JSON.stringify(attribution.approvers.map(person => person.id).sort()))
       cursor = matched ? null : audit.cursor
     } while (cursor)
     if (!native || !matched || native.actor !== matched.label || context.result.accepted !== 1) {

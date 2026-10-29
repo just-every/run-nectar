@@ -70,6 +70,14 @@ export interface Actor {
   /** A credential's pinned dated API version (DEV-002); members use the latest unless a request names one. */
   attribution?: string
   apiVersion?: string
+  /** Immutable company-door attribution, supplied from the admitted tool context. */
+  readonly companyAgent?: {
+    readonly operationId: string
+    readonly clientId: string | null
+    readonly agent: { readonly id: string; readonly name: string }
+    readonly sponsor: { readonly id: string; readonly name: string }
+    readonly approvers: readonly { readonly id: string; readonly name: string }[]
+  }
 }
 
 export const can = (actor: Actor, capability: Capability) => actor.capabilities.has(capability)
@@ -108,6 +116,9 @@ export function requireOwner(actor: Actor) {
 }
 
 export const actorLabel = (actor: Actor) => actor.attribution ?? (actor.kind === 'agent' ? `agent:${actor.name}` : actor.email)
+
+/** Ordinary native actors retain their existing audit-detail shape. */
+export const companyAgentDetail = (actor: Actor) => actor.companyAgent ? { companyAgent: actor.companyAgent } : {}
 
 export async function currentActor(env: Bindings, request: Request): Promise<Actor | null> {
   const bearer = request.headers.get('authorization')?.match(/^Bearer (nectar_[A-Za-z0-9_-]{20,100})$/)?.[1]

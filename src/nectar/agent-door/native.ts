@@ -21,7 +21,10 @@ export async function nativeActor(env: Bindings, ctx: ToolContext): Promise<Acto
   const requested = new Set(ctx.scopes.flatMap(scope => grants[scope] ?? []))
   if (requested.has('read')) for (const family of RECORD_FAMILIES) requested.add(`read.${family}`)
   return { id: ctx.consent ? ctx.agent.id : ctx.clientId ?? ctx.agent.id, kind: 'agent', name: ctx.agent.name, email: '', role: null,
-    sessionId: null, capabilities: new Set([...held].filter(cap => requested.has(cap))), attribution: ctx.actor.label }
+    sessionId: null, capabilities: new Set([...held].filter(cap => requested.has(cap))), attribution: ctx.actor.label,
+    companyAgent: { operationId: ctx.operationId, clientId: ctx.clientId ?? null,
+      agent: { id: ctx.agent.id, name: ctx.agent.name }, sponsor: { id: ctx.person.id, name: ctx.person.name },
+      approvers: ctx.approvers.map(person => ({ id: person.id, name: person.name })) } }
 }
 
 export async function nativeCall<T>(run: () => Promise<T>): Promise<T> {

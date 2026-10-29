@@ -60,7 +60,7 @@ The input remains ct's unmerged draft at
 `b8e7ade1caf5d86f4743df039057de595f7e09d9`,
 `docs/contract/AGENT-SURFACE.md`. This change does not merge or rewrite it and
 creates no `SURFACE-*` clause IDs. The ten tools above use its existing names.
-The draft's wider catalogue and resource templates remain targets, not claims.
+The draft has 166 tools, 56 resource templates, 31 event types and eight prompt jobs. This candidate exposes ten tools, no public resource/event/prompt/subscription family, and 20 journey steps. The remaining 156 tool names are unregistered targets, not claims.
 
 The native code explicitly requires a member, owner, fresh factor or native
 session for financial decisions, access/security administration, meter activation,
@@ -76,6 +76,8 @@ content; it is not a general health/payroll document classifier. Financial apply
 and independent native decision journeys remain outside this candidate. In
 particular, a prepared correction is still subject to the native financial
 preparation and separate-person requirements. No native authority is fabricated.
+
+GOV-005 is PARTIAL for the newly retained door artifacts. Native erasure only inventories `nc_*` tables; the new `agent_door_*` arguments, decisions, approvals and replay outcomes have no agreed client-scoped redaction and concurrent-capture fence. Base explicitly identifies that custody boundary as unresolved.
 
 The full candidate is PARTIAL until its integrated conformance and these wider
 native/custody gaps have been judged. The descriptor's journey is the declared

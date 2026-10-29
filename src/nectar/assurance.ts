@@ -1,7 +1,7 @@
 // Current assurance coverage: recorded source controls versus ingested usage, and signed seat and ramp
 // steps versus issued invoices. A scan owns only case records. Financial fixes keep their existing approvals.
 import type { Bindings } from '../auth.server'
-import { actorLabel, requireCapability, requireMember, type Actor } from './actor'
+import { actorLabel, companyAgentDetail, requireCapability, requireMember, type Actor } from './actor'
 import { all, canonical, commit, guard, insist, newId, now, one, parseJson, stmt, type Row } from './core'
 import { cents } from './decimal'
 import { isMonth } from './dates'
@@ -109,7 +109,7 @@ export async function scanCases(env: Bindings, actor: Actor, periods: string[], 
       stmt(env,"INSERT INTO nc_assurance_observations(id,customer_id,case_id,basis_hash,evidence_json,status,created_by,created_at) VALUES(?,?,?,?,?,'open',?,?)",newId(),proof.customer,id,proof.basis,canonical(proof),actorLabel(actor),at))
   }
   const coverage=['usage_source_control',...Object.keys(detectors())]
-  await commit(env,statements,{actor:actorLabel(actor),action:'assurance.scan',subject,detail:{coverage,compared:proofs.length,opened,rechecked}})
+  await commit(env,statements,{actor:actorLabel(actor),action:'assurance.scan',subject,detail:{coverage,compared:proofs.length,opened,rechecked,...companyAgentDetail(actor)}})
   return {coverage,compared:proofs.length,opened,rechecked}
 }
 
@@ -152,7 +152,7 @@ export async function recheckAssurance(env: Bindings, actor: Actor, input: Input
   const proof=await current(env,actor,row)
   const status=!proof.mismatch && row.approved_basis===proof.basis?'resolved':'open'
   await commit(env,[unchanged(env,seq),ownerGuard(env,row.owner_id),...observationStatements(env,actor,row,proof)],
-    {actor:actorLabel(actor),action:'assurance.recheck',subject:id,detail:{basis:proof.basis,mismatch:proof.mismatch,status}})
+    {actor:actorLabel(actor),action:'assurance.recheck',subject:id,detail:{basis:proof.basis,mismatch:proof.mismatch,status,...companyAgentDetail(actor)}})
   return {id,status,evidence:proof}
 }
 
