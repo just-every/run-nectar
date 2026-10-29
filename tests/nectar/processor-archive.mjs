@@ -209,6 +209,7 @@ export async function processorArchiveJourney() {
     return {customer,financeEmail,async restoreCheck(restored,owner,removed=false){
      await restored.api('remittance.upload',owner,{file:source},409)
      await restored.api('remittance.confirm',owner,{receipt,fingerprint:prepared.fingerprint,confirm:true},removed?404:409)
+     if(removed)await restored.api('mfa.verify',owner,{code:totp(factor.secret,Date.parse(restored.vars.NECTAR_LOCAL_TIME))})
      await restored.api('bank.remittance.preview',owner,{account:plaid.account,file:bankSource},409)
      const payments=await restored.api('payments',owner)
      assert.equal(payments.filter(p=>p.customer_id===customer).length,removed?0:2)

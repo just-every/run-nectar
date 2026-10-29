@@ -3430,7 +3430,7 @@
       "executable": false
     },
     "src/nectar/erasure-purge.ts": {
-      "sha256": "de64b5f0dc72033127d777ec129ca1bc090792b7b0631577853cea95644dcfc7",
+      "sha256": "e68d9f614c81b0571cf2dad7928ff467a732c009144191f671e1a45b5dc6609d",
       "executable": false
     },
     "src/nectar/erasure-records.ts": {
@@ -3450,7 +3450,7 @@
       "executable": false
     },
     "src/nectar/erasure.ts": {
-      "sha256": "ce857a803aec3bf839d9e8ce54b7f08494dd580c3d822812eb8b4479d3825a84",
+      "sha256": "59c6a0a68991f696d4c5d93194aa3b60dd9c7e95a432ab3d62ddb8a60ed4eceb",
       "executable": false
     },
     "src/nectar/exports.ts": {
@@ -5534,7 +5534,7 @@
       "executable": false
     },
     "tests/nectar/processor-archive.mjs": {
-      "sha256": "8257cca7bb741d1fe55a7286352eaf0b43a086f79188193a100a6f89d86c803f",
+      "sha256": "e0ab6a563cc31f3abcaa9a1ee7b5055252c2b036c1d42062eb265323f8a0aa6b",
       "executable": false
     },
     "tests/nectar/processor-cash-imported-sandbox.mjs": {
@@ -5602,7 +5602,7 @@
       "executable": false
     },
     "tests/nectar/remittance-plaid-sandbox.mjs": {
-      "sha256": "006f8bdecbb5449b31dba688fba0530f84cdacf5b1c9d93cedb6b142cd9c6d7d",
+      "sha256": "3ef26b3b310c98030efdf3ff66a4511bb9b181ef9823a26f40e65c16d9e32204",
       "executable": false
     },
     "tests/nectar/remittance-plaid.mjs": {
