@@ -33,7 +33,7 @@ export async function enterpriseOidcFlow(h, owner, { onState } = {}) {
   const finish = (start, options = {}) => h.raw(start.callback.pathname + start.callback.search, { cookie: options.cookie ?? start.binding })
   const signIn = async (claims = {}, expected = 303) => {
     const start = await begin({ claims }), response = await finish(start)
-    assert.equal(response.status, expected, 'Signed OIDC response status')
+    assert.equal(response.status, expected, 'Signed OIDC response status: ' + (response.status === expected ? '' : await response.text()))
     return { start, response, session: cookies(response) }
   }
   assert.equal((await h.raw('/sso/oidc/start', { body: {}, headers: { origin: 'https://foreign.nectar-app.com' } })).status, 403)
@@ -110,5 +110,13 @@ export async function enterpriseOidcFlow(h, owner, { onState } = {}) {
   assert.equal((await finish(rotatedFlight)).status, 403, 'Connection changes end pending sign-ins')
   await scim('', { token: oldToken, status: 401 })
   await h.assertStorageExcludes([idp.secret, h.vars.SSO_OIDC_TRANSACTION_SECRET, oldToken, configured.scim_token, 'synthetic-nectar-access', 'synthetic-nectar-refresh'])
+  const final = await signIn({ amr: ['mfa'] })
+  const pendingMember = await h.api('access.give', owner, { email: address(203), name: 'Pending analyst', role: 'accountant' })
+  const pendingSession = await h.signIn(pendingMember.email, { requested: true })
+  const pendingProof = await begin({ link: true, cookie: pendingSession, claims: { sub: 'synthetic-nectar-pending-oidc', email: pendingMember.email } })
+  assert.equal((await finish(pendingProof, { cookie: pendingProof.binding + '; ' + pendingSession })).status, 303)
+  const pending = (await h.api('sso-links', owner)).find(row => row.member.member === pendingMember.id)
+  assert.ok(pending)
   console.log('Enterprise OIDC: signed subject, PKCE, role and MFA custody, owner consent, linking, replay, audit rollback and immediate SCIM revocation passed')
+  return { pending, member: await h.api('me', final.session), session: final.session }
 }

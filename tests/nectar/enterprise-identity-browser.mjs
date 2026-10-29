@@ -5,7 +5,8 @@ import { harness } from './harness.mjs'
 import { enterpriseLinkingFlow } from './enterprise-linking.mjs'
 import { enterpriseIdentityFlow } from './enterprise-identity.mjs'
 
-if (process.argv[2] === 'linking') await linkingBrowser()
+if (process.argv[2] === 'oidc') await oidcBrowser()
+else if (process.argv[2] === 'linking') await linkingBrowser()
 else {
 const directory = process.env.NECTAR_EVIDENCE_DIR ?? '.evidence/enterprise-identity'
 await mkdir(directory, { recursive: true })
@@ -124,5 +125,45 @@ async function linkingBrowser() {
         assert.equal(await ownerPage.locator(`input[name=link][value="${request.id}"]`).count(), 0, 'Native form consumes the exact reviewed request')
       },
     })
+  } finally { await browser?.close(); await h.close() }
+}
+
+async function oidcBrowser() {
+  const { harnessOptions, enterpriseOidcFlow } = await import('./enterprise-oidc.mjs')
+  const directory = process.env.NECTAR_EVIDENCE_DIR ?? '.evidence/enterprise-oidc'
+  await mkdir(directory, { recursive: true })
+  const h = await harness({ ...harnessOptions(), assets: true })
+  let browser
+  try {
+    await h.raw('/auth/bootstrap', { body: { token: h.vars.SETUP_TOKEN, displayName: 'Nectar owner' } })
+    const owner = await h.signIn(h.vars.OWNER_EMAIL)
+    await h.raw('/setup', { cookie: owner, form: new URLSearchParams({ confirm: 'yes' }) })
+    await h.api('business.configure', owner, { legal_name: 'Nectar enterprise journey', timezone: 'UTC', invoice_prefix: 'OIDC', payment_terms_days: 30 })
+    browser = await chromium.launch({ headless: true, executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH, args: ['--no-sandbox', '--use-mock-keychain', '--password-store=basic'] })
+    const context = await browser.newContext({ viewport: { width: 1440, height: 950 } })
+    await context.addCookies(owner.split('; ').map(value => { const i = value.indexOf('='); return { name: value.slice(0, i), value: value.slice(i + 1), url: h.origin } }))
+    const ownerPage = await context.newPage()
+    async function capture(page, label, path) {
+      await page.setViewportSize({ width: 1440, height: 950 })
+      await page.goto(h.origin + path)
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, label + ' fits')
+      assert.equal(await page.locator('a,button,[role=button]').evaluateAll(nodes => nodes.filter(node => !node.textContent.trim() && node.querySelector('svg,img') && !node.getAttribute('aria-describedby')).length), 0)
+      for (const width of [1440, 390]) {
+        await page.setViewportSize({ width, height: 950 })
+        await page.screenshot({ path: `${directory}/${width}-${label}.png`, fullPage: true })
+        console.log('BROWSER', width, label)
+      }
+    }
+    await enterpriseOidcFlow(h, owner, { onState: async ({ label, session }) => {
+      await capture(ownerPage, label + '-settings', '/app/sso')
+      assert.equal(await ownerPage.getByRole('heading', { name: 'OpenID Connect connection' }).count(), 1)
+      assert.equal(await ownerPage.locator('[name=certificate]').count(), 0, 'OIDC settings never present an unrelated SAML reconfiguration form')
+      const memberContext = await browser.newContext()
+      await memberContext.addCookies(session.split('; ').map(value => { const i = value.indexOf('='); return { name: value.slice(0, i), value: value.slice(i + 1), url: h.origin } }))
+      const page = await memberContext.newPage()
+      await capture(page, label + '-member', '/app/security')
+      assert.equal(await page.getByRole('link', { name: 'Prove provider identity' }).count(), 0)
+      await memberContext.close()
+    } })
   } finally { await browser?.close(); await h.close() }
 }

@@ -80,6 +80,6 @@ export async function oidcResponse(request: Request, env: Bindings): Promise<Res
     } catch (error) { await auth.accounts.revokeSession(completed.session.id); throw error }
     return redirect('/app', [cookie(env, state!, '', 0), completed.cookie])
   } catch (error: any) {
-    return Response.json({ error: error.code ?? 'oidc_assertion_refused' }, { status: error.status ?? 403, headers: { 'cache-control': 'no-store' } })
+    return Response.json({ error: error.code ?? 'oidc_assertion_refused' }, { status: error.status === 400 ? 403 : error.status ?? 500, headers: { 'cache-control': 'no-store' } })
   }
 }

@@ -72,5 +72,13 @@ proofs invalidate approval. Neither reactivation nor archive restoration
 revives enterprise sessions or pending requests. The linking and real archive
 journeys are in `tests/nectar/enterprise-linking.mjs`; linking mode in
 `tests/nectar/enterprise-identity-browser.mjs` exercises the native approval.
-Owner provisioning, custom-role mappings, broader administration, OIDC and
+Owner provisioning, custom-role mappings, broader administration and
 live interoperability for every named provider remain required and unproved.
+Native OIDC connection and sign-in custody is documented in the Enterprise
+OIDC connection section of `API.md`; its signed-token journey is
+`tests/nectar/enterprise-oidc.mjs` (`enterpriseOidcFlow`). The owner Settings
+page identifies that protocol and its callback without offering a SAML form.
+OIDC proofs and connection records are installation-bound; real archive
+restoration is exercised by the OIDC archive mode in
+`tests/nectar/enterprise-linking.mjs`. These fixtures establish no authentic
+Okta or other named-provider interoperability.

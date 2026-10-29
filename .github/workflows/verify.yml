@@ -47,6 +47,7 @@ jobs:
         run: |
           node tests/nectar/enterprise-identity-browser.mjs
           node tests/nectar/enterprise-identity-browser.mjs linking
+          node tests/nectar/enterprise-identity-browser.mjs oidc
 
       - name: Native same-intent collection browser journey
         if: ${{ matrix.shard == 1 }}
@@ -145,3 +146,5 @@ jobs:
       - run: pnpm run deps
       - run: pnpm exec vite build
       - run: NECTAR_TEST_CHECKOUT=1 node tests/nectar/enterprise-linking.mjs archive
+      - run: pnpm exec rer reset --yes
+      - run: NECTAR_TEST_CHECKOUT=1 node tests/nectar/enterprise-linking.mjs oidc-archive

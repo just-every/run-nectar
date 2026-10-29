@@ -212,12 +212,13 @@ export async function enterpriseLinkingFlow(h, owner, { onState, approve } = {})
 
 // The real archive command must remove populated enterprise authority, while
 // retaining ordinary member and audit history. Run only in a disposable tree.
-export async function enterpriseLinkingArchive() {
+export async function enterpriseLinkingArchive({ oidc = false } = {}) {
   const { access, mkdir, mkdtemp, readFile, rm } = await import('node:fs/promises')
   const { join } = await import('node:path')
   const { readArchive } = await import('@runeditrun/rer/modules/portability')
   const { command } = await import('./cli.mjs')
   const { harness } = await import('./harness.mjs')
+  const oidcJourney = oidc ? await import('./enterprise-oidc.mjs') : null
   assert.equal(process.env.NECTAR_TEST_CHECKOUT, '1', 'Only a disposable checkout may run archive restoration')
   const root = process.cwd()
   for (const name of ['.dev.vars', '.wrangler/state']) await access(join(root, name)).then(() => { throw new Error('A fresh unconfigured checkout is required') }, error => { if (error.code !== 'ENOENT') throw error })
@@ -228,12 +229,12 @@ export async function enterpriseLinkingArchive() {
     const config = JSON.parse(await readFile('wrangler.jsonc', 'utf8'))
     const persistence = join(root, '.wrangler/state/v3'), databaseId = config.d1_databases.find(binding => binding.binding === 'DB').database_id
     await command(root, ['export', '--output', join(scratch, 'empty.rer')])
-    h = await harness({ persistence, databaseId, applyMigrations: false })
+    h = await harness({ ...oidcJourney?.harnessOptions(), persistence, databaseId, applyMigrations: false })
     await h.raw('/auth/bootstrap', { body: { token: h.vars.SETUP_TOKEN, displayName: 'Nectar archive owner' } })
     const owner = await h.signIn(h.vars.OWNER_EMAIL)
     await h.raw('/setup', { cookie: owner, form: new URLSearchParams({ confirm: 'yes' }) })
     await h.api('business.configure', owner, { legal_name: 'Nectar archive journey', timezone: 'UTC', invoice_prefix: 'LINK', payment_terms_days: 30 })
-    const result = await enterpriseLinkingFlow(h, owner), settings = { ...h.vars }
+    const result = await (oidcJourney ? oidcJourney.enterpriseOidcFlow(h, owner) : enterpriseLinkingFlow(h, owner)), settings = { ...h.vars }
     const beforeMembers = await h.api('members', owner), beforeAudit = await h.api('audit', owner)
     assert.ok((await h.api('sso-links', owner)).some(row => row.id === result.pending.id))
     assert.equal((await h.api('me', result.session)).id, result.member.id)
@@ -245,7 +246,7 @@ export async function enterpriseLinkingArchive() {
     const items = records.filter(record => record.kind === 'part').flatMap(record => record.items)
     assert.ok(items.some(item => item.table === 'nc_members' && item.row.id === result.member.id), 'The populated archive preserves member attribution')
     assert.ok(items.some(item => item.table === 'nc_audit' && item.row.action === 'sso.link.approve'), 'Portable audit evidence remains present')
-    assert.ok(!items.some(item => ['nc_sso_links', 'nc_scim_users', 'nc_sso_config', 'nc_saml_transactions'].includes(item.table)), 'No enterprise authority or pending proof enters the archive')
+    assert.ok(!items.some(item => ['nc_sso_links', 'nc_scim_users', 'nc_sso_config', 'nc_saml_transactions', 'nc_oidc_config', 'nc_oidc_transactions'].includes(item.table)), 'No enterprise authority or pending proof enters the archive')
     await command(root, ['reset', '--yes'])
     await command(root, ['import', '--input', archive, '--yes'])
     h = await harness({ persistence, databaseId, applyMigrations: false, settings })
@@ -264,4 +265,4 @@ export async function enterpriseLinkingArchive() {
   } finally { await h?.close(); await rm(scratch, { recursive: true, force: true }) }
 }
 
-if (process.argv[1]?.endsWith('/enterprise-linking.mjs') && process.argv[2] === 'archive') await enterpriseLinkingArchive()
+if (process.argv[1]?.endsWith('/enterprise-linking.mjs') && ['archive', 'oidc-archive'].includes(process.argv[2])) await enterpriseLinkingArchive({ oidc: process.argv[2] === 'oidc-archive' })

@@ -162,7 +162,7 @@
       "executable": false
     },
     ".github/workflows/verify.yml": {
-      "sha256": "bbd046389f5f16857b7665de2e50202e106d766dab341e0ff2ea570c8f0cb00f",
+      "sha256": "15d86a01829a0a964a50545064daf1401ddd754697bc3cec696eb23bcbcbf88d",
       "executable": false
     },
     ".gitignore": {
@@ -186,7 +186,7 @@
       "executable": false
     },
     "API.md": {
-      "sha256": "fd5d88bf2941b73ba7a667b639cc0c6fb1eea527db06cd91ebac3a003973cdeb",
+      "sha256": "d05d3c7034593999aff9267cdc5fbd3085621e42ff4c83b9d7766e0fffac35e6",
       "executable": false
     },
     "base-copies.json": {
@@ -242,7 +242,7 @@
       "executable": false
     },
     "docs/enterprise-sign-in.md": {
-      "sha256": "07e1aa18d612fd3b68138ac44f9654dcf1aa4b89fa62bde2cbc01d4906181d42",
+      "sha256": "f6b5c64ea60c52e8ae9304525e150e61ae5f31385e05b0f1a2245442fe0adad5",
       "executable": false
     },
     "docs/evidence/processor-events-sandbox.json": {
@@ -855,6 +855,10 @@
     },
     "migrations/core/0115_enterprise_linking.sql": {
       "sha256": "e0c585818f0ffd6fc403393e2678573ca808931f08d840efae71345456ecdd7b",
+      "executable": false
+    },
+    "migrations/core/0116_enterprise_oidc.sql": {
+      "sha256": "ab9d2babca1f92a6dd2a8f78c10ac8cd823f9abd3939f719c004844737885708",
       "executable": false
     },
     "ONBOARDING.md": {
@@ -3781,6 +3785,22 @@
       "sha256": "5ba2ede99e47b7fc39abb2fc2cbb3ec0d7ec6187f6695798af9f6e830f5beae7",
       "executable": false
     },
+    "src/nectar/oidc-config.ts": {
+      "sha256": "f55008579c355bda2a1c2fd55b5baf43286260ec5980f87cfc9f20b51669212a",
+      "executable": false
+    },
+    "src/nectar/oidc-protocol.d.mts": {
+      "sha256": "43275d85fd2323a565e4ecabf8778681c90d99d3adc5ebcf99860ada249e432e",
+      "executable": false
+    },
+    "src/nectar/oidc-protocol.mjs": {
+      "sha256": "b9e54a1619b1431dea4f361a1bceede6292e7bbaeb934903e15cb878d624c3ca",
+      "executable": false
+    },
+    "src/nectar/oidc.ts": {
+      "sha256": "db8e05aa76b62389a5e0b4d0e152f37b6c265c4a312fd8b0d768266197240891",
+      "executable": false
+    },
     "src/nectar/one-time-charges.ts": {
       "sha256": "b132141f3ec9c7263694c783ed181def10a18dae06bb99e49a2c019c64a56bf1",
       "executable": false
@@ -4734,7 +4754,7 @@
       "executable": false
     },
     "src/nectar/ui/sso.ts": {
-      "sha256": "a1f7b1fd412f22c8a409269524507abe68f050fa398b4edace872d148a4a6d7c",
+      "sha256": "cd9f630da02bc500af7080043316c44463d8ae0efa68549a0e9bc1c6018c1f1f",
       "executable": false
     },
     "src/nectar/ui/tooltip.ts": {
@@ -5190,7 +5210,7 @@
       "executable": false
     },
     "tests/nectar/enterprise-identity-browser.mjs": {
-      "sha256": "4a4ab20fde2fc45a9fd2116ec95f6bc97bc53243ec452d356c98a9f53add7891",
+      "sha256": "3ded763d8d9e131f4869f048e285bd9d393fcc73df9b46b2cfce74703cf8e90e",
       "executable": false
     },
     "tests/nectar/enterprise-identity-sandbox.mjs": {
@@ -5202,7 +5222,11 @@
       "executable": false
     },
     "tests/nectar/enterprise-linking.mjs": {
-      "sha256": "5f52a97a8518d2922ddd828a3f7d80f86cb78f4be5ed146f19b0764c8db69418",
+      "sha256": "bd285979b6750ac8fa2b6dbc929f1cb1c48511a0c75351cdbbb1203642109ee0",
+      "executable": false
+    },
+    "tests/nectar/enterprise-oidc.mjs": {
+      "sha256": "123f2be9b3473a22b74eea6e5428c2920489315677a87665bdf73c6b64f2538f",
       "executable": false
     },
     "tests/nectar/entitlement-quotas.mjs": {
@@ -5383,6 +5407,10 @@
     },
     "tests/nectar/numbering.mjs": {
       "sha256": "836f8a835ff9d9644040057616a5cc6c7cb26b3be7400bec23534b55f1a3ed34",
+      "executable": false
+    },
+    "tests/nectar/oidc-fixture.mjs": {
+      "sha256": "2c30dbcbc548697b8bc90900e3acb09fe784ae8622f07bfbbec4d7ae427be917",
       "executable": false
     },
     "tests/nectar/one-time.mjs": {
