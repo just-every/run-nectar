@@ -7,7 +7,7 @@ import { assertRecoveryBuckets, assertRecoveryTotals } from './recovery-assertio
 
 export function nativeCollectionEdge() {
   const calls=[],intents=new Map(),charges=new Map(),keys=new Set(),customers=new Map(),accounts=new Map([[1,'synthetic-nectar-native-account-1'],[2,'synthetic-nectar-native-account-2']])
-  let loseNext=false,loseBeforeNext=false,refusalNext=null,pendingNext=false,searchVisible=true,created=Date.parse('2026-10-22T10:00:00Z')/1000
+  let failIntentRead=false,beforeRecoveryConfirm=null,loseNext=false,loseBeforeNext=false,refusalNext=null,pendingNext=false,searchVisible=true,created=Date.parse('2026-10-22T10:00:00Z')/1000
   for(let n=1;n<=4;n++)customers.set(`synthetic-nectar-native-customer-${n}`,{account:n===2?2:1,method:`synthetic-nectar-native-card-${n}`})
   const list=data=>({object:'list',has_more:false,data})
   const fetch=async request=>{
@@ -59,6 +59,8 @@ export function nativeCollectionEdge() {
       assert.equal(form.get('payment_method'),intent.last_payment_error.payment_method.id)
       assert.equal(form.get('payment_method'),customers.get(intent.customer).method)
       assert.equal(form.get('off_session'),'true')
+      const before=beforeRecoveryConfirm;beforeRecoveryConfirm=null
+      if(before)await before()
       const charge=`synthetic-nectar-recovery-charge-${calls.length}`
       if(refusalNext){
         const code=refusalNext;refusalNext=null
@@ -82,12 +84,13 @@ export function nativeCollectionEdge() {
       return Response.json(list([...intents.values()].filter(row=>row.account===account&&row.value.customer===customer&&row.value.created>=from&&row.value.created<=to).map(row=>row.value)))
     }
     if(method==='GET'&&path.startsWith('/payment_intents/')){
+      if(failIntentRead){failIntentRead=false;return new Response(null,{status:503})}
       const row=intents.get(path.split('/').at(-1));return row?.account===account?Response.json(row.value):Response.json({},{status:404})
     }
     if(method==='GET'&&path==='/charges')return Response.json(list([...charges.values()].filter(row=>row.account===account&&row.value.payment_intent===url.searchParams.get('payment_intent')).map(row=>row.value)))
     throw new Error(`Unexpected native collection paid-edge request ${method} ${path}`)
   }
-  return {fetch,calls,customers,accounts,intents,charges,pendingPayment(){pendingNext=true},losePayment(){loseNext=true},loseBeforePayment(){loseBeforeNext=true},refuseNext(code,declineCode=null,advice=false){refusalNext=declineCode||advice?{code,declineCode,advice}:code},setSearchVisible(value){searchVisible=value},capturedAt(instant){created=Date.parse(instant)/1000}}
+  return {fetch,calls,customers,accounts,intents,charges,beforeRecoveryConfirm(callback){beforeRecoveryConfirm=callback},failIntentRead(){failIntentRead=true},pendingPayment(){pendingNext=true},losePayment(){loseNext=true},loseBeforePayment(){loseBeforeNext=true},refuseNext(code,declineCode=null,advice=false){refusalNext=declineCode||advice?{code,declineCode,advice}:code},setSearchVisible(value){searchVisible=value},capturedAt(instant){created=Date.parse(instant)/1000}}
 }
 
 const edge=nativeCollectionEdge()
@@ -508,6 +511,13 @@ export async function nativeCollectionFlow(h,owner,{onState=async()=>{},confirm,
   await api('collection.recovery.confirm',payload,409)
   edge.accounts.set(1,'synthetic-nectar-native-account-1')
   assert.equal(postsNow(),beforeStaleFactor,'Changed review fields, saved card and provider account are refused before a provider write')
+  let inFlight,readFailure,inFlightBefore
+  edge.beforeRecoveryConfirm(async()=>{
+    inFlightBefore=(await api('native-collections')).find(row=>row.id===success.failed.id)
+    edge.failIntentRead()
+    readFailure=await api('collection.reconcile',{request:success.failed.id})
+    inFlight=await api('collection.reconcile',{request:success.failed.id})
+  })
   let recoveredSame
   if(confirmRecovery)recoveredSame=await recoverReview(payload)
   else{
@@ -515,6 +525,8 @@ export async function nativeCollectionFlow(h,owner,{onState=async()=>{},confirm,
     assert.deepEqual(replies.map(r=>r.status).sort(),[200,409],'Concurrent recovery confirmations claim exactly once')
     recoveredSame=await replies.find(r=>r.status===200).json()
   }
+  assert.deepEqual(readFailure,inFlightBefore,'A failed provider read cannot release an in-flight recovery claim')
+  assert.deepEqual(inFlight,inFlightBefore,'Checking an in-flight recovery must not seal its old decline')
   assert.equal(recoveredSame.status,'collected')
   assert.equal(recoveredSame.payment_intent_ref,success.failed.payment_intent_ref)
   assert.deepEqual([(await api(`invoices/${success.source.id}`)).paidCents,(await api(`invoices/${success.source.id}`)).balanceCents],[10000,0])
@@ -609,6 +621,39 @@ export async function nativeCollectionFlow(h,owner,{onState=async()=>{},confirm,
   assert.equal(edge.calls.filter(c=>c.method==='POST'&&c.path==='/payment_intents').length,originalCreates+2,'Only the two independently issued later test invoices create intents; recovery never does')
   assert.equal(edge.intents.size,originalIntents+2)
   assert.equal(edge.calls.filter(c=>c.method==='POST'&&c.path.endsWith('/confirm')).length,3,'Only the three explicitly confirmed recoveries reach the provider')
+  // A purchase may expire between the original refusal and recovery, or
+  // between recovery review and its separate confirmation. Neither may debit.
+  await h.api('mfa.verify',finance,{code:totp(financeFactor.secret,instant)})
+  edge.customers.get('synthetic-nectar-native-customer-1').method='synthetic-nectar-expiring-card'
+  const expiring=[]
+  const date=new Date(instant).toISOString().slice(0,10)
+  const expiry=new Date(instant+2*86400000).toISOString().slice(0,10)
+  for(let n=0;n<2;n++){
+    const terms=await api('prepaid.prepare',{subscription,mode:'grant',kind:'money',source:'purchase',amount:'40',effective_date:date,expires_date:expiry,priority:0,expiry_consent:true})
+    await h.api('prepaid.decide',finance,{request:terms.request,decision:'approved'})
+    const purchase=await api('prepaid.purchase.prepare',{intent:terms.request,issue_date:date})
+    await api('invoice.approve',{invoice:purchase.invoice,acknowledge:true})
+    await api('invoice.finalise',{invoice:purchase.invoice,issue_date:date})
+    const review=await api('collection.prepare',{invoice:purchase.invoice})
+    edge.refuseNext('processing_error')
+    const failed=await api('collection.confirm',review.instructions.confirm)
+    assert.equal(failed.status,'declined')
+    expiring.push({invoice:purchase.invoice,failed})
+  }
+  instant=Date.parse(`${expiry}T00:00:00Z`)-60000
+  await h.advanceClock(new Date(instant).toISOString());edge.capturedAt(new Date(instant).toISOString())
+  await api('mfa.verify',{code:totp(secret,instant)})
+  const expiryReview=await api('collection.recovery.prepare',{request:expiring[0].failed.id})
+  instant+=120000
+  await h.advanceClock(new Date(instant).toISOString())
+  const expiredPosts=postsNow(),expiredPayments=await api('payments')
+  const expiredInvoices=await Promise.all(expiring.map(row=>api(`invoices/${row.invoice}`)))
+  assert.equal((await api('collection.recovery.confirm',expiryReview.instructions.reconfirm,409)).error,'prepaid_funding_expired','A prepared recovery must recheck prepaid expiry before charging')
+  assert.equal((await api('collection.recovery.prepare',{request:expiring[1].failed.id},409)).error,'prepaid_funding_expired','An already expired prepaid purchase cannot prepare recovery')
+  assert.equal(postsNow(),expiredPosts,'Expired prepaid recovery sends no provider write')
+  assert.deepEqual(await api('payments'),expiredPayments,'Expired prepaid recovery records no received cash')
+  assert.deepEqual(await Promise.all(expiring.map(row=>api(`invoices/${row.invoice}`))),expiredInvoices,'Expired prepaid recovery changes no allocation or balance')
+  for(const row of expiring)assert.equal((await api('native-collections')).find(item=>item.id===row.failed.id).status,'declined','Expired recovery does not consume the original claim')
   console.log('Same-intent recovery: one allocation, immutable first failure and exact recovery rates; replay, changed sources, holds, erasure, stale factors and prohibited declines remain closed')
   }
   console.log('Native collection: two frozen accounts, exact current balances, explicit owner confirmation, captured proof, atomic payment/allocation, read-only search/list recovery, definitive declined/authentication outcomes, concurrent confirmation, no second intent and erasure/factor boundaries')
