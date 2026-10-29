@@ -27,8 +27,12 @@ export async function remittancesPanel(env: Bindings, actor: Actor, url: URL) {
   const back = '/app/receivables#remittances', selected = url.searchParams.get('remittance')
   const row = rows.find(row => row.id === selected), people = operator ? await customers(env, actor) : []
   let review = h``
-  if (row?.status === 'confirmed' && row.available_cents === 0 && row.short?.length) {
-    review = h`<article class="notice" id="remittance-review"><h3>Short payment review</h3><p>All received funds have been allocated. These invoices still have an unpaid balance.</p>
+  if (row?.bank_payout_ref) {
+    review = h`<article class="card" id="remittance-review"><h3>Matched bank deposit</h3><p>${cents(row.amount_cents)} received ${row.received_on}.</p>
+      <dl><dt>Bank transaction</dt><dd style="overflow-wrap:anywhere">${row.bank_transaction_ref}</dd><dt>Processor payout</dt><dd style="overflow-wrap:anywhere">${row.bank_payout_ref}</dd></dl>
+      <p>This deposit reconciles the existing processor payment records.</p><p><a href="/app/processor-events">Open processor payout</a></p></article>`
+  } else if (row?.status === 'confirmed' && row.available_cents === 0 && row.short?.length) {
+    review = h`<article class="card" id="remittance-review"><h3>Short payment review</h3><p>All received funds have been allocated. These invoices still have an unpaid balance.</p>
       ${table(['Invoice','Still owed'],row.short.map((invoice: any)=>[h`<a href="/app/invoices/${invoice.id}">${invoice.number}</a>`,cents(invoice.balance_cents)]))}</article>`
   }
   if (operator && row && !row.bank_payout_ref) {
@@ -58,5 +62,5 @@ export async function remittancesPanel(env: Bindings, actor: Actor, url: URL) {
       ${form('remittance.upload',back,fileField('Remittance CSV','file',{required:true,accept:'.csv'}),'Upload for review',{multipart:true})}</details>` : ''}
     ${review}
     ${table(['Source receipt','Received','Customer','Amount','State','Review'],rows.map(row=>[row.source.receiptId,row.received_on,row.customer_name??'Unidentified',cents(row.amount_cents),row.bank_payout_ref?'Payout reconciled':row.status==='staged'?reasons[row.preview?.reason??row.reason]??'Ready for confirmation':reasons[row.reason],
-      row.bank_payout_ref?h`<a href="/app/processor-events">Review payout</a>`:operator&&(row.status==='staged'||row.available_cents>0)?h`<a href="/app/receivables?remittance=${row.id}#remittance-review">Review receipt</a>`:h`${(row.short??[]).map((i:any)=>h`<p>${i.number}: ${cents(i.balance_cents)} still owed</p>`)}`]),{empty:'No remittance receipts uploaded.'})}</section>`
+      row.bank_payout_ref?h`<a href="/app/receivables?remittance=${row.id}#remittance-review">Review match</a>`:operator&&(row.status==='staged'||row.available_cents>0)?h`<a href="/app/receivables?remittance=${row.id}#remittance-review">Review receipt</a>`:h`${(row.short??[]).map((i:any)=>h`<p>${i.number}: ${cents(i.balance_cents)} still owed</p>`)}`]),{empty:'No remittance receipts uploaded.'})}</section>`
 }
