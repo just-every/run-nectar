@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { file } from './harness.mjs'
+import { totp } from './mfa.mjs'
 
 let provider
 export function harnessOptions() {
@@ -264,12 +265,35 @@ export async function moveInvestigationsFlow(h,owner,{onState=async()=>{}}={}) {
   assert.equal(confirmedAudits.length,1,'concurrent confirmation retains one audited review')
   assert.deepEqual(await api('runs'),runsBefore)
   noOriginal(await api(rollbackPath))
+  const reviewAssignee=(await api('access.give',{email:h.vars.OWNER_EMAIL.replace('owner','synthetic-nectar-review-assignee'),name:'Synthetic review assignee',role:'finance'})).id
+  await api('assurance.assign',{case:cases[0].id,owner:reviewAssignee})
+  const assignedPlan=await api('move.rollback.prepare',plan)
+  await api('access.end',{member:reviewAssignee})
+  assert.equal((await api(rollbackPath)).find(row=>row.id===assignedPlan.id).stale,true)
+  assert.equal((await api('move.rollback.confirm',{request:assignedPlan.id,basis:assignedPlan.basis_hash,confirm:true},409)).error,'assurance_owner_unavailable')
+  assert.equal((await api('move.rollback.prepare',plan,409)).error,'assurance_owner_unavailable')
+  await api('assurance.assign',{case:cases[0].id,owner:ownerId})
   const unsupportedEvent=sourceEvent('synthetic-nectar-event-3',4,created+1)
   unsupportedEvent.data.object.status='paused'
   await consume(unsupportedEvent)
   assert.equal((await h.api(`assurance-cases/${eventCase.id}`,agent)).stale,true,'a newer unsupported source cannot leave an older explanation current')
   await h.api('assurance.recheck',agent,{case:eventCase.id},409)
   await api('assurance.approve',{case:eventCase.id,basis:eventChecked.evidence.basis},409)
+
+  // Review authority also expires with the owner's ordinary MFA factor.
+  const factorTime=Date.parse('2026-10-25T12:00:00Z')
+  const factor=await api('mfa.totp.start',{label:'Synthetic review authenticator'})
+  await api('mfa.totp.confirm',{factor:factor.factor,code:totp(factor.secret,factorTime)})
+  await api('mfa.policy',{scope:'roles',roles:['owner']})
+  const stepUpPlan=await api('move.rollback.prepare',plan)
+  const stepUpConfirmation={request:stepUpPlan.id,basis:stepUpPlan.basis_hash,confirm:true}
+  await h.advanceClock('2026-10-25T12:20:00Z')
+  assert.equal((await api('move.rollback.confirm',stepUpConfirmation,403)).error,'mfa_step_up_required')
+  assert.equal((await api('move.rollback.prepare',plan,403)).error,'mfa_step_up_required')
+  assert.equal((await api(rollbackPath)).find(row=>row.id===stepUpPlan.id).confirmed_at,null)
+  await api('mfa.verify',{code:totp(factor.secret,factorTime+20*60*1000)})
+  assert.ok((await api('move.rollback.confirm',stepUpConfirmation)).confirmed_at)
+  await api('mfa.policy',{scope:'off'})
 
   // Erasure withdraws case evidence and replay cannot reconstruct it.
   const erasedCustomer=customers.find(row=>row.id===cases[0].customer_id)

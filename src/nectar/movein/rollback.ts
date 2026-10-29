@@ -15,10 +15,11 @@ async function snapshot(env: Bindings, subscription: string, cutover: string) {
   insist(isDate(cutover) && Number(cutover.slice(8))===sub.anchor_day, 'cutover_must_start_a_period')
   const sources=await all(env,`SELECT i.id,i.provider_ref,i.source_json,i.lines_json,i.revision FROM nc_incumbent_invoices i WHERE i.subscription_id=? ORDER BY i.id`,sub.id)
   const comparisons=(await moveInvestigationEvidence(env)).filter(proof=>proof.subscription===sub.id || ['customer','payment-method'].includes(proof.category)&&proof.customer===sub.customer_id)
-  const cases=await all(env,`SELECT id,owner_id,status,basis_hash,approved_basis FROM nc_assurance_cases WHERE customer_id=? AND kind='move_comparison' ORDER BY id`,sub.customer_id)
+  const cases=await all(env,`SELECT a.id,a.owner_id,a.status,a.basis_hash,a.approved_basis,m.status AS owner_status,m.role AS owner_role FROM nc_assurance_cases a LEFT JOIN nc_members m ON m.id=a.owner_id WHERE a.customer_id=? AND a.kind='move_comparison' ORDER BY a.id`,sub.customer_id)
   const bindings=await all(env,'SELECT id,account_ref,stripe_customer_ref,revision FROM nc_stripe_customer_bindings WHERE customer_id=? ORDER BY id',sub.customer_id)
   const basis={subscription:sub.id,customer:sub.customer_id,subscriptionRevision:sub.revision,customerRevision:sub.customer_revision,cutover,
     references:{source:'stripe',customer:sub.customer_ref,subscription:sub.provider_ref,invoices:sources.map(row=>row.provider_ref).filter(historyReference),bindings},
+    caseOwnersAvailable:cases.every(row=>row.owner_status==='active'&&['owner','finance'].includes(row.owner_role)),
     sourceBasis:await fingerprint(sources),comparisons:comparisons.map(proof=>({source:proof.source,basis:proof.basis,mismatch:proof.mismatch})),cases}
   return {...basis,hash:await fingerprint(basis)}
 }
@@ -36,6 +37,7 @@ export async function prepareMoveRollback(env:Bindings,actor:Actor,input:Input) 
   await collectionOwner(env,actor)
   input.only(['subscription','cutover_start','processor_ref','instructions','returnTo'])
   const seq=await sequence(env),source=await snapshot(env,input.text('subscription',{max:100}),input.text('cutover_start',{max:10}))
+  insist(source.caseOwnersAvailable,'assurance_owner_unavailable',409)
   const processor=input.text('processor_ref',{max:200}),instructions=input.text('instructions',{max:2000})
   insist(historyReference(processor),'invalid_processor_reference')
   const planHash=await fingerprint([processor,instructions])
@@ -54,6 +56,7 @@ export async function confirmMoveRollback(env:Bindings,actor:Actor,input:Input) 
   const seq=await sequence(env),row=await one(env,'SELECT * FROM nc_move_rollback_plans WHERE id=?',input.text('request',{max:100}))
   insist(row,'move_review_not_found',404)
   const current=await snapshot(env,row.subscription_id,row.cutover_start)
+  insist(current.caseOwnersAvailable,'assurance_owner_unavailable',409)
   insist(row.basis_hash===current.hash && input.text('basis',{max:100})===current.hash,'move_review_source_changed',409)
   insist(input.flag('confirm'),'move_review_confirmation_required')
   insist(!current.comparisons.some((proof:Row)=>proof.mismatch) || input.flag('acknowledge_discrepancies'),'move_review_discrepancies_required',409)
