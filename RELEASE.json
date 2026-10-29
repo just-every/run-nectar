@@ -79,6 +79,7 @@
     "migrations/core/0086_payment_receipts.sql",
     "migrations/core/0087_collection_webhooks.sql",
     "migrations/core/0113_portal_retention_authority.sql",
-    "migrations/core/0115_billing_notices.sql"
+    "migrations/core/0115_billing_notices.sql",
+    "migrations/core/0116_enterprise_linking.sql"
   ]
 }

@@ -41,11 +41,38 @@ signed authentication time supplies GOV-007 freshness, rather than arrival
 time. The separate payment-method setup rule still requires a local TOTP or
 passkey, as specified by its 26 October ruling.
 
-The conservative identity-linking, role and MFA defaults above await ct
-approval under GOV-003. Local public-door proof is
+Ct approved the connection, role and MFA policy with riders on 26 October 2026.
+This policy approval establishes no live provider qualification or completed GOV-003 claim. Local public-door proof is
 `tests/nectar/enterprise-identity.mjs` (`enterpriseIdentityFlow`). Its native
 connection screens are exercised by
 `tests/nectar/enterprise-identity-browser.mjs`. The separately invoked
 `tests/nectar/enterprise-identity-sandbox.mjs` uses held Okta credentials,
 creates only temporary Nectar identities and removes its user, app and group.
 It prints a secret-free outcome and never persists provider assertions.
+
+
+An active existing member in a non-owner preset role can now open Sign-in
+security and choose Prove provider identity. Keep the current Nectar session
+open through the signed provider round trip. Nectar checks that the authorized
+provider role agrees with the existing role, then holds an exact request for
+at most five minutes. Email equality is never enough to link accounts.
+
+The owner opens Enterprise sign-in under Access, reviews the exact member,
+provider issuer and immutable subject, connection revision and role, confirms
+a second factor, then chooses Approve member link. This approval always needs
+a fresh factor, including when the general MFA policy is off. It preserves the
+member and operator identifiers and all historical attribution, while ending
+old sessions and unused email sign-in links. Audit failure changes nothing.
+
+Pending requests are inactive SCIM reservations: the provider may read or
+remove them, but activation cannot grant access. Provider removal invalidates
+the pending proof; owner connection authorization must be renewed before that
+subject can be requested again. Connection or member changes and expired
+proofs invalidate approval. Neither reactivation nor archive restoration
+revives enterprise sessions or pending requests. The linking and real archive
+journeys are in `tests/nectar/enterprise-linking.mjs`; linking mode in
+`tests/nectar/enterprise-identity-browser.mjs` exercises the native approval.
+Owner provisioning, custom-role mappings, broader administration, OIDC and
+live interoperability for every named provider remain required and unproved.
+
+Existing-member linking adds `migrations/core/0116_enterprise_linking.sql` after the current billing-notice migration; retain all previously applied migrations unchanged.
