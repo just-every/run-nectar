@@ -103,7 +103,7 @@ export async function promotionRedemption(env: Bindings, actor: Actor, request: 
 
 export interface AmountCouponIn {
   id: string; value: string; duration: 'once' | 'repeating' | 'forever'; months: number | null
-  from: string; priceIds: string[]; note: string
+  from: string; to?: string | null; source?: Record<string, unknown>; priceIds: string[]; note: string
 }
 
 /** Saved operands travel with issued invoices and all historical simulations. */
@@ -112,6 +112,7 @@ export async function amountCouponInputs(env: Bindings, subscription: string): P
       (SELECT original.product_id FROM nc_prices original WHERE original.id IN (SELECT value FROM json_each(t.price_ids_json)))) AS current_prices_json
       FROM nc_coupon_amount_terms t WHERE t.subscription_id=? ORDER BY t.effective_from,t.id`, subscription))
     .map(row => ({ id: row.id, value: row.value, duration: row.duration, months: row.months, from: row.effective_from,
+      ...(row.origin === 'import' ? { to: row.effective_to, source: parseJson<Record<string, unknown>>(row.source_json, {}) } : {}),
       priceIds: parseJson<string[]>(row.price_ids_json, []).length ? parseJson<string[]>(row.current_prices_json, []).sort() : [], note: row.note }))
 }
 
@@ -128,7 +129,7 @@ export function amountCouponLines(input: { amountCoupons?: AmountCouponIn[]; per
     for (let index = first; index <= end; index++) {
       if (coupon.duration === 'once' && index > 0 || coupon.duration === 'repeating' && index >= coupon.months!) break
       const date = addMonthsClamped(coupon.from, index)
-      if (date >= input.period.start && date < input.period.end) count++
+      if (date >= input.period.start && date < input.period.end && (!coupon.to || date < coupon.to)) count++
     }
     if (!count) continue
     const covered = source.filter(line => line.priceId && line.amountCents > 0 && line.periodEnd > coupon.from
