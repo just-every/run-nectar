@@ -6,7 +6,7 @@
       "hosted": false,
       "commands": [
         "node scripts/contract-docs.mjs check",
-        "node scripts/edition-authoring/cli.mjs check",
+        "node node_modules/@runeditrun/rer/edition-authoring/cli.mjs check",
         "pnpm run check",
         "pnpm run typecheck",
         "pnpm run test:runtime",
