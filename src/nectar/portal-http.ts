@@ -1,3 +1,6 @@
+import { portalChangePreview, portalChangePreviewPage } from './portal-change-preview'
+import { portalWinbackData, portalWinbackPage, operatePortalWinback } from './portal-winback'
+import { portalRenewalData, portalRenewalPage, operatePortalRenewal } from './portal-renewal'
 import { portalChangesPage } from './portal-change-page'
 import { portalChangeData, requestPortalChange } from './portal-change-requests'
 import { customerPortalMethodActions, operatePortalMethodAction } from './portal-method-actions'
@@ -34,7 +37,7 @@ export async function portalResponse(request: Request, env: Bindings): Promise<R
   let language: string | null = null
   // Public stylesheet for refusal pages has no customer or merchant data.
   if (url.pathname === '/portal/theme.css' && !url.search) return ['GET','HEAD'].includes(request.method) ? portalStyle() : new Response(null, { status: 405, headers: { ...headers, allow: 'GET, HEAD' } })
-  if (!['GET','HEAD'].includes(request.method) && !(['/portal/change.request','/portal/payment-methods/action','/portal/payment-methods/action/reconcile','/portal/payment-methods/start','/portal/payment-methods/finish','/portal/payment-methods/reconcile','/portal/prepaid-refund.request','/portal/privacy','/portal/answer-proposal','/portal/prepaid-topup.accept','/portal/prepaid-topup.revoke'].includes(url.pathname) && request.method === 'POST')) {
+  if (!['GET','HEAD'].includes(request.method) && !((/^\/portal\/(?:renewal|return)\/[\w-]+$/.test(url.pathname) || ['/portal/change.preview','/portal/change.request','/portal/payment-methods/action','/portal/payment-methods/action/reconcile','/portal/payment-methods/start','/portal/payment-methods/finish','/portal/payment-methods/reconcile','/portal/prepaid-refund.request','/portal/privacy','/portal/answer-proposal','/portal/prepaid-topup.accept','/portal/prepaid-topup.revoke'].includes(url.pathname)) && request.method === 'POST')) {
     if (request.body) await request.arrayBuffer()
     return new Response(null, { status: 405, headers: { ...headers, allow: 'GET, HEAD' } })
   }
@@ -43,6 +46,27 @@ export async function portalResponse(request: Request, env: Bindings): Promise<R
     const returned=isSetup && (!url.searchParams.has('session') || url.pathname.endsWith('/finish') || url.pathname.endsWith('/reconcile'))?await resolveSetupReturn(env,request):null
     const session = url.searchParams.has('session')?await customerSession(env, request):returned?.session??await customerSession(env,request)
     language = session.language
+    const renewal = url.pathname.match(/^\/portal\/(renewal|return)\/([\w-]+)$/)
+    if (renewal) {
+      const returning=renewal[1]==='return',subscription=renewal[2],token=url.searchParams.get('session')!
+      const link=(path:string)=>`${path}?session=${encodeURIComponent(token)}`
+      if(request.method==='POST') {
+        const result=await (returning?operatePortalWinback:operatePortalRenewal)(env,request,session,subscription,await Input.from(request))
+        if(request.headers.get('content-type')?.startsWith('application/json'))return Response.json(result,{headers})
+        return new Response(null,{status:303,headers:{...headers,location:link(returning?'/portal/changes':`/portal/renewal/${subscription}`)}})
+      }
+      if(request.headers.get('accept')?.includes('application/json'))return Response.json(await (returning?portalWinbackData:portalRenewalData)(env,session,subscription),{headers})
+      const L=customerText(session.language,session.currency)
+      const response=portalPage(L.t(returning?'return.offer.title':'renewal.manage.title'),await (returning?portalWinbackPage:portalRenewalPage)(env,session,subscription,link),{lang:L.tag,style:link('/portal/theme.css')})
+      return new Response(request.method==='HEAD'?null:response.body,{headers:{...Object.fromEntries(response.headers),...headers,'referrer-policy':'strict-origin','content-security-policy':`default-src 'none'; style-src 'self'; font-src 'self'; form-action 'self'; frame-ancestors ${session.audience==='embedded'?session.parent:"'none'"}; base-uri 'none'`}})
+    }
+    if(url.pathname==='/portal/change.preview'&&request.method==='POST') {
+      const quote=await portalChangePreview(env,request,session,await Input.from(request))
+      if(request.headers.get('content-type')?.startsWith('application/json'))return Response.json(quote,{headers})
+      const token=url.searchParams.get('session')!,L=customerText(session.language,session.currency)
+      const response=portalPage(L.t('portal.change.previewHeading'),portalChangePreviewPage(session,quote,`/portal/changes/${quote.subscription}?session=${encodeURIComponent(token)}`),{lang:L.tag,style:`/portal/theme.css?session=${encodeURIComponent(token)}`})
+      return new Response(response.body,{headers:{...Object.fromEntries(response.headers),'content-security-policy':`default-src 'none'; style-src 'self'; font-src 'self'; frame-ancestors ${session.audience==='embedded'?session.parent:"'none'"}; base-uri 'none'; form-action 'none'`}})
+    }
     if (url.pathname === '/portal/change.request' && request.method === 'POST') {
       const result = await requestPortalChange(env, request, session, await Input.from(request))
       if (request.headers.get('content-type')?.startsWith('application/json')) return Response.json(result, { headers })
@@ -153,7 +177,7 @@ export async function portalResponse(request: Request, env: Bindings): Promise<R
     return new Response(request.method === 'HEAD' ? null : response.body, { headers: resultHeaders })
   } catch (error) {
     if (!(error instanceof NectarError)) throw error
-    if(['/portal/change.request','/portal/payment-methods/action','/portal/payment-methods/action/reconcile','/portal/payment-methods/start','/portal/payment-methods/finish','/portal/payment-methods/reconcile','/portal/prepaid-refund.request','/portal/answer-proposal','/portal/prepaid-topup.accept','/portal/prepaid-topup.revoke'].includes(url.pathname) && request.headers.get('content-type')?.startsWith('application/json')) return Response.json({error:error.code},{status:error.status,headers})
+    if((/^\/portal\/(?:renewal|return)\/[\w-]+$/.test(url.pathname)||['/portal/change.preview','/portal/change.request','/portal/payment-methods/action','/portal/payment-methods/action/reconcile','/portal/payment-methods/start','/portal/payment-methods/finish','/portal/payment-methods/reconcile','/portal/prepaid-refund.request','/portal/answer-proposal','/portal/prepaid-topup.accept','/portal/prepaid-topup.revoke'].includes(url.pathname)) && request.headers.get('content-type')?.startsWith('application/json')) return Response.json({error:error.code},{status:error.status,headers})
     const known = language !== null && ![401,403].includes(error.status)
     const L = customerText(known ? language : null)
     const title = L.t(known ? 'portal.request.unavailable' : 'portal.unavailable')
