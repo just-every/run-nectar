@@ -1,3 +1,4 @@
+import { partialPaymentRows } from './invoice-partial-payments'
 import { portalChangeSettings } from './portal-change-policy'
 import { readRemittances } from './remittances'
 import { processorEvents } from './processor-events'
@@ -98,6 +99,7 @@ export async function customerView(env: Bindings, actor: Actor, id: string, url?
 }
 
 export const views: Record<string, View> = {
+  invoicePartialPayments:(env,actor,_r,_id,url)=>partialPaymentRows(env,actor,url.searchParams.get('customer')??undefined),
   portalChanges: (env,actor) => portalChangeSettings(env,actor),
   processorEvents:(env,actor,_r,_id,url)=>processorEvents(env,actor,url.searchParams.get('customer')??undefined),
   assuranceCases: (env,actor)=>assuranceCases(env,actor),

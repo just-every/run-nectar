@@ -959,3 +959,25 @@ recipient, language, source or wording changes invalidate its frozen basis.
 A prepared event cannot be replaced, including after expiry, provider refusal
 or uncertainty. Acceptance records provider acceptance rather than mailbox
 delivery. A receipt records an allocation, without claiming settlement.
+
+
+### Partial card payment on an issued invoice
+
+The owner uses `invoice.partial.prepare` with `invoice` and `amount_cents`, then
+`invoice.partial.confirm` with the exact returned `confirm` fields. Both steps
+require a current local authenticator or passkey verification. Confirmation
+reserves the original invoice; it does not accept on the customer's behalf.
+The owner can inspect `GET /api/nectar/invoice-partial-payments`, withdraw an
+unclaimed preparation with `invoice.partial.revoke`, or read the existing
+provider outcome with `invoice.partial.reconcile` and `request`.
+
+The authenticated own customer sees the exact approved payment on the existing
+invoice page. A protected same-origin POST to `/portal/invoice-payment/start`
+accepts `request`, `basis_hash` and explicit `accept`, and creates one test-mode
+card Checkout. POST `/portal/invoice-payment/check` reads that existing outcome.
+GET on the return page changes no money. No customer session reaches the
+processor; its separate opaque return cookie expires with the customer session.
+Captured cash and its invoice allocation are recorded together once. Unknown
+outcomes retain the reservation and permit reads only. Archive restoration
+restores financial history and unresolved reservations with no executable
+owner or customer authority. This slice saves no method and schedules no debit.

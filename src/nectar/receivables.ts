@@ -59,6 +59,7 @@ export async function creditNoteStatements(env: Bindings, actor: Actor, input: I
   const id = newId(), issuedAt=clockInstant(env)
   const [balanceSql, balanceParam] = balanceOf(invoice.id)
   return { statements: [
+    guard(env, 'invoice_partial_reserved', 'NOT EXISTS(SELECT 1 FROM nc_invoice_partial_reservations WHERE invoice_id=?)', invoice.id),
     ...authorization.guards,
     ...allocation.statements,
     guard(env, 'exceeds_balance', `${balanceSql} >= ?`, balanceParam, amount),

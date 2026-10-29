@@ -1,3 +1,4 @@
+import { invoicePartialSection } from './invoice-partial-payments'
 import { automaticCollectionSection } from './automatic-collection'
 import { invoiceAutomationSection } from './invoice-automation'
 import { currencyRecord } from '../currency-rates'
@@ -119,6 +120,7 @@ export async function invoicePage(env: Bindings, actor: Actor, id: string, url: 
       ${pays.length && i.balanceCents > 0 ? form('payment.allocate', `/app/invoices/${i.id}`, h`${hidden('invoice', i.id)}${select('Payment', 'payment', pays.map((p: any) => ({ value: p.id, label: `${p.reference} — ${money(p.unallocated_cents)} unallocated` })), pays[0].id)}${field('Amount ($)', 'amount')}`, 'Allocate payment', { layout: 'columns', secondary: true }) : ''}</section>` : ''}
     ${await automaticCollectionSection(env,actor,i)}
     ${await nativeCollectionSection(env,actor,i)}
+    ${await invoicePartialSection(env,actor,i)}
     ${i.status === 'issued' ? creditApprovals(i, actor) : ''}
     ${i.status === 'issued' ? writeOffSection(i, actor, pays) : ''}
     ${await notesSection(env,actor,i.customer_id,'invoice',i.id,`/app/invoices/${i.id}#notes`)}

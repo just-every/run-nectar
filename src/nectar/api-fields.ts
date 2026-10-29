@@ -573,6 +573,27 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "customer": "text",
     "service_date": "text"
   },
+  "invoice.partial.confirm": {
+    "account_ref": "text",
+    "amount_cents": "integer",
+    "balance_cents": "integer",
+    "basis_hash": "text",
+    "confirm": "flag",
+    "customer": "text",
+    "invoice": "text",
+    "request": "text",
+    "stripe_customer_ref": "text"
+  },
+  "invoice.partial.prepare": {
+    "amount_cents": "integer",
+    "invoice": "text"
+  },
+  "invoice.partial.reconcile": {
+    "request": "text"
+  },
+  "invoice.partial.revoke": {
+    "request": "text"
+  },
   "invoice.refund.execute": {
     "amount": "text",
     "basis": "text",

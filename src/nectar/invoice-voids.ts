@@ -17,11 +17,12 @@ import { revenueCreditStatements } from './revenue-records'
 
 // A provider write may have succeeded before its response was lost. Its
 // durable claim must settle before a correction can consume the owed balance.
-const unresolvedCollection = `SELECT invoice_id FROM nc_native_collections WHERE invoice_id=? AND status IN ('claimed','uncertain')
+const unresolvedCollection = `SELECT invoice_id FROM nc_invoice_partial_reservations WHERE invoice_id=?
+  UNION ALL SELECT invoice_id FROM nc_native_collections WHERE invoice_id=? AND status IN ('claimed','uncertain')
   UNION ALL SELECT invoice_id FROM nc_automatic_collections WHERE invoice_id=? AND status IN ('claimed','uncertain','pending_settlement')
   UNION ALL SELECT invoice_id FROM nc_processor_cash_applications WHERE invoice_id=? AND status='uncertain'
   UNION ALL SELECT invoice_id FROM nc_payment_link_attempts WHERE invoice_id=? AND status IN ('captured','recording_invoice')`
-const collectionArguments = (invoice: string) => [invoice, invoice, invoice, invoice]
+const collectionArguments = (invoice: string) => [invoice, invoice, invoice, invoice, invoice]
 
 async function source(env: Bindings, actor: Actor, input: Input) {
   requireMember(actor, 'approve')
