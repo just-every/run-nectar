@@ -60,7 +60,7 @@ export async function importPage(env: Bindings, actor: Actor, url: URL) {
   const shadow = await shadowSubscriptions(env, actor)
   const owner = actor.role === 'owner'
   const zone = (await business(env))!.timezone
-  return page('Move in', actor, h`<h1>Move in from Stripe Billing</h1>
+  return page('Move in', actor, h`<h1>Move in from Stripe Billing</h1><p><a href="/app/import/investigations">Review move-in investigations</a></p>
     <section class="card" aria-labelledby="upload"><h2 id="upload">1. Preview</h2><p class="hint">Upload the Stripe API list responses you captured (expanded with <code>data.items</code> and <code>data.discounts</code> where present). The preview writes nothing.</p>
       <form method="post" action="/app/import/preview" enctype="multipart/form-data" class="columns">${uploadFields()}<button type="submit">Preview the move</button></form></section>
     <section class="card" aria-labelledby="jobs"><h2 id="jobs">2. Moves applied</h2>${table(['Applied', 'State', 'Records$', 'Originals', 'Undo'], jobs.map((j: any) => [when(j.appliedAt, zone), tag(j.state === 'completed' ? 'Completed' : j.state), j.effects,h`${(j.originalFiles??[]).map((file:any)=>file.available?h`<p><a href="/app/import/${j.id}/originals/${file.id}">Download ${file.name}</a></p>`:h`<p>${file.name}: withdrawn</p>`)}`,

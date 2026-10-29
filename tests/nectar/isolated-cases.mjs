@@ -86,6 +86,7 @@ export const isolatedJourneys = [
   { file: 'metrics', name: 'metricsFlow', load: () => import('./metrics.mjs') },
   { file: 'metric-zones', name: 'metricZones', load: () => import('./metric-zones.mjs') },
   { file: 'usage-replay', name: 'usageReplayFlow', load: () => import('./usage-replay.mjs') },
+  { file: 'move-investigations', name: 'moveInvestigationsFlow', load: () => import('./move-investigations.mjs') },
   { file: 'reconciliation', name: 'reconciliationFlow', load: () => import('./reconciliation.mjs') },
   { file: 'assurance-detectors', name: 'assuranceDetectorsFlow', load: () => import('./assurance-detectors.mjs') },
   { file: 'assurance-detectors', name: 'assuranceScheduleFlow', load: () => import('./assurance-detectors.mjs') },

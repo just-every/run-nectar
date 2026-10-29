@@ -120,6 +120,9 @@ export async function proposalDetail(env: Bindings, actor: Actor, id: string): P
   if (row.status === 'pending') {
     try { stale = canonical(await currentBasis(env, row.kind, payload)) !== canonical(parseJson(row.basis_json, {})) } catch { stale = true }
   }
+  if(row.status==='pending' && parseJson<Row>(row.evidence_json,{}).assurance?.moveBasis) {
+    try { await assuranceProposalGuards(env,parseJson<Row>(row.evidence_json,{}).assurance) } catch { stale=true }
+  }
   const changesPrice = payload.setup === true || row.kind === 'price_change' || (row.kind === 'amendment' && payload.kind === 'price_override')
   const needsPreparation = changesPrice && row.created_by_kind === 'member' && !row.prepared_by_id
   let needsOtherApprover = changesPrice && row.created_by_kind === 'member' && row.prepared_by_id === actor.id
