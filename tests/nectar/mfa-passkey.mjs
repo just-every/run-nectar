@@ -23,7 +23,7 @@ try {
   await h.api('mfa.policy', owner, { scope: 'roles', roles: ['finance'] })
   const signedIn = await h.signIn('gov007-passkey@example.test', { requested: true })
 
-  browser = await chromium.launch({ headless: true, executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH, args: ['--no-sandbox', '--use-mock-keychain', '--password-store=basic'] })
+  browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH, headless: true, args: ['--no-sandbox', '--use-mock-keychain', '--password-store=basic'] })
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } })
   const useCookie = async cookie => { await context.clearCookies(); await context.addCookies(cookie.split('; ').map(pair => { const at = pair.indexOf('='); return { name: pair.slice(0, at), value: pair.slice(at + 1), url: h.origin } })) }
   const page = await context.newPage()

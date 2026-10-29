@@ -15,7 +15,7 @@ try {
  }
  await symlink(join(root,'node_modules'),join(target,'node_modules'),'dir')
  await cp(join(root,'dist'),join(target,'dist'),{recursive:true})
- const child=spawn(process.execPath,['tests/nectar/recovery.mjs',...((process.argv.includes('--smoke')||process.env.NECTAR_RECOVERY_FULL==='0')?['--smoke']:[])],{cwd:target,stdio:'inherit',env:{...process.env,NECTAR_TEST_CHECKOUT:'1'}})
+ const child=spawn(process.execPath,['tests/nectar/recovery.mjs',...process.argv.slice(2).filter(arg=>arg!=='--smoke'),...((process.argv.includes('--smoke')||process.env.NECTAR_RECOVERY_FULL==='0')?['--smoke']:[])],{cwd:target,stdio:'inherit',env:{...process.env,NECTAR_TEST_CHECKOUT:'1'}})
  const code=await new Promise((resolve,reject)=>{child.on('error',reject);child.on('exit',resolve)})
  assert.equal(code,0,'Public CLI recovery journey passes')
  passed=true

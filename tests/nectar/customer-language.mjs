@@ -1,12 +1,14 @@
 import assert from 'node:assert/strict'
+import { spawnSync } from 'node:child_process'
+import { cp, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { applyPolicy } from './policy-helper.mjs'
 
 // PORT-006: per-customer language over every customer-facing message and page
 // Nectar has today, through the built Worker's public doors and its mail edge.
 const figures = text => text.match(/-?USD [\d,]+\.\d{2}/g) ?? []
-
 const linkIn = (text, kind) => new URL(text.match(new RegExp(`http://[^\\s]+/${kind}/[a-f0-9]{64}`))[0]).pathname
-
 const LANGS = ['es-US', 'en']
 
 export async function customerLanguageFlow(h, owner) {
@@ -134,4 +136,54 @@ export async function customerLanguageFlow(h, owner) {
   assert.match(drafts.en.body, /Recurring discount: 10%; effective November 1, 2026, with no recorded end date\./)
   assert.deepEqual(figures(drafts['es-US'].body), figures(drafts.en.body), 'PORT-006 the Spanish explanation carries the same figures as the English one')
   assert.ok(figures(drafts.en.body).length >= 6)
+}
+
+/** Runs against a build that added only tests/fixtures/locales/fr.json. */
+export async function frenchFlow(h, owner) {
+  const customer = (await h.api('customer.create', owner, { external_id: 'PORT006-FR', name: 'Cyprès Analytique', billing_email: 'fr@lang.example', language: 'fr' })).id
+  const product = (await h.api('product.create', owner, { code: 'port006-fr', name: 'Plateforme' })).id
+  const price = (await h.api('price.create', owner, { product, kind: 'flat', unit_amount: '100', taxable: false })).id
+  const sub = (await h.api('subscription.create', owner, { customer, start_date: '2026-01-01', price: [price] })).id
+  const term = await h.api('term.prepare', owner, { subscription: sub, revision: (await h.api(`subscriptions/${sub}`, owner)).revision, term_start: '2026-01-01', months: 12, auto_renew: true, notice_days: 30, uplift_percent: '5' })
+  await h.api('term.decide', owner, { term: term.term, decision: 'approved', confirm_single: true })
+  const html = await (await h.raw(new URL((await h.api('term.link', owner, { term: term.term })).cancelUrl).pathname)).text()
+  assert.match(html, /<html lang="fr">/); assert.match(html, /Gérez votre renouvellement/)
+  assert.match(html, /La période en cours se termine le 1 janvier 2027\./, 'PORT-006 a French customer’s page switches with no code change')
+  assert.match(await (await h.raw(`/app/customers/${customer}`, { cookie: owner })).text(), /Customer language<\/dt><dd>Français/)
+}
+
+export async function incompleteFrenchFlow(h, owner) {
+  assert.equal((await h.api('customer.create', owner, { external_id: 'PORT006-FR', name: 'Cyprès Analytique', billing_email: 'fr@lang.example', language: 'fr' }, 400)).error, 'unsupported_language', 'PORT-006 an incomplete file is never offered, so no customer sees a key')
+}
+
+/** The check, then a real build of a copy with only a French file added. */
+export async function translationFiles() {
+  const check = dir => spawnSync(process.execPath, ['scripts/check-locales.mjs', ...(dir ? [dir] : [])], { encoding: 'utf8' })
+  assert.equal(check().status, 0, 'PORT-006 the shipped translation files are complete')
+  const french = JSON.parse(await readFile('tests/fixtures/locales/fr.json', 'utf8'))
+  const root = await mkdtemp(join(tmpdir(), 'nectar-port006-')), home = process.cwd()
+  try {
+    for (const name of ['src', 'public', 'migrations', 'package.json', 'vite.config.ts', 'tsconfig.json', 'wrangler.jsonc', 'deploy-site.json', 'edition.json', 'rer-project.json', 'seed.json'])
+      await cp(name, join(root, name), { recursive: true })
+    await symlink(join(home, 'node_modules'), join(root, 'node_modules'))
+    const locale = join(root, 'src/nectar/locales/fr.json')
+    const build = () => { const result=spawnSync(join(home, 'node_modules/.bin/vite'), ['build'], { cwd: root, encoding: 'utf8' }); assert.equal(result.status, 0, `copy builds: ${result.stderr}`) }
+    await writeFile(locale, JSON.stringify(french, null, 2))
+    assert.equal(check(join(root, 'src/nectar/locales')).status, 0, 'The added French catalogue is complete')
+    build()
+    // Each built copy initializes its runtime in its own working directory.
+    const journey = name => {
+      const result=spawnSync(process.execPath,[join(home,'tests/nectar/sanity.mjs'),'--clause','customer-language',name],{cwd:root,encoding:'utf8',timeout:180000,killSignal:'SIGKILL'})
+      const diagnostic=String(result.error?.message??result.stderr).replace(/\/(renew|return|erase)\/[a-f0-9]{64}/g,'/$1/[redacted]').replace(/(token=|rer-dev=|RER_DEV_KEY=)[^&\s"']+/g,'$1[redacted]')
+      assert.equal(result.status,0,`PORT-006 ${name}: ${diagnostic}`)
+    }
+    journey('frenchFlow')
+    const { ['renewal.manage.heading']: _, ...missing } = french
+    await writeFile(locale, JSON.stringify(missing, null, 2))
+    const failed = check(join(root, 'src/nectar/locales'))
+    assert.equal(failed.status, 1, 'PORT-006 a missing string fails the check')
+    assert.match(failed.stderr, /fr\.json: missing renewal\.manage\.heading/)
+    build()
+    journey('incompleteFrenchFlow')
+  } finally { await rm(root, { recursive: true, force: true }) }
 }

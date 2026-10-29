@@ -3,9 +3,7 @@ import { createHash } from 'node:crypto'
 
 // Independent cents, written from the executed order rather than the rating engine.
 const monthlyCents = [5000, ...Array(10).fill(10000), 40000, ...Array(11).fill(11000), 29000, ...Array(11).fill(12100), 16900]
-
 const sum = values => values.reduce((a, b) => a + b, 0)
-
 const digest = text => createHash('sha256').update(text, 'utf8').digest('hex')
 
 function executedOrder(suffix, year = 2020) {
@@ -328,4 +326,243 @@ export async function contractSetup(h, owner) {
   assert.equal(exceptionIssued.total_cents,8700,'AGENT-006 actual usage, included allowance, discount, override and credit bill exactly as previewed with no manual setup')
   console.log('AGENT-006 executed-order setup: exact source custody, independent 36-month preview and ordinary issued bills, atomic separate approval, rejection/staleness and append-only human resolution passed')
   return { proposal: prepared.id, subscription: approved.subscription, customer: plan.customer.id, invoices: invoices.map(row => row.id) }
+}
+
+const anchoredMonth = (anchor, offset) => {
+  const [year, month, day] = anchor.split('-').map(Number)
+  const first = new Date(Date.UTC(year, month - 1 + offset, 1))
+  const last = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + 1, 0)).getUTCDate()
+  return `${first.toISOString().slice(0, 8)}${String(Math.min(day, last)).padStart(2, '0')}`
+}
+
+function intervalOrder(number, { unit = 'month', count = 12, timing = 'advance', months = 24, mixed = false, meter } = {}) {
+  const id = `synthetic-nectar-${number}`, start = '2018-01-31', end = anchoredMonth(start, months)
+  const customer = `Customer ${id}, Synthetic Cedar, billing ap@cedar.example.`
+  const term = `Service starts ${start}, with a fixed ${months}-month term ending ${end}, anchored to ${start}; all additions co-term at that end.`
+  const fee = `Platform costs USD ${mixed ? '12000' : '100'} every ${count} ${unit}${count === 1 ? '' : 's'}, billed in ${timing}, non-taxable, Net 30.`
+  const usage = 'Calls cost USD 2 each, billed monthly in arrears, non-taxable. Ten calls per monthly period are a buyer-supplied hypothetical scenario, never actual usage.'
+  const addon = `Add-on costs USD 1200 every 12 months, billed in advance from 2019-07-31 and co-termed to ${end}, non-taxable.`
+  const text = [customer, term, fee, ...(mixed ? [usage, addon] : []), 'Executed by Synthetic Buyer and Synthetic Seller.'].join('\n')
+  return {
+    setup: true, source: { name: 'synthetic-executed-order.txt', text, execution_reference: `${id} execution record` },
+    customer: { external_id: id, name: 'Synthetic Cedar', billing_email: 'ap@cedar.example', quote: customer },
+    catalog: [
+      { key: 'platform', new_product: { code: id, name: 'Synthetic Platform' }, kind: 'flat', unit_amount: mixed ? '12000' : '100', interval_unit: unit, interval_count: count, billing_timing: timing, taxable: false, quote: fee },
+      ...(mixed ? [
+        { key: 'calls', new_product: { code: `${id}-calls`, name: 'Synthetic Calls' }, kind: 'unit', unit_amount: '2', meter, interval_unit: 'month', interval_count: 1, billing_timing: 'arrears', taxable: false, quote: usage },
+        { key: 'addon', new_product: { code: `${id}-addon`, name: 'Synthetic Add-on' }, kind: 'flat', unit_amount: '1200', interval_unit: 'month', interval_count: 12, billing_timing: 'advance', taxable: false, quote: addon },
+      ] : []),
+    ],
+    subscription: { external_id: `${id}-service`, start_date: start, billing_anchor_date: start, anchor_day: 31, term_months: months, quote: term },
+    items: [{ key: 'platform', price: 'platform', quote: fee }, ...(mixed ? [{ key: 'calls', price: 'calls', quote: usage }, { key: 'addon', price: 'addon', from: '2019-07-31', quote: addon }] : [])],
+    ...(mixed ? { usage_scenario_label: 'Buyer supplied ten hypothetical calls per month', usage_assumptions: Array.from({ length: months }, (_, i) => ({ period: anchoredMonth(start, i), meter, quantity: '10', quote: usage })) } : {}),
+    ambiguities: [],
+  }
+}
+
+/** CAT-001 inherits executed-source custody, one governed approval, and ordinary billing. */
+export async function contractIntervalSetup(h, owner) {
+  const api = (path, body, status) => h.api(path, owner, body, status)
+  await api('access.give', { email: 'synthetic-nectar-80@example.test', name: 'Synthetic Finance', role: 'finance' })
+  const finance = await h.signIn('synthetic-nectar-80@example.test', { requested: true })
+  const propose = payload => api('proposal.create', { kind: 'amendment', title: 'Synthetic executed interval order', payload })
+  const decide = (id, decision = 'approved', who = finance, status = 200) => h.api('proposal.decide', who, { proposal: id, decision }, status)
+  const snapshot = () => Promise.all([api('customers'), api('catalog'), api('runs')])
+  const initial = await snapshot()
+  for (const [number, options, expected] of [
+    [83, { unit: 'week', count: 1, timing: 'arrears', months: 12 }, 53],
+    [84, { count: 3, months: 36 }, 12],
+    [85, { count: 6, months: 24 }, 4],
+    [86, { count: 5, months: 12 }, 3],
+    [87, { count: 1, timing: 'arrears', months: 1 }, 1],
+  ]) {
+    const payload = intervalOrder(number, options), proposal = await propose(payload)
+    assert.deepEqual(proposal.impact.unresolvedAmbiguities, [])
+    assert.equal(proposal.impact.periods.length, expected, 'CAT-001 finite terms include every actual invoice period, including weekly terms beyond 36 periods')
+    assert.equal(proposal.impact.previewHorizon.through, anchoredMonth('2018-01-31', options.months))
+    const spans = proposal.impact.periods.map(row => [row.period.start, row.period.end])
+    assert.equal(spans[0][0], '2018-01-31')
+    assert.equal(spans.at(-1)[1], anchoredMonth('2018-01-31', options.months))
+    if (number === 87) assert.deepEqual(spans, [['2018-01-31', '2018-02-28']], 'CAT-001 full anchors clamp February without losing day 31')
+    await decide(proposal.id, 'rejected')
+  }
+  assert.deepEqual(await snapshot(), initial, 'CAT-001 rejected full-term previews write no billing records')
+
+  const meter = (await api('meter.create', { code: 'synthetic-nectar-82', name: 'Synthetic Calls', unit_label: 'calls' })).id
+  const payload = intervalOrder(81, { mixed: true, meter }), before = await snapshot()
+  const prepared = await propose(payload), saved = await api(`proposals/${prepared.id}`), plan = saved.payload.plan
+  assert.deepEqual(prepared.impact.unresolvedAmbiguities, [])
+  assert.equal(prepared.impact.periods.length, 25, 'CAT-001 services due together compose one invoice per due date')
+  assert.deepEqual(await snapshot(), before, 'CAT-001 preparation retains only the proposal, never live setup records')
+  assert.equal(plan.subscription.contractTermMonths, 24)
+  assert.equal(plan.subscription.contractEndDate, '2020-01-31')
+  assert.deepEqual(plan.prices.map(price => price.billing), [{ unit: 'month', count: 12, timing: 'advance' }, { unit: 'month', count: 1, timing: 'arrears' }, { unit: 'month', count: 12, timing: 'advance' }])
+  const platform = prepared.impact.periods.filter(row => row.calculation.lines.some(line => line.priceId === plan.prices[0].id))
+  const platformLines = platform.flatMap(row => row.calculation.lines.filter(line => line.priceId === plan.prices[0].id).map(line => [row.assumedIssueDate, line.periodStart, line.periodEnd, line.amountCents]))
+  assert.deepEqual(platformLines, [['2018-01-31', '2018-01-31', '2019-01-31', 1200000], ['2019-01-31', '2019-01-31', '2020-01-31', 1200000]])
+  const usage = prepared.impact.periods.filter(row => row.calculation.lines.some(line => line.priceId === plan.prices[1].id))
+  assert.equal(usage.length, 24)
+  assert.deepEqual(usage.flatMap(row => row.calculation.lines.filter(line => line.priceId === plan.prices[1].id).map(line => line.amountCents)), Array(24).fill(2000))
+  const addon = prepared.impact.periods.find(row => row.calculation.lines.some(line => line.priceId === plan.prices[2].id))
+  const addonLines = addon.calculation.lines.filter(line => line.priceId === plan.prices[2].id)
+  assert.equal(addonLines.length, 1)
+  assert.deepEqual([addon.assumedIssueDate, addonLines[0].periodStart, addonLines[0].periodEnd, addonLines[0].amountCents], ['2019-07-31', '2019-07-31', '2020-01-31', 60493], 'CAT-001 co-termed annual add-on earns 184 of 365 days, rounded once')
+  assert.equal(prepared.impact.totals.totalCents, 2508493)
+  assert.deepEqual(prepared.impact.annualTotals.map(row => row.totalCents), [1222000, 1284493, 2000], 'CAT-001 whole-invoice annual totals follow actual due dates, including the final arrears invoice')
+  await decide(prepared.id, 'approved', owner, 409)
+  assert.deepEqual(await snapshot(), before, 'CAT-001 self-approval cannot partially apply interval setup')
+  const approved = await decide(prepared.id)
+  await decide(prepared.id, 'approved', finance, 409)
+  const installed = await api(`subscriptions/${approved.subscription}`)
+  assert.equal(installed.billing_anchor_date, '2018-01-31')
+  assert.equal(installed.contract_end_date, '2020-01-31')
+  assert.equal(installed.items.find(item => item.price_id === plan.prices[2].id).effective_to, '2020-01-31')
+  await api('usage.submit', { events: Array.from({ length: 24 }, (_, i) => ({ event_id: `synthetic-nectar-81-calls-${i}`, customer: 'synthetic-nectar-81', meter: 'synthetic-nectar-82', quantity: '10', occurred_at: `${anchoredMonth('2018-01-31', i)}T12:00:00Z` })) })
+  const byMonth = Map.groupBy(prepared.impact.periods, row => row.assumedIssueDate.slice(0, 7))
+  const invoices = []
+  for (const [month, previews] of byMonth) {
+    const firstRun = await api('billrun.prepare', { period: month })
+    const first = (await api(`runs/${firstRun.id}`)).invoices.filter(row => row.customer_id === approved.customer)
+    const rerun = await api('billrun.prepare', { period: month })
+    const drafts = (await api(`runs/${rerun.id}`)).invoices.filter(row => row.customer_id === approved.customer)
+    assert.deepEqual(drafts.map(row => row.total_cents).sort((a, b) => a - b), first.map(row => row.total_cents).sort((a, b) => a - b), 'CAT-001 re-preparation never duplicates or changes interval amounts')
+    assert.equal(drafts.length, previews.length)
+    for (const draft of drafts) {
+      const detail = await api(`invoices/${draft.id}`)
+      const preview = previews.find(row => row.billing.key === detail.calculation.inputs.billing.key)
+      assert.ok(preview, 'CAT-001 ordinary due-date billing selects the exact saved preview window')
+      assert.equal(detail.status, 'draft', 'CAT-001 setup approval leaves ordinary invoice approval separate')
+      assert.deepEqual(detail.lines.map(line => [line.kind, line.price_id, line.quantity, line.unit_amount, line.amount_cents, line.period_start, line.period_end, !!line.taxable]), previewLines(preview.calculation))
+      await api('invoice.approve', { invoice: draft.id, acknowledge: true })
+      await api('invoice.finalise', { invoice: draft.id, issue_date: preview.assumedIssueDate })
+      const issued = await api(`invoices/${draft.id}`)
+      assert.equal(issued.total_cents, preview.calculation.totalCents)
+      invoices.push(issued)
+    }
+  }
+  assert.equal(invoices.length, 25)
+  assert.equal(invoices.flatMap(invoice => invoice.lines).filter(line => line.price_id === plan.prices[0].id).length, 2)
+  assert.equal(invoices.flatMap(invoice => invoice.lines).filter(line => line.price_id === plan.prices[1].id).length, 24)
+  assert.equal(invoices.flatMap(invoice => invoice.lines).filter(line => line.price_id === plan.prices[2].id).length, 1)
+  assert.equal(sum(invoices.map(row => row.total_cents)), prepared.impact.totals.totalCents)
+  for (const invoice of invoices) assert.deepEqual((await api(`invoices/${invoice.id}`)).calculation, invoice.calculation, 'CAT-001 later intervals preserve all previously issued evidence')
+  console.log('CAT-001/AGENT-006 quoted intervals, complete finite terms, day-31 anchors, mixed advance/arrears, co-termination and ordinary issued invoice parity passed')
+}
+
+// SET-001 inheritance: this proves quoted routing intent and ordinary invoice
+// custody. It makes no claim of processor execution or accounting delivery.
+export async function contractEntitySetup(h, owner, {onState = async () => {}, decideSetup} = {}) {
+  const api = (path, body, status) => h.api(path, owner, body, status)
+  await api('access.give', { email: 'synthetic-nectar-entity-finance@example.test', name: 'Synthetic Entity Finance', role: 'finance' })
+  const finance = await h.signIn('synthetic-nectar-entity-finance@example.test', { requested: true })
+  const agent = { bearer: (await api('credential.issue', { name: 'Synthetic entity setup preparer', scopes: ['prepare'] })).key }
+  const mutate = async (path, body, status) => api(path, { revision: (await api('business')).revision, ...body }, status)
+  const identity = (number, days) => ({ legal_name: `Synthetic entity ${number}`, address: `${number} Synthetic Way, US`, ein: `${number}-7654321`, invoice_prefix: `SE${number}`, invoice_number_width: 4,
+    payment_terms_days: days, processor_account_ref: `synthetic-nectar-${number}-processor`, ledger_company_ref: `synthetic-nectar-${number}-ledger`, tax_registration: `synthetic-nectar-${number}-tax` })
+  const a = identity(21, 45), b = identity(22, 60)
+  const entityA = (await mutate('entity.create', a)).id, entityB = (await mutate('entity.create', b)).id
+  const entityRows = await api('billing-entities')
+  const order = (number, entity, id, existingCustomer) => {
+    const buyer = `Customer synthetic-nectar-${number}, Synthetic order customer ${number}, billing synthetic-nectar-${number}@example.test.`
+    const service = `Service runs from 2016-01-01 until 2016-03-01, billed monthly in arrears on day 1, Net ${entity.payment_terms_days}.`
+    const fee = 'The platform fee is USD 100 per month, non-taxable.'
+    const routing = `Bill-to entity ${entity.legal_name}; processor account ${entity.processor_account_ref}; ledger company ${entity.ledger_company_ref}.`
+    return { setup: true, source: { name: 'synthetic-entity-order.txt', text: [buyer, service, fee, routing, 'Executed by Synthetic Buyer and Synthetic Seller.'].join('\n'), execution_reference: `synthetic-nectar-${number} execution` },
+      customer: existingCustomer ? { id: existingCustomer, quote: buyer } : { external_id: `synthetic-nectar-${number}`, name: `Synthetic order customer ${number}`, billing_email: `synthetic-nectar-${number}@example.test`, quote: buyer },
+      entity: { id, processor_account_ref: entity.processor_account_ref, ledger_company_ref: entity.ledger_company_ref, quote: routing },
+      catalog: [{ key: 'platform', new_product: { code: `synthetic-nectar-${number}`, name: 'Synthetic Entity Platform' }, kind: 'flat', unit_amount: '100', taxable: false, quote: fee }],
+      subscription: { start_date: '2016-01-01', end_date: '2016-03-01', quote: service }, items: [{ key: 'platform', price: 'platform', quote: fee }], ambiguities: [] }
+  }
+  const propose = (payload, status = 200) => h.api('proposal.create', agent, { kind: 'amendment', title: 'Executed entity order', payload }, status)
+  const decide = (proposal, who = owner, decision = 'approved', status = 200) => decideSetup && decision === 'approved' && status === 200 ? decideSetup({proposal,decision},who) : h.api('proposal.decide', who, { proposal, decision }, status)
+  const snapshot = () => Promise.all([api('customers'), api('catalog'), api('runs'), api('billing-entities')])
+  const initial = await snapshot()
+  const invalid = order(211, a, entityA)
+  invalid.entity.quote = 'An entity route that is absent from the executed source.'
+  await propose(invalid, 400)
+  const invented = order(212, a, entityA)
+  invented.entity.processor_account_ref = 'synthetic-nectar-unknown-processor'
+  await propose(invented, 409)
+  assert.deepEqual(await snapshot(), initial, 'SET-001 unquoted or mismatched routes create no billing records')
+  const incomplete = order(213, a, entityA)
+  delete incomplete.entity
+  const unresolved = await propose(incomplete)
+  assert.ok(unresolved.impact.unresolvedAmbiguities.length)
+  await decide(unresolved.id, owner, 'approved', 409)
+  await decide(unresolved.id, owner, 'rejected')
+  assert.deepEqual(await snapshot(), initial)
+  const rejected = await propose(order(214, a, entityA))
+  await decide(rejected.id, owner, 'rejected')
+  assert.deepEqual(await snapshot(), initial, 'SET-001 rejected entity setup leaves customer assignments and sequence counters unchanged')
+
+  const installed = []
+  for (const [number, entity, id] of [[215, a, entityA], [216, b, entityB]]) {
+    const input = order(number, entity, id), prepared = await propose(input), saved = await api(`proposals/${prepared.id}`)
+    assert.deepEqual(prepared.impact.unresolvedAmbiguities, [])
+    assert.equal(prepared.impact.periods.length, 2)
+    assert.deepEqual(prepared.impact.periods.map(period => period.calculation.totalCents), [10000, 10000])
+    assert.equal(saved.basis.sourceSha256, saved.payload.source.sha256)
+    const quoted = saved.payload.plan.billingEntity
+    assert.equal(quoted.revision, entityRows.entities.find(row => row.id === id).revision)
+    assert.deepEqual(prepared.impact.billingEntity, quoted)
+    for (const period of prepared.impact.periods) {
+      assert.deepEqual(period.inputs.invoiceContent.billingEntity, quoted)
+      assert.equal(period.inputs.invoiceContent.paymentTermsDays, entity.payment_terms_days)
+    }
+    const page = await h.raw(`/app/proposals/${prepared.id}`, { cookie: owner })
+    assert.equal(page.status, 200)
+    const markup = await page.text()
+    assert.ok(markup.includes(entity.processor_account_ref) && markup.includes(entity.ledger_company_ref))
+    assert.match(markup, /Owner-recorded routing intent/)
+    await onState({label:`entity-${number}-prepared`,proposal:prepared.id})
+    const before = await snapshot()
+    await decide(prepared.id, finance, 'approved', 403)
+    assert.deepEqual(await snapshot(), before, 'SET-001 finance approval cannot bypass owner entity-assignment authority')
+    const approved = await decide(prepared.id)
+    assert.equal(approved.billingEntity.id, id)
+    assert.equal((await api(`customers/${approved.customer}`)).billing_entity_id, id)
+    await decide(prepared.id, owner, 'approved', 409)
+    installed.push({ approved, prepared, saved, input, entity })
+    await onState({label:`entity-${number}-installed`,proposal:prepared.id,customer:approved.customer,subscription:approved.subscription})
+  }
+  for (const month of ['2016-01', '2016-02']) {
+    const run = await api('billrun.prepare', { period: month })
+    const drafts = (await api(`runs/${run.id}`)).invoices
+    for (const value of installed) {
+      const draft = drafts.find(invoice => invoice.customer_id === value.approved.customer), preview = value.prepared.impact.periods.find(period => period.period.start.startsWith(month))
+      assert.ok(draft)
+      await api('invoice.approve', { invoice: draft.id, acknowledge: true })
+      await api('invoice.finalise', { invoice: draft.id, issue_date: preview.assumedIssueDate })
+      const issued = await api(`invoices/${draft.id}`)
+      assert.equal(issued.total_cents, preview.calculation.totalCents)
+      assert.equal(issued.billing_entity_id, value.approved.billingEntity.id)
+      assert.deepEqual(JSON.parse(issued.billing_route_json), value.approved.billingEntity.route, 'SET-001 ordinary issue retains the exact quoted processor/ledger intent')
+      assert.deepEqual(issued.calculation.inputs.invoiceContent, preview.inputs.invoiceContent, 'SET-001 normal invoice terms and entity snapshot equal the full-term preview')
+      assert.equal(issued.number, `${value.entity.invoice_prefix}-${month === '2016-01' ? '0001' : '0002'}`)
+      const due = new Date(`${preview.assumedIssueDate}T00:00:00Z`); due.setUTCDate(due.getUTCDate() + value.entity.payment_terms_days)
+      assert.equal(issued.due_date, due.toISOString().slice(0, 10))
+      ;(value.issued ??= []).push(issued)
+      await onState({label:`entity-${value.entity.invoice_prefix}-${month}-issued`,invoice:issued.id,customer:value.approved.customer})
+    }
+  }
+
+  const existing = (await api('customer.create', { external_id: 'synthetic-nectar-217', name: 'Synthetic reassigned customer', billing_email: 'synthetic-nectar-217@example.test' })).id
+  await mutate('customer.entity', { customer: existing, entity: entityA, confirm: true })
+  const reassignment = await propose(order(217, b, entityB, existing))
+  assert.equal((await api(`customers/${existing}`)).billing_entity_id, entityA, 'SET-001 preparing a new assignment changes no existing customer')
+  await decide(reassignment.id)
+  assert.equal((await api(`customers/${existing}`)).billing_entity_id, entityB, 'SET-001 the same setup approval applies an eligible existing-customer assignment')
+  await propose(order(218, b, entityB, installed[0].approved.customer), 409)
+
+  const staleInput = order(219, a, entityA), stale = await propose(staleInput)
+  await mutate('entity.update', { ...a, entity: entityA, ledger_company_ref: 'synthetic-nectar-21-new-ledger' })
+  const afterEdit = await snapshot()
+  assert.equal((await api(`proposals/${stale.id}`)).stale, true)
+  await decide(stale.id, owner, 'approved', 409)
+  await onState({label:'entity-stale-refused',proposal:stale.id})
+  assert.deepEqual(await snapshot(), afterEdit, 'SET-001 an edited route refuses stale approval without installing customer, catalog or subscription changes')
+  assert.equal((await api(`proposals/${stale.id}`)).payload.source.text, staleInput.source.text)
+  await decide(stale.id, owner, 'rejected')
+  for (const value of installed) for (const invoice of value.issued) assert.deepEqual(await api(`invoices/${invoice.id}`), invoice, 'SET-001 later entity edits preserve issued legal and route evidence')
+  console.log('SET-001/AGENT-006 quoted existing entity and route intent, complete-term invoice parity, owner approval, stale routing refusal and immutable issue custody passed')
 }

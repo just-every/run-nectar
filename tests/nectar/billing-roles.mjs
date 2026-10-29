@@ -1,6 +1,125 @@
+// GOV-001: billing roles through the public doors. Each preset role and an
+// owner-defined custom role is crawled across every action, JSON door and page
+// as NEC-15 does, against expectations written here from ct's approved matrix
+// (20 Oct 16:55Z); support credits stop at the owner-set limit; a custom role
+// change applies on the member's next request; support notes, INT-003 alerts,
+// DEV-005 metadata and AGENT-007 answers follow the member's current authority.
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
+import { API_DOORS, PAGE_DOORS } from '../../src/nectar/doors.ts'
 import { totp } from './mfa.mjs'
 import { applyPolicy } from './policy-helper.mjs'
+
+const ACTIONS = [...(await readFile(new URL('../../src/nectar/actions.ts', import.meta.url), 'utf8')).matchAll(/^  '([\w.]+)':/gm)].map(match => match[1])
+// Every member manages their own factor and email choices (GOV-007, INT-003).
+const OWN = name => (name.startsWith('mfa.') && !['mfa.policy', 'mfa.reset'].includes(name)) || name === 'notification.preferences'
+// Probes name a record kind or metric where a door's pattern needs one, so the family check decides.
+const API_PROBE = { periodCloses: 'period-closes', customerBalance: 'customers/none/balance', notes: 'notes/payment/none', metadata: 'metadata/price/none', metadataObjects: 'objects/customer', report: 'reports/billings', reportInvoice: 'reports/billings/none', reportLine: 'invoices/none/lines/none', prepaid:'prepaid/none', prepaidSource:'prepaid/none/entries/none' }
+const PAGE_PROBE = { prepaid:'/app/prepaid/none', prepaidSource:'/app/prepaid/none/entries/none', prepaidCsv:'/app/exports/prepaid/none.csv', importOriginals:'/app/import/none/originals/'+ '0'.repeat(64), metadata: '/app/metadata/price/none', report: '/app/reports/billings', reportInvoice: '/app/reports/billings/none', reportCsv: '/app/exports/reports/billings.csv', metadataCsv: '/app/exports/objects/customer.csv', reportLine: '/app/invoices/none/lines/none' }
+const fill = pattern => pattern.replace(/^\^|\$$/g, '').replace(/\(\[[^)]*\]\+\)/g, 'none').replace(/\\\./g, '.')
+
+const READ_ALL_API = API_DOORS.map(([, name]) => name).filter(name => !['dunning','sso','paymentLinks','trialCollections','prepaidRefundNotices','hierarchies','webhooks','webhookDelivery','members', 'roles', 'imports', 'audit', 'reportSchedule', 'reportDelivery', 'noteMembers','billingEntities','nativeCollections','prepaidTopupAuthorizations','prepaidTopupClaims'].includes(name))
+const READ_ALL_PAGES = PAGE_DOORS.map(([, name]) => name).filter(name => !['dunning','sso','paymentLinks','hierarchies','webhooks','webhookDelivery','prepaidRefundProof','prepaidRefundCsv','prepaidTopupSource','prepaidCsv', 'revenueJournalCsv', 'numberRegisterCsv', 'erasureEvidence', 'revenueCsv', 'reportSchedule', 'reportDelivery', 'reportDeliveryCsv', 'reportCsv', 'metadataCsv', 'runFile', 'import', 'exports', 'customersFile', 'invoicesFile', 'usageFile', 'subscriptionsFile', 'audit', 'noticeFile','importOriginals'].includes(name))
+const COMMON = { api: ['openapi', 'me', 'notifications', 'mfa'], pages: ['home', 'more', 'security', 'passkeyScript'] }
+const EXPECTED = {
+  collections: {
+    actions: ['remittance.upload','remittance.preview','remittance.confirm','remittance.allocate.preview','remittance.allocate','invoice.refund.preview', 'payment.record', 'payment.allocate', 'processor.cash.allocate', 'reminder.prepare', 'reminder.approve', 'reminder.discard', 'task.create', 'task.complete', 'cadence.enroll', 'cadence.promise', 'cadence.dispute', 'cadence.resolve', 'cadence.approve', 'cadence.run', 'note.add', 'answer.read'],
+    api: ['remittances','processorEvents','automaticCollections','paymentReceipt','prepaidRefunds', 'numberRegister', 'customers', 'customer', 'invoices', 'invoice', 'ageing', 'writeOffs', 'ledgerPostings', 'customerBalance', 'payments', 'notices', 'tasks', 'notes', 'noteMembers', 'entitlement', 'reportLine', 'cadences', 'metadataObjects'],
+    pages: ['processorEvents','paymentReceipt','prepaidRefundList', 'prepaidRefundSource', 'numberRegister', 'customers', 'customer', 'certificateFile', 'invoice', 'receivables', 'noticeFile', 'cadences', 'billingAnswers', 'reportLine', 'metadataList'],
+  },
+  sales: {
+    actions: ['change.prepare', 'plan.change.prepare', 'amendment.propose', 'contract.prepare'],
+    api: ['portalChanges', 'customers', 'customer', 'catalog', 'promotions', 'subscription', 'upcoming', 'entitlement', 'metadata', 'metadataObjects'],
+    pages: ['portalChanges', 'customers', 'customer', 'certificateFile', 'catalog', 'subscription', 'metadata', 'metadataList'],
+  },
+  support: {
+    actions: ['invoice.refund.preview', 'prepaid.refund.request', 'note.add', 'credit.issue', 'answer.read'],
+    api: ['portalChanges','remittances','processorEvents','automaticCollections','paymentReceipt','prepaidRefunds', 'numberRegister', 'customers', 'customer', 'invoices', 'invoice', 'ageing', 'writeOffs', 'ledgerPostings', 'customerBalance', 'payments', 'notes', 'noteMembers', 'entitlement', 'subscription', 'upcoming', 'reportLine', 'metadataObjects', 'prepaid', 'prepaidSource'],
+    pages: ['portalChanges','processorEvents','paymentReceipt','prepaidRefundList', 'prepaidRefundSource', 'numberRegister', 'customers', 'customer', 'certificateFile', 'subscription', 'prepaid', 'prepaidSource', 'invoice', 'receivables', 'billingAnswers', 'reportLine', 'metadataList'],
+  },
+  developer: {
+    actions: ['invoice.refund.preview', 'credential.issue', 'credential.revoke', 'credential.version', 'webhook.stripe.consume', 'webhook.register', 'webhook.rotate', 'webhook.disable', 'webhook.replay', 'webhook.dispatch', 'answer.read', 'meter.preview', 'usage.correction.preview'],
+    api: [...READ_ALL_API,'webhooks','webhookDelivery'], pages: [...READ_ALL_PAGES,'webhooks','webhookDelivery'],
+  },
+  analyst: {
+    actions: ['report.schedule'],
+    api: ['retryComparison','currencyRates','currencyReport','customers', 'customer', 'entitlement', 'metadataObjects', 'report', 'reportInvoice', 'reportLine', 'periodCloses', 'revenue', 'revenueJournal', 'revenueSource', 'reportSchedule', 'reportDelivery'],
+    pages: ['currencyReport','customers', 'customer', 'certificateFile', 'metadataList', 'metadataCsv', 'revenue', 'revenueSource', 'revenueCsv', 'revenueJournalCsv', 'reportSchedule', 'reportDelivery', 'reportDeliveryCsv', 'reportCsv', 'report', 'reportInvoice', 'reportLine', 'exports', 'customersFile'],
+  },
+}
+
+/** What a signed-in member actually reaches: anything but 403 counts as reached. */
+async function reach(h, who) {
+  const found = { actions: [], api: [], pages: [] }
+  for (const name of ACTIONS.filter(name => !OWN(name))) {
+    const response = await h.raw(`/api/nectar/${name}`, { cookie: who, body: {} })
+    const text = await response.text()
+    assert.ok(response.status < 500 && response.status !== 401, `${name}: ${response.status} ${text.slice(0, 200)}`)
+    if (response.status !== 403) found.actions.push(name)
+    else assert.match(JSON.parse(text).error, /^(forbidden|owner_required|person_required)$/, `${name} refused for its role, not its input`)
+  }
+  for (const [pattern, name] of API_DOORS) {
+    const response = await h.raw(`/api/nectar/${API_PROBE[name] ?? fill(pattern)}`, { cookie: who })
+    await response.text()
+    assert.ok(response.status < 500 && response.status !== 401, `${name}: ${response.status}`)
+    if (response.status !== 403) found.api.push(name)
+  }
+  for (const [pattern, name] of PAGE_DOORS) {
+    const response = await h.raw(PAGE_PROBE[name] ?? fill(pattern), { cookie: who })
+    await response.text()
+    assert.ok(response.status < 500 && response.status !== 401, `${name}: ${response.status}`)
+    if (response.status !== 403) found.pages.push(name)
+  }
+  return found
+}
+
+// Real records, so a page that composes several reads cannot hide behind a placeholder's 404.
+const FAMILIES = { collections: ['customers', 'invoices', 'payments'], sales: ['customers', 'catalog', 'subscriptions'], support: ['customers', 'subscriptions', 'invoices', 'payments'],
+  developer: ['customers', 'catalog', 'subscriptions', 'invoices', 'payments', 'reports'], analyst: ['customers', 'reports'] }
+const recordDoors = ids => [
+  [`/api/nectar/customers/${ids.customer}`, ['customers']], [`/app/customers/${ids.customer}`, ['customers']],
+  [`/api/nectar/subscriptions/${ids.subscription}`, ['subscriptions']], [`/app/subscriptions/${ids.subscription}`, ['subscriptions']], [`/api/nectar/subscriptions/${ids.subscription}/upcoming`, ['subscriptions']],
+  [`/api/nectar/invoices/${ids.invoice}`, ['invoices']], [`/app/invoices/${ids.invoice}`, ['invoices']], ['/api/nectar/payments', ['payments']], [`/api/nectar/notes/payment/${ids.payment}`, ['payments']],
+  [`/api/nectar/metadata/invoice/${ids.invoice}`, ['invoices']], ['/api/nectar/catalog', ['catalog']], ['/app/catalog', ['catalog']],
+  ['/api/nectar/number-register', ['invoices']], ['/app/numbering', ['invoices']],
+  ['/app/reports/billings', ['reports']], ['/app/revenue', ['reports']], ['/app/receivables', ['customers', 'invoices', 'payments']],
+  [`/api/nectar/reports/billings/${ids.invoice}?period=2026-09`, ['reports']], [`/app/reports/billings/${ids.invoice}?period=2026-09`, ['reports']],
+]
+async function assertRecords(h, who, role, ids) {
+  for (const [path, needs] of recordDoors(ids)) {
+    const response = await h.raw(path, { cookie: who })
+    await response.text()
+    assert.ok(response.status < 500 && response.status !== 401, `${path}: ${response.status}`)
+    assert.equal(response.status !== 403, needs.every(family => FAMILIES[role].includes(family)), `GOV-001 ${role} on a real record ${path}: ${response.status}`)
+  }
+}
+
+/** Every link a member is shown opens for them: pages reached from Home never point at a refused door. */
+async function assertLinksOpen(h, who, role) {
+  const seen = new Set(), queue = ['/app']
+  while (queue.length && seen.size < 40) {
+    const path = queue.shift()
+    if (seen.has(path)) continue
+    seen.add(path)
+    const response = await h.raw(path, { cookie: who })
+    const text = await response.text()
+    if (response.status !== 200 || !(response.headers.get('content-type') ?? '').includes('text/html')) continue
+    for (const [, href] of text.matchAll(/href="(\/app[^"#]*)/g)) {
+      const link = href.replaceAll('&amp;', '&')
+      if (link.startsWith('/app/do/') || seen.has(link)) continue
+      const opened = await h.raw(link, { cookie: who })
+      await opened.text()
+      assert.notEqual(opened.status, 403, `GOV-001 ${role} is shown ${link} on ${path} but may not open it`)
+      if (opened.status === 200 && !queue.includes(link)) queue.push(link)
+    }
+  }
+}
+
+async function assertReach(h, who, role, expected) {
+  const found = await reach(h, who)
+  const want = { actions: expected.actions, api: [...new Set([...COMMON.api, ...expected.api])], pages: [...new Set([...COMMON.pages, ...expected.pages])] }
+  for (const kind of ['actions', 'api', 'pages']) assert.deepEqual(found[kind].toSorted(), want[kind].toSorted(), `GOV-001 ${role} reaches exactly its ${kind}`)
+}
 
 export async function billingRolesFlow(h, owner) {
   // Two customers with issued invoices and a recorded payment, all by the owner.
@@ -26,10 +145,12 @@ export async function billingRolesFlow(h, owner) {
   for (const [role, email] of Object.entries(people)) who[role] = await h.signIn(email, { requested: true })
   const member = async email => (await h.api('members', owner)).find(m => m.email === email)
   const records = { customer: alder, subscription: subscriptions[alder], invoice: invoiceOf(alder), payment }
-  for (const role of ['collections','sales','support','developer']) assert.equal((await h.api('me',who[role])).role,role)
-  await h.api('payment.allocate',who.sales,{payment,invoice:invoiceOf(alder),amount:'1'},403)
-  await h.api('credit.issue',who.developer,{invoice:invoiceOf(alder),amount:'1',reason:'Forbidden'},403)
-  await h.api('invoice.approve',who.collections,{invoice:invoiceOf(alder),acknowledge:true},403)
+  for (const role of ['collections', 'sales', 'support', 'developer']) {
+    assert.equal((await h.api('me', who[role])).role, role)
+    await assertReach(h, who[role], role, EXPECTED[role])
+    await assertRecords(h, who[role], role, records)
+    if (role !== 'developer') await assertLinksOpen(h, who[role], role)
+  }
 
   // Support credits: zero until the owner sets a limit, then $500 passes and $600 is refused.
   const credit = amount => ({ invoice: invoiceOf(birch), amount, reason: 'Goodwill for a support outage' })
@@ -80,6 +201,9 @@ export async function billingRolesFlow(h, owner) {
   who.analyst = await h.signIn('gov001-analyst@example.test', { requested: true })
   const me = await h.api('me', who.analyst)
   assert.equal(me.role_name, 'Billing analyst'); assert.deepEqual(me.capabilities.toSorted(), ['export', 'read.customers', 'read.reports'])
+  await assertReach(h, who.analyst, 'Billing analyst', EXPECTED.analyst)
+  await assertRecords(h, who.analyst, 'analyst', records)
+  await assertLinksOpen(h, who.analyst, 'Billing analyst')
   assert.match(await h.page(`/app/reports/billings/${invoiceOf(alder)}?period=2026-09`, who.analyst), /\$2,000\.00/, 'GOV-001 a report reader drills a figure to its source invoice')
   assert.match(await (await h.raw('/app/exports/customers.csv', { cookie: who.analyst })).text(), /Alder Robotics/)
   // Removing export applies on the next request, without signing out.

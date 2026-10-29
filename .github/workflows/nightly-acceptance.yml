@@ -15,3 +15,102 @@ jobs:
     uses: ./.github/workflows/verify.yml
     with:
       full: true
+
+  done-browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        journey:
+          - clause-browser assurance
+          - clause-browser intervals
+          - clause-browser cancellation
+          - clause-browser erasure
+          - clause-browser history
+          - clause-browser collection
+          - clause-browser portal-usage
+          - clause-browser prepaid
+          - customer-record-browser
+          - customer-child-browser
+          - prepaid-topup-browser
+          - prepaid-refund-browser
+          - portal-prepaid-browser
+          - payment-links-browser
+          - portal-methods-browser
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22.20.0'
+          package-manager-cache: false
+      - run: npm install --global pnpm@10.12.4
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run deps
+      - run: pnpm exec playwright install chromium
+      - run: pnpm run build
+      - run: node tests/nectar/journey.mjs --browser ${{ matrix.journey }}
+
+  done-scale:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        journey:
+          - erasure erasureScaleFlow
+          - prepaid prepaidScaleErasureFlow
+          - move-history moveHistoryErasureFlow
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22.20.0'
+          package-manager-cache: false
+      - run: npm install --global pnpm@10.12.4
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run deps
+      - run: pnpm run build
+      - run: node tests/nectar/sanity.mjs --clause ${{ matrix.journey }}
+
+  done-archives:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        journey:
+          - portal-journey
+          - erasure-archive
+          - mfa-archive
+          - processor-archive
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22.20.0'
+          package-manager-cache: false
+      - run: npm install --global pnpm@10.12.4
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run deps
+      - run: pnpm exec playwright install chromium
+      - run: pnpm run build
+      - run: node scripts/verify-checkout.mjs --archive ${{ matrix.journey }}
+
+  done-stripe-history:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      STRIPE_SECRET_KEY: ${{ secrets.STRIPE_US_TEST_SECRET_KEY }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22.20.0'
+          package-manager-cache: false
+      - run: npm install --global pnpm@10.12.4
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run deps
+      - run: pnpm exec playwright install chromium
+      - run: pnpm run build
+      - run: node tests/nectar/processor-journey.mjs --sandbox stripe-history-sandbox

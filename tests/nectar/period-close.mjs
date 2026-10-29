@@ -1,8 +1,12 @@
+// REV-002 through public doors: finance closes months; each close freezes the
+// roll-forward, journals and billings/collections/revenue packet and posts
+// summarized journals to the ledger at a synthetic QuickBooks edge. Credits and
+// invoices that arrive for a closed month are reported in the open month, and
+// the closed month's revenue, journal and CSV stay byte-for-byte unchanged.
 import assert from 'node:assert/strict'
 import { quickbooksEdge } from './quickbooks-edge.mjs'
 
 let edge
-
 export const harnessOptions = () => { edge = quickbooksEdge(); return { quickbooksFetch: edge.fetch, localTime: '2026-10-05T20:00:00Z' } }
 
 export async function periodCloseFlow(h, owner) {
@@ -137,4 +141,37 @@ export async function periodCloseFlow(h, owner) {
   const page = await h.page('/app/revenue?from=2026-08&to=2026-11', owner)
   assert.match(page, /Period close/)
   assert.deepEqual((await api('period-closes')).closes.map(c => c.period), ['2026-08', '2026-09', '2026-10'])
+}
+
+// REV-001 inheritance with a nonzero deferred position: an annual advance fee is
+// closed month by month; the deferred journal, roll-forward and frozen packet tie.
+export async function periodCloseDeferredFlow(h, owner) {
+  const api = (path, body, status) => h.api(path, owner, body, status)
+  const customer = (await api('customer.create', { external_id: 'REV002-ANNUAL', name: 'Longfield Annual Prepay', billing_email: 'ap@longfield.example' })).id
+  const product = (await api('product.create', { code: 'rev002-annual', name: 'Annual platform' })).id
+  const price = (await api('price.create', { product, kind: 'flat', unit_amount: '1200.00', taxable: false, billing_interval: 'annual', billing_timing: 'advance' })).id
+  await api('subscription.create', { customer, start_date: '2026-08-01', billing_anchor_date: '2026-08-01', price: [price] })
+  const run = await api('billrun.prepare', { period: '2026-08' })
+  const draft = (await api(`runs/${run.id}`)).invoices.find(row => row.customer_id === customer)
+  await api('invoice.approve', { invoice: draft.id, acknowledge: true })
+  await api('invoice.finalise', { invoice: draft.id, issue_date: '2026-08-01' })
+  const months = async () => (await api('revenue?from=2026-08&to=2026-10')).months
+  const row = m => [m.period, m.openingCents, m.billingsCents, m.creditsCents, m.recognizedCents, m.closingCents, m.deferredLiabilityCents]
+  const before = await months()
+  assert.deepEqual(before.map(row), [['2026-08', 0, 120000, 0, 10000, 110000, 110000], ['2026-09', 110000, 0, 0, 10000, 100000, 100000], ['2026-10', 100000, 0, 0, 10000, 90000, 90000]])
+  const schedules = (await api(`revenue/${draft.id}`)).schedules
+  const journalBefore = await (await h.raw('/app/exports/revenue-journal.csv?period=2026-09', { cookie: owner })).text()
+  await api('revenue.close', { period: '2026-08' })
+  await api('revenue.close', { period: '2026-09' })
+  assert.deepEqual(edge.summary(), ['D:90:1200.00 C:92:1100.00 C:93:100.00', 'D:92:100.00 C:93:100.00'], 'deferred revenue posts to the ledger and releases month by month')
+  const closed = (await api('period-closes/2026-09')).closes[0].packet
+  assert.deepEqual([closed.rollforward.closingCents, closed.rollforward.deferredLiabilityCents], [100000, 100000])
+  // A credit against the closed annual fee posts in October; closed months and the issued schedule stay put.
+  await api('credit.issue', { invoice: draft.id, amount: '60.00', reason: 'Annual fee goodwill after close' })
+  const after = await months()
+  assert.deepEqual(after.slice(0, 2).map(row), before.slice(0, 2).map(row))
+  assert.deepEqual([after[2].creditsCents, after[2].openingCents], [-6000, 100000])
+  for (const m of after) assert.equal(m.openingCents + m.netBillingsCents - m.recognizedCents, m.closingCents)
+  assert.equal(await (await h.raw('/app/exports/revenue-journal.csv?period=2026-09', { cookie: owner })).text(), journalBefore)
+  assert.deepEqual((await api(`revenue/${draft.id}`)).schedules, schedules)
 }

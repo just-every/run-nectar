@@ -1,11 +1,19 @@
+import { catalogueApprovals, catalogueSingleApproval } from './catalogue-approvals.mjs'
+import { publishPrice } from './price-helper.mjs'
+import { policyApprovals } from './policy-approvals.mjs'
+import { notificationsFlow } from './notifications.mjs'
+import { metadataFlow } from './metadata.mjs'
+import { applyPolicy } from './policy-helper.mjs'
+// Nectar's acceptance clauses (ACCEPTANCE.md), each exercised through public
+// doors (JSON door, form door, pages and downloads) against the built Worker
+// with real local D1. Mail reaches a fake Resend at the network edge; no other
+// provider is involved. All businesses are invented.
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
+import { API_DOORS, PAGE_DOORS } from '../../src/nectar/doors.ts'
 import { file, harness } from './harness.mjs'
-import { applyPolicy } from './policy-helper.mjs'
-import { publishPrice } from './price-helper.mjs'
-import { catalogueApprovals, catalogueSingleApproval } from './catalogue-approvals.mjs'
-import { policyApprovals } from './policy-approvals.mjs'
 import { oneTimeBilling } from './one-time.mjs'
+import { invoicePaginationFlow } from './api-platform.mjs'
 import { notesFlow } from './notes.mjs'
 import { reportsFlow } from './reports.mjs'
 import { priceSwitches } from './price-switches.mjs'
@@ -14,27 +22,20 @@ import { priceApprovals } from './price-approvals.mjs'
 import { creditPolicy } from './credit-policy.mjs'
 import { exemptionCertificates } from './certificates.mjs'
 import { pricingModels } from './pricing-models.mjs'
-import { notificationsFlow } from './notifications.mjs'
-import { metadataFlow } from './metadata.mjs'
 
+const ACTIONS = [...(await readFile(new URL('../../src/nectar/actions.ts', import.meta.url), 'utf8')).matchAll(/^  '([\w.]+)':/gm)].map(match => match[1])
 const h = await harness()
-
+const check = async (id, run) => { await run(); console.log(`${id} passed`) }
 const ids = {}, cookie = {}
-
 const csv = rows => ['event_id,customer,meter,quantity,occurred_at', ...rows.map(row => row.join(','))].join('\n') + '\n'
-
 const usage = (who, rows) => h.api('usage.submit', who, { events: rows.map(([event_id, customer, meter, quantity, occurred_at]) => ({ event_id, customer, meter, quantity, occurred_at })) })
-
 const invoiceOf = async (run, customer) => (await h.api(`runs/${run}`, cookie.owner)).invoices.find(invoice => invoice.customer_name === customer)
-
 const recurring = lines => lines.filter(line => ['flat', 'seat', 'discount'].includes(line.kind)).map(line => ({ description: line.description, amountCents: line.amount_cents, periodStart: line.period_start, periodEnd: line.period_end }))
-
 const stripe = async name => file(`${name}.json`, await readFile(new URL(`../fixtures/stripe/${name}.json`, import.meta.url)), 'application/json')
-
 const stripeFiles = async () => Object.fromEntries(await Promise.all(['manifest', 'customers', 'products', 'prices', 'subscriptions', 'invoices', 'meters'].map(async name => [name, await stripe(name)])))
 
 try {
-  {
+  await check('NEC-01 business, currency, timezone and declared tax', async () => {
     assert.equal((await h.raw('/auth/bootstrap', { body: { token: h.vars.SETUP_TOKEN, displayName: 'Rosa Owner' } })).status, 303)
     cookie.owner = await h.signIn(h.vars.OWNER_EMAIL)
     assert.equal((await h.raw('/setup', { cookie: cookie.owner, form: new URLSearchParams({ confirm: 'yes' }) })).status, 303)
@@ -49,13 +50,15 @@ try {
     await h.api('tax.declare', cookie.owner, { tax_jurisdiction: 'CA', tax_mode: 'flat_rate', tax_rate: '0', tax_note: 'x' }, 400)
     await applyPolicy(h, cookie.owner, 'tax.declare', { tax_jurisdiction: 'CA', tax_mode: 'flat_rate', tax_rate: '8.25', tax_note: 'Advised by our CPA, September 2026' })
     assert.equal((await h.api('business', cookie.owner)).tax_rate, '8.25')
-    await h.page('/app/settings', cookie.owner)
-  }
+    assert.match(await h.page('/app/settings', cookie.owner), /Not reviewed/)
+  })
+
+
   await catalogueSingleApproval(h, cookie.owner)
 
   await policyApprovals(h, cookie.owner)
 
-  {
+  await check('NEC-02 customers and billing contacts with external ids', async () => {
     const created = await h.submit('customer.create', cookie.owner, { external_id: 'NW-1001', name: 'Northwind Robotics', billing_email: 'ap@northwind.example', address: '9 Dock St, Seattle, WA' }, '/app/customers/{id}')
     ids.northwind = created.pathname.split('/').pop()
     ids.pinecrest = (await h.api('customer.create', cookie.owner, { external_id: 'PC-2002', name: 'Pinecrest Labs', billing_email: 'billing@pinecrest.example', tax_exempt: true, tax_exempt_ref: 'CA-RESALE-88' })).id
@@ -71,8 +74,9 @@ try {
     await h.api('customer.update', cookie.owner, edit)
     assert.equal((await h.api('customer.update', cookie.owner, { ...edit, address: 'Stale replacement' }, 409)).error, 'stale')
     assert.equal((await h.api(`customers/${ids.northwind}`, cookie.owner)).address, edit.address)
-  }
-  {
+  })
+
+  await check('NEC-03 products, immutable price versions and meters', async () => {
     ids.core = (await h.api('product.create', cookie.owner, { code: 'core', name: 'Core plan' })).id
     ids.seatsProduct = (await h.api('product.create', cookie.owner, { code: 'seats', name: 'Seats' })).id
     ids.eventsProduct = (await h.api('product.create', cookie.owner, { code: 'events', name: 'Event processing' })).id
@@ -91,8 +95,9 @@ try {
     await h.api('price.retire', cookie.owner, { price: second.id })
     assert.equal((await h.api('subscription.create', cookie.owner, { customer: ids.pinecrest, start_date: '2026-07-01', price: [second.id], quantity: ['1'] }, 404)).error, 'price_not_found')
     await h.api('feature.grant', cookie.owner, { product: ids.eventsProduct, feature: 'api_access' })
-  }
-  {
+  })
+
+  await check('NEC-04 subscriptions with anchor, trial and approved exceptions', async () => {
     const created = await h.submit('subscription.create', cookie.owner, { customer: ids.northwind, start_date: '2026-07-01', anchor_day: '1', price: [ids.coreV1, ids.seat, ids.events], quantity: ['', '5', ''],
       exception_kind: 'discount_percent', exception_value: '10', exception_effective_from: '2026-07-01', exception_note: 'Launch partner', exception_clause: '§4.2 Customer receives a ten percent (10%) discount on platform and seat fees for the term.' }, '/app/subscriptions/{id}')
     ids.s1 = created.pathname.split('/').pop()
@@ -107,8 +112,9 @@ try {
     await h.api('amendment.decide', cookie.owner, { amendment: ids.discount, decision: 'approved' })
     await h.api('amendment.decide', cookie.owner, { amendment: ids.discount, decision: 'approved' }, 409)
     assert.equal((await h.api(`subscriptions/${ids.s1}`, cookie.owner)).amendments[0].status, 'approved')
-  }
-  {
+  })
+
+  await check('NEC-05 usage with stable ids and duplicate rejection', async () => {
     const rows = [
       ['e-001', 'NW-1001', 'events', '1000000', '2026-07-02T10:00:00-07:00'],
       ['e-002', 'NW-1001', 'events', '2345678.5', '2026-07-15T12:00:00-07:00'],
@@ -130,8 +136,9 @@ try {
     // The same file again adds nothing.
     const again = await h.api('usage.submit', cookie.owner, { file: file('july.csv', csv(rows), 'text/csv') })
     assert.deepEqual([again.accepted, again.duplicates], [0, 6])
-  }
-  {
+  })
+
+  await check('NEC-06 missing and late usage and exact totals before rating', async () => {
     const view = await h.api('usage/inspect?period=2026-07', cookie.owner)
     const s1 = view.subscriptions.find(sub => sub.subscription === ids.s1)
     const meter = s1.meters[0]
@@ -141,8 +148,9 @@ try {
     assert.equal(meter.daysWithoutUsage.length, 28)
     assert.ok(view.unattributed.some(event => event.event_id === 'e-007'), 'usage no price rates is listed')
     assert.match(await h.page('/app/usage?period=2026-07', cookie.owner), /3,346,678\.5 events/)
-  }
-  {
+  })
+
+  await check('NEC-07 deterministic rating with explicit rounding', async () => {
     await h.api('invoice.finalise', cookie.owner, { run: 'none' }, 409)
     const run = await h.api('billrun.prepare', cookie.owner, { period: '2026-07' })
     ids.julyRun = run.id
@@ -165,8 +173,9 @@ try {
     const redraft = await h.api(`invoices/${(await invoiceOf(again.id, 'Northwind Robotics')).id}`, cookie.owner)
     assert.equal(redraft.source_fingerprint, draft.source_fingerprint)
     assert.deepEqual(redraft.lines.map(line => [line.kind, line.amount_cents]), draft.lines.map(line => [line.kind, line.amount_cents]))
-  }
-  {
+  })
+
+  await check('NEC-10 approval, source changes and numbered finalisation', async () => {
     // Finalising waits for the owner's tax review.
     await h.api('invoice.approve', cookie.owner, { run: ids.julyRun })
     await h.api('invoice.finalise', cookie.owner, { run: ids.julyRun }, 409)
@@ -201,8 +210,9 @@ try {
     await h.api('amendment.decide', cookie.owner, { amendment: lateCredit.amendment, decision: 'rejected' })
     const third = await h.api('billrun.prepare', cookie.owner, { period: '2026-07' })
     assert.equal(third.summary.invoices, 0); assert.equal(third.summary.skipped.length, 2)
-  }
-  {
+  })
+
+  await check('NEC-08 scheduled changes bill exactly as previewed', async () => {
     const s1 = await h.api(`subscriptions/${ids.s1}`, cookie.owner)
     const seats = s1.items.find(item => item.kind === 'seat')
     await h.api('change.prepare', cookie.owner, { subscription: ids.s1, item: seats.id, quantity: 8, effective_date: '2026-07-20' }, 409)
@@ -218,8 +228,9 @@ try {
     ids.augustRun = run.id
     const draft = await h.api(`invoices/${(await invoiceOf(run.id, 'Northwind Robotics')).id}`, cookie.owner)
     assert.deepEqual(recurring(draft.lines), prepared.preview.after.lines.map(({ description, amountCents, periodStart, periodEnd }) => ({ description, amountCents, periodStart, periodEnd })))
-  }
-  {
+  })
+
+  await check('NEC-09 draft bill run comparison and exceptions', async () => {
     // A late event for issued July is replayed at July's saved price/tax,
     // then its exact governed delta bills on the August statement.
     await usage(cookie.owner, [['e-009', 'NW-1001', 'events', '2500', '2026-07-25T08:00:00-07:00']])
@@ -242,8 +253,9 @@ try {
     assert.match(page, /Large change/); assert.match(page, /Draft invoices \(2\)/)
     // Exceptions must be acknowledged by the person approving.
     await h.api('invoice.approve', cookie.owner, { invoice: northwind.id }, 409)
-  }
-  {
+  })
+
+  await check('NEC-11 credit notes, payment evidence and allocations', async () => {
     const id = ids.julyNorthwind
     await h.api('credit.issue', cookie.owner, { invoice: id, amount: '5000.00', reason: 'too much' }, 409)
     const credit = await h.api('credit.issue', cookie.owner, { invoice: id, amount: '500.00', reason: 'Service credit for the 12 July outage' })
@@ -259,8 +271,9 @@ try {
     assert.equal(invoice.balanceCents, 58144)
     const ledger = (await h.api(`customers/${ids.northwind}`, cookie.owner)).ledger
     assert.deepEqual([ledger.invoicedCents, ledger.creditedCents, ledger.paidCents, ledger.balanceCents, ledger.unallocatedCents], [208144, 50000, 100000, 58144, 0])
-  }
-  {
+  })
+
+  await check('NEC-12 ageing, reminder drafts and follow-up tasks', async () => {
     const age = await h.api('ageing', cookie.owner)
     const row = age.invoices.find(invoice => invoice.id === ids.julyNorthwind)
     assert.ok(row.daysOverdue > 0 && row.bucket !== 'current')
@@ -281,8 +294,9 @@ try {
     const task = tasks.find(t => t.status === 'open' && /ada@northwind/.test(t.title))
     await h.api('task.complete', cookie.owner, { task: task.id, outcome: 'Ada confirmed payment run on Friday' })
     assert.match(await h.page('/app/receivables', cookie.owner), /Ada confirmed payment run/)
-  }
-  {
+  })
+
+  await check('NEC-14 agent prepares, a person approves', async () => {
     const issued = await h.raw('/app/access/credential', { cookie: cookie.owner, form: new URLSearchParams([['name', 'Finance agent'], ['scopes', 'prepare']]) })
     const html = await issued.text()
     ids.agentKey = html.match(/nectar_[A-Za-z0-9_-]{30,}/)[0]
@@ -335,18 +349,56 @@ try {
     assert.equal((await h.api('notices', cookie.owner)).find(n => n.id === approved.notice).status, 'approved')
     await h.api('credential.revoke', cookie.owner, { key: (await h.api('credentials', cookie.owner)).find(k => k.name === 'Finance agent').id })
     await h.api('customers', agent, undefined, 401)
-  }
-  {
+  })
+
+  await check('NEC-15 roles are enforced in every handler', async () => {
     await h.api('access.give', cookie.owner, { email: 'fran@example.test', name: 'Fran Finance', role: 'finance' })
     await h.api('access.give', cookie.owner, { email: 'acct@example.test', name: 'Avery Accountant', role: 'accountant' })
     await h.api('access.give', cookie.owner, { email: 'x@example.test', name: 'Nope', role: 'owner' }, 400)
     cookie.finance = await h.signIn('fran@example.test', { requested: true })
     cookie.accountant = await h.signIn('acct@example.test', { requested: true })
-    // Roles are exercised on actual customer, money and export records.
-    await h.api('credit.issue', cookie.accountant, {invoice:ids.julyNorthwind,amount:'1',reason:'Read only'},403)
-    await h.api('access.give',cookie.finance,{email:'overreach@example.test',role:'finance',name:'Overreach'},403)
-    await h.api('customer.create',undefined,{external_id:'ANON',name:'Anonymous',billing_email:'anon@example.test'},401)
-    assert.equal((await h.raw('/app/customers')).status,303)
+    const ownerOnly = ['portal.change.policy','processor.cash.imported.prepare','processor.cash.imported.confirm','processor.cash.return.preview','processor.cash.return.prepare','dunning.withdraw','dunning.policy.create','dunning.enroll','dunning.mail.prepare','dunning.mail.send','dunning.end','retry.segment.assign','retry.method.prepare','retry.churn.record','retry.policy.configure','payment_link.activate','payment_link.create','payment_link.deactivate','automatic.collection.prepare','automatic.collection.revoke','automatic.collection.reconcile','automatic.collection.event','collection.customer.bind','collection.prepare','collection.confirm','collection.reconcile','collection.recovery.prepare','collection.recovery.confirm','prepaid.topup.prepare','prepaid.topup.revoke','prepaid.topup.run','prepaid.topup.reconcile','prepaid.prepare','prepaid.purchase.prepare','prepaid.funding.confirm','prepaid.consent.revoke','prepaid.settle','imported.collection.prepare','imported.collection.execute','imported.collection.reconcile','imported.collection.finalize','mfa.policy', 'mfa.reset', 'cadence.policy.prepare', 'lifecycle.policy', 'credit.policy', 'certificate.policy', 'business.configure', 'invoice.series','entity.create','entity.update','customer.entity','invoice.series.capture','invoice.series.capture-live', 'tax.declare', 'tax.review', 'access.give', 'access.end', 'credential.issue', 'credential.revoke', 'subscription.adopt']
+    const metricPreview = await h.api('meter.prepare', cookie.owner, { code:'role-preview', name:'Role preview', unit_label:'events', source_meter:ids.meter, definition:{ aggregation:'count' } })
+    for (const name of ACTIONS) {
+      if (name === 'usage.correction.preview' || name === 'invoice.refund.preview') {
+        await h.api(name,cookie.accountant,{},400)
+      } else if (name === 'answer.read') {
+        const answer = await h.api(name,cookie.accountant,{customer:ids.northwind,invoice:ids.julyNorthwind,question:'What is the invoice total?'})
+        assert.equal(answer.invoiceId,ids.julyNorthwind,'AGENT-007 accountant reads cited invoice answers')
+      } else if (name === 'report.schedule') {
+        await h.api(name,cookie.accountant,{enabled:false,day:1})
+        assert.equal((await h.api('report-schedule',cookie.accountant)).schedule.enabled,false,'RPT-002 accountant controls their own report schedule')
+      } else if (name.startsWith('mfa.') && !ownerOnly.includes(name)) {
+        const own = await h.raw(`/api/nectar/${name}`, { cookie: cookie.accountant, body: {} })
+        assert.ok([200, 400, 404, 409].includes(own.status), `GOV-007 every role manages its own factor: ${name} ${own.status}`)
+      } else if (name === 'notification.preferences') await h.api(name,cookie.accountant,{ mentions:true,payment_mismatch:false,billrun_exceptions:false,proposals:false })
+      else if (name === 'meter.preview') {
+        const preview = await h.api(name, cookie.accountant, { request:metricPreview.request, customer:ids.northwind, period:'2020-01' })
+        assert.deepEqual(preview.results.map(row => row.exact), [{ numerator:'0', denominator:'1' }], 'USE-002 accountant can preview actual historical inputs')
+      } else await h.api(name, cookie.accountant, {}, 403)
+      await h.api(name, undefined, {}, 401)
+      if (ownerOnly.includes(name)) await h.api(name, cookie.finance, {}, 403)
+      else if (name === 'prepaid.refund.prepare') {
+        // CAT-012 permits finance preparation; real funded preparation and
+        // independent approval are exercised by prepaidRefundFlow.
+        const refused = await h.api(name, cookie.finance, { grant: 'synthetic-nectar-602', reason: 'Synthetic unfunded refund request' }, 409)
+        assert.equal(refused.error, 'prepaid_refund_paid_card_required', 'Finance must still supply a funded refundable grant')
+      }
+    }
+    for (const [pattern] of API_DOORS) {
+      const path = pattern.replace(/^\^|\$$/g, '').replace(/\(\[[^)]*\]\+\)/g, 'none')
+      const response = await h.raw(`/api/nectar/${path}`)
+      assert.equal(response.status, 401, path)
+      const accountant = await h.raw(`/api/nectar/${path}`, { cookie: cookie.accountant })
+      assert.ok([200, 400, 403, 404].includes(accountant.status), `${path}: ${accountant.status}`)
+      if (['members', 'credentials', 'imports','billing-entities'].includes(path)) assert.equal(accountant.status, 403, path)
+    }
+    for (const [pattern,name] of PAGE_DOORS) {
+      const path = name==='importOriginals'?'/app/import/none/originals/'+'0'.repeat(64):pattern.replace(/^\^|\$$/g, '').replace(/\(\[[^)]*\]\+\)/g, 'none').replace(/\\\./g, '.')
+      const response = await h.raw(path)
+      assert.equal(response.status, 303, path)
+      assert.match(response.headers.get('location'), /\/signin/)
+    }
     // An accountant reads and exports; a finance operator works; neither manages access.
     assert.equal((await h.raw('/app/exports/invoices.csv', { cookie: cookie.accountant })).status, 200)
     assert.equal((await h.raw('/app/access', { cookie: cookie.finance })).status, 403)
@@ -356,8 +408,9 @@ try {
     const accountantMember = (await h.api('members', cookie.owner)).find(m => m.email === 'acct@example.test')
     await h.api('access.end', cookie.owner, { member: accountantMember.id })
     await h.api('me', cookie.accountant, undefined, 401)
-  }
-  {
+  })
+
+  await check('NEC-13 exports and entitlement explanations', async () => {
     const invoices = await (await h.raw('/app/exports/invoices.csv', { cookie: cookie.owner })).text()
     const julyRow = invoices.split('\r\n').find(line => line.startsWith('RB-000002'))
     assert.ok(julyRow.includes(',2081.44,500.00,1100.00,481.44,'), julyRow)
@@ -377,8 +430,10 @@ try {
     assert.equal(denied.allowed, false); assert.ok(denied.paths[0].steps.some(step => /does not grant/.test(step)))
     const before = await h.api('entitlements/NW-1001?feature=api_access&date=2026-06-15', cookie.owner)
     assert.equal(before.allowed, false); assert.match(before.paths[0].steps[0], /starts 2026-07-01/)
-  }
-  {
+  })
+
+
+  await check('NEC-16 Stripe Billing move-in with dry run, journal, undo and shadow cutover', async () => {
     const files = await stripeFiles()
     const short = { ...files, manifest: file('manifest.json', JSON.stringify({ ...JSON.parse(await readFile(new URL('../fixtures/stripe/manifest.json', import.meta.url))), files: { customers: { count: 99, has_more: false } } })) }
     const refused = await h.api('import.preview', cookie.owner, short, 400)
@@ -437,13 +492,15 @@ try {
     assert.ok(jobs.find(j => j.id === again.job).blockers.length > 0)
     const blocked = await h.api('import.job', cookie.finance, { job: again.job, action: 'undo' }, 409)
     assert.equal(blocked.error, 'undo_blocked')
-  }
-  {
+  })
+
+  await check('NEC-04 a subscription with an end date still holds its meter until it ends', async () => {
     await h.api('subscription.end', cookie.owner, { subscription: ids.s1, end_date: '2027-03-01' })
     assert.equal((await h.api('subscription.create', cookie.owner, { customer: ids.northwind, start_date: '2026-12-01', price: [ids.events], quantity: [''] }, 409)).error, 'meter_already_billed')
     await h.api('subscription.create', cookie.owner, { customer: ids.northwind, start_date: '2027-03-01', price: [ids.events], quantity: [''] })
-  }
-  await pricingModels(h, cookie.owner)
+  })
+
+  await check('CAT-002 graduated, volume, package and stair-step seats and usage', () => pricingModels(h, cookie.owner))
 
   await exemptionCertificates(h, cookie.owner)
 
@@ -460,19 +517,10 @@ try {
   await oneTimeBilling(h, cookie.owner)
 
   await reportsFlow(h, cookie.owner)
+  await invoicePaginationFlow(h, cookie.owner)
   await notesFlow(h, cookie.owner)
   await notificationsFlow(h,cookie.owner)
   await metadataFlow(h,cookie.owner)
-
-  const all=(await h.api('invoices',cookie.owner)).data,seen=[]
-  let next='invoices?limit=1'
-  while(next) {
-    const page=await h.api(next,cookie.owner)
-    seen.push(...page.data.map(invoice=>invoice.id))
-    assert.ok(seen.length<=all.length,'Invoice cursors terminate without duplicate rows')
-    next=page.next_cursor?`invoices?limit=1&cursor=${encodeURIComponent(page.next_cursor)}`:null
-  }
-  assert.deepEqual(seen,all.map(invoice=>invoice.id),'Issued and draft invoices traverse in public list order exactly once')
 
   // Every main screen renders for the owner without an error.
   for (const path of ['/app', '/app/more', '/app/settings', '/app/customers', `/app/customers/${ids.northwind}`, `/app/subscriptions/${ids.s1}`, '/app/catalog', '/app/usage', '/app/billing', `/app/billing/${ids.augustRun}`, `/app/invoices/${ids.julyNorthwind}`, '/app/receivables', '/app/proposals', '/app/import', '/app/exports', '/app/access', '/app/audit']) await h.page(path, cookie.owner)
@@ -480,5 +528,3 @@ try {
 } finally {
   await h.close()
 }
-
-console.log('JOURNEY PASS first billing cycle')

@@ -148,3 +148,112 @@ export async function retentionFlow(h,owner,{onState=async()=>{}}={}) {
   await onState('final-report','/app/retention')
   console.log('SUB-005 optional saves, issued two/three-month discounts, win-back clock/once-only mail, reports, pause/downgrade and authority passed')
 }
+
+// CAT-001: the saved count is counted on actual price intervals, through the
+// same scoped customer acceptance and ordinary billing doors as monthly saves.
+export async function retentionIntervalFlow(h, owner) {
+  const api = (path, body, status) => h.api(path, owner, body, status)
+  await h.advanceClock('2026-01-01T16:00:00Z')
+  const product = (await api('product.create', { code: 'synthetic-nectar-91', name: 'Synthetic Weekly Platform' })).id
+  const weekly = (await api('price.create', { product, kind: 'flat', unit_amount: '100', taxable: false, interval_unit: 'week', interval_count: 1, billing_timing: 'arrears' })).id
+  async function policy(changes) {
+    const current = (await api('retention')).policy
+    const request = await api('retention.policy.prepare', { ...current, enabled: true, revision: current.revision, save_kind: 'discount', save_percent: 50, save_months: 2, pause_months: 2, save_price_id: weekly, pause_price_id: weekly, winback_price_id: weekly, winback_enabled: false, winback_percent: 30, winback_months: 2, ...changes })
+    assert.equal((await api('retention')).policy.revision, current.revision)
+    await api('retention.policy.decide', { request: request.request, decision: 'approved', confirm_single: true })
+  }
+  async function subscription(number, prices = [weekly], start = '2025-01-01', withTerm = true) {
+    const customer = (await api('customer.create', { external_id: `synthetic-nectar-${number}`, name: `Synthetic interval customer ${number}`, billing_email: `synthetic-nectar-${number}@example.test` })).id
+    const sub = (await api('subscription.create', { customer, start_date: start, billing_anchor_date: start, price: prices })).id
+    let term
+    if (withTerm) {
+      const prepared = await api('term.prepare', { subscription: sub, revision: (await api(`subscriptions/${sub}`)).revision, term_start: start, months: 36, auto_renew: true, notice_days: 30, uplift_percent: '0' })
+      await api('term.decide', { term: prepared.term, decision: 'approved', confirm_single: true })
+      term = prepared.term
+    }
+    return { sub, customer, term }
+  }
+  async function offerFor(s) {
+    const path = new URL((await api('term.link', { term: s.term })).cancelUrl).pathname
+    const offer = (await api('retention')).offers.findLast(row => row.subscription_id === s.sub && row.kind === 'save')
+    return { path, offer, terms: offer && JSON.parse(offer.terms_json) }
+  }
+  async function accept(saved) {
+    const page = await h.raw(saved.path)
+    assert.equal(page.status, 200)
+    assert.match(await page.text(), /invoice periods/)
+    assert.equal((await h.raw(saved.path, { form: new URLSearchParams({ confirm: 'save', offer: saved.offer.id }) })).status, 200)
+    assert.equal((await h.raw(saved.path, { form: new URLSearchParams({ confirm: 'save', offer: saved.offer.id }) })).status, 404)
+  }
+  async function issueDue(s, month) {
+    const run = await api('billrun.prepare', { period: month })
+    const drafts = (await api(`runs/${run.id}`)).invoices.filter(row => row.customer_id === s.customer)
+    const issued = []
+    for (const draft of drafts) {
+      const before = await api(`invoices/${draft.id}`)
+      await api('invoice.approve', { invoice: draft.id, acknowledge: true })
+      await api('invoice.finalise', { invoice: draft.id, issue_date: before.calculation.inputs.billing.dueDate })
+      issued.push(await api(`invoices/${draft.id}`))
+    }
+    return issued.sort((a, b) => a.period_start.localeCompare(b.period_start))
+  }
+  await policy({})
+  const saved = await subscription(92), save = await offerFor(saved)
+  assert.deepEqual([save.terms.from, save.terms.to, save.terms.priceId], ['2025-12-31', '2026-01-14', weekly])
+  assert.equal(save.terms.preview.length, 2)
+  assert.deepEqual(save.terms.preview.map(row => [row.before.totalCents, row.after.totalCents]), [[10000, 5000], [10000, 5000]])
+  await accept(save)
+  await h.advanceClock('2026-01-22T16:00:00Z')
+  const originals = await issueDue(saved, '2026-01')
+  assert.deepEqual(originals.map(invoice => invoice.total_cents), [5000, 5000, 10000], 'CAT-001 two weekly save periods stop after fourteen days, rather than two months')
+  for (const [i, preview] of save.terms.preview.entries()) assert.equal(originals[i].total_cents, preview.after.totalCents, 'CAT-001 ordinary save invoices equal the same-engine offer preview')
+
+  // A mixed subscription cannot silently count its monthly usage cadence.
+  const annualProduct = (await api('product.create', { code: 'synthetic-nectar-93', name: 'Synthetic Annual Platform' })).id
+  const annual = (await api('price.create', { product: annualProduct, kind: 'flat', unit_amount: '1200', taxable: false, interval_unit: 'month', interval_count: 12, billing_timing: 'advance' })).id
+  const meter = (await api('meter.create', { code: 'synthetic-nectar-94', name: 'Synthetic Monthly Calls', unit_label: 'calls' })).id
+  const usageProduct = (await api('product.create', { code: 'synthetic-nectar-94', name: 'Synthetic Monthly Calls' })).id
+  const monthlyUsage = (await api('price.create', { product: usageProduct, kind: 'unit', meter, unit_amount: '2', taxable: false })).id
+  await policy({ save_price_id: annual })
+  const mixed = await subscription(95, [annual, monthlyUsage]), annualSave = await offerFor(mixed)
+  assert.deepEqual([annualSave.terms.from, annualSave.terms.to, annualSave.terms.priceId], ['2026-01-01', '2028-01-01', annual])
+  assert.deepEqual(annualSave.terms.preview.map(row => row.after.totalCents), [60000, 60000])
+  await accept(annualSave)
+  const mixedInvoices = await issueDue(mixed, '2026-01')
+  assert.equal(mixedInvoices.find(invoice => invoice.lines.some(line => line.price_id === annual)).total_cents, 60000, 'CAT-001 annual advance save discounts the selected annual price at its anniversary')
+
+  await policy({ save_kind: 'pause' })
+  const paused = await subscription(96, [weekly], '2026-01-01'), pause = await offerFor(paused)
+  assert.deepEqual([pause.terms.from, pause.terms.to], ['2026-01-22', '2026-02-05'])
+  assert.deepEqual(pause.terms.preview.map(row => row.after.totalCents), [0, 0])
+  assert.equal((await h.raw(pause.path, { form: new URLSearchParams({ confirm: 'save', offer: pause.offer.id }) })).status, 200)
+  await h.advanceClock('2026-02-20T16:00:00Z')
+  const pausedJanuary = await issueDue(paused, '2026-01')
+  assert.equal(pausedJanuary.find(invoice => invoice.period_start === '2026-01-22').total_cents, 0)
+  const pausedInvoices = await issueDue(paused, '2026-02')
+  assert.deepEqual(pausedInvoices.map(invoice => invoice.total_cents), [0, 10000, 10000], 'CAT-001 a two-week pause resumes on the saved boundary')
+
+  await policy({ save_kind: 'discount', winback_enabled: true })
+  const returning = await subscription(97, [weekly], '2026-01-01', false)
+  await api('subscription.cancel', { subscription: returning.sub, revision: (await api(`subscriptions/${returning.sub}`)).revision, mode: 'immediate', effective_date: '2026-02-20', reason: 'Synthetic ended service' })
+  const beforeMail = h.mails.length
+  const tick = async () => assert.equal((await h.raw(`/cdn-cgi/local/scheduled?time=${Date.parse('2026-02-20T16:00:00Z')}&cron=${encodeURIComponent('0 14 * * *')}`)).status, 200)
+  await tick(); await tick()
+  const mails = h.mails.slice(beforeMail).filter(mail => mail.to.includes('synthetic-nectar-97@example.test'))
+  assert.equal(mails.length, 1, 'CAT-001 native win-back preserves the once-only mail reservation')
+  assert.match(mails[0].text, /2 invoice periods/)
+  const path = new URL(mails[0].text.match(/http:\/\/[^\s]+\/return\/[a-f0-9]{64}/)[0]).pathname
+  assert.equal((await h.raw(path, { form: new URLSearchParams({ confirm: 'accept' }) })).status, 200)
+  assert.equal((await h.raw(path, { form: new URLSearchParams({ confirm: 'accept' }) })).status, 404)
+  const returned = (await api('retention')).offers.find(row => row.subscription_id === returning.sub && row.kind === 'winback')
+  const returnTerms = JSON.parse(returned.terms_json)
+  assert.deepEqual([returnTerms.from, returnTerms.to], ['2026-02-19', '2026-03-05'])
+  assert.deepEqual(returnTerms.preview.map(row => row.after.totalCents), [7000, 7000])
+  await h.advanceClock('2026-03-13T16:00:00Z')
+  const feb = await issueDue(returning, '2026-02'), march = await issueDue(returning, '2026-03')
+  assert.equal(feb.find(invoice => invoice.period_start === '2026-02-19').total_cents, 7000)
+  assert.equal(march.find(invoice => invoice.period_start === '2026-02-26').total_cents, 7000)
+  assert.equal(march.find(invoice => invoice.period_start === '2026-03-05').total_cents, 10000)
+  for (const original of originals) assert.deepEqual(await api(`invoices/${original.id}`), original, 'CAT-001 new cadence retention preserves previously issued invoice evidence')
+  console.log('CAT-001/SUB-005 weekly save/pause/win-back periods, explicit annual price scope, same-engine previews and issued evidence passed')
+}

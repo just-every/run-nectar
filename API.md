@@ -524,6 +524,9 @@ An owner with a fresh factor prepares `prepaid.prepare` terms (paid or promotion
 
 `collection.customer.bind`, `collection.prepare`, `collection.confirm` and `collection.reconcile` are owner-only native issued-invoice operations. Mutations require a fresh required factor. The customer account binding must equal the immutable issued billing-entity processor route. Confirmation binds the exact current owed USD amount, customer and saved default card; a durable invoice claim prevents another PaymentIntent. Read-only reconciliation searches and lists existing provider objects. Definitive declines and authentication requirements remain distinct from unknown outcomes. No receipt email is requested. `GET native-collections` is owner-only; it never requires a fresh factor merely to read the retained outcome. This is PAY-008 manual collection, not PAY-003 automatic card/ACH collection or a QuickBooks posting.
 
+`collection.recovery.prepare` takes the original collection `request`. A current owner with a fresh TOTP or passkey reviews one recovery after a definitive soft decline and its published retry delay. The amount must still be the full owed amount originally attempted, on the same card, customer and processor account. The preparation freezes current source, factor, holds and retry policy; it performs no provider write. `collection.recovery.confirm` accepts the returned `instructions.reconfirm` with explicit `confirm: true`. It claims this one recovery before confirming the original PaymentIntent with a distinct stable idempotency key. Replays cannot claim again, and an unknown response permits only `collection.reconcile` reads. Hard declines, authentication, unknown reasons, provider no-retry advice, disputes, promises, expired factors, changed terms and attempt limits refuse recovery. The original refusal stays in recovery reporting, and actual allocated cash is attributed to attempt 2 without an inferred dunning step. Prepared authority is excluded from archives and removed on erasure. Hosted authentication and changed-method recovery remain outside this door.
+
+
 
 `prepaid.topup.prepare` freezes the approved threshold policy, current card/account, fixed purchase, business-calendar-month cap and start/end dates. The signed customer reviews `/portal/prepaid-topups/ID`, explicitly accepts the exact basis, and can revoke there. A different current human approver confirms `prepaid.topup.decide`; the sole owner must explicitly confirm. Daily evaluation or `prepaid.topup.run` reserves one crossing before one off-session card PaymentIntent. Unknown attempts count against the cap and are reconciled with GET only; card replacement, expiry and revocation end authorization. Original purchase invoices remain immutable; credits become effective on actual capture date. No receipt email, ACH mandate or legal-compliance claim is made.
 
@@ -840,8 +843,8 @@ required. Current wrappers preserve those existing API and provider boundaries.
 The owner prepares `portal.change.policy` with `prices` (catalog price IDs),
 `minimum_seats` and `pause_allowed`. The existing `policy.decide` door requires
 independent approval, or its audited explicit sole-owner confirmation. These
-restrictions enable requests only. Pausing is unavailable in the current flow,
-including when a merchant records that its future policy would permit it.
+restrictions enable pending requests. A separately approved SUB-005 pause save
+also requires `pause_allowed`; signed commitment overlaps refuse a pause save.
 
 A signed own-customer session opens `/portal/changes` and
 `/portal/changes/ID`. With `Accept: application/json`, these return the same
@@ -849,7 +852,7 @@ allowlisted subscriptions, approved compatible choices and pending status.
 The index retains request status independently of current change eligibility.
 Choices currently support one active simple monthly flat or seat item billed
 in arrears. Catalog descriptions are merchant text; interface labels use the
-customer's language. No proration or payment preview is claimed.
+customer's language. No payment execution is authorized.
 
 `POST /portal/change.request?session=TOKEN` requires the exact session Origin
 and only `subscription`, `item`, `target_price`, `quantity`, `basis`,
@@ -869,5 +872,66 @@ Configuration remains owner-only; ordinary governed subscription changes remain
 separate. Erasure deletes operational requests and invalidates sessions;
 archives may preserve non-executable pending evidence but never customer
 sessions, and a later erasure journal refuses older personal archives.
-Automatic upgrades, downgrades, seat changes, pauses, cancellation, exact
-proration and payment, and inherited renewal and retention flows remain owed.
+Ordinary upgrades, downgrades, seat changes, non-term cancellation and complete
+proration and payment remain owed.
+
+The same signed customer session opens `GET /portal/renewal/ID` to review the
+current approved term and one optional approved save, with Cancel renewal always
+available. GET is read-only and creates no offer or link. JSON reads use
+`Accept: application/json` and project term dates, renewal state, uplift and the
+save's exact period totals without internal inputs or signed narratives.
+`POST /portal/renewal/ID?session=TOKEN` accepts only the displayed `basis`,
+`confirm=cancel` or `confirm=save`, optional `reason`, and the save's `offer` ID.
+The same-origin, own-customer, live-session, current-source and policy guards
+run with the mutation and audit. Cancellation disables the next renewal at its
+existing boundary. It needs one confirmation, with no mandatory reason or save. When the displayed
+optional offer is declined, its outcome and optional reason are recorded with
+the cancellation in the same transaction.
+Save acceptance rechecks exact approved terms and changes billing atomically;
+it neither issues an invoice nor collects money. Discount saves last their
+quoted periods; pause saves suspend access and charges until the quoted date;
+compatible downgrade saves retain existing item end dates, seat floors and
+signed minimums. A below-minimum downgrade stays a pending human request.
+
+`GET /portal/return/ID` shows an existing, unexpired own-subscription win-back
+under the current approved policy. `POST` accepts only its `offer` and
+`confirm=accept`, consumes it once and reactivates under its quoted discount.
+No new message or offer is sent by opening the portal. A policy approval records
+an operational portal-retention grant, which is excluded from archives. Both
+its owner preparer and approver must remain active with their original authority.
+Restoring policy and offer evidence alone cannot reactivate portal retention;
+a fresh owner-prepared and approved policy is required. Renewal cancellation
+remains available independently of the retention grant.
+
+
+`POST /portal/change.preview?session=TOKEN` is a read-only same-engine estimate
+for one current simple monthly flat or seat item billed in arrears. It takes
+`subscription`, `item`, `target_price`, `quantity`, the options' `basis` and
+`policy_revision`, and requires the exact session Origin. Only compatible
+approved prices and quantities above the seat floor are accepted. Issued
+periods, scheduled future items, changed sources and unsupported billing
+calendars are refused. The answer projects the business-local effective day,
+service period, before and after subtotal, tax and total, and their exact
+difference. Its returned basis fingerprints the complete rating inputs and
+policy; it confers neither execution nor payment authority. No service, invoice,
+payment, audit event or outbound message is created. The existing customer form also opens the estimate in the customer language;
+its optional hidden `confirm` field has no effect in this read-only door.
+Ordinary change confirmation and collection remain unfinished.
+
+### Reviewed remittance receipts
+
+Members with receivables authority and customer, invoice and payment reads upload a USD CSV with `remittance.upload` (`file`, using the ordinary multipart or JSON file representation). No funds are recorded by upload or preview. Each row uses these ordered columns:
+
+```csv
+receipt_id,received_on,currency,amount,customer,invoice_reference,allocation_amount
+synthetic-nectar-1,2026-10-15,USD,150.00,synthetic-nectar-2,CD-000001,100.00
+synthetic-nectar-1,2026-10-15,USD,150.00,synthetic-nectar-2,CD-000002,50.00
+```
+
+Repeat the deposit amount and date for each invoice row. Receipt IDs are immutable across all uploads in this installation. Use exact dollars and cents and full invoice numbers. Customer is an exact external customer ID or native ID. Leave customer and both invoice cells empty for an unknown deposit; a person must identify its customer before confirming received funds. Conflicting or unresolved references are never partly guessed. Several equal invoice balances remain ambiguous.
+
+`remittance.preview` takes `receipt` and an optional explicitly identified `customer`. It returns proposed allocations, current balances, remaining funds, review reason and `fingerprint`. `remittance.confirm` takes that receipt, identified customer, fingerprint and `confirm: true`; it records one ordinary numbered received-funds receipt and every supported allocation atomically with the audit. Changed balances require a new preview. An exact repeated confirmation returns the existing payment.
+
+`GET /api/nectar/remittances` lists staged sources, short payments and unallocated funds under the same read authority, with the ordinary `limit` and `cursor` pagination. For received funds awaiting allocation, call `remittance.allocate.preview` with `receipt`, `invoice` and `amount`, then `remittance.allocate` with the same values, returned fingerprint and `confirm: true`. Ordinary `payment.allocate` and write-off recovery refuse these sources, and customer-balance application excludes them even under an automatic policy, so the separate review cannot be bypassed. Both confirmation doors require a person; application credentials and read-only members cannot move money. Replays, changed source payloads, stale balances, foreign customers, other currencies and erased sources cannot create another payment or allocation. Source-identity tombstones survive financial removal; restored receipts confer no automatic execution authority.
+
+These doors record an operator-confirmed USD receipt from a file. They do not charge a processor, attest bank verification, claim processor settlement or complete the Plaid and PAY-007 acceptance still named in AR-002.
