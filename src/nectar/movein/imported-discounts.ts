@@ -15,6 +15,7 @@ export function importedAmountDiscounts(subscription: any, options: {
 }): { discounts: any[]; amounts: ImportedAmountDiscount[] } {
   const refuse: (ok: unknown, reason: string) => asserts ok = (ok, reason) => insist(ok, 'unsupported_imported_discount', 400, { subscription: subscription.id, reason })
   refuse(subscription.discounts == null || Array.isArray(subscription.discounts), 'discounts must be fully expanded')
+  refuse(!(subscription.items?.data ?? []).some((item: any) => item.discount || item.discounts?.length), 'item-level discounts need separate qualification')
   const discounts: any[] = []
   for (const entry of [subscription.discount, ...(subscription.discounts ?? [])].filter(Boolean)) {
     refuse(typeof entry === 'object' && typeof entry.id === 'string' && entry.id.length > 0, 'discount identity must be captured')
@@ -27,12 +28,15 @@ export function importedAmountDiscounts(subscription: any, options: {
     const coupon = discount.coupon ?? discount.source?.coupon
     refuse(coupon && typeof coupon === 'object', 'coupon must be fully expanded')
     if (coupon.amount_off == null) continue
+    const reference = (value: any) => typeof value === 'string' ? value : value?.id
+    refuse(!discount.subscription || reference(discount.subscription) === subscription.id, 'discount belongs to another subscription')
+    refuse(!discount.customer || reference(discount.customer) === reference(subscription.customer), 'discount belongs to another customer')
     refuse(discounts.length === 1, 'stacked fixed discounts need source ordering qualification')
     refuse(typeof coupon.id === 'string' && coupon.id.length > 0 && !discount.deleted && !discount.promotion_code, 'missing coupon identity or unsupported promotion redemption')
     refuse(Number.isSafeInteger(coupon.amount_off) && coupon.amount_off > 0 && coupon.amount_off <= 100_000_000_000 && coupon.currency === 'usd' && coupon.percent_off == null, 'fixed coupon must have one exact USD cent amount')
     refuse(['once', 'repeating', 'forever'].includes(coupon.duration), 'unknown coupon duration')
     const months = coupon.duration === 'repeating' ? coupon.duration_in_months : null
-    refuse(months === null || Number.isSafeInteger(months) && months >= 1 && months <= 36, 'repeating coupon needs its original month count')
+    refuse(coupon.duration !== 'repeating' || Number.isSafeInteger(months) && months >= 1 && months <= 36, 'repeating coupon needs its original month count')
     const date = (unix: unknown): string => {
       refuse(Number.isSafeInteger(unix) && (unix as number) > 0 && (unix as number) < 253_402_214_400, 'missing or invalid effective instant')
       const from = localDate((unix as number) * 1000, options.zone)
