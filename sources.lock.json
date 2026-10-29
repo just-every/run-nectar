@@ -162,7 +162,7 @@
       "executable": false
     },
     ".github/workflows/verify.yml": {
-      "sha256": "cdf0a9055db5e922b28f270354aeb79fa3084d9e7def9f4872ce1d1b9535dac7",
+      "sha256": "32c645c1d5f88673be679de4c59ccc3ce506e8aefb3deb96c3ae16b4179ccdf7",
       "executable": false
     },
     ".gitignore": {
@@ -174,7 +174,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "07a3baca6b93a5922eb5c15e6d34a5d762cd3e8702474004b05cae54df1c1584",
+      "sha256": "e3c29e5fe3f8e9c6c44f3d4f289212c366743d23a4cbf77dea470b6ed92c56e2",
       "executable": false
     },
     "AGENTS.consumer.md": {
@@ -194,7 +194,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "ca0a1f3d8d3da7dd4a3346ba8cc7edc1abffc7bc9c310dd92099cc212b531bd5",
+      "sha256": "229cb1ffbd6d6e4861a4849ea34aa4095be7b3a8bfcbdedc0e92d975de4fa5d5",
       "executable": false
     },
     "DEMO.md": {
@@ -230,7 +230,7 @@
       "executable": false
     },
     "docs/CLAIMS.md": {
-      "sha256": "16e63bfb517d4eea5a84bd0962b7a5050157c185ebf85f9a44b3b6229b1b4ea6",
+      "sha256": "319cd8d129561d516bd623f92a2712fc2e81250096af9e9af6e69d87fa6b3c0c",
       "executable": false
     },
     "docs/composition-baseline.json": {
@@ -5046,7 +5046,7 @@
       "executable": false
     },
     "tests/nectar/automatic-collection-archive.mjs": {
-      "sha256": "8b8b54cf17a89b20907bf8291f137898b9878f36c16ac0f56bca3dbfb5e5a4d1",
+      "sha256": "ac294ea0e7dbd3b65082da318b553353c04fec46841a28b3b48eed768d4d99b2",
       "executable": false
     },
     "tests/nectar/automatic-collection-browser.mjs": {

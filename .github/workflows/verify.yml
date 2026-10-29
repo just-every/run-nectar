@@ -125,8 +125,17 @@ jobs:
       - run: NECTAR_TEST_CHECKOUT=1 node tests/nectar/processor-archive.mjs remittances
 
   automatic-collection-archive:
+    name: ${{ matrix.check }}
     runs-on: ubuntu-24.04
     timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - journey: automatic
+            check: automatic-collection-archive
+          - journey: recovery
+            check: automatic-recovery-archive
     env:
       CI: 'true'
       WRANGLER_SEND_METRICS: 'false'
@@ -142,4 +151,4 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm run deps
       - run: pnpm exec vite build
-      - run: NECTAR_TEST_CHECKOUT=1 node tests/nectar/automatic-collection-archive.mjs
+      - run: NECTAR_TEST_CHECKOUT=1 node tests/nectar/automatic-collection-archive.mjs ${{ matrix.journey }}

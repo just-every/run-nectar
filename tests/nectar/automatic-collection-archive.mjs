@@ -328,6 +328,7 @@ export async function automaticCollectionRetryArchiveJourney(){
  let h,owner,settings,secret,now=at
  const api=(path,body,status)=>h.api(path,owner,body,status)
  const rows=()=>api('automatic-collections')
+ const report=kind=>api(['reports',kind].join('/')+(kind==='ar'?'':'?period=2026-10'))
  const tick=async(status=200)=>{const response=await h.raw(`/cdn-cgi/local/scheduled?time=${now}&cron=${encodeURIComponent('* * * * *')}`);assert.equal(response.status,status,await response.text())}
  const close=async()=>{settings={...h.vars};await h.close();h=null}
  const open=async()=>{
@@ -444,9 +445,9 @@ export async function automaticCollectionRetryArchiveJourney(){
    assert.equal(invoice.next_payment_attempt,null)
   }
   assert.equal((await api('payments')).length,3)
-  assert.equal((await api('reports/billings?period=2026-10')).totalCents,90000)
-  assert.equal((await api('reports/collections?period=2026-10')).totalCents,30000)
-  assert.equal((await api('reports/ar')).totalCents,60000)
+  assert.equal((await report('billings')).totalCents,90000)
+  assert.equal((await report('collections')).totalCents,30000)
+  assert.equal((await report('ar')).totalCents,60000)
   const recovered=await api('recovery')
   assert.deepEqual([recovered.totals.failedInvoices,recovered.totals.failedAmountCents,recovered.totals.recoveredAmountCents],[9,90000,30000])
   const erasure=await api('erasure.request',{customer:claimed.customer})
@@ -467,9 +468,14 @@ export async function automaticCollectionRetryArchiveJourney(){
   await open();await tick()
   await api('automatic.collection.reconcile',{request:claimed.id},404)
   assert.equal((await api('invoices/'+claimed.invoice)).paidCents,10000)
-  assert.equal((await api('reports/collections?period=2026-10')).totalCents,30000)
+  assert.equal((await report('collections')).totalCents,30000)
   assert.equal(edge.writes.length,writes)
   console.log('automaticCollectionRetryArchiveJourney: restored replacement claim identity reconciles once without debit authority; pending consent and approval stay inert; exact money and erasure custody survive real commands')
  }finally{await h?.close();await rm(scratch,{recursive:true,force:true})}
 }
-if(process.argv[1]===new URL(import.meta.url).pathname){await automaticCollectionArchiveJourney();await automaticCollectionRetryArchiveJourney()}
+if(process.argv[1]===new URL(import.meta.url).pathname){
+ const journey=process.argv[2]
+ assert.ok(journey===undefined||['automatic','recovery'].includes(journey),'Choose automatic or recovery archive custody')
+ if(journey===undefined||journey==='automatic')await automaticCollectionArchiveJourney()
+ if(journey===undefined||journey==='recovery')await automaticCollectionRetryArchiveJourney()
+}
