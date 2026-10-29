@@ -3438,7 +3438,7 @@
       "executable": false
     },
     "src/nectar/erasure-records.ts": {
-      "sha256": "623545fb4529cee7bd6efe3fa67dff799bdd19c9210adc868fa3a6b02a27df3d",
+      "sha256": "06ac0498f46508fbed40528dfe8f0fdbf71e7c490e8640eb123ce7e6b5155d06",
       "executable": false
     },
     "src/nectar/erasure-requests.ts": {
@@ -3750,7 +3750,7 @@
       "executable": false
     },
     "src/nectar/movein/stripe.ts": {
-      "sha256": "06dbd133f22dc8c6b6a73861c85c9321c4de97b0efe5279d05063e2c21269fc8",
+      "sha256": "29d2381336ba97ac728afe5c66bde720de8b7745ca5e446922cfa63da22e266d",
       "executable": false
     },
     "src/nectar/movein/target.ts": {
@@ -5210,7 +5210,7 @@
       "executable": false
     },
     "tests/nectar/erasure-archive.mjs": {
-      "sha256": "9ad8030d1e52a163b2207accba7cca0a08ed344a11184a5e020478d6606f1077",
+      "sha256": "5795f0a77bc012720920cf74ebaf10abc63a3542b8e19adf8d690072e62ece94",
       "executable": false
     },
     "tests/nectar/erasure-record-kinds.mjs": {
@@ -5354,7 +5354,7 @@
       "executable": false
     },
     "tests/nectar/move-discounts.mjs": {
-      "sha256": "b8ffc91addcdd2b5e30a5de09fccde6035f59f687139a60e69723138027572a7",
+      "sha256": "fb5b5f5f2a5669c1439069607c1ea44182eb603e241c3320d7db288ff45274bf",
       "executable": false
     },
     "tests/nectar/move-history.mjs": {

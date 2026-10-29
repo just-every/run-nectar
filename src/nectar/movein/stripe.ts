@@ -167,6 +167,7 @@ async function build(env: Bindings, actor: Actor, input: Input) {
   }
   const historyContext = { customers: lists.customers, invoices: lists.invoices ?? [], subscriptions: lists.subscriptions, subscriptionEvents: lists.subscription_events ?? [], payments: lists.payments ?? [], prices: lists.prices, customerTarget, zone }
   const mappedSubscriptions = new Set<string>(), mappedInvoices = new Set<string>()
+  const discountOwners = new Map<string, string>()
 
   const context = importContext(env, actor)
   const plan = await planD1Import({ artifacts, records, diagnostics: [] }, {
@@ -255,6 +256,8 @@ async function build(env: Bindings, actor: Actor, input: Input) {
         const { discounts, amounts } = importedAmountDiscounts(o, { zone, anchorDay, prices: lists.prices, supportedPrice: priceOk,
           priceId: targetIds.price, identity: id => hex(`nectar:stripe:amount-discount:${id}`) })
         for (const discount of discounts) {
+          insist(!discountOwners.has(discount.id) || discountOwners.get(discount.id) === o.id, 'unsupported_imported_discount', 400, { reason: 'one discount identity cannot belong to different subscriptions' })
+          discountOwners.set(discount.id, o.id)
           const coupon = discount.coupon ?? discount.source?.coupon
           if (coupon?.percent_off && (coupon.duration === 'forever' || coupon.duration === 'repeating' || coupon.duration === 'once')) {
             const from = dateOf(discount.start) ?? start
@@ -341,7 +344,12 @@ export async function applyImport(env: Bindings, actor: Actor, input: Input) {
   const undone = (await one<{ n: number }>(env, "SELECT COUNT(*) AS n FROM ik_jobs WHERE destination = ? AND fingerprint = ? AND state IN ('undone', 'rolled_back')", destination, reviewed))!.n
   const reviewedContext = { ...context, reviewedFingerprint: reviewed, ...(undone ? { operationKey: `${reviewed}:${undone}` } : {}) }
   const job = await createD1ImportJob(plan, reviewedContext)
-  const result = await applyD1ImportBatches(job.id, reviewedContext)
+  const result = await applyD1ImportBatches(job.id, reviewedContext).catch(error => {
+    // Retiring source custody invalidates its saved review. A replay is a
+    // conflict for the operator; it never gains a fresh import authority.
+    if (error instanceof Error && error.message === 'REVIEW_FINGERPRINT_MISMATCH') throw new NectarError('reviewed_fingerprint_changed', 409)
+    throw error
+  })
   await commit(env, [], { actor: actorLabel(actor), action: 'import.apply', subject: job.id, detail: { kit: 'stripe', fingerprint: reviewed, counts: plan.counts } })
   return { job: job.id, state: result.state }
 }
