@@ -1127,6 +1127,10 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "revision": "integer",
     "role_map": "json"
   },
+  "sso.link.approve": {
+    "basis": "text",
+    "link": "text"
+  },
   "subscription.addon": {
     "effective_date": "text",
     "price": "text",
