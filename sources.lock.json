@@ -258,6 +258,10 @@
       "sha256": "3b7797ed40929666b01f911366c201ab9f4abd783295ecebfea1699e446cb0c6",
       "executable": false
     },
+    "docs/agent-door.md": {
+      "sha256": "3e7ae99d4a8d698592258b6418c56137347365aad9d99ee689578d5fb3a16072",
+      "executable": false
+    },
     "docs/agents-and-access.md": {
       "sha256": "d6978f53011971ef7de1bb659924472ae53bed93305041a78b0a469c68ee9798",
       "executable": false
