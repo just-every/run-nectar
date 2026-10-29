@@ -1,5 +1,6 @@
 import { scanCloseTieout } from './close-tieout'
 import { prepareTransferInstructions, confirmTransferInstructions } from './transfer-instructions'
+import { approveLink } from './sso-linking'
 import { preparePortalChangePolicy } from './portal-change-policy'
 import { uploadBankDeposit, uploadRemittances, previewRemittance, confirmRemittance, previewRemittanceAllocation, allocateRemittance } from './remittances'
 import { bindSandboxProcessor, reconcileSandboxBilling } from './test-billing'
@@ -132,6 +133,7 @@ export const actions: Record<string, Handler> = {
   'sso.configure': configureSso,
   'close.scan': scanCloseTieout,
   'move.investigate': investigateMove,
+  'sso.link.approve': approveLink,
   'assurance.scan': scanAssurance,
   'assurance.assign': assignAssurance,
   'assurance.approve': approveAssurance,
