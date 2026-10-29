@@ -174,7 +174,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "50b41882eba927c14f4911b512ad5ce9f8733d3e911f9822245dcaadd0c2f46a",
+      "sha256": "a8c500ed844e7939f91be985e5a2cd3b3c2be39bcb165e0ea146d83cd9ab2621",
       "executable": false
     },
     "AGENTS.consumer.md": {
@@ -194,7 +194,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "903ef34adfc9e21da2a9c7b5710ec23d4ce02c125b01f435abd8d19a746295ca",
+      "sha256": "63ae61c660dda35a5d1b2dac26c7de3305c7f81d1dcdbc43a694886788b6cba7",
       "executable": false
     },
     "DEMO.md": {
@@ -230,7 +230,7 @@
       "executable": false
     },
     "docs/CLAIMS.md": {
-      "sha256": "eb629ec6345f781a080ed2f4478e62376d0879e2f43f24f33812b797f4d3e70a",
+      "sha256": "d1db9ab2a0bc4bb330af114912f852af0ee611da0f84b4eb836eaa0481b89e88",
       "executable": false
     },
     "docs/composition-baseline.json": {
@@ -3438,7 +3438,7 @@
       "executable": false
     },
     "src/nectar/erasure-records.ts": {
-      "sha256": "7e7eb5cde7de243f9ec01313b2a4ee862e345849caa4ec6381e5f8b595ae176e",
+      "sha256": "623545fb4529cee7bd6efe3fa67dff799bdd19c9210adc868fa3a6b02a27df3d",
       "executable": false
     },
     "src/nectar/erasure-requests.ts": {
@@ -3746,7 +3746,7 @@
       "executable": false
     },
     "src/nectar/movein/imported-discounts.ts": {
-      "sha256": "4ca47f9f4927b783b2d8efdf0cc5d762ce9bf3ad0ae10cc374fd2661ec264dcd",
+      "sha256": "20e06f776ede5ce895205d3134d30d791bb0a613f9d1913c30b3ac7f5dd8a500",
       "executable": false
     },
     "src/nectar/movein/stripe.ts": {
@@ -5098,7 +5098,7 @@
       "executable": false
     },
     "tests/nectar/clause-browser.mjs": {
-      "sha256": "7a3441974e7df79c3bb1768ef1c050abf716e2aba1cc36e56b2142a9ca1e5943",
+      "sha256": "720aa0ad56858acc43845e9b6286375907cef4668aaa33873c4e218931fa9c7f",
       "executable": false
     },
     "tests/nectar/clause-runner.mjs": {
@@ -5210,7 +5210,7 @@
       "executable": false
     },
     "tests/nectar/erasure-archive.mjs": {
-      "sha256": "4364002c8cf68757fa8e69b3998ef14f804374c0cd65694428621781693fef4b",
+      "sha256": "9ad8030d1e52a163b2207accba7cca0a08ed344a11184a5e020478d6606f1077",
       "executable": false
     },
     "tests/nectar/erasure-record-kinds.mjs": {
@@ -5286,7 +5286,7 @@
       "executable": false
     },
     "tests/nectar/isolated-cases.mjs": {
-      "sha256": "b21b613936cf25e34e39ebcb64737dfeccf6f2b7f85431c9a252304dbe5ec3b6",
+      "sha256": "cc8f151672b7ff926343e20c2a44befffe8103a5dad80d97ab02a437234b8f1d",
       "executable": false
     },
     "tests/nectar/isolated.mjs": {
@@ -5351,6 +5351,10 @@
     },
     "tests/nectar/move-collection.mjs": {
       "sha256": "c64d7b593d65a4b3c33e23677dd87f25e308ddcd213c3fbade486132439abaeb",
+      "executable": false
+    },
+    "tests/nectar/move-discounts.mjs": {
+      "sha256": "b8ffc91addcdd2b5e30a5de09fccde6035f59f687139a60e69723138027572a7",
       "executable": false
     },
     "tests/nectar/move-history.mjs": {
