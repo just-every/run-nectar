@@ -51,10 +51,11 @@ try {
   assert.ok(!rows.some(item => item.table === 'nc_sandbox_processor_authority'), 'The actual archive contains no executable sandbox debit consent')
   await command(root, ['reset', '--yes'])
   await command(root, ['import', '--input', populated, '--yes'])
-  h = await harness({ ...options, settings })
+  const restoredAt = '2026-10-01T12:01:00Z'
+  h = await harness({ ...options, settings, localTime: restoredAt })
   assert.equal((await h.raw('/auth/bootstrap', { body: { token: h.vars.SETUP_TOKEN, displayName: 'Restored owner' } })).status, 303)
   const restoredOwner = await h.signIn(h.vars.OWNER_EMAIL)
-  await h.api('mfa.verify', restoredOwner, { code: totp(factor, Date.parse(options.localTime)) })
+  await h.api('mfa.verify', restoredOwner, { code: totp(factor, Date.parse(restoredAt)) })
   const after = await h.api(`sandbox/customers/${proof.customer}`, restoredOwner)
   assert.deepEqual(after, { ...before, billing: { ...before.billing, enabled: false, processor: null } }, 'Public restore retains all clock, calendar, invoice, retry, cent and inbox evidence exactly')
   const writes = sandboxProcessor.writes.length
