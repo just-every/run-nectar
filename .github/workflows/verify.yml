@@ -78,6 +78,10 @@ jobs:
           node tests/nectar/processor-events-browser.mjs cash
           node tests/nectar/processor-events-browser.mjs imported
 
+      - name: Subscription state history browser journey
+        if: ${{ matrix.shard == 1 }}
+        run: node tests/nectar/subscription-states-browser.mjs
+
   # The real rer export, restore and removal journey needs a fresh checkout and its own wall.
   processor-archive:
     runs-on: ubuntu-24.04

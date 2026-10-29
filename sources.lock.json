@@ -162,7 +162,7 @@
       "executable": false
     },
     ".github/workflows/verify.yml": {
-      "sha256": "9299f14f1e3bef89fafbaf002e1ab6293e578c57acc82ea5b6153396e998d25c",
+      "sha256": "70a18b90556b9adc197f0b0f5db1bb752898ed99495eb1eb6cab0869b31ae3e9",
       "executable": false
     },
     ".gitignore": {
@@ -174,7 +174,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "33e782321c333e38ac963ad796b32856cf1324db99c54ac1dc8894f70b968212",
+      "sha256": "b7783b283ad64c8a955cf32e6bfd9dd680c2d8218163f7817cfff41a3598db73",
       "executable": false
     },
     "AGENTS.consumer.md": {
@@ -194,7 +194,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "df17f911c66ee7b4116786f66ac7c3166fe63622ec12ed1ef6b3106d66a9af23",
+      "sha256": "bcd4c365626dff0a9e610a14e7989f253ddf07df3bc9c6a55f0cd1f7b13b850e",
       "executable": false
     },
     "DEMO.md": {
@@ -230,7 +230,7 @@
       "executable": false
     },
     "docs/CLAIMS.md": {
-      "sha256": "746a86c98b4c5cd1277575099d922beea8b1f39fbbc000b1e65e62e5543b5cb0",
+      "sha256": "ded1829200e1dce0c58c7f5524d80396c044551abe93473592c72e94da276915",
       "executable": false
     },
     "docs/composition-baseline.json": {
@@ -5278,7 +5278,7 @@
       "executable": false
     },
     "tests/nectar/isolated-cases.mjs": {
-      "sha256": "2b84271be46ec544c4ef0e581272710db5501493f4115501b7a0545a2c9f0746",
+      "sha256": "b21b613936cf25e34e39ebcb64737dfeccf6f2b7f85431c9a252304dbe5ec3b6",
       "executable": false
     },
     "tests/nectar/isolated.mjs": {
@@ -5705,8 +5705,16 @@
       "sha256": "f694b47d8cf576f12853280e85bc241cfd5c3c5058eaa93016793a827e44776a",
       "executable": false
     },
+    "tests/nectar/subscription-states-browser.mjs": {
+      "sha256": "30560c47d982c36d35a79c61731eb571b303107993ae8d4aee3f66f84dcade11",
+      "executable": false
+    },
     "tests/nectar/subscription-states-sandbox.mjs": {
       "sha256": "a8a6688a89b10f45d0b7d1cda9a23327b9fd10eb03a9a977389b37acd15cf3ef",
+      "executable": false
+    },
+    "tests/nectar/subscription-states.mjs": {
+      "sha256": "40542288ad3890660d5d5bdca99a0725f3d692001d66f1a9dc95d394b0f6df50",
       "executable": false
     },
     "tests/nectar/upcoming.mjs": {
