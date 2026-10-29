@@ -174,7 +174,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "530b1d0a453403795c1f45af2d1b30862978530d6190944f105c5103d1e795b4",
+      "sha256": "b7f1d23815c1367d1f64ac100027be7a09f97c6bed88104b23100b2550f07ccb",
       "executable": false
     },
     "AGENTS.consumer.md": {
@@ -194,7 +194,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "f85b625b583a18237e253a6815c9631ca7661bbee4f3d5ea7697102483016593",
+      "sha256": "5952484050d81e72ccb030bd184bc62d439e1e104c3db89e61525fd0162661c3",
       "executable": false
     },
     "DEMO.md": {
@@ -230,7 +230,7 @@
       "executable": false
     },
     "docs/CLAIMS.md": {
-      "sha256": "bea60a35954043c40cd1e2316d732ed558c27f2871116e2d195e2e9d8dce6ab9",
+      "sha256": "9f4e2341b6e720a3c50f1704ab0b53ee8f9f6eaa643310d89cfdb4f2363b1071",
       "executable": false
     },
     "docs/composition-baseline.json": {
@@ -366,7 +366,7 @@
       "executable": false
     },
     "IMPORTING.md": {
-      "sha256": "0c146d92acd5778b1be2ced7c0146351d58e882647b256957585442589e4803a",
+      "sha256": "dc75eb1dacd2e30acda67e1f74e40f4306211485c301c5acacddaa996a4a29d7",
       "executable": false
     },
     "LICENSE": {
@@ -847,6 +847,10 @@
     },
     "migrations/core/0113_imported_amount_discounts.sql": {
       "sha256": "8dccc75729700e18128b7150e4630442b6e6461c00dca680166fd99fbdc8139a",
+      "executable": false
+    },
+    "migrations/core/0114_imported_pending_items.sql": {
+      "sha256": "9c1a2945efc9a16c1da83f46c291903d04065aa6163aeecbf0ffdd434365dbfa",
       "executable": false
     },
     "ONBOARDING.md": {
@@ -3650,7 +3654,7 @@
       "executable": false
     },
     "src/nectar/manual-invoices.ts": {
-      "sha256": "7d3c2f3f5db3316d619f0b76839946116a10381b8d25817e1cd5fc0d891b0259",
+      "sha256": "891cf7b452ebcecc179d1542dfda7f2f30cedfea115e6dd738ced01edf27b789",
       "executable": false
     },
     "src/nectar/metadata-lists.ts": {
@@ -3705,6 +3709,10 @@
       "sha256": "63b18e95978adcd0eb2ed02ff39f78664b13701acb64ec275a2d74079f3834e8",
       "executable": false
     },
+    "src/nectar/movein/cancellation.ts": {
+      "sha256": "240352078c4a618f04ca4d528901f96f58b76e153847d0bb98a2aea42b22b4e7",
+      "executable": false
+    },
     "src/nectar/movein/collection-provider.ts": {
       "sha256": "2375c76321480512001422e486a71e86f6888948b4ab10ead73c0fbc42bddc6d",
       "executable": false
@@ -3737,12 +3745,20 @@
       "sha256": "1f5ad3ddba1c7d96b7ca72ee20c0ded5d8828a5a4844417a78012a1682da9943",
       "executable": false
     },
+    "src/nectar/movein/pending-items.ts": {
+      "sha256": "1a3c001dcc0405bfcd91f5fa6e4f85cf21cb05c448caca3630a6bb45e2d47a6e",
+      "executable": false
+    },
+    "src/nectar/movein/schedules.ts": {
+      "sha256": "40f1b5648ea32b4649001dcf2f163c23207d1b7e7a1984f46db83c053bcd1e25",
+      "executable": false
+    },
     "src/nectar/movein/stripe.ts": {
-      "sha256": "29d2381336ba97ac728afe5c66bde720de8b7745ca5e446922cfa63da22e266d",
+      "sha256": "c82fd6ef2d7de846d3d4d72fd007e62323bbebc83b358556657571f32903d1e3",
       "executable": false
     },
     "src/nectar/movein/target.ts": {
-      "sha256": "e24d1a8ae392103d27a7d8079c62e63f73a955b8cd615a0f4cbd8ab61da9cef4",
+      "sha256": "62bee74ae8689076cfbfee0281ea0f6ea84ec43189e12e05d832d6153b4ff734",
       "executable": false
     },
     "src/nectar/note-records.ts": {
@@ -4690,7 +4706,7 @@
       "executable": false
     },
     "src/nectar/ui/review.ts": {
-      "sha256": "e728c08143a0b36e3b3a65a69512e0dbd04ebc9bda08493ec60f16061ae07ea4",
+      "sha256": "6fbfd511cc99114e2328530722c339c52922894f47caddc39229030d32cf56ba",
       "executable": false
     },
     "src/nectar/ui/security.ts": {
@@ -5322,7 +5338,7 @@
       "executable": false
     },
     "tests/nectar/move-discounts.mjs": {
-      "sha256": "8b6cbb36135c7f5c100fe82f00262d597fdc4417507a9179c6c40ae2d981677f",
+      "sha256": "36fcd0fdf53b211632f1c0102fc157a2e7c583d7497ef7173a97d99c07dba93c",
       "executable": false
     },
     "tests/nectar/move-history.mjs": {

@@ -140,6 +140,7 @@ export async function moveDiscountsFlow(h, owner, { onState = async () => {} } =
   assert.equal((await api('import.job', { job: imported.job, action: 'undo' }, 409)).error, 'undo_blocked')
   await api('import.apply', { ...discountFiles(altered), fingerprint: (await api('import.preview', discountFiles(altered))).fingerprint }, 409)
   assert.deepEqual(await Promise.all(saved.map(invoice => api('invoices/' + invoice.id))), saved, 'replay, changed source and unsafe undo leave issued calculations immutable')
+  await movePendingItemsFlow(h, owner, { onState, reader })
   // Erasure retires captured identities while retaining anonymous money facts.
   const request = await api('erasure.request', { customer: ordered[0].id })
   await api('erasure.verify', { request: request.id, reason: 'Independently verified imported discount owner', evidence: file('synthetic-nectar-owner.txt', 'Signed source owner request', 'text/plain') })
@@ -157,4 +158,135 @@ export async function moveDiscountsFlow(h, owner, { onState = async () => {} } =
   await onState({ label: 'erased-source', path: '/app/customers/' + ordered[0].id })
   console.log('MOVE-008 imported amount terms: original consumed month, exact expiry, once and forever, restrictions, cap, tax, replay, authority, atomic audit refusal, undo and immutable issued calculations passed')
   return { capture, files, customers: ordered, subscriptions, invoices: saved }
+}
+
+export function pendingItemsCapture() {
+  const capture = JSON.parse(JSON.stringify(amountDiscountCapture()).replaceAll('synthetic-nectar-discount-', 'synthetic-nectar-pending-'))
+  capture.customers.data = capture.customers.data.slice(0, 3)
+  capture.subscriptions.data = capture.subscriptions.data.slice(0, 3)
+  capture.invoices.data = capture.invoices.data.slice(0, 1)
+  for (const [index, sub] of capture.subscriptions.data.entries()) {
+    delete sub.discounts
+    sub.items.data = [{ ...sub.items.data[0], price: { id: capture.prices.data[0].id }, quantity: 1 }]
+    if (index === 0) sub.cancel_at_period_end = true
+    else if (index === 1) { sub.status = 'trialing'; sub.trial_end = unix('2026-11-16') }
+    else sub.schedule = { id: 'synthetic-nectar-pending-schedule', status: 'active', end_behavior: 'release',
+      subscription: sub.id, customer: sub.customer, current_phase: { start_date: unix('2026-11-01'), end_date: unix('2026-12-01') },
+      phases: [
+        { start_date: unix('2026-11-01'), end_date: unix('2026-12-01'), items: [{ price: capture.prices.data[0].id, quantity: 1 }] },
+        { start_date: unix('2026-12-01'), end_date: unix('2027-01-01'), items: [{ price: capture.prices.data[2].id, quantity: 1 }] },
+        { start_date: unix('2027-01-01'), end_date: unix('2027-02-01'), items: [{ price: capture.prices.data[3].id, quantity: 1 }] },
+      ] }
+  }
+  const invoice = capture.invoices.data[0]
+  Object.assign(invoice, { total: 33000, tax: 3000, amount_paid: 33000, total_discount_amounts: [] })
+  invoice.lines.data = [invoice.lines.data[0]]
+  capture.invoice_items = { object: 'list', has_more: false, data: [{ id: 'synthetic-nectar-pending-item-1',
+    object: 'invoiceitem', customer: capture.customers.data[0].id, subscription: capture.subscriptions.data[0].id,
+    invoice: null, currency: 'usd', amount: 7500, quantity: 3, discountable: false, tax_rates: [],
+    period: { start: unix('2026-11-01'), end: unix('2026-12-01') } }] }
+  for (const [name, value] of Object.entries(capture)) if (name !== 'manifest') capture.manifest.files[name] = { count: value.data.length, has_more: false }
+  return capture
+}
+
+async function movePendingItemsFlow(h, owner, { onState, reader }) {
+  const api = (path, body, status) => h.api(path, owner, body, status)
+  const capture = pendingItemsCapture(), files = discountFiles(capture)
+  const before = await api('customers'), preview = await api('import.preview', files)
+  assert.deepEqual(preview.rejected, [])
+  assert.equal(preview.create.pending_item, 1)
+  for (const change of [
+    c => { c.invoice_items.data[0].invoice = 'synthetic-nectar-already-invoiced' },
+    c => { c.invoice_items.data[0].subscription = null },
+    c => { c.invoice_items.data[0].customer = c.customers.data[1].id },
+    c => { c.invoice_items.data[0].discountable = true },
+    c => { c.invoice_items.data[0].currency = 'eur' },
+    c => { c.invoice_items.data[0].amount = -7500 },
+    c => { c.invoice_items.data[0].tax_rates = [{ percentage: 10 }] },
+    c => { c.invoice_items.data[0].proration = true },
+    c => { c.subscriptions.data[0].cancel_at = unix('2026-12-02') },
+    c => { delete c.subscriptions.data[0].current_period_end },
+    c => { c.subscriptions.data[0].current_period_end += 3600 },
+    c => { c.subscriptions.data[2].schedule.phases[1].start_date = unix('2026-12-02') },
+    c => { c.subscriptions.data[2].schedule.phases[1].items[0].price = 'synthetic-nectar-missing-phase-price' },
+    c => { c.subscriptions.data[2].schedule.phases[0].items[0].quantity = 2 },
+    c => { c.subscriptions.data[2].schedule.phases[1].add_invoice_items = [{ price: c.prices.data[2].id }] },
+    c => { c.subscriptions.data[2].schedule.customer = c.customers.data[1].id },
+    c => { c.subscriptions.data[2].schedule.end_behavior = 'unknown' },
+    c => { delete c.invoice_items },
+  ]) {
+    const invalid = structuredClone(capture); change(invalid)
+    await api('import.apply', { ...discountFiles(invalid), fingerprint: preview.fingerprint }, 400)
+    assert.deepEqual(await api('customers'), before, 'unsupported live state refuses before any native write')
+  }
+  const changed = structuredClone(capture); changed.invoice_items.data[0].amount = 7200
+  await api('import.apply', { ...discountFiles(changed), fingerprint: preview.fingerprint }, 409)
+  await h.api('import.apply', reader, { ...files, fingerprint: preview.fingerprint }, 403)
+  await h.rejectAudit('import.record.write')
+  try {
+    const response = await h.raw('/api/nectar/import.apply', { cookie: owner, body: { ...files, fingerprint: preview.fingerprint } })
+    assert.ok(response.status >= 400)
+    assert.deepEqual(await api('customers'), before, 'audit refusal leaves neither a subscription nor a pending charge')
+  } finally { await h.rejectAudit() }
+  const undone = await api('import.apply', { ...files, fingerprint: preview.fingerprint })
+  await api('import.job', { job: undone.job, action: 'undo' })
+  assert.deepEqual(await api('customers'), before, 'untouched undo removes native pending items before their customer')
+  const imported = await api('import.apply', { ...files, fingerprint: preview.fingerprint })
+  const customers = await api('customers')
+  const ordered = await Promise.all(capture.customers.data.map(source => api('customers/' + customers.find(row => row.external_id === source.id).id)))
+  const subs = ordered.map(customer => customer.subscriptions[0]), charge = ordered[0].charges[0]
+  assert.deepEqual([charge.amount_cents, charge.quantity, charge.unit_amount, charge.effective_date], [7500, '3', '25.00', '2026-11-01'])
+  assert.deepEqual([subs[0].end_date, subs[1].trial_end], ['2026-12-01', '2026-11-16'])
+  assert.equal((await api('import.apply', { ...files, fingerprint: preview.fingerprint })).job, imported.job)
+  assert.deepEqual(await api('customers/' + ordered[0].id), ordered[0], 'reimport does not recreate pending items')
+  const manual = { customer: ordered[0].id, charges: [charge.id], service_date: '2026-11-01' }
+  assert.equal((await api('invoice.manual', manual, 409)).error, 'imported_charge_requires_subscription_billing')
+  const shadow = await api('billrun.prepare', { period: '2026-10' })
+  const prior = (await api('runs/' + shadow.id)).invoices.find(invoice => invoice.subscription_id === subs[0].id)
+  assert.equal(prior.total_cents, 33000, 'pending source item never enters an earlier source-owned period')
+  assert.ok(prior.comparison.incumbent.reconciled)
+  await api('subscription.adopt', { subscription: subs[0].id, cutover_start: '2026-12-01', acknowledge_unreconciled: true }, 409)
+  for (const sub of subs) await api('subscription.adopt', { subscription: sub.id, cutover_start: '2026-11-01', acknowledge_unreconciled: true })
+  const run = await api('billrun.prepare', { period: '2026-11' })
+  const november = (await api('runs/' + run.id)).invoices
+  const issued = []
+  for (const [index, sub] of subs.entries()) {
+    const invoice = await api('invoices/' + november.find(invoice => invoice.subscription_id === sub.id).id)
+    assert.equal(invoice.total_cents, [40500, 16500, 33000][index], 'independent charge, trial and schedule calculation with declared tax')
+    if (index === 0) {
+      assert.equal(invoice.tax_cents, 3000, 'explicitly untaxed pending item adds no tax')
+      const line = invoice.lines.find(line => line.kind === 'one_time')
+      assert.deepEqual([line.amount_cents, line.quantity, line.evidence.invoiceItem], [7500, '3', capture.invoice_items.data[0].id])
+    }
+    await api('invoice.approve', { invoice: invoice.id, acknowledge: true })
+    await api('invoice.finalise', { invoice: invoice.id, issue_date: '2026-12-01' })
+    issued.push(await api('invoices/' + invoice.id))
+    await onState({ label: ['pending-item-issued', 'remaining-trial-issued', 'schedule-first-phase'][index], path: '/app/invoices/' + invoice.id })
+  }
+  assert.equal((await api('customers/' + ordered[0].id)).charges[0].invoice_id, issued[0].id)
+  const next = await api('billrun.prepare', { period: '2026-12' })
+  const december = (await api('runs/' + next.id)).invoices
+  assert.ok(!december.some(invoice => invoice.subscription_id === subs[0].id), 'boundary cancellation prevents the next invoice')
+  assert.equal(december.find(invoice => invoice.subscription_id === subs[1].id).total_cents, 33000, 'the remaining trial never restarts after its original end')
+  assert.equal(december.find(invoice => invoice.subscription_id === subs[2].id).total_cents, 11000, 'second phase switches price on its original boundary')
+  const scheduleInvoices = []
+  await h.advanceClock('2027-04-05T12:00:00Z')
+  for (const period of ['2026-12', '2027-01', '2027-02']) {
+    const result = period === '2026-12' ? next : await api('billrun.prepare', { period })
+    const candidate = (await api('runs/' + result.id)).invoices.find(invoice => invoice.subscription_id === subs[2].id)
+    const invoice = await api('invoices/' + candidate.id)
+    assert.equal(invoice.total_cents, period === '2026-12' ? 11000 : 16500, 'dated schedule and released final price keep exact cents')
+    assert.deepEqual(invoice.lines.filter(line => ['flat', 'seat'].includes(line.kind)).map(line => [line.period_start, line.period_end]),
+      [[period + '-01', { '2026-12': '2027-01-01', '2027-01': '2027-02-01', '2027-02': '2027-03-01' }[period]]])
+    await api('invoice.approve', { invoice: invoice.id, acknowledge: true })
+    await api('invoice.finalise', { invoice: invoice.id, issue_date: invoice.period_end })
+    scheduleInvoices.push(await api('invoices/' + invoice.id))
+    await onState({ label: 'schedule-' + period, path: '/app/invoices/' + invoice.id })
+  }
+  assert.equal((await api('import.job', { job: imported.job, action: 'undo' }, 409)).error, 'undo_blocked')
+  await api('import.apply', { ...discountFiles(changed), fingerprint: (await api('import.preview', discountFiles(changed))).fingerprint }, 409)
+  assert.deepEqual(await Promise.all(issued.map(invoice => api('invoices/' + invoice.id))), issued, 'changed source and unsafe undo preserve issued money')
+  assert.deepEqual(await Promise.all(scheduleInvoices.map(invoice => api('invoices/' + invoice.id))), scheduleInvoices, 'replay cannot alter issued schedule phases')
+  await onState({ label: 'pending-item-import', path: '/app/import' })
+  console.log('MOVE-008 pending item billed once, untaxed source cents, remaining trial, boundary cancellation, replay, undo and atomic refusal passed')
 }

@@ -34,12 +34,14 @@ const noDependents = (expression: string, id: string) => ({ text: `${expression.
 
 const CUSTOMER_DEPENDENTS = `((SELECT COUNT(*) FROM nc_subscriptions WHERE customer_id = ?1 AND origin = 'native') + (SELECT COUNT(*) FROM nc_usage_events WHERE customer_id = ?1)
   + (SELECT COUNT(*) FROM nc_invoices WHERE customer_id = ?1) + (SELECT COUNT(*) FROM nc_contacts WHERE customer_id = ?1) + (SELECT COUNT(*) FROM nc_payments WHERE customer_id = ?1)
-  + (SELECT COUNT(*) FROM nc_tasks WHERE customer_id = ?1) + (SELECT COUNT(*) FROM nc_notices WHERE customer_id = ?1))`
+  + (SELECT COUNT(*) FROM nc_tasks WHERE customer_id = ?1) + (SELECT COUNT(*) FROM nc_notices WHERE customer_id = ?1)
+  + (SELECT COUNT(*) FROM nc_charges WHERE customer_id = ?1 AND origin='native'))`
 const PRODUCT_DEPENDENTS = `((SELECT COUNT(*) FROM nc_prices WHERE product_id = ?1 AND origin = 'native') + (SELECT COUNT(*) FROM nc_features WHERE product_id = ?1) + (SELECT COUNT(*) FROM nc_price_requests WHERE product_id = ?1))`
 const METER_DEPENDENTS = `((SELECT COUNT(*) FROM nc_prices WHERE meter_id = ?1 AND origin = 'native') + (SELECT COUNT(*) FROM nc_usage_events WHERE meter_id = ?1) + (SELECT COUNT(*) FROM nc_price_requests WHERE meter_id = ?1))`
 const PRICE_DEPENDENTS = `((SELECT COUNT(*) FROM nc_items WHERE price_id = ?1 AND origin = 'native') + (SELECT COUNT(*) FROM nc_amendments WHERE price_id = ?1 AND origin <> 'import') + (SELECT COUNT(*) FROM nc_changes WHERE new_price_id = ?1))`
 const SUBSCRIPTION_DEPENDENTS = `((SELECT COUNT(*) FROM nc_invoices WHERE subscription_id = ?1) + (SELECT COUNT(*) FROM nc_items WHERE subscription_id = ?1 AND origin = 'native')
-  + (SELECT COUNT(*) FROM nc_amendments WHERE subscription_id = ?1 AND origin <> 'import') + (SELECT COUNT(*) FROM nc_changes WHERE subscription_id = ?1))`
+  + (SELECT COUNT(*) FROM nc_amendments WHERE subscription_id = ?1 AND origin <> 'import') + (SELECT COUNT(*) FROM nc_changes WHERE subscription_id = ?1)
+  + (SELECT COUNT(*) FROM nc_charges WHERE subscription_id=?1 AND origin='native'))`
 
 const customer: Kind = {
   async read(db, id) {
@@ -219,7 +221,35 @@ const history: Kind = {
   count: '(SELECT COUNT(*) FROM nc_incumbent_history)',
 }
 
-export const KINDS: Record<string, Kind> = { meter, product, price, customer, subscription, invoice: historicalDocument('invoice'), credit_note: historicalDocument('credit-note'), history }
+const pendingItemFields = (value: Value): [string, unknown][] => [
+  ['customer_id', value.customerId], ['subscription_id', value.subscriptionId], ['description', value.description],
+  ['quantity', value.quantity], ['unit_amount', value.unitAmount], ['amount_cents', value.amountCents],
+  ['taxable', value.taxable], ['effective_date', value.effectiveDate], ['pricing_evidence_json', value.evidence],
+]
+const pendingItem: Kind = {
+  async read(db, id) {
+    const row = await db.prepare("SELECT * FROM nc_charges WHERE id=? AND origin='import'").bind(id).first<any>()
+    return row ? { revision: row.import_revision, value: withDependents({ customerId: row.customer_id,
+      subscriptionId: row.subscription_id, description: row.description, quantity: row.quantity, unitAmount: row.unit_amount,
+      amountCents: row.amount_cents, taxable: row.taxable, effectiveDate: row.effective_date, evidence: row.pricing_evidence_json },
+    row.invoice_id ? 1 : 0) } : undefined
+  },
+  matches(value, id, revision) {
+    const fields = eq([...pendingItemFields(value), ['import_revision', revision], ['invoice_id', null]])
+    return sql(`EXISTS(SELECT 1 FROM nc_charges WHERE id=? AND origin='import' AND ${fields.text})`, id, ...fields.params)
+  },
+  absent: id => sql('NOT EXISTS(SELECT 1 FROM nc_charges WHERE id=?)', id),
+  write(value, id, revision) {
+    const fields = pendingItemFields(value)
+    return [sql(`INSERT INTO nc_charges(id,${fields.map(([key]) => key).join(',')},origin,import_revision,created_by,created_at)
+      VALUES(?,${fields.map(() => '?').join(',')},'import',?,'import:stripe',?)`, id, ...fields.map(([, value]) => value), revision, at())]
+  },
+  remove: id => [sql("DELETE FROM nc_charges WHERE id=? AND origin='import' AND invoice_id IS NULL", id)],
+  ids: db => idsOf(db, 'nc_charges'),
+  count: "(SELECT COUNT(*) FROM nc_charges WHERE origin='import')",
+}
+
+export const KINDS: Record<string, Kind> = { meter, product, price, customer, subscription, pending_item: pendingItem, invoice: historicalDocument('invoice'), credit_note: historicalDocument('credit-note'), history }
 const kindOf = (name: string) => { const kind = Object.hasOwn(KINDS, name) ? KINDS[name] : undefined; if (!kind) throw new Error(`TARGET_KIND_UNKNOWN: ${name}`); return kind }
 
 export const nectarTargets: D1TargetAdapter = {

@@ -1,4 +1,7 @@
 import { importedAmountDiscounts } from './imported-discounts'
+import { pendingItemValue } from './pending-items'
+import { importedCancellation } from './cancellation'
+import { importedSchedule } from './schedules'
 import { importOriginalFiles } from '../import-originals'
 // Move-in kit 1: Stripe Billing records. Reads owner-captured Stripe API list
 // responses (customers, products, prices, subscriptions, invoices and,
@@ -24,7 +27,7 @@ import { HISTORY_FILES, duplicateStripeSource, stripeCreditEvidence, stripeHisto
 
 const namespace = 'stripe', mappingVersion = 'stripe-billing-1', destination = 'billing'
 const FILE_BYTES = 6_000_000
-export const FILES = ['manifest', 'customers', 'products', 'prices', 'meters', 'subscriptions', 'invoices', 'credit_notes', ...HISTORY_FILES] as const
+export const FILES = ['manifest', 'customers', 'products', 'prices', 'meters', 'subscriptions', 'invoice_items', 'invoices', 'credit_notes', ...HISTORY_FILES] as const
 type FileName = typeof FILES[number]
 const REQUIRED: FileName[] = ['manifest', 'customers', 'products', 'prices', 'subscriptions']
 const MAX_ITEMS = 6
@@ -110,6 +113,7 @@ async function build(env: Bindings, actor: Actor, input: Input) {
   }
   insist(!manifest.files?.credit_notes?.count || !!parsed.credit_notes, 'capture_incomplete')
   for (const name of HISTORY_FILES) insist(!manifest.files?.[name] || !!parsed[name], 'capture_incomplete', 400, { file: name })
+  insist(!manifest.files?.invoice_items || !!parsed.invoice_items, 'capture_incomplete', 400, { file: 'invoice_items' })
   const incomplete = coverage.filter(entry => !entry.complete)
   if (incomplete.length) throw new NectarError('capture_incomplete', 400, incomplete)
 
@@ -123,6 +127,7 @@ async function build(env: Bindings, actor: Actor, input: Input) {
   for (const [index, item] of [...lists.prices.entries()].sort((a, b) => (a[1].created ?? 0) - (b[1].created ?? 0) || String(a[1].id).localeCompare(String(b[1].id)))) record('price', item, 'prices', index)
   for (const [index, item] of lists.customers.entries()) record('customer', item, 'customers', index)
   for (const [index, item] of lists.subscriptions.entries()) record('subscription', item, 'subscriptions', index)
+  for (const [index, item] of (lists.invoice_items ?? []).entries()) record('pending_item', item, 'invoice_items', index)
   for (const [index, item] of (lists.invoices ?? []).entries()) record('invoice', item, 'invoices', index)
   for (const [index, item] of (lists.credit_notes ?? []).entries()) record('credit_note', item, 'credit_notes', index)
   for (const [file, kind] of [['payments','payment'],['refunds','refund'],['disputes','dispute'],['subscription_events','subscription_event']] as const)
@@ -140,6 +145,7 @@ async function build(env: Bindings, actor: Actor, input: Input) {
   const rejected: Preview['rejected'] = [], attention: Preview['attention'] = []
   const create: Record<string, number> = { meter: 0, product: 0, price: 0, customer: 0, subscription: 0, invoice: 0 }
   if (lists.credit_notes) create.credit_note = 0
+  if (lists.invoice_items) create.pending_item = 0
   if (HISTORY_FILES.some(name => lists[name])) create.history = 0
   const at = (source: SourceRecord) => `${source.location.artifact} #${source.location.row} (${String(source.sourceId).split(':').slice(1).join(':')})`
   const reject = (source: SourceRecord, reason: string) => { rejected.push({ location: at(source), reason }); return { effects: [], rejection: reason } }
@@ -174,6 +180,14 @@ async function build(env: Bindings, actor: Actor, input: Input) {
     version: mappingVersion,
     map(source) {
       const o = source.payload as any
+      if (source.kind === 'pending_item') {
+        const value = pendingItemValue(o, { subscriptions: lists.subscriptions, zone, customerTarget,
+          subscriptionTarget: targetIds.subscription, mappedSubscriptions })
+        const id = hex(`nectar:stripe:pending-item:${o.id}`)
+        if (conflict('pending_item', id, source)) return reject(source, 'already imported earlier with different values')
+        if (!existing.has(`pending_item:${id}`)) create.pending_item++
+        return { effects: [effect('pending_item', id, value)] }
+      }
       if (['payment','refund','dispute','subscription_event'].includes(source.kind)) {
         const captured = stripeHistoryValue(source.kind as HistorySourceKind, o, historyContext)
         if (captured.reason !== undefined) return reject(source, captured.reason)
@@ -250,7 +264,7 @@ async function build(env: Bindings, actor: Actor, input: Input) {
           if (!priceVersion.has(priceId)) return reject(source, `price ${priceId} was not imported; historical evidence is retained but unsupported billing terms are not installed`)
           mapped.push({ id: targetIds.item(item.id), priceId: targetIds.price(priceId), quantity: item.quantity ?? 1, from: start, to: null, providerRef: item.id })
         }
-        const end = o.status === 'canceled' ? dateOf(o.ended_at ?? o.canceled_at) : o.cancel_at ? dateOf(o.cancel_at) : null
+        const end = importedCancellation(o, zone)
         const trialEnd = o.trial_end && dateOf(o.trial_end)! > start ? dateOf(o.trial_end) : null
         const amendments = []
         const { discounts, amounts } = importedAmountDiscounts(o, { zone, anchorDay, prices: lists.prices, supportedPrice: priceOk,
@@ -265,13 +279,15 @@ async function build(env: Bindings, actor: Actor, input: Input) {
             amendments.push({ id: targetIds.amendment(discount.id ?? `${o.id}:${coupon.id}`), kind: 'discount_percent', value: decimalText(micros(String(coupon.percent_off))), from, to, note: `Stripe coupon ${coupon.name ?? coupon.id}`, status: 'approved' })
           } else if (coupon?.amount_off == null && coupon) note(source, `coupon ${coupon.id} (${coupon.amount_off ? 'fixed amount' : 'unsupported'}) is not moved; record it as a contract exception in Nectar`)
         }
-        if (o.schedule) note(source, `Stripe subscription schedule ${idOf(o.schedule)} is recorded, not executed; schedule its future phases as changes in Nectar`)
+        const scheduled = importedSchedule(o, mapped, { zone, anchorDay, prices: lists.prices, supportedPrice: priceOk,
+          priceId: targetIds.price, identity: id => hex(`nectar:stripe:schedule-item:${id}`), endDate: end })
+        if (typeof o.schedule === 'string') note(source, `Stripe subscription schedule ${o.schedule} has no captured phases; future changes are not installed`)
         if (o.default_tax_rates?.length) note(source, 'Stripe tax rates are not moved; Nectar applies its declared tax policy')
         const id = targetIds.subscription(o.id)
         if (conflict('subscription', id, source)) return reject(source, 'already imported earlier with different values')
         if (!existing.has(`subscription:${id}`)) create.subscription++
         mappedSubscriptions.add(o.id)
-        return { effects: [effect('subscription', id, { customerId, externalId: o.id, anchorDay, startDate: start, trialEnd, endDate: end && end > start ? end : null, providerRef: o.id, scheduleRef: o.schedule ? idOf(o.schedule) : null, collection: String(o.collection_method ?? ''), ...(amounts.length ? { amountCoupons: amounts } : {}), items: mapped.sort((a, b) => a.id.localeCompare(b.id)), amendments: amendments.sort((a, b) => a.id.localeCompare(b.id)) })] }
+        return { effects: [effect('subscription', id, { customerId, externalId: o.id, anchorDay, startDate: start, trialEnd, endDate: scheduled.endDate && scheduled.endDate > start ? scheduled.endDate : null, providerRef: o.id, scheduleRef: o.schedule ? idOf(o.schedule) : null, collection: String(o.collection_method ?? ''), ...(amounts.length ? { amountCoupons: amounts } : {}), items: scheduled.items.sort((a, b) => a.id.localeCompare(b.id)), amendments: amendments.sort((a, b) => a.id.localeCompare(b.id)) })] }
       }
       // Credit notes retain exact source numbers and amounts as read-only custody.
       // They never create a Nectar credit or change native/imported balances.
@@ -415,6 +431,8 @@ export async function adopt(env: Bindings, actor: Actor, input: Input) {
   const cutover = input.text('cutover_start', { max: 10 })
   insist(isDate(cutover) && Number(cutover.slice(8)) === sub.anchor_day, 'cutover_must_start_a_period')
   insist(cutover >= sub.earliestCutover, 'cutover_overlaps_previous_biller', 409, { earliest: sub.earliestCutover })
+  const pending = await all(env, "SELECT effective_date FROM nc_charges WHERE subscription_id=? AND origin='import' AND invoice_id IS NULL", sub.id)
+  insist(pending.every(item => item.effective_date === cutover), 'pending_items_cutover_changed', 409)
   insist(sub.reconciled || input.flag('acknowledge_unreconciled'), 'shadow_not_reconciled', 409)
   const current = await one(env, 'SELECT revision FROM nc_subscriptions WHERE id = ?', sub.id)
   await commit(env, [

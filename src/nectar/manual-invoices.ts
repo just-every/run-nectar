@@ -21,6 +21,7 @@ export async function manualCalculation(env: Bindings, b: Business, customerId: 
   const rows = await all(env, `SELECT * FROM nc_charges WHERE customer_id=? AND invoice_id IS NULL AND id IN (${ids.map(() => '?').join(',')}) ORDER BY effective_date,id`, customerId, ...ids)
   for (const row of rows) assertSameCurrency(customer.currency, row.currency)
   insist(rows.length === ids.length, 'charges_already_billed_or_missing', 409)
+  insist(rows.every(row => row.origin !== 'import'), 'imported_charge_requires_subscription_billing', 409)
   insist(rows.every(row => row.effective_date <= date), 'charge_in_future')
   const certificate = await certificateBasis(env, customerId, b.tax_jurisdiction, { start: date, end: addDays(date, 1) })
   const tax = { mode: b.tax_mode, rate: b.tax_rate, jurisdiction: b.tax_jurisdiction, exempt: certificate?.exempt ?? !!customer.tax_exempt, exemptRef: certificate?.exemptRef ?? customer.tax_exempt_ref, ...(certificate ? { certificate: certificate.certificate, exception: certificate.exception } : {}) }
