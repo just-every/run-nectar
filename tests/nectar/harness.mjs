@@ -12,7 +12,7 @@ import { httpListener } from './http-listener.mjs'
 const wrangler = createRequire(import.meta.url)('wrangler')
 const { Miniflare, convertV4MiniflareOptions } = createRequire(createRequire(import.meta.url).resolve('wrangler'))('miniflare')
 
-export async function harness({ assets = false, localTime, hostname = '127.0.0.1', stripeFetch, stripeSecret, stripeSecondarySecret, stripeWebhookSecret, quickbooksFetch, webhookFetch, persistence, databaseId='nectar', applyMigrations=true, settings={} } = {}) {
+export async function harness({ assets = false, localTime, hostname = '127.0.0.1', stripeFetch, plaidFetch, stripeSecret, stripeSecondarySecret, stripeWebhookSecret, quickbooksFetch, webhookFetch, persistence, databaseId='nectar', applyMigrations=true, settings={} } = {}) {
   const secret = () => randomBytes(32).toString('base64url')
   const vars = { AUTH_LOCAL: 'true', OWNER_EMAIL: 'owner@example.test', SESSION_SECRET: secret(), SETUP_TOKEN: secret(), MFA_KEY: secret(), PORTAL_KEY: secret(), MAIL_PROVIDER: 'resend', MAIL_API_KEY: 'test-only-resend-key', MAIL_FROM: 'auth@example.test' }
   // Persistent journeys keep their private runtime keys in memory across
@@ -30,6 +30,7 @@ export async function harness({ assets = false, localTime, hostname = '127.0.0.1
     if(nativeMailFetch&&new URL(request.url).hostname==='api.sendgrid.com')return nativeMailFetch(request)
     if (new URL(request.url).hostname==='receiver.nectar-app.com'&&webhookFetch)return webhookFetch(request)
     if (new URL(request.url).hostname==='api.stripe.com'&&stripeFetch)return stripeFetch(request)
+    if (new URL(request.url).hostname==='sandbox.plaid.com'&&plaidFetch)return plaidFetch(request)
     if (new URL(request.url).hostname==='sandbox-quickbooks.api.intuit.com'&&quickbooksFetch)return quickbooksFetch(request)
     if (request.url !== 'https://api.resend.com/emails') return new Response('Unexpected outbound request', { status: 599 })
     const message=await request.json();mails.push(message)

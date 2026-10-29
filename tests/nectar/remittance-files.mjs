@@ -1,3 +1,4 @@
+import { plaidRemittanceEdge, plaidRemittanceFlow } from './remittance-plaid.mjs'
 import { applyPolicy } from './policy-helper.mjs'
 // Real Worker and D1; cash, matching and refusal use only public doors.
 import assert from 'node:assert/strict'
@@ -6,7 +7,11 @@ import { mkdir } from 'node:fs/promises'
 import { file } from './harness.mjs'
 import { csvRows } from './financial-reports.mjs'
 
-export const harnessOptions = () => ({ assets: true, localTime: '2026-10-28T12:00:00Z' })
+let bankEdge
+export const harnessOptions = () => {
+  bankEdge=plaidRemittanceEdge()
+  return { assets:true,localTime:'2026-10-28T12:00:00Z',plaidFetch:bankEdge.fetch,settings:{PLAID_CLIENT_ID:'synthetic-nectar-plaid-client',PLAID_SECRET:'synthetic-nectar-plaid-secret',PLAID_ACCESS_TOKEN:'synthetic-nectar-plaid-access'} }
+}
 const header = 'receipt_id,received_on,currency,amount,customer,invoice_reference,allocation_amount\n'
 export const remittanceFile = rows => file('synthetic-nectar-900.csv',header+rows.map(row=>row.join(',')).join('\n')+'\n')
 export async function remittanceFixtures(h, owner) {
@@ -178,6 +183,7 @@ export async function remittanceFilesFlow(h, owner) {
   await confirm(wire,match,409)
   await api('remittance.allocate.preview',{receipt:wire,invoice:invoices[4].id,amount:'1.00'},409)
   await h.assertStorageExcludes(['synthetic-nectar-901','synthetic-nectar-910','synthetic-nectar-911','synthetic-nectar-913'])
+  await plaidRemittanceFlow(h,owner,bankEdge,remittanceFile)
   console.log('Remittance public-door money, refusal, reconciliation, erasure and browser journey passed')
 }
 

@@ -1,3 +1,4 @@
+import { plaidRemittanceEdge } from './remittance-plaid.mjs'
 import { remittanceFile, remittanceFixtures } from './remittance-files.mjs'
 import { file } from './harness.mjs'
 // Public processor capture, statutory removal and actual rer archive restore.
@@ -18,7 +19,7 @@ const cashKinds=['nc_processor_events','nc_processor_cash_applications','nc_proc
 const returnKinds=['nc_processor_cash_returns']
 const importedKinds=['nc_processor_cash_imported_applications','nc_processor_cash_imported_takeovers']
 const nativeKinds=[...new Set([...eventKinds,...cashKinds])]
-const remittanceKinds=['nc_remittances','nc_remittance_allocations']
+const remittanceKinds=['nc_remittances','nc_remittance_allocations','nc_plaid_deposits']
 const sourceKinds=[...nativeKinds,...returnKinds,...importedKinds,...remittanceKinds,'nc_remittance_source_keys']
 const priorDay=day=>new Date(Date.parse(`${day}T12:00:00Z`)-86400000).toISOString()
 
@@ -182,8 +183,8 @@ export async function processorArchiveJourney() {
     await worker.signIn('synthetic-nectar-archive-finance@example.test',{requested:true})
     return {...result,financeEmail:'synthetic-nectar-archive-finance@example.test'}
    }})
-  if(only==='remittances')await additionalArchivePhase(root,scratch,{label:'remittances',persistence,databaseId,edge:processorCashEdge(),requiredKinds:remittanceKinds,localTime:'2026-10-28T10:00:00Z',
-   async populate(worker,who){
+  if(only==='remittances')await additionalArchivePhase(root,scratch,{label:'remittances',persistence,databaseId,edge:processorCashEdge(),plaid:plaidRemittanceEdge(),requiredKinds:remittanceKinds,localTime:'2026-10-28T10:00:00Z',
+   async populate(worker,who,provider,plaid){
     const api=(path,body,status)=>worker.api(path,who,body,status)
     const {customer,issue}=await remittanceFixtures(worker,who),invoice=await issue('10.00')
     const source=remittanceFile([['synthetic-nectar-930','2026-10-15','USD','25.00','synthetic-nectar-901','','']])
@@ -192,6 +193,12 @@ export async function processorArchiveJourney() {
     const confirmed=await api('remittance.confirm',{receipt,fingerprint:prepared.fingerprint,confirm:true})
     const allocation=await api('remittance.allocate.preview',{receipt,invoice:invoice.id,amount:'10.00'})
     await api('remittance.allocate',{receipt,invoice:invoice.id,amount:'10.00',fingerprint:allocation.fingerprint,confirm:true})
+    const bankInvoice=await issue('5.00'),deposit=plaid.seed('synthetic-nectar-bank-archive',5)
+    const bankSource=remittanceFile([[deposit.transaction_id,'2026-10-15','USD','5.00','synthetic-nectar-901',bankInvoice.number,'5.00']])
+    const factor=await api('mfa.totp.start',{})
+    await api('mfa.totp.confirm',{factor:factor.factor,code:totp(factor.secret,Date.parse('2026-10-28T10:00:00Z'))})
+    const bankPreview=await api('bank.remittance.preview',{account:plaid.account,file:bankSource})
+    await api('bank.remittance.confirm',{account:plaid.account,file:bankSource,fingerprint:bankPreview.fingerprint,confirm:true})
     const financeEmail=['synthetic-nectar-931','example.test'].join('@')
     await api('access.give',{email:financeEmail,name:'Synthetic finance',role:'finance'})
     await worker.signIn(financeEmail,{requested:true})
@@ -202,8 +209,9 @@ export async function processorArchiveJourney() {
     return {customer,financeEmail,async restoreCheck(restored,owner,removed=false){
      await restored.api('remittance.upload',owner,{file:source},409)
      await restored.api('remittance.confirm',owner,{receipt,fingerprint:prepared.fingerprint,confirm:true},removed?404:409)
+     await restored.api('bank.remittance.preview',owner,{account:plaid.account,file:bankSource},409)
      const payments=await restored.api('payments',owner)
-     assert.equal(payments.filter(p=>p.customer_id===customer).length,removed?0:1)
+     assert.equal(payments.filter(p=>p.customer_id===customer).length,removed?0:2)
      if(!removed)assert.equal(payments.find(p=>p.id===confirmed.payment).amount_cents,2500)
     }}
    }})
@@ -213,22 +221,22 @@ export async function processorArchiveJourney() {
 
 // Return-only and imported originals need separate installations: their real
 // frozen report journeys each reserve the owner's one October snapshot.
-async function additionalArchivePhase(root,scratch,{label,persistence,databaseId,edge,requiredKinds,populate,localTime}) {
+async function additionalArchivePhase(root,scratch,{label,persistence,databaseId,edge,plaid,requiredKinds,populate,localTime}) {
  const path=name=>join(scratch,`${label}-${name}.rer`)
  let h
  try {
   await command(root,['reset','--yes'])
   await command(root,['export','--output',path('empty')])
-  const setup=await processorSetup(edge,{persistence,databaseId,applyMigrations:false,...localTime?{localTime}:{}})
+  const setup=await processorSetup(edge,{persistence,databaseId,applyMigrations:false,...plaid?{plaidFetch:plaid.fetch,settings:{PLAID_CLIENT_ID:'synthetic-nectar-plaid-client',PLAID_SECRET:'synthetic-nectar-plaid-secret',PLAID_ACCESS_TOKEN:'synthetic-nectar-plaid-access'}}:{},...localTime?{localTime}:{}})
   h=setup.h
   const enrollment={};observeOwnerEnrollment(h,setup.owner,enrollment)
-  const target=await populate(h,setup.owner,edge)
+  const target=await populate(h,setup.owner,edge,plaid)
   const settings={...h.vars}
   await h.close();h=null
   await command(root,['export','--output',path('populated')])
   const captured=sources(await archiveItems(path('populated')))
   for(const kind of requiredKinds)assert.ok(captured.some(item=>item.table===kind&&item.row.customer_id===target.customer),`Actual ${label} archive includes populated ${kind}`)
-  h=await harness({assets:true,persistence,databaseId,applyMigrations:false,settings,localTime:'2026-11-02T12:00:00Z'})
+  h=await harness({assets:true,persistence,databaseId,applyMigrations:false,settings,plaidFetch:plaid?.fetch,localTime:'2026-11-02T12:00:00Z'})
   const owner=await restoredOwner(h,enrollment,'2026-11-02T12:00:00Z'),finance=await h.signIn(target.financeEmail)
   await processorFinancialRemovalFlow(h,owner,{finance,peer:target.peer,targets:[{customer:target.customer,kinds:requiredKinds}]})
   if(target.restoreCheck)await target.restoreCheck(h,owner,true)
@@ -242,7 +250,7 @@ async function additionalArchivePhase(root,scratch,{label,persistence,databaseId
   await command(root,['export','--output',path('restored')])
   assert.deepEqual(sources(await archiveItems(path('restored'))),captured,`Actual rer restore preserves every populated ${label} processor source`)
   if(target.restoreCheck){
-   h=await harness({assets:true,persistence,databaseId,applyMigrations:false,settings,localTime:'2026-11-02T12:00:00Z'})
+   h=await harness({assets:true,persistence,databaseId,applyMigrations:false,settings,plaidFetch:plaid?.fetch,localTime:'2026-11-02T12:00:00Z'})
    assert.equal((await h.raw('/auth/bootstrap',{body:{token:h.vars.SETUP_TOKEN,displayName:'Restored owner'}})).status,303)
    await target.restoreCheck(h,await restoredOwner(h,enrollment,'2026-11-02T12:00:00Z'))
   }

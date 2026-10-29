@@ -5,7 +5,7 @@ import { clockInstant } from './clock'
 import { cents } from './decimal'
 import { Input } from './input'
 import { allocationFactStatements, BALANCE_SQL, paymentFactStatement, UNALLOCATED_SQL } from './receivables'
-import { remittanceAllocation, remittanceMatch, remittanceSources } from './remittance-matching'
+import { remittanceAllocation, remittanceMatch, remittanceSources, type RemittanceSource } from './remittance-matching'
 
 function readable(actor: Actor) {
   for (const family of ['customers','invoices','payments'] as const) requireRead(actor, family)
@@ -20,7 +20,13 @@ async function receipt(env: Bindings, input: Input) {
 export async function uploadRemittances(env: Bindings, actor: Actor, input: Input) {
   operator(actor)
   const file = (await input.file('file', { maxBytes: 128_000 }))!
-  const sources = remittanceSources(file.bytes), ids: string[] = [], statements: D1PreparedStatement[] = []
+  const { ids, statements } = await stageRemittanceSources(env, actor, remittanceSources(file.bytes))
+  if (statements.length) await commit(env, statements, { actor: actorLabel(actor), action: 'remittance.upload', subject: ids[0], detail: { receipts: ids } })
+  return { id: ids[0], receipts: ids }
+}
+
+export async function stageRemittanceSources(env: Bindings, actor: Actor, sources: RemittanceSource[], stableIds = false) {
+  const ids: string[] = [], statements: D1PreparedStatement[] = [], rows: Row[] = []
   for (const source of sources) {
     const sourceKey = await fingerprint({ kind: 'usd-remittance', receiptId: source.receiptId }), payloadHash = await fingerprint(source)
     const key = await one(env, 'SELECT * FROM nc_remittance_source_keys WHERE source_key_hash=?', sourceKey)
@@ -29,18 +35,17 @@ export async function uploadRemittances(env: Bindings, actor: Actor, input: Inpu
     if (existing) {
       insist(existing.status !== 'erased', 'remittance_erased', 409)
       insist(existing.payload_hash === payloadHash, 'remittance_source_changed', 409)
-      ids.push(existing.id); continue
+      ids.push(existing.id); rows.push(existing); continue
     }
-    const id = newId(), row = { id, status: 'staged', source_json: JSON.stringify(source), payload_hash: payloadHash }
+    const id = stableIds ? sourceKey : newId(), row = { id, status: 'staged', source_json: JSON.stringify(source), payload_hash: payloadHash, amount_cents: source.amountCents, received_on: source.receivedOn }
     const match = await remittanceMatch(env, row)
     if (match.customer) statements.push(customerGuard(env, match.customer, match.customerRevision))
     statements.push(stmt(env, `INSERT INTO nc_remittances(id,source_key_hash,payload_hash,source_json,amount_cents,currency,received_on,customer_id,status,created_by,created_at) VALUES(?,?,?,?,?,?,?,?,'staged',?,?)`,
       id, sourceKey, payloadHash, row.source_json, source.amountCents, source.currency, source.receivedOn, match.customer, actorLabel(actor), clockInstant(env)))
     statements.push(stmt(env, 'INSERT INTO nc_remittance_source_keys(source_key_hash,payload_hash,record_id) VALUES(?,?,?)', sourceKey, payloadHash, id))
-    ids.push(id)
+    ids.push(id); rows.push(row)
   }
-  if (statements.length) await commit(env, statements, { actor: actorLabel(actor), action: 'remittance.upload', subject: ids[0], detail: { receipts: ids } })
-  return { id: ids[0], receipts: ids }
+  return { ids, statements, rows }
 }
 export async function previewRemittance(env: Bindings, actor: Actor, input: Input) {
   operator(actor)
@@ -66,6 +71,14 @@ export async function confirmRemittance(env: Bindings, actor: Actor, input: Inpu
   const preview = await remittanceMatch(env, row, selected)
   insist(preview.customer, 'remittance_customer_required', 409)
   insist(hash === preview.fingerprint, 'stale', 409)
+  const { payment, statements } = remittanceConfirmationStatements(env, actor, row, preview)
+  await commit(env, statements, { actor: actorLabel(actor), action: 'remittance.confirm', subject: row.id, detail: { customer: preview.customer, payment, allocations: preview.allocations, reason: preview.reason } })
+  return { id: row.id, payment, duplicate: false }
+}
+
+export function remittanceConfirmationStatements(env: Bindings, actor: Actor, row: Row, preview: Awaited<ReturnType<typeof remittanceMatch>>) {
+  insist(preview.customer, 'remittance_customer_required', 409)
+  const hash = preview.fingerprint
   const payment = newId(), statements = [
     guard(env, 'stale', "EXISTS(SELECT 1 FROM nc_remittances WHERE id=? AND status='staged' AND payload_hash=?)", row.id, row.payload_hash),
     customerGuard(env, preview.customer, preview.customerRevision),
@@ -79,8 +92,8 @@ export async function confirmRemittance(env: Bindings, actor: Actor, input: Inpu
   for (const allocation of preview.allocations) statements.push(balanceGuard(env, allocation.invoice, preview.customer, allocation.balanceCents),
     ...allocationFactStatements(env, actor, payment, { id: allocation.invoice }, allocation.amountCents, newId()))
   statements.push(stmt(env, "UPDATE nc_remittances SET status='confirmed',customer_id=?,payment_id=?,confirmation_hash=?,confirmed_by=?,confirmed_at=? WHERE id=?", preview.customer, payment, hash, actorLabel(actor), clockInstant(env), row.id))
-  await commit(env, statements, { actor: actorLabel(actor), action: 'remittance.confirm', subject: row.id, detail: { customer: preview.customer, payment, allocations: preview.allocations, reason: preview.reason } })
-  return { id: row.id, payment, duplicate: false }
+  statements.push(stmt(env, 'UPDATE nc_plaid_deposits SET customer_id=? WHERE receipt_id=? AND customer_id IS NOT ?', preview.customer, row.id, preview.customer))
+  return { payment, statements }
 }
 export async function previewRemittanceAllocation(env: Bindings, actor: Actor, input: Input) {
   operator(actor)
@@ -110,7 +123,7 @@ export async function allocateRemittance(env: Bindings, actor: Actor, input: Inp
 }
 export async function readRemittances(env: Bindings, actor: Actor): Promise<Row[]> {
   readable(actor)
-  const rows = await all(env, `SELECT r.*,c.name AS customer_name,${UNALLOCATED_SQL} AS available_cents FROM nc_remittances r LEFT JOIN nc_customers c ON c.id=r.customer_id LEFT JOIN nc_payments p ON p.id=r.payment_id WHERE r.status<>'erased' ORDER BY r.created_at DESC,r.id`)
+  const rows = await all(env, `SELECT r.*,c.name AS customer_name,b.transaction_ref AS bank_transaction_ref,b.account_ref AS bank_account_ref,${UNALLOCATED_SQL} AS available_cents FROM nc_remittances r LEFT JOIN nc_customers c ON c.id=r.customer_id LEFT JOIN nc_payments p ON p.id=r.payment_id LEFT JOIN nc_plaid_deposits b ON b.receipt_id=r.id WHERE r.status<>'erased' ORDER BY r.created_at DESC,r.id`)
   return Promise.all(rows.map(async row => {
     const source = parseJson<Row>(row.source_json, {})
     if (row.status === 'staged') {

@@ -1,3 +1,4 @@
+import { previewPlaidRemittances, confirmPlaidRemittances } from './plaid-remittances'
 import { preparePortalChangePolicy } from './portal-change-policy'
 import { uploadRemittances, previewRemittance, confirmRemittance, previewRemittanceAllocation, allocateRemittance } from './remittances'
 import { consumeProcessorEvent } from './processor-events'
@@ -332,6 +333,8 @@ export const actions: Record<string, Handler> = {
   'promotion.create': createPromotionCode,
   'trial.extend': extendTrial,
   'trial.resolve': resolveTrial,
+  'bank.remittance.preview': previewPlaidRemittances,
+  'bank.remittance.confirm': confirmPlaidRemittances,
   'remittance.upload': uploadRemittances,
   'remittance.preview': previewRemittance,
   'remittance.confirm': confirmRemittance,
