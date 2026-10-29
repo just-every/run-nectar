@@ -89,6 +89,7 @@ export async function giveAccess(env: Bindings, actor: Actor, input: Input, requ
   const id = existing?.id ?? newId()
   const identity = await one(env, 'SELECT id FROM oa_operators WHERE email=?', email)
   insist(identity, 'native_operator_required', 409)
+  insist(!existing?.operator_id || existing.operator_id === identity.id, 'native_binding_mismatch', 409)
   await commit(env, [existing
     ? stmt(env, "UPDATE nc_members SET name = ?, role = ?, custom_role_id = ?, operator_id = ?, status = 'active', updated_at = ? WHERE id = ?", name, role, customId, identity.id, now(), id)
     : stmt(env, "INSERT INTO nc_members (id, email, name, role, custom_role_id, operator_id, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?)", id, email, name, role, customId, identity.id, now(), now())],

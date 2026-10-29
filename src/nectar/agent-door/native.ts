@@ -1,6 +1,6 @@
 import type { Bindings } from '../../auth.server'
 import { ToolRefusal, type ClassAndFacts, type ToolContext } from '../../modules/agent-door/index.ts'
-import { memberCapabilities, type Actor, type Capability, type Role } from '../actor'
+import { memberCapabilities, RECORD_FAMILIES, type Actor, type Capability, type Role } from '../actor'
 import { NectarError, one } from '../core'
 
 const grants: Record<string, Capability[]> = {
@@ -19,7 +19,8 @@ export async function nativeActor(env: Bindings, ctx: ToolContext): Promise<Acto
   if (!member) throw new ToolRefusal('unauthenticated')
   const held = memberCapabilities(member.role as Role, member.custom)
   const requested = new Set(ctx.scopes.flatMap(scope => grants[scope] ?? []))
-  return { id: ctx.clientId ?? ctx.agent.id, kind: 'agent', name: ctx.agent.name, email: '', role: null,
+  if (requested.has('read')) for (const family of RECORD_FAMILIES) requested.add(`read.${family}`)
+  return { id: ctx.consent ? ctx.agent.id : ctx.clientId ?? ctx.agent.id, kind: 'agent', name: ctx.agent.name, email: '', role: null,
     sessionId: null, capabilities: new Set([...held].filter(cap => requested.has(cap))), attribution: ctx.actor.label }
 }
 
@@ -33,9 +34,28 @@ export async function nativeCall<T>(run: () => Promise<T>): Promise<T> {
 
 /** Classify retained content, never instructions supplied alongside the call. */
 export function contentClasses(value: unknown, measure = 1): ClassAndFacts[] {
-  const text = JSON.stringify(value) ?? ''
-  const kind = /\b\d{3}-\d{2}-\d{4}\b|\b\d{2}-\d{7}\b/.test(text) ? 'ID'
-    : /\b(?:bank|routing|account)[ _-]?(?:number|no)["\s:=_-]*\d{6,}\b/i.test(text) ? 'bank'
-    : /\b(?:card|pan)[ _-]?(?:number|no)?["\s:=_-]*\d{13,19}\b/i.test(text) ? 'card' : null
-  return [{ class: 'standard', facts: { measure } }, ...(kind ? [{ class: 'sensitive' as const, facts: { measure, kind } }] : [])]
+  const records = new Map<string, Set<string>>()
+  const opaque = /^(?:id|event_?id|external_id|customer_?id|meter_?id|subscription_?id|invoice_?id|source_id|record_id|source_fingerprint|basis|basis_hash|fingerprint)$/i
+  function visit(item: unknown, path = 'record', record = 'record') {
+    if (!item || typeof item !== 'object') return
+    if (Array.isArray(item)) { item.forEach((entry, i) => visit(entry, `${path}/${i}`, `${path}/${i}`)); return }
+    const row = item as Record<string, unknown>
+    const identity = row.id ?? row.event_id ?? row.eventId
+    const current = typeof identity === 'string' ? identity : record
+    for (const [key, content] of Object.entries(row)) {
+      if (content && typeof content === 'object') { visit(content, `${path}/${key}`, current); continue }
+      if (typeof content !== 'string' || opaque.test(key) || !content || /^(?:[x*• -]+|.*(?:last.?four|last.?4|ending in)\D*\d{4})$/i.test(content)) continue
+      const kind = /\b\d{3}-\d{2}-\d{4}\b|\b\d{2}-\d{7}\b/.test(content) || /^(?:ssn|ein|tax_?id)$/.test(key) ? 'ID'
+        : /(?:bank|routing|iban|account_number)/i.test(key) || /\b(?:bank|routing|account)[ _-]?(?:number|no)[\s:=_-]*\d{6,}\b/i.test(content) ? 'bank'
+        : /(?:card_number|pan)/i.test(key) || /\b(?:card|pan)[ _-]?(?:number|no)?[\s:=_-]*\d{13,19}\b/i.test(content) ? 'card'
+        : /(?:diagnosis|medical_record|patient|health)/i.test(key) || /\b(?:diagnos(?:is|ed)|patient|HIV|medical history)\b/i.test(content) ? 'health'
+        : /(?:payroll|salary|wage)/i.test(key) ? 'payroll' : null
+      if (kind) { const found = records.get(kind) ?? new Set<string>(); found.add(current); records.set(kind, found) }
+    }
+  }
+  visit(value)
+  const kinds = [...records.keys()].sort()
+  const protectedRecords = new Set([...records.values()].flatMap(found => [...found]))
+  return [{ class: 'standard', facts: { measure } }, ...(kinds.length ? [{ class: 'sensitive' as const,
+    facts: { measure: protectedRecords.size, kind: kinds.join(',') } }] : [])]
 }

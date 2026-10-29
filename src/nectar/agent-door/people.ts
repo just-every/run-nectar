@@ -9,6 +9,7 @@ interface BoundMember {
   id: string; name: string; role: Role; status: string; operator_id: string
   operatorEmail: string; operatorName: string; operatorRole: string; operatorStatus: string
 }
+interface NativePerson extends Person { policyRole: 'owner' | 'editor' | null }
 const boundColumns = `m.id,m.name,m.role,m.status,m.operator_id,o.email AS operatorEmail,
   o.display_name AS operatorName,o.role AS operatorRole,o.status AS operatorStatus`
 const setupOwner = `SELECT o.id FROM oa_operators o LEFT JOIN oa_bootstrap b ON b.claim_id=o.id
@@ -17,14 +18,17 @@ const setupOwner = `SELECT o.id FROM oa_operators o LEFT JOIN oa_bootstrap b ON 
 /** Business subjects resolve only through saved operator IDs, never a token's email. */
 export function nectarPeople(env: Bindings): PeopleAdapter {
   const db = env.DB
-  async function read(id: string): Promise<Person | null> {
+  async function read(id: string): Promise<NativePerson | null> {
     const row = await db.prepare(`SELECT ${boundColumns} FROM nc_members m
       JOIN oa_operators o ON o.id=m.operator_id WHERE m.id=?`).bind(id).first<BoundMember>()
     if (!row) return null
     const operator = { id: row.operator_id, email: row.operatorEmail, displayName: row.operatorName,
       role: row.operatorRole, status: row.operatorStatus } as Operator
+    const signed = await db.prepare(`SELECT business_role FROM bs_team WHERE operator_id=?
+      AND state IN ('active','invited') AND business_id IS NOT NULL`).bind(row.operator_id).first<{ business_role: string }>()
     return { id: row.id, name: row.name, email: row.operatorEmail,
       role: row.operatorRole === 'owner' ? 'owner' : row.role === 'owner' ? 'finance' : row.role,
+      policyRole: row.operatorRole === 'owner' ? 'owner' : signed?.business_role === 'admin' ? 'editor' : null,
       active: row.status === 'active' && isActiveOperator(operator, authConfig(env).allowList) }
   }
   const owner = () => db.prepare(`SELECT m.id,m.operator_id FROM nc_members m
@@ -48,6 +52,7 @@ export function nectarPeople(env: Bindings): PeopleAdapter {
   }
   return {
     person: read,
+    businessRole: person => (person as NativePerson).policyRole ?? null,
     async sponsor({ sub }) {
       const saved = await settings()
       if (!saved) return null

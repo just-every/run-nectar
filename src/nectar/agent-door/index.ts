@@ -40,7 +40,7 @@ export function nectarDoor(env: Bindings) {
       return { sponsor: { id: row.sponsor_member_id }, agent: { id: row.id, name: row.name, specialist }, scopes: scopes(row.scopes), clientId: row.id }
     },
     async currentScopes(principal) {
-      if (!principal.clientId) return principal.scopes
+      if (principal.consent || !principal.clientId) return principal.scopes
       const row = await one(env, 'SELECT scopes,sponsor_member_id FROM nc_agent_keys WHERE id=? AND revoked_at IS NULL', principal.clientId)
       return row?.sponsor_member_id === principal.person.id ? scopes(row.scopes) : []
     },
