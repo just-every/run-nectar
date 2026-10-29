@@ -1106,6 +1106,24 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "revision": "integer",
     "role": "text"
   },
+  "sandbox.catalog.copy": {
+    "confirm": "flag",
+    "source_fingerprint": "text"
+  },
+  "sandbox.clock.advance": {
+    "clock": "text",
+    "confirm": "flag",
+    "customer": "text",
+    "revision": "integer"
+  },
+  "sandbox.customer.create": {
+    "catalog": "text",
+    "clock": "text",
+    "label": "text",
+    "price": "list",
+    "quantity": "list",
+    "trial_end": "text"
+  },
   "setup.resolve": {
     "proposal": "text",
     "resolution": "list"

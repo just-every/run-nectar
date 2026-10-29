@@ -174,7 +174,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "5988dc585e504aba5a8ac475db45e81feb44aa6b05cd7a329860c7bd8cfc3bf7",
+      "sha256": "512baea4b66121d7368401da11af2614a19be0b21205b68099d35ac6a1edc197",
       "executable": false
     },
     "AGENTS.consumer.md": {
@@ -186,7 +186,7 @@
       "executable": false
     },
     "API.md": {
-      "sha256": "53312135b330594d32bf601476b8cc9eda276ffed3f0aae1f64e1498d8f3fd8c",
+      "sha256": "5d5dd80b630c19ac7826c09e0e4492856ae03c2fec563c2c83ea2c83fa4045d4",
       "executable": false
     },
     "base-copies.json": {
@@ -194,7 +194,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "95b40c0b1f23d31a129b6796c96e020a7467e37a6bfc6b51f9510166e3ac5fc6",
+      "sha256": "a975068942a34e1333c7e4e7811162ba76279aeb9c6f90c6739d86e1f4d6444f",
       "executable": false
     },
     "DEMO.md": {
@@ -230,7 +230,7 @@
       "executable": false
     },
     "docs/CLAIMS.md": {
-      "sha256": "a7f370ac2e3089722c68ed2259b3eae9709d1fd9dab22aa657e2dc8c64444a4f",
+      "sha256": "b272dee836af5ef1e34abdee1124d8d817300183b4b633c55d154908e780b873",
       "executable": false
     },
     "docs/composition-baseline.json": {
@@ -857,6 +857,10 @@
       "sha256": "b6b04511880aea6e0de4a46e2ef841a3972ae3a4b82581779cf6d573650c3728",
       "executable": false
     },
+    "migrations/core/0116_sandbox_privacy.sql": {
+      "sha256": "a221f0406a8084a30f60f57acedacf0ab68df02c4eee593f3f7b066d74bdfad0",
+      "executable": false
+    },
     "ONBOARDING.md": {
       "sha256": "95bb235abff28ac36979868486caf2cb73bfbe4ab63037f3e301d189bb9398d9",
       "executable": false
@@ -1030,7 +1034,7 @@
       "executable": false
     },
     "RELEASE.json": {
-      "sha256": "49afcaecfc14da3fd561061ea9b74e9b500ff8759e684ab44fbe77adca0633f3",
+      "sha256": "a4e050887bc7b24fd7616f92ac8872b5f0e5f16b3a70de3b44808095be0241b1",
       "executable": false
     },
     "rer-project.json": {
@@ -3134,7 +3138,7 @@
       "executable": false
     },
     "src/nectar/api-fields.ts": {
-      "sha256": "15c66b26583647f576db78db99c63537946f1c4afb9fa2f3eb2d8c12917c50eb",
+      "sha256": "12ee375ebabd033541f4116f139d228b6396e517e7566f51ab0885754aa8871b",
       "executable": false
     },
     "src/nectar/api-versions.ts": {
@@ -3438,7 +3442,7 @@
       "executable": false
     },
     "src/nectar/erasure-records.ts": {
-      "sha256": "ed380566d9ca73264e79cd3c3fadf6800f68760cdc95ee00704dc6f56f88c88d",
+      "sha256": "56791922258f64390b43236c3e673e4c55914e8c0bdd032c07eb5bc450a9a593",
       "executable": false
     },
     "src/nectar/erasure-requests.ts": {
@@ -4435,6 +4439,10 @@
     },
     "src/nectar/test-clock.ts": {
       "sha256": "5e183c1c66e4d306bf8462b7cd3bcc881d9fc9b4cd01d8ded2f9d714a1d478bc",
+      "executable": false
+    },
+    "src/nectar/test-mode-privacy.ts": {
+      "sha256": "be06521e7bd24568d21dc126d067dbe8884e0425b79784a4f2f421f98da4be93",
       "executable": false
     },
     "src/nectar/test-mode.ts": {
@@ -5738,7 +5746,7 @@
       "executable": false
     },
     "tests/nectar/test-mode.mjs": {
-      "sha256": "ac5edf8f7a0520203b5e550378708c1b7c45586a187290d43710fabaa1ae146b",
+      "sha256": "3a00508c796732d63b5d98e4b8426e6f7825a102f18abfb5552316f73f7ada49",
       "executable": false
     },
     "tests/nectar/upcoming.mjs": {
