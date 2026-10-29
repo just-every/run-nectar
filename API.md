@@ -1006,6 +1006,18 @@ tick. There is no operational activation, resend or retry action.
 Capacity remains unmeasured in `seed.json`. This history does not qualify the
 required ten-thousand-subscription billing day or its timing and restart proof.
 
+The separate `Native billing capacity` workflow is started only by explicit
+workflow dispatch. Its committed command is
+`node tests/nectar/job-capacity.mjs`. The journey creates 10,000 subscriptions
+through the public API, checkpoints their billing day, restarts the real Worker
+before customer consents and after the hundredth processor-edge capture, then
+continues only through the existing fresh-factor owner confirmation. It checks
+one invoice per subscription, one matching capture and receipt per invoice,
+all exported paid balances, the revenue roll-forward and the completion audit.
+Its elapsed billing-day time includes the explicit consent and both restarts;
+seed creation is reported separately. A native timing result does not establish
+unattended recovery, real processor throughput or live delivery capacity.
+
 ## Explicit billing notices
 
 The current interim notice commands are owner-only and require a fresh

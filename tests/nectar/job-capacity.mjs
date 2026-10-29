@@ -50,14 +50,14 @@ export async function nativeJobCapacityFlow(h,owner){
   await api('portal.configure',{hosts:[h.origin],parents:[]})
   const product=(await api('product.create',{code:'synthetic-nectar-native-capacity',name:'Synthetic capacity service'})).id
   const price=(await api('price.create',{product,kind:'flat',unit_amount:'1',taxable:false})).id
-  const customers=[],subscriptions=new Set(),seedStart=performance.now()
+  const customers=[],subscriptions=new Set(),sources=new Map(),requests=new Map(),seedStart=performance.now()
   await parallel(Array.from({length:count/perCustomer},(_,index)=>index),async index=>{
     const customer=(await api('customer.create',{external_id:`synthetic-nectar-capacity-${index}`,name:`Synthetic capacity customer ${index}`,billing_email:h.vars.OWNER_EMAIL})).id
     const remote=`synthetic-nectar-capacity-customer-${index}`
     edge.customers.set(remote,{account:1,method:`synthetic-nectar-capacity-card-${index}`})
     await api('collection.customer.bind',{customer,account_ref:'synthetic-nectar-native-account-1',stripe_customer_ref:remote,confirm:true})
     for(let n=0;n<perCustomer;n++)subscriptions.add((await api('subscription.create',{customer,start_date:'2026-10-01',price:[price]})).id)
-    customers.push(customer)
+    customers.push(customer);sources.set(customer,remote)
     if(customers.length%100===0)console.log(JSON.stringify({phase:'seed',subscriptions:subscriptions.size,elapsedMs:Math.round(performance.now()-seedStart)}))
   })
   assert.equal(subscriptions.size,count)
@@ -72,6 +72,7 @@ export async function nativeJobCapacityFlow(h,owner){
   const [execution]=(await api('invoice-automation')).runs,run=execution.periods[0].bill_run_id
   const drafts=(await api(`runs/${run}`)).invoices.filter(invoice=>subscriptions.has(invoice.subscription_id))
   assert.equal(drafts.length,count);assert.ok(drafts.every(invoice=>invoice.status==='draft'&&invoice.total_cents===100))
+  assert.deepEqual(new Set(drafts.map(invoice=>invoice.subscription_id)),subscriptions,'Every seeded subscription owns exactly one draft')
   const preparedAt=performance.now(),byCustomer=new Map(customers.map(id=>[id,[]]))
   for(const draft of drafts)byCustomer.get(draft.customer_id).push(draft.id)
   // The refused approval leaves every checkpointed draft intact. Restart
@@ -84,6 +85,7 @@ export async function nativeJobCapacityFlow(h,owner){
     const session=await api('portal.session.issue',{customer,origin:h.origin,audience:'hosted'})
     for(const invoice of byCustomer.get(customer)){
       const request=await api('automatic.collection.prepare',{invoice,issue_date:'2026-11-01'})
+      requests.set(invoice,{id:request.id,customer})
       assert.equal((await h.raw(`/portal/automatic-collections/${request.id}?session=${encodeURIComponent(session.token)}`,{body:{request:request.id,basis_hash:request.basis,accept:true}})).status,200)
       await api('automatic.collection.decide',{request:request.id,basis_hash:request.basis,decision:'approved',confirm:true,confirm_single:true})
       if(++consented%1000===0)console.log(JSON.stringify({phase:'consent',invoices:consented,elapsedMs:Math.round(performance.now()-preparedAt)}))
@@ -113,23 +115,62 @@ export async function nativeJobCapacityFlow(h,owner){
   assert.equal(finished.status,'finalised')
   const issued=finished.invoices.filter(invoice=>subscriptions.has(invoice.subscription_id))
   assert.equal(issued.length,count);assert.ok(issued.every(invoice=>invoice.status==='issued'&&invoice.total_cents===100))
+  assert.deepEqual(new Set(issued.map(invoice=>invoice.subscription_id)),subscriptions,'Restart leaves exactly one issued invoice for every seeded subscription')
+  assert.equal(new Set(issued.map(invoice=>invoice.number)).size,count,'Every issued invoice keeps a distinct number')
+  assert.ok(issued.every(invoice=>invoice.period_start==='2026-10-01'&&invoice.period_end==='2026-11-01'&&invoice.currency==='USD'))
+  const captures=new Map()
+  for(const {account,value:intent} of edge.intents.values()){
+    const invoice=intent.metadata.nectar_native_invoice,source=requests.get(invoice)
+    assert.ok(source,'Every processor capture belongs to a reviewed invoice')
+    assert.equal(account,1);assert.equal(intent.customer,sources.get(source.customer))
+    assert.equal(intent.metadata.nectar_native_collection_request,source.id)
+    assert.equal(intent.currency,'usd');assert.equal(intent.amount,100);assert.equal(intent.amount_received,100)
+    assert.equal(captures.has(invoice),false,'No subscription invoice has two processor captures')
+    captures.set(invoice,intent.id)
+  }
+  assert.deepEqual(new Set(captures.keys()),new Set(issued.map(invoice=>invoice.id)))
   const response=await h.raw('/app/exports/invoices.csv',{cookie:owner});assert.equal(response.status,200)
   const invoiceIds=new Set(issued.map(invoice=>invoice.id))
   const csv=csvRows(await response.text())
   assert.ok(csv.every(row=>invoiceIds.has(row.invoice_id)))
   assert.equal(csv.length,count);assert.equal(new Set(csv.map(row=>row.invoice_id)).size,count)
   assert.ok(csv.every(row=>row.total==='1.00'&&row.paid==='1.00'&&row.balance==='0.00'))
+  assert.ok(csv.every(row=>row.credited==='0.00'&&row.written_off==='0.00'&&row.tax==='0.00'))
+  assert.equal(new Set(csv.map(row=>row.number)).size,count)
+  const allocatedCents=csv.reduce((sum,row)=>sum+Math.round(Number(row.paid)*100),0)
+  assert.equal(allocatedCents,1000000)
   const collections=await api('reports/collections?period=2026-11')
   assert.equal(collections.entries.length,count);assert.equal(collections.totalCents,count*100)
+  assert.equal(new Set(collections.entries.map(row=>row.paymentId)).size,count,'One recorded receipt per captured payment')
+  assert.deepEqual(new Set(collections.entries.map(row=>row.number)),new Set([...captures.values()].map(id=>`stripe:synthetic-nectar-native-account-1:${id}`)))
+  assert.ok(collections.entries.every(row=>row.sourceKind==='payment'&&row.amountCents===100))
+  const billings=await api('reports/billings?period=2026-11'),ar=await api('reports/ar')
+  assert.equal(billings.totalCents,1000000);assert.deepEqual(new Set(billings.entries.map(row=>row.invoiceId)),invoiceIds)
+  assert.equal(ar.totalCents,0);assert.deepEqual(ar.entries,[])
+  const revenue=await api('revenue?from=2026-10&to=2026-11')
+  assert.deepEqual([revenue.openingCents,revenue.netBillingsCents,revenue.recognizedCents,revenue.closingCents],[0,1000000,1000000,0])
+  assert.deepEqual(revenue.months.map(row=>[row.period,row.billingsCents,row.recognizedCents,row.closingCents]),[['2026-10',0,1000000,-1000000],['2026-11',1000000,0,0]])
+  for(const kind of ['billing','recognition']){
+    const rows=revenue.contributions.filter(row=>row.kind===kind)
+    assert.equal(rows.length,count);assert.equal(new Set(rows.map(row=>row.lineId)).size,count)
+    assert.deepEqual(new Set(rows.map(row=>row.invoiceId)),invoiceIds)
+    assert.ok(rows.every(row=>row.custody==='issue-snapshot'&&row.amountCents===100))
+  }
+  const audit=await api('audit')
+  const completion=audit.filter(row=>row.action==='invoice.automation.complete'&&row.subject===interrupted.id)
+  assert.equal(completion.length,1);assert.equal(JSON.parse(completion[0].detail).issued.length,count)
   const dispatch=(await api('job-runs')).runs.find(row=>row.id===originalDispatch.id)
   assert.equal(dispatch.status,'failed')
   assert.equal(dispatch.jobs.find(job=>job.job==='invoice-automation').error_code,'storage_failure')
   assert.equal((await tick()).status,200)
   assert.equal(edge.intents.size,count);assert.equal(edge.calls.filter(call=>call.method==='POST'&&call.path==='/payment_intents').length,count)
-  const receipt={head,activeSubscriptions:count,issuedInvoices:count,capturedPayments:count,allocatedCents:count*100,
+  const completionMs=Math.round(completedAt-started)
+  const receipt={head,activeSubscriptions:subscriptions.size,issuedInvoices:issued.length,capturedPayments:captures.size,allocatedCents,
+    recordedReceipts:collections.entries.length,revenueSchedules:revenue.contributions.filter(row=>row.kind==='recognition').length,reconciled:true,
     realWorkerRestart:true,workerRestarts:2,preparationMs:Math.round(preparedAt-started),explicitConsentMs:Math.round(consentedAt-preparedAt),
-    completionMs:Math.round(completedAt-started),processingMs:Math.round(preparedAt-started+completedAt-consentedAt),
+    completionMs,nativeTimingPassed:completionMs<15*60_000,processingMs:Math.round(preparedAt-started+completedAt-consentedAt),
     qualified:false,boundary:'native processor edge; explicit invoice consent and owner-confirmed continuation; unattended and live provider capacity remain unqualified'}
   console.log('NATIVE CAPACITY RESULT',JSON.stringify(receipt))
+  assert.ok(receipt.nativeTimingPassed,'The native billing day, including explicit consents and real restarts, finishes within fifteen minutes')
 }
 if(process.argv[1]===new URL(import.meta.url).pathname)await runIsolated('job-capacity','nativeJobCapacityFlow',async()=>({harnessOptions,nativeJobCapacityFlow}))
