@@ -215,7 +215,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "d694061174563fbf7bdbb8a90945257a4786bf40c351073164856d70788e6345",
+      "sha256": "4640fa81b75aed8bff99fa18f6319f5a14f2a13d322075a1e8e48c620172f9ae",
       "executable": false
     },
     "agent-surface.json": {
@@ -239,7 +239,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "10f51a20eb4d44a31328c4ac9c302176e66696c589c4940a454d4f7fa94323ec",
+      "sha256": "0ba6ec5e7a6c29042bc4f687664e0d31d5b6e5ee2c6097b8c997a0785ad01ce2",
       "executable": false
     },
     "DEMO.md": {
@@ -279,7 +279,7 @@
       "executable": false
     },
     "docs/CLAIMS.md": {
-      "sha256": "a53343b79c219c2f24ce78cc95c823e893f39dc05d28628f7dbae7e25f5f8afa",
+      "sha256": "e6c8adf93523f9d339e23e8fc5ca10a128b219b5992c497fe1df87f26d658902",
       "executable": false
     },
     "docs/composition-baseline.json": {
