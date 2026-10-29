@@ -70,7 +70,7 @@ try{
  assert.ok(items(await rows(before)).some(item=>item.table==='nc_portal_change_requests'&&item.row.id===portalChange.request.id),'The actual archive includes non-executable pending request evidence')
  const originalAmount=items(await rows(before)).find(item=>item.table==='nc_coupon_amount_terms'&&item.row.customer_id===amountCustomer.id).row
  assert.deepEqual([originalAmount.value,originalAmount.duration,originalAmount.months,originalAmount.effective_from,originalAmount.effective_to],['200.00','repeating',3,'2026-10-01','2027-01-01'])
- assert.equal(JSON.parse(originalAmount.price_ids_json).length,2)
+ assert.equal(JSON.parse(originalAmount.price_ids_json).length,3)
  assert.equal(JSON.parse(originalAmount.source_json).discount,amountCapture.subscriptions.data[0].discounts[0].id)
  assert.ok(!items(await rows(before)).some(i=>i.table==='nc_idempotency'),'DEV-002 the idempotency replay store never enters an archive')
  await start()
@@ -99,10 +99,15 @@ try{
  await api('import.apply',cookie,{...amountFiles,fingerprint:replayPreview.fingerprint},409)
  assert.deepEqual(await api('customers/'+amountCustomer.id,cookie),erasedAmountCustomer,'Capture replay cannot resurrect an erased person')
  await stop();await command(root,['export','--output',after])
- const archived=items(await rows(after)),privateValues=[amountCustomer.external_id,amountCustomer.billing_email,amountCustomer.name,amountCapture.subscriptions.data[0].discounts[0].id,customer.billing_email,customer.address,customer.external_id,'Amelia Privatecontact','amelia.private@gov005.example','private imported customer note GOV005','private metadata GOV005',historicalCustomer.billing_email,historicalCustomer.external_id,'synthetic-nectar-private-7'].filter(Boolean)
- for(const item of archived){const serialized=JSON.stringify(item);for(const value of privateValues)assert.ok(!serialized.includes(value),`GOV-005 archive ${item.table} removes personal text`)
+ const archived=items(await rows(after)),privateValues=[customer.billing_email,customer.address,customer.external_id,'Amelia Privatecontact','amelia.private@gov005.example','private imported customer note GOV005','private metadata GOV005',historicalCustomer.billing_email,historicalCustomer.external_id,'synthetic-nectar-private-7'].filter(Boolean)
+ privateValues.push(amountCustomer.external_id,amountCustomer.billing_email,amountCapture.subscriptions.data[0].discounts[0].id)
+ for(const item of archived){const serialized=JSON.stringify(item);
+  if(item.table!=='nc_erasure_financial')assert.ok(!serialized.includes(amountCustomer.name),'Only the existing legal financial retention exception keeps the issued legal label')
+  for(const value of privateValues)assert.ok(!serialized.includes(value),`GOV-005 archive ${item.table} removes personal text`)
   if(item.kind==='row')for(const [column,value] of Object.entries(item.row)){if(typeof value==='object'&&value?.blob){const decoded=Buffer.from(value.blob,'base64').toString();for(const personal of privateValues)assert.ok(!decoded.includes(personal),`GOV-005 retained blob ${item.table}.${column} has no erased personal data`)}}
  }
+ const retainedAmount=archived.filter(item=>item.table==='nc_erasure_financial'&&item.row.request_id===amountRequest.id)
+ assert.deepEqual(retainedAmount.map(item=>[item.row.legal_name,item.row.amount_cents,item.row.tax_cents]),[[amountCustomer.name,22000,2000]],'The existing legal retention exception keeps only the exact issued label and financial facts')
  const anonymousAmount=archived.find(item=>item.table==='nc_coupon_amount_terms'&&item.row.id===originalAmount.id).row
  for(const field of ['id','redemption_id','subscription_id','customer_id','value','duration','months','effective_from','effective_to','price_ids_json','origin'])assert.deepEqual(anonymousAmount[field],originalAmount[field],field+' retains exact anonymous rating custody')
  assert.equal(anonymousAmount.source_json,'{}');assert.equal(anonymousAmount.note,'')
