@@ -256,7 +256,7 @@ export async function decide(env: Bindings, actor: Actor, input: Input) {
   const recipient = input.text('recipient', { max: 200, optional: true }) || payload.recipient
   insist(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient), 'invalid_recipient')
   const subject = input.text('subject', { max: 200, optional: true }) || payload.subject
-  const body = input.text('body', { max: 8000, optional: true }) || payload.body
+  const body = (input.text('body', { max: 8000, optional: true }) || payload.body).replace(/\r\n/g, '\n')
   insist(recipient === payload.recipient && subject === payload.subject && body === payload.body, 'collection_approval_changed', 409)
   const reminder = await reminderBasis(env, payload.customer)
   const notice = newId()
