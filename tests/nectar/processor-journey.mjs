@@ -209,7 +209,7 @@ const { join } = await import('node:path')
 const { isDeepStrictEqual } = await import('node:util')
 const { stripeSandbox, check, safeError, reference, monthTime, monthName } = await import('./processor-edge.mjs')
 
-const evidence = join(process.cwd(), '.evidence')
+const evidence = process.env.NECTAR_EVIDENCE_DIR ?? join(process.cwd(), '.evidence')
 const receipt = { version: 1, journey: 'MOVE-007 Stripe 18-month history', status: 'running', startedAt: new Date().toISOString(), head: null,
   clockId: null, sourceIds: {}, assertions: {}, captureHashes: {}, cleanup: { clockDeleted: false } }
 let stripe, phase = 'test-key', ownedClock, h

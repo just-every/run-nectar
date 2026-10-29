@@ -4,7 +4,8 @@
       "name": "sanity-1",
       "browser": false,
       "commands": [
-        "node tests/nectar/flows.mjs",
+        "node tests/nectar/flows.mjs --core-only",
+        "node tests/nectar/flows.mjs --audit-only",
         "node tests/runtime.mjs",
         "node tests/nectar/sanity.mjs intervalsFlow cadencesFlow promotionsFlow retentionFlow commitments portalPrepaidFlow invoiceAutomationFlow invoiceRefundPreviewFlow periodCloseFlow mfaFlow"
       ]
@@ -40,7 +41,8 @@
         "node tests/nectar/sanity.mjs entitlementQuotasFlow moveHistoryFlow assuranceDetectorsFlow paymentLinksFlow creditCorrectionFlow processorCashImportedFlow prepaidTopupFlow numberingEntitiesFlow lifecycleFlow",
         "node tests/nectar/journey.mjs --browser clause-browser native-collection",
         "node tests/nectar/journey.mjs --browser payment-retries-browser",
-        "node tests/nectar/journey.mjs --browser payment-retries-browser churn"
+        "node tests/nectar/journey.mjs --browser payment-retries-browser churn",
+        "node tests/nectar/clause-browser.mjs native-collection"
       ]
     },
     {

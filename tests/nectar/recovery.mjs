@@ -14,7 +14,7 @@ if (process.argv[2] === '--archive') {
 import { seedPendingPortalChange } from './portal-change-requests.mjs'
 import { createServer } from 'node:net'
 import assert from 'node:assert/strict'
-import { mkdir, readFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { readArchive } from '@runeditrun/rer/modules/portability'
 import { command } from './cli.mjs'
@@ -39,7 +39,9 @@ const setup=()=>command(root,['setup','--owner-email','owner@example.test','--no
 
 const rows=async path=>{
  const bytes=await readFile(path),items=[]
+ let header
  for await(const record of readArchive(new ReadableStream({start(c){c.enqueue(bytes);c.close()}}))) {
+  if(!header){header=record;for(const table of ['nc_invoices','nc_invoice_lines','nc_usage_events','nc_audit','nc_proposals','ik_jobs'])assert.ok(header.tables.some(row=>row.name===table),`${table} is declared in the real archive`);assert.ok(header.excludedTables.includes('oa_sessions'))}
   if(record.kind==='part')items.push(...record.items.map(({index,...item})=>item))
  }
  return items
@@ -69,6 +71,24 @@ async function stop(){await h?.close();h=null}
 const api=(path,body,status)=>h.api(path,owner,body,status)
 
 const before='exports/before-erasure.rer',after='exports/erased.rer',restored='exports/restored.rer'
+
+const refuseCorruptArchive=async path=>{
+ const corrupted=(await readFile(path,'utf8')).replace('"kind":"part"','"kind":"bad"')
+ assert.notEqual(corrupted,await readFile(path,'utf8'),'The test corrupts an actual archive part')
+ await writeFile('exports/corrupt.rer',corrupted,{mode:0o600})
+ await command(root,['import','--input','exports/corrupt.rer','--yes'],{refuse:true})
+}
+const assertRestoredInvoices=async archived=>{
+ const invoices=archived.filter(item=>item.table==='nc_invoices'&&item.row.status==='issued')
+ assert.ok(invoices.length>=2,'The real restore contains multiple independently issued invoices')
+ for(const {row} of invoices){
+  const invoice=await api(`invoices/${row.id}`)
+  assert.equal(invoice.number,row.number)
+  assert.equal(invoice.total_cents,row.total_cents)
+  assert.deepEqual(invoice.calculation,JSON.parse(row.calculation_json),'Restored issued calculations agree with every archived source field')
+ }
+}
+
 
 try {
  await start()
@@ -103,7 +123,7 @@ try {
   assert.ok(archived.some(row=>row.table==='nc_invoices'&&row.row.id===invoice))
   assert.ok(!JSON.stringify(archived).includes(factor.secret),'The exported factor stays sealed')
   await command(root,['reset','--yes'])
-  await (async()=>{const {writeFile}=await import('node:fs/promises');await writeFile('exports/corrupt.rer',(await readFile(after,'utf8')).replace('\"kind\":\"part\"','\"kind\":\"bad\"'));await command(root,['import','--input','exports/corrupt.rer','--yes'],{refuse:true})})()
+  await refuseCorruptArchive(after)
   await command(root,['import','--input',after,'--yes'])
   await command(root,['export','--output',restored])
   assert.deepEqual(await rows(restored),archived,'Every portable row survives real CLI export/reset/import')
@@ -114,6 +134,7 @@ try {
   const restoredInvoice=await api(`invoices/${invoice}`)
   assert.deepEqual([restoredInvoice.total_cents,restoredInvoice.tax_cents,restoredInvoice.balanceCents],[11000,1000,0])
   assert.equal(restoredInvoice.calculation.fingerprint,issued.calculation.fingerprint)
+  await assertRestoredInvoices(archived)
   console.log('JOURNEY PASS public CLI billing export/reset/import and restored identity')
  } else {
  await command(root,['export','--output','public/exposed.rer'],{refuse:true})
@@ -154,6 +175,7 @@ try {
  assert.ok(erased.some(row=>row.table==='ik_d1_erasure_journal'))
  console.log('RECOVERY restore')
  await command(root,['reset','--yes'])
+ await refuseCorruptArchive(after)
  await command(root,['import','--input',before,'--journal',after,'--yes'],{refuse:true})
  await command(root,['import','--input',after,'--yes'])
  await command(root,['import','--input',after,'--yes'],{refuse:true})
@@ -175,6 +197,7 @@ try {
  const restoredInvoice=await api(`invoices/${invoice}`)
  assert.deepEqual([restoredInvoice.total_cents,restoredInvoice.tax_cents,restoredInvoice.balanceCents],[11000,1000,0])
  assert.deepEqual(restoredInvoice.calculation,retained.calculation,'Restore preserves the exact anonymized financial evidence')
+ await assertRestoredInvoices(erased)
  await stop()
  console.log('JOURNEY PASS public CLI billing, erasure, restore, MFA custody and setup upgrade')
  }

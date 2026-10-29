@@ -361,6 +361,9 @@ try {
     }
     const customerPath=state=>`/portal/upcoming?session=${encodeURIComponent(state.session.token)}&subscription=${state.subscription}&period=${state.period}`
     await entitlementQuotasFlow(h,owner,{onState:async state=>{
+      // Numeric feature transitions are operator observations; customer quota
+      // states carry the scoped portal capability exercised below.
+      if(!state.session){assert.match(state.label,/^numeric-/);return}
       await both(`quota-${state.code}-${state.used}`,customerPath(state))
     }})
     await commitments(h,owner,{onState:async state=>{
@@ -758,7 +761,7 @@ try{
     }
   },{prepareHosted:async({customer,binding,method})=>{
     await page.goto(h.origin+`/app/customers/${customer}`)
-    const detail=page.locator('#saved-payment-methods details');await detail.locator('summary').click()
+    const detail=page.locator('#saved-payment-methods details').filter({has:page.locator('form[action="/app/do/checkout.setup.prepare"]')});await detail.locator('summary').click()
     const form=detail.locator('form');await form.locator('[name=binding]').selectOption(binding);await form.locator('[name=method]').selectOption(method);await form.locator('[name=confirm]').check()
     for(const width of [1440,390]){await page.setViewportSize({width,height:950});await shot(`hosted-${method}-prepare`,width)}
     await Promise.all([page.waitForNavigation({waitUntil:'load'}),form.getByRole('button').first().click()])
