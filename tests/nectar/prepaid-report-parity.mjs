@@ -1,3 +1,5 @@
+// Assert the report, source, CSV and monthly frozen snapshot at real ledger
+// transitions. The scheduled transport is the harness's mail network edge.
 import assert from 'node:assert/strict'
 import { performance } from 'node:perf_hooks'
 import { csvRows } from './financial-reports.mjs'

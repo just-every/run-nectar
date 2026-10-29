@@ -494,5 +494,225 @@
         "invoiceAutomationFlow"
       ]
     ]
+  },
+  {
+    "name": "contractIntervalSetup",
+    "steps": [
+      [
+        "contract-setup",
+        "contractIntervalSetup"
+      ]
+    ]
+  },
+  {
+    "name": "contractEntitySetup",
+    "steps": [
+      [
+        "contract-setup",
+        "contractEntitySetup"
+      ]
+    ]
+  },
+  {
+    "name": "prepaidRefreshLedgerFlow",
+    "steps": [
+      [
+        "prepaid",
+        "prepaidRefreshLedgerFlow"
+      ]
+    ]
+  },
+  {
+    "name": "prepaidCorrectionFlow",
+    "steps": [
+      [
+        "prepaid",
+        "prepaidCorrectionFlow"
+      ]
+    ]
+  },
+  {
+    "name": "prepaidPurchaseCreditFlow",
+    "steps": [
+      [
+        "prepaid",
+        "prepaidPurchaseCreditFlow"
+      ]
+    ]
+  },
+  {
+    "name": "prepaidErasureFlow",
+    "steps": [
+      [
+        "prepaid",
+        "prepaidErasureFlow"
+      ]
+    ]
+  },
+  {
+    "name": "prepaidRefreshTopupFlow",
+    "steps": [
+      [
+        "prepaid",
+        "prepaidRefreshTopupFlow"
+      ]
+    ],
+    "harness": "prepaidRefreshHarnessOptions"
+  },
+  {
+    "name": "prepaidRefundCorrectionFlow",
+    "steps": [
+      [
+        "prepaid-refunds",
+        "prepaidRefundCorrectionFlow"
+      ]
+    ]
+  },
+  {
+    "name": "prepaidAgentCreditFlow",
+    "steps": [
+      [
+        "credit-correction",
+        "prepaidAgentCreditFlow"
+      ]
+    ]
+  },
+  {
+    "name": "prepaidAgentDraftCorrectionsFlow",
+    "steps": [
+      [
+        "credit-correction",
+        "prepaidAgentDraftCorrectionsFlow"
+      ]
+    ]
+  },
+  {
+    "name": "prepaidCommercialMigrationFlow",
+    "steps": [
+      [
+        "credit-correction",
+        "prepaidCommercialMigrationFlow"
+      ]
+    ]
+  },
+  {
+    "name": "retentionIntervalFlow",
+    "steps": [
+      [
+        "retention",
+        "retentionIntervalFlow"
+      ]
+    ]
+  },
+  {
+    "name": "nativeIntervalErasureFlow",
+    "steps": [
+      [
+        "erasure",
+        "nativeIntervalErasureFlow"
+      ]
+    ]
+  },
+  {
+    "name": "metricZones",
+    "steps": [
+      [
+        "metrics",
+        "metricZones"
+      ]
+    ]
+  },
+  {
+    "name": "revenueErasureFlow",
+    "steps": [
+      [
+        "revenue",
+        "revenueErasureFlow"
+      ]
+    ],
+    "businessTimezone": "UTC"
+  },
+  {
+    "name": "periodCloseDeferredFlow",
+    "steps": [
+      [
+        "period-close",
+        "periodCloseDeferredFlow"
+      ]
+    ]
+  },
+  {
+    "name": "retryPlanChurnFlow",
+    "steps": [
+      [
+        "payment-retries",
+        "retryPlanChurnFlow"
+      ]
+    ]
+  },
+  {
+    "name": "retryComparisonFlow",
+    "steps": [
+      [
+        "payment-retries",
+        "retryComparisonFlow"
+      ]
+    ]
+  },
+  {
+    "name": "portalAnswersFlow",
+    "steps": [
+      [
+        "portal-answers",
+        "portalAnswersFlow"
+      ]
+    ]
+  },
+  {
+    "name": "portalEmbeddingFlow",
+    "steps": [
+      [
+        "portal-sessions",
+        "portalEmbeddingFlow"
+      ]
+    ]
+  },
+  {
+    "name": "automaticCollectionFlow",
+    "steps": [
+      [
+        "native-collection",
+        "automaticCollectionFlow"
+      ]
+    ],
+    "harness": "automaticHarnessOptions"
+  },
+  {
+    "name": "moveCollectionFlow",
+    "steps": [
+      [
+        "move-history",
+        "moveCollectionFlow"
+      ]
+    ],
+    "harness": "moveCollectionHarnessOptions"
+  },
+  {
+    "name": "portalRenewalFlow",
+    "steps": [
+      [
+        "portal-renewal",
+        "portalRenewalFlow"
+      ]
+    ]
+  },
+  {
+    "name": "remittanceFilesFlow",
+    "steps": [
+      [
+        "remittance-files",
+        "remittanceFilesFlow"
+      ]
+    ]
   }
 ]

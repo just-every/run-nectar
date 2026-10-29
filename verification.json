@@ -37,7 +37,10 @@
       "commands": [
         "node tests/nectar/journey.mjs",
         "node tests/nectar/mfa-passkey.mjs",
-        "node tests/nectar/sanity.mjs entitlementQuotasFlow moveHistoryFlow assuranceDetectorsFlow paymentLinksFlow creditCorrectionFlow processorCashImportedFlow prepaidTopupFlow numberingEntitiesFlow lifecycleFlow"
+        "node tests/nectar/sanity.mjs entitlementQuotasFlow moveHistoryFlow assuranceDetectorsFlow paymentLinksFlow creditCorrectionFlow processorCashImportedFlow prepaidTopupFlow numberingEntitiesFlow lifecycleFlow",
+        "node tests/nectar/journey.mjs --browser clause-browser native-collection",
+        "node tests/nectar/journey.mjs --browser payment-retries-browser",
+        "node tests/nectar/journey.mjs --browser payment-retries-browser churn"
       ]
     },
     {
@@ -45,6 +48,20 @@
       "browser": false,
       "commands": [
         "node scripts/verify-checkout.mjs"
+      ]
+    },
+    {
+      "name": "done-1",
+      "browser": false,
+      "commands": [
+        "node tests/nectar/sanity.mjs contractIntervalSetup prepaidRefreshLedgerFlow prepaidPurchaseCreditFlow prepaidRefreshTopupFlow prepaidAgentCreditFlow prepaidCommercialMigrationFlow nativeIntervalErasureFlow revenueErasureFlow retryPlanChurnFlow portalAnswersFlow automaticCollectionFlow portalRenewalFlow"
+      ]
+    },
+    {
+      "name": "done-2",
+      "browser": true,
+      "commands": [
+        "node tests/nectar/sanity.mjs contractEntitySetup prepaidCorrectionFlow prepaidErasureFlow prepaidRefundCorrectionFlow prepaidAgentDraftCorrectionsFlow retentionIntervalFlow metricZones periodCloseDeferredFlow retryComparisonFlow portalEmbeddingFlow moveCollectionFlow remittanceFilesFlow"
       ]
     }
   ]

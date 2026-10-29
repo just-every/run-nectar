@@ -3,7 +3,7 @@ import { nativeIntervalErasureFlow } from './erasure-record-kinds.mjs'
 
 export const businessTimezone='UTC'
 
-async function erasureScaleFlow(h, owner) {
+export async function erasureScaleFlow(h, owner) {
   await h.advanceClock('2026-02-01T16:00:00Z')
   const api = (path, body) => h.api(path, owner, body)
   const external = 'synthetic-nectar-erasure-scale-1', peerExternal = 'synthetic-nectar-erasure-scale-2'
@@ -318,3 +318,5 @@ export async function erasureFlow(h, owner, onState = async () => {}) {
   await erasureScaleFlow(h,owner)
   console.log('GOV-005 verified owner erasure, alternative evidence, roles, personal-data removal and seven-year financial retention passed')
 }
+
+export { nativeIntervalErasureFlow }

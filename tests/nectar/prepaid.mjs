@@ -1,4 +1,3 @@
-import { prepaidRefreshParity } from './prepaid-report-parity.mjs'
 import { prepaidReportParity } from './prepaid-report-parity.mjs'
 import assert from 'node:assert/strict'
 import { applyPolicy } from './policy-helper.mjs'
@@ -7,7 +6,7 @@ import { csvRows } from './financial-reports.mjs'
 // CAT-004 foundation: real native purchase/approve/issue/payment doors.
 // Bank receipts here are ordinary operator-recorded external payments; the
 // separate native-card journey supplies actual processor-edge receipts.
-export async function prepaidFlow(h,owner,{fundPurchase,onState=async()=>{},onRefresh=row=>prepaidRefreshParity(h,owner,row)}={}) {
+export async function prepaidFlow(h,owner,{fundPurchase,onState=async()=>{},onRefresh=async()=>{}}={}) {
   const api=(path,body,status)=>h.api(path,owner,body,status)
   await h.advanceClock('2026-01-01T18:00:00Z')
   await applyPolicy(h,owner,'tax.declare',{tax_jurisdiction:'CA',tax_mode:'flat_rate',tax_rate:'10',tax_note:'Synthetic prepaid consumption tax'})
@@ -173,3 +172,232 @@ export async function prepaidFlow(h,owner,{fundPurchase,onState=async()=>{},onRe
   console.log('CAT-004 prepaid foundation: governed money/units, real paid purchases, pure previews, priority, source tax, exact consumption, capped rollover, expiry and consent-bound pending topups passed')
   return {row,units,purchaseInvoice,topupInvoice,january,february,expired,unitState}
 }
+
+// New customer-owned ledger families inherit withdrawal and financial custody.
+export async function prepaidErasureFlow(h,owner,{scale=false}={}){
+  const {row,purchaseInvoice,topupInvoice}=await prepaidFlow(h,owner)
+  const api=(path,body,status)=>h.api(path,owner,body,status)
+  const before=await api(`revenue?from=2026-01&to=2026-12&customer=${row.customer}`)
+  if(scale)for(let offset=0;offset<10000;offset+=5000){
+    const submitted=await api('usage.submit',{events:Array.from({length:5000},(_,index)=>({event_id:`synthetic-nectar-${100000+offset+index}`,customer:row.external,meter:row.meterCode,quantity:'1',occurred_at:'2026-03-15T12:00:00Z',properties:{note:'Synthetic private prepaid scale customer'}}))})
+    assert.deepEqual([submitted.accepted,submitted.rejected],[5000,0])
+  }
+  const request=await api('erasure.request',{customer:row.customer})
+  const link=h.mails.at(-1).text.match(/https?:\/\/[^\s"<]+\/erase\/[a-f0-9]{64}/)[0]
+  assert.equal((await h.raw(new URL(link).pathname,{form:new URLSearchParams({confirm:'yes'})})).status,200)
+  const approved=await api('erasure.approve',{request:request.id,confirm:true})
+  if(scale)assert.ok(approved.receipt.changed.some(change=>change.kind==='nc_usage_events'&&change.records>=10000),'The complete prepaid customer graph erases all 10000 additional events')
+  for(const kind of ['nc_prepaid_requests','nc_prepaid_consents','nc_prepaid_funding_intents'])assert.ok(approved.receipt.changed.some(change=>change.kind===kind),kind)
+  await api(`prepaid/${row.subscription}`,undefined,410)
+  await api('prepaid.prepare',{subscription:row.subscription},410)
+  const after=await api(`revenue?from=2026-01&to=2026-12&customer=${row.customer}`)
+  assert.deepEqual(after.months,before.months,'Anonymous retained prepaid purchase and consumption schedules preserve every financial cent and date')
+  for(const invoice of [purchaseInvoice,topupInvoice]){
+    const source=await api(`revenue/${invoice.id}?from=2026-01&to=2026-12`)
+    for(const privateText of ['synthetic-nectar-310@example.test','Synthetic prepaid 310','synthetic-nectar-payment-'])assert.ok(!JSON.stringify(source).includes(privateText))
+  }
+  const audit=await api('audit')
+  assert.ok(!JSON.stringify(audit).includes('synthetic-nectar-310@example.test'))
+}
+
+// The same historical usage doors govern financial tax corrections AND the
+// append-only restoration/reallocation of previously consumed paid credits.
+export async function prepaidCorrectionFlow(h,owner){
+  const api=(path,body,status)=>h.api(path,owner,body,status)
+  await h.advanceClock('2026-01-01T18:00:00Z')
+  await applyPolicy(h,owner,'tax.declare',{tax_jurisdiction:'CA',tax_mode:'flat_rate',tax_rate:'10',tax_note:'Synthetic prepaid correction tax'})
+  await api('tax.review',{revision:(await api('business')).revision})
+  await api('access.give',{email:'synthetic-nectar-351@example.test',name:'Synthetic correction finance',role:'finance'})
+  const finance=await h.signIn('synthetic-nectar-351@example.test',{requested:true})
+  const customer=(await api('customer.create',{external_id:'synthetic-nectar-352',name:'Synthetic prepaid correction',billing_email:'synthetic-nectar-352@example.test'})).id
+  const meter=(await api('meter.create',{code:'synthetic-nectar-353',name:'Synthetic correction calls',unit_label:'calls'})).id
+  const product=(await api('product.create',{code:'synthetic-nectar-354',name:'Synthetic correction usage'})).id
+  const price=(await api('price.create',{product,kind:'unit',meter,unit_amount:'1',taxable:true})).id
+  const subscription=(await api('subscription.create',{customer,start_date:'2026-01-01',price:[price]})).id
+  const prepareGrant=async(source,amount)=>api('prepaid.prepare',{subscription,mode:'grant',kind:'money',source,amount,effective_date:'2026-01-01',expires_date:'2026-05-01',priority:10,expiry_consent:true})
+  const paid=await prepareGrant('purchase','100')
+  await h.api('prepaid.decide',finance,{request:paid.request,decision:'approved'})
+  const purchase=(await api('prepaid.purchase.prepare',{intent:paid.request,issue_date:'2026-01-01'})).invoice
+  await api('invoice.approve',{invoice:purchase,acknowledge:true});await api('invoice.finalise',{invoice:purchase,issue_date:'2026-01-01'})
+  const payment=await api('payment.record',{customer,amount:'100',received_on:'2026-01-01',method:'bank_transfer',reference:'synthetic-nectar-355'})
+  await api('payment.allocate',{payment:payment.payment,invoice:purchase,amount:'100'})
+  await api('prepaid.funding.confirm',{intent:paid.request,confirm:true})
+  const submit=(id,quantity,date)=>api('usage.submit',{events:[{event_id:`synthetic-nectar-${id}`,customer:'synthetic-nectar-352',meter:'synthetic-nectar-353',quantity,occurred_at:`${date}T12:00:00Z`}]})
+  const issued=[]
+  for(const [period,quantity,id,date] of [['2026-01','40',356,'2026-02-01'],['2026-02','30',357,'2026-03-01']]){
+    await submit(id,quantity,`${period}-15`)
+    await h.advanceClock(`${date}T18:00:00Z`)
+    const run=await api('billrun.prepare',{period}),invoice=(await api(`runs/${run.id}`)).invoices.find(invoice=>invoice.customer_id===customer)
+    await api('invoice.approve',{invoice:invoice.id,acknowledge:true});await api('invoice.finalise',{invoice:invoice.id,issue_date:date})
+    issued.push(await api(`invoices/${invoice.id}`))
+  }
+  const state=()=>api(`prepaid/${subscription}`),before=await state()
+  assert.equal(before.balances[0].remainingN,3000)
+  const originalLedger=before.entries.map(entry=>({...entry})),purchaseOriginal=await api(`invoices/${purchase}`)
+  await submit(358,'20','2026-01-15')
+  const body={subscription,from_period:'2026-01',through_period:'2026-02',void_event_ids:['synthetic-nectar-356'],add_event_ids:['synthetic-nectar-358']}
+  const preview=await api('usage.correction.preview',body)
+  assert.deepEqual(preview.delta,{subtotalCents:0,taxCents:-200,totalCents:-200})
+  assert.deepEqual(await state(),before,'Historical previews reserve neither restored funds nor a liability change')
+  const prepare=(body)=>api('usage.correction.prepare',{...body,reason:'Synthetic retained source correction',explanation:'Reviewed source usage and its original purchase ledger change by the exact approved amounts.'})
+  const first=await prepare(body)
+  assert.equal(first.plan.prepaid.deltas.reduce((sum,entry)=>sum+entry.amountN,0),2000)
+  await api('usage.correction.decide',{correction:first.id,decision:'approved'},409)
+  await h.api('usage.correction.decide',finance,{correction:first.id,decision:'approved'})
+  const restored=await state()
+  assert.equal(restored.balances[0].remainingN,5000)
+  assert.equal(restored.entries.reduce((sum,entry)=>sum+entry.recognitionCents,0),5000)
+  for(const entry of originalLedger)assert.deepEqual(restored.entries.find(saved=>saved.id===entry.id),entry,'Correction appends signed differences without editing original ledger statements')
+  await h.api('usage.correction.decide',finance,{correction:first.id,decision:'approved'},409)
+  const second=await prepare({subscription,from_period:'2026-02',through_period:'2026-02',void_event_ids:['synthetic-nectar-357'],add_event_ids:[]})
+  await h.api('usage.correction.decide',finance,{correction:second.id,decision:'approved'})
+  const corrected=await state()
+  assert.equal(corrected.balances[0].remainingN,8000,'A later correction retains the first corrected predecessor basis')
+  assert.equal(corrected.entries.reduce((sum,entry)=>sum+entry.recognitionCents,0),2000)
+  assert.ok(corrected.entries.some(entry=>entry.kind==='correction'&&entry.recognitionCents<0))
+  for(const original of [...issued,purchaseOriginal])assert.deepEqual((await api(`invoices/${original.id}`)).calculation,original.calculation)
+  const csv=await h.raw(`/app/exports/prepaid/${subscription}.csv`,{cookie:owner});assert.equal(csv.status,200)
+  assert.equal(csvRows(await csv.text()).length,corrected.entries.length)
+  for(const entry of corrected.entries.filter(entry=>entry.kind==='correction'))assert.equal((await api(`prepaid/${subscription}/entries/${entry.id}`)).entry.recognitionCents,entry.recognitionCents)
+  await submit(359,'5','2026-02-15')
+  const stale=await prepare({subscription,from_period:'2026-02',through_period:'2026-02',void_event_ids:[],add_event_ids:['synthetic-nectar-359']})
+  const promotion=await prepareGrant('promotion','1');await h.api('prepaid.decide',finance,{request:promotion.request,decision:'approved'})
+  await h.api('usage.correction.decide',finance,{correction:stale.id,decision:'approved'},409)
+  assert.equal((await state()).balances[0].remainingN,8100,'A stale financial approval cannot consume or restore any prepaid balance')
+  await api('usage.correction.decide',{correction:stale.id,decision:'rejected'})
+  const revenueBefore=await api(`revenue?from=2026-01&to=2026-12&customer=${customer}`)
+  const erase=await api('erasure.request',{customer})
+  const link=h.mails.at(-1).text.match(/https?:\/\/[^\s"<]+\/erase\/[a-f0-9]{64}/)[0]
+  assert.equal((await h.raw(new URL(link).pathname,{form:new URLSearchParams({confirm:'yes'})})).status,200)
+  const receipt=await api('erasure.approve',{request:erase.id,confirm:true})
+  assert.ok(receipt.receipt.changed.some(row=>row.kind==='nc_prepaid_corrections'))
+  assert.deepEqual((await api(`revenue?from=2026-01&to=2026-12&customer=${customer}`)).months,revenueBefore.months)
+  await h.advanceClock('2033-03-02T18:00:00Z')
+  assert.deepEqual((await api('erasure.purge',{})).removed,[erase.id])
+  assert.deepEqual((await api('erasure.purge',{})).removed,[])
+  console.log('CAT-004 governed historical prepaid replay: exact tax, signed liability/recognition, immutable originals, repeated correction, source/CSV and stale refusal passed')
+  return {subscription,customer,purchase,issued,first,second}
+}
+
+// An unpaid purchase credit reduces only its contract liability. Reduced
+// consideration never becomes a fully funded grant or an automatic charge.
+export async function prepaidPurchaseCreditFlow(h,owner){
+  const api=(path,body,status)=>h.api(path,owner,body,status)
+  await h.advanceClock('2026-01-01T18:00:00Z')
+  await api('access.give',{email:'synthetic-nectar-361@example.test',name:'Synthetic purchase credit finance',role:'finance'})
+  const finance=await h.signIn('synthetic-nectar-361@example.test',{requested:true})
+  const customer=(await api('customer.create',{external_id:'synthetic-nectar-362',name:'Synthetic credited prepaid purchase',billing_email:'synthetic-nectar-362@example.test'})).id
+  const product=(await api('product.create',{code:'synthetic-nectar-363',name:'Synthetic prepaid credit service'})).id
+  const price=(await api('price.create',{product,kind:'flat',unit_amount:'1',taxable:false})).id
+  const subscription=(await api('subscription.create',{customer,start_date:'2026-01-01',price:[price]})).id
+  const grant=await api('prepaid.prepare',{subscription,mode:'grant',kind:'money',source:'purchase',amount:'100',effective_date:'2026-01-01',expires_date:'2026-05-01',priority:0,expiry_consent:true})
+  await h.api('prepaid.decide',finance,{request:grant.request,decision:'approved'})
+  const invoice=(await api('prepaid.purchase.prepare',{intent:grant.request,issue_date:'2026-01-01'})).invoice
+  await api('invoice.approve',{invoice,acknowledge:true});await api('invoice.finalise',{invoice,issue_date:'2026-01-01'})
+  const original=await api(`invoices/${invoice}`),source=await api(`revenue/${invoice}`)
+  await api('credit.issue',{invoice,amount:'25',reason:'Synthetic unused unpaid purchase correction'})
+  assert.equal((await api(`invoices/${invoice}`)).balanceCents,7500)
+  await api('prepaid.funding.confirm',{intent:grant.request,confirm:true},409)
+  const payment=await api('payment.record',{customer,amount:'75',received_on:'2026-01-01',method:'bank_transfer',reference:'synthetic-nectar-364'})
+  await api('payment.allocate',{payment:payment.payment,invoice,amount:'75'})
+  assert.equal((await api(`invoices/${invoice}`)).balanceCents,0)
+  await api('prepaid.funding.confirm',{intent:grant.request,confirm:true},409)
+  const state=await api(`prepaid/${subscription}`)
+  assert.equal(state.grants.length,0);assert.equal(state.entries.length,0)
+  assert.equal(state.fundingIntents.find(intent=>intent.id===grant.request).status,'pending')
+  const report=await api(`revenue?period=2026-01&customer=${customer}`)
+  assert.deepEqual([report.netBillingsCents,report.recognizedCents,report.closingCents],[7500,0,7500])
+  assert.equal(report.months[0].deferredLiabilityCents,7500)
+  assert.deepEqual((await api(`invoices/${invoice}`)).calculation,original.calculation)
+  assert.deepEqual((await api(`revenue/${invoice}`)).schedules,source.schedules,'A credit preserves the original purchase schedule and appends only a liability reversal')
+  console.log('CAT-004 credited unpaid purchase: reduced liability without revenue, paid-reduced-consideration funding refusal and immutable source passed')
+  return {customer,subscription,invoice,intent:grant.request}
+}
+
+// Outside push Verify: same financial custody journey with the larger graph.
+export async function prepaidScaleErasureFlow(h,owner){return prepaidErasureFlow(h,owner,{scale:true})}
+
+// Public-door prepaid-refresh checks share this retained journey module.
+const prepaidRefreshJourneys = await (async () => {
+// USE-006 parity inside push Verify: the existing prepaid journeys call the
+// refresh assertion after every committed ledger transition and the automatic
+// funding, so grant, drawdown, rollover, expiry and top-up are each read back
+// through the operator page and JSON door within the one-minute bound.
+const { default: assert } = await import('node:assert/strict')
+const { prepaidTopupFlow } = await import('./prepaid-topup.mjs')
+const { prepaidRefreshParity } = await import('./prepaid-report-parity.mjs')
+
+const { harnessOptions } = await import('./prepaid-topup.mjs')
+async function prepaidRefreshLedgerFlow(h,owner) {
+  const samples=[]
+  await prepaidFlow(h,owner,{onRefresh:async row=>samples.push(await prepaidRefreshParity(h,owner,row))})
+  for(const kind of ['grant','drawdown','expiry','rollover'])assert.ok(samples.some(sample=>sample.entryKinds.includes(kind)),`Refresh parity covers ${kind}`)
+}
+
+async function prepaidRefreshTopupFlow(h,owner) {
+  let funded=0
+  await prepaidTopupFlow(h,owner,{onState:async state=>{if(state.label==='funded'){funded++;await prepaidRefreshParity(h,owner,state.row)}}})
+  assert.equal(funded,1,'Refresh parity covers the automatic top-up funding')
+}
+
+return { prepaidRefreshLedgerFlow, prepaidRefreshTopupFlow, harnessOptions }
+})()
+export const { prepaidRefreshLedgerFlow, prepaidRefreshTopupFlow, harnessOptions: prepaidRefreshHarnessOptions } = prepaidRefreshJourneys
+
+// Public-door prepaid-browser checks share this retained journey module.
+const prepaidBrowserJourneys = await (async () => {
+// Native operator use over the same public ledger and approval journey.
+const { default: assert } = await import('node:assert/strict')
+
+async function prepaidBrowser({h,owner,page,context,both,form,submit}) {
+  let sequence=0
+  const result=await prepaidFlow(h,owner,{onState:async state=>{
+    const label=`prepaid-${sequence++}`
+    for(const row of [state.row,state.units].filter(Boolean)){
+      await both(`${label}-${row===state.row?'money':'units'}-ledger`,`/app/prepaid/${row.subscription}`)
+      await both(`${label}-${row===state.row?'money':'units'}-upcoming`,`/app/subscriptions/${row.subscription}?preview_period=2026-03#upcoming`)
+      const saved=await h.api(`prepaid/${row.subscription}`,owner)
+      for(const kind of ['grant','drawdown','rollover','expiry']){
+        const entry=saved.entries.find(entry=>entry.kind===kind)
+        if(entry)await both(`${label}-${row===state.row?'money':'units'}-${kind}`,`/app/prepaid/${row.subscription}/entries/${encodeURIComponent(entry.id)}`)
+      }
+    }
+    await both(`${label}-balances`,`/app/reports/credit-balances?customer=${state.row.customer}`)
+    const balances=await h.api(`reports/credit-balances?customer=${state.row.customer}`,owner)
+    for(const [index,entry]of balances.entries.filter(entry=>entry.prepaid).entries())await both(`${label}-balance-source-${index}`,entry.href)
+    await both(`${label}-revenue`,`/app/revenue?from=2026-01&to=2026-12&customer=${state.row.customer}`)
+    await both(`${label}-purchase-revenue`,`/app/revenue/${state.purchaseInvoice.id}?from=2026-01&to=2026-12`)
+  }})
+  await page.goto(h.origin+`/app/prepaid/${result.row.subscription}`)
+  const prepare=form('prepaid.prepare')
+  await prepare.locator('select[name="kind"]').selectOption('units')
+  await prepare.locator('select[name="source"]').selectOption('promotion')
+  await prepare.locator('select[name="meter"]').selectOption(result.row.meter)
+  await prepare.locator('input[name="amount"]').fill('12.5')
+  await prepare.locator('input[name="effective_date"]').fill('2026-04-01')
+  await prepare.locator('input[name="expires_date"]').fill('2026-07-01')
+  await prepare.locator('input[name="priority"]').fill('4')
+  await prepare.locator('input[name="expiry_consent"]').check()
+  await both('prepaid-native-preparation',null)
+  await submit(prepare)
+  const pending=(await h.api(`prepaid/${result.row.subscription}`,owner)).requests.find(request=>request.status==='pending')
+  assert.ok(pending)
+  const setActor=async cookie=>{
+    await context.clearCookies()
+    await context.addCookies(cookie.split('; ').map(value=>{const i=value.indexOf('=');return {name:value.slice(0,i),value:value.slice(i+1),url:h.origin}}))
+  }
+  const finance=await h.signIn('synthetic-nectar-301@example.test')
+  await setActor(finance)
+  await both('prepaid-native-independent-approval',`/app/prepaid/${result.row.subscription}`,async()=>{
+    await page.getByText('Exact terms and drawdown order',{exact:true}).last().click()
+  })
+  const approve=form('prepaid.decide').filter({has:page.locator(`input[name="request"][value="${pending.id}"]`)}).filter({has:page.locator('input[name="decision"][value="approved"]')})
+  await submit(approve)
+  assert.equal((await h.api(`prepaid/${result.row.subscription}`,finance)).requests.find(request=>request.id===pending.id).status,'approved')
+  await both('prepaid-native-approved',`/app/prepaid/${result.row.subscription}`)
+  await setActor(owner)
+}
+
+return { prepaidBrowser }
+})()
+export const { prepaidBrowser } = prepaidBrowserJourneys
