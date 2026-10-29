@@ -2,6 +2,7 @@ import { importedAmountDiscounts } from './imported-discounts'
 import { pendingItemValue } from './pending-items'
 import { importedCancellation } from './cancellation'
 import { importedSchedule } from './schedules'
+import { importedTaxFields } from './tax-ids'
 import { importOriginalFiles } from '../import-originals'
 // Move-in kit 1: Stripe Billing records. Reads owner-captured Stripe API list
 // responses (customers, products, prices, subscriptions, invoices and,
@@ -244,9 +245,10 @@ async function build(env: Bindings, actor: Actor, input: Input) {
         if (!email) note(source, 'no email in Stripe; add a billing email before issuing invoices')
         const address = o.address ? [o.address.line1, o.address.line2, o.address.city, o.address.state, o.address.postal_code, o.address.country].filter(Boolean).join(', ') : ''
         const exempt = o.tax_exempt === 'exempt' || o.tax_exempt === 'reverse'
+        const invoiceSettings = importedTaxFields(o)
         if (exempt) note(source, `Stripe tax_exempt "${o.tax_exempt}" imported as an exemption; keep the certificate on file`)
         if (!existing.has(`customer:${id}`)) create.customer++
-        return { effects: [effect('customer', id, { externalId: o.id, name: String(o.name ?? o.description ?? o.id).slice(0, 160), billingEmail: email, address: address.slice(0, 400), taxExempt: exempt ? 1 : 0, taxExemptRef: exempt ? `stripe:${o.tax_exempt}` : '', providerRef: o.id })] }
+        return { effects: [effect('customer', id, { externalId: o.id, name: String(o.name ?? o.description ?? o.id).slice(0, 160), billingEmail: email, address: address.slice(0, 400), taxExempt: exempt ? 1 : 0, taxExemptRef: exempt ? `stripe:${o.tax_exempt}` : '', providerRef: o.id, ...(invoiceSettings ? { invoiceSettings } : {}) })] }
       }
       if (source.kind === 'subscription') {
         if (['incomplete', 'incomplete_expired', 'paused'].includes(o.status)) return reject(source, `status "${o.status}" has no billing to move; resolve it in Stripe first`)

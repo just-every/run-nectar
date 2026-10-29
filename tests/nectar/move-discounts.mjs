@@ -165,6 +165,8 @@ export function pendingItemsCapture() {
   capture.customers.data = capture.customers.data.slice(0, 3)
   capture.subscriptions.data = capture.subscriptions.data.slice(0, 3)
   capture.invoices.data = capture.invoices.data.slice(0, 1)
+  capture.customers.data[0].tax_ids = { object: 'list', has_more: false, data: [{ id: 'synthetic-nectar-pending-tax-id',
+    customer: capture.customers.data[0].id, type: 'us_ein', value: '00-0000001' }] }
   for (const [index, sub] of capture.subscriptions.data.entries()) {
     delete sub.discounts
     sub.items.data = [{ ...sub.items.data[0], price: { id: capture.prices.data[0].id }, quantity: 1 }]
@@ -204,6 +206,7 @@ async function movePendingItemsFlow(h, owner, { onState, reader }) {
     c => { c.invoice_items.data[0].amount = -7500 },
     c => { c.invoice_items.data[0].tax_rates = [{ percentage: 10 }] },
     c => { c.invoice_items.data[0].proration = true },
+    c => { c.invoice_items.data[0].automatic_tax = { enabled: true } },
     c => { c.subscriptions.data[0].cancel_at = unix('2026-12-02') },
     c => { delete c.subscriptions.data[0].current_period_end },
     c => { c.subscriptions.data[0].current_period_end += 3600 },
@@ -213,6 +216,9 @@ async function movePendingItemsFlow(h, owner, { onState, reader }) {
     c => { c.subscriptions.data[2].schedule.phases[1].add_invoice_items = [{ price: c.prices.data[2].id }] },
     c => { c.subscriptions.data[2].schedule.customer = c.customers.data[1].id },
     c => { c.subscriptions.data[2].schedule.end_behavior = 'unknown' },
+    c => { c.customers.data[0].tax_ids.has_more = true },
+    c => { c.customers.data[0].tax_ids.data[0].customer = c.customers.data[1].id },
+    c => { c.customers.data[0].tax_ids.data[0].type = 'unqualified' },
     c => { delete c.invoice_items },
   ]) {
     const invalid = structuredClone(capture); change(invalid)
@@ -237,6 +243,8 @@ async function movePendingItemsFlow(h, owner, { onState, reader }) {
   const subs = ordered.map(customer => customer.subscriptions[0]), charge = ordered[0].charges[0]
   assert.deepEqual([charge.amount_cents, charge.quantity, charge.unit_amount, charge.effective_date], [7500, '3', '25.00', '2026-11-01'])
   assert.deepEqual([subs[0].end_date, subs[1].trial_end], ['2026-12-01', '2026-11-16'])
+  assert.equal(JSON.parse(ordered[0].invoice_settings_json).customFields['Imported US tax ID'], '00-0000001')
+  assert.equal(ordered[0].tax_exempt, 0, 'a displayed source tax ID grants no exemption')
   assert.equal((await api('import.apply', { ...files, fingerprint: preview.fingerprint })).job, imported.job)
   assert.deepEqual(await api('customers/' + ordered[0].id), ordered[0], 'reimport does not recreate pending items')
   const manual = { customer: ordered[0].id, charges: [charge.id], service_date: '2026-11-01' }
@@ -255,6 +263,7 @@ async function movePendingItemsFlow(h, owner, { onState, reader }) {
     assert.equal(invoice.total_cents, [40500, 16500, 33000][index], 'independent charge, trial and schedule calculation with declared tax')
     if (index === 0) {
       assert.equal(invoice.tax_cents, 3000, 'explicitly untaxed pending item adds no tax')
+      assert.equal(invoice.calculation.inputs.invoiceContent.customerFields['Imported US tax ID'], '00-0000001')
       const line = invoice.lines.find(line => line.kind === 'one_time')
       assert.deepEqual([line.amount_cents, line.quantity, line.evidence.invoiceItem], [7500, '3', capture.invoice_items.data[0].id])
     }
@@ -264,6 +273,19 @@ async function movePendingItemsFlow(h, owner, { onState, reader }) {
     await onState({ label: ['pending-item-issued', 'remaining-trial-issued', 'schedule-first-phase'][index], path: '/app/invoices/' + invoice.id })
   }
   assert.equal((await api('customers/' + ordered[0].id)).charges[0].invoice_id, issued[0].id)
+  await api('portal.configure', { hosts: [h.origin], parents: [] })
+  const session = await api('portal.session.issue', { customer: ordered[0].id, origin: h.origin, audience: 'hosted' })
+  const ownInvoice = '/portal/invoices/' + issued[0].id + '?session=' + session.token
+  const pdf = await h.raw(ownInvoice + '&format=pdf')
+  assert.equal(pdf.status, 200)
+  const bytes = Buffer.from(await pdf.arrayBuffer())
+  const pdfText = [...bytes.toString('latin1').matchAll(/<([0-9a-f]+)> Tj/g)].map(match => Buffer.from(match[1], 'hex').toString('latin1')).join('\n')
+  assert.ok(pdfText.includes('00-0000001'), 'the downloaded issued PDF retains the captured tax ID')
+  assert.ok((await (await h.raw(ownInvoice)).text()).includes('00-0000001'))
+  assert.ok((await (await h.raw('/app/customers/' + ordered[0].id, { cookie: owner })).text()).includes('00-0000001'), 'the native customer record retains the captured tax ID')
+  const foreign = await api('portal.session.issue', { customer: ordered[1].id, origin: h.origin, audience: 'hosted' })
+  assert.equal((await h.raw('/portal/invoices/' + issued[0].id + '?session=' + foreign.token)).status, 404, 'another customer cannot read the imported tax ID')
+  await onState({ label: 'pending-tax-id-portal', path: ownInvoice })
   const next = await api('billrun.prepare', { period: '2026-12' })
   const december = (await api('runs/' + next.id)).invoices
   assert.ok(!december.some(invoice => invoice.subscription_id === subs[0].id), 'boundary cancellation prevents the next invoice')
@@ -287,6 +309,20 @@ async function movePendingItemsFlow(h, owner, { onState, reader }) {
   await api('import.apply', { ...discountFiles(changed), fingerprint: (await api('import.preview', discountFiles(changed))).fingerprint }, 409)
   assert.deepEqual(await Promise.all(issued.map(invoice => api('invoices/' + invoice.id))), issued, 'changed source and unsafe undo preserve issued money')
   assert.deepEqual(await Promise.all(scheduleInvoices.map(invoice => api('invoices/' + invoice.id))), scheduleInvoices, 'replay cannot alter issued schedule phases')
+  const request = await api('erasure.request', { customer: ordered[0].id })
+  await api('erasure.verify', { request: request.id, reason: 'Independently verified pending-item account owner', evidence: file('synthetic-nectar-pending-owner.txt', 'Signed owner request', 'text/plain') })
+  await api('erasure.approve', { request: request.id, confirm: true })
+  assert.equal((await h.raw(ownInvoice + '&format=pdf')).status, 401, 'erasure withdraws the tax-bearing customer PDF capability')
+  const anonymous = await api('customers/' + ordered[0].id)
+  assert.equal(anonymous.invoice_settings_json, '{}', 'erasure withdraws the captured tax identifier')
+  const retained = await api('invoices/' + issued[0].id)
+  assert.deepEqual([retained.number, retained.total_cents, retained.tax_cents], [issued[0].number, 40500, 3000], 'anonymous invoice retains exact issued custody')
+  const retainedCharge = retained.lines.find(line => line.kind === 'one_time')
+  assert.equal(retainedCharge.amount_cents, 7500, 'anonymous issued charge retains its exact amount')
+  assert.deepEqual(retainedCharge.evidence, {}, 'erasure withdraws original source references')
+  const retired = await api('import.preview', files)
+  await api('import.apply', { ...files, fingerprint: retired.fingerprint }, 409)
+  assert.deepEqual(await api('customers/' + ordered[0].id), anonymous, 'replay cannot restore erased tax or pending-item source identity')
   await onState({ label: 'pending-item-import', path: '/app/import' })
   console.log('MOVE-008 pending item billed once, untaxed source cents, remaining trial, boundary cancellation, replay, undo and atomic refusal passed')
 }

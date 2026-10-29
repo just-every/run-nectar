@@ -23,7 +23,8 @@ export function pendingItemValue(item: any, options: {
   refuse(item.discountable === false && !item.discounts?.length && !item.discount_amounts?.length,
     'discountable pending items need separate source qualification')
   refuse(Array.isArray(item.tax_rates) && item.tax_rates.length === 0 && !item.tax_amounts?.length
-    && !item.price?.tax_behavior?.includes('inclusive'), 'pending items must explicitly have no source tax rates')
+    && !sub.automatic_tax?.enabled && !item.automatic_tax?.enabled && item.tax_behavior !== 'inclusive'
+    && item.price?.tax_behavior !== 'inclusive', 'pending items must explicitly have no source tax rates')
   const boundary = sub.current_period_start
   refuse(Number.isSafeInteger(boundary) && boundary > 0, 'the captured current billing period is required')
   const date = localDate(boundary * 1000, options.zone)

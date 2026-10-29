@@ -20,6 +20,8 @@ export function importedSchedule(subscription: any, items: any[], options: {
   const simple = (phase: any) => !phase.discounts?.length && !phase.coupon && !phase.add_invoice_items?.length
     && !phase.trial_end && !phase.trial && !phase.billing_thresholds && !phase.application_fee_percent
     && !phase.automatic_tax?.enabled && !phase.default_tax_rates?.length && !phase.transfer_data
+    && (!phase.currency || phase.currency === 'usd')
+    && (!phase.invoice_settings || !Object.values(phase.invoice_settings).some(value => value != null))
     && (!phase.billing_cycle_anchor || phase.billing_cycle_anchor === 'automatic')
     && (!phase.collection_method || phase.collection_method === subscription.collection_method)
   refuse(simple(schedule.default_settings ?? {}), 'schedule defaults contain unsupported billing effects')

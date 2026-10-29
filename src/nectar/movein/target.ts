@@ -46,16 +46,17 @@ const SUBSCRIPTION_DEPENDENTS = `((SELECT COUNT(*) FROM nc_invoices WHERE subscr
 const customer: Kind = {
   async read(db, id) {
     const row = await db.prepare("SELECT * FROM nc_customers WHERE id = ? AND origin = 'import'").bind(id).first<any>()
-    return row ? { revision: row.revision, value: withDependents({ externalId: row.external_id, name: row.name, billingEmail: row.billing_email, address: row.address, taxExempt: row.tax_exempt, taxExemptRef: row.tax_exempt_ref, providerRef: row.provider_ref }, await dependents(db, CUSTOMER_DEPENDENTS, id)) } : undefined
+    return row ? { revision: row.revision, value: withDependents({ externalId: row.external_id, name: row.name, billingEmail: row.billing_email, address: row.address, taxExempt: row.tax_exempt, taxExemptRef: row.tax_exempt_ref, providerRef: row.provider_ref,
+      ...(row.invoice_settings_json !== '{}' ? { invoiceSettings: row.invoice_settings_json } : {}) }, await dependents(db, CUSTOMER_DEPENDENTS, id)) } : undefined
   },
   matches(value, id, revision) {
-    const main = eq([['external_id', value.externalId], ['name', value.name], ['billing_email', value.billingEmail], ['address', value.address], ['tax_exempt', value.taxExempt], ['tax_exempt_ref', value.taxExemptRef], ['provider_ref', value.providerRef], ['status', 'active'], ['revision', revision]])
+    const main = eq([['external_id', value.externalId], ['name', value.name], ['billing_email', value.billingEmail], ['address', value.address], ['tax_exempt', value.taxExempt], ['tax_exempt_ref', value.taxExemptRef], ['provider_ref', value.providerRef], ['status', 'active'], ['revision', revision], ['invoice_settings_json', value.invoiceSettings ?? '{}']])
     const free = noDependents(CUSTOMER_DEPENDENTS, id)
     return sql(`EXISTS(SELECT 1 FROM nc_customers WHERE id = ? AND origin = 'import' AND ${main.text}) AND ${free.text}`, id, ...main.params, ...free.params)
   },
   absent: id => sql('NOT EXISTS(SELECT 1 FROM nc_customers WHERE id = ?)', id),
-  write: (value, id, revision) => [sql("INSERT INTO nc_customers (id, external_id, name, billing_email, address, tax_exempt, tax_exempt_ref, origin, provider_ref, revision, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'import', ?, ?, ?, ?)",
-    id, value.externalId, value.name, value.billingEmail, value.address, value.taxExempt, value.taxExemptRef, value.providerRef, revision, at(), at())],
+  write: (value, id, revision) => [sql("INSERT INTO nc_customers (id, external_id, name, billing_email, address, tax_exempt, tax_exempt_ref, origin, provider_ref, revision, created_at, updated_at, invoice_settings_json) VALUES (?, ?, ?, ?, ?, ?, ?, 'import', ?, ?, ?, ?, ?)",
+    id, value.externalId, value.name, value.billingEmail, value.address, value.taxExempt, value.taxExemptRef, value.providerRef, revision, at(), at(), value.invoiceSettings ?? '{}')],
   remove: id => [sql("DELETE FROM nc_customers WHERE id = ? AND origin = 'import'", id)],
   ids: db => idsOf(db, 'nc_customers'),
   count: "(SELECT COUNT(*) FROM nc_customers WHERE origin = 'import')",
