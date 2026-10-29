@@ -6,7 +6,7 @@ import { customerText } from './locale'
 // A correction is reviewed against a complete, immutable issued chain. Only
 // approval appends an effective basis and settles/queues its exact signed delta.
 import type { Bindings } from '../auth.server'
-import { actorLabel, requireCapability, requireMember, requireOwner, type Actor } from './actor'
+import { actorLabel, companyAgentDetail, requireCapability, requireMember, requireOwner, type Actor } from './actor'
 import { all, canonical, commit, fingerprint, guard, insist, newId, now, one, parseJson, stmt, type Row } from './core'
 import { requireBusiness } from './business'
 import { clockInstant } from './clock'
@@ -115,7 +115,7 @@ export async function prepareUsageCorrection(env: Bindings, actor: Actor, input:
   const p=await plan(env,actor,payload)
   await commit(env,[sequenceGuard(env,p.seq),stmt(env,`INSERT INTO nc_usage_corrections(id,subscription_id,customer_id,payload_json,plan_json,basis,prepared_by_id,prepared_by_kind,prepared_by,prepared_at) VALUES(?,?,?,?,?,?,?,?,?,?)`,
     id,p.summary.subscription,p.summary.customer,JSON.stringify(p.normalized),JSON.stringify(p.summary),p.basis,actor.id,actor.kind,actorLabel(actor),now())],
-    {actor:actorLabel(actor),action:'usage.correction.prepare',subject:id,detail:{subscription:p.summary.subscription,basis:p.basis,delta:p.summary.delta,disposition:p.summary.disposition}})
+    {actor:actorLabel(actor),action:'usage.correction.prepare',subject:id,detail:{subscription:p.summary.subscription,basis:p.basis,delta:p.summary.delta,disposition:p.summary.disposition,...companyAgentDetail(actor)}})
   return {id,status:'pending',basis:p.basis,plan:p.summary}
 }
 async function checked(env: Bindings, actor: Actor, id: string) {
