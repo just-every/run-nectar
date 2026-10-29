@@ -36,7 +36,9 @@ members receive native Accountant and no policy-editing role. Native promotion
 alone never changes the signed Business role. Current membership, operator
 admission and native roles are re-read; token email cannot select a sponsor.
 New application keys retain their native sponsor ID. Legacy prepare/usage keys
-keep their original scope and never acquire financial approval authority.
+keep their existing API purpose, but require native reissue before admission to
+the company door: their saved author email cannot establish a sponsor ID.
+Neither scope acquires financial approval authority.
 
 The native owner lifecycle supports signed owner claims when paired. The setup
 manifest now declares that mode so normal verification sends the signed claim to

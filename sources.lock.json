@@ -259,7 +259,7 @@
       "executable": false
     },
     "docs/agent-door.md": {
-      "sha256": "3e7ae99d4a8d698592258b6418c56137347365aad9d99ee689578d5fb3a16072",
+      "sha256": "708951c204ab32d90279a088939ab9c6d895c8e179a0489a8bb2e1204f88d49b",
       "executable": false
     },
     "docs/agents-and-access.md": {
@@ -911,7 +911,7 @@
       "executable": false
     },
     "migrations/core/0114_agent_native_identity.sql": {
-      "sha256": "9afa82d04cefc923374e3019c6217da972695c2d28df41ee5c979377c14048bf",
+      "sha256": "e20289e1a5d9000a553757aace9136b69f421faf5e47846ccabdfc44d4ff56aa",
       "executable": false
     },
     "ONBOARDING.md": {
