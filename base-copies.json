@@ -5154,6 +5154,15 @@
       },
       "modes": {
         "VERIFY-WORKFLOW.md": "100644"
+      },
+      "adapted": {
+        "VERIFY-WORKFLOW.md": "4280971d7c0295b8a88c3e1179048efcbbe14f30"
+      },
+      "acknowledged": {
+        "VERIFY-WORKFLOW.md": {
+          "sha256": "dfcd729a5ac6d3387b0e0e94d73852f0a07addd26e7a51c4fc8c608412e2ceaf",
+          "mode": "100644"
+        }
       }
     }
   ]
