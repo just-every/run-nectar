@@ -853,6 +853,10 @@
       "sha256": "87494a215e5b54c0796fb5dfaeff01ff2cf36eb8816510b7ae70ed07ecf48082",
       "executable": false
     },
+    "migrations/core/0115_job_runs.sql": {
+      "sha256": "3e6cceaf953f3f4417a31b208255719b0fe528f3d8946ddd4333cf200897173f",
+      "executable": false
+    },
     "ONBOARDING.md": {
       "sha256": "95bb235abff28ac36979868486caf2cb73bfbe4ab63037f3e301d189bb9398d9",
       "executable": false
@@ -3601,6 +3605,10 @@
       "sha256": "c1b7ecf033d4ffa02f449f4916c4cc375963eed34d8a3e24b69d47169c89cd29",
       "executable": false
     },
+    "src/nectar/job-runs.ts": {
+      "sha256": "a733a583562770852917ec95a47fd9c340e0e0dcf55dcca34e2a54ca421801fd",
+      "executable": false
+    },
     "src/nectar/ledger-postings.ts": {
       "sha256": "1d3a175f04fe2c6b3a130da57a0e4b28a499f9e57cc4ac29361ae2383fcc704b",
       "executable": false
@@ -5283,6 +5291,10 @@
     },
     "tests/nectar/isolated.mjs": {
       "sha256": "84963202cc537c0d53606702cb9f8a5cdcb4db4996ac4f64a495cb52c92c32e3",
+      "executable": false
+    },
+    "tests/nectar/job-runs.mjs": {
+      "sha256": "881c38ab6cb2926f68f9e509a75dad6915f493f80cb77316be66c5e2e8f70862",
       "executable": false
     },
     "tests/nectar/journey.mjs": {
