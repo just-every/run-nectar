@@ -129,8 +129,18 @@ export async function proveTransferInstructions(stripe, secret) {
       assert.equal(observed.transfer_instructions_json,invoice.transfer_instructions_json,'Payment cannot rewrite issued instructions')
       const cash=await stripe.request('GET',`/v1/customers/${remote.id}/cash_balance`)
       assert.equal(cash.available?.usd??0,0)
+      const transactions=(await stripe.list(`/v1/customers/${remote.id}/cash_balance_transactions`)).data
+      const ledger=await api(`processor-events?customer=${customer}`)
+      assert.deepEqual(ledger.cashTransactions.map(row=>[row.transaction_ref,row.amount_cents,row.ending_balance_cents]).sort(),
+        transactions.map(row=>[row.id,row.net_amount,row.ending_balance]).sort(),'Recorded cash history agrees independently with Stripe')
+      assert.equal(transactions.filter(row=>row.type==='funded').length,index+1)
+      assert.equal(transactions.filter(row=>row.type==='applied_to_payment').length,index+1)
       results.cash.push({invoice:invoice.id,matching:index===0?'reference':'exact_amount',event:event.id,transfer:funded.id,cents:invoice.total_cents,allocations:1,remainingCents:0})
     }
+    const intents=(await stripe.list('/v1/payment_intents',{customer:remote.id})).data
+    assert.equal(intents.length,2,'Repeated cash events create no replacement payment')
+    assert.equal(writes.filter(row=>row.path==='/v1/payment_intents').length,2)
+    assert.equal(writes.filter(row=>row.path.endsWith('/funding_instructions')).length,1)
     results.status='passed';results.customer=remote.id;results.invoices=invoices.map(row=>row.id)
     results.nativeInstructionWrites=1
     return results
