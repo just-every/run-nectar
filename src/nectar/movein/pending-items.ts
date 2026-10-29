@@ -1,12 +1,13 @@
 // A pending source item becomes an ordinary immutable charge. Its source
 // identity survives replay; invoice issue owns the existing once-only claim.
 import { insist } from '../core'
-import { plainMoney } from '../decimal'
+import { micros, plainMoney } from '../decimal'
 import { localDate, zonedStart } from '../dates'
 
 export function pendingItemValue(item: any, options: {
   subscriptions: any[]; zone: string; customerTarget: (id: string) => string | null
   subscriptionTarget: (id: string) => string; mappedSubscriptions: Set<string>
+  taxMode: string; taxRate: string
 }) {
   const refuse: (ok: unknown, reason: string) => asserts ok = (ok, reason) =>
     insist(ok, 'unsupported_pending_invoice_item', 400, { item: item.id, reason })
@@ -24,7 +25,15 @@ export function pendingItemValue(item: any, options: {
     'discountable pending items need separate source qualification')
   refuse(Array.isArray(item.tax_rates) && item.tax_rates.length === 0 && !item.tax_amounts?.length
     && !sub.automatic_tax?.enabled && !item.automatic_tax?.enabled && item.tax_behavior !== 'inclusive'
-    && item.price?.tax_behavior !== 'inclusive', 'pending items must explicitly have no source tax rates')
+    && item.price?.tax_behavior !== 'inclusive', 'explicit item tax rates and automatic or inclusive tax need separate qualification')
+  // Stripe uses subscription defaults when the invoice item has no own rates.
+  const rates = sub.default_tax_rates
+  refuse(Array.isArray(rates) && rates.length <= 1, 'complete subscription default tax rates are required')
+  const rate = rates[0]
+  if (rates.length) refuse(rate && typeof rate.id === 'string' && rate.inclusive === false
+    && typeof rate.percentage === 'number' && Number.isFinite(rate.percentage) && rate.percentage >= 0 && rate.percentage <= 100
+    && options.taxMode === 'flat_rate' && micros(String(rate.percentage)) === micros(options.taxRate),
+    'one expanded exclusive default rate must match the declared Nectar tax policy')
   const boundary = sub.current_period_start
   refuse(Number.isSafeInteger(boundary) && boundary > 0, 'the captured current billing period is required')
   const date = localDate(boundary * 1000, options.zone)
@@ -32,8 +41,9 @@ export function pendingItemValue(item: any, options: {
   return {
     customerId, subscriptionId: options.subscriptionTarget(sub.id), description: 'Imported pending invoice item',
     quantity: String(quantity), unitAmount: plainMoney(item.amount / quantity), amountCents: item.amount,
-    taxable: 0, effectiveDate: date,
+    taxable: rate ? 1 : 0, effectiveDate: date,
     evidence: JSON.stringify({ provider: 'stripe', invoiceItem: item.id, amountCents: item.amount, quantity,
-      periodStart: item.period?.start ?? null, periodEnd: item.period?.end ?? null, discountable: false }),
+      periodStart: item.period?.start ?? null, periodEnd: item.period?.end ?? null, discountable: false,
+      defaultTaxRates: rate ? [{ id: rate.id, percentage: rate.percentage, inclusive: false }] : [] }),
   }
 }

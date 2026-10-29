@@ -183,7 +183,7 @@ async function build(env: Bindings, actor: Actor, input: Input) {
       const o = source.payload as any
       if (source.kind === 'pending_item') {
         const value = pendingItemValue(o, { subscriptions: lists.subscriptions, zone, customerTarget,
-          subscriptionTarget: targetIds.subscription, mappedSubscriptions })
+          subscriptionTarget: targetIds.subscription, mappedSubscriptions, taxMode: business.tax_mode, taxRate: business.tax_rate })
         const id = hex(`nectar:stripe:pending-item:${o.id}`)
         if (conflict('pending_item', id, source)) return reject(source, 'already imported earlier with different values')
         if (!existing.has(`pending_item:${id}`)) create.pending_item++
@@ -434,7 +434,9 @@ export async function adopt(env: Bindings, actor: Actor, input: Input) {
   insist(isDate(cutover) && Number(cutover.slice(8)) === sub.anchor_day, 'cutover_must_start_a_period')
   insist(cutover >= sub.earliestCutover, 'cutover_overlaps_previous_biller', 409, { earliest: sub.earliestCutover })
   const pending = await all(env, "SELECT effective_date FROM nc_charges WHERE subscription_id=? AND origin='import' AND invoice_id IS NULL", sub.id)
-  insist(pending.every(item => item.effective_date === cutover), 'pending_items_cutover_changed', 409)
+  // Unbilled source charges retain their original dates and travel into the
+  // first Nectar invoice, even when Stripe already billed that service period.
+  insist(pending.every(item => item.effective_date <= cutover), 'pending_items_cutover_changed', 409)
   insist(sub.reconciled || input.flag('acknowledge_unreconciled'), 'shadow_not_reconciled', 409)
   const current = await one(env, 'SELECT revision FROM nc_subscriptions WHERE id = ?', sub.id)
   await commit(env, [

@@ -109,7 +109,14 @@ export async function prepareRun(env: Bindings, actor: Actor, input: Input) {
     }
     const period = periodStartingIn(sub.anchor_day, month)
     if(await one(env,'SELECT 1 FROM nc_hierarchy_consumed WHERE subscription_id=? AND period_start=?',sub.id,period.start)){skipped.push({subscription:sub.id,customer:sub.customer_name,reason:'already consolidated'});continue}
-    if (sub.start_date >= period.end || (sub.end_date && sub.end_date <= period.start)) continue
+    if (sub.start_date >= period.end) continue
+    if (sub.end_date && sub.end_date <= period.start) {
+      // A source-ended subscription can still owe an unbilled imported item.
+      // Rating retains the end date, so this produces charges without renewal.
+      const pending = sub.billing_mode === 'live' && sub.cutover_start && period.start >= sub.cutover_start
+        && await one(env, "SELECT 1 FROM nc_charges WHERE subscription_id=? AND origin='import' AND invoice_id IS NULL AND effective_date<? LIMIT 1", sub.id, period.end)
+      if (!pending) continue
+    }
     if (sub.cutover_start && period.end <= sub.cutover_start) { skipped.push({ subscription: sub.id, customer: sub.customer_name, reason: `billed by the previous biller before cutover on ${sub.cutover_start}` }); continue }
     if (await one(env, "SELECT 1 FROM nc_invoices WHERE subscription_id = ? AND invoice_kind = 'recurring' AND period_start = ? AND status = 'issued'", sub.id, period.start)) { skipped.push({ subscription: sub.id, customer: sub.customer_name, reason: 'already invoiced' }); continue }
     if (period.end > day) { open.push({ subscription: sub.id, customer: sub.customer_name, periodEnd: period.end }); continue }

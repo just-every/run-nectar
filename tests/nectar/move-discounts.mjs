@@ -168,6 +168,7 @@ export function pendingItemsCapture() {
   capture.customers.data[0].tax_ids = { object: 'list', has_more: false, data: [{ id: 'synthetic-nectar-pending-tax-id',
     customer: capture.customers.data[0].id, type: 'us_ein', value: '00-0000001' }] }
   for (const [index, sub] of capture.subscriptions.data.entries()) {
+    sub.default_tax_rates = []
     delete sub.discounts
     sub.items.data = [{ ...sub.items.data[0], price: { id: capture.prices.data[0].id }, quantity: 1 }]
     if (index === 0) sub.cancel_at_period_end = true
@@ -193,10 +194,30 @@ export function pendingItemsCapture() {
 
 async function movePendingItemsFlow(h, owner, { onState, reader }) {
   const api = (path, body, status) => h.api(path, owner, body, status)
-  const capture = pendingItemsCapture(), files = discountFiles(capture)
+  const capture = pendingItemsCapture()
+  // Stripe has billed November, but these items remain unbilled. Exercise
+  // both an ongoing subscription and one ending at the source boundary.
+  for (const ended of [false, true]) {
+    const suffix = ended ? '-ended' : '-continuing'
+    const copy = value => JSON.parse(JSON.stringify(value).replaceAll('synthetic-nectar-pending-', 'synthetic-nectar-carried' + suffix + '-'))
+    const customer = copy(capture.customers.data[0]), sub = copy(capture.subscriptions.data[0])
+    const invoice = copy(capture.invoices.data[0]), item = copy(capture.invoice_items.data[0])
+    delete customer.tax_ids
+    sub.items.data[0].price = { id: capture.prices.data[0].id }
+    sub.cancel_at_period_end = ended
+    sub.default_tax_rates = [{ id: 'synthetic-nectar-source-tax-10', percentage: 10, inclusive: false }]
+    invoice.created = invoice.period_start = unix('2026-11-01')
+    invoice.period_end = unix('2026-12-01')
+    invoice.lines.data[0].price = { id: capture.prices.data[0].id }
+    invoice.lines.data[0].period = { start: invoice.period_start, end: invoice.period_end }
+    capture.customers.data.push(customer); capture.subscriptions.data.push(sub)
+    capture.invoices.data.push(invoice); capture.invoice_items.data.push(item)
+  }
+  for (const [name, value] of Object.entries(capture)) if (name !== 'manifest') capture.manifest.files[name] = { count: value.data.length, has_more: false }
+  const files = discountFiles(capture)
   const before = await api('customers'), preview = await api('import.preview', files)
   assert.deepEqual(preview.rejected, [])
-  assert.equal(preview.create.pending_item, 1)
+  assert.equal(preview.create.pending_item, 3)
   for (const change of [
     c => { c.invoice_items.data[0].invoice = 'synthetic-nectar-already-invoiced' },
     c => { c.invoice_items.data[0].subscription = null },
@@ -207,6 +228,12 @@ async function movePendingItemsFlow(h, owner, { onState, reader }) {
     c => { c.invoice_items.data[0].tax_rates = [{ percentage: 10 }] },
     c => { c.invoice_items.data[0].proration = true },
     c => { c.invoice_items.data[0].automatic_tax = { enabled: true } },
+    c => { delete c.subscriptions.data[0].default_tax_rates },
+    c => { c.subscriptions.data[3].default_tax_rates = [null] },
+    c => { c.subscriptions.data[3].default_tax_rates = ['synthetic-nectar-unexpanded-tax'] },
+    c => { c.subscriptions.data[3].default_tax_rates[0].inclusive = true },
+    c => { c.subscriptions.data[3].default_tax_rates[0].percentage = 9 },
+    c => { c.subscriptions.data[3].default_tax_rates.push({ ...c.subscriptions.data[3].default_tax_rates[0] }) },
     c => { c.subscriptions.data[0].cancel_at = unix('2026-12-02') },
     c => { delete c.subscriptions.data[0].current_period_end },
     c => { c.subscriptions.data[0].current_period_end += 3600 },
@@ -253,12 +280,24 @@ async function movePendingItemsFlow(h, owner, { onState, reader }) {
   const prior = (await api('runs/' + shadow.id)).invoices.find(invoice => invoice.subscription_id === subs[0].id)
   assert.equal(prior.total_cents, 33000, 'pending source item never enters an earlier source-owned period')
   assert.ok(prior.comparison.incumbent.reconciled)
-  await api('subscription.adopt', { subscription: subs[0].id, cutover_start: '2026-12-01', acknowledge_unreconciled: true }, 409)
-  for (const sub of subs) await api('subscription.adopt', { subscription: sub.id, cutover_start: '2026-11-01', acknowledge_unreconciled: true })
+  await api('subscription.adopt', { subscription: subs[0].id, cutover_start: '2026-10-01', acknowledge_unreconciled: true }, 409)
+  for (const sub of subs.slice(0, 3)) await api('subscription.adopt', { subscription: sub.id, cutover_start: '2026-11-01', acknowledge_unreconciled: true })
+  for (const sub of subs.slice(3)) {
+    await h.api('subscription.adopt', reader, { subscription: sub.id, cutover_start: '2026-12-01', acknowledge_unreconciled: true }, 403)
+    await api('subscription.adopt', { subscription: sub.id, cutover_start: '2026-11-01', acknowledge_unreconciled: true }, 409)
+    await h.rejectAudit('subscription.adopt')
+    try {
+      const response = await h.raw('/api/nectar/subscription.adopt', { cookie: owner, body: { subscription: sub.id, cutover_start: '2026-12-01', acknowledge_unreconciled: true } })
+      assert.ok(response.status >= 400)
+      assert.equal((await api('subscriptions/' + sub.id)).billing_mode, 'shadow', 'failed adoption audit preserves source custody')
+    } finally { await h.rejectAudit() }
+    await api('subscription.adopt', { subscription: sub.id, cutover_start: '2026-12-01', acknowledge_unreconciled: true })
+  }
   const run = await api('billrun.prepare', { period: '2026-11' })
   const november = (await api('runs/' + run.id)).invoices
   const issued = []
-  for (const [index, sub] of subs.entries()) {
+  assert.ok(!november.some(invoice => subs.slice(3).some(sub => sub.id === invoice.subscription_id)), 'source-billed November is never billed again')
+  for (const [index, sub] of subs.slice(0, 3).entries()) {
     const invoice = await api('invoices/' + november.find(invoice => invoice.subscription_id === sub.id).id)
     assert.equal(invoice.total_cents, [40500, 16500, 33000][index], 'independent charge, trial and schedule calculation with declared tax')
     if (index === 0) {
@@ -291,6 +330,21 @@ async function movePendingItemsFlow(h, owner, { onState, reader }) {
   assert.ok(!december.some(invoice => invoice.subscription_id === subs[0].id), 'boundary cancellation prevents the next invoice')
   assert.equal(december.find(invoice => invoice.subscription_id === subs[1].id).total_cents, 33000, 'the remaining trial never restarts after its original end')
   assert.equal(december.find(invoice => invoice.subscription_id === subs[2].id).total_cents, 11000, 'second phase switches price on its original boundary')
+  for (const [index, sub] of subs.slice(3).entries()) {
+    const invoice = await api('invoices/' + december.find(invoice => invoice.subscription_id === sub.id).id)
+    assert.deepEqual([invoice.subtotal_cents, invoice.tax_cents, invoice.total_cents], index === 0 ? [37500, 3750, 41250] : [7500, 750, 8250], 'unbilled items inherit 10% tax without rebilling ended service')
+    const line = invoice.lines.find(line => line.kind === 'one_time')
+    assert.equal(line.evidence.defaultTaxRates[0].percentage, 10)
+    assert.equal(line.period_start, '2026-11-01', 'the carried item retains its original source date')
+    assert.equal(invoice.lines.filter(line => line.kind === 'one_time').length, 1)
+    await api('invoice.approve', { invoice: invoice.id, acknowledge: true })
+    await api('invoice.finalise', { invoice: invoice.id, issue_date: '2027-01-01' })
+    assert.equal((await api('customers/' + ordered[index + 3].id)).charges[0].invoice_id, invoice.id)
+    await onState({ label: index === 0 ? 'carried-inherited-tax' : 'ended-pending-item-only', path: '/app/invoices/' + invoice.id })
+  }
+  const january = (await api('runs/' + (await api('billrun.prepare', { period: '2027-01' })).id)).invoices
+  assert.equal(january.find(invoice => invoice.subscription_id === subs[3].id).total_cents, 33000, 'the pending item is consumed once')
+  assert.ok(!january.some(invoice => invoice.subscription_id === subs[4].id), 'an ended subscription stops after its pending item is billed')
   const scheduleInvoices = []
   await h.advanceClock('2027-04-05T12:00:00Z')
   for (const period of ['2026-12', '2027-01', '2027-02']) {
@@ -324,5 +378,5 @@ async function movePendingItemsFlow(h, owner, { onState, reader }) {
   await api('import.apply', { ...files, fingerprint: retired.fingerprint }, 409)
   assert.deepEqual(await api('customers/' + ordered[0].id), anonymous, 'replay cannot restore erased tax or pending-item source identity')
   await onState({ label: 'pending-item-import', path: '/app/import' })
-  console.log('MOVE-008 pending item billed once, untaxed source cents, remaining trial, boundary cancellation, replay, undo and atomic refusal passed')
+  console.log('MOVE-008 pending items billed once after source-billed periods, inherited and absent tax, ended service, remaining trial, boundary cancellation, replay, undo and atomic refusal passed')
 }
