@@ -178,7 +178,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "2e5e5cf870e385929d090121013fa3f20d543ec422b3674a2a4e83fb5b2e8f21",
+      "sha256": "929cd5ec358ce6e0fc9ca39378206845cf928bf5fa4e456aa8d8716cf0d09943",
       "executable": false
     },
     "AGENTS.consumer.md": {
@@ -198,7 +198,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "ee21b84a4cb3f85537b9f56a2fff7679d5ba3406ce62789ad5663d5138b809d6",
+      "sha256": "03885d7d776c6a0192c146a1935fed0040cc168e2b6e1ee6d1022d5d5193ba26",
       "executable": false
     },
     "DEMO.md": {
@@ -234,7 +234,7 @@
       "executable": false
     },
     "docs/CLAIMS.md": {
-      "sha256": "0342c8c40a382188c0aaa181c1a2a7841c998cedd3a853bf5f310999dfb90250",
+      "sha256": "513a0a4178656482612f61aa23a64b267fa899c92eab3977271ab14c38fc97dd",
       "executable": false
     },
     "docs/composition-baseline.json": {
@@ -3546,7 +3546,7 @@
       "executable": false
     },
     "src/nectar/inputs.ts": {
-      "sha256": "8dfa958b939dcb0053242b9e64e08ca0604c9f065f822a304be029c7161daf02",
+      "sha256": "ff6d1576cd66c65a67cca8c9efee26ea2b4c1924f7f19a5444fbff454337d456",
       "executable": false
     },
     "src/nectar/interval-cancel-plan.ts": {
