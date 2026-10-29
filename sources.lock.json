@@ -174,7 +174,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "d5e1e553c6e3b3f00cc58237fcd50c04544250a93a313db4190203392c94ccf1",
+      "sha256": "675e3be7decc14f311967170ebce37fda16c990087bc76221c3f9ce5f4d7d003",
       "executable": false
     },
     "AGENTS.consumer.md": {
@@ -194,7 +194,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "efcc1e590a3a04e169e9698470ace8a5af73594513653e3ba376d42b2bb94c47",
+      "sha256": "5258db742d4ec1c9c8810cf3d44c6e1b80c5d95dd9b3e289184099d2bc0b9ff4",
       "executable": false
     },
     "DEMO.md": {
@@ -230,7 +230,7 @@
       "executable": false
     },
     "docs/CLAIMS.md": {
-      "sha256": "84d89e61dd143d55dc09bf7c1fe5635dfc6cdfbc4cce64a45f7f6c4dfd674f8b",
+      "sha256": "ec8ba7088e2a35c4800cddd146f7a9dd229ae3b6919e8c929a43ccf83402ec0b",
       "executable": false
     },
     "docs/composition-baseline.json": {
@@ -5082,7 +5082,7 @@
       "executable": false
     },
     "tests/nectar/card-prohibition-families.mjs": {
-      "sha256": "1b11abdd57e605b4a4c5a460c81ffe21850e98e28b2cd229bfca6dd3e328f1cf",
+      "sha256": "4af068583965ad91a7118367bf09211ca43ca3bb58b6d7a770611b6178b123ec",
       "executable": false
     },
     "tests/nectar/catalogue-approvals.mjs": {

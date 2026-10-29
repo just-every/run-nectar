@@ -105,6 +105,10 @@ export async function cardProhibitionFamiliesFlow(h,owner) {
     return {subscription,fields,authorization}
   }
   const lifecycle=async row=>(await api(`customers/${row.customer}`)).billingRecord.cardLifecycle
+  const prohibited=async(path,body)=>{
+    const result=await api(path,body,409)
+    assert.ok(['payment_method_unusable','precondition_failed'].includes(result.error),`${path}: the method refusal must reach its read or transactional fence`)
+  }
   const refused=async(row,code)=>{
     const records=await lifecycle(row),record=records.find(r=>r.methodRef===row.method)
     assert.ok(record,`${row.family}: identity-matched ${code} must persist a prohibition`)
@@ -122,6 +126,8 @@ export async function cardProhibitionFamiliesFlow(h,owner) {
     if(family==='imported') {
       const rename=value=>typeof value==='string'?value.replaceAll('synthetic-nectar-',`synthetic-nectar-import-${index}-`):Array.isArray(value)?value.map(rename):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).map(([k,v])=>[k,rename(v)])):value
       const capture=rename(collectionCapture()),originalCustomer=capture.customers.data[0].id
+      capture.invoices.data.push({...structuredClone(capture.invoices.data.find(row=>row.status==='open')),id:`synthetic-nectar-replacement-control-${index}`,number:`REPLACEMENT-${index}`})
+      capture.manifest.files.invoices.count=capture.invoices.data.length
       row.provider=originalCustomer;edge.customers.delete(provider);edge.customers.set(originalCustomer,{account:1,method})
       for(const item of capture.invoices.data){item.default_payment_method=method;edge.invoices.set(item.id,structuredClone(item))}
       const files=Object.fromEntries(Object.entries(capture).map(([name,value])=>[name,file(`${name}.json`,JSON.stringify(value),'application/json')]))
@@ -191,26 +197,28 @@ export async function cardProhibitionFamiliesFlow(h,owner) {
     binding??={id:(await lifecycle(row)).find(record=>record.methodRef===method).binding}
     edge.rules.delete(method)
     const blockedWrites=edge.writes().length,blockedPayments=await api('payments')
-    await api('collection.prepare',{invoice:freshInvoice??await invoice(row)},409)
+    if(family==='imported')await api('collection.prepare',{invoice:await invoice(row)},409)
+    else await prohibited('collection.prepare',{invoice:freshInvoice})
     const attempts=await Promise.all([1,2].map(()=>h.raw(`/api/nectar/${family==='imported'?'imported.collection.execute':'collection.confirm'}`,{cookie:owner,body:family==='imported'?pending.instructions.execute:waiting.instructions.confirm})))
     assert.deepEqual(attempts.map(r=>r.status),[409,409])
-    if(family==='reconfirmation'){await api('collection.recovery.prepare',{request:prepared.id},409);await api('collection.recovery.confirm',pending.instructions.reconfirm,409)}
+    if(family!=='reconfirmation')for(const response of attempts)assert.equal((await response.json()).error,'precondition_failed','Concurrent pending work reaches its transactional fence')
+    if(family==='reconfirmation'){await api('collection.recovery.prepare',{request:prepared.id},409);await prohibited('collection.recovery.confirm',pending.instructions.reconfirm)}
     if(family==='automatic'||family==='retry') {
       if(family==='automatic')await issue(pending)
       const fresh=await invoice(row,false)
-      await api('automatic.collection.prepare',{invoice:fresh,issue_date:day()},409)
+      await prohibited('automatic.collection.prepare',{invoice:fresh,issue_date:day()})
     }
     if(family==='trial') {
-      await api('trial.collection.prepare',{subscription:pending.subscription},409)
+      await prohibited('trial.collection.prepare',{subscription:pending.subscription})
       await move(at+86400000);await tick(true)
     }
     if(family==='topup') {
-      await api('prepaid.topup.prepare',pending.fields,409)
-      await api('prepaid.topup.run',{authorization:pending.authorization.id},409)
+      await prohibited('prepaid.topup.prepare',pending.fields)
+      await prohibited('prepaid.topup.run',{authorization:pending.authorization.id})
     }
     if(family==='imported') {
-      await api('imported.collection.prepare',{invoice:documents[2].id},409)
-      await api('imported.collection.execute',pending.instructions.execute,409)
+      await prohibited('imported.collection.prepare',{invoice:documents[2].id})
+      await prohibited('imported.collection.execute',pending.instructions.execute)
       await api('imported.collection.reconcile',{request:prepared.id})
     }
     // Repeated current provider updater observations must retain the prohibition.
@@ -239,16 +247,34 @@ export async function cardProhibitionFamiliesFlow(h,owner) {
       assert.equal((await api('imported.collection.finalize',{request:captured.id,confirm:true})).status,'collected')
       assert.equal((await api(`customers/${row.customer}`)).importedCollections.find(r=>r.id===captured.id).amount_cents,11000)
       edge.customers.get(row.provider).method=method
-      await api('imported.collection.execute',pending.instructions.execute,409)
+      await prohibited('imported.collection.execute',pending.instructions.execute)
     } else {
       const replacementInvoice=freshInvoice??await invoice(row)
       const replacement=await api('collection.prepare',{invoice:replacementInvoice})
       assert.equal((await api('collection.confirm',replacement.instructions.confirm)).status,'collected')
       assert.equal((await api(`invoices/${replacementInvoice}`)).paidCents,10000)
       edge.customers.get(row.provider).method=method
-      await api('collection.prepare',{invoice:await invoice(row)},409)
+      await prohibited('collection.prepare',{invoice:await invoice(row)})
     }
     await refused(row,code)
+    // A successful replacement does not rehabilitate the earlier method, even
+    // when Stripe selects it again and the owner refreshes its exact binding.
+    const afterReplacementWrites=edge.writes().length,afterReplacementPayments=await api('payments')
+    if(family!=='imported')await api('collection.customer.bind',{customer:row.customer,account_ref:row.account,stripe_customer_ref:row.provider,confirm:true})
+    const observed=`synthetic-nectar-prohibition-replacement-event-${index}`
+    edge.events.set(observed,{object:'event',id:observed,type:'payment_method.automatically_updated',livemode:false,created:Math.floor(at/1000),data:{object:{object:'payment_method',id:method,customer:row.provider,type:'card',livemode:false,card:{brand:'visa',last4:'4242',exp_month:12,exp_year:2035}}}})
+    await api('card.lifecycle.consume',{binding:binding.id,event_ref:observed,confirm:true})
+    if(family==='reconfirmation')await prohibited('collection.recovery.confirm',pending.instructions.reconfirm)
+    else if(family==='imported')await prohibited('imported.collection.execute',pending.instructions.execute)
+    else await api('collection.confirm',waiting.instructions.confirm,409)
+    if(family==='topup')await prohibited('prepaid.topup.run',{authorization:pending.authorization.id})
+    if(family==='automatic'||family==='retry')await tick()
+    if(family==='trial')await tick(true)
+    if(family==='imported')await prohibited('imported.collection.prepare',{invoice:documents[4].id})
+    else await prohibited('collection.prepare',{invoice:await invoice(row)})
+    await refused(row,code)
+    assert.equal(edge.writes().length,afterReplacementWrites,`${family}: replacement and repeated provider observations never revive old prepared work`)
+    assert.deepEqual(await api('payments'),afterReplacementPayments,'The old method creates no further payment or allocation after replacement')
     // Equal method references on a different customer, and on a different
     // account, remain independently collectible under explicit new authority.
     for(const account of [1,2]) {
