@@ -259,7 +259,7 @@
       "executable": false
     },
     "docs/agent-door.md": {
-      "sha256": "cdacb8725bf33a8fa0e8c4ca2ef3b4f3fa9529fd59b82c136651b9d25dc21645",
+      "sha256": "6c0259badcf87d85a2ab1af2e27a601fe3b3ff372d65de2af3196110a69771cf",
       "executable": false
     },
     "docs/agents-and-access.md": {
@@ -914,6 +914,10 @@
       "sha256": "e20289e1a5d9000a553757aace9136b69f421faf5e47846ccabdfc44d4ff56aa",
       "executable": false
     },
+    "migrations/core/0115_agent_identity_custody.sql": {
+      "sha256": "3f53aad808eeac503a694eb46e8af64ebbb9f227ac985a5e39615b9b57308a64",
+      "executable": false
+    },
     "ONBOARDING.md": {
       "sha256": "95bb235abff28ac36979868486caf2cb73bfbe4ab63037f3e301d189bb9398d9",
       "executable": false
@@ -1263,7 +1267,7 @@
       "executable": false
     },
     "scripts/installer/local.mjs": {
-      "sha256": "8e787e4a1560cda6f5896c01c3a3e4fe7403f621026f3cd65ad3c19528d55903",
+      "sha256": "d753c3960d959c8af949e1c380a1abb270f50b07e243841d192d3ec11ef788e2",
       "executable": false
     },
     "scripts/installer/seed.mjs": {
@@ -3587,7 +3591,7 @@
       "executable": false
     },
     "src/nectar/access.ts": {
-      "sha256": "7f4e98e23dfd81333b013b227bb00e7527ff6e4c0475e5702f1b6bb785629da4",
+      "sha256": "65f26c0cfbfed3a4d69b26466070e0cab21e48571927eefd305113478e7c1d38",
       "executable": false
     },
     "src/nectar/ach-payment-evidence.ts": {
@@ -3599,7 +3603,7 @@
       "executable": false
     },
     "src/nectar/actor.ts": {
-      "sha256": "5bf80647cf98f5e765d4c7e4d39e0fc417ae154d69ec310c82b41820e787b718",
+      "sha256": "137fa269e9d97f2a4c46809fa6539c133e16d54d7ed69d7c08fc35bfed83f013",
       "executable": false
     },
     "src/nectar/addons.ts": {
@@ -3611,11 +3615,11 @@
       "executable": false
     },
     "src/nectar/agent-door/native.ts": {
-      "sha256": "68c0654d3462f459a778447465ee513b3500eb2f74ef7f0fdbb2d3bc329d679d",
+      "sha256": "8d774e93f186cbe1995f3fa7df748cc7ce97854a93b20503949084c03da36d99",
       "executable": false
     },
     "src/nectar/agent-door/people.ts": {
-      "sha256": "f4c368e43d19ffb91a3f0172b95c52ca8b18154bce9409045846a49c775a9dd1",
+      "sha256": "0b494f86404686c0b2751e73ce76e6a3d7ce2f0a6ce352b869b8b67c5d90fd80",
       "executable": false
     },
     "src/nectar/agent-door/prepare-evidence.ts": {
@@ -3923,7 +3927,7 @@
       "executable": false
     },
     "src/nectar/erasure-checkpoint.ts": {
-      "sha256": "6d540eb5bfaed9a7c81ccae002500451c833d4fb951810eb58ac8933e30167e6",
+      "sha256": "33e58fca3608492a21052e0f27c4c453b785b202411729bfbd34f9dbafdd30ae",
       "executable": false
     },
     "src/nectar/erasure-import.ts": {
@@ -4871,7 +4875,7 @@
       "executable": false
     },
     "src/nectar/scim.ts": {
-      "sha256": "a3d0b77216c5bfcf2697a4b1179fab9c3c36d80f8b0b2d2c44209093be213e70",
+      "sha256": "179201ec2df071b361c81b696a797406bb7237ae1b8d4b2c9bb101e3fdddaea9",
       "executable": false
     },
     "src/nectar/setup-apply.ts": {

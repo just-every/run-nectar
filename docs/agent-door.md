@@ -30,7 +30,7 @@ refusals. Unknown native tools receive `tool_not_found`. No synthetic events too
 is registered. Internal door audit remains enabled.
 
 Business subjects bind through signed `owner_id` and team `id` values to durable
-operator IDs, then Nectar member IDs. The setup owner remains the native owner.
+operator IDs, then Nectar member IDs through installation-only `oa_nectar_members`. This binding, signed Business settings and live door policy/approval/replay stores never transfer in billing archives. The setup owner remains the native owner.
 Business admins receive native Finance and Business editor authority; Business
 members receive native Accountant and no policy-editing role. Native promotion
 alone never changes the signed Business role. Current membership, operator

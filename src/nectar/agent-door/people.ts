@@ -10,7 +10,7 @@ interface BoundMember {
   operatorEmail: string; operatorName: string; operatorRole: string; operatorStatus: string
 }
 interface NativePerson extends Person { policyRole: 'owner' | 'editor' | null }
-const boundColumns = `m.id,m.name,m.role,m.status,m.operator_id,o.email AS operatorEmail,
+const boundColumns = `m.id,m.name,m.role,m.status,b.operator_id,o.email AS operatorEmail,
   o.display_name AS operatorName,o.role AS operatorRole,o.status AS operatorStatus`
 const setupOwner = `SELECT o.id FROM oa_operators o LEFT JOIN oa_bootstrap b ON b.claim_id=o.id
   WHERE o.role='owner' AND o.status='active' ORDER BY b.claim_id IS NULL,o.created_at,o.id LIMIT 1`
@@ -20,7 +20,8 @@ export function nectarPeople(env: Bindings): PeopleAdapter {
   const db = env.DB
   async function read(id: string): Promise<NativePerson | null> {
     const row = await db.prepare(`SELECT ${boundColumns} FROM nc_members m
-      JOIN oa_operators o ON o.id=m.operator_id WHERE m.id=?`).bind(id).first<BoundMember>()
+      JOIN oa_nectar_members b ON b.member_id=m.id
+      JOIN oa_operators o ON o.id=b.operator_id WHERE m.id=?`).bind(id).first<BoundMember>()
     if (!row) return null
     const operator = { id: row.operator_id, email: row.operatorEmail, displayName: row.operatorName,
       role: row.operatorRole, status: row.operatorStatus } as Operator
@@ -31,8 +32,9 @@ export function nectarPeople(env: Bindings): PeopleAdapter {
       policyRole: row.operatorRole === 'owner' ? 'owner' : signed?.business_role === 'admin' ? 'editor' : null,
       active: row.status === 'active' && isActiveOperator(operator, authConfig(env).allowList) }
   }
-  const owner = () => db.prepare(`SELECT m.id,m.operator_id FROM nc_members m
-    WHERE m.operator_id=(${setupOwner})`).first<{ id: string; operator_id: string }>()
+  const owner = () => db.prepare(`SELECT m.id,b.operator_id FROM nc_members m
+    JOIN oa_nectar_members b ON b.member_id=m.id
+    WHERE b.operator_id=(${setupOwner})`).first<{ id: string; operator_id: string }>()
   const settings = () => db.prepare('SELECT owner_id FROM bs_settings WHERE singleton=1 AND stopped=0')
     .first<{ owner_id: string | null }>()
   async function active(id: string) {
@@ -45,7 +47,8 @@ export function nectarPeople(env: Bindings): PeopleAdapter {
     if (!saved) return null
     if (saved.owner_id && (await owner())?.id === person.id) return { id: saved.owner_id, role: 'owner' }
     const row = await db.prepare(`SELECT t.business_id,t.business_role FROM bs_team t
-      JOIN nc_members m ON m.operator_id=t.operator_id WHERE m.id=?
+      JOIN oa_nectar_members b ON b.operator_id=t.operator_id
+      JOIN nc_members m ON m.id=b.member_id WHERE m.id=?
       AND t.state IN ('active','invited') AND t.business_id IS NOT NULL`).bind(person.id)
       .first<{ business_id: string; business_role: string | null }>()
     return row ? { id: row.business_id, role: row.business_role === 'admin' ? 'editor' : null } : null
@@ -60,7 +63,8 @@ export function nectarPeople(env: Bindings): PeopleAdapter {
         const native = await owner()
         return native ? active(native.id) : null
       }
-      const row = await db.prepare(`SELECT m.id FROM bs_team t JOIN nc_members m ON m.operator_id=t.operator_id
+      const row = await db.prepare(`SELECT m.id FROM bs_team t
+        JOIN oa_nectar_members b ON b.operator_id=t.operator_id JOIN nc_members m ON m.id=b.member_id
         WHERE t.business_id=? AND t.state IN ('active','invited')`).bind(sub).first<{ id: string }>()
       return row ? active(row.id) : null
     },
@@ -92,7 +96,8 @@ export function nectarTeam(env: Bindings): TeamAdapter {
         const operator = await env.DB.prepare('SELECT email FROM oa_operators WHERE id=?')
           .bind(row.operatorId).first<{ email: string }>()
         const email = operator?.email ?? row.email
-        const matches = (await env.DB.prepare('SELECT id,operator_id,email,role,status,name,updated_at FROM nc_members WHERE operator_id=? OR email=?')
+        const matches = (await env.DB.prepare(`SELECT m.id,b.operator_id,m.email,m.role,m.status,m.name,m.updated_at
+          FROM nc_members m LEFT JOIN oa_nectar_members b ON b.member_id=m.id WHERE b.operator_id=? OR m.email=?`)
           .bind(row.operatorId, email).all<NativeMembership>()).results
         const member = matches.find(value => value.operator_id === row.operatorId)
         // Neither a matching address nor a new Business identity may adopt an unrelated native membership.
@@ -109,29 +114,34 @@ export function nectarTeam(env: Bindings): TeamAdapter {
         // Assertions run after the OA lifecycle statements, under the same signed revision fence.
         statements.push(env.DB.prepare(`INSERT INTO bs_assert(value) SELECT CASE WHEN
           EXISTS(SELECT 1 FROM oa_operators WHERE id=? AND role=? AND status=?)
-          AND NOT EXISTS(SELECT 1 FROM nc_members m JOIN oa_operators o ON o.id=?
-            WHERE m.email=o.email AND (m.operator_id IS NULL OR m.operator_id<>?))
-          AND ${member ? 'EXISTS(SELECT 1 FROM nc_members WHERE id=? AND operator_id=? AND email=? AND role=? AND status=? AND name=? AND updated_at=?)'
-            : 'NOT EXISTS(SELECT 1 FROM nc_members WHERE operator_id=?)'}
+          AND NOT EXISTS(SELECT 1 FROM nc_members m LEFT JOIN oa_nectar_members b ON b.member_id=m.id
+            JOIN oa_operators o ON o.id=? WHERE m.email=o.email AND (b.operator_id IS NULL OR b.operator_id<>?))
+          AND ${member ? 'EXISTS(SELECT 1 FROM nc_members m JOIN oa_nectar_members b ON b.member_id=m.id WHERE m.id=? AND b.operator_id=? AND m.email=? AND m.role=? AND m.status=? AND m.name=? AND m.updated_at=?)'
+            : 'NOT EXISTS(SELECT 1 FROM oa_nectar_members WHERE operator_id=?)'}
           THEN 1 ELSE NULL END WHERE ${guard.sql}`)
           .bind(row.operatorId, businessRole, row.state, row.operatorId, row.operatorId,
             ...(member ? [member.id, row.operatorId, member.email, member.role, member.status, member.name, member.updated_at] : [row.operatorId]), ...guard.args))
         if (member) {
           statements.push(env.DB.prepare(`UPDATE nc_members SET email=(SELECT email FROM oa_operators WHERE id=?),
             name=(SELECT display_name FROM oa_operators WHERE id=?),role=?,status=?,updated_at=?
-            WHERE id=? AND operator_id=? AND ${guard.sql} AND
+            WHERE id=? AND EXISTS(SELECT 1 FROM oa_nectar_members b WHERE b.member_id=nc_members.id AND b.operator_id=?) AND ${guard.sql} AND
             (email<>(SELECT email FROM oa_operators WHERE id=?) OR name<>(SELECT display_name FROM oa_operators WHERE id=?) OR role<>? OR status<>?)`)
             .bind(row.operatorId, row.operatorId, nativeRole, status, at, id, row.operatorId, ...guard.args,
               row.operatorId, row.operatorId, nativeRole, status))
         } else {
-          statements.push(env.DB.prepare(`INSERT INTO nc_members(id,operator_id,email,name,role,status,created_at,updated_at)
-            SELECT ?,o.id,o.email,o.display_name,?,?,?,? FROM oa_operators o WHERE o.id=? AND ${guard.sql}`)
+          statements.push(env.DB.prepare(`INSERT INTO nc_members(id,email,name,role,status,created_at,updated_at)
+            SELECT ?,o.email,o.display_name,?,?,?,? FROM oa_operators o WHERE o.id=? AND ${guard.sql}`)
             .bind(id, nativeRole, status, at, at, row.operatorId, ...guard.args))
         }
         statements.push(env.DB.prepare(`INSERT INTO nc_audit(at,actor,action,subject,detail)
           SELECT ?,?,?,?,? WHERE changes()>0 AND ${guard.sql}`)
           .bind(at, `Business ${input.ownerEmail}`, status === 'ended' ? 'access.end' : 'access.give', id,
             JSON.stringify({ via: 'business', operator: row.operatorId, role: nativeRole, status }), ...guard.args))
+        // Audit the actual membership insert above before installing its identity binding;
+        // changes() from this installation-only write must never invent a membership event.
+        if (!member) statements.push(env.DB.prepare(`INSERT INTO oa_nectar_members(member_id,operator_id)
+          SELECT m.id,o.id FROM nc_members m JOIN oa_operators o ON o.id=?
+          WHERE m.id=? AND ${guard.sql}`).bind(row.operatorId, id, ...guard.args))
       }
       return { statements, rows: plan.rows, afterCommit: () => plan.afterCommit() }
     },

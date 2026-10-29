@@ -32,7 +32,8 @@ export async function scimResponse(request: Request, env: Bindings): Promise<Res
       const name = String(body.displayName ?? email).slice(0, 120)
       await commit(env, [guard(env, 'identity_exists', 'NOT EXISTS(SELECT 1 FROM nc_members WHERE email=?) AND NOT EXISTS(SELECT 1 FROM oa_operators WHERE email=?)', email, email),
         stmt(env, "INSERT INTO oa_operators(id,email,display_name,role,status,version,created_at) VALUES(?,?,?,'member','active',1,?)", operator, email, name, at),
-        stmt(env, "INSERT INTO nc_members(id,email,name,role,operator_id,status,created_at,updated_at) VALUES(?,?,?,?,?,'active',?,?)", member, email, name, role, operator, at, at),
+        stmt(env, "INSERT INTO nc_members(id,email,name,role,status,created_at,updated_at) VALUES(?,?,?,?,'active',?,?)", member, email, name, role, at, at),
+        stmt(env, 'INSERT INTO oa_nectar_members(member_id,operator_id) VALUES(?,?)', member, operator),
         stmt(env, 'INSERT INTO nc_scim_users VALUES(?,?,?,?,?,?,1,1)', user, external, email, member, operator, source),
         guard(env, 'stale', 'EXISTS(SELECT 1 FROM nc_sso_config WHERE revision=?)', config.revision)],
       { actor: 'system:scim', action: 'scim.create', subject: member, detail: { user, externalId: external, role } })

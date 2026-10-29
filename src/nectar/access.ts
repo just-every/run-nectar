@@ -80,7 +80,7 @@ export async function giveAccess(env: Bindings, actor: Actor, input: Input, requ
   const custom = role === 'custom' ? await one(env, 'SELECT id, name FROM nc_roles WHERE id = ?', input.text('custom_role', { max: 100 })) : null
   insist(role !== 'custom' || custom, 'role_not_found', 404)
   const customId = custom?.id ?? null
-  const existing = await one(env, 'SELECT * FROM nc_members WHERE email = ?', email)
+  const existing = await one(env, 'SELECT m.*,identity.operator_id FROM nc_members m LEFT JOIN oa_nectar_members identity ON identity.member_id=m.id WHERE m.email = ?', email)
   insist(!existing || existing.status === 'ended', 'already_has_access', 409)
   const auth = operatorAuth(env), operator = await operatorByEmail(env, request, email)
   insist(operator?.role !== 'owner', 'already_has_access', 409)
@@ -91,8 +91,10 @@ export async function giveAccess(env: Bindings, actor: Actor, input: Input, requ
   insist(identity, 'native_operator_required', 409)
   insist(!existing?.operator_id || existing.operator_id === identity.id, 'native_binding_mismatch', 409)
   await commit(env, [existing
-    ? stmt(env, "UPDATE nc_members SET name = ?, role = ?, custom_role_id = ?, operator_id = ?, status = 'active', updated_at = ? WHERE id = ?", name, role, customId, identity.id, now(), id)
-    : stmt(env, "INSERT INTO nc_members (id, email, name, role, custom_role_id, operator_id, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?)", id, email, name, role, customId, identity.id, now(), now())],
+    ? stmt(env, "UPDATE nc_members SET name = ?, role = ?, custom_role_id = ?, status = 'active', updated_at = ? WHERE id = ?", name, role, customId, now(), id)
+    : stmt(env, "INSERT INTO nc_members (id, email, name, role, custom_role_id, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'active', ?, ?)", id, email, name, role, customId, now(), now()),
+    guard(env, 'native_binding_mismatch', 'NOT EXISTS(SELECT 1 FROM oa_nectar_members WHERE member_id=? AND operator_id<>?)', id, identity.id),
+    stmt(env, 'INSERT INTO oa_nectar_members(member_id,operator_id) VALUES(?,?) ON CONFLICT(member_id) DO NOTHING', id, identity.id)],
   { actor: actorLabel(actor), action: 'access.give', subject: id, detail: { email, role, ...(custom ? { customRole: custom.name } : {}), invited: !operator } })
   return { id, email, role, ...(customId ? { custom_role: customId } : {}) }
 }

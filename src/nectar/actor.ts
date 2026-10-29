@@ -130,7 +130,7 @@ export async function currentActor(env: Bindings, request: Request): Promise<Act
   // The role (and a custom role's capabilities) is read on every request, so a
   // change the owner makes applies from the member's next request.
   const member = await one<{ id: string; name: string; role: Role; status: string; custom_name: string | null; custom_capabilities: string | null }>(env,
-    'SELECT m.id, m.name, m.role, m.status, r.name AS custom_name, r.capabilities AS custom_capabilities FROM nc_members m LEFT JOIN nc_roles r ON r.id = m.custom_role_id WHERE m.operator_id = ?', session.operator.id)
+    'SELECT m.id, m.name, m.role, m.status, r.name AS custom_name, r.capabilities AS custom_capabilities FROM nc_members m LEFT JOIN nc_roles r ON r.id = m.custom_role_id JOIN oa_nectar_members identity ON identity.member_id=m.id WHERE identity.operator_id = ?', session.operator.id)
   insist(member && member.status === 'active', 'not_a_member', 403)
   const role: Role = session.operator.role === 'owner' ? 'owner' : member.role === 'owner' ? 'finance' : member.role
   return { id: member.id, kind: 'member', name: member.name, email, role, ...(role === 'custom' && member.custom_name ? { roleName: member.custom_name } : {}), sessionId: session.id, capabilities: memberCapabilities(role, member.custom_capabilities) }
@@ -138,7 +138,14 @@ export async function currentActor(env: Bindings, request: Request): Promise<Act
 
 async function ensureOwnerMember(env: Bindings, email: string, name: string, operatorId: string) {
   await env.DB.batch([
-    stmt(env, "INSERT INTO nc_members (id, email, name, operator_id, role, status, created_at, updated_at) VALUES (?, ?, ?, ?, 'owner', 'active', ?, ?) ON CONFLICT(operator_id) WHERE operator_id IS NOT NULL DO UPDATE SET role = 'owner', status = 'active', email=excluded.email, name=excluded.name", newId(), email, name, operatorId, now(), now()),
+    stmt(env, `INSERT INTO nc_members (id,email,name,role,status,created_at,updated_at)
+      VALUES(COALESCE((SELECT member_id FROM oa_nectar_members WHERE operator_id=?),
+        (SELECT id FROM nc_members WHERE email=?),?),?,?,'owner','active',?,?)
+      ON CONFLICT(id) DO UPDATE SET role='owner',status='active',email=excluded.email,name=excluded.name`,
+    operatorId, email, newId(), email, name, now(), now()),
+    stmt(env, `INSERT INTO oa_nectar_members(member_id,operator_id)
+      SELECT id,? FROM nc_members WHERE email=?
+      ON CONFLICT(operator_id) DO NOTHING`, operatorId, email),
   ])
 }
 
