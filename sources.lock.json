@@ -3623,7 +3623,7 @@
       "executable": false
     },
     "src/nectar/agent-door/prepare-tools.ts": {
-      "sha256": "2398f40c87a580f776e7f317a55d7fbe21ef7a57c3a502b822699ebb415c7e2f",
+      "sha256": "2d870b57b8e77d10983d5cf639e6efa754b065816f139975f29cbb2e32cf2ea4",
       "executable": false
     },
     "src/nectar/agent-door/read-tools.ts": {

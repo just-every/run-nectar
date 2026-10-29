@@ -52,7 +52,7 @@ function tool(env: Bindings, spec: PrepareTool): ToolDefinition {
     inputSchema: spec.inputSchema, outputSchema: spec.outputSchema, untrusted: true,
     classify: async (args, ctx) => {
       const current = await evidence(args, ctx)
-      return contentClasses(current.content, current.count)
+      return contentClasses({ content: current.content, summary: current.summary }, current.count)
     },
     summary: async (args, ctx) => (await evidence(args, ctx)).summary,
     ...(spec.target ? { target: async (args: Record<string, unknown>, ctx: ToolContext) => (await evidence(args, ctx)).target ?? null } : {}),
