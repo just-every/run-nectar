@@ -40,10 +40,11 @@ keep their existing API purpose, but require native reissue before admission to
 the company door: their saved author email cannot establish a sponsor ID.
 Neither scope acquires financial approval authority.
 
-The native owner lifecycle supports signed owner claims when paired. The setup
-manifest now declares that mode so normal verification sends the signed claim to
-the production `/auth/owner-claim` handler. The initializer configures a real
-native business and reviews its tax declaration through ordinary owner HTTP.
+Nectar's setup manifest retains its native setup-token lifecycle, explicitly at
+`/auth/bootstrap`. The initializer posts the per-run setup credential to that
+production bootstrap handler, then configures a real native business and reviews
+its tax declaration through ordinary owner HTTP. The separate paired
+`/auth/owner-claim` handler continues requiring its signed credential.
 Fixtures create customers, catalog, events, subscriptions and issued invoices
 through those same doors; they do not insert application data directly.
 

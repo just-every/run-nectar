@@ -259,7 +259,7 @@
       "executable": false
     },
     "docs/agent-door.md": {
-      "sha256": "a5eab05e9890a2ae7fb965c38ac2441097669fa4d40b8e9836970b8b8f2d533d",
+      "sha256": "7260bd4d45dbe06b154717dbb7fa1c8bfa5fcf19d04026556865383f7c4ab77c",
       "executable": false
     },
     "docs/agents-and-access.md": {
@@ -1091,11 +1091,11 @@
       "executable": false
     },
     "rer-project.json": {
-      "sha256": "cd8cee6c576e2618a00798414fced9e6fdafba20100aa4f7a7910d3e444ab5d1",
+      "sha256": "c53d94ade137ea589bfddcb87ced03ed27feb5253242f53f30fabf791bf5b165",
       "executable": false
     },
     "rer-setup.json": {
-      "sha256": "28d080f29615f07fb2b2dc85758b9f95ad36533394d106989abec775853aa174",
+      "sha256": "7162a7455d6a31dca461f280a22cc7181a0fdcaa5d37ce2852171266bc6b1f15",
       "executable": false
     },
     "RUN-LOCALLY.md": {
@@ -5483,7 +5483,7 @@
       "executable": false
     },
     "tests/agent-door/initialize-owner.mjs": {
-      "sha256": "a41c41ebd23c9e5e30e2e59b068a41181e49353bcad8b02444b37ca99b857bb4",
+      "sha256": "897939b55755cc42f0135920b0ac5e2fe582d58b78db88ace9af0727232752ed",
       "executable": false
     },
     "tests/agent-door/native-client.mjs": {

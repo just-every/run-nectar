@@ -246,9 +246,10 @@
     },
     {
       "type": "owner-claim",
-      "mode": "signed",
+      "mode": "setup-token",
       "emailField": "OWNER_EMAIL",
-      "tokenField": "SETUP_TOKEN"
+      "tokenField": "SETUP_TOKEN",
+      "path": "/auth/bootstrap"
     }
   ],
   "dependencies": [

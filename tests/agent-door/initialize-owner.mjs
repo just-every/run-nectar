@@ -1,8 +1,9 @@
 import { nativeClient } from './native-client.mjs'
 
-/** The same signed claim and owner/member setup used by a production installation. */
+/** The native setup-token bootstrap declared by Nectar, followed by its real member/business setup. */
 export default async function initialize({ request, origin, claim, email, returnTo }) {
-  const response = await request(new URL(claim.path, origin).href, {
+  if (claim.mode !== 'setup-token') throw new Error('Nectar requires its declared native bootstrap lifecycle')
+  const response = await request(new URL('/auth/bootstrap', origin).href, {
     method: 'POST', redirect: 'manual', headers: { origin, 'content-type': 'application/json' },
     body: JSON.stringify({ token: claim.token, displayName: 'Taylor Billing', returnTo }),
   })
