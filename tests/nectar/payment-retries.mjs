@@ -1,3 +1,4 @@
+import { billingNoticeAssertions, sendBillingNoticeAssertions, billingNoticeCustodyAssertions, billingNoticeBasisAssertions } from './billing-notices.mjs'
 import assert from 'node:assert/strict'
 import { retryEdge } from './retry-edge.mjs'
 import { totp } from './mfa.mjs'
@@ -59,10 +60,14 @@ export async function paymentRetriesFlow(h,owner,{onState=async()=>{},prepareCol
  const processing=await create('processing_error',{recoverAt:2})
  assert.equal((await parity(processing)).next_payment_attempt,first+4*3600000)
  await onState({state:'scheduled',...processing})
+ await billingNoticeAssertions(h,owner,disabled.id)
+ await onState({state:'billing-notice',...await sendBillingNoticeAssertions(h,owner,processing.id)})
  const count=edge.writes.length;await tick(first+4*3600000-1);assert.equal(edge.writes.length,count)
  await tick(first+4*3600000);await tick(first+4*3600000)
  assert.equal(edge.writes.length,count+1);assert.equal((await api(`invoices/${processing.id}`)).balanceCents,0)
  assert.equal((await api(`invoices/${processing.id}`)).allocations.length,1)
+ await fresh()
+ await onState({state:'billing-notice',...await sendBillingNoticeAssertions(h,owner,processing.id,{paid:true})})
  await onState({state:'recovered',...processing})
  // Hard declines and unknown reasons are never confirmed again on the same method.
  for(const code of ['stolen_card','lost_card','authentication_required','pickup_card','incorrect_number','revocation_of_authorization','revocation_of_all_authorizations','highest_risk_level','transaction_not_allowed']){
@@ -73,11 +78,13 @@ export async function paymentRetriesFlow(h,owner,{onState=async()=>{},prepareCol
   // create sets a standard method rule too; the selected replacement remains hard.
   const hard=await create(code,{customer:customers[2]})
   assert.equal((await parity(hard)).next_payment_attempt,null)
+  if(['stolen_card','lost_card'].includes(code))await onState({state:'billing-notice',...await sendBillingNoticeAssertions(h,owner,hard.id,{recipient:'retry-4@example.test',outcome:code==='stolen_card'?'rejected':'uncertain'})})
   await onState({state:code,...hard})
  }
  // Both ACH eligible returns allow at most two reinitiations; all authorization returns stop.
  for(const code of ['R01','R09','insufficient_funds','R02','R03','R05','R07','R10','R29']){
   const bank=await create(code,{customer:customers[1]})
+  if(code==='R01')await onState({state:'billing-notice',...await sendBillingNoticeAssertions(h,owner,bank.id,{language:'es-US',recipient:'retry-3@example.test'})})
   const initial=await parity(bank)
   const intent=edge.intents.get(edge.writes.at(-1).id).value,charge=edge.charges.get(intent.latest_charge).value
   const event={object:'event',id:`synthetic-nectar-${8000+edge.events.size}`,type:'charge.failed',livemode:false,created:instant/1000,data:{object:structuredClone(charge)}}
@@ -165,6 +172,13 @@ export async function paymentRetriesFlow(h,owner,{onState=async()=>{},prepareCol
  await move(instant+15*day)
  const expired=await api(`invoices/${overdue.id}`);assert.equal(expired.next_payment_attempt,null);assert.equal(expired.retry_status,'exhausted')
  await tick(instant);assert.equal(edge.writes.length,overdueWrites,'An expired window cannot send even when the scheduler missed its earlier due time')
+ await fresh()
+ await billingNoticeBasisAssertions(h,owner,()=>create('processing_error'))
+ await billingNoticeCustodyAssertions(h,owner,{invoice:overdue.id,customer:customers[0],instant,refresh:async at=>{
+  if(at!==undefined){instant=at;edge.setTime(at)}
+  if(verifiedAt!==instant)await api('mfa.verify',{code:totp(factor.secret,instant)})
+  verifiedAt=instant
+ }})
  console.log('paymentRetriesFlow: consented policy, exact timing, hard and ACH prohibitions, caps, dispute hold, once-only cash and page API webhook parity')
 }
 
