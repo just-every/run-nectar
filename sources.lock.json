@@ -861,6 +861,10 @@
       "sha256": "09eb60985566e1639d09f4a2de9da5b8225dfbcbf41687ab7b09205707dee43d",
       "executable": false
     },
+    "migrations/core/0117_invoice_payment_schedules.sql": {
+      "sha256": "2e78f8f1939cc281e41226cbb168517b9e0cdc2fc16d1f31e82b37504bdf66af",
+      "executable": false
+    },
     "ONBOARDING.md": {
       "sha256": "95bb235abff28ac36979868486caf2cb73bfbe4ab63037f3e301d189bb9398d9",
       "executable": false
@@ -3599,6 +3603,10 @@
     },
     "src/nectar/invoice-partial-payments.ts": {
       "sha256": "2f735d97c29f6dbba338c295cd95e4a686c24a67334c8d6666b8db006d125672",
+      "executable": false
+    },
+    "src/nectar/invoice-payment-schedules.ts": {
+      "sha256": "9785d23e99228a8eef131bbfd711c4dbdde06685dcdd0f7df677c2d0e5c33b44",
       "executable": false
     },
     "src/nectar/invoice-pdf.ts": {
