@@ -7,7 +7,7 @@ import { unmatchedProcessorCash } from './processor-cash-queue'
 import { readRemittances } from './remittances'
 
 export interface CashQueueItem {
-  id: string; source: 'remittance' | 'processor_cash'; sourceReference: string; status: string
+  id: string; source: 'remittance' | 'processor_cash' | 'plaid_sandbox'; sourceReference: string; status: string
   customer: string | null; customerName: string; currency: string
   receivedOn: string; amountCents: number; unallocatedCents: number; reason: string
   ageDays: number; returnDeadline: string | null; daysLeft: number | null; href: string
@@ -27,7 +27,7 @@ export async function cashApplicationQueue(env: Bindings, actor: Actor): Promise
   ])
   const names = new Map(customers.map(row => [row.id, row.name])), at = clockInstant(env)
   const items: CashQueueItem[] = receipts.filter(row => row.status === 'staged' || row.available_cents > 0 || row.short.length).map(row => ({
-    id: row.id, source: 'remittance', sourceReference: row.source.receiptId, status: row.status,
+    id: row.id, source: row.bank_transaction_ref ? 'plaid_sandbox' : 'remittance', sourceReference: row.bank_transaction_ref ?? row.source.receiptId, status: row.status,
     customer: row.customer_id, customerName: row.customer_name ?? 'Unidentified', currency: row.currency,
     receivedOn: row.received_on, amountCents: row.amount_cents,
     unallocatedCents: row.status === 'staged' ? row.amount_cents : row.available_cents,

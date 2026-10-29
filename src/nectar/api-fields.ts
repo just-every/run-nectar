@@ -114,6 +114,16 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "reason": "text",
     "reference": "text"
   },
+  "bank.remittance.confirm": {
+    "account": "text",
+    "confirm": "flag",
+    "file": "file",
+    "fingerprint": "text"
+  },
+  "bank.remittance.preview": {
+    "account": "text",
+    "file": "file"
+  },
   "billrun.prepare": {
     "period": "text"
   },

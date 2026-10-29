@@ -16,7 +16,7 @@ export async function cashApplicationPanel(env: Bindings, actor: Actor) {
   const rows = await cashApplicationQueue(env, actor)
   return h`<section class="card" id="cash-application-queue"><h2>Cash application queue</h2>
     ${table(['Received','Source','Customer','Unallocated','State','Review'], rows.map(row => [row.receivedOn,
-      h`${row.source === 'processor_cash' ? 'Processor cash balance' : 'Remittance file'}<p>${row.sourceReference}</p>`,
+      h`${row.source === 'processor_cash' ? 'Processor cash balance' : row.source === 'plaid_sandbox' ? 'Posted sandbox bank deposit' : 'Remittance file'}<p>${row.sourceReference}</p>`,
       row.customerName,cents(row.unallocatedCents,row.currency),
       h`${row.status === 'staged' ? 'Awaiting receipt confirmation. ' : ''}${reasons[row.reason] ?? 'Needs allocation'}${row.daysLeft !== null ? h`<p>${row.ageDays} days old · ${row.daysLeft ? `${row.daysLeft} days until return deadline` : 'Return deadline reached'}</p><p>75-day processor deadline: ${row.returnDeadline?.slice(0,10)}</p>` : ''}`,
       h`<a href="${row.href}">${row.source === 'processor_cash' ? 'Review transfer' : 'Review receipt'}</a>`,
