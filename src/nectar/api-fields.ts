@@ -539,6 +539,11 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "enabled": "flag",
     "hour": "integer"
   },
+  "invoice.automation.resume": {
+    "confirm": "flag",
+    "revision": "text",
+    "run": "text"
+  },
   "invoice.automation.run": {},
   "invoice.correction.refresh": {
     "invoice": "text"

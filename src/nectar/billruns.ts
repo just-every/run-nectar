@@ -133,13 +133,14 @@ export async function prepareRunWithCheckpoint(env: Bindings, actor: Actor, inpu
     previous: previousRun ? { run: previousRun.id, period: previousRun.period, ...(parseJson<Row>(previousRun.summary_json, {}).currency?{currency:parseJson<Row>(previousRun.summary_json, {}).currency}:{}), totals: parseJson<Row>(previousRun.summary_json, {}).totals ?? null } : null,
   }
   const runVersion = drafts.find(draft => draft.input.version !== RATING_VERSION)?.input.version ?? RATING_VERSION
-  const runId = newId(), at = now(), statements: D1PreparedStatement[] = checkpoint?.(runId) ?? []
+  const runId = newId(), at = now(), statements: D1PreparedStatement[] = []
   const prior = await one(env, "SELECT id FROM nc_bill_runs WHERE period = ? AND kind = 'recurring' AND status = 'draft'", month)
   // A replaced draft keeps any invoice it already issued: it closes as finalised, otherwise it is discarded.
   if (prior) statements.push(
     stmt(env, "UPDATE nc_invoices SET status = 'discarded' WHERE bill_run_id = ? AND status IN ('draft', 'shadow', 'approved')", prior.id),
     stmt(env, "UPDATE nc_bill_runs SET status = CASE WHEN EXISTS(SELECT 1 FROM nc_invoices WHERE bill_run_id = ?1 AND status = 'issued') THEN 'finalised' ELSE 'discarded' END WHERE id = ?1 AND status = 'draft'", prior.id))
   statements.push(stmt(env, "INSERT INTO nc_bill_runs (id, period, cutoff_at, calc_version, status, summary_json, created_by, created_at) VALUES (?, ?, ?, ?, 'draft', ?, ?, ?)", runId, month, at, runVersion, JSON.stringify(summary), actorLabel(actor), at))
+  if (checkpoint) statements.push(...checkpoint(runId))
   for (const draft of drafts) {
     const invoiceId = newId()
     statements.push(stmt(env, `INSERT INTO nc_invoices (id, bill_run_id, customer_id, subscription_id, period_start, period_end, status, subtotal_cents, tax_cents, total_cents, calc_version, source_fingerprint, calculation_json, comparison_json, exceptions_json, created_at,billing_key,currency)

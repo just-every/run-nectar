@@ -626,6 +626,29 @@ An issued customer invoice at `/portal/invoices/{id}` offers `format=pdf` and `f
 `invoice.automation.prepare` takes `enabled` and `hour` (0 through 23 in the business billing timezone). Only the owner prepares. `invoice.automation.decide` takes `request`, `decision`, and the explicit `confirm_single` flag only for an owner without another active owner or finance approver; otherwise a different owner or finance member approves. Both decisions require a fresh factor when the installation requires one. Agents never approve. The existing billing page shows pending policies and daily outcomes. `invoice.automation.run` is an owner-only local execution door for the same scheduler Cron uses.
 
 The adopted default is off, with no automatic invoice email or processor charge. A daily durable reservation prevents duplicate attempts; ordinary billing fingerprints, exception refusal and financial transactions remain authoritative. Each approval and issue rechecks the policy revision and current policy-maker and approver roles. Failed or interrupted attempts need human review; automatic recovery and catch-up older than the previous month are not implemented. These automatic-issue defaults await ct approval, and INV-001 remains PARTIAL.
+`GET /api/nectar/invoice-automation` is an owner-only read of the policy and
+latest thirty daily reservations, saved monthly bill-run identities, execution
+revisions, heartbeat instants, continuation counts and current eligibility.
+Historical reservations without installation-local authority are never eligible.
+
+`invoice.automation.resume` takes `run`, the exact reviewed `revision`, and
+`confirm: true`. A current owner session must present a local TOTP or passkey
+within fifteen minutes, even when installation-wide MFA is off. The reservation
+must have failed, or have no heartbeat for thirty minutes, on the current
+business-local day under the same enabled and still-authorized policy. A changed
+policy, an old day, an active execution or a stale revision is refused. Claim
+and audit commit together; concurrent confirmations cannot both continue.
+
+Continuation reuses each atomically checkpointed monthly bill run. Issued
+invoices remain unchanged; clean saved drafts and approved invoices pass the
+ordinary current-source checks before issue. Exceptions, discarded drafts and
+erased sources stay in review. A new execution revision fences an older Worker
+at every prepare, approval and issue transaction. This is explicit continuation
+of that invoice day, not automatic recovery, catch-up, collection approval or a
+message resend. Existing exact-invoice collection consent and invoice-unique
+payment claims remain independent. Archives retain historical checkpoints and
+outcomes but exclude continuation authority; a restore cannot execute them.
+
 ### Prepaid refund intake and notices (CAT-012)
 
 `prepaid.refund.prepare` requires a current owner or finance member with `approve` and a fresh factor. Supply `grant` for direct financial preparation, or `refund` to prepare the current quote for a pending support or customer intake; `reason` is private to financial members. A different current owner or finance member approves via `prepaid.refund.decide`; self-approval is always refused.
