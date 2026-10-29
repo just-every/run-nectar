@@ -77,11 +77,11 @@ interface NativeMembership { id: string; operator_id: string | null; email: stri
 
 /** Keep native auth's signed roster plan and invitations, adding Nectar's own membership in its batch. */
 export function nectarTeam(env: Bindings): TeamAdapter {
-  const native = operatorAuth(env).businessTeam!
+  const native = () => operatorAuth(env).businessTeam!
   return {
-    ownerEmail: () => native.ownerEmail(),
+    ownerEmail: () => native().ownerEmail(),
     async prepare(input) {
-      const plan = await native.prepare({ ...input, roles: { admin: 'admin', member: 'member' } })
+      const plan = await native().prepare({ ...input, roles: { admin: 'admin', member: 'member' } })
       const statements: Statement[] = [...plan.statements]
       const desired = new Map(input.members.map(member => [member.email.toLowerCase(), member]))
       const managed = new Set(input.managed.filter(row => row.state !== 'conflict').map(row => row.operatorId))
