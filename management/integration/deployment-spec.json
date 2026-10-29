@@ -738,6 +738,12 @@
       "name": "core-0114_agent_native_identity.sql",
       "sha256": "e20289e1a5d9000a553757aace9136b69f421faf5e47846ccabdfc44d4ff56aa",
       "sql": "-- Bind native people and application credentials once, independently of email.\nALTER TABLE nc_members ADD COLUMN operator_id TEXT REFERENCES oa_operators(id);\nCREATE UNIQUE INDEX nc_members_operator ON nc_members(operator_id) WHERE operator_id IS NOT NULL;\nUPDATE nc_members SET operator_id=(SELECT id FROM oa_operators WHERE email=nc_members.email)\nWHERE operator_id IS NULL;\nALTER TABLE nc_agent_keys ADD COLUMN sponsor_member_id TEXT REFERENCES nc_members(id);\n-- Old keys saved only an author address. Do not infer their sponsor from a\n-- possibly reused address: reissue through the existing native key lifecycle.\n"
+    },
+    {
+      "binding": "DB",
+      "name": "core-0115_agent_identity_custody.sql",
+      "sha256": "3f53aad808eeac503a694eb46e8af64ebbb9f227ac985a5e39615b9b57308a64",
+      "sql": "-- Operator identities belong to this installation, not portable billing data.\n-- Preserve the existing binding while moving its foreign key out of nc_members.\nCREATE TABLE oa_nectar_members (\n  member_id TEXT PRIMARY KEY REFERENCES nc_members(id),\n  operator_id TEXT NOT NULL UNIQUE REFERENCES oa_operators(id)\n);\nINSERT INTO oa_nectar_members(member_id,operator_id)\nSELECT id,operator_id FROM nc_members WHERE operator_id IS NOT NULL;\nDROP INDEX nc_members_operator;\nALTER TABLE nc_members DROP COLUMN operator_id;\n"
     }
   ],
   "compatibilityDate": "2026-09-08",
