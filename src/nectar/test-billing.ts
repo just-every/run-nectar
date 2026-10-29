@@ -41,6 +41,9 @@ export async function bindSandboxProcessor(env: Bindings, actor: Actor, input: I
   insist(!await one(env, 'SELECT 1 FROM nc_sandbox_invoices WHERE customer_id=?', c.id), 'sandbox_processor_binding_fixed', 409)
   await commit(env, [memberFence(env, actor),
     guard(env, 'sandbox_live_customer_refused', 'NOT EXISTS(SELECT 1 FROM nc_stripe_customer_bindings WHERE stripe_customer_ref=?)', remote),
+    guard(env, 'sandbox_processor_binding_fixed', 'NOT EXISTS(SELECT 1 FROM nc_sandbox_processor_records WHERE customer_id=? AND (account_ref<>? OR customer_ref<>? OR method_ref<>?))', c.id, selected.accountRef, remote, card.methodId),
+    stmt(env, 'INSERT OR IGNORE INTO nc_sandbox_processor_records(customer_id,account_ref,customer_ref,method_ref) VALUES(?,?,?,?)', c.id, selected.accountRef, remote, card.methodId),
+    guard(env, 'sandbox_processor_binding_fixed', 'EXISTS(SELECT 1 FROM nc_sandbox_processor_records WHERE customer_id=? AND account_ref=? AND customer_ref=? AND method_ref=?)', c.id, selected.accountRef, remote, card.methodId),
     stmt(env, 'INSERT INTO nc_sandbox_processor_authority(customer_id,account_ref,customer_ref,method_ref,standalone_card,created_by,created_at) VALUES(?,?,?,?,?,?,?)', c.id, selected.accountRef, remote, card.methodId, method ? 1 : 0, actor.id, now()),
     event(env, c.id, 'billing-enabled', c.clock_at, c.trial_end && localDate(c.clock_at, (await sandboxCatalog(env, c.catalog_id)).configuration.timezone) < c.trial_end ? 'trialing' : 'active', { mode: 'sandbox', account: selected.accountRef }),
   ], { actor: actorLabel(actor), action: 'sandbox.processor.bind', subject: c.id, detail: { account: selected.accountRef, customer: remote } })
@@ -53,6 +56,7 @@ async function binding(env: Bindings, actor: Actor, customer: string) {
   insist(c, 'sandbox_customer_not_found', 404)
   const authority = await one(env, 'SELECT * FROM nc_sandbox_processor_authority WHERE customer_id=?', customer)
   insist(authority, 'sandbox_processor_confirmation_required', 409)
+  insist(await one(env, 'SELECT 1 FROM nc_sandbox_processor_records WHERE customer_id=? AND account_ref=? AND customer_ref=? AND method_ref=?', customer, authority.account_ref, authority.customer_ref, authority.method_ref), 'sandbox_processor_binding_changed', 409)
   const selected = await sandboxStripe(env, authority.account_ref)
   const card = await sandboxProviderCustomer(selected, c.id, c.catalog_id, authority.customer_ref, authority.standalone_card ? authority.method_ref : undefined)
   insist(card.methodId === authority.method_ref && !await one(env, 'SELECT 1 FROM nc_stripe_customer_bindings WHERE stripe_customer_ref=?', authority.customer_ref), 'sandbox_processor_binding_changed', 409)
