@@ -17,21 +17,47 @@ const browser = await chromium.launch({ headless: true,
   ...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH } : {}),
   args: ['--no-sandbox', '--use-mock-keychain', '--password-store=basic'] })
 const seen = new Set()
+const proofContexts = new Map()
 let taps = 0, states = 0
 
 async function fit(page, label) {
   assert.deepEqual(page.viewportSize(), { width: 390, height: 844 })
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, `${label} has no sideways scroll`)
-  assert.ok(await page.evaluate(() => navigator.maxTouchPoints > 0 && matchMedia('(pointer: coarse)').matches), 'A touch browser performs the journey')
+  assert.deepEqual(await page.evaluate(() => ({ touch: navigator.maxTouchPoints > 0, coarse: matchMedia('(pointer: coarse)').matches })), { touch: true, coarse: true }, `${label}: a touch browser performs the journey`)
   const icons = await page.locator('a,button,[role=button]').evaluateAll(nodes => nodes.filter(n => !n.textContent.trim() && n.querySelector('svg,img') && !n.getAttribute('aria-describedby')).length)
   assert.equal(icons, 0, `${label} has no unexplained icon controls`)
   states++
   if (directory && !seen.has(label)) {
     seen.add(label)
-    await page.screenshot({ path: `${directory}/390-${label}.png`, fullPage: true })
-    await page.setViewportSize({ width: 1440, height: 844 })
-    await page.screenshot({ path: `${directory}/1440-${label}.png`, fullPage: true })
-    await page.setViewportSize({ width: 390, height: 844 })
+    // Render the actual current HTML independently: resizing the customer's
+    // context for proof must never change its mobile or touch emulation.
+    const html = await page.evaluate(() => {
+      const copy = document.documentElement.cloneNode(true)
+      const originals = document.querySelectorAll('input,textarea,option,details')
+      copy.querySelectorAll('input,textarea,option,details').forEach((node, index) => {
+        const original = originals[index]
+        if (node.tagName === 'INPUT') {
+          node.setAttribute('value', original.value)
+          node.toggleAttribute('checked', original.checked)
+        } else if (node.tagName === 'TEXTAREA') node.textContent = original.value
+        else if (node.tagName === 'OPTION') node.toggleAttribute('selected', original.selected)
+        else node.toggleAttribute('open', original.open)
+      })
+      return '<!doctype html>' + copy.outerHTML
+    })
+    for (const width of [390, 1440]) {
+      if (!proofContexts.has(width)) proofContexts.set(width, await browser.newContext({ viewport: { width, height: 844 }, isMobile: width === 390, hasTouch: width === 390 }))
+      const context = proofContexts.get(width), proof = await context.newPage()
+      try {
+        await context.clearCookies(); await context.addCookies(await page.context().cookies())
+        if (page.url() === 'about:blank') await proof.setContent(html)
+        else {
+          await proof.route('**/*', route => route.request().isNavigationRequest() ? route.fulfill({ contentType: 'text/html', body: html }) : route.continue())
+          await proof.goto(page.url())
+        }
+        await proof.screenshot({ path: `${directory}/${width}-${label}.png`, fullPage: true })
+      } finally { await proof.close() }
+    }
   }
 }
 async function tap(control) { await control.tap(); taps++ }
@@ -68,6 +94,12 @@ async function nativePaymentLinks() {
       start: async ({ id, language, payload }) => {
         await page.goto(`${h.origin}/pay-links/${id}?language=${language}`)
         assert.equal(await page.locator('html').getAttribute('lang'), language)
+        const offer = await (await h.raw(`/pay-links/${id}?language=${language}`, { headers: { accept: 'application/json' } })).json()
+        const text = await page.locator('main').innerText()
+        for (const cents of [offer.terms.subtotalCents, offer.terms.taxCents, offer.terms.totalCents]) {
+          const amount = new Intl.NumberFormat(language, { style: 'currency', currency: 'USD', currencyDisplay: 'code' }).format(cents / 100).replaceAll('\u00a0', ' ')
+          assert.ok(text.includes(amount), 'The native consent shows the exact independently checked offer figures')
+        }
         const form = page.locator('form[action$="/start"]')
         for (const name of ['name', 'billing_email', 'address']) {
           await tap(form.locator(`[name=${name}]`)); await form.locator(`[name=${name}]`).fill(payload[name])
@@ -76,7 +108,9 @@ async function nativePaymentLinks() {
         if (payload.make_default) await confirm(form, 'make_default')
         const accepted = await form.evaluate(element => Object.fromEntries(new FormData(element)))
         await fit(page, `link-${language}-consent`)
-        const [posted] = await Promise.all([page.waitForResponse(r => new URL(r.url()).pathname === `/pay-links/${id}/start` && r.request().method() === 'POST'), tap(form.getByRole('button'))])
+        const [posted] = await Promise.all([page.waitForResponse(r => new URL(r.url()).pathname === `/pay-links/${id}/start` && r.request().method() === 'POST'), page.waitForNavigation().catch(error => {
+          assert.match(error.message, /ERR_FAILED|ERR_ABORTED/)
+        }), tap(form.getByRole('button'))])
         assert.equal(posted.status(), 303)
         const headers = await posted.allHeaders(), attempt = headers['set-cookie'].match(/Path=\/pay-links\/attempts\/([\w-]+)/)[1]
         const saved = (await context.cookies()).find(c => c.name === 'nectar_payment_link' && c.path === `/pay-links/attempts/${attempt}`)
@@ -94,7 +128,7 @@ async function nativePaymentLinks() {
         await fit(page, `link-${operation}`)
         if (await form.count()) {
           const action = await form.getAttribute('action')
-          const [posted] = await Promise.all([page.waitForResponse(r => new URL(r.url()).pathname === action && r.request().method() === 'POST'), tap(form.getByRole('button'))])
+          const [posted] = await Promise.all([page.waitForResponse(r => new URL(r.url()).pathname === action && r.request().method() === 'POST'), page.waitForNavigation(), tap(form.getByRole('button'))])
           assert.equal(posted.status(), 303)
           if (operation === 'cancellation') return { cancelUrl: new URL((await posted.allHeaders()).location, h.origin).href }
           await page.goto(h.origin + path); await fit(page, `link-${operation}-result`)
@@ -109,9 +143,15 @@ async function nativePaymentLinks() {
         assert.equal(await page.locator('form').count(), 1, 'Cancellation needs one confirmation')
         await submit(page, page.locator('form'), 'link-cancellation')
       },
-    }, onState: async ({ completed, state, cancelPath }) => {
+    }, onState: async ({ completed, state, cancelPath, customer }) => {
       await page.goto(h.origin + (cancelPath ?? `/pay-links/attempts/${completed.id}`))
       await fit(page, `link-${state}`)
+      if (state === 'complete') assert.ok((await page.locator('main').innerText()).includes('USD 144.38'), 'The completed signup retains its exact monthly total')
+      if (state === 'one-time-complete') {
+        const text = await page.locator('main').innerText()
+        assert.ok(text.includes('USD 52.76'), 'The paid return shows the independently computed tax-inclusive capture')
+        assert.ok(text.includes(customer.billingRecord.receipts.find(row => row.payment === completed.payment).number), 'The paid return identifies its actual receipt')
+      }
     } })
   })
 }
@@ -124,7 +164,9 @@ async function nativeMethods() {
         await page.goto(path(session))
         const form = page.locator(`form:has(input[name=setup][value="${setup}"])`)
         await confirm(form); await confirm(form, 'make_default'); await fit(page, `method-${method}-consent`)
-        const [posted] = await Promise.all([page.waitForResponse(r => new URL(r.url()).pathname === '/portal/payment-methods/start' && r.request().method() === 'POST'), tap(form.getByRole('button'))])
+        const [posted] = await Promise.all([page.waitForResponse(r => new URL(r.url()).pathname === '/portal/payment-methods/start' && r.request().method() === 'POST'), page.waitForNavigation().catch(error => {
+          assert.match(error.message, /ERR_FAILED|ERR_ABORTED/)
+        }), tap(form.getByRole('button'))])
         assert.equal(posted.status(), 303)
         const headers = await posted.allHeaders(), cookie = (await context.cookies()).find(c => c.name === 'nectar_setup_return')
         assert.ok(cookie)
@@ -141,9 +183,13 @@ async function nativeMethods() {
         assert.equal(response.status(), state === 'refused' ? 401 : 200)
         await fit(page, `method-${method}-${state}`)
       },
-      confirmMethodAction: async ({ session, action, operation }) => {
+      confirmMethodAction: async ({ session, action, operation, customer }) => {
         await page.goto(path(session))
         const form = page.locator(`[data-method-action="${action}"] form`)
+        const actions = await (await h.raw(`/portal/payment-methods/actions?session=${encodeURIComponent(session.token)}`)).json()
+        const record = await h.api(`customers/${customer}`, owner)
+        const setup = record.billingRecord.hostedSetups.find(row => row.id === actions.find(row => row.id === action).setup)
+        assert.ok((await form.locator('..').innerText()).includes(setup.paymentMethod.last4), 'Method choice identifies the exact saved instrument')
         await confirm(form); await submit(page, form, `method-action-${operation}`)
         const response = await h.raw(`/portal/payment-methods/actions?session=${encodeURIComponent(session.token)}`)
         return (await response.json()).find(row => row.id === action)
@@ -210,6 +256,7 @@ async function message(page, html, label, facts) {
   for (const button of await buttons.all()) assert.ok((await button.boundingBox()).height >= 44, 'Primary email links are tappable')
   // A single message column stays within the phone even with the real capability URL.
   assert.equal(await page.locator('body').evaluate(node => node.getBoundingClientRect().right <= innerWidth), true)
+  assert.equal(await page.locator('body > p').evaluateAll(nodes => nodes.every((node, index) => !index || node.getBoundingClientRect().top >= nodes[index - 1].getBoundingClientRect().bottom)), true, 'Message paragraphs occupy one column')
 }
 async function nativeMessages() {
   await installation(dunningOptions(), async (h, owner, page) => {
@@ -233,7 +280,9 @@ async function nativeMessages() {
         await page.goto(h.origin + path)
         let form = page.locator(`form:has(input[name=setup][value="${setupId}"])`)
         await confirm(form); await confirm(form, 'make_default'); await fit(page, 'dunning-update-consent')
-        await Promise.all([page.waitForRequest(r => r.url().startsWith('https://checkout.stripe.com/')), tap(form.getByRole('button'))])
+        await Promise.all([page.waitForNavigation().catch(error => {
+          assert.match(error.message, /ERR_FAILED|ERR_ABORTED/)
+        }), tap(form.getByRole('button'))])
         complete(); await page.goto(h.origin + path)
         form = page.locator(`form:has(input[name=setup][value="${setupId}"])`)
         await confirm(form); await submit(page, form, 'dunning-update-finish')
@@ -257,7 +306,8 @@ async function nativeMessages() {
     const languages = new Set()
     for (const mail of delivered) {
       const language = mail.html.match(/lang="([^"]+)"/)[1]
-      await message(page, mail.html, `expiry-${language}`, ['4242', '2026'])
+      const date = new Intl.DateTimeFormat(language, { dateStyle: 'long', timeZone: 'UTC' }).format(new Date('2026-11-05T00:00:00Z'))
+      await message(page, mail.html, `expiry-${language}`, ['4242', date])
       languages.add(language)
     }
     assert.deepEqual([...languages].sort(), ['en', 'es-US'], 'Both actual expiry message languages render')
@@ -266,8 +316,11 @@ async function nativeMessages() {
 
 try {
   await nativePaymentLinks()
+  console.log('Mobile native payment links, returns and cancellation passed')
   await nativeMethods()
+  console.log('Mobile native payment method consent, defaults and removal passed')
   await nativeInvoices()
+  console.log('Mobile own-customer invoices, PDF downloads and capability refusals passed')
   await nativeMessages()
   console.log(`mobileCustomerJourney passed: ${states} native states at 390 by 844, ${taps} taps; provider payment and mailbox delivery remain unqualified`)
 } finally { await browser.close() }
