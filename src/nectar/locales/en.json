@@ -456,5 +456,9 @@
   "portal.change.afterAmount": "Proposed period total",
   "portal.change.difference": "Prorated difference",
   "portal.change.effective": "Effective date",
-  "portal.change.previewReadOnly": "This estimate does not change your subscription or charge you. Downgrades can be sent separately for merchant review."
+  "portal.change.previewReadOnly": "This estimate does not change your subscription or charge you. Downgrades can be sent separately for merchant review.",
+  "billing_notice.payment_receipt.subject": "Payment recorded for invoice {invoice}",
+  "billing_notice.payment_receipt.body": "{merchant} recorded a payment of {amount} on {date} for invoice {invoice}.",
+  "billing_notice.payment_failed.subject": "Payment failed for invoice {invoice}",
+  "billing_notice.payment_failed.body": "The payment for invoice {invoice} from {merchant} failed on {date}. The current collectible amount is {amount}. No payment is confirmed by this message."
 }

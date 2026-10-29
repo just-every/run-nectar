@@ -943,3 +943,19 @@ These doors record an operator-confirmed USD receipt from a file. They do not ch
 Both upload doors return the canonical `id` and an opaque `source`. Pass those as `receipt` and `source` to `remittance.preview`, then confirm its exact `fingerprint` through `remittance.confirm` with `confirm: true`. Confirming the first source records and allocates the received funds. Confirming the other source of an already confirmed receipt records its provenance and audit against the existing payment without adding cash or allocations. This works in either order. Conflicting reuse of either stable identity is refused; matching amounts alone do not establish identity.
 
 The payment receipt API and its native receipt page list both confirmed recorded sources. Unconfirmed sources remain in the receivables review queue. Source confirmation requires the existing member receivables capability; credentials cannot confirm. Customer erasure hides source references and preserves opaque replay tombstones, so a repeated upload cannot recreate erased money.
+
+## Explicit billing notices
+
+The current interim notice commands are owner-only and require a fresh
+authenticator or passkey verification. No notice runs unattended.
+`GET /api/nectar/billing-notices` returns sender settings and delivery outcomes.
+
+- `billing.notice.configure`: `kind`, `sender` (`off`, `nectar` or `processor`), current `revision`, `language`, `confirm:true`; optional paired `subject` and `body` edit that language's template. Empty templates restore the translation defaults. Supported placeholders are `{invoice}`, `{merchant}`, `{amount}` and `{date}`; an edited body must retain every fact.
+- `billing.notice.prepare`: `kind`, `invoice`, `confirm:true`; optionally `event` selects a specific positive allocation for a receipt. Current send kinds are `payment_failed` and `payment_receipt`. The other four settings reserve their sender choices but their send doors remain unavailable.
+- `billing.notice.send`: the prepared `notice`, its `basis_hash` and a separate `confirm:true`.
+
+A notice is informational: it grants no payment authority. Sender settings,
+recipient, language, source or wording changes invalidate its frozen basis.
+A prepared event cannot be replaced, including after expiry, provider refusal
+or uncertainty. Acceptance records provider acceptance rather than mailbox
+delivery. A receipt records an allocation, without claiming settlement.
