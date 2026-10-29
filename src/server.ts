@@ -1,3 +1,4 @@
+import { nectarDoor, nectarBusinessSettings } from './nectar/agent-door'
 import { processorWebhook } from './nectar/processor-http'
 import { escalateProcessorCash } from './nectar/processor-cash-queue'
 import { observeSubscriptionStates } from './nectar/subscription-states'
@@ -83,6 +84,11 @@ export default withDemo({
     await observeSubscriptionStates(runtimeBindings(env))
   },
   async fetch(request, env, execution) {
+    const native = runtimeBindings(env)
+    const door = await nectarDoor(native).handle(request)
+    if (door) return door
+    const settings = await nectarBusinessSettings(native).handle(request)
+    if (settings) return settings
     const paymentEvent=await processorWebhook(request,runtimeBindings(env))
     if(paymentEvent)return paymentEvent
     const cardEvent=await cardLifecycleWebhook(request,runtimeBindings(env))

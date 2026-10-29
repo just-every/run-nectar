@@ -1,7 +1,7 @@
 ## Nectar implementation claims
 
 Generated from [CONTRACT.md](https://github.com/just-every/run-nectar/blob/main/CONTRACT.md). A partial or missing clause retains the work named in its Gap.
-Status: **130 clauses: 60 done, 40 partial, 30 missing.**
+Status: **143 clauses: 60 done, 40 partial, 43 missing.**
 
 | Clause | Title | Status | Present proof | Gap |
 | --- | --- | --- | --- | --- |
@@ -135,3 +135,16 @@ Status: **130 clauses: 60 done, 40 partial, 30 missing.**
 | AGENT-008 | Month-end close tie-out | missing |  | No close tie-out. |
 | AGENT-009 | Agent-assisted case resolution with approval beyond proposals | missing |  | No agent-assisted resolution beyond proposals; no automatic financial or outbound action authorized. |
 | AGENT-010 | Scheduled assurance comparisons and disputed-item collection pauses | done | `tests/nectar/assurance-detectors.mjs` — assuranceScheduleFlow plants the same mismatches, then drives the real scheduled Worker entry point: a tick that fails at its commit opens no partial case and is recorded as failed with its error code, the next tick recovers and opens one case per mismatch, repeat ticks open none, a tick whose outcome was never written stays visible as running and does not overlap a second tick, after ten minutes the next tick marks it interrupted and restarts with the same cases, ticks prepare no bill run and apply no payment, issue no invoice and send no message, and an ordinary fix is rechecked on the next tick but closed only after a person confirms its exact basis. `tests/nectar/native-collection.mjs` — nativeCollectionFlow records a partial and a whole-invoice dispute: the partly disputed invoice freezes and charges only its undisputed remainder at the provider, the wholly disputed invoice is refused before any provider call, a dispute recorded after review refuses the pending charge, issued invoice evidence, debt and tax stay unchanged, and resolving a dispute restores the full owed balance only where the once-only native claim does not still stop it. `tests/nectar/cadences.mjs` keeps proving AR-001's line-amount holds for reminders and the scheduled cadence. |  |
+| BASE-AGENT-001 | One MCP door per seed | missing |  | Not yet judged through this seed's own doors. |
+| BASE-AGENT-002 | The seed's jobs are tools, through the UI's own actions | missing |  | Not yet judged through this seed's own doors. |
+| BASE-AGENT-003 | Records are resources | missing |  | Not yet judged through this seed's own doors. |
+| BASE-AGENT-004 | Business identity and short-lived, audience-bound tokens | missing |  | Not yet judged through this seed's own doors. |
+| BASE-AGENT-005 | An agent acts as a person in a role, never more | missing |  | Not yet judged through this seed's own doors. |
+| BASE-AGENT-006 | Every action declares its risk class | missing |  | Not yet judged through this seed's own doors. |
+| BASE-AGENT-007 | The company's policy decides, at one chokepoint | missing |  | Not yet judged through this seed's own doors. |
+| BASE-AGENT-008 | Truthful attribution | missing |  | Not yet judged through this seed's own doors. |
+| BASE-AGENT-009 | Every agent action is audited with its class and decision | missing |  | Not yet judged through this seed's own doors. |
+| BASE-AGENT-010 | Agents can follow changes | missing |  | Not yet judged through this seed's own doors. |
+| BASE-AGENT-011 | Limits are policy, and Pause stops everything | missing |  | Not yet judged through this seed's own doors. |
+| BASE-AGENT-012 | Writes are idempotent and conflict-safe | missing |  | Not yet judged through this seed's own doors. |
+| BASE-AGENT-013 | Manifest, docs and the conformance journey | missing |  | Not yet judged through this seed's own doors. |

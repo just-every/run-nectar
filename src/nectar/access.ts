@@ -87,9 +87,11 @@ export async function giveAccess(env: Bindings, actor: Actor, input: Input, requ
   if (!operator) await auth.invite(request, { email, displayName: name, role: 'member', returnTo: '/app' })
   else if (operator.status === 'inactive') await auth.setOperatorStatus(request, operator.id, 'active')
   const id = existing?.id ?? newId()
+  const identity = await one(env, 'SELECT id FROM oa_operators WHERE email=?', email)
+  insist(identity, 'native_operator_required', 409)
   await commit(env, [existing
-    ? stmt(env, "UPDATE nc_members SET name = ?, role = ?, custom_role_id = ?, status = 'active', updated_at = ? WHERE id = ?", name, role, customId, now(), id)
-    : stmt(env, "INSERT INTO nc_members (id, email, name, role, custom_role_id, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'active', ?, ?)", id, email, name, role, customId, now(), now())],
+    ? stmt(env, "UPDATE nc_members SET name = ?, role = ?, custom_role_id = ?, operator_id = ?, status = 'active', updated_at = ? WHERE id = ?", name, role, customId, identity.id, now(), id)
+    : stmt(env, "INSERT INTO nc_members (id, email, name, role, custom_role_id, operator_id, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?)", id, email, name, role, customId, identity.id, now(), now())],
   { actor: actorLabel(actor), action: 'access.give', subject: id, detail: { email, role, ...(custom ? { customRole: custom.name } : {}), invited: !operator } })
   return { id, email, role, ...(customId ? { custom_role: customId } : {}) }
 }
@@ -128,7 +130,7 @@ export async function issueKey(env: Bindings, actor: Actor, input: Input) {
   const version = checkVersion(input.text('api_version', { optional: true, max: 20 }) || LATEST_VERSION)
   const key = `nectar_${base64url(crypto.getRandomValues(new Uint8Array(32)))}`
   const id = newId()
-  await commit(env, [stmt(env, 'INSERT INTO nc_agent_keys (id, name, key_hash, scopes, api_version, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)', id, name, await sha256Hex(key), [...new Set(scopes)].sort().join(' '), version, actorLabel(actor), now())],
+  await commit(env, [stmt(env, 'INSERT INTO nc_agent_keys (id, name, key_hash, scopes, api_version, created_by, created_at, sponsor_member_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', id, name, await sha256Hex(key), [...new Set(scopes)].sort().join(' '), version, actorLabel(actor), now(), actor.id)],
     { actor: actorLabel(actor), action: 'credential.issue', subject: id, detail: { name, scopes, api_version: version } })
   return { id, name, scopes: scopes as Scope[], api_version: version, key }
 }
