@@ -162,7 +162,7 @@
       "executable": false
     },
     ".github/workflows/verify.yml": {
-      "sha256": "70a18b90556b9adc197f0b0f5db1bb752898ed99495eb1eb6cab0869b31ae3e9",
+      "sha256": "c08d3710989295d08c11d6413614b6e5e2534ef20653c3f6bf0486a8c47e2b19",
       "executable": false
     },
     ".gitignore": {
@@ -174,7 +174,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "50b41882eba927c14f4911b512ad5ce9f8733d3e911f9822245dcaadd0c2f46a",
+      "sha256": "7daedecb73c36d6849d00f2e14d1f4a218cf8174d8a20dc7f4c975455c81735a",
       "executable": false
     },
     "AGENTS.consumer.md": {
@@ -194,7 +194,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "903ef34adfc9e21da2a9c7b5710ec23d4ce02c125b01f435abd8d19a746295ca",
+      "sha256": "411d8d5d85e3646e3801dacbcbcac2f3a29db5333f7eeb3f10611cb09ede0698",
       "executable": false
     },
     "DEMO.md": {
@@ -230,7 +230,7 @@
       "executable": false
     },
     "docs/CLAIMS.md": {
-      "sha256": "eb629ec6345f781a080ed2f4478e62376d0879e2f43f24f33812b797f4d3e70a",
+      "sha256": "5d2e15c8e76b72fd8b5ca94c13a17c002f6fc974c0f8831b19d9c6408a19f4ab",
       "executable": false
     },
     "docs/composition-baseline.json": {
@@ -3174,7 +3174,7 @@
       "executable": false
     },
     "src/nectar/automatic-collection-jobs.ts": {
-      "sha256": "12042aa2e1b5f2ff55a7bab94166118afa6d26abfc99efb038591b8d08da209c",
+      "sha256": "06508332f6cf5b9e8eff708507bcf6d38013025f1f3620e47f182f1f00e5fc61",
       "executable": false
     },
     "src/nectar/automatic-collection-records.ts": {
@@ -5035,6 +5035,10 @@
     },
     "tests/nectar/assurance-detectors.mjs": {
       "sha256": "8957babf709bb853855211449100f64fe4e171e5aea76c05017f5776cad1920c",
+      "executable": false
+    },
+    "tests/nectar/automatic-collection-archive.mjs": {
+      "sha256": "15101ae1cc8785148070499e171dd0b9366be9b7de666cad25ef7d5a3e6f2d60",
       "executable": false
     },
     "tests/nectar/automatic-collection-browser.mjs": {
