@@ -1,3 +1,4 @@
+import { unusableMethodGuard } from './card-lifecycle'
 import { setupOwner,setupOwnerFence } from './hosted-setup-basis'
 import { selectedRetryPolicy } from './retry-policy'
 import type { Bindings } from '../auth.server'
@@ -37,7 +38,7 @@ export async function prepareAutomaticCollection(env: Bindings, actor: Actor, in
  const q:AutomaticQuote={invoice:invoice.id,customer:invoice.customer_id,customerRevision:invoice.customer_revision,fingerprint:invoice.source_fingerprint,calculation:invoice.calculation_json,
  amountCents:invoice.total_cents,currency:'usd',accountRef:selected.account,bindingId:binding.id,bindingRevision:binding.revision,method,owner:actor.id,issueDate,businessRevision:business.revision,wording,wordingVersion:retryPolicy?'exact-invoice-retries-1':'exact-invoice-1',attempts:1,...(retryPolicy?{retryPolicy,retryFactor}:{})}
  const id=newId(),basis=await fingerprint(q),at=clockInstant(env)
- await commit(env,[collectionAuthority(env,actor),...(retryPolicy?setupOwnerFence(env,actor):[]),...(retrySelection?[retrySelection.fence]:[]),guard(env,'automatic_collection_draft_changed',"EXISTS(SELECT 1 FROM nc_invoices WHERE id=? AND status IN ('draft','approved') AND source_fingerprint=? AND calculation_json=?)",invoice.id,q.fingerprint,q.calculation),
+ await commit(env,[collectionAuthority(env,actor),unusableMethodGuard(env,q.accountRef,method.customerRef,method.paymentMethodRef),...(retryPolicy?setupOwnerFence(env,actor):[]),...(retrySelection?[retrySelection.fence]:[]),guard(env,'automatic_collection_draft_changed',"EXISTS(SELECT 1 FROM nc_invoices WHERE id=? AND status IN ('draft','approved') AND source_fingerprint=? AND calculation_json=?)",invoice.id,q.fingerprint,q.calculation),
  stmt(env,`INSERT INTO nc_automatic_collections(id,invoice_id,customer_id,status,basis_json,basis_hash,prepared_by,prepared_at,account_ref,stripe_customer_ref,payment_method_ref,amount_cents,method_kind,revision)
  VALUES(?,?,?,'awaiting_customer',?,?,?,?,?,?,?,?,?,?)`,id,invoice.id,invoice.customer_id,canonical(q),basis,actor.id,at,q.accountRef,method.customerRef,method.paymentMethodRef,q.amountCents,method.kind,newId()),stmt(env,'INSERT INTO nc_automatic_collection_authorizations(id,customer_id,invoice_id,basis_hash,created_by,created_at) VALUES(?,?,?,?,?,?)',id,invoice.customer_id,invoice.id,basis,actor.id,at)],
  {actor:actorLabel(actor),action:'automatic.collection.prepare',subject:id,detail:{invoice:invoice.id,basis,amountCents:q.amountCents,issueDate}})

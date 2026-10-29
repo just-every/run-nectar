@@ -97,4 +97,5 @@ export const isolatedJourneys = [
   { file: 'close-tieout', name: 'closeTieoutFlow', load: () => import('./close-tieout.mjs') },
   { file: 'test-mode', name: 'testModeFlow', load: () => import('./test-mode.mjs') },
   { file: 'job-runs', name: 'jobRunsFlow', load: () => import('./job-runs.mjs') },
+  { file: 'card-prohibition-families', name: 'cardProhibitionFamiliesFlow', load: () => import('./card-prohibition-families.mjs') },
 ]

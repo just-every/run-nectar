@@ -115,13 +115,19 @@ export async function readIntent(stripe: StripeClient, identity: PaymentIdentity
 /** Definitive refusal requires a current, identity-matched intent and complete
  * charge evidence proving that no succeeded payment exists. Error text is never saved. */
 export async function refusedPayment(stripe: StripeClient, intent: Row, identity: PaymentIdentity) {
-  const paymentIntentRef = verifyIntent(intent, identity)
+  verifyIntent(intent, identity)
+  return refusedPaymentEvidence(stripe,intent,identity.customerRef)
+}
+
+/** Caller must first validate the complete intent identity and frozen economics. */
+export async function refusedPaymentEvidence(stripe: StripeClient, intent: Row, customerRef: string) {
+  const paymentIntentRef = providerReference(intent.id)
   if (intent.status !== 'requires_payment_method' || !intent.last_payment_error || intent.amount_received !== 0) return null
   const code = intent.last_payment_error.code, decline = intent.last_payment_error.decline_code
   insist(typeof code === 'string' && /^[a-z_]{1,100}$/.test(code), 'stripe_native_refusal_unconfirmed', 409)
   const history = await stripe(`/charges?${new URLSearchParams({ payment_intent: paymentIntentRef, limit: '100' })}`)
   insist(history.object === 'list' && history.has_more === false && Array.isArray(history.data), 'stripe_native_charge_history_incomplete', 409)
-  insist(history.data.every((charge: Row) => charge.object === 'charge' && ref(charge.payment_intent) === paymentIntentRef && ref(charge.customer) === identity.customerRef
+  insist(history.data.every((charge: Row) => charge.object === 'charge' && ref(charge.payment_intent) === paymentIntentRef && ref(charge.customer) === customerRef
     && charge.status !== 'succeeded' && charge.paid !== true && charge.captured !== true), 'stripe_native_refusal_unconfirmed', 409)
   const providerDeclineCode=typeof decline==='string' && /^[a-z_]{1,100}$/.test(decline)?decline:null
   // Stripe documents authentication_not_handled as an authentication refusal.

@@ -1,3 +1,4 @@
+import { unusableMethodGuard } from './card-lifecycle'
 import type { Bindings } from '../auth.server'
 import { actorLabel, requireMember, type Actor } from './actor'
 import { clockInstant } from './clock'
@@ -27,7 +28,7 @@ export async function prepareTrialCollection(env: Bindings, actor: Actor, input:
     amountCents: invoice.rating.totalCents, currency: 'usd', attempts: 1, chargeDate: invoice.trialEnd }
   const id = newId(), at = clockInstant(env), basis = await fingerprint(quote), revision = newId()
   const row = { id, subscription_id: invoice.subscription, customer_id: invoice.customer, quote_json: canonical(quote), basis_hash: basis, status: 'pending_owner', prepared_by: actor.id, revision }
-  await commit(env, [collectionAuthority(env, actor),
+  await commit(env, [collectionAuthority(env, actor),unusableMethodGuard(env,quote.accountRef,quote.customerRef,quote.paymentMethodRef),
     stmt(env, `INSERT INTO nc_trial_collections(id,subscription_id,customer_id,trial_end,quote_json,basis_hash,status,prepared_by,prepared_at,revision)
       VALUES(?,?,?,?,?,?,'pending_owner',?,?,?)`, id, invoice.subscription, invoice.customer, invoice.trialEnd, canonical(quote), basis, actor.id, at, revision),
     trialCollectionGuard(env, row, false),
