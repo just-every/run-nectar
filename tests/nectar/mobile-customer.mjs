@@ -160,6 +160,18 @@ async function nativePaymentLinks() {
 async function nativeMethods() {
   await installation(methodOptions(), async (h, owner, page, context) => {
     const path = session => `${h.origin}/portal/payment-methods?session=${encodeURIComponent(session.token)}`
+    const confirmMethodAction = async ({ session, action, operation, customer, expectedStatus = 200 }) => {
+      await page.goto(path(session))
+      const form = page.locator(`[data-method-action="${action}"] form`)
+      const actions = await (await h.raw(`/portal/payment-methods/actions?session=${encodeURIComponent(session.token)}`)).json()
+      const record = await h.api(`customers/${customer}`, owner)
+      const selected = actions.find(row => row.id === action)
+      const setup = record.billingRecord.hostedSetups.find(row => row.id === selected.setup)
+      assert.ok((await form.locator('..').innerText()).includes(setup.paymentMethod.last4), 'Method choice identifies the exact saved instrument')
+      await confirm(form); await submit(page, form, `method-action-${selected.operation}-${operation}-${expectedStatus}`, expectedStatus)
+      const response = await h.raw(`/portal/payment-methods/actions?session=${encodeURIComponent(session.token)}`)
+      return (await response.json()).find(row => row.id === action)
+    }
     await customerSearchFlow(h, owner, async () => {}, {
       startHosted: async ({ session, setup, method }) => {
         await page.goto(path(session))
@@ -184,17 +196,8 @@ async function nativeMethods() {
         assert.equal(response.status(), state === 'refused' ? 401 : 200)
         await fit(page, `method-${method}-${state}`)
       },
-      confirmMethodAction: async ({ session, action, operation, customer }) => {
-        await page.goto(path(session))
-        const form = page.locator(`[data-method-action="${action}"] form`)
-        const actions = await (await h.raw(`/portal/payment-methods/actions?session=${encodeURIComponent(session.token)}`)).json()
-        const record = await h.api(`customers/${customer}`, owner)
-        const setup = record.billingRecord.hostedSetups.find(row => row.id === actions.find(row => row.id === action).setup)
-        assert.ok((await form.locator('..').innerText()).includes(setup.paymentMethod.last4), 'Method choice identifies the exact saved instrument')
-        await confirm(form); await submit(page, form, `method-action-${operation}`)
-        const response = await h.raw(`/portal/payment-methods/actions?session=${encodeURIComponent(session.token)}`)
-        return (await response.json()).find(row => row.id === action)
-      },
+      confirmMethodAction,
+      confirmUncertainMethodAction: confirmMethodAction,
       methodState: async ({ session, operation, state }) => {
         const response = await page.goto(path(session))
         assert.equal(response.status(), state === 'refused' ? 401 : 200)
