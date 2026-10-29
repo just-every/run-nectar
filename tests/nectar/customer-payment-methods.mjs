@@ -178,6 +178,15 @@ export async function assertHostedSetups(h, owner, { customer, other, binding, f
     await post(session,'finish',setup.id,409)
     assert.equal(writes('default'),defaults,'Mismatched processor custody never changes default')
     edge.setFault(null)
+    if(method==='us_bank_account'){
+      for(const status of ['pending','inactive']){
+        provider.mandate.status=status
+        await post(session,'finish',setup.id,409)
+        assert.equal(writes('default'),defaults,'An unconfirmed mandate grants no default or completion')
+        assert.equal((await h.api(`customers/${customer}`,owner)).billingRecord.hostedSetups.find(row=>row.id===setup.id).status,'open')
+      }
+      provider.mandate.status='active'
+    }
     await post(otherSession,'finish',setup.id,404)
     const finished=executeFinish?await executeFinish({h,owner,session,setup:setup.id,method,post:()=>post(session,'finish',setup.id)}):await post(session,'finish',setup.id)
     assert.equal(finished.status,'complete')
@@ -187,11 +196,23 @@ export async function assertHostedSetups(h, owner, { customer, other, binding, f
     const record=await h.api(`customers/${customer}`,owner)
     const saved=record.billingRecord.hostedSetups.find(row=>row.id===setup.id)
     assert.equal(saved.status,'complete')
+    assert.equal(saved.paymentMethod.setupIntentRef,provider.setup.id,'Setup evidence retains the exact successful provider setup')
     const safe=JSON.stringify(saved)
     assert.ok(safe.includes(provider.method.id) && safe.includes(method==='card'?'4242':'6789'))
     if(method==='us_bank_account') {
       assert.equal(saved.paymentMethod.mandateRef,provider.mandate.id,'Captured ACH retains the verified mandate reference')
+      assert.equal(saved.paymentMethod.mandateStatus,provider.mandate.status,'Captured ACH retains the observed mandate outcome')
+      assert.equal(saved.paymentMethod.mandateAcceptedAt,provider.mandate.customer_acceptance.accepted_at*1000,'Provider acceptance time is distinct from native setup consent')
+      assert.equal(saved.paymentMethod.mandateAcceptanceType,'online')
+      assert.equal(saved.paymentMethod.mandateTextVersion,null,'An unavailable authorization version is never invented')
       assert.equal(saved.paymentMethod.mandateText,null,'Unavailable processor authorization text is never fabricated')
+      const completed=(await h.api('audit',owner)).find(row=>row.subject===setup.id&&row.action==='checkout.setup.complete')
+      const evidence=JSON.parse(completed.detail)
+      assert.equal(evidence.setupIntentRef,provider.setup.id)
+      assert.equal(evidence.mandateRef,provider.mandate.id)
+      assert.equal(evidence.mandateStatus,provider.mandate.status)
+      assert.equal(evidence.mandateAcceptedAt,provider.mandate.customer_acceptance.accepted_at*1000)
+      assert.equal(evidence.mandateAcceptanceType,'online')
     }
     for(const privateValue of ['synthetic-nectar-810','110000000','routing_number','ip_address','user_agent','4242424242424242','123456789012'])assert.ok(!safe.includes(privateValue),'Customer projection contains no financial input or private acceptance payload')
   }

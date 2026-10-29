@@ -42,7 +42,7 @@ export async function hostedSetupArchiveJourney() {
   const run=async(args,options)=>{const output=await command(root,args,options);outputs.push(output);console.log('SETUP_ARCHIVE command',args[0],options?.refuse?'refused':'passed');return output}
   const config=JSON.parse(await readFile('wrangler.jsonc','utf8'))
   const persistence=join(root,'.wrangler/state/v3'),databaseId=config.d1_databases.find(row=>row.binding==='DB').database_id
-  const native=nativeCollectionEdge(),refs=[1,3,4,5,6].map(n=>`synthetic-nectar-native-customer-${n}`)
+  const native=nativeCollectionEdge(),refs=[1,3,4,5,6,7,8].map(n=>`synthetic-nectar-native-customer-${n}`)
   for(const ref of refs)native.customers.set(ref,{account:1,method:null})
   const edge=hostedSetupEdge(native.fetch,{customerRefs:refs})
   const traffic=[]
@@ -104,7 +104,7 @@ export async function hostedSetupArchiveJourney() {
       const binding=(await api('collection.customer.bind',{customer,account_ref:'synthetic-nectar-native-account-1',stripe_customer_ref:ref,confirm:true})).id
       targets.push({customer,binding,ref})
     }
-    const [updating,creating,open,erased,peer]=targets,expected=[]
+    const [updating,creating,open,erased,peer,failed,unaccepted]=targets,expected=[]
     async function capture(target,{method='card',makeDefault=false,outcome='complete'}={}){
       const session=await issue(target.customer)
       const setup=await api('checkout.setup.prepare',{customer:target.customer,binding:target.binding,method,confirm:true})
@@ -114,7 +114,9 @@ export async function hostedSetupArchiveJourney() {
       const started=await post(session,'start',setup.id,{body:{consent_hash:consentHash,make_default:makeDefault},status:outcome==='creating'?502:200})
       assert.ok(started.cookie)
       let status=outcome==='creating'?'creating':'open'
+      if(outcome==='failed'){edge.expire(setup.id);await post(session,'reconcile',setup.id,{cookie:started.cookie});status='failed'}
       if(['complete','updating'].includes(outcome)){
+        if(method==='us_bank_account')edge.sessions.get(setup.id).mandate.customer_acceptance.accepted_at=1792663183
         edge.complete(setup.id)
         if(outcome==='updating')edge.setFault('lose-default')
         await post(session,'finish',setup.id,{cookie:started.cookie,status:outcome==='updating'?502:200})
@@ -132,6 +134,8 @@ export async function hostedSetupArchiveJourney() {
     await capture(creating,{outcome:'creating'})
     await capture(open,{outcome:'open'})
     await capture(erased,{makeDefault:true})
+    await capture(failed,{outcome:'failed'})
+    const abandoned=await api('checkout.setup.prepare',{customer:unaccepted.customer,binding:unaccepted.binding,method:'card',confirm:true})
     // Nonempty, independently known financial facts must survive setup restoration.
     const charge=(await api('charge.add',{customer:updating.customer,amount:'100',description:'Synthetic service',effective_date:'2026-10-22',taxable:false})).charge
     const invoice=(await api('invoice.manual',{customer:updating.customer,charges:[charge],service_date:'2026-10-22'})).id
@@ -147,6 +151,7 @@ export async function hostedSetupArchiveJourney() {
     await run(['export','--output',archive('before')])
     const before=await archiveItems(archive('before')),captured=history(before)
     assert.equal(captured.length,expected.length)
+    assert.ok(!captured.some(row=>row.id===abandoned.id),'Unaccepted preparation creates no portable consent evidence')
     for(const item of expected){
       const row=captured.find(row=>row.id===item.id),wording=JSON.parse(row.consent_json)
       assert.equal(row.customer_id,item.customer);assert.equal(row.method,item.method);assert.equal(row.status,item.status)
@@ -161,23 +166,50 @@ export async function hostedSetupArchiveJourney() {
       if(item.status==='complete'||item.status==='updating'){
         const method=JSON.parse(row.method_json)
         assert.equal(method.methodRef,item.provider.method.id);assert.equal(method.last4,item.method==='card'?'4242':'6789')
-        if(item.method==='us_bank_account'){assert.equal(method.mandateRef,item.provider.mandate.id);assert.equal(method.mandateText,null)}
+        assert.equal(method.setupIntentRef,item.provider.setup.id,'Archive retains the matching provider setup reference')
+        if(item.method==='us_bank_account'){
+          assert.equal(method.mandateRef,item.provider.mandate.id);assert.equal(method.mandateText,null)
+          assert.equal(method.mandateStatus,item.provider.mandate.status,'Archive retains the observed mandate outcome')
+          assert.equal(method.mandateAcceptedAt,item.provider.mandate.customer_acceptance.accepted_at*1000)
+          assert.equal(method.mandateAcceptanceType,'online');assert.equal(method.mandateTextVersion,null)
+          assert.notEqual(method.mandateAcceptedAt,row.accepted_at,'Provider acceptance is not reconstructed from the native consent clock')
+        }
       }
     }
+    const achProvider=expected.find(row=>row.id===ach).provider
+    const achAudit=before.find(item=>item.table==='nc_audit'&&item.row.subject===ach&&item.row.action==='checkout.setup.complete')
+    const achFacts=JSON.parse(achAudit.row.detail)
+    assert.equal(achFacts.setupIntentRef,achProvider.setup.id)
+    assert.equal(achFacts.mandateRef,achProvider.mandate.id)
+    assert.equal(achFacts.mandateStatus,achProvider.mandate.status)
+    assert.equal(achFacts.mandateAcceptedAt,achProvider.mandate.customer_acceptance.accepted_at*1000)
+    assert.equal(achFacts.mandateAcceptanceType,'online')
     assert.notEqual(captured.find(row=>row.id===card).default_choice,captured.find(row=>row.id===ach).default_choice)
     for(const table of ['nc_hosted_setups','nc_hosted_setup_returns','nc_portal_sessions','nc_automatic_collection_authorizations'])assert.ok(!before.some(item=>item.table===table),'Archives exclude executable authority')
     excludes(JSON.stringify(before),[...sensitive,...expected.flatMap(row=>[row.session.token,row.returnCookie.split('=')[1]])],'Archive contents')
     const writeCount=writes(),trafficCount=traffic.length
     await run(['reset','--yes']);await run(['import','--input',archive('before'),'--yes'])
     await run(['export','--output',archive('restored')])
-    assert.deepEqual(history(await archiveItems(archive('restored'))),captured,'Actual restore preserves every historical evidence byte')
+    const restoredArchive=await archiveItems(archive('restored'))
+    assert.deepEqual(history(restoredArchive),captured,'Actual restore preserves every historical evidence byte')
+    assert.deepEqual(restoredArchive.find(item=>item.table==='nc_audit'&&item.row.seq===achAudit.row.seq),achAudit,'Actual restore preserves the original mandate audit facts')
     await restart({fresh:true})
     assert.deepEqual(await money(updating.customer),financial)
-    for(const target of targets.slice(0,4)){
+    for(const target of [...targets.slice(0,4),failed]){
       const rows=await currentRows(target.customer)
       assert.equal(rows.length,expected.filter(row=>row.customer===target.customer).length)
       assert.ok(rows.every(row=>row.historical&&!row.debitAuthority))
+      for(const row of rows){
+        const stored=JSON.parse(captured.find(item=>item.id===row.id).method_json??'null')
+        if(stored){
+          assert.equal(row.paymentMethod.setupIntentRef,stored.setupIntentRef)
+          assert.equal(row.paymentMethod.mandateStatus,stored.mandateStatus)
+          assert.equal(row.paymentMethod.mandateAcceptedAt,stored.mandateAcceptedAt)
+        }
+      }
     }
+    assert.deepEqual(await currentRows(unaccepted.customer),[],'Restoration does not revive an unaccepted setup')
+    await post(await issue(unaccepted.customer),'start',abandoned.id,{status:404})
     assert.deepEqual(await currentRows(peer.customer),[],'A foreign customer receives no setup evidence')
     const foreignPage=await readPage(await issue(peer.customer))
     excludes(foreignPage,['4242','6789',...expected.map(row=>row.id)],'Foreign customer page')
@@ -205,7 +237,7 @@ export async function hostedSetupArchiveJourney() {
     browser=await chromium.launch({headless:true,...process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?{executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH}:{},args:['--no-sandbox','--use-mock-keychain','--password-store=basic']})
     const page=await browser.newPage(),directory=process.env.NECTAR_EVIDENCE_DIR
     if(directory)await mkdir(directory,{recursive:true})
-    for(const [label,target] of [['updating',updating],['creating',creating],['open',open]])for(const language of ['en','es-US']){
+    for(const [label,target] of [['updating',updating],['creating',creating],['open',open],['failed',failed]])for(const language of ['en','es-US']){
       const strings=JSON.parse(await readFile(`src/nectar/locales/${language}.json`,'utf8'))
       const record=await api(`customers/${target.customer}`)
       await api('customer.update',{customer:target.customer,revision:record.revision,name:record.name,billing_email:record.billing_email,language})
@@ -239,6 +271,34 @@ export async function hostedSetupArchiveJourney() {
       }
     }
     await browser.close();browser=null
+    // A terminal history is evidence only. New work needs current authority and acceptance.
+    const newlyAccepted=[],ordinaryOwner=await h.signIn(h.vars.OWNER_EMAIL)
+    for(const target of [erased,failed,unaccepted]){
+      const input={customer:target.customer,binding:target.binding,method:'card',confirm:true}
+      await h.api('checkout.setup.prepare',ordinaryOwner,input,403)
+      const beforeFresh=writes(),session=await issue(target.customer)
+      const setup=await api('checkout.setup.prepare',input)
+      assert.equal(writes(),beforeFresh,'Fresh preparation itself grants no provider write')
+      await post(await issue(peer.customer),'start',setup.id,{status:404})
+      await post(session,'start',setup.id,{status:409,body:{consent_hash:'synthetic-nectar-unaccepted'}})
+      assert.equal(writes(),beforeFresh,'Old history and a current session never replace current explicit acceptance')
+      if(target!==erased)continue
+      const html=await readPage(session),consentHash=html.match(/name="consent_hash" value="([^"]+)"/)?.[1]
+      assert.ok(consentHash)
+      const started=await post(session,'start',setup.id,{body:{consent_hash:consentHash,make_default:false}})
+      edge.complete(setup.id)
+      await post(session,'finish',setup.id,{cookie:started.cookie})
+      assert.equal(writes(),beforeFresh+1,'Current acceptance creates exactly one setup and no default change')
+      const saved=(await currentRows(target.customer)).find(row=>row.id===setup.id)
+      assert.equal(saved.status,'complete');assert.equal(saved.historical,false);assert.equal(saved.debitAuthority,false)
+      assert.equal(saved.defaultChoice,false)
+      newlyAccepted.push({id:setup.id,session,returnCookie:started.cookie,provider:edge.sessions.get(setup.id)})
+      const event=(await api('audit')).find(row=>row.subject===setup.id&&row.action==='checkout.setup.complete')
+      assert.equal(JSON.parse(event.detail).setupIntentRef,edge.sessions.get(setup.id).setup.id)
+      await post(session,'finish',setup.id,{cookie:started.cookie,status:401})
+      assert.equal(writes(),beforeFresh+1,'Replayed current completion creates no further write')
+    }
+    const authorizedWriteCount=writes()
     const request=await api('erasure.request',{customer:erased.customer})
     await api('erasure.verify',{request:request.id,reason:'Independent synthetic setup owner verification',evidence:file('synthetic-nectar-setup-owner.txt','Synthetic independently checked owner')})
     await api('erasure.approve',{request:request.id,confirm:true})
@@ -249,7 +309,8 @@ export async function hostedSetupArchiveJourney() {
     const anonymized=await archiveItems(archive('erased'))
     assert.deepEqual(history(anonymized),captured.filter(row=>row.customer_id!==erased.customer),'Erasure removes setup evidence without consuming peers')
     const privateRow=expected.find(row=>row.customer===erased.customer)
-    excludes(JSON.stringify(anonymized),[email(903),privateRow.provider.method.id],'Anonymized archive')
+    const erasedReferences=[privateRow,...newlyAccepted].flatMap(row=>[row.provider.method.id,row.provider.setup.id])
+    excludes(JSON.stringify(anonymized),[email(903),...erasedReferences],'Anonymized archive')
     await run(['reset','--yes'])
     const refused=await run(['import','--input',archive('before'),'--journal',relative(root,archive('erased')),'--yes'],{refuse:true})
     assert.match(refused,/later_journal|erased_row|erasure_epoch/,'An older archive is refused against known erasure custody')
@@ -260,11 +321,11 @@ export async function hostedSetupArchiveJourney() {
     const restoredErased=await api(`customers/${erased.customer}`)
     assert.ok(restoredErased.erased_at);assert.deepEqual(restoredErased.billingRecord?.hostedSetups??[],[])
     await api('portal.session.issue',{customer:erased.customer,origin:h.origin,audience:'hosted'},404)
-    for(const operation of ['start','finish','reconcile'])await post(privateRow.session,operation,privateRow.id,{cookie:privateRow.returnCookie,status:401})
+    for(const row of [privateRow,...newlyAccepted])for(const operation of ['start','finish','reconcile'])await post(row.session,operation,row.id,{cookie:row.returnCookie,status:401})
     assert.deepEqual(await money(updating.customer),financial)
-    assert.equal(writes(),writeCount,'Anonymized restore revives no setup or collection authority')
+    assert.equal(writes(),authorizedWriteCount,'Anonymized restore revives no setup or collection authority')
     excludes(outputs.join('\n'),sensitive,'CLI logs')
-    await h.assertStorageExcludes(sensitive)
+    await h.assertStorageExcludes([...sensitive,...erasedReferences])
     console.log('SETUP_ARCHIVE actual export, reset and import; exact consent custody, unchanged cents, erasure refusal and anonymized restore passed')
   } finally {await browser?.close();await h?.close();await rm(scratch,{recursive:true,force:true})}
 }

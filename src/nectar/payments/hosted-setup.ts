@@ -6,10 +6,11 @@ import { providerReference, type StripeClient } from './stripe'
 type Method = 'card' | 'us_bank_account'
 interface SetupIdentity { id: string; customerRef: string; method: Method }
 export interface HostedSetupMethod {
-  methodRef: string; kind: Method; brand: string | null; last4: string
+  methodRef: string; setupIntentRef: string | null; kind: Method; brand: string | null; last4: string
   expMonth: number | null; expYear: number | null; bankName: string | null
   accountType: 'checking' | 'savings' | null
-  mandateRef: string | null; mandateText: string | null
+  mandateRef: string | null; mandateText: string | null; mandateTextVersion: null
+  mandateStatus: 'active' | null; mandateAcceptedAt: number | null; mandateAcceptanceType: 'online' | null
 }
 const mismatch = 'hosted_setup_evidence_mismatch'
 const brands = new Set(['amex','cartes_bancaires','diners','discover','eftpos_au','interac','jcb','link','mastercard','unionpay','visa','unknown'])
@@ -73,8 +74,9 @@ export async function readHostedSetup(stripe: StripeClient, input: SetupIdentity
   if (input.method === 'card') {
     insist(brands.has(details.brand) && Number.isSafeInteger(details.exp_month) && details.exp_month >= 1 && details.exp_month <= 12
       && Number.isSafeInteger(details.exp_year) && details.exp_year >= 2000 && details.exp_year <= 9999, mismatch, 409)
-    return { methodRef, kind: 'card', brand: details.brand, last4: details.last4, expMonth: details.exp_month,
-      expYear: details.exp_year, bankName: null, accountType: null, mandateRef: null, mandateText: null }
+    return { methodRef, setupIntentRef: setupRef, kind: 'card', brand: details.brand, last4: details.last4, expMonth: details.exp_month,
+      expYear: details.exp_year, bankName: null, accountType: null, mandateRef: null, mandateText: null, mandateTextVersion: null,
+      mandateStatus: null, mandateAcceptedAt: null, mandateAcceptanceType: null }
   }
   insist(typeof details.bank_name === 'string' && details.bank_name.trim().length > 0 && details.bank_name.length <= 100
     && !/[\u0000-\u001f\u007f]|\d{12}/.test(details.bank_name) && ['checking','savings'].includes(details.account_type), mismatch, 409)
@@ -84,13 +86,15 @@ export async function readHostedSetup(stripe: StripeClient, input: SetupIdentity
     && providerReference(mandate.payment_method) === methodRef && mandate.type === 'multi_use'
     && mandate.payment_method_details?.type === 'us_bank_account' && mandate.customer_acceptance?.type === 'online'
     && Number.isSafeInteger(mandate.customer_acceptance.accepted_at) && mandate.customer_acceptance.accepted_at > 0
+    && Number.isSafeInteger(mandate.customer_acceptance.accepted_at * 1000)
     && mandate.customer_acceptance.online && typeof mandate.customer_acceptance.online.ip_address === 'string'
     && typeof mandate.customer_acceptance.online.user_agent === 'string', mismatch, 409)
   insist(mandate.status === 'active', 'hosted_setup_pending', 409)
   // Stripe's Mandate object exposes acceptance evidence, not authorization copy.
   // Null means unavailable; a mandate reference must never stand in for text.
-  return { methodRef, kind: 'us_bank_account', brand: null, last4: details.last4, expMonth: null, expYear: null,
-    bankName: details.bank_name, accountType: details.account_type, mandateRef, mandateText: null }
+  return { methodRef, setupIntentRef: setupRef, kind: 'us_bank_account', brand: null, last4: details.last4, expMonth: null, expYear: null,
+    bankName: details.bank_name, accountType: details.account_type, mandateRef, mandateText: null, mandateTextVersion: null,
+    mandateStatus: mandate.status, mandateAcceptedAt: mandate.customer_acceptance.accepted_at * 1000, mandateAcceptanceType: 'online' }
 }
 
 /** Only an expired Checkout with no completable SetupIntent releases a claim. */
