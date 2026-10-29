@@ -39,7 +39,7 @@ function nativePlan(definition:unknown):MetricPlan {
 export async function metricEvents(env:Bindings,customer:string,source:string,before:number):Promise<(MetricEvent&{meterId:string;invoiceId:string|null})[]> {
   return (await all(env,"SELECT event_id,meter_id,quantity,occurred_at,properties_json,invoice_id FROM nc_usage_events WHERE customer_id=? AND meter_id=? AND status='active' AND NOT EXISTS(SELECT 1 FROM nc_usage_voids v WHERE v.event_id=nc_usage_events.event_id) AND occurred_at<? ORDER BY occurred_at,event_id",customer,source,before)).map(e=>({eventId:e.event_id,meterId:e.meter_id,quantity:e.quantity,occurredAt:e.occurred_at,properties:parseJson(e.properties_json,{}),invoiceId:e.invoice_id}))
 }
-export async function metricRequests(env:Bindings,actor:Actor) {
+export async function metricRequests(env:Bindings,actor:Actor): Promise<Row[]> {
   requireRead(actor,'catalog')
   return await Promise.all((await all(env,'SELECT * FROM nc_metric_requests ORDER BY prepared_at,id')).map(async r=>({...r,plan:parseJson(r.plan_json,{}),plan_json:undefined,previews:(await all(env,'SELECT * FROM nc_metric_previews WHERE request_id=? ORDER BY prepared_at,id',r.id)).map(p=>({...p,result:parseJson(p.result_json,[]),result_json:undefined}))})))
 }
