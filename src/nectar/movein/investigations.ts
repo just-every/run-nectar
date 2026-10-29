@@ -19,7 +19,6 @@ export async function moveInvestigationEvidence(env: Bindings): Promise<Row[]> {
   const refs = new Map((await all(env,'SELECT id,provider_ref FROM nc_prices')).map(row=>[row.id,row.provider_ref]))
   const results: Row[] = []
   for (const document of documents) {
-    if (!isDate(document.period_start)) continue
     const capturedLines = parseJson<Row[]>(document.lines_json,[])
     const lines = capturedLines.filter(line=>line.kind!=='discount')
     // Ambiguous, metered and incomplete captures remain outside this supported comparison.
@@ -29,7 +28,11 @@ export async function moveInvestigationEvidence(env: Bindings): Promise<Row[]> {
       !/^\d{1,12}(\.\d{1,4})?$/.test(String(line.price_source.unit_amount_decimal??line.price_source.unit_amount??'')) ||
       line.price_source.currency!=='usd' || line.price_source.recurring?.usage_type==='metered' || line.proration ||
       line.interval!=='month' || line.interval_count!==1)) continue
-    const period = periodContaining(document.anchor_day,document.period_start)
+    // Invoice windows can precede the service being billed. Compare the cycle
+    // containing the captured lines, retaining partial-service differences.
+    const periods = lines.map(line=>periodContaining(document.anchor_day,line.period_start))
+    const period = periods[0]
+    if (periods.some(value=>value.start!==period.start || value.end!==period.end)) continue
     const engine = await rated(env,business,document.subscription_id,period)
     if (Object.values(engine.input.prices).some(price=>!['flat','seat'].includes(price.kind)||price.pricing)) continue
     const provenance = (await all(env,"SELECT job_id,record_json FROM ik_provenance WHERE target_kind='invoice' AND target_id=? AND reversed=0",document.id))[0]

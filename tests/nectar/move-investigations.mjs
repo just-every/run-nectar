@@ -18,7 +18,9 @@ export async function moveInvestigationsFlow(h,owner,{onState=async()=>{}}={}) {
     records.prices.push(price)
     records.subscriptions.push({id:id('subscription'),object:'subscription',customer:id('customer'),status:'active',start_date:stamp('2026-07-01'),billing_cycle_anchor:stamp('2026-07-01'),items:list([{id:id('item'),price,quantity:2}])})
     const amount=index===1?7500:index===3?2419:5000
-    records.invoices.push({id:id('invoice'),object:'invoice',number:`SYNTHETIC-${index}`,customer:id('customer'),subscription:id('subscription'),status:'paid',currency:'usd',period_start:stamp('2026-08-01'),period_end:stamp('2026-09-01'),created:stamp('2026-09-01'),total:amount,tax:0,amount_paid:amount,amount_remaining:0,metadata:{private:privateMarker},lines:list([{id:id('line'),description:privateMarker,amount,quantity:index===1?3:2,price:{...price,unit_amount:2500},period:{start:stamp('2026-08-01'),end:stamp(index===3?'2026-08-16':'2026-09-01')},type:'subscription',subscription:id('subscription')}])})
+    // The partial-service case and clean control have July invoice windows,
+    // while their subscription lines supply August service.
+    records.invoices.push({id:id('invoice'),object:'invoice',number:`SYNTHETIC-${index}`,customer:id('customer'),subscription:id('subscription'),status:'paid',currency:'usd',period_start:stamp(index>=3?'2026-07-01':'2026-08-01'),period_end:stamp(index>=3?'2026-08-01':'2026-09-01'),created:stamp('2026-09-01'),total:amount,tax:0,amount_paid:amount,amount_remaining:0,metadata:{private:privateMarker},lines:list([{id:id('line'),description:privateMarker,amount,quantity:index===1?3:2,price:{...price,unit_amount:2500},period:{start:stamp('2026-08-01'),end:stamp(index===3?'2026-08-16':'2026-09-01')},type:'subscription',subscription:id('subscription')}])})
   }
   const capture=Object.fromEntries(Object.entries(records).map(([name,data])=>[name,list(data)]))
   capture.manifest={source:'stripe',files:Object.fromEntries(Object.entries(records).map(([name,data])=>[name,{count:data.length,has_more:false}]))}
@@ -49,6 +51,7 @@ export async function moveInvestigationsFlow(h,owner,{onState=async()=>{}}={}) {
   const expected=[{quantity:[3,2],amountCents:[7500,5000]},{unitAmount:['25.00','20.00'],amountCents:[5000,4000]},{to:['2026-08-16','2026-09-01'],amountCents:[2419,5000]}]
   for(const [index,row] of cases.entries()) {
     assert.equal(row.owner_id,ownerId)
+    assert.deepEqual(row.evidence.period,{start:'2026-08-01',end:'2026-09-01'})
     assert.deepEqual(Object.fromEntries(row.evidence.differences.map(item=>[item.field,[item.captured,item.engine]])),expected[index])
     assert.deepEqual(row.evidence.citation,{job:imported.job,artifactHash,sourceHash:createHash('sha256').update(canonical(records.invoices[index])).digest('hex'),row:index+1})
     assert.match(row.evidence.citation.sourceHash,/^[a-f0-9]{64}$/)
