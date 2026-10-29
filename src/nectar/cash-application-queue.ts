@@ -26,7 +26,7 @@ export async function cashApplicationQueue(env: Bindings, actor: Actor): Promise
     readRemittances(env, actor), unmatchedProcessorCash(env, actor), all(env, 'SELECT id,name FROM nc_customers WHERE erased_at IS NULL'),
   ])
   const names = new Map(customers.map(row => [row.id, row.name])), at = clockInstant(env)
-  const items: CashQueueItem[] = receipts.filter(row => row.status === 'staged' || row.available_cents > 0 || row.short.length).map(row => ({
+  const items: CashQueueItem[] = receipts.filter(row => !row.bank_payout_ref && (row.status === 'staged' || row.available_cents > 0 || row.short.length)).map(row => ({
     id: row.id, source: row.bank_transaction_ref ? 'plaid_sandbox' : 'remittance', sourceReference: row.bank_transaction_ref ?? row.source.receiptId, status: row.status,
     customer: row.customer_id, customerName: row.customer_name ?? 'Unidentified', currency: row.currency,
     receivedOn: row.received_on, amountCents: row.amount_cents,

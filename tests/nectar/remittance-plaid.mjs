@@ -59,7 +59,7 @@ export async function plaidRemittanceFlow(h,owner,edge,makeFile) {
   assert.deepEqual({payments:await api('payments'),receipts:await api('remittances')},snapshot,'The bank source, receipt and all allocations roll back with audit failure')
   await confirm(batch,proposal)
   assert.equal((await api(`invoices/${invoices[4].id}`)).balanceCents,3000)
-  await bankQueueScreens(h,owner)
+  await bankQueueScreens(h,owner,{invoice:invoices[4],owed:'$30.00'})
   const unknownId=proposal.receipts.find(row=>row.source===unknown.transaction_id).id
   assert.equal((await api('remittances')).find(row=>row.id===unknownId).payment_id,null,'An unidentified bank deposit is queued without a payment')
   const identified=await api('remittance.preview',{receipt:unknownId,customer})
@@ -101,7 +101,7 @@ export async function plaidRemittanceFlow(h,owner,edge,makeFile) {
   console.log('Posted Plaid receipt capture, automatic advice application, queued identification, money refusals and erasure passed')
 }
 
-export async function bankQueueScreens(h,owner) {
+export async function bankQueueScreens(h,owner,{invoice,owed}) {
  const browser=await chromium.launch({headless:true,executablePath:process.env.NECTAR_CHROMIUM_PATH,args:['--no-sandbox','--use-mock-keychain','--password-store=basic']})
  try {
   const context=await browser.newContext({viewport:{width:1440,height:950}})
@@ -115,6 +115,12 @@ export async function bankQueueScreens(h,owner) {
    await mkdir(process.env.NECTAR_EVIDENCE_DIR,{recursive:true})
    for(const width of [1440,390]){await page.setViewportSize({width,height:950});await queue.screenshot({path:`${process.env.NECTAR_EVIDENCE_DIR}/posted-bank-queue-${width}.png`})}
   }
+  await page.setViewportSize({width:1440,height:950})
+  await queue.locator('tr').filter({hasText:'Posted sandbox bank deposit'}).filter({hasText:'Short payment'}).getByRole('link',{name:'Review receipt'}).click()
+  const review=page.locator('#remittance-review')
+  assert.match(await review.innerText(),new RegExp(owed.replace('$','\\$').replace('.','\\.')))
+  assert.equal(await review.locator(`a[href="/app/invoices/${invoice.id}"]`).innerText(),invoice.number,'Short-payment review opens the exact unpaid invoice')
+  if(process.env.NECTAR_EVIDENCE_DIR)for(const width of [1440,390]){await page.setViewportSize({width,height:950});await review.screenshot({path:`${process.env.NECTAR_EVIDENCE_DIR}/posted-bank-short-review-${width}.png`})}
   await context.close()
  }finally{await browser.close()}
 }

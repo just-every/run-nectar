@@ -10,11 +10,15 @@ import { remittanceMatch, remittanceSources } from './remittance-matching'
 import { remittanceConfirmationStatements, stageRemittanceSources } from './remittances'
 
 type PlaidBindings = Bindings & { PLAID_CLIENT_ID?: string; PLAID_SECRET?: string; PLAID_ACCESS_TOKEN?: string }
-async function bankOperator(env: Bindings, actor: Actor) {
+export async function bankOperator(env: Bindings, actor: Actor) {
   requireOwner(actor)
   for (const family of ['customers','invoices','payments'] as const) requireRead(actor, family)
   const factor = await standing(env, actor)
   insist(factor.verifiedAt !== null && clockInstant(env) - factor.verifiedAt <= STEP_UP_MS, 'mfa_step_up_required', 403)
+}
+export function bankAuthorityGuard(env: Bindings, actor: Actor) {
+  return guard(env, 'authority', `EXISTS(SELECT 1 FROM nc_members m JOIN oa_operators o ON o.email=m.email JOIN nc_mfa_sessions s ON s.member_id=m.id
+    WHERE m.id=? AND m.status='active' AND m.role='owner' AND o.status='active' AND o.role='owner' AND s.session_id=? AND s.verified_at>=?)`, actor.id, actor.sessionId, clockInstant(env)-STEP_UP_MS)
 }
 function plaid(env: PlaidBindings) {
   insist(env.PLAID_CLIENT_ID?.trim() && env.PLAID_SECRET?.trim() && env.PLAID_ACCESS_TOKEN?.trim(), 'plaid_sandbox_credentials_required', 409)
@@ -89,8 +93,7 @@ export async function confirmPlaidRemittances(env: Bindings, actor: Actor, input
   const prepared = await capture(env, actor, input), hash = input.text('fingerprint', { max: 64 })
   if (prepared.plans.every(plan => plan.captured)) return { receipts: prepared.ids, duplicate: true }
   insist(hash === prepared.fingerprint, 'stale', 409)
-  const statements = [guard(env, 'authority', `EXISTS(SELECT 1 FROM nc_members m JOIN oa_operators o ON o.email=m.email JOIN nc_mfa_sessions s ON s.member_id=m.id
-    WHERE m.id=? AND m.status='active' AND m.role='owner' AND o.status='active' AND o.role='owner' AND s.session_id=? AND s.verified_at>=?)`, actor.id, actor.sessionId, clockInstant(env)-STEP_UP_MS), ...prepared.statements], audit = []
+  const statements = [bankAuthorityGuard(env, actor), ...prepared.statements], audit = []
   for (const { row, deposit, captured, preview } of prepared.plans) {
     if (captured) continue
     statements.push(stmt(env, `INSERT INTO nc_plaid_deposits(id,receipt_id,customer_id,account_ref,transaction_ref,source_hash,amount_cents,currency,received_on,captured_at,captured_by) VALUES(?,?,?,?,?,?,?,'USD',?,?,?)`,

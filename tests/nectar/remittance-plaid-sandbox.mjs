@@ -23,7 +23,7 @@ async function request(path,fields={}) {
   value=await response.json()
  }catch{throw new Error('Plaid sandbox transport unavailable')}
  requests.push({path,status:response.status,requestId:value?.request_id??null})
- if(!response.ok){const code=typeof value?.error_code==='string'&&/^[A-Z_]+$/.test(value.error_code)?value.error_code:'provider_failure';throw new Error(`Plaid sandbox HTTP ${response.status} ${code}`)}
+ if(!response.ok){const code=typeof value?.error_code==='string'&&/^[A-Z_]+$/.test(value.error_code)?value.error_code:'provider_failure';throw Object.assign(new Error(`Plaid sandbox HTTP ${response.status} ${code}`),{code,status:response.status})}
  return value
 }
 try {
@@ -35,9 +35,11 @@ try {
  const account=connected.accounts.find(row=>row.type==='depository'&&row.subtype==='checking'&&row.balances?.iso_currency_code==='USD')?.account_id
  assert.ok(account,'A USD depository account is required')
  let posted=[]
- for(const wait of [0,2000,5000,10000,15000]){
+ for(const wait of [0,2000,5000,10000,15000,30000]){
   if(wait)await delay(wait)
-  const observed=await request('/transactions/get',{access_token:accessToken,start_date:day,end_date:day,options:{account_ids:[account],count:500,offset:0}})
+  let observed
+  try{observed=await request('/transactions/get',{access_token:accessToken,start_date:day,end_date:day,options:{account_ids:[account],count:500,offset:0}})}
+  catch(error){if(error.code==='PRODUCT_NOT_READY')continue;throw error}
   posted=observed.transactions.filter(row=>deposits.some(([kind])=>row.name===`${tag}-${kind}`))
   if(posted.length===4)break
  }
@@ -70,7 +72,7 @@ try {
    assert.equal(confirmed.duplicate,false);assert.equal((await api('payments')).length,3)
    for(const row of invoices.slice(0,4))assert.equal((await api(`invoices/${row.id}`)).balanceCents,0)
    assert.equal((await api(`invoices/${invoices[4].id}`)).balanceCents,5500)
-   await bankQueueScreens(h,owner)
+   await bankQueueScreens(h,owner,{invoice:invoices[4],owed:'$55.00'})
    const unknown=preview.receipts.find(row=>row.source===ids.unknown).id
    const queued=(await api('cash-application-queue')).find(row=>row.id===unknown)
    assert.equal(queued.source,'plaid_sandbox');assert.equal(queued.unallocatedCents,700);assert.equal(queued.customer,null)

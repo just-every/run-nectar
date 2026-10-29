@@ -9,7 +9,7 @@ import { plainMoney } from '../decimal'
 import { cents, check, field, fileField, form, h, hidden, select, table } from './html'
 
 const reasons: Record<string,string> = { unidentified_customer: 'Customer needs identification', unmatched_reference: 'Invoice reference needs review',
-  ambiguous_customer: 'Several customers share this identifier', awaiting_confirmation: 'Ready for confirmation',
+  payout_matched: 'Payout reconciled', ambiguous_customer: 'Several customers share this identifier', awaiting_confirmation: 'Ready for confirmation',
   balance_requires_review: 'Advice exceeds a current invoice balance', short_payment: 'Short payment: invoice balance remains', unallocated_funds: 'Received funds await allocation',
   ambiguous_amount: 'Several invoices have this amount', unmatched_amount: 'No exact invoice amount', source_requires_review: 'Source needs review', allocated: 'Allocated' }
 export async function cashApplicationPanel(env: Bindings, actor: Actor) {
@@ -27,7 +27,11 @@ export async function remittancesPanel(env: Bindings, actor: Actor, url: URL) {
   const back = '/app/receivables#remittances', selected = url.searchParams.get('remittance')
   const row = rows.find(row => row.id === selected), people = operator ? await customers(env, actor) : []
   let review = h``
-  if (operator && row) {
+  if (row?.status === 'confirmed' && row.available_cents === 0 && row.short?.length) {
+    review = h`<article class="notice" id="remittance-review"><h3>Short payment review</h3><p>All received funds have been allocated. These invoices still have an unpaid balance.</p>
+      ${table(['Invoice','Still owed'],row.short.map((invoice: any)=>[h`<a href="/app/invoices/${invoice.id}">${invoice.number}</a>`,cents(invoice.balance_cents)]))}</article>`
+  }
+  if (operator && row && !row.bank_payout_ref) {
     if (row.status === 'staged') {
       const customer = url.searchParams.get('remittance_customer') ?? ''
       const preview = await previewRemittance(env, actor, Input.of({ receipt: row.id, customer }))
@@ -53,6 +57,6 @@ export async function remittancesPanel(env: Bindings, actor: Actor, url: URL) {
     ${operator ? h`<details><summary>Upload a remittance file</summary><p>CSV columns: receipt_id, received_on, currency, amount, customer, invoice_reference, allocation_amount. Use a stable receipt ID, USD, an exact dollar amount and a YYYY-MM-DD date. Repeat the receipt total for each invoice row. Customer is its exact customer ID; invoice reference is the full invoice number. Leave the last two cells empty for an unidentified deposit.</p>
       ${form('remittance.upload',back,fileField('Remittance CSV','file',{required:true,accept:'.csv'}),'Upload for review',{multipart:true})}</details>` : ''}
     ${review}
-    ${table(['Source receipt','Received','Customer','Amount','State','Review'],rows.map(row=>[row.source.receiptId,row.received_on,row.customer_name??'Unidentified',cents(row.amount_cents),row.status==='staged'?reasons[row.preview?.reason??row.reason]??'Ready for confirmation':reasons[row.reason],
-      operator&&(row.status==='staged'||row.available_cents>0)?h`<a href="/app/receivables?remittance=${row.id}#remittance-review">Review receipt</a>`:h`${(row.short??[]).map((i:any)=>h`<p>${i.number}: ${cents(i.balance_cents)} still owed</p>`)}`]),{empty:'No remittance receipts uploaded.'})}</section>`
+    ${table(['Source receipt','Received','Customer','Amount','State','Review'],rows.map(row=>[row.source.receiptId,row.received_on,row.customer_name??'Unidentified',cents(row.amount_cents),row.bank_payout_ref?'Payout reconciled':row.status==='staged'?reasons[row.preview?.reason??row.reason]??'Ready for confirmation':reasons[row.reason],
+      row.bank_payout_ref?h`<a href="/app/processor-events">Review payout</a>`:operator&&(row.status==='staged'||row.available_cents>0)?h`<a href="/app/receivables?remittance=${row.id}#remittance-review">Review receipt</a>`:h`${(row.short??[]).map((i:any)=>h`<p>${i.number}: ${cents(i.balance_cents)} still owed</p>`)}`]),{empty:'No remittance receipts uploaded.'})}</section>`
 }
