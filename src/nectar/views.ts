@@ -53,7 +53,7 @@ import { API_DOORS, match } from './doors'
 import { entitlements, explainEntitlement } from './exports'
 import { importJobs, shadowSubscriptions } from './movein/stripe'
 import { policyChanges, policySettings } from './policy-changes'
-import { proposalDetail, proposals } from './proposals'
+import { collectionPlan, proposalDetail, proposals } from './proposals'
 import { customerLedger, payments } from './receivables'
 import { lifecycleHistory, lifecycleIntervals } from './lifecycle-records'
 import { subscriptionDetail } from './subscriptions'
@@ -142,6 +142,7 @@ export const views: Record<string, View> = {
   me: async (_env, actor) => ({ id: actor.id, kind: actor.kind, name: actor.name, email: actor.email, role: actor.role, ...(actor.roleName ? { role_name: actor.roleName } : {}), capabilities: [...actor.capabilities] }),
   business: (env, actor) => businessView(env, actor),
   customers: (env, actor,_r,_id,url) => customers(env, actor,url),
+  collectionDiagnosis: async (env, actor, _r, id) => { requireCapability(actor, 'read'); const plan = await collectionPlan(env, { customer: id }); return { customer: id, ...plan.impact, recipient: plan.normalized.recipient } },
   customer: (env, actor, _request, id, url) => customerView(env, actor, id, url),
   catalog: (env, actor,_r,_id,url) => catalog(env, actor,url),
   upcoming: (env, actor, _r, id, url) => upcoming(env,actor,id,url.searchParams.get('period')),
