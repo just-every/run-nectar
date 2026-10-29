@@ -36,7 +36,9 @@ export async function settleAutomaticIntent(env:Bindings,row:Row,stripe:StripeCl
   insist(history.object==='list'&&history.has_more===false&&Array.isArray(history.data)&&history.data.length>0&&history.data.every((charge:Row)=>
    charge.object==='charge'&&providerReference(charge.payment_intent)===intentRef&&providerReference(charge.customer)===identity.customerRef&&charge.status==='failed'&&charge.paid===false),'automatic_collection_return_unconfirmed',409)
   const latest=history.data.find((charge:Row)=>charge.id===providerReference(intent.latest_charge))
-  insist(latest,'automatic_collection_return_unconfirmed',409)
+  insist(latest&&latest.amount===identity.amountCents&&latest.currency===identity.currency
+   &&providerReference(latest.payment_method)===identity.paymentMethodRef&&latest.livemode===identity.livemode,
+   'automatic_collection_return_unconfirmed',409)
   const code=bankNetworkReturnCode(latest,intent)??bankReturnCode(intent.last_payment_error.code)
   insist(typeof code==='string'&&/^[A-Za-z0-9_]{1,100}$/.test(code),'automatic_collection_return_unconfirmed',409)
   const facts=processorReturnStatements(env,row.account_ref,latest,intent,row.customer_id,row.invoice_id,clockInstant(env))
