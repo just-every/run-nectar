@@ -95,4 +95,5 @@ export const isolatedJourneys = [
   { file: 'job-runs', name: 'jobRunsFlow', load: () => import('./job-runs.mjs') },
   { file: 'job-retry-restart', name: 'retryJobRestartFlow', load: () => import('./job-retry-restart.mjs') },
   { file: 'job-report-restart', name: 'reportJobRestartFlow', load: () => import('./job-report-restart.mjs') },
+  { file: 'job-webhook-restart', name: 'webhookJobRestartFlow', load: () => import('./job-webhook-restart.mjs') },
 ]
