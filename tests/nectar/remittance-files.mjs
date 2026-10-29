@@ -120,9 +120,9 @@ export async function remittanceFilesFlow(h, owner) {
   const outsider=['synthetic-nectar-918','example.test'].join('@')
   await api('access.give',{email:outsider,name:'Read only member',role:'accountant'})
   const readOnly=await h.signIn(outsider,{requested:true})
-  for(const action of ['remittance.upload','remittance.preview','remittance.confirm','remittance.allocate.preview','remittance.allocate'])await h.api(action,readOnly,{},403)
+  for(const action of ['bank.deposit.upload','remittance.upload','remittance.preview','remittance.confirm','remittance.allocate.preview','remittance.allocate'])await h.api(action,readOnly,{},403)
   const key=await api('credential.issue',{name:'Synthetic capture reader',scopes:['prepare']})
-  for(const action of ['remittance.upload','remittance.preview','remittance.confirm','remittance.allocate.preview','remittance.allocate'])await h.api(action,{bearer:key.key},{},403)
+  for(const action of ['bank.deposit.upload','remittance.upload','remittance.preview','remittance.confirm','remittance.allocate.preview','remittance.allocate'])await h.api(action,{bearer:key.key},{},403)
   await api('credential.revoke',{key:key.id});await h.api('remittance.confirm',{bearer:key.key},{receipt:wire,fingerprint:match.fingerprint,confirm:true},401)
   const customerView=await api(`customers/${customer}`), ledger=customerView.ledger
   assert.equal(ledger.invoicedCents,73006);assert.equal(ledger.paidCents,68106);assert.equal(ledger.balanceCents,4900)
@@ -154,6 +154,7 @@ export async function remittanceFilesFlow(h, owner) {
   await confirm(wire,match,409)
   await api('remittance.allocate.preview',{receipt:wire,invoice:invoices[4].id,amount:'1.00'},409)
   await h.assertStorageExcludes(['synthetic-nectar-901','synthetic-nectar-910','synthetic-nectar-911','synthetic-nectar-913'])
+  await crossSourcePayments(h,owner,{issue})
   console.log('Remittance public-door money, refusal, reconciliation, erasure and browser journey passed')
 }
 
@@ -208,4 +209,106 @@ async function remittanceScreens(h,owner,{customer,invoice,rows}) {
     assert.ok((await icons.allTextContents()).every(text=>text.trim()),'All new controls have visible text')
     await context.close()
   } finally {await browser.close()}
+}
+
+// One money journey covers both capture orders and the unsafe duplicate path.
+async function crossSourcePayments(h,owner,{issue}) {
+  const api=(path,body,status)=>h.api(path,owner,body,status)
+  const customer=(await api('customer.create',{external_id:'synthetic-nectar-930',name:'Synthetic source reconciliation',billing_email:['synthetic-nectar-930','example.test'].join('@')})).id
+  const invoice=await issue('10.00',customer), reverseInvoice=await issue('10.00',customer)
+  const rows=(id,number,amount='10.00')=>[[id,'2026-10-15','USD',amount,'synthetic-nectar-930',number,amount]]
+  const original=remittanceFile(rows('synthetic-nectar-931',invoice.number)), bankId='synthetic-nectar-932'
+  const snapshot=async()=>({payments:(await api('payments')).filter(p=>p.customer_id===customer),invoice:await api(`invoices/${invoice.id}`),reverse:await api(`invoices/${reverseInvoice.id}`)})
+  const confirm=async(source,status)=>{
+    const preview=await api('remittance.preview',{receipt:source.id,source:source.source})
+    return api('remittance.confirm',{receipt:source.id,source:source.source,customer:preview.customer,fingerprint:preview.fingerprint,confirm:true},status)
+  }
+  // Native forms perform deposit then identical ordinary CSV, including both confirmations.
+  const browser=await chromium.launch({headless:true,executablePath:process.env.NECTAR_CHROMIUM_PATH,args:['--no-sandbox','--use-mock-keychain','--password-store=basic']})
+  let payment
+  try {
+    const context=await browser.newContext({viewport:{width:1440,height:1000}})
+    await context.addCookies(owner.split('; ').map(value=>{const i=value.indexOf('=');return {name:value.slice(0,i),value:value.slice(i+1),url:h.origin}}))
+    const page=await context.newPage(), directory=process.env.NECTAR_EVIDENCE_DIR
+    if(directory)await mkdir(directory,{recursive:true})
+    const capture=async name=>{
+      assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`${name} fits at 1440`)
+      if(directory)for(const width of [1440,390]){await page.setViewportSize({width,height:1000});await page.screenshot({path:`${directory}/${name}-${width}.png`,fullPage:true})}
+      await page.setViewportSize({width:1440,height:1000})
+    }
+    const submit=async action=>{
+      const form=page.locator(`form[action="/app/do/${action}"]`)
+      await Promise.all([page.waitForNavigation({waitUntil:'load'}),form.locator('button[type=submit]').click()])
+      assert.equal(new URL(page.url()).searchParams.get('error'),null,`Native ${action} succeeds`)
+    }
+    const setCsv=label=>page.getByLabel(label,{exact:true}).setInputFiles({name:original.filename,mimeType:['text','csv'].join('/'),buffer:Buffer.from(original.base64,'base64')})
+    const review=async()=>page.locator('#remittances tbody tr').filter({hasText:'synthetic-nectar-931'}).getByRole('link',{name:'Review source',exact:true}).click()
+    await page.goto(h.origin+'/app/receivables')
+    await page.getByText('Record a bank deposit',{exact:true}).click()
+    await page.getByLabel('Bank source ID',{exact:true}).fill(bankId);await setCsv('Bank deposit CSV')
+    const before=await snapshot();await submit('bank.deposit.upload');assert.deepEqual(await snapshot(),before,'Staging a deposit creates no money')
+    await review();await capture('bank-deposit-review')
+    await page.getByLabel('I confirm these received funds and the listed allocations').check();await submit('remittance.confirm')
+    const afterBank=await snapshot()
+    assert.equal(afterBank.payments.length,1);payment=afterBank.payments[0].id
+    assert.equal(afterBank.payments[0].amount_cents,1000);assert.equal(afterBank.invoice.balanceCents,0)
+    await page.getByText('Upload a remittance file',{exact:true}).click();await setCsv('Remittance CSV');await submit('remittance.upload')
+    assert.deepEqual(await snapshot(),afterBank,'Uploading the identical ordinary CSV changes no payment or invoice')
+    await review()
+    assert.match(await page.locator('#remittance-review').innerText(),/existing payment without changing its amount or allocations/)
+    await capture('ordinary-source-reconciliation')
+    await page.getByLabel('I confirm these received funds and the listed allocations').check();await submit('remittance.confirm')
+    assert.deepEqual(await snapshot(),afterBank,'Confirming the duplicate source cannot count the ten dollars twice')
+    await page.goto(`${h.origin}/app/payments/${payment}/receipt`)
+    const sources=page.locator('section').filter({has:page.getByRole('heading',{name:'Recorded sources',exact:true})})
+    assert.match(await sources.innerText(),/Bank deposit/);assert.match(await sources.innerText(),/Ordinary remittance/)
+    assert.match(await sources.innerText(),/synthetic-nectar-931/);assert.match(await sources.innerText(),/synthetic-nectar-932/)
+    await capture('reconciled-payment-sources')
+    await context.close()
+  } finally {await browser.close()}
+  const receipt=await api(`payments/${payment}/receipt`)
+  assert.equal(receipt.amountCents,1000);assert.equal(receipt.allocatedCents,1000);assert.equal(receipt.allocations.length,1)
+  assert.deepEqual(receipt.recordedSources.map(s=>[s.kind,s.reference]),[['bank_deposit',bankId],['ordinary_remittance','synthetic-nectar-931']])
+  const both=await api('remittances'), first=both.find(r=>r.payment_id===payment)
+  assert.equal(first.origins.length,2);assert.ok(first.origins.every(s=>s.confirmed_at!==null))
+  const audit=(await api('audit')).filter(a=>a.subject===payment)
+  const reconciled=audit.find(a=>a.action==='remittance.reconcile')
+  assert.ok(reconciled,'Reconciliation is audited against the original payment')
+  assert.match(JSON.stringify(reconciled),/bank_deposit/);assert.match(JSON.stringify(reconciled),/ordinary_remittance/)
+  assert.match(JSON.stringify(reconciled),/synthetic-nectar-931/);assert.match(JSON.stringify(reconciled),/synthetic-nectar-932/)
+  const same=await api('remittance.upload',{file:original})
+  assert.equal(same.id,first.id);assert.equal((await confirm(same)).payment,payment)
+  const bankReplay=await api('bank.deposit.upload',{bank_source_id:bankId,file:original})
+  assert.equal(bankReplay.id,first.id);assert.equal((await confirm(bankReplay)).payment,payment)
+  const beforeUnsafe=await snapshot()
+  await api('bank.deposit.upload',{bank_source_id:bankId,file:remittanceFile(rows('synthetic-nectar-933',invoice.number))},409)
+  await api('remittance.upload',{file:remittanceFile(rows('synthetic-nectar-931',invoice.number,'11.00'))},409)
+  assert.deepEqual(await snapshot(),beforeUnsafe,'Changed identities or amounts cannot acquire another payment')
+  // Reverse order and an audit failure on the second source: no extra payment or allocation.
+  const reverseCsv=remittanceFile(rows('synthetic-nectar-934',reverseInvoice.number))
+  const ordinary=await api('remittance.upload',{file:reverseCsv}), originalPayment=(await confirm(ordinary)).payment
+  const reverseBank=await api('bank.deposit.upload',{bank_source_id:'synthetic-nectar-935',file:reverseCsv})
+  assert.equal(reverseBank.id,ordinary.id)
+  const unchanged=await snapshot(), pending=await api('remittance.preview',{receipt:reverseBank.id,source:reverseBank.source})
+  const body={receipt:reverseBank.id,source:reverseBank.source,fingerprint:pending.fingerprint,confirm:true}
+  await h.rejectAudit('remittance.reconcile')
+  assert.equal((await h.raw('/api/nectar/remittance.confirm',{cookie:owner,body})).status,500)
+  await h.rejectAudit(null)
+  assert.equal((await api(`payments/${originalPayment}/receipt`)).recordedSources.length,1,'Audit failure rolls back the second source confirmation')
+  assert.deepEqual(await snapshot(),unchanged)
+  const attempts=await Promise.all([1,2].map(()=>h.raw('/api/nectar/remittance.confirm',{cookie:owner,body})))
+  assert.ok(attempts.every(r=>[200,409].includes(r.status)));assert.ok(attempts.some(r=>r.status===200));for(const r of attempts)await r.text()
+  assert.equal((await confirm(reverseBank)).payment,originalPayment)
+  assert.deepEqual(await snapshot(),unchanged)
+  const reversed=await api(`payments/${originalPayment}/receipt`)
+  assert.equal(reversed.amountCents,1000);assert.equal(reversed.allocatedCents,1000);assert.equal(reversed.allocations.length,1);assert.equal(reversed.recordedSources.length,2)
+  assert.equal((await snapshot()).payments.reduce((sum,p)=>sum+p.amount_cents,0),2000,'Two different ten-dollar receipts remain two payments in total')
+  const erasure=await api('erasure.request',{customer})
+  await api('erasure.verify',{request:erasure.id,reason:'Synthetic identity verified',evidence:file('synthetic-nectar-936.txt','Synthetic signed verification')})
+  await api('erasure.approve',{request:erasure.id,confirm:true})
+  assert.deepEqual((await api(`payments/${payment}/receipt`)).recordedSources,[])
+  await api('remittance.upload',{file:original},409);await api('bank.deposit.upload',{bank_source_id:bankId,file:original},409)
+  assert.equal((await api('remittances')).some(r=>r.id===first.id),false)
+  await h.assertStorageExcludes(['synthetic-nectar-930','synthetic-nectar-931','synthetic-nectar-932','synthetic-nectar-934','synthetic-nectar-935'])
+  console.log('AR-006 cross-source public forms and API journey passed: both orders retain one original payment, sources, audits and safe replay')
 }

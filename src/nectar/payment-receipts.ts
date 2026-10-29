@@ -34,7 +34,11 @@ export async function readPaymentReceipts(env: Bindings, actor: Actor, customer:
     }
     return grouped
   }
-  const allocationsByPayment = group(allAllocations), provenanceByPayment = group(allProvenance)
+  const allSources = await all(env, `SELECT r.payment_id,o.kind,o.source_reference,o.confirmed_at,o.confirmed_by
+    FROM nc_remittance_origins o JOIN nc_remittances r ON r.id=o.receipt_id
+    WHERE r.customer_id=? AND (? IS NULL OR r.payment_id=?) AND r.status='confirmed' AND o.confirmed_at IS NOT NULL
+    ORDER BY o.kind,o.source_reference`, customer, payment, payment)
+  const allocationsByPayment = group(allAllocations), provenanceByPayment = group(allProvenance), sourcesByPayment = group(allSources)
   return rows.map(row => {
     const erased = !!row.erased_at || !!row.erased
     const allocations = (allocationsByPayment.get(row.id) ?? [])
@@ -46,7 +50,7 @@ export async function readPaymentReceipts(env: Bindings, actor: Actor, customer:
     return { id: row.id, number: row.number, sequence: row.sequence, payment: row.id, customer: row.customer_id,
       amountCents: row.amount_cents, currency: row.currency, receivedOn: row.received_on, method: row.method,
       recordedAt: row.recorded_at, allocatedCents, returnedCents: row.amount_cents - allocatedCents - row.unallocated_cents, unallocatedCents: row.unallocated_cents,
-      allocations: allocationFacts, erased, custody: 'recorded_cash' as const,
+      allocations: allocationFacts, recordedSources: erased ? [] : (sourcesByPayment.get(row.id) ?? []).map(s => ({ kind: s.kind, reference: s.source_reference, confirmedAt: s.confirmed_at, confirmedBy: s.confirmed_by })), erased, custody: 'recorded_cash' as const,
       provenance: provenance.map(p => ({ id: p.id, kind: p.kind, invoice: p.invoice_id,
         sourcePath: p.invoice_id ? `/app/invoices/${encodeURIComponent(p.invoice_id)}` : `/app/payments/${encodeURIComponent(row.id)}/receipt` })), sourcePath: paymentReceiptPath(row.id) }
   })

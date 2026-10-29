@@ -114,6 +114,10 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "reason": "text",
     "reference": "text"
   },
+  "bank.deposit.upload": {
+    "bank_source_id": "text",
+    "file": "file"
+  },
   "billrun.prepare": {
     "period": "text"
   },
@@ -1018,11 +1022,13 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "confirm": "flag",
     "customer": "text",
     "fingerprint": "text",
-    "receipt": "text"
+    "receipt": "text",
+    "source": "text"
   },
   "remittance.preview": {
     "customer": "text",
-    "receipt": "text"
+    "receipt": "text",
+    "source": "text"
   },
   "remittance.upload": {
     "file": "file"
