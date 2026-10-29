@@ -167,6 +167,17 @@ export async function enterpriseLinkingFlow(h, owner, { onState, approve } = {})
   await scim('/' + peerRequest.id, { method: 'PATCH', body: { Operations: [{ op: 'replace', path: 'active', value: true }] }, status: 409 })
   assert.equal((await h.api('me', peer.cookie)).id, peer.id, 'A reservation never transfers control of a native account to SCIM')
 
+  // A new native sign-in must not revive consent based on a revoked session.
+  await finish(await sign({ who: peer, changes: { subject: 'synthetic-nectar-session-ended' } }))
+  const sessionRequest = await pending(peer)
+  const nativeSession = await (await h.raw('/auth/session', { cookie: peer.cookie })).json()
+  assert.equal((await h.raw('/auth/session/revoke', { cookie: owner, body: { sessionId: nativeSession.id } })).status, 204)
+  await h.api('me', peer.cookie, undefined, 401)
+  await h.api('sso.link.approve', owner, fields(sessionRequest), 409)
+  peer.cookie = await h.signIn(peer.email)
+  await h.api('sso.link.approve', owner, fields(sessionRequest), 409)
+  assert.equal((await scim('?' + new URLSearchParams({ filter: `externalId eq "${sessionRequest.subject}"` }))).Resources[0].active, false, 'Revoked native proof creates no managed authority')
+
   const configPending = await sign({ who: peer, changes: { subject: 'synthetic-nectar-rotated' } })
   await finish(configPending)
   const configRequest = await pending(peer), configFlight = await sign({ who: peer, changes: { subject: 'synthetic-nectar-rotating-flight' } })
