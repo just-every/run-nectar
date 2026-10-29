@@ -43,8 +43,20 @@ export function validTimeZone(zone: string): boolean {
   try { new Intl.DateTimeFormat('en-US', { timeZone: zone }); return /^[A-Za-z_]+(\/[A-Za-z0-9_+-]+)*$/.test(zone) } catch { return false }
 }
 
+// Reuse only immutable formatters. No timestamp, customer or calendar result
+// enters this bounded cache; a changed business zone selects its own formatter.
+const partFormatters = new Map<string, Intl.DateTimeFormat>()
+function partFormatter(zone: string) {
+  let formatter = partFormatters.get(zone)
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat('en-US', { timeZone: zone, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    if (partFormatters.size >= 32) partFormatters.delete(partFormatters.keys().next().value!)
+    partFormatters.set(zone, formatter)
+  }
+  return formatter
+}
 const parts = (ms: number, zone: string) => {
-  const values = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: zone, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })
+  const values = Object.fromEntries(partFormatter(zone)
     .formatToParts(new Date(ms)).filter(part => part.type !== 'literal').map(part => [part.type, Number(part.value)]))
   return values as Record<'year' | 'month' | 'day' | 'hour' | 'minute' | 'second', number>
 }

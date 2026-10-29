@@ -32,7 +32,7 @@ export function harnessOptions() {
         await active.bothSearching.promise
         if (search === 2) await active.allowSecond.promise
       }
-      if (gate?.mode === 'reconcile' && path === '/v1/charges') {
+      if (['reconcile','capture-proof'].includes(gate?.mode) && path === '/v1/charges') {
         const active = gate
         active.entered.resolve()
         await active.release.promise
@@ -399,6 +399,33 @@ async function invoiceJobResumption(h, owner, { finance, factor, financeFactor, 
   assert.equal(edge.calls.filter(call=>call.method==='POST'&&call.path==='/payment_intents').length,priorPosts+1)
   const captureAudit=await api('audit')
   for(const action of ['automatic.collection.claim','automatic.collection.collected'])assert.equal(captureAudit.filter(event=>event.action===action&&event.subject===request.id).length,1)
+  // Interrupt after the initial provider acknowledgement, while its captured
+  // charge proof is still being read. Only the original durable claim survives.
+  const beforeProofPayments=(await api('payments')).length,beforeProofPosts=edge.calls.filter(call=>call.method==='POST'&&call.path==='/payment_intents').length
+  const proofCharge=await api('charge.add',{customer:customers[0],amount:'100',description:'Synthetic acknowledged capture interruption',effective_date:'2026-11-01',taxable:false})
+  const proofDraft=await api('invoice.manual',{customer:customers[0],charges:[proofCharge.charge],service_date:'2026-11-01'})
+  const proofRequest=await api('automatic.collection.prepare',{invoice:proofDraft.id,issue_date:'2026-11-01'})
+  const proofConsent=await api('portal.session.issue',{customer:customers[0],origin:h.origin,audience:'hosted'})
+  assert.equal((await h.raw(`/portal/automatic-collections/${proofRequest.id}?session=${encodeURIComponent(proofConsent.token)}`,{body:{request:proofRequest.id,basis_hash:proofRequest.basis,accept:true}})).status,200)
+  await h.api('automatic.collection.decide',finance,{request:proofRequest.id,basis_hash:proofRequest.basis,decision:'approved',confirm:true})
+  await api('invoice.approve',{invoice:proofDraft.id,acknowledge:true})
+  const proofPause=gate={mode:'capture-proof',entered:deferred(),release:deferred()}
+  const proving=api('invoice.finalise',{invoice:proofDraft.id,issue_date:'2026-11-01'}).catch(()=>null)
+  try{
+    await wait(proofPause.entered.promise)
+    assert.equal(edge.calls.filter(call=>call.method==='POST'&&call.path==='/payment_intents').length,beforeProofPosts+1)
+    assert.deepEqual((await api(`invoices/${proofDraft.id}`)).allocations,[])
+    instant+=31*60_000
+    await h.restart(new Date(instant).toISOString())
+  }finally{gate=null;proofPause.release.resolve();await proving}
+  edge.capturedAt(new Date(instant).toISOString());await refresh()
+  for(const response of await Promise.all([tick(),tick()]))assert.equal(response.status,200)
+  const proofPaid=await api(`invoices/${proofDraft.id}`),proofCollection=(await api('automatic-collections')).find(row=>row.id===proofRequest.id)
+  assert.deepEqual([proofPaid.paidCents,proofPaid.balanceCents,proofPaid.allocations.length],[10000,0,1])
+  assert.equal((await api('payments')).length,beforeProofPayments+1)
+  assert.equal(proofCollection.status,'collected')
+  assert.equal(proofCollection.paymentIntentRef,[...edge.intents.values()].find(row=>row.value.metadata.nectar_native_invoice===proofDraft.id).value.id)
+  assert.equal(edge.calls.filter(call=>call.method==='POST'&&call.path==='/payment_intents').length,beforeProofPosts+1)
   // A failed future run cannot borrow approval from a changed policy or day.
   instant=Date.parse('2026-12-01T10:00:00Z');await h.advanceClock(new Date(instant).toISOString());await refresh()
   await h.rejectAudit('invoice.approve')
