@@ -49,8 +49,8 @@ export async function erasurePlan(env: Bindings, customer: Row): Promise<Erasure
   const mutations: ErasureMutation[] = [], changes = new Map<string,{kind:string;fields:Set<string>;records:number}>()
   for (const image of images) {
     const { table,row,key,required,foreignKeys } = image
-    if (table === 'nc_sandbox_catalogs' || table === 'nc_sandbox_previews' || table === 'nc_sandbox_customers') {
-      const column = table === 'nc_sandbox_catalogs' ? 'catalog_json' : table === 'nc_sandbox_previews' ? 'preview_json' : 'label'
+    if (table === 'nc_sandbox_catalogs' || table === 'nc_sandbox_previews' || table === 'nc_sandbox_customers' || table === 'nc_sandbox_invoices') {
+      const column = table === 'nc_sandbox_catalogs' ? 'catalog_json' : table === 'nc_sandbox_previews' ? 'preview_json' : table === 'nc_sandbox_invoices' ? 'invoice_json' : 'label'
       const redacted = column === 'label' ? String(sandboxRedaction(row.label, personal, 'label')) : JSON.stringify(sandboxRedaction(json(row[column]), personal))
       if (redacted !== row[column]) {
         mutations.push({ table, row, key, updates: { [column]: redacted } })
