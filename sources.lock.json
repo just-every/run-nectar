@@ -3426,7 +3426,7 @@
       "executable": false
     },
     "src/nectar/erasure-records.ts": {
-      "sha256": "a6776952538df8db1549d461e3fb1413a9a803a770e11cde3973fb280485523f",
+      "sha256": "772e7b8f984f11fd37a776231eb87568015d2fd8a61935719d4ddb27863f89cd",
       "executable": false
     },
     "src/nectar/erasure-requests.ts": {
@@ -3730,11 +3730,11 @@
       "executable": false
     },
     "src/nectar/movein/stripe.ts": {
-      "sha256": "b31ab7550e92645a88a7779aeb941d803e4ab9e00f80f4420e6cd66db268720c",
+      "sha256": "06dbd133f22dc8c6b6a73861c85c9321c4de97b0efe5279d05063e2c21269fc8",
       "executable": false
     },
     "src/nectar/movein/target.ts": {
-      "sha256": "237f2d0f40db41ae2e7f2c06bfa10692a2cf0329a756f0f2f326d3dd45aac1e0",
+      "sha256": "e24d1a8ae392103d27a7d8079c62e63f73a955b8cd615a0f4cbd8ab61da9cef4",
       "executable": false
     },
     "src/nectar/note-records.ts": {
@@ -4166,7 +4166,7 @@
       "executable": false
     },
     "src/nectar/promotions.ts": {
-      "sha256": "37ce309209bfb10ce0f495a68f198ccafb54530f09d8eeefcb4a4e5bc624008f",
+      "sha256": "61949143053804ccf1a111503bde70dab728664148f6dd567f34f195cd632d50",
       "executable": false
     },
     "src/nectar/proposals.ts": {

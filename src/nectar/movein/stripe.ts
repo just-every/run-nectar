@@ -1,3 +1,4 @@
+import { importedAmountDiscounts } from './imported-discounts'
 import { importOriginalFiles } from '../import-originals'
 // Move-in kit 1: Stripe Billing records. Reads owner-captured Stripe API list
 // responses (customers, products, prices, subscriptions, invoices and,
@@ -251,14 +252,15 @@ async function build(env: Bindings, actor: Actor, input: Input) {
         const end = o.status === 'canceled' ? dateOf(o.ended_at ?? o.canceled_at) : o.cancel_at ? dateOf(o.cancel_at) : null
         const trialEnd = o.trial_end && dateOf(o.trial_end)! > start ? dateOf(o.trial_end) : null
         const amendments = []
-        const discounts = [o.discount, ...(Array.isArray(o.discounts) ? o.discounts : [])].filter(d => d && typeof d === 'object')
+        const { discounts, amounts } = importedAmountDiscounts(o, { zone, anchorDay, prices: lists.prices, supportedPrice: priceOk,
+          priceId: targetIds.price, identity: id => hex(`nectar:stripe:amount-discount:${id}`) })
         for (const discount of discounts) {
           const coupon = discount.coupon ?? discount.source?.coupon
           if (coupon?.percent_off && (coupon.duration === 'forever' || coupon.duration === 'repeating' || coupon.duration === 'once')) {
             const from = dateOf(discount.start) ?? start
             const to = discount.end ? dateOf(discount.end) : coupon.duration === 'once' ? periodContaining(anchorDay, from).end : null
             amendments.push({ id: targetIds.amendment(discount.id ?? `${o.id}:${coupon.id}`), kind: 'discount_percent', value: decimalText(micros(String(coupon.percent_off))), from, to, note: `Stripe coupon ${coupon.name ?? coupon.id}`, status: 'approved' })
-          } else if (coupon) note(source, `coupon ${coupon.id} (${coupon.amount_off ? 'fixed amount' : 'unsupported'}) is not moved; record it as a contract exception in Nectar`)
+          } else if (coupon?.amount_off == null && coupon) note(source, `coupon ${coupon.id} (${coupon.amount_off ? 'fixed amount' : 'unsupported'}) is not moved; record it as a contract exception in Nectar`)
         }
         if (o.schedule) note(source, `Stripe subscription schedule ${idOf(o.schedule)} is recorded, not executed; schedule its future phases as changes in Nectar`)
         if (o.default_tax_rates?.length) note(source, 'Stripe tax rates are not moved; Nectar applies its declared tax policy')
@@ -266,7 +268,7 @@ async function build(env: Bindings, actor: Actor, input: Input) {
         if (conflict('subscription', id, source)) return reject(source, 'already imported earlier with different values')
         if (!existing.has(`subscription:${id}`)) create.subscription++
         mappedSubscriptions.add(o.id)
-        return { effects: [effect('subscription', id, { customerId, externalId: o.id, anchorDay, startDate: start, trialEnd, endDate: end && end > start ? end : null, providerRef: o.id, scheduleRef: o.schedule ? idOf(o.schedule) : null, collection: String(o.collection_method ?? ''), items: mapped.sort((a, b) => a.id.localeCompare(b.id)), amendments: amendments.sort((a, b) => a.id.localeCompare(b.id)) })] }
+        return { effects: [effect('subscription', id, { customerId, externalId: o.id, anchorDay, startDate: start, trialEnd, endDate: end && end > start ? end : null, providerRef: o.id, scheduleRef: o.schedule ? idOf(o.schedule) : null, collection: String(o.collection_method ?? ''), ...(amounts.length ? { amountCoupons: amounts } : {}), items: mapped.sort((a, b) => a.id.localeCompare(b.id)), amendments: amendments.sort((a, b) => a.id.localeCompare(b.id)) })] }
       }
       // Credit notes retain exact source numbers and amounts as read-only custody.
       // They never create a Nectar credit or change native/imported balances.
