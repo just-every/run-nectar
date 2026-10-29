@@ -478,5 +478,21 @@
   "partial.status.collected": "Payment received and allocated to this invoice. The remaining balance is still owed.",
   "partial.status.expired": "The processor confirmed expiration without payment. No payment was recorded.",
   "partial.status.revoked": "This payment permission was withdrawn before checkout.",
-  "partial.status.withdrawn": "This payment permission is unavailable."
+  "partial.status.withdrawn": "This payment permission is unavailable.",
+  "schedule.title": "Dated ACH payment",
+  "schedule.date": "Agreed submission date",
+  "schedule.method": "Bank account",
+  "schedule.boundary": "This is one exact dated instruction using an existing bank mandate. An owner must confirm submission on the agreed date. No background job submits it, no missed date is caught up, and no other payment or retry is authorized.",
+  "schedule.accept": "I authorize one ACH payment for the exact invoice, customer, processor account, bank account, amount, current balance and submission date shown. This instruction requires separate owner submission on that date.",
+  "schedule.submit": "Accept dated ACH instruction",
+  "schedule.withdraw": "Withdraw dated instruction",
+  "schedule.pending": "ACH is pending. The balance remains owed until verified funds are available.",
+  "schedule.status.approved": "Ready for your separate acceptance. No payment has been submitted.",
+  "schedule.status.open": "Instruction accepted. Awaiting owner confirmation on the agreed date.",
+  "schedule.status.claimed": "Submission claimed once. Check the existing payment; do not submit another.",
+  "schedule.status.uncertain": "The outcome is uncertain. The invoice stays reserved while the existing payment is checked.",
+  "schedule.status.collected": "ACH funds verified and allocated to this invoice.",
+  "schedule.status.expired": "The processor confirmed refusal without captured cash. No payment was recorded.",
+  "schedule.status.revoked": "This dated instruction was withdrawn before submission.",
+  "schedule.status.withdrawn": "This dated instruction is unavailable."
 }

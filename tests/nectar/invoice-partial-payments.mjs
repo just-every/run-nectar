@@ -4,7 +4,8 @@ import { file } from './harness.mjs'
 import { totp } from './mfa.mjs'
 
 export function invoicePartialEdge() {
-  const calls=[],sessions=new Map(),intents=new Map(),charges=new Map()
+  const calls=[],sessions=new Map(),intents=new Map(),charges=new Map(),banks=new Map()
+  let bankTime=Date.parse('2026-11-28T12:00:00Z'),bankLose=false,cardTime=Date.parse('2026-10-29T12:00:00Z')
   let lose=false,live=false,account='synthetic-nectar-partial-account',wrongProof=false
   const list=data=>({object:'list',has_more:false,data})
   const fetch=async request=>{
@@ -12,6 +13,9 @@ export function invoicePartialEdge() {
     const url=new URL(request.url),path=url.pathname.replace('/v1',''),body=request.method==='POST'?new URLSearchParams(await request.text()):null
     calls.push({path,method:request.method,body:body?Object.fromEntries(body):null})
     if(path==='/account')return Response.json({object:'account',id:account})
+    if(path.startsWith('/mandates/')){const b=[...banks.values()].find(b=>b.mandateRef===path.split('/').at(-1));return Response.json({...b,object:'mandate',id:b?.mandateRef,status:'active',type:'multi_use',livemode:false,payment_method:b?.paymentMethodRef})}
+    if(path.startsWith('/customers/')&&banks.has(path.split('/').at(-1))){const b=banks.get(path.split('/').at(-1));return Response.json({object:'customer',id:b.customerRef,livemode:live,invoice_settings:{default_payment_method:b.paymentMethodRef}})}
+    if(path.startsWith('/payment_methods/')&&[...banks.values()].some(b=>b.paymentMethodRef===path.split('/').at(-1))){const b=[...banks.values()].find(b=>b.paymentMethodRef===path.split('/').at(-1));return Response.json({object:'payment_method',id:b.paymentMethodRef,customer:b.customerRef,livemode:false,type:'us_bank_account',us_bank_account:{bank_name:'Synthetic Community Bank',last4:'6789'}})}
     if(path.startsWith('/customers/'))return Response.json({object:'customer',id:path.split('/').at(-1),livemode:live,invoice_settings:{default_payment_method:null}})
     if(path.startsWith('/payment_methods/'))return Response.json({object:'payment_method',id:path.split('/').at(-1),livemode:false,type:'card',customer:null})
     if(path==='/checkout/sessions'&&body){
@@ -30,27 +34,47 @@ export function invoicePartialEdge() {
     }
     if(path==='/checkout/sessions')return Response.json(list([...sessions.values()].filter(s=>s.customer===url.searchParams.get('customer'))))
     if(path.startsWith('/checkout/sessions/'))return Response.json(sessions.get(path.split('/').at(-1)))
+    if(path==='/payment_intents'&&body){
+      const b=banks.get(body.get('customer'));assert.ok(b);assert.equal(body.get('payment_method'),b.paymentMethodRef);assert.equal(body.get('mandate'),b.mandateRef)
+      assert.equal(body.get('payment_method_types[0]'),'us_bank_account');assert.equal(body.get('off_session'),'true');assert.equal(body.get('confirm'),'true')
+      for(const key of ['setup_future_usage','receipt_email'])assert.equal(body.get(key),null)
+      const id=`synthetic-nectar-schedule-intent-${intents.size+1}`,charge=`synthetic-nectar-schedule-charge-${intents.size+1}`
+      const intent={object:'payment_intent',id,status:'processing',customer:b.customerRef,payment_method:b.paymentMethodRef,currency:'usd',amount:Number(body.get('amount')),amount_received:0,livemode:false,latest_charge:charge,
+        metadata:Object.fromEntries([...body].filter(([key])=>key.startsWith('metadata[')).map(([key,value])=>[key.slice(9,-1),value]))}
+      intents.set(id,intent);charges.set(charge,{object:'charge',id:charge,customer:b.customerRef,payment_method:b.paymentMethodRef,payment_intent:id,status:'pending',paid:false,captured:false,amount:intent.amount,amount_captured:0,amount_refunded:0,refunded:false,disputed:false,currency:'usd',livemode:false,created:bankTime/1000,balance_transaction:`synthetic-nectar-transaction-${id}`})
+      if(bankLose){bankLose=false;return new Response(null,{status:503})}
+      return Response.json(intent)
+    }
+    if(path==='/payment_intents/search')return Response.json({object:'search_result',has_more:false,data:[...intents.values()]})
+    if(path==='/payment_intents')return Response.json(list([...intents.values()].filter(i=>i.customer===url.searchParams.get('customer'))))
+    if(path.startsWith('/charges/'))return Response.json(charges.get(path.split('/').at(-1)))
+    if(path.startsWith('/balance_transactions/')){const c=[...charges.values()].find(c=>c.balance_transaction===path.split('/').at(-1));return Response.json({object:'balance_transaction',id:c.balance_transaction,source:c.id,type:'payment',currency:'usd',amount:c.amount,status:c.available?'available':'pending',available_on:bankTime/1000})}
     if(path.startsWith('/payment_intents/')){const intent=structuredClone(intents.get(path.split('/').at(-1)));if(wrongProof)intent.customer='synthetic-nectar-foreign';return Response.json(intent)}
     if(path==='/charges')return Response.json(list([...charges.values()].filter(c=>c.payment_intent===url.searchParams.get('payment_intent'))))
     throw new Error(`Unexpected Stripe edge request ${request.method} ${path}`)
   }
-  return {fetch,calls,sessions,intents,lose(){lose=true},setLive(value){live=value},setAccount(value){account=value},wrongProof(value){wrongProof=value},
+  return {fetch,calls,sessions,intents,banks,
+    bank(customerRef){const b={customerRef,paymentMethodRef:`synthetic-nectar-bank-${banks.size+1}`,mandateRef:`synthetic-nectar-mandate-${banks.size+1}`};banks.set(customerRef,b);return b},
+    cardTime(value){cardTime=Date.parse(value)},bankTime(value){bankTime=Date.parse(value)},loseBank(){bankLose=true},
+    settleBank(id,available=true){const i=intents.get(id),c=charges.get(i.latest_charge);Object.assign(i,{status:'succeeded',amount_received:i.amount});Object.assign(c,{status:'succeeded',paid:true,captured:true,amount_captured:i.amount,available})},
+    refuseBank(id){const i=intents.get(id),c=charges.get(i.latest_charge);Object.assign(i,{status:'requires_payment_method',amount_received:0,last_payment_error:{code:'insufficient_funds'}});Object.assign(c,{status:'failed',paid:false,captured:false})},
+    lose(){lose=true},setLive(value){live=value},setAccount(value){account=value},wrongProof(value){wrongProof=value},
     expire(id){sessions.get(id).status='expired'},
     complete(id){const s=sessions.get(id),intent=`synthetic-nectar-partial-intent-${id}`,charge=`synthetic-nectar-partial-charge-${id}`,method='synthetic-nectar-one-time-card'
       Object.assign(s,{status:'complete',payment_status:'paid',payment_intent:intent})
       intents.set(intent,{object:'payment_intent',id:intent,status:'succeeded',customer:s.customer,payment_method:method,currency:'usd',amount:40000,amount_received:40000,livemode:false,latest_charge:charge,metadata:s.intentMetadata})
       charges.set(charge,{object:'charge',id:charge,status:'succeeded',paid:true,captured:true,customer:s.customer,payment_method:method,payment_intent:intent,
-        currency:'usd',amount:40000,amount_captured:40000,amount_refunded:0,refunded:false,disputed:false,created:Date.parse('2026-10-29T12:00:00Z')/1000,livemode:false})
+        currency:'usd',amount:40000,amount_captured:40000,amount_refunded:0,refunded:false,disputed:false,created:cardTime/1000,livemode:false})
     }}
 }
 let edge
 export const harnessOptions=()=>{edge=invoicePartialEdge();return {localTime:'2026-10-29T12:00:00Z',stripeFetch:edge.fetch,stripeSecret:'synthetic-nectar-partial-key'}}
 export const getPartialEdge=()=>edge
 
-export async function seedPartialInvoice(h,owner,customer,{issue=true,amount='1000'}={}) {
-  const charge=await h.api('charge.add',owner,{customer,amount,description:'Synthetic partial invoice service',effective_date:'2026-09-01',taxable:false})
+export async function seedPartialInvoice(h,owner,customer,{issue=true,amount='1000',issueDate='2026-09-01',description='Synthetic partial invoice service'}={}) {
+  const charge=await h.api('charge.add',owner,{customer,amount,description,effective_date:'2026-09-01',taxable:false})
   const draft=await h.api('invoice.manual',owner,{customer,charges:[charge.charge],service_date:'2026-09-01'})
-  if(issue){await h.api('invoice.approve',owner,{invoice:draft.id,acknowledge:true});await h.api('invoice.finalise',owner,{invoice:draft.id,issue_date:'2026-09-01'})}
+  if(issue){await h.api('invoice.approve',owner,{invoice:draft.id,acknowledge:true});await h.api('invoice.finalise',owner,{invoice:draft.id,issue_date:issueDate})}
   return h.api(`invoices/${draft.id}`,owner)
 }
 export async function invoicePartialPaymentsFlow(h,owner,{interaction={},onState=async()=>{}}={}) {
@@ -71,7 +95,7 @@ export async function invoicePartialPaymentsFlow(h,owner,{interaction={},onState
   for(let n=1;n<=3;n++)await api('collection.customer.bind',{customer:customers[n-1],account_ref:'synthetic-nectar-partial-account',stripe_customer_ref:`synthetic-nectar-partial-customer-${n}`,confirm:true})
   await h.api('invoice.partial.prepare',undefined,{},401)
   const agent={bearer:(await api('credential.issue',{name:'Synthetic partial observer',scopes:['prepare']})).key}
-  for(const action of ['invoice.partial.prepare','invoice.partial.confirm','invoice.partial.revoke','invoice.partial.reconcile'])await h.api(action,agent,{},403)
+  for(const action of ['invoice.partial.prepare','invoice.partial.confirm','invoice.partial.revoke','invoice.partial.reconcile','invoice.partial.schedule.prepare','invoice.partial.schedule.execute'])await h.api(action,agent,{},403)
   await h.api('invoice-partial-payments',agent,undefined,403)
   await api('invoice.partial.prepare',{invoice:draft.id,amount_cents:40000},409)
   await api('invoice.partial.prepare',{invoice:first.id,amount_cents:100000},409)
@@ -200,5 +224,134 @@ export async function invoicePartialPaymentsFlow(h,owner,{interaction={},onState
   await h.api('invoice-partial-payments',agent,undefined,401)
   assert.ok(!(await api('invoice-partial-payments')).some(r=>r.customer===customers[2]),'Erasure withdraws partial-payment customer access and operational authority')
   console.log('Partial invoice payment: exact once-only captured cash, current remainder, source and authority refusals, audit rollback, read-only uncertain recovery and erasure passed')
+  await invoiceScheduledRemainderFlow(h,owner,{edge,secret:factor.secret,onState,interaction})
   return {customers,first:first.id,second:second.id,completed,prepared,secret:factor.secret}
+}
+
+// The retained safety floor permits dated instructions, with no unattended
+// submission. Exercise the actual human and customer doors, including money
+// refusal and erasure, beside the two-payment business outcome.
+export async function invoiceScheduledRemainderFlow(h,owner,{edge,secret,onState=async()=>{},interaction={}}) {
+  const api=(path,body,status)=>h.api(path,owner,body,status),start='2026-10-29T12:17:00Z',due='2026-11-28',when='2026-11-28T12:00:00Z'
+  await h.advanceClock(start);edge.cardTime(start)
+  await api('mfa.verify',{code:totp(secret,Date.parse(start))})
+  const identity=await api('me'),scenarios=[]
+  const make=async(label,{partial=false,language='en'}={})=>{
+    const customer=(await api('customer.create',{external_id:`synthetic-nectar-scheduled-${label}`,name:`Synthetic dated customer ${label}`,billing_email:identity.email.replace(/^[^@]+/,`synthetic-nectar-dated-${label}`),language})).id
+    const invoice=await seedPartialInvoice(h,owner,customer,{issueDate:'2026-10-29',description:`Synthetic dated service ${label}`})
+    const ref=`synthetic-nectar-dated-customer-${label}`
+    await api('collection.customer.bind',{customer,account_ref:'synthetic-nectar-partial-account',stripe_customer_ref:ref,confirm:true})
+    const session=await api('portal.session.issue',{customer,origin:h.origin,audience:'hosted'})
+    if(partial){
+      const p=await api('invoice.partial.prepare',{invoice:invoice.id,amount_cents:40000});await api('invoice.partial.confirm',p.confirm)
+      const started=await h.raw(`/portal/invoice-payment/start?session=${session.token}`,{body:{request:p.id,basis_hash:p.basisHash,accept:true}})
+      assert.equal(started.status,200);await started.json();edge.complete([...edge.sessions.keys()].at(-1))
+      assert.equal((await api('invoice.partial.reconcile',{request:p.id})).status,'collected')
+      assert.equal((await api(`invoices/${invoice.id}`)).balanceCents,60000)
+    }
+    const bank=edge.bank(ref)
+    const body={invoice:invoice.id,scheduled_on:due,mandate_ref:bank.mandateRef}
+    const preparation=label==='en'&&interaction.schedulePrepare?await interaction.schedulePrepare({invoice:invoice.id,body}):await api('invoice.partial.schedule.prepare',body)
+    return {label,customer,invoice:invoice.id,session,preparation,bank,body}
+  }
+  const customerPost=async(s,path,body,status=200)=>{
+    const response=await h.raw(`/portal/invoice-payment/${path}?session=${s.session.token}`,{body}),text=await response.text()
+    assert.equal(response.status,status,`${path}: ${text.slice(0,400)}`)
+    return response.headers.get('content-type')?.includes('application/json')?JSON.parse(text):text
+  }
+  const accept=async(s)=>{
+    await api('invoice.partial.confirm',s.preparation.confirm)
+    if(s.label==='en'&&interaction.scheduleAccept)await interaction.scheduleAccept(s)
+    else await customerPost(s,'schedule',{request:s.preparation.id,basis_hash:s.preparation.basisHash,accept:true})
+    const row=(await api('invoice-partial-payments')).find(r=>r.id===s.preparation.id);assert.equal(row.status,'open');assert.equal(row.claimedAt,null)
+    return row
+  }
+  const executeBody=s=>({request:s.preparation.id,basis_hash:s.preparation.basisHash,scheduled_on:due,amount_cents:s.preparation.amountCents,payment_method_ref:s.bank.paymentMethodRef,confirm:true})
+  for(const [label,language] of [['en','en'],['es','es-US']]){
+    const s=await make(label,{partial:true,language});scenarios.push(s)
+    for(const date of ['2026-10-28','2026-11-29'])await api('invoice.partial.schedule.prepare',{...s.body,scheduled_on:date},409)
+    await api('invoice.partial.confirm',{...s.preparation.confirm,scheduled_on:'2026-11-27'},409)
+    await api('invoice.partial.confirm',{...s.preparation.confirm,payment_method_ref:'synthetic-nectar-foreign-bank'},409)
+    await accept(s)
+    await customerPost(s,'schedule',{request:s.preparation.id,basis_hash:s.preparation.basisHash,accept:true},409)
+    await api('invoice.partial.schedule.execute',executeBody(s),409)
+    await api('collection.prepare',{invoice:s.invoice},409)
+    await api('credit.issue',{invoice:s.invoice,amount:'1',reason:'Reserved dated payment'},409)
+    await onState({label:`schedule-accepted-${label}`,invoice:s.invoice,session:s.session,request:s.preparation})
+  }
+  const revoked=await make('revoked');await accept(revoked)
+  const withdrawn=await make('withdrawn');await accept(withdrawn)
+  await customerPost(withdrawn,'withdraw',{request:withdrawn.preparation.id,withdraw:true})
+  await api('credit.issue',{invoice:withdrawn.invoice,amount:'1',reason:'Customer withdrew before debit'})
+  const stale=await make('stale');await api('credit.issue',{invoice:stale.invoice,amount:'1',reason:'Changed prepared invoice'})
+  await api('invoice.partial.confirm',stale.preparation.confirm,409)
+  const methodChanged=await make('method');await accept(methodChanged)
+  const disputed=await make('dispute');await accept(disputed)
+  const erased=await make('erased');await accept(erased)
+  const erasure=await api('erasure.request',{customer:erased.customer})
+  await api('erasure.verify',{request:erasure.id,reason:'Independently verified synthetic dated instruction',evidence:file('synthetic-owner.txt','Synthetic ownership verification','text/plain')})
+  await api('erasure.approve',{request:erasure.id,confirm:true})
+  await api('invoice.partial.schedule.execute',executeBody(erased),404)
+  const foreign=await h.raw(`/portal/invoice-payment/withdraw?session=${scenarios[1].session.token}`,{body:{request:scenarios[0].preparation.id,withdraw:true}})
+  assert.equal(foreign.status,404);await foreign.text()
+  const writes=edge.calls.filter(c=>c.method==='POST').length
+  await h.advanceClock(when);edge.bankTime(when)
+  await api('invoice.partial.schedule.execute',executeBody(scenarios[0]),403,'Expired fresh factor cannot submit')
+  await api('mfa.verify',{code:totp(secret,Date.parse(when))})
+  await api('portal.session.revoke',{session:revoked.session.id})
+  await api('invoice.partial.schedule.execute',executeBody(revoked),409)
+  await api('invoice.partial.schedule.execute',executeBody(withdrawn),409)
+  const priorMethod=methodChanged.bank.paymentMethodRef;methodChanged.bank.paymentMethodRef='synthetic-nectar-changed-bank'
+  await api('invoice.partial.schedule.execute',{...executeBody(methodChanged),payment_method_ref:priorMethod},409)
+  methodChanged.bank.paymentMethodRef=priorMethod
+  const invoice=await api(`invoices/${disputed.invoice}`)
+  await api('cadence.dispute',{invoice:disputed.invoice,line:invoice.lines[0].id,amount_cents:1,reason:'Dated instruction source disputed'})
+  await api('invoice.partial.schedule.execute',executeBody(disputed),409)
+  // Ordinary scheduled ticks have no authority over these instructions.
+  const tick=await h.raw('/cdn-cgi/local/scheduled?cron=*+*+*+*+*');assert.equal(tick.status,200);await tick.text()
+  assert.equal(edge.calls.filter(c=>c.method==='POST').length,writes,'Refusals and scheduled ticks submit no payment')
+  await h.rejectAudit('invoice.schedule.claim');await api('invoice.partial.schedule.execute',executeBody(scenarios[0]),500);await h.rejectAudit(null)
+  assert.equal(edge.calls.filter(c=>c.method==='POST').length,writes,'Claim audit rollback precedes any provider write')
+  for(const s of scenarios){
+    const original=await api(`invoices/${s.invoice}`)
+    // Acceptance endures only as its exact dated instruction. Ordinary expired
+    // customer sessions gain no page or mutation access from that instruction.
+    const expired=await h.raw(`/portal/invoices/${s.invoice}?session=${s.session.token}`);assert.equal(expired.status,401);await expired.text()
+    s.session=await api('portal.session.issue',{customer:s.customer,origin:h.origin,audience:'hosted'})
+    if(s.label==='es')edge.loseBank()
+    if(s.label==='en'&&interaction.scheduleExecute)await interaction.scheduleExecute(s,executeBody(s))
+    else {
+      const attempts=await Promise.all([h.raw('/api/nectar/invoice.partial.schedule.execute',{cookie:owner,body:executeBody(s)}),h.raw('/api/nectar/invoice.partial.schedule.execute',{cookie:owner,body:executeBody(s)})])
+      assert.deepEqual(attempts.map(r=>r.status).sort(),[200,409],'Concurrent submission claims the accepted instruction once')
+      for(const response of attempts)await response.text()
+    }
+    await api('invoice.partial.schedule.execute',executeBody(s),409)
+    const intent=[...edge.intents.values()].find(i=>i.metadata.nectar_native_collection_request===s.preparation.id)
+    assert.ok(intent);assert.equal(intent.amount,60000)
+    const pending=await api('invoice.partial.reconcile',{request:s.preparation.id});assert.equal(pending.status,'open')
+    assert.equal((await api(`invoices/${s.invoice}`)).balanceCents,60000,'Pending ACH is not cash')
+    await onState({label:`schedule-pending-${s.label}`,invoice:s.invoice,session:s.session,request:pending})
+    edge.settleBank(intent.id,false)
+    await api('invoice.partial.reconcile',{request:s.preparation.id},409)
+    assert.equal((await api(`invoices/${s.invoice}`)).balanceCents,60000,'Captured but unavailable ACH funds remain pending')
+    edge.settleBank(intent.id)
+    await h.rejectAudit('invoice.schedule.collected');await api('invoice.partial.reconcile',{request:s.preparation.id},500);await h.rejectAudit(null)
+    assert.equal((await api(`invoices/${s.invoice}`)).balanceCents,60000,'Settlement audit rolls back cash and allocation')
+    const settled=await api('invoice.partial.reconcile',{request:s.preparation.id});assert.equal(settled.status,'collected')
+    const after=await api(`invoices/${s.invoice}`),customer=await api(`customers/${s.customer}`)
+    assert.deepEqual([after.total_cents,after.paidCents,after.balanceCents,after.allocations.length],[100000,100000,0,2])
+    assert.deepEqual([customer.ledger.invoicedCents,customer.ledger.paidCents,customer.ledger.balanceCents],[100000,100000,0])
+    assert.equal((await api(`payments/${settled.payment}/receipt`)).amountCents,60000)
+    for(const key of ['number','total_cents','source_fingerprint','billing_route_json','calculation'])assert.deepEqual(after[key],original[key])
+    await api('invoice.partial.reconcile',{request:s.preparation.id})
+    assert.equal((await api(`invoices/${s.invoice}`)).allocations.length,2)
+    await onState({label:`schedule-paid-${s.label}`,invoice:s.invoice,session:s.session,request:settled})
+  }
+  assert.equal(edge.calls.filter(c=>c.method==='POST').length,writes+2,'Exactly one provider write for each dated payment, including lost-response recovery')
+  assert.equal((await api('reports/collections?period=2026-11')).totalCents,120000)
+  await h.advanceClock('2026-11-29T12:00:00Z')
+  for(const s of scenarios)await api('reminder.prepare',{customer:s.customer},409)
+  await api('mfa.verify',{code:totp(secret,Date.parse('2026-11-29T12:00:00Z'))})
+  await api('invoice.partial.schedule.execute',executeBody(methodChanged),409,'No missed-date catch-up')
+  console.log('Dated ACH instructions: separate consent, exact-date human submission, two payments, pending funds, read-only recovery, settlement, reminder suppression and unsafe-path refusals passed')
 }

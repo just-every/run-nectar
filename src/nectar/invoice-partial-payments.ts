@@ -1,3 +1,4 @@
+import { validateScheduleConfirmation, reconcileScheduledPayment } from './invoice-payment-schedules'
 import type { Bindings } from '../auth.server'
 import { actorLabel, requireOwner, type Actor } from './actor'
 import { requireBusiness } from './business'
@@ -19,11 +20,14 @@ export async function partialPaymentRow(env: Bindings, id: string) {
   return row
 }
 export function partialPaymentView(row: Row) {
+  const basis = parseJson<Row>(row.basis_json, {})
   return { id: row.id, invoice: row.invoice_id, customer: row.customer_id, status: row.status, amountCents: row.amount_cents,
+    kind: row.payment_kind, scheduledOn: basis.scheduledOn ?? null, method: basis.method?.summary ?? null, paymentMethodRef:basis.method?.paymentMethodRef??null, claimedAt: row.claimed_at,
     balanceCents: row.balance_cents, basisHash: row.basis_hash, accountRef: row.account_ref, customerRef: row.customer_ref,
     payment: row.payment_id, allocation: row.allocation_id, error: row.error_code,
     confirm: row.status === 'prepared' ? { request: row.id, basis_hash: row.basis_hash, invoice: row.invoice_id, customer: row.customer_id,
-      amount_cents: row.amount_cents, balance_cents: row.balance_cents, account_ref: row.account_ref, stripe_customer_ref: row.customer_ref, confirm: true } : null }
+      amount_cents: row.amount_cents, balance_cents: row.balance_cents, account_ref: row.account_ref, stripe_customer_ref: row.customer_ref,
+      ...(row.payment_kind === 'scheduled_ach' ? { scheduled_on: basis.scheduledOn, payment_method_ref: basis.method.paymentMethodRef, mandate_ref: basis.method.mandateRef } : {}), confirm: true } : null }
 }
 export async function partialPaymentRows(env: Bindings, actor: Actor, customer?: string) {
   requireOwner(actor)
@@ -33,7 +37,7 @@ export async function partialPaymentRows(env: Bindings, actor: Actor, customer?:
 
 // Deliberately ordinary native invoices only. No standing collection or saved
 // method authority follows from this one customer-initiated card purchase.
-async function sourceForPartial(env: Bindings, invoice: string, reservation?: string) {
+export async function sourceForPartial(env: Bindings, invoice: string, reservation?: string) {
   const source = await nativeCollectionSource(env, invoice, reservation), row = source.row, calculation = parseJson<Row>(row.calculation_json, {})
   insist(row.customer_origin === 'native' && row.currency === 'USD' && source.disputedCents === 0 && source.payerId === row.customer_id
     && !calculation.inputs?.prepaidPurchase && !calculation.inputs?.reissue
@@ -51,7 +55,7 @@ async function sourceForPartial(env: Bindings, invoice: string, reservation?: st
   'invoice_partial_unsupported_source', 409)
   return source
 }
-function eligibleGuard(env: Bindings, invoice: string) {
+export function eligibleGuard(env: Bindings, invoice: string) {
   return guard(env, 'invoice_partial_unsupported_source', `EXISTS(SELECT 1 FROM nc_invoices i JOIN nc_customers c ON c.id=i.customer_id WHERE i.id=? AND c.origin='native'
       AND NOT EXISTS(SELECT 1 FROM nc_customer_hierarchies WHERE customer_id=c.id OR parent_id=c.id))
     AND NOT EXISTS(SELECT 1 FROM nc_payment_link_attempts WHERE invoice_id=?)
@@ -63,10 +67,10 @@ function eligibleGuard(env: Bindings, invoice: string) {
     AND NOT EXISTS(SELECT 1 FROM nc_credit_requests WHERE invoice_id=? AND status='pending')
     AND NOT EXISTS(SELECT 1 FROM nc_processor_objects WHERE invoice_id=? AND kind IN ('dispute','ach_return') AND status IN ('needs_response','under_review','lost','warning_needs_response','warning_under_review'))`, invoice, invoice, invoice, invoice, invoice, invoice, invoice, invoice, invoice)
 }
-function rowGuard(env: Bindings, row: Row) {
+export function rowGuard(env: Bindings, row: Row) {
   return guard(env, 'invoice_partial_state_changed', 'EXISTS(SELECT 1 FROM nc_invoice_partial_payments WHERE id=? AND revision=? AND status=?)', row.id, row.revision, row.status)
 }
-function reservationGuard(env: Bindings, row: Row) {
+export function reservationGuard(env: Bindings, row: Row) {
   return guard(env, 'invoice_partial_reserved', 'EXISTS(SELECT 1 FROM nc_invoice_partial_reservations WHERE invoice_id=? AND request_id=?)', row.invoice_id, row.id)
 }
 export function partialAuthorityGuard(env: Bindings, row: Row) {
@@ -79,7 +83,7 @@ export function partialAuthorityGuard(env: Bindings, row: Row) {
     AND a.factor_verified_at BETWEEN ? AND ? AND f.method IN ('totp','passkey') AND f.verified_at>=a.factor_verified_at
     AND f.verified_at BETWEEN ? AND ?)`, row.prepared_by, row.id, at-STEP_UP_MS, at, at-STEP_UP_MS, at)
 }
-async function currentSource(env: Bindings, row: Row) {
+export async function currentSource(env: Bindings, row: Row) {
   const source = await sourceForPartial(env, row.invoice_id, row.id), basis = parseJson<Row>(row.basis_json, {})
   insist(await fingerprint(basis) === row.basis_hash && source.sourceHash === basis.sourceHash && source.row.balance_cents === row.balance_cents,
     'invoice_partial_source_changed', 409)
@@ -88,7 +92,7 @@ async function currentSource(env: Bindings, row: Row) {
   insist(binding, 'invoice_partial_binding_changed', 409)
   return source
 }
-function bindingFence(env: Bindings, row: Row) {
+export function bindingFence(env: Bindings, row: Row) {
   return guard(env, 'invoice_partial_binding_changed', 'EXISTS(SELECT 1 FROM nc_stripe_customer_bindings WHERE id=? AND revision=? AND customer_id=? AND account_ref=? AND stripe_customer_ref=?)',
     row.binding_id, row.binding_revision, row.customer_id, row.account_ref, row.customer_ref)
 }
@@ -117,7 +121,7 @@ export async function prepareInvoicePartial(env: Bindings, actor: Actor, input: 
 }
 export async function confirmInvoicePartial(env: Bindings, actor: Actor, input: Input) {
   await setupOwner(env, actor)
-  input.only(['request','basis_hash','invoice','customer','amount_cents','balance_cents','account_ref','stripe_customer_ref','confirm','returnTo'])
+  input.only(['request','basis_hash','invoice','customer','amount_cents','balance_cents','account_ref','stripe_customer_ref','scheduled_on','payment_method_ref','mandate_ref','confirm','returnTo'])
   const row = await partialPaymentRow(env, input.text('request', { max: 100 }))
   insist(row.prepared_by === actor.id && row.status === 'prepared', 'invoice_partial_state_changed', 409)
   insist(input.flag('confirm'), 'confirmation_required')
@@ -126,6 +130,7 @@ export async function confirmInvoicePartial(env: Bindings, actor: Actor, input: 
     && input.text('stripe_customer_ref', { max: 255 }) === row.customer_ref && input.integer('amount_cents', { min: 50 }) === row.amount_cents
     && input.integer('balance_cents', { min: 50 }) === row.balance_cents, 'invoice_partial_confirmation_changed', 409)
   const source = await currentSource(env, row)
+  if (row.payment_kind === 'scheduled_ach') await validateScheduleConfirmation(env, row, input)
   await commit(env, [...setupOwnerFence(env, actor), partialAuthorityGuard(env, row), rowGuard(env, row), nativeSourceGuard(env, source), bindingFence(env, row), eligibleGuard(env, row.invoice_id),
     stmt(env, 'INSERT INTO nc_invoice_partial_reservations(invoice_id,request_id,customer_id,created_at) VALUES(?,?,?,?)', row.invoice_id, row.id, row.customer_id, clockInstant(env)),
     stmt(env, "UPDATE nc_invoice_partial_payments SET status='approved',approved_at=?,revision=? WHERE id=?", clockInstant(env), newId(), row.id),
@@ -136,9 +141,10 @@ export async function revokeInvoicePartial(env: Bindings, actor: Actor, input: I
   requireOwner(actor)
   input.only(['request','returnTo'])
   const row = await partialPaymentRow(env, input.text('request', { max: 100 }))
-  insist(['prepared','approved'].includes(row.status), 'invoice_partial_requires_reconciliation', 409)
+  insist(['prepared','approved'].includes(row.status) || row.payment_kind === 'scheduled_ach' && row.status === 'open' && !row.claimed_at, 'invoice_partial_requires_reconciliation', 409)
   await commit(env, [...setupOwnerFence(env, actor), rowGuard(env, row), stmt(env,'DELETE FROM nc_invoice_partial_reservations WHERE request_id=?',row.id),
     stmt(env,'DELETE FROM nc_invoice_partial_authority WHERE id=?',row.id),
+    stmt(env,'DELETE FROM nc_invoice_schedule_authority WHERE id=?',row.id),
     stmt(env,"UPDATE nc_invoice_partial_payments SET status='revoked',revision=? WHERE id=?",newId(),row.id)],
   {actor:actorLabel(actor),action:'invoice.partial.revoke',subject:row.id,detail:{invoice:row.invoice_id}})
   return partialPaymentView(await partialPaymentRow(env,row.id))
@@ -153,6 +159,7 @@ export async function startInvoicePartial(env: Bindings, session: CustomerSessio
   input.only(['request','basis_hash','accept'])
   insist(input.flag('accept') && input.text('basis_hash',{max:100}) === row.basis_hash, 'invoice_partial_acceptance_required')
   insist(session.audience === 'hosted' && row.customer_id === session.customer, 'invoice_partial_not_found', 404)
+  insist(row.payment_kind === 'card', 'invoice_partial_card_required', 409)
   insist(row.status === 'approved', 'invoice_partial_already_claimed', 409)
   const source = await currentSource(env,row), at=clockInstant(env), L=customerText(session.language)
   const consent = { version: 1, language: L.tag, wording: L.t('partial.accept'), invoice: row.invoice_id, number: source.row.number,
@@ -219,6 +226,7 @@ export async function reconcileInvoicePartial(env: Bindings, actor: Actor, input
   return partialPaymentView(await reconcilePartial(env,await partialPaymentRow(env,input.text('request',{max:100})),actor))
 }
 export async function reconcilePartial(env: Bindings,row: Row,actor?: Actor,session?: CustomerSession,returnHash?: string) {
+  if (row.payment_kind === 'scheduled_ach') return reconcileScheduledPayment(env, row, session)
   if(['collected','expired'].includes(row.status))return row
   insist(['claimed','open','uncertain'].includes(row.status),'invoice_partial_not_reconcilable',409)
   if(session)insist(row.customer_id===session.customer&&session.audience==='hosted','forbidden',403)

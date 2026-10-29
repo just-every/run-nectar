@@ -1,3 +1,4 @@
+import { prepareInvoiceSchedule, executeInvoiceSchedule } from './invoice-payment-schedules'
 import { prepareInvoicePartial, confirmInvoicePartial, revokeInvoicePartial, reconcileInvoicePartial } from './invoice-partial-payments'
 import { preparePortalChangePolicy } from './portal-change-policy'
 import { uploadBankDeposit, uploadRemittances, previewRemittance, confirmRemittance, previewRemittanceAllocation, allocateRemittance } from './remittances'
@@ -165,6 +166,8 @@ export const actions: Record<string, Handler> = {
   'automatic.collection.revoke': revokeAutomaticCollection,
   'automatic.collection.reconcile': checkAutomaticCollection,
   'automatic.collection.event': consumeAutomaticEvent,
+  'invoice.partial.schedule.prepare': prepareInvoiceSchedule,
+  'invoice.partial.schedule.execute': executeInvoiceSchedule,
   'invoice.partial.prepare': prepareInvoicePartial,
   'invoice.partial.confirm': confirmInvoicePartial,
   'invoice.partial.revoke': revokeInvoicePartial,

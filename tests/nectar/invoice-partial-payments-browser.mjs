@@ -64,6 +64,31 @@ try {
         assert.match(headers.location,/^https:\/\/checkout\.stripe\.com\//)
         return {started:{status:'open'},cookie:headers['set-cookie'].split(';')[0]}
       },
+      schedulePrepare:async({invoice,body})=>{
+        await op.goto(h.origin+`/app/invoices/${invoice}`)
+        const form=op.locator('form[action="/app/do/invoice.partial.schedule.prepare"]')
+        await form.locator('..').locator('summary').click()
+        await form.locator('[name=scheduled_on]').fill(body.scheduled_on)
+        await form.locator('[name=mandate_ref]').fill(body.mandate_ref)
+        await submit(form)
+        const result=(await rows()).find(r=>r.invoice===invoice&&r.kind==='scheduled_ach'&&r.status==='prepared')
+        assert.ok(result);await capture(op,'owner-dated-review');return result
+      },
+      scheduleAccept:async state=>{
+        await customer.goto(h.origin+`/portal/invoices/${state.invoice}?session=${state.session.token}`)
+        await capture(customer,'schedule-exact-customer-review')
+        const form=customer.locator(`[data-partial="${state.preparation.id}"] form`).first()
+        await form.locator('[name=accept]').check()
+        await Promise.all([customer.waitForNavigation(),form.locator('button').click()])
+        assert.equal((await rows()).find(r=>r.id===state.preparation.id).status,'open')
+      },
+      scheduleExecute:async state=>{
+        await op.goto(h.origin+`/app/invoices/${state.invoice}`)
+        const form=op.locator('form[action="/app/do/invoice.partial.schedule.execute"]')
+        await capture(op,'owner-exact-date-submission')
+        await form.locator('[name=confirm]').check();await submit(form)
+        assert.ok((await rows()).find(r=>r.id===state.preparation.id).claimedAt)
+      },
       check:async({invoice,session,request})=>{
         await customer.goto(h.origin+`/portal/invoices/${invoice}?session=${session.token}`)
         const form=customer.locator(`[data-partial="${request}"] form`)
@@ -78,6 +103,11 @@ try {
       const text=await customer.locator('main').innerText()
       if(state.label==='captured-en'){assert.match(text,/USD 600\.00/);assert.match(text,/USD 400\.00/)}
       if(state.label==='captured-es'){assert.match(text,/600,00 USD|USD 600\.00/);assert.match(text,/400,00 USD|USD 400\.00/)}
+      if(state.label.startsWith('schedule-')){
+        if(state.label.endsWith('-en'))assert.match(text,/USD 600\.00/)
+        if(state.label.endsWith('-es'))assert.match(text,/600,00 USD|USD 600\.00/)
+        if(state.label.startsWith('schedule-paid-'))assert.match(text,/USD 0\.00|0,00 USD/)
+      }
       await capture(customer,state.label)
     }
   })

@@ -1,3 +1,4 @@
+import { acceptInvoiceSchedule, withdrawInvoiceSchedule } from './invoice-payment-schedules'
 import type { Bindings } from '../auth.server'
 import { clockInstant } from './clock'
 import { insist, one, sha256Hex } from './core'
@@ -41,6 +42,12 @@ export async function invoicePartialResponse(request: Request,env: Bindings): Pr
     insist(request.headers.get('origin')===session.origin,'forbidden',403)
     const input=await Input.from(request),id=input.text('request',{max:100}),row=await partialPaymentRow(env,id)
     insist(row.customer_id===session.customer&&(!returned||returned.requestId===row.id),'invoice_partial_not_found',404)
+    if(url.pathname.endsWith('/schedule') || url.pathname.endsWith('/withdraw')){
+      insist(!returned,'forbidden',403)
+      const result=url.pathname.endsWith('/schedule') ? await acceptInvoiceSchedule(env,session,row,input) : await withdrawInvoiceSchedule(env,session,row,input)
+      if(request.headers.get('content-type')?.startsWith('application/json'))return Response.json(partialCustomerView(result),{headers})
+      return new Response(null,{status:303,headers:{...headers,location:`/portal/invoices/${encodeURIComponent(row.invoice_id)}?session=${encodeURIComponent(url.searchParams.get('session')!)}`}})
+    }
     if(url.pathname.endsWith('/start')){
       insist(!returned,'forbidden',403)
       const token=b64url(crypto.getRandomValues(new Uint8Array(32))),expiry=Math.min(session.exp,clockInstant(env)+900000)
@@ -54,7 +61,7 @@ export async function invoicePartialResponse(request: Request,env: Bindings): Pr
     const result=await reconcilePartial(env,row,undefined,session,returned?.hash)
     if(['collected','expired'].includes(result.status))headers['set-cookie']=`${cookieName}=; ${attributes}; Max-Age=0`
     if(request.headers.get('content-type')?.startsWith('application/json'))return Response.json(partialCustomerView(result),{headers})
-    const response=portalPage(L.t('partial.title'),h`<h1>${L.t('partial.title')}</h1><p>${L.t(`partial.status.${result.status}`)}</p><p>${L.t('partial.amount')}: ${L.money(result.amount_cents)}</p>`,{lang:L.tag})
+    const response=portalPage(L.t('partial.title'),h`<h1>${L.t('partial.title')}</h1><p>${L.t(result.payment_kind==='scheduled_ach'?`schedule.status.${result.status}`:`partial.status.${result.status}`)}</p><p>${L.t('partial.amount')}: ${L.money(result.amount_cents)}</p>`,{lang:L.tag})
     return new Response(response.body,{headers:{...Object.fromEntries(response.headers),...headers}})
   }
   insist(url.pathname==='/portal/invoice-payment/return'&&returned,'not_found',404)

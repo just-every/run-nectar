@@ -478,5 +478,21 @@
   "partial.status.collected": "Paiement reçu et affecté à cette facture. Le solde restant est toujours dû.",
   "partial.status.expired": "Le prestataire a confirmé l’expiration sans paiement. Aucun paiement n’a été enregistré.",
   "partial.status.revoked": "Cette autorisation a été retirée avant le paiement.",
-  "partial.status.withdrawn": "Cette autorisation de paiement n’est pas disponible."
+  "partial.status.withdrawn": "Cette autorisation de paiement n’est pas disponible.",
+  "schedule.title": "Paiement ACH daté",
+  "schedule.date": "Date convenue d’envoi",
+  "schedule.method": "Compte bancaire",
+  "schedule.boundary": "Cette instruction datée utilise un mandat bancaire existant. Un propriétaire doit confirmer l’envoi à la date convenue. Aucune tâche automatique ne l’envoie, aucune date manquée n’est rattrapée et aucun autre paiement ni nouvel essai n’est autorisé.",
+  "schedule.accept": "J’autorise un paiement ACH unique pour la facture, le client, le compte du processeur, le compte bancaire, le montant, le solde et la date d’envoi exacts indiqués. Un propriétaire doit confirmer séparément l’envoi à cette date.",
+  "schedule.submit": "Accepter l’instruction ACH datée",
+  "schedule.withdraw": "Retirer l’instruction datée",
+  "schedule.pending": "Le paiement ACH est en attente. Le solde reste dû jusqu’à la disponibilité vérifiée des fonds.",
+  "schedule.status.approved": "Prêt pour votre acceptation séparée. Aucun paiement n’a été envoyé.",
+  "schedule.status.open": "Instruction acceptée. En attente de confirmation du propriétaire à la date convenue.",
+  "schedule.status.claimed": "Envoi réservé une fois. Vérifiez le paiement existant sans nouvel envoi.",
+  "schedule.status.uncertain": "Résultat incertain. La facture reste réservée pendant la vérification du paiement existant.",
+  "schedule.status.collected": "Fonds ACH vérifiés et affectés à cette facture.",
+  "schedule.status.expired": "Le processeur a confirmé le refus sans encaissement. Aucun paiement enregistré.",
+  "schedule.status.revoked": "Cette instruction datée a été retirée avant l’envoi.",
+  "schedule.status.withdrawn": "Cette instruction datée est indisponible."
 }

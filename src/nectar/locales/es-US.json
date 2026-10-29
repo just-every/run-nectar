@@ -478,5 +478,21 @@
   "partial.status.collected": "Pago recibido y asignado a esta factura. El saldo restante sigue pendiente.",
   "partial.status.expired": "El procesador confirmó el vencimiento sin pago. No se registró ningún pago.",
   "partial.status.revoked": "Este permiso de pago se retiró antes del pago.",
-  "partial.status.withdrawn": "Este permiso de pago no está disponible."
+  "partial.status.withdrawn": "Este permiso de pago no está disponible.",
+  "schedule.title": "Pago ACH con fecha",
+  "schedule.date": "Fecha acordada de envío",
+  "schedule.method": "Cuenta bancaria",
+  "schedule.boundary": "Esta es una instrucción con fecha exacta que utiliza un mandato bancario existente. Un propietario debe confirmar el envío en la fecha acordada. Ninguna tarea automática la envía, no se recuperan fechas vencidas y no se autoriza otro pago ni reintento.",
+  "schedule.accept": "Autorizo un pago ACH para la factura, el cliente, la cuenta del procesador, la cuenta bancaria, el importe, el saldo actual y la fecha de envío exactos indicados. Esta instrucción requiere el envío por separado de un propietario en esa fecha.",
+  "schedule.submit": "Aceptar instrucción ACH con fecha",
+  "schedule.withdraw": "Retirar instrucción con fecha",
+  "schedule.pending": "El ACH está pendiente. El saldo sigue adeudado hasta verificar que los fondos están disponibles.",
+  "schedule.status.approved": "Listo para su aceptación por separado. No se ha enviado ningún pago.",
+  "schedule.status.open": "Instrucción aceptada. Esperando confirmación del propietario en la fecha acordada.",
+  "schedule.status.claimed": "El envío se ha reservado una vez. Compruebe el pago existente; no envíe otro.",
+  "schedule.status.uncertain": "El resultado es incierto. La factura sigue reservada mientras se comprueba el pago existente.",
+  "schedule.status.collected": "Fondos ACH verificados y asignados a esta factura.",
+  "schedule.status.expired": "El procesador confirmó el rechazo sin fondos capturados. No se registró ningún pago.",
+  "schedule.status.revoked": "Esta instrucción con fecha se retiró antes del envío.",
+  "schedule.status.withdrawn": "Esta instrucción con fecha no está disponible."
 }

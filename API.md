@@ -981,3 +981,31 @@ Captured cash and its invoice allocation are recorded together once. Unknown
 outcomes retain the reservation and permit reads only. Archive restoration
 restores financial history and unresolved reservations with no executable
 owner or customer authority. This slice saves no method and schedules no debit.
+
+
+### Dated ACH remainder instructions
+
+For an ordinary native USD issued invoice with a bound test customer and an
+existing verified default bank method and active mandate,
+`invoice.partial.schedule.prepare` accepts `invoice`, `scheduled_on` and
+`mandate_ref`. The agreed business-local date must be today or later and no
+later than the invoice due date. Preparation freezes the full current remainder,
+bank method, processor account, customer, mandate and source. Fresh-factor owner
+confirmation uses `invoice.partial.confirm` with its complete returned `confirm`
+object. The own customer's hosted invoice page separately accepts or withdraws
+that exact dated instruction through `/portal/invoice-payment/schedule` or
+`/portal/invoice-payment/withdraw`. Merely observing a saved bank mandate grants
+no Nectar debit authority.
+
+This conservative current door submits no payment in a scheduled job.
+`invoice.partial.schedule.execute` requires the preparing owner, a current local
+fresh factor and explicit `confirm`, `request`, `basis_hash`, `scheduled_on`,
+`amount_cents` and `payment_method_ref` on the exact agreed date. Changed sources,
+methods, balances or revoked customer consent refuse; missed dates never catch
+up. A durable once-only claim precedes the sole provider submission. Unknown
+outcomes retain the invoice reservation and permit only the existing read-only
+`invoice.partial.reconcile` door. Pending ACH and unavailable captured funds leave
+the debt open; verified available funds record one receipt and allocation.
+Dated acceptance authority is installation-local and excluded from archives;
+retained claimed attempts can reconcile their original outcome without any new
+provider write. Erasure withdraws authority and customer access.

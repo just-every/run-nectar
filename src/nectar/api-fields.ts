@@ -581,7 +581,10 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "confirm": "flag",
     "customer": "text",
     "invoice": "text",
+    "mandate_ref": "text",
+    "payment_method_ref": "text",
     "request": "text",
+    "scheduled_on": "text",
     "stripe_customer_ref": "text"
   },
   "invoice.partial.prepare": {
@@ -593,6 +596,19 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
   },
   "invoice.partial.revoke": {
     "request": "text"
+  },
+  "invoice.partial.schedule.execute": {
+    "amount_cents": "integer",
+    "basis_hash": "text",
+    "confirm": "flag",
+    "payment_method_ref": "text",
+    "request": "text",
+    "scheduled_on": "text"
+  },
+  "invoice.partial.schedule.prepare": {
+    "invoice": "text",
+    "mandate_ref": "text",
+    "scheduled_on": "text"
   },
   "invoice.refund.execute": {
     "amount": "text",
