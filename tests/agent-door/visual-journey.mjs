@@ -23,7 +23,7 @@ async function screenshots(context, pages) {
   const browser = await chromium.launch({ headless: true })
   try {
     const session = await browser.newContext()
-    await session.addCookies(context.cookie.split('; ').map(pair => {
+    if (context.cookie) await session.addCookies(context.cookie.split('; ').map(pair => {
       const at = pair.indexOf('=')
       return { name: pair.slice(0, at), value: pair.slice(at + 1), url: context.origin }
     }))
@@ -40,7 +40,7 @@ async function screenshots(context, pages) {
         await page.setViewportSize({ width, height: width === 390 ? 844 : 1000 })
         await page.goto(new URL(path, context.origin).href)
         const size = await page.evaluate(() => ({ width: innerWidth, scroll: document.documentElement.scrollWidth,
-          controls: [...document.querySelectorAll('button,input:not([type=hidden]),select,a.button')]
+          controls: [...document.querySelectorAll('button:not(:disabled),input:not([type=hidden]):not(:disabled),select:not(:disabled),a.button,a.action')]
             .filter(node => node.getBoundingClientRect().width > 0).map(node => node.getBoundingClientRect().height) }))
         if (size.scroll > size.width || size.controls.some(height => height < 44)) throw new Error('Native agent screen layout failed')
         const file = `.cache/agent-door-visual/${state}-${width}.png`
@@ -71,7 +71,8 @@ export async function afterStep(context) {
   const pending = extra.result?._meta?.['com.runeditrun/approval']
   if (!pending?.id) throw new Error('Native browser journey requires a real held approval')
   const path = `/agents/approvals/${encodeURIComponent(pending.id)}`
-  await screenshots(context, [['agents', '/agents'], ['pending', path]])
+  await screenshots(context, [['agents', '/agents'], ['pending', path], ['identity-settings', '/auth/settings/identity']])
+  await screenshots({ ...context, cookie: '' }, [['identity-signed-out', '/auth/settings/identity']])
   const { approval } = await person(context, `/agents/api/approvals/${encodeURIComponent(pending.id)}`)
   await person(context, `/agents/api/approvals/${encodeURIComponent(pending.id)}/reject`, {
     revision: approval.revision, summary_sha256: approval.summary_sha256,

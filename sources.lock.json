@@ -5491,7 +5491,7 @@
       "executable": false
     },
     "tests/agent-door/visual-journey.mjs": {
-      "sha256": "d3955bd77b375c02b6b57542e8e3e57c2fd2312093b1cba8a23a8c58f1805bd8",
+      "sha256": "603c9ef408e835b30bafdde8b24e78944002e8c78e9596f26304b89f09cff769",
       "executable": false
     },
     "tests/fixtures/invoice-logo.jpg": {
