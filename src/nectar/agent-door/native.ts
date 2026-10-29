@@ -13,12 +13,13 @@ const grants: Record<string, Capability[]> = {
 
 /** Preserve native agent identity. Company approval never makes it a member. */
 export async function nativeActor(env: Bindings, ctx: ToolContext): Promise<Actor> {
-  const member = await one(env, `SELECT m.*,r.capabilities AS custom FROM nc_members m
+  const member = await one(env, `SELECT m.*,r.capabilities AS custom,o.role AS operator_role FROM nc_members m
     LEFT JOIN nc_roles r ON r.id=m.custom_role_id
     JOIN oa_nectar_members identity ON identity.member_id=m.id JOIN oa_operators o ON o.id=identity.operator_id
     WHERE m.id=? AND m.status='active' AND o.status='active'`, ctx.person.id)
   if (!member) throw new ToolRefusal('unauthenticated')
-  const held = memberCapabilities(member.role as Role, member.custom)
+  const role: Role = member.operator_role === 'owner' ? 'owner' : member.role === 'owner' ? 'finance' : member.role as Role
+  const held = memberCapabilities(role, member.custom)
   const requested = new Set(ctx.scopes.flatMap(scope => grants[scope] ?? []))
   if (requested.has('read')) for (const family of RECORD_FAMILIES) requested.add(`read.${family}`)
   return { id: ctx.consent ? ctx.agent.id : ctx.clientId ?? ctx.agent.id, kind: 'agent', name: ctx.agent.name, email: '', role: null,

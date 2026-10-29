@@ -12,8 +12,8 @@ interface BoundMember {
 interface NativePerson extends Person { policyRole: 'owner' | 'editor' | null }
 const boundColumns = `m.id,m.name,m.role,m.status,b.operator_id,o.email AS operatorEmail,
   o.display_name AS operatorName,o.role AS operatorRole,o.status AS operatorStatus`
-const setupOwner = `SELECT o.id FROM oa_operators o LEFT JOIN oa_bootstrap b ON b.claim_id=o.id
-  WHERE o.role='owner' AND o.status='active' ORDER BY b.claim_id IS NULL,o.created_at,o.id LIMIT 1`
+const setupOwner = `SELECT o.id FROM oa_bootstrap b JOIN oa_operators o ON o.id=b.claim_id
+  WHERE b.singleton=1 AND o.role='owner' AND o.status='active'`
 
 /** Business subjects resolve only through saved operator IDs, never a token's email. */
 export function nectarPeople(env: Bindings): PeopleAdapter {

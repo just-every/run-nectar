@@ -215,7 +215,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "bf12c03a872fe7b6f3540ed034713a2bfcc698872ae6f0a612d23d26c4bf6177",
+      "sha256": "c0ca3d272ca72362212445762b7db837d8c5d06b971184d25ce8602a4e2ce22c",
       "executable": false
     },
     "agent-surface.json": {
@@ -239,7 +239,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "67f732d2d5f06147ff6276136402fb4a5885606e0ae84272ef861e59b8e98e97",
+      "sha256": "aec9ee67b9a690df6f567771d0b6fce2f7a53de76b056e38f18857508334d5e6",
       "executable": false
     },
     "DEMO.md": {
@@ -279,7 +279,7 @@
       "executable": false
     },
     "docs/CLAIMS.md": {
-      "sha256": "5be6459daa4b6d56b2124a0ea79b91ea6df6403a618ef651f3579389fafee77a",
+      "sha256": "2f32c8bd867ac44368753c0d9f5ed9f8ca35b492697673336f7741071103c3e9",
       "executable": false
     },
     "docs/composition-baseline.json": {
@@ -3615,11 +3615,11 @@
       "executable": false
     },
     "src/nectar/agent-door/native.ts": {
-      "sha256": "8d774e93f186cbe1995f3fa7df748cc7ce97854a93b20503949084c03da36d99",
+      "sha256": "16f581fce9ba42f84497cb4a5717bc0c883df412c2c571f144e30aca7bd77125",
       "executable": false
     },
     "src/nectar/agent-door/people.ts": {
-      "sha256": "0b494f86404686c0b2751e73ce76e6a3d7ce2f0a6ce352b869b8b67c5d90fd80",
+      "sha256": "3ee398822614017b870e55d8f46af991e7ae1f725e94d4bd7252adddfc37341c",
       "executable": false
     },
     "src/nectar/agent-door/prepare-evidence.ts": {
