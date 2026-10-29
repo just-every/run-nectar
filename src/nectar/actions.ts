@@ -1,5 +1,5 @@
 import { preparePortalChangePolicy } from './portal-change-policy'
-import { uploadRemittances, previewRemittance, confirmRemittance, previewRemittanceAllocation, allocateRemittance } from './remittances'
+import { uploadBankDeposit, uploadRemittances, previewRemittance, confirmRemittance, previewRemittanceAllocation, allocateRemittance } from './remittances'
 import { consumeProcessorEvent } from './processor-events'
 import { allocateProcessorCash } from './processor-cash-queue'
 import { prepareImportedCashTakeover, confirmImportedCashTakeover } from './processor-cash-imported'
@@ -7,6 +7,7 @@ import { previewProcessorCashReturn, prepareProcessorCashReturn, executeProcesso
 import { prepareInvoiceRefund, executeInvoiceRefund, reconcileInvoiceRefund } from './invoice-refunds'
 import { previewInvoiceRefund } from './invoice-refund-preview'
 import { prepareInvoiceVoid, voidInvoice } from './invoice-voids'
+import { configureBillingNotice, prepareBillingNotice, sendBillingNotice } from './billing-notices'
 import { createDunningPolicy, enrollDunning } from './dunning-policy'
 import { prepareDunningMail, sendDunningMail } from './dunning-mail'
 import { endDunning, revokeDunning } from './dunning'
@@ -144,6 +145,9 @@ export const actions: Record<string, Handler> = {
   'payment_link.activate': activatePaymentLink,
   'payment_link.create': createPaymentLink,
   'payment_link.deactivate': deactivatePaymentLink,
+  'billing.notice.configure': configureBillingNotice,
+  'billing.notice.prepare': prepareBillingNotice,
+  'billing.notice.send': sendBillingNotice,
   'dunning.policy.create': createDunningPolicy,
   'dunning.enroll': enrollDunning,
   'dunning.mail.prepare': prepareDunningMail,
@@ -335,6 +339,7 @@ export const actions: Record<string, Handler> = {
   'promotion.create': createPromotionCode,
   'trial.extend': extendTrial,
   'trial.resolve': resolveTrial,
+  'bank.deposit.upload': uploadBankDeposit,
   'remittance.upload': uploadRemittances,
   'remittance.preview': previewRemittance,
   'remittance.confirm': confirmRemittance,

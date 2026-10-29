@@ -114,6 +114,30 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "reason": "text",
     "reference": "text"
   },
+  "bank.deposit.upload": {
+    "bank_source_id": "text",
+    "file": "file"
+  },
+  "billing.notice.configure": {
+    "body": "text",
+    "confirm": "flag",
+    "kind": "text",
+    "language": "text",
+    "revision": "integer",
+    "sender": "text",
+    "subject": "text"
+  },
+  "billing.notice.prepare": {
+    "confirm": "flag",
+    "event": "text",
+    "invoice": "text",
+    "kind": "text"
+  },
+  "billing.notice.send": {
+    "basis_hash": "text",
+    "confirm": "flag",
+    "notice": "text"
+  },
   "billrun.prepare": {
     "period": "text"
   },
@@ -555,6 +579,7 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "confirm": "flag",
     "destination": "text",
     "invoice": "text",
+    "proposal": "text",
     "reason": "text",
     "refund": "text"
   },
@@ -563,6 +588,7 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "basis": "text",
     "destination": "text",
     "invoice": "text",
+    "proposal": "text",
     "reason": "text"
   },
   "invoice.refund.preview": {
@@ -1018,11 +1044,13 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "confirm": "flag",
     "customer": "text",
     "fingerprint": "text",
-    "receipt": "text"
+    "receipt": "text",
+    "source": "text"
   },
   "remittance.preview": {
     "customer": "text",
-    "receipt": "text"
+    "receipt": "text",
+    "source": "text"
   },
   "remittance.upload": {
     "file": "file"

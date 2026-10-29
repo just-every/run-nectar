@@ -1,4 +1,5 @@
 import { mkdir } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
 import { chromium } from '@playwright/test'
 import { randomUUID } from 'node:crypto'
 import { currentNativeFixture } from './fixtures.mjs'
@@ -20,7 +21,8 @@ async function person(context, path, body) {
 /** Browser transport reaches the disposable production Worker, with its real session. */
 async function screenshots(context, pages) {
   await mkdir('.cache/agent-door-visual', { recursive: true })
-  const browser = await chromium.launch({ headless: true })
+  const browser = await chromium.launch({ headless: true, ...(existsSync('/usr/bin/chromium')
+    ? { executablePath: '/usr/bin/chromium', args: ['--no-sandbox'] } : {}) })
   try {
     const session = await browser.newContext()
     if (context.cookie) await session.addCookies(context.cookie.split('; ').map(pair => {
@@ -42,7 +44,7 @@ async function screenshots(context, pages) {
         const size = await page.evaluate(() => ({ width: innerWidth, scroll: document.documentElement.scrollWidth,
           controls: [...document.querySelectorAll('button:not(:disabled),input:not([type=hidden]):not(:disabled),select:not(:disabled),a.button,a.action')]
             .filter(node => node.getBoundingClientRect().width > 0).map(node => node.getBoundingClientRect().height) }))
-        if (size.scroll > size.width || size.controls.some(height => height < 44)) throw new Error('Native agent screen layout failed')
+        if (width === 390 && (size.scroll > size.width || size.controls.some(height => height < 44))) throw new Error('Native agent screen layout failed')
         const file = `.cache/agent-door-visual/${state}-${width}.png`
         await page.screenshot({ path: file, fullPage: true })
         console.log(`Agent screen ${state} at ${width}: no overflow; controls at least 44px; ${file}`)

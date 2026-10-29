@@ -23,3 +23,14 @@ export function draftCorrectionMessages(p:Row){
 function revenueEffect(periods:Row[],policy:string){
  return h`<h3>Revenue recognition effect</h3><p>Tax is excluded. Recognition policy: ${policy}.</p>${table(['Month','Revenue before$','Revenue after$','Revenue change$'],periods.map(r=>[h`<span data-revenue-period="${r.period}" data-before-cents="${r.beforeCents}" data-after-cents="${r.afterCents}" data-delta-cents="${r.deltaCents}">${r.period}</span>`,cents(r.beforeCents),cents(r.afterCents),cents(r.deltaCents)]))}`
 }
+
+export function refundCorrectionBody(p:Row){
+  const r=p.impact.refund,m=p.impact.mail
+  return h`<h2>Invoice refund simulation</h2><p><a href="${r.source}">Original invoice</a> · ${r.destination==='original'?'Original payment method':'Customer balance'}</p>
+    ${table(['Measure','Original$','Reversing$'],[['Subtotal',cents(r.original.subtotalCents),cents(r.reversing.subtotalCents)],['Tax',cents(r.original.taxCents),cents(r.reversing.taxCents)],['Total',cents(r.original.totalCents),cents(r.reversing.totalCents)]])}
+    ${table(['Effect','Change$'],[['Cash',cents(r.effects.cashCents)],['Customer balance',cents(r.effects.customerBalanceCents)],['Revenue',cents(r.effects.revenueCents)]])}
+    <p>Issued originals remain unchanged. ${r.executionAvailable?'The saved request requires human approval.':'Provider tax reversal is unavailable; execution is refused.'}</p>
+    <h3>Cited source lines</h3><ul>${m.citations.map((c:Row)=>h`<li><a href="${c.source}">Source line</a><blockquote>${c.quote}</blockquote></li>`)}</ul>
+    <h3>Customer explanation</h3><p>${m.explanation}</p><p>To: ${m.recipient}</p><p>Subject: ${m.subject}</p><pre class="message">${m.body}</pre><p>${m.outcome}</p>
+    <p>Refund outcome: ${p.refundRequest?.status??'Not prepared'}. Mail outcome: ${p.correctionMail?.status??'Not reserved'}.</p>${p.correctionMail?.status==='suppressed'?h`<p>No customer message was sent. <a href="/app/customers/${r.customer}">Review the current billing contact</a> before contacting the customer.</p>`:''}${p.refundRequest?.refund_ref?h`<p>Processor refund reference: ${p.refundRequest.refund_ref}</p>`:''}`
+}

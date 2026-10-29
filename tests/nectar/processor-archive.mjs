@@ -18,7 +18,7 @@ const cashKinds=['nc_processor_events','nc_processor_cash_applications','nc_proc
 const returnKinds=['nc_processor_cash_returns']
 const importedKinds=['nc_processor_cash_imported_applications','nc_processor_cash_imported_takeovers']
 const nativeKinds=[...new Set([...eventKinds,...cashKinds])]
-const remittanceKinds=['nc_remittances','nc_remittance_allocations']
+const remittanceKinds=['nc_remittances','nc_remittance_allocations','nc_remittance_origins']
 const sourceKinds=[...nativeKinds,...returnKinds,...importedKinds,...remittanceKinds,'nc_remittance_source_keys']
 const priorDay=day=>new Date(Date.parse(`${day}T12:00:00Z`)-86400000).toISOString()
 
@@ -190,6 +190,10 @@ export async function processorArchiveJourney() {
     const receipt=(await api('remittance.upload',{file:source})).id
     const prepared=await api('remittance.preview',{receipt})
     const confirmed=await api('remittance.confirm',{receipt,fingerprint:prepared.fingerprint,confirm:true})
+    const bank=await api('bank.deposit.upload',{bank_source_id:'synthetic-nectar-937',file:source})
+    const bankPreview=await api('remittance.preview',{receipt:bank.id,source:bank.source})
+    assert.equal((await api('remittance.confirm',{receipt:bank.id,source:bank.source,fingerprint:bankPreview.fingerprint,confirm:true})).payment,confirmed.payment)
+    assert.equal((await api(`payments/${confirmed.payment}/receipt`)).recordedSources.length,2)
     const allocation=await api('remittance.allocate.preview',{receipt,invoice:invoice.id,amount:'10.00'})
     await api('remittance.allocate',{receipt,invoice:invoice.id,amount:'10.00',fingerprint:allocation.fingerprint,confirm:true})
     const financeEmail=['synthetic-nectar-931','example.test'].join('@')
@@ -201,6 +205,7 @@ export async function processorArchiveJourney() {
     await worker.assertStorageExcludes(['synthetic-nectar-901','synthetic-nectar-930'])
     return {customer,financeEmail,async restoreCheck(restored,owner,removed=false){
      await restored.api('remittance.upload',owner,{file:source},409)
+     await restored.api('bank.deposit.upload',owner,{bank_source_id:'synthetic-nectar-937',file:source},409)
      await restored.api('remittance.confirm',owner,{receipt,fingerprint:prepared.fingerprint,confirm:true},removed?404:409)
      const payments=await restored.api('payments',owner)
      assert.equal(payments.filter(p=>p.customer_id===customer).length,removed?0:1)

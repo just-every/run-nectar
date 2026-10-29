@@ -1,3 +1,5 @@
+import { planInvoiceRefundCorrection, checkedRefundCorrection } from './invoice-refund-correction'
+import { executeRefundCorrection } from './invoice-refunds'
 import { assuranceProposal, assuranceProposalGuards } from './assurance'
 import { amendmentPlan, correctionPlan } from './draft-correction-plan'
 import { planInvoiceCredit, invoiceCreditStatements } from './credit-correction'
@@ -44,6 +46,7 @@ async function collectionPlan(env: Bindings, payload: Row) {
 
 async function plan(env: Bindings, kind: Kind, payload: Row, saved = false):Promise<{normalized:Row;impact:any;basis:Row}> {
   const business = await requireBusiness(env)
+  if (kind === 'amendment' && payload.invoice_refund === true) return planInvoiceRefundCorrection(env,payload)
   if (kind === 'amendment' && payload.invoice_credit === true) return await planInvoiceCredit(env,business,payload,saved)
   if (kind === 'amendment' && payload.setup === true) return await setupPlan(env,business,payload,saved)
   if (kind === 'amendment') return await draftCorrectionPlan(env,kind,await amendmentPlan(env,business,payload))
@@ -74,7 +77,7 @@ export async function proposeDraft(env: Bindings, actor: Actor, input: Input) {
   insist(payload && typeof payload === 'object' && !Array.isArray(payload), 'invalid_payload')
   const evidence = (input.has('evidence') ? input.json('evidence') : {}) as Row
   insist(evidence && typeof evidence === 'object' && !Array.isArray(evidence), 'invalid_evidence')
-  if (kind === 'amendment' && payload.setup !== true && payload.invoice_credit !== true) {
+  if (kind === 'amendment' && payload.setup !== true && payload.invoice_credit !== true && payload.invoice_refund !== true) {
     const clauses = Array.isArray(evidence.clauses) ? evidence.clauses.filter((c: Row) => typeof c?.quote === 'string' && c.quote.trim()) : []
     insist(clauses.length, 'quoted_clause_required')
   }
@@ -108,7 +111,7 @@ export async function proposeDraft(env: Bindings, actor: Actor, input: Input) {
 
 export async function proposals(env: Bindings, actor: Actor) {
   requireCapability(actor, 'read')
-  return await all(env, 'SELECT id, kind, json_extract(payload_json, \'$.invoice_credit\') AS invoice_credit,title, status, created_by, created_by_kind, created_at, decided_by, decided_at FROM nc_proposals ORDER BY status = \'pending\' DESC, created_at DESC LIMIT 200')
+  return await all(env, 'SELECT id, kind, json_extract(payload_json, \'$.invoice_credit\') AS invoice_credit,json_extract(payload_json, \'$.invoice_refund\') AS invoice_refund,title, status, created_by, created_by_kind, created_at, decided_by, decided_at FROM nc_proposals ORDER BY status = \'pending\' DESC, created_at DESC LIMIT 200')
 }
 
 export async function proposalDetail(env: Bindings, actor: Actor, id: string): Promise<Row> {
@@ -126,9 +129,12 @@ export async function proposalDetail(env: Bindings, actor: Actor, id: string): P
   const correctionMail=await one(env,'SELECT * FROM nc_credit_correction_mail WHERE proposal_id=?',id)
   const binding=await one(env,'SELECT b.request_id,r.prepared_by FROM nc_credit_correction_requests b JOIN nc_credit_requests r ON r.id=b.request_id WHERE b.proposal_id=?',id)
   const customerMessages=await all(env,'SELECT * FROM nc_draft_correction_mail WHERE proposal_id=? ORDER BY customer_id',id)
+  const refundRequest=payload.invoice_refund===true?await one(env,"SELECT id,prepared_by_id,status,refund_ref,credit_id FROM nc_invoice_refunds WHERE json_extract(quote_json,'$.correction.proposal.id')=? ORDER BY prepared_at DESC LIMIT 1",id):null
+  const needsRefundPreparation=payload.invoice_refund===true&&!refundRequest
+  if(payload.invoice_refund===true&&parseJson<Row>(row.impact_json,{}).refund?.needsSecondApprover&&refundRequest?.prepared_by_id===actor.id)needsOtherApprover=true
   const needsCreditPreparation=payload.invoice_credit===true && parseJson<Row>(row.impact_json,{}).credit?.needsSecondApprover && !binding
   needsOtherApprover=needsOtherApprover || payload.invoice_credit===true && parseJson<Row>(row.impact_json,{}).credit?.needsSecondApprover && binding?.prepared_by===actor.id
-  return { ...row, needsCreditPreparation,correctionMail,creditRequest:binding?.request_id??null,customerMessages,needsPreparation, needsOtherApprover, payload, evidence: parseJson(row.evidence_json, {}), impact: parseJson(row.impact_json, {}), basis: parseJson(row.basis_json, {}), result: parseJson(row.result_json, null), stale, payload_json: undefined, evidence_json: undefined, impact_json: undefined, basis_json: undefined, result_json: undefined }
+  return { ...row, needsRefundPreparation,refundRequest, needsCreditPreparation,correctionMail,creditRequest:binding?.request_id??null,customerMessages,needsPreparation, needsOtherApprover, payload, evidence: parseJson(row.evidence_json, {}), impact: parseJson(row.impact_json, {}), basis: parseJson(row.basis_json, {}), result: parseJson(row.result_json, null), stale, payload_json: undefined, evidence_json: undefined, impact_json: undefined, basis_json: undefined, result_json: undefined }
 }
 
 /** A person approves or rejects. Approval re-reads the basis and applies the typed change through the normal records. */
@@ -150,6 +156,13 @@ export async function decide(env: Bindings, actor: Actor, input: Input) {
     return { id: row.id, status: 'rejected' }
   }
   const payload = parseJson<Row>(row.payload_json, {})
+  if(payload.invoice_refund===true) {
+    await checkedRefundCorrection(env,row.id)
+    const refund=await one(env,"SELECT id,basis_hash FROM nc_invoice_refunds WHERE json_extract(quote_json,'$.correction.proposal.id')=? AND status='pending' ORDER BY prepared_at DESC LIMIT 1",row.id)
+    insist(refund,'invoice_refund_needs_preparation',409)
+    const result=await executeRefundCorrection(env,actor,Input.of({refund:refund.id,basis:refund.basis_hash,confirm:true}),{...row,decision_note:note})
+    return {...result,refund:result.id,id:row.id,status:'approved'}
+  }
   const simulationSeq = payload.simulation === true || payload.setup === true || payload.invoice_credit === true || row.kind === 'usage_correction' || row.kind === 'amendment' || row.kind === 'collection' ? (await one(env,'SELECT COALESCE(MAX(seq),0) AS seq FROM nc_audit'))!.seq : null
   if ((payload.setup === true || row.kind === 'price_change' || (row.kind === 'amendment' && payload.kind === 'price_override')) && row.created_by_kind === 'member') {
     insist(row.prepared_by_id, 'price_proposal_needs_preparation', 409)
