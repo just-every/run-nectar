@@ -449,5 +449,12 @@
   "portal.change.review": "A person must review this request before any change.",
   "portal.change.stale": "The subscription or merchant policy has changed since this request. It grants no authority to apply the old choice.",
   "portal.change.empty": "No requests yet.",
-  "portal.change.quantity": "Quantity"
+  "portal.change.quantity": "Quantity",
+  "portal.change.previewButton": "Preview change",
+  "portal.change.previewHeading": "Plan change estimate",
+  "portal.change.beforeAmount": "Current period total",
+  "portal.change.afterAmount": "Proposed period total",
+  "portal.change.difference": "Prorated difference",
+  "portal.change.effective": "Effective date",
+  "portal.change.previewReadOnly": "This estimate does not change your subscription or charge you. Downgrades can be sent separately for merchant review."
 }
