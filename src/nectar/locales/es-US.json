@@ -449,5 +449,12 @@
   "portal.change.review": "Una persona debe revisar esta solicitud antes de cualquier cambio.",
   "portal.change.stale": "La suscripción o la política del comercio cambió desde esta solicitud. No autoriza aplicar la opción anterior.",
   "portal.change.empty": "Todavía no hay solicitudes.",
-  "portal.change.quantity": "Cantidad"
+  "portal.change.quantity": "Cantidad",
+  "portal.change.previewButton": "Ver cambio estimado",
+  "portal.change.previewHeading": "Estimación del cambio de plan",
+  "portal.change.beforeAmount": "Total actual del período",
+  "portal.change.afterAmount": "Total propuesto del período",
+  "portal.change.difference": "Diferencia prorrateada",
+  "portal.change.effective": "Fecha de entrada en vigor",
+  "portal.change.previewReadOnly": "Esta estimación no cambia su suscripción ni le cobra. Los cambios a un plan inferior se pueden enviar por separado para revisión de la empresa."
 }

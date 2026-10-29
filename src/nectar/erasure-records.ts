@@ -12,8 +12,8 @@ const relation = new Set(['customer_id','subscription_id','invoice_id','payment_
 const keep = new Set(['purpose','correction_kind','intent_key','billing_key','interval_unit','billing_timing','numbering_mode','capture_kind','account_ref','custody','basis_hash','error_code','occurred_text','number','kind','document_kind','status','origin','language','currency','method','method_kind','billing_mode','invoice_kind','calc_version','version','revision','quantity','unit_amount','value','tax_rate','tax_mode','tax_jurisdiction','anchor_day','billing_interval','access','scope','scopes','pricing_model','action','state','approval_mode','mail_status','verified_method','event','created_by_kind','prepared_by_kind','requested_by_kind','source','proposal_kind'])
 // The processor refund identifier is retained cash custody under ct batch11 I.
 const typedPlanField=(table:string,column:string)=>table.startsWith('nc_processor_')&&['type','event_type','code','decline_code','source_hash'].includes(column)||table==='nc_plan_changes'&&['mode','policy'].includes(column)||table==='nc_invoice_refunds'&&column==='destination'
-const financialIdentifier=(table:string,column:string)=>(['nc_prepaid_refunds','nc_invoice_refunds'].includes(table)&&column==='refund_ref')||(table.startsWith('nc_processor_')&&['transaction_ref','source_ref','payout_ref','event_ref','object_ref','intent_ref','transfer_ref','stripe_customer_ref','payment_intent_ref','charge_ref','refund_ref'].includes(column))
-const reserved = new Set(['nc_incumbent_revenue','nc_erased_records','nc_guard','nc_privacy_generation','nc_privacy_context','nc_erasure_requests','nc_erasure_financial','nc_business','nc_members','nc_agent_keys'])
+const financialIdentifier=(table:string,column:string)=>(table==='nc_remittances'&&['source_key_hash','payload_hash','confirmation_hash'].includes(column))||(['nc_prepaid_refunds','nc_invoice_refunds'].includes(table)&&column==='refund_ref')||(table.startsWith('nc_processor_')&&['transaction_ref','source_ref','payout_ref','event_ref','object_ref','intent_ref','transfer_ref','stripe_customer_ref','payment_intent_ref','charge_ref','refund_ref'].includes(column))
+const reserved = new Set(['nc_remittance_source_keys','nc_incumbent_revenue','nc_erased_records','nc_guard','nc_privacy_generation','nc_privacy_context','nc_erasure_requests','nc_erasure_financial','nc_business','nc_members','nc_agent_keys'])
 const keyed = (value: unknown, ids: Set<string>): boolean => typeof value === 'string' ? ids.has(value) : Array.isArray(value) ? value.some(v => keyed(v, ids)) : !!value && typeof value === 'object' && Object.values(value).some(v => keyed(v, ids))
 const json = (text: unknown) => { try { return JSON.parse(String(text)) } catch { return null } }
 const blankJson = (value: string) => Array.isArray(json(value)) ? '[]' : '{}'
@@ -36,7 +36,7 @@ export async function erasurePlan(env: Bindings, customer: Row): Promise<Erasure
     changed = false
     for (const image of images) {
       if (image.table === 'nc_audit' || image.table === 'nc_bill_runs' || image.table === 'nc_report_deliveries') continue
-      const owns = image.scoped || Object.entries(image.row).some(([k,v]) => relation.has(k) && typeof v === 'string' && ids.has(v)) || (image.table === 'nc_proposals' && keyed(json(image.row.payload_json),ids))
+      const owns = image.scoped || (image.table==='nc_remittances' && keyed(json(image.row.source_json),new Set([...ids,customer.external_id,customer.provider_ref,customer.billing_email].filter(Boolean)))) || Object.entries(image.row).some(([k,v]) => relation.has(k) && typeof v === 'string' && ids.has(v)) || (image.table === 'nc_proposals' && keyed(json(image.row.payload_json),ids))
       if (!owns) continue
       if (!image.scoped) { image.scoped = true; changed = true }
       if (image.row.id && !ids.has(image.row.id)) { ids.add(image.row.id); changed = true }
@@ -79,6 +79,7 @@ export async function erasurePlan(env: Bindings, customer: Row): Promise<Erasure
       if (['nc_usage_correction_mail','nc_credit_correction_mail','nc_draft_correction_mail','nc_notifications','nc_note_mentions','nc_renewal_notices','nc_card_expiry_notices'].includes(table)) updates.status='suppressed'
       if (table==='nc_cadence_deliveries') updates.status='superseded'
       if (table==='nc_webhook_deliveries') {updates.status='suppressed';updates.claim=null}
+      if (table==='nc_remittances') updates.status='erased'
       if (table==='nc_notices') updates.status='discarded'
       if (table==='nc_tasks') updates.status='done'
       if (table==='nc_renewal_terms') {updates.auto_renew=0;updates.token_hash=null;updates.status='ended'}

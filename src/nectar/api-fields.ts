@@ -1002,6 +1002,31 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
   "reminder.prepare": {
     "customer": "text"
   },
+  "remittance.allocate": {
+    "amount": "text",
+    "confirm": "flag",
+    "fingerprint": "text",
+    "invoice": "text",
+    "receipt": "text"
+  },
+  "remittance.allocate.preview": {
+    "amount": "text",
+    "invoice": "text",
+    "receipt": "text"
+  },
+  "remittance.confirm": {
+    "confirm": "flag",
+    "customer": "text",
+    "fingerprint": "text",
+    "receipt": "text"
+  },
+  "remittance.preview": {
+    "customer": "text",
+    "receipt": "text"
+  },
+  "remittance.upload": {
+    "file": "file"
+  },
   "report.schedule": {
     "day": "integer",
     "enabled": "flag"
