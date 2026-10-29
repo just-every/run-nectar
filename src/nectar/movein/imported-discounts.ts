@@ -27,7 +27,10 @@ export function importedAmountDiscounts(subscription: any, options: {
   for (const discount of discounts) {
     const coupon = discount.coupon ?? discount.source?.coupon
     refuse(coupon && typeof coupon === 'object', 'coupon must be fully expanded')
-    if (coupon.amount_off == null) continue
+    if (coupon.amount_off == null) {
+      refuse(typeof coupon.percent_off === 'number' && Number.isFinite(coupon.percent_off) && coupon.percent_off > 0 && coupon.percent_off <= 100 && ['once','repeating','forever'].includes(coupon.duration), 'coupon needs a captured supported amount or percentage and duration')
+      continue
+    }
     const reference = (value: any) => typeof value === 'string' ? value : value?.id
     refuse(!discount.subscription || reference(discount.subscription) === subscription.id, 'discount belongs to another subscription')
     refuse(!discount.customer || reference(discount.customer) === reference(subscription.customer), 'discount belongs to another customer')

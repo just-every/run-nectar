@@ -3734,7 +3734,7 @@
       "executable": false
     },
     "src/nectar/movein/imported-discounts.ts": {
-      "sha256": "20e06f776ede5ce895205d3134d30d791bb0a613f9d1913c30b3ac7f5dd8a500",
+      "sha256": "1f5ad3ddba1c7d96b7ca72ee20c0ded5d8828a5a4844417a78012a1682da9943",
       "executable": false
     },
     "src/nectar/movein/stripe.ts": {
@@ -5322,7 +5322,7 @@
       "executable": false
     },
     "tests/nectar/move-discounts.mjs": {
-      "sha256": "fb5b5f5f2a5669c1439069607c1ea44182eb603e241c3320d7db288ff45274bf",
+      "sha256": "8b6cbb36135c7f5c100fe82f00262d597fdc4417507a9179c6c40ae2d981677f",
       "executable": false
     },
     "tests/nectar/move-history.mjs": {
