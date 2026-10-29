@@ -70,3 +70,22 @@ export async function assertComparisonDescription(h,owner,record){
  for(const result of [measured,baseline])assert.ok(text.includes(`${result.recoveredPayments} payments (${(result.recoveryRate*100).toFixed(1)}%) and ${dollars(result.recoveredAmountCents)}`))
  assert.ok(page.includes('href="/api/nectar/retry-comparison"'),'The product comparison cites its measured API record')
 }
+
+// The manual-recovery sanity journey supplies its independently observed first
+// refusal and cash, rather than computing expected results from report fields.
+export function assertNativeRecovery(report,first,recoveredAmountCents){
+ const row=report.invoices.find(r=>r.invoice===first.invoice)
+ assert.ok(row,'The first failed invoice remains in the report after recovery')
+ assert.deepEqual([row.firstFailedAt,row.failedAmountCents,row.declineCode],[first.firstFailedAt,first.failedAmountCents,first.declineCode])
+ assert.equal(row.recoveredAmountCents,recoveredAmountCents)
+ assert.deepEqual(row.attempts.map(a=>[a.attempt,a.outcome]),[[1,'failed'],[2,'collected']])
+ assert.deepEqual(row.recoveries.map(r=>[r.amountCents,r.attempt,r.step]),[[recoveredAmountCents,2,null]])
+ for(const [groups,key] of [[report.byAttempt,'2'],[report.byDecline,first.declineCode],[report.byDunningStep,'unrecorded']]){
+  const bucket=groups.find(b=>b.key===key&&b.currency===first.currency)
+  assert.ok(bucket)
+  assert.equal(bucket.recoveryRate,bucket.recoveredInvoices/bucket.failedInvoices)
+  assert.equal(bucket.amountRecoveryRate,bucket.recoveredAmountCents/bucket.failedAmountCents)
+ }
+ const attempt=report.byAttempt.find(b=>b.key==='2'&&b.currency===first.currency)
+ assert.deepEqual([attempt.failedInvoices,attempt.recoveredInvoices,attempt.failedAmountCents,attempt.recoveredAmountCents,attempt.recoveryRate,attempt.amountRecoveryRate],[1,1,first.failedAmountCents,recoveredAmountCents,1,1])
+}

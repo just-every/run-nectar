@@ -46,6 +46,7 @@ import { preparePrepaidRefund, decidePrepaidRefund, reconcilePrepaidRefund } fro
 import { preparePrepaidTopupAuthorization, decidePrepaidTopupAuthorization, revokePrepaidTopupAuthorization } from './prepaid-topup-authorization'
 import { reconcilePrepaidTopup } from './prepaid-topup-charge'
 import { runPrepaidTopupFromDoor } from './prepaid-topup-actions'
+import { prepareNativeReconfirmation, confirmNativeReconfirmation } from './payments/reconfirmation'
 import { bindNativeCollectionCustomer, prepareNativeCollection, confirmNativeCollection, reconcileNativeCollection } from './payments/collection'
 import { preparePrepaid, decidePrepaid, revokePrepaidConsent } from './prepaid-terms'
 import { preparePrepaidPurchase } from './prepaid-purchase'
@@ -162,6 +163,8 @@ export const actions: Record<string, Handler> = {
   'collection.prepare': prepareNativeCollection,
   'collection.confirm': confirmNativeCollection,
   'collection.reconcile': reconcileNativeCollection,
+  'collection.recovery.prepare': prepareNativeReconfirmation,
+  'collection.recovery.confirm': confirmNativeReconfirmation,
   'payment.ach_evidence.record':recordAchPaymentEvidence,
   'customer.payment_methods.refresh':refreshCustomerPaymentMethods,
   'checkout.setup.prepare':prepareHostedSetup,
