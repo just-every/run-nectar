@@ -1,3 +1,4 @@
+import { unusableMethodGuard } from './card-lifecycle'
 // Owner-reviewed quote plus the customer's signed portal acceptance. A merchant
 // factor alone never supplies permission for an off-session customer charge.
 import type { Bindings } from '../auth.server'
@@ -32,7 +33,7 @@ export async function preparePrepaidTopupAuthorization(env:Bindings,actor:Actor,
   const customer=await one(env,'SELECT revision FROM nc_customers WHERE id=? AND erased_at IS NULL',consent.customer_id);insist(customer,'customer_not_found',404)
   const id=newId(),quote:TopupQuote={subscription:consent.subscription_id,customer:consent.customer_id,consent:consent.id,request:consent.request_id,owner:actor.id,terms,consentTermsJson:consent.terms_json,timezone:business.timezone,businessRevision:business.revision,customerRevision:customer.revision,thresholdN:consent.threshold_n,amountCents:terms.valueCents,periodCapCents,period:'business_calendar_month',currency:'usd',startDate,endDate,bindingId:binding.id,bindingRevision:binding.revision,accountRef,customerRef:card.customerRef,paymentMethodRef:card.paymentMethodRef,livemode:card.livemode,card:card.card,content,revokePath:'/portal/prepaid-topup.revoke',fundingEffective:'captured-payment-date',capRule:'all claimed amounts, including unknown outcomes'}
   const basis=await fingerprint(quote),at=clockInstant(env)
-  await commit(env,[collectionAuthority(env,actor),guard(env,'topup_terms_changed',"EXISTS(SELECT 1 FROM nc_prepaid_consents WHERE id=? AND status='active' AND terms_json=? AND threshold_n=?)",consent.id,consent.terms_json,consent.threshold_n),
+  await commit(env,[collectionAuthority(env,actor),unusableMethodGuard(env,accountRef,card.customerRef,card.paymentMethodRef),guard(env,'topup_terms_changed',"EXISTS(SELECT 1 FROM nc_prepaid_consents WHERE id=? AND status='active' AND terms_json=? AND threshold_n=?)",consent.id,consent.terms_json,consent.threshold_n),
     stmt(env,"INSERT INTO nc_prepaid_topup_authorizations(id,consent_id,subscription_id,customer_id,quote_json,basis_hash,start_date,end_date,prepared_by_id,prepared_at,status) VALUES(?,?,?,?,?,?,?,?,?,?,'awaiting_customer')",id,consent.id,consent.subscription_id,consent.customer_id,canonical(quote),basis,startDate,endDate,actor.id,at)],{actor:actorLabel(actor),action:'prepaid.topup.authorization.prepare',subject:id,detail:{basis,customer:consent.customer_id,amountCents:terms.valueCents,periodCapCents}})
   return {id,status:'awaiting_customer',basis,quote}
 }

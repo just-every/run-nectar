@@ -1,4 +1,4 @@
-import { assertMethodUsable, unusableMethodGuard } from '../card-lifecycle'
+import { assertMethodUsable, HARD_CARD_DECLINES, recordUnusableMethod, unusableMethodGuard } from '../card-lifecycle'
 // Owner-approved, single-attempt collection of an original Stripe invoice.
 // The claim commits before provider writes. Claimed/uncertain work never pays
 // again: a separate owner action can only read actual settlement evidence.
@@ -7,7 +7,9 @@ import { actorLabel, type Actor } from '../actor'
 import { requireBusiness } from '../business'
 import { clockInstant } from '../clock'
 import { all, canonical, commit, fingerprint, guard, insist, newId, stmt, type Row } from '../core'
-import type { Input } from '../input'
+import { Input } from '../input'
+import { bindNativeCollectionCustomer } from '../payments/customer'
+import { refusedPaymentEvidence } from '../payments/stripe'
 import { CollectionProviderError, collectionIntentIdentity, collectionProviderRefusal, collectionStripe, invoiceFacts, readCollectionIntent,
   stripeCollectedEvidence, stripeCollectionSnapshot, type CollectionStripe } from './collection-provider'
 import { collectionAuthority, collectionBasis, collectionOwner, collectionSourceGuard, collectionView,
@@ -57,6 +59,25 @@ async function saveIntent(env: Bindings, actor: Actor, request: Row, basis: Coll
   insist(!request.payment_intent_ref || request.payment_intent_ref === id, 'stripe_collection_intent_mismatch', 409)
   return collectionChange(env, actor, request, { payment_intent_ref: id }, 'intent.record')
 }
+// Definitive, identity-matched refusal is permanent evidence, never a reason
+// to create another intent. Association uses the same owner-confirmed tuple
+// and the ordinary binding door; it supplies no collection authorization.
+async function saveRefusal(env: Bindings, actor: Actor, request: Row, basis: CollectionBasis, stripe: CollectionStripe, intent: Row) {
+  collectionIntentIdentity(intent,basis,request)
+  const refusal = await refusedPaymentEvidence(stripe,intent,basis.snapshot.invoice.customer)
+  if (!refusal) return null
+  const code = refusal.declineCode ?? refusal.errorCode
+  if (HARD_CARD_DECLINES.has(code)) {
+    await bindNativeCollectionCustomer(env,actor,Input.of({customer:request.customer_id,account_ref:basis.snapshot.account,
+      stripe_customer_ref:basis.snapshot.invoice.customer,confirm:true}))
+    await recordUnusableMethod(env,{accountRef:basis.snapshot.account,customerRef:basis.snapshot.invoice.customer,
+      paymentMethodRef:basis.snapshot.paymentMethod,requestId:request.id,invoiceId:request.invoice_id,
+      key:basis.intentKey,amountCents:request.amount_cents,currency:request.currency,livemode:basis.snapshot.invoice.livemode},code)
+  }
+  const saved = await saveIntent(env,actor,request,basis,intent)
+  return saveOutcome(env,actor,saved,'failed',null,code)
+}
+
 async function finishMirror(env: Bindings, actor: Actor, request: Row, stripe: CollectionStripe, basis: CollectionBasis, evidence: PaymentEvidence, replay: boolean) {
   const snapshot = await stripeCollectionSnapshot(stripe, request.invoice_ref)
   insist(snapshot.account === basis.snapshot.account, 'stripe_invoice_source_changed', 409)
@@ -119,11 +140,22 @@ export async function executeImportedCollection(env: Bindings, actor: Actor, inp
       'payment_method_types[0]': basis.snapshot.paymentMethodType,
       'metadata[nectar_collection_key]': basis.intentKey, 'metadata[nectar_collection_request]': request.id,
       'metadata[nectar_original_invoice]': request.invoice_ref }), `nectar-movein-${basis.intentKey}`)
+    const refusal = await saveRefusal(env,actor,liveRequest,basis,stripe,intent)
+    if (refusal) return collectionView(refusal)
     liveRequest = await saveIntent(env, actor, liveRequest, basis, intent)
     const evidence = await stripeCollectedEvidence(stripe, intent, basis, request, (await requireBusiness(env)).timezone)
     liveRequest = await saveOutcome(env, actor, liveRequest, 'uncertain', evidence, 'stripe_mirror_unconfirmed')
     return collectionView(liveRequest)
   } catch (error) {
+    if (paymentAttempted && error instanceof CollectionProviderError && error.intentRef) {
+      try {
+        // Read only: the current account response must match the original
+        // customer, method, amount, currency, mode and collection metadata.
+        const intent = await stripe(`/payment_intents/${encodeURIComponent(error.intentRef)}`)
+        const refusal = await saveRefusal(env,actor,liveRequest,basis,stripe,intent)
+        if (refusal) return collectionView(refusal)
+      } catch { /* Incomplete or mismatched evidence remains uncertain. */ }
+    }
     const failed = error instanceof CollectionProviderError && !error.uncertain
     return collectionView(await saveOutcome(env, actor, liveRequest, failed && !paymentAttempted ? 'failed' : 'uncertain', null,
       failed && !paymentAttempted ? 'stripe_request_refused' : liveRequest.charge_ref ? 'stripe_mirror_unconfirmed' : 'stripe_payment_not_confirmed'))
@@ -134,7 +166,7 @@ export async function reconcileImportedCollection(env: Bindings, actor: Actor, i
   await collectionOwner(env, actor)
   input.only(['request','returnTo'])
   const request = await storedCollection(env, input.text('request', { max: 100 }))
-  if (request.status === 'collected') return collectionView(request)
+  if (['collected','failed'].includes(request.status)) return collectionView(request)
   insist(['claimed','uncertain'].includes(request.status), 'imported_collection_not_reconcilable', 409)
   const { source, basis } = await currentCollectionBasis(env, actor, request), stripe = collectionStripe(env)
   let current = request
@@ -143,6 +175,8 @@ export async function reconcileImportedCollection(env: Bindings, actor: Actor, i
     insist(snapshot.account === basis.snapshot.account, 'stripe_invoice_source_changed', 409)
     matchOriginalInvoice(source.original, snapshot.invoice, true)
     const intent = await readCollectionIntent(stripe, basis, current)
+    const refusal = await saveRefusal(env,actor,current,basis,stripe,intent)
+    if (refusal) return collectionView(refusal)
     current = await saveIntent(env, actor, current, basis, intent)
     const evidence = await stripeCollectedEvidence(stripe, intent, basis, current, (await requireBusiness(env)).timezone)
     const mirrored = snapshot.invoice.status === 'paid' && snapshot.invoice.amount_remaining === 0 && snapshot.invoice.paid_out_of_band

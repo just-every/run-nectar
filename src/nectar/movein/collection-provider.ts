@@ -7,7 +7,7 @@ import { stripeReference } from './history'
 
 export const COLLECTION_STRIPE_VERSION = '2025-03-31.basil'
 export class CollectionProviderError extends Error {
-  constructor(readonly uncertain: boolean) { super('imported_collection_provider_error') }
+  constructor(readonly uncertain: boolean, readonly intentRef: string | null = null) { super('imported_collection_provider_error') }
 }
 export function collectionStripe(env: Bindings) {
   const secret = (env as Bindings & { STRIPE_BILLING_SECRET?: string }).STRIPE_BILLING_SECRET
@@ -22,9 +22,15 @@ export function collectionStripe(env: Bindings) {
         ...(body ? { body } : {}),
       })
     } catch { throw new CollectionProviderError(true) }
-    if (!response.ok) { await response.body?.cancel(); throw new CollectionProviderError(response.status >= 500 || response.status === 409 || response.status === 429) }
     let value: unknown
     try { value = await response.json() } catch { throw new CollectionProviderError(true) }
+    if (!response.ok) {
+      // An error body is only a reference for a subsequent authenticated read.
+      // Never accept its decline text or its embedded intent as payment proof.
+      const candidate = value && typeof value === 'object' ? stripeReference((value as Row).error?.payment_intent) : ''
+      const intentRef = /^[A-Za-z0-9_-]{1,255}$/.test(candidate) && !/^(sk|rk)_(live|test)_/i.test(candidate) ? candidate : null
+      throw new CollectionProviderError(response.status >= 500 || response.status === 409 || response.status === 429,intentRef)
+    }
     if (!value || typeof value !== 'object' || Array.isArray(value)) throw new CollectionProviderError(true)
     return value as Row
   }
@@ -81,7 +87,7 @@ export interface CollectionPaymentIdentity { snapshot: CollectionSnapshot; inten
 export function collectionIntentIdentity(intent: Row, basis: CollectionPaymentIdentity, request: Row) {
   insist(intent.object === 'payment_intent' && text(intent.id) && stripeReference(intent.customer) === basis.snapshot.invoice.customer
     && intent.currency === request.currency && intent.amount === request.amount_cents && intent.livemode === basis.snapshot.invoice.livemode
-    && stripeReference(intent.payment_method) === basis.snapshot.paymentMethod && intent.metadata?.nectar_collection_key === basis.intentKey
+    && (stripeReference(intent.payment_method) === basis.snapshot.paymentMethod || intent.status === 'requires_payment_method' && !stripeReference(intent.payment_method) && stripeReference(intent.last_payment_error?.payment_method) === basis.snapshot.paymentMethod) && intent.metadata?.nectar_collection_key === basis.intentKey
     && intent.metadata?.nectar_collection_request === request.id && intent.metadata?.nectar_original_invoice === request.invoice_ref,
   'stripe_collection_intent_mismatch', 409)
   return intent.id as string
