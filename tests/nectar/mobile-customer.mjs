@@ -22,7 +22,8 @@ let taps = 0, states = 0
 
 async function fit(page, label) {
   assert.deepEqual(page.viewportSize(), { width: 390, height: 844 })
-  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, `${label} has no sideways scroll`)
+  assert.equal(await page.evaluate(() => innerWidth), 390, `${label} uses the phone layout viewport`)
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > 390), false, `${label} has no sideways scroll`)
   assert.deepEqual(await page.evaluate(() => ({ touch: navigator.maxTouchPoints > 0, coarse: matchMedia('(pointer: coarse)').matches })), { touch: true, coarse: true }, `${label}: a touch browser performs the journey`)
   const icons = await page.locator('a,button,[role=button]').evaluateAll(nodes => nodes.filter(n => !n.textContent.trim() && n.querySelector('svg,img') && !n.getAttribute('aria-describedby')).length)
   assert.equal(icons, 0, `${label} has no unexplained icon controls`)
@@ -248,15 +249,18 @@ async function nativeInvoices() {
   })
 }
 
-async function message(page, html, label, facts) {
+async function message(page, html, label, facts, expectsLink = true) {
   await page.goto('about:blank'); await page.setContent(html)
   for (const fact of facts) assert.ok((await page.locator('body').innerText()).includes(fact), `${label} retains ${fact}`)
   await fit(page, label)
   const buttons = page.getByRole('link')
+  assert.equal(await buttons.count(), expectsLink ? 1 : 0, 'The message exposes its intended primary action')
   for (const button of await buttons.all()) assert.ok((await button.boundingBox()).height >= 44, 'Primary email links are tappable')
   // A single message column stays within the phone even with the real capability URL.
   assert.equal(await page.locator('body').evaluate(node => node.getBoundingClientRect().right <= innerWidth), true)
-  assert.equal(await page.locator('body > p').evaluateAll(nodes => nodes.every((node, index) => !index || node.getBoundingClientRect().top >= nodes[index - 1].getBoundingClientRect().bottom)), true, 'Message paragraphs occupy one column')
+  const paragraphs = page.locator('body > p, body > main > p')
+  assert.ok(await paragraphs.count() > 0, 'The actual message has visible paragraphs')
+  assert.equal(await paragraphs.evaluateAll(nodes => nodes.every((node, index) => !index || node.getBoundingClientRect().top >= nodes[index - 1].getBoundingClientRect().bottom)), true, 'Message paragraphs occupy one column')
 }
 async function nativeMessages() {
   await installation(dunningOptions(), async (h, owner, page) => {
@@ -264,7 +268,7 @@ async function nativeMessages() {
     await dunningSequenceFlow(h, owner, {
       onState: async state => {
         if (!state.emailHtml) return
-        await message(page, state.emailHtml, `dunning-${state.record.customer}-${state.message.step}`, ['USD 100.00'])
+        await message(page, state.emailHtml, `dunning-${state.record.customer}-${state.message.step}`, ['USD 100.00'], !!state.link)
         languages.add(await page.locator('html').getAttribute('lang'))
         const customer = await h.api(`customers/${state.record.customer}`, owner)
         const invoice = await h.api(`invoices/${state.record.invoice}`, owner)
