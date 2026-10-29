@@ -6,7 +6,7 @@ import assert from 'node:assert/strict'
 
 export function quickbooksEdge({ company = 'synthetic-nectar-company', token = 'synthetic-nectar-qbo' } = {}) {
   const accounts = new Map([['Bad Debts', '80'], ['Accounts Receivable (A/R)', '84'], ['Billings Clearing', '90'], ['Contract Assets', '91'], ['Deferred Revenue', '92'], ['Revenue', '93']]), customers = new Map()
-  const entries = [], byRequest = new Map(), calls = []
+  const entries = [], byRequest = new Map(), calls = [], creditMemos = new Map()
   let outage = null
   const unquote = text => text.replace(/\\(['\\])/g, '$1')
   const fetch = async request => {
@@ -17,7 +17,10 @@ export function quickbooksEdge({ company = 'synthetic-nectar-company', token = '
     if (outage === 'down') return new Response('{}', { status: 503 })
     if (outage === 'unauthorized') return new Response('{}', { status: 401 })
     if (request.method === 'GET' && path.endsWith('/query')) {
-      const query = url.searchParams.get('query'), found = query.match(/^select Id, (\w+) from (\w+) where \w+ = '((?:[^'\\]|\\.)*)'$/)
+      const query = url.searchParams.get('query')
+      const creditQuery = query.match(/^select \* from CreditMemo where DocNumber = '((?:[^'\\]|\\.)*)'$/)
+      if (creditQuery) return Response.json({ QueryResponse: { CreditMemo: creditMemos.has(unquote(creditQuery[1])) ? [structuredClone(creditMemos.get(unquote(creditQuery[1])))] : [] } })
+      const found = query.match(/^select Id, (\w+) from (\w+) where \w+ = '((?:[^'\\]|\\.)*)'$/)
       assert.ok(found, `understood query ${query}`)
       const [, , kind, value] = found, text = unquote(value)
       if (kind === 'JournalEntry') return Response.json({ QueryResponse: { JournalEntry: entries.filter(entry => entry.DocNumber === text).map(entry => ({ Id: entry.Id, DocNumber: entry.DocNumber })) } })
@@ -40,6 +43,6 @@ export function quickbooksEdge({ company = 'synthetic-nectar-company', token = '
     if (outage === 'lost') return new Response('{}', { status: 500 })
     return Response.json({ JournalEntry: entry })
   }
-  return { fetch, entries, calls, addCustomer: (name, id = `synthetic-customer-${customers.size + 1}`) => customers.set(name, id), setOutage: mode => { outage = mode },
+  return { fetch, entries, calls, setCreditMemo: memo => creditMemos.set(memo.DocNumber, structuredClone(memo)), addCustomer: (name, id = `synthetic-customer-${customers.size + 1}`) => customers.set(name, id), setOutage: mode => { outage = mode },
     summary: () => entries.map(entry => entry.Line.map(line => `${line.JournalEntryLineDetail.PostingType[0]}:${line.JournalEntryLineDetail.AccountRef.value}:${line.Amount.toFixed(2)}`).join(' ')) }
 }

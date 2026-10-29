@@ -12,33 +12,13 @@ export interface JournalLine { side: 'debit' | 'credit'; account: string; amount
 export interface JournalEntry { companyRef: string; docNumber: string; requestId: string; date: string; memo: string; customerName: string; lines: JournalLine[] }
 
 const ORIGINS: Record<string, string> = { sandbox: 'https://sandbox-quickbooks.api.intuit.com', production: 'https://quickbooks.api.intuit.com' }
-const quoted = (value: string) => `'${value.replaceAll('\\', '\\\\').replaceAll("'", "\\'")}'`
+export const quoted = (value: string) => `'${value.replaceAll('\\', '\\\\').replaceAll("'", "\\'")}'`
 
 /** The company a posting goes to: the entity's recorded company, else the installation's single company. */
 export const defaultCompany = (env: Bindings) => env.QUICKBOOKS_COMPANY_ID?.trim() || null
 
 export async function postJournalEntry(env: Bindings, entry: JournalEntry): Promise<string> {
-  const { QUICKBOOKS_ACCESS_TOKEN: token, QUICKBOOKS_ENVIRONMENT: environment } = env
-  insist(token?.trim() && environment && ORIGINS[environment!], 'ledger_not_configured', 409)
-  insist(/^[A-Za-z0-9_.:-]{1,60}$/.test(entry.companyRef), 'ledger_company_invalid', 409)
-  const base = `${ORIGINS[environment!]}/v3/company/${encodeURIComponent(entry.companyRef)}`
-  const call = async (path: string, body?: unknown) => {
-    let response: Response
-    try {
-      response = await fetch(`${base}${path}`, { method: body ? 'POST' : 'GET', redirect: 'manual', signal: AbortSignal.timeout(20000),
-        headers: { authorization: `Bearer ${token}`, accept: 'application/json', ...(body ? { 'content-type': 'application/json' } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}) })
-    } catch { throw new NectarError('ledger_unavailable', 502) }
-    let result: any
-    try { result = await response.json() } catch { throw new NectarError('ledger_unavailable', 502) }
-    if (response.status === 401 || response.status === 403) throw new NectarError('ledger_unauthorized', 502)
-    if (!response.ok) throw new NectarError(response.status >= 500 || response.status === 429 ? 'ledger_unavailable' : 'ledger_rejected', 502)
-    return result
-  }
-  const query = async (statement: string, kind: string): Promise<any[]> => {
-    const result = await call(`/query?${new URLSearchParams({ query: statement, minorversion: '75' })}`)
-    const rows = result?.QueryResponse?.[kind]
-    return Array.isArray(rows) ? rows : []
-  }
+  const { query, call } = ledgerClient(env, entry.companyRef)
   // A prior attempt may have been recorded although its response was lost.
   const prior = await query(`select Id, DocNumber from JournalEntry where DocNumber = ${quoted(entry.docNumber)}`, 'JournalEntry')
   if (prior.length) {
@@ -66,3 +46,33 @@ export async function postJournalEntry(env: Bindings, entry: JournalEntry): Prom
   insist(typeof id === 'string' && /^[A-Za-z0-9_-]{1,40}$/.test(id) && created.JournalEntry.DocNumber === entry.docNumber, 'ledger_unconfirmed', 502)
   return id
 }
+
+// Fixed-origin, read-only access for explicitly requested close observations.
+function ledgerClient(env: Bindings, companyRef: string) {
+  const { QUICKBOOKS_ACCESS_TOKEN: token, QUICKBOOKS_ENVIRONMENT: environment } = env
+  insist(token?.trim() && environment && ORIGINS[environment!], 'ledger_not_configured', 409)
+  insist(/^[A-Za-z0-9_.:-]{1,60}$/.test(companyRef), 'ledger_company_invalid', 409)
+  const base = `${ORIGINS[environment!]}/v3/company/${encodeURIComponent(companyRef)}`
+  const call = async (path: string, body?: unknown) => {
+    let response: Response
+    try {
+      response = await fetch(`${base}${path}`, { method: body ? 'POST' : 'GET', redirect: 'manual', signal: AbortSignal.timeout(20000),
+        headers: { authorization: `Bearer ${token}`, accept: 'application/json', ...(body ? { 'content-type': 'application/json' } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}) })
+    } catch { throw new NectarError('ledger_unavailable', 502) }
+    let result: any
+    try { result = await response.json() } catch { throw new NectarError('ledger_unavailable', 502) }
+    if (response.status === 401 || response.status === 403) throw new NectarError('ledger_unauthorized', 502)
+    if (!response.ok) throw new NectarError(response.status >= 500 || response.status === 429 ? 'ledger_unavailable' : 'ledger_rejected', 502)
+    return result
+  }
+  const query = async (statement: string, kind: string): Promise<any[]> => {
+    const result = await call(`/query?${new URLSearchParams({ query: statement, minorversion: '75' })}`)
+    insist(result?.QueryResponse && typeof result.QueryResponse === 'object', 'ledger_response_invalid', 502)
+    const rows = result.QueryResponse[kind]
+    insist(rows === undefined || Array.isArray(rows), 'ledger_response_invalid', 502)
+    return rows ?? []
+  }
+  return { call, query }
+}
+
+export const ledgerQuery = (env: Bindings, companyRef: string) => ledgerClient(env, companyRef).query

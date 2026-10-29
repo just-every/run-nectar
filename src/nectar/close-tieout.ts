@@ -1,4 +1,6 @@
 // A native preparation view, never a close or an instruction to move money.
+import { closeCreditSources, CLOSE_CREDIT_KIND } from './close-credits'
+import { payoutChecks } from './close-payouts'
 import type { Bindings } from '../auth.server'
 import { requireCapability, type Actor } from './actor'
 import { balanceSources } from './balance'
@@ -15,7 +17,8 @@ import { saveAssuranceProofs } from './assurance'
 
 export const CLOSE_CASH_KIND = 'close_unapplied_cash'
 export const CLOSE_LEDGER_KIND = 'close_bad_debt_sync'
-export const CLOSE_KINDS = [CLOSE_CASH_KIND, CLOSE_LEDGER_KIND]
+export const CLOSE_PAYOUT_KIND = 'close_payout_reconciliation'
+export const CLOSE_KINDS = [CLOSE_CASH_KIND, CLOSE_LEDGER_KIND, CLOSE_PAYOUT_KIND, CLOSE_CREDIT_KIND]
 export const CLOSE_DEFINITION = 'Current recorded native USD sources through the selected month, with their current allocations, credits, returns and posting outcomes. Later human fixes change this preparation basis. Erased customer sources are withdrawn; required anonymous financial custody remains in ordinary reports and archives. This is not a frozen historical balance, bank settlement, provider tax commitment or ledger balance certification. Cash and goodwill remain separate; cash applications are counted once from allocations. A scan only records review cases. Existing financial approval and period-close authority remain required.'
 
 // Refuse a mixed snapshot if an ordinary writer commits while the packet is read.
@@ -92,6 +95,8 @@ export async function closeTieout(env: Bindings, actor: Actor, selectedPeriod?: 
   const reported = (await revenueReport(env, actor, new URL(`https://nectar.invalid/?period=${period}`), { nativeActiveOnly: true })).months[0]
   const ledger = (await all(env, `SELECT l.id,l.kind,l.invoice_id,l.customer_id,l.amount_cents,l.status,l.error_code,l.external_ref,l.attempts,l.entries_json
     FROM nc_ledger_postings l JOIN nc_customers c ON c.id=l.customer_id WHERE c.erased_at IS NULL AND l.kind IN ('bad_debt','bad_debt_recovery') ORDER BY l.id`)).filter(row => invoiceIds.has(row.invoice_id))
+  const payouts = (await payoutChecks(env)).filter(row => row.currency === 'usd' && localDate(row.occurred_at, configuration.timezone).slice(0, 7) === period)
+  const creditSync = await closeCreditSources(env, invoiceIds)
   const proofs: Row[] = []
   for (const payment of payments) {
     const proof = { kind: CLOSE_CASH_KIND, source: `close:${period}:cash:${payment.id}`, period, customer: payment.customer_id,
@@ -111,7 +116,37 @@ export async function closeTieout(env: Bindings, actor: Actor, selectedPeriod?: 
       href: `/app/invoices/${posting.invoice_id}#write-offs`, fixHref: `/app/invoices/${posting.invoice_id}#write-offs`, mismatch: posting.status !== 'posted' }
     proofs.push({ ...proof, basis: await fingerprint(proof) })
   }
-  const totals = { debt: { ...debt, computedCents: debtComputed, differenceCents: debtComputed - debt.reportedCents },
+  for (const payout of payouts) {
+    // An account-level discrepancy is assigned once to each affected customer.
+    // The payout total is still counted only once in the packet.
+    for (const customer of [...new Set<string>(payout.members.map((row: Row) => row.customer).filter(Boolean))].sort()) {
+      const proof = { kind: CLOSE_PAYOUT_KIND, source: `close:${period}:payout:${payout.id}:${customer}`, period, customer,
+        payout: payout.id, payoutRef: payout.payout_ref, amountCents: payout.amount_cents, grossCents: payout.gross_cents,
+        feeCents: payout.fee_cents, netCents: payout.net_cents, differenceCents: payout.difference_cents,
+        error: payout.error_code, sourceBasis: payout.basis_hash, members: payout.members,
+        category: 'reconciliation_break', title: 'Payout and fee reconciliation',
+        cause: payout.difference_cents !== 0 ? `Observed constituent net differs from the payout by ${payout.difference_cents} cents. Inspect the exact fee and source comparisons; no missing movement is invented.`
+          : payout.error_code ? 'The observed payout does not have complete, unchanged constituent evidence.' : 'Observed payout constituents and recorded fees agree.',
+        proposedFix: 'Finance reviews the processor source and fees, then uses the existing authenticated event-consumption door to observe the corrected source. No payout or journal is initiated here.',
+        href: `/app/processor-events#${payout.id}`, fixHref: '/app/processor-events', mismatch: payout.error_code !== null }
+      proofs.push({ ...proof, basis: await fingerprint(proof) })
+    }
+  }
+  for (const credit of creditSync) {
+    const proof = { kind: CLOSE_CREDIT_KIND, source: `close:${period}:credit:${credit.id}`, period, customer: credit.customer,
+      credit: credit.id, invoice: credit.invoice, amountCents: credit.amountCents, company: credit.company, status: credit.status,
+      ledgerRef: credit.ledgerRef, observedCents: credit.observedCents, error: credit.error, sourceBasis: credit.sourceBasis,
+      category: credit.status === 'unobserved' ? 'review' : 'synchronization_failure', title: 'Credit-note synchronization',
+      cause: credit.status === 'missing' ? 'The exact issued credit note is absent from the observed ledger company.'
+        : credit.status === 'synced' ? 'The observed credit memo matches the native source, customer, amount and currency.'
+        : credit.status === 'mismatch' ? 'The observed credit memo does not match the exact native credit note.'
+        : credit.status === 'unavailable' ? 'The ledger could not establish the credit-note outcome. No synchronization success is inferred.'
+        : 'No current source-bound ledger observation is available. This is unknown coverage, not a confirmed missing memo.',
+      proposedFix: 'Finance uses its accounting connector or the ledger to correct this exact credit memo, then explicitly observes the current ledger, confirms the new basis and rechecks. The packet creates no credit memo or journal.',
+      href: `/app/invoices/${credit.invoice}`, fixHref: `/app/close-tieout?period=${period}`, mismatch: credit.status !== 'synced' }
+    proofs.push({ ...proof, basis: await fingerprint(proof) })
+  }
+  const totals = { payouts: { count: payouts.length, amountCents: sum(payouts, 'amount_cents'), grossCents: sum(payouts, 'gross_cents'), feeCents: sum(payouts, 'fee_cents'), netCents: sum(payouts, 'net_cents'), differenceCents: sum(payouts, 'difference_cents'), unresolved: payouts.filter(row => row.error_code).length }, debt: { ...debt, computedCents: debtComputed, differenceCents: debtComputed - debt.reportedCents },
     cash: { ...cash, computedUnappliedCents: cashComputed, differenceCents: cashComputed - cash.reportedUnappliedCents },
     credit: { ...credit, computedGoodwillCents: creditComputed, differenceCents: creditComputed - credit.reportedGoodwillCents },
     revenue: { ...revenue, differenceCents: revenue.closingCents - reported.closingCents, rollforwardDifferenceCents: revenue.openingCents + revenue.netBillingsCents - revenue.recognizedCents - revenue.closingCents } }
@@ -119,9 +154,10 @@ export async function closeTieout(env: Bindings, actor: Actor, selectedPeriod?: 
     { area: 'Invoice debt, received cash and allocations', state: 'native_sources', detail: 'Issued invoices and received payments dated through this month, using current reductions and allocations.' },
     { area: 'Customer credit movements', state: 'native_sources', detail: 'Current goodwill grants and applications, recorded cash returns and available carried correction credit. Cash application entries are not counted twice.' },
     { area: 'Revenue roll-forward', state: 'native_sources', detail: 'Active native issued schedules and credit contributions with existing closed-period adjustments. Imported and erased sources are excluded.' },
+    { area: 'Credit-note synchronization', state: 'observed_sources', detail: 'Explicit finance-requested QuickBooks reads match the exact native credit marker, customer, total and USD currency. Unobserved, absent, mismatched and unavailable outcomes remain distinct. No write or live connector qualification.' },
     { area: 'Bad-debt journal synchronization', state: 'limited', detail: 'Only existing bad-debt and recovery journal outcomes. No live ledger balance or credit-note synchronization qualification.' },
     { area: 'Erased customer sources', state: 'excluded', detail: 'Operational sources and cases are withdrawn. Required anonymous financial facts remain in ordinary retained reports and archives.' },
-    { area: 'Payouts and processor fees', state: 'not_covered', detail: 'Complete payout and fee reconciliation remains unqualified.' },
+    { area: 'Payouts and processor fees', state: 'observed_test_sources', detail: 'Current typed Stripe test-account payout observations, constituent sums and recorded-fee comparisons. Incomplete or changed sources remain explicit breaks; this is not live settlement or connector qualification.' },
     { area: 'Provider tax commitments', state: 'not_covered', detail: 'Native declared tax is not provider commitment proof.' },
     { area: 'Connectors, entities and currencies', state: 'limited', detail: 'USD native preparation only. Complete connector and entity qualification and other currencies remain required.' },
   ]
@@ -133,7 +169,7 @@ export async function closeTieout(env: Bindings, actor: Actor, selectedPeriod?: 
     writeOffs: writeOffs.map(invoiceLink), recoveries: recoveries.map(invoiceLink), reversals: reversals.map(invoiceLink),
     movements: movements.map(row => ({ ...row, href: `/api/nectar/customers/${row.customer_id}/balance` })),
     balances: balances.map(row => ({ ...row, href: `/api/nectar/customers/${row.customer}/balance` })),
-    revenue: revenueSources.map(({ customerName: _name, entityName: _entity, ...row }) => row), ledger }
+    payouts, creditSync, revenue: revenueSources.map(({ customerName: _name, entityName: _entity, ...row }) => row), ledger }
   const basis = await fingerprint({ period, definition: CLOSE_DEFINITION, sources, totals, coverage })
   insist(await closeSequence(env) === seq, 'close_source_changed', 409)
   return { period, currency: 'USD', definition: CLOSE_DEFINITION, basis, totals, coverage, sources, proofs }

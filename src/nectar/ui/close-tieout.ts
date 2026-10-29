@@ -22,6 +22,7 @@ export async function closeTieoutPage(env: Bindings, actor: Actor, url: URL) {
     <section class="card"><h2>Preparation basis</h2><p>${packet.definition}</p>
       <form method="get">${field('Month', 'period', { type: 'month', value: packet.period })}<button type="submit">Show packet</button></form>
       ${details({ fingerprint: packet.basis }, 'Source fingerprint')}
+      ${approve ? form('close.credits.observe', returnTo, h`${hidden('period', packet.period)}${hidden('basis', packet.basis)}`, 'Observe ledger credit notes', { secondary: true }) : ''}
       ${prepare ? form('close.scan', returnTo, h`${hidden('period', packet.period)}${hidden('basis', packet.basis)}${select('Case owner', 'owner', owners.map(row => ({ value: row.id, label: row.name })), actor.id)}`, 'Scan for review items', { secondary: true }) : ''}
     </section>
     <section class="card"><h2>Invoice debt</h2><p>Issued ${cents(debt.issuedCents)} − credits ${cents(debt.creditNotesCents)} − cash allocations ${cents(debt.allocatedCents)} − carried credit ${cents(debt.carriedAppliedCents)} − goodwill ${cents(debt.goodwillAppliedCents)} − write-offs ${cents(debt.writeOffCents)} + recoveries ${cents(debt.recoveryCents)} + reversals ${cents(debt.reversedCents)}.</p>
@@ -30,11 +31,12 @@ export async function closeTieoutPage(env: Bindings, actor: Actor, url: URL) {
       <p>Goodwill grants ${cents(credit.grantedCents)} − applications ${cents(credit.appliedCents)} = available <strong>${cents(credit.computedGoodwillCents)}</strong>. Difference ${cents(credit.differenceCents)}. Separate available carried correction credit ${cents(credit.carriedCents)}.</p></section>
     <section class="card"><h2>Revenue roll-forward</h2><p>Opening ${cents(revenue.openingCents)} + net billings ${cents(revenue.netBillingsCents)} − recognition ${cents(revenue.recognizedCents)} = closing <strong>${cents(revenue.closingCents)}</strong>. Report difference ${cents(revenue.differenceCents)}; roll-forward difference ${cents(revenue.rollforwardDifferenceCents)}.</p>
       <p><a href="/app/revenue?period=${packet.period}">Inspect revenue schedules and journals</a></p></section>
+    <section class="card"><h2>Payouts and fees</h2><p>Observed payout amount ${cents(packet.totals.payouts.amountCents)} · constituent gross ${cents(packet.totals.payouts.grossCents)} − fees ${cents(packet.totals.payouts.feeCents)} = net ${cents(packet.totals.payouts.netCents)}. Difference ${cents(packet.totals.payouts.differenceCents)} · unresolved ${packet.totals.payouts.unresolved}.</p><p>Only observed test-account sources are compared. Missing coverage remains unqualified.</p></section>
     <section class="card"><h2>Coverage</h2>${table(['Area', 'State', 'Boundary'], packet.coverage.map(row => [row.area, tag(row.state.replaceAll('_', ' ')), row.detail]))}</section>
     <section class="card"><h2>Review items and synchronization failures</h2><p>A successful comparison does not close a case. After an ordinary authorized fix, a person confirms the exact current basis; a fresh recheck then resolves it.</p>
       ${items.length ? items.map(proof => {
         const saved = cases.find(row => row.source_id === proof.source)
-        return h`<article class="card" id="case-${saved?.id ?? proof.source}"><h3>${proof.category === 'review' ? 'Unapplied received cash' : 'Bad-debt synchronization failure'}</h3>
+        return h`<article class="card" id="case-${saved?.id ?? proof.source}"><h3>${proof.title ?? (proof.category === 'review' ? 'Unapplied received cash' : 'Bad-debt synchronization failure')}</h3>
           <p>${tag(saved?.status ?? 'not scanned')} · ${proof.mismatch ? 'Needs review' : 'Current source agrees'} · ${cents(proof.unappliedCents ?? proof.amountCents)}</p><p>${proof.cause}</p><p>${proof.proposedFix}</p>
           <p><a href="${proof.href}">Exact financial source</a> · <a href="${proof.fixHref}">Open ordinary review door</a></p>
           ${details({ ...proof, case: saved?.id, owner: saved?.owner_id }, 'Current evidence and basis')}

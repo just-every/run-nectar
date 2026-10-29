@@ -1,4 +1,5 @@
 // Current provider reads, never event payload snapshots, determine financial facts.
+import { payoutComparison, PayoutComparisonError } from './close-payouts'
 import type { Bindings } from '../auth.server'
 import { ROLE_CAPABILITIES, type Actor } from './actor'
 import { requireBusiness } from './business'
@@ -132,15 +133,16 @@ export async function payoutFacts(env:Bindings,stripe:StripeClient,account:strin
  const transaction=await stripe(`/balance_transactions/${encodeURIComponent(providerReference(ref(payout.balance_transaction)))}`)
  insist(ref(transaction.source)===payout.id&&transaction.amount===-payout.amount&&transaction.currency===payout.currency,'processor_payout_transaction_mismatch',409)
  const statements=[await transactionStatement(env,account,transaction,{payout:payout.id}),objectStatement(env,account,payout,'payout',null,null,payout.status,payout.automatic===true?null:'manual_payout_constituents_unavailable',clockInstant(env))]
- // Stripe supplies constituents only for automatic payouts. A manual payout's
- // debit is retained honestly without inventing an invoice membership list.
+ // Keep validated comparison evidence even when the constituent sum is refused.
+ // Rejected observations never enter the financial transaction table.
+ const observed: {transaction:Row;context:Row}[]=[]
  if(payout.automatic===true){
-  // Stripe includes the payout debit itself; it is already recorded above.
   const members=(await completeList(stripe,'/balance_transactions',{payout:payout.id,'expand[]':'data.source'})).filter(row=>row.id!==transaction.id)
-  insist(members.length>0&&members.every(row=>row.currency===payout.currency)&&members.reduce((sum,row)=>sum+integer(row.net),0)===payout.amount,'processor_payout_does_not_reconcile',409)
-  for(const member of members){
-   statements.push(await transactionStatement(env,account,member,{...await payoutAttribution(env,stripe,account,member),payout:payout.id}))
-  }
+  for(const member of members)observed.push({transaction:member,context:await payoutAttribution(env,stripe,account,member)})
  }
+ const comparison=await payoutComparison(env,account,payout,transaction,observed)
+ if(comparison.error&&payout.automatic===true)throw new PayoutComparisonError(comparison.error,comparison.statements)
+ statements.push(...comparison.statements)
+ for(const {transaction:member,context} of observed)statements.push(await transactionStatement(env,account,member,{...context,payout:payout.id}))
  return {statements,customer:null,invoice:null}
 }

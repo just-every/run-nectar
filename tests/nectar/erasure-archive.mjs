@@ -44,7 +44,8 @@ try{
  const closeBasis=(await api('close-tieout?period=2026-09',cookie)).basis
  await api('close.scan',cookie,{period:'2026-09',basis:closeBasis,owner:(await api('me',cookie)).id})
  const closeCases=(await api('assurance-cases',cookie)).filter(row=>row.customer_id===closeSources.customer)
- assert.equal(closeCases.length,2,'Close preparation keeps two distinct operational cases before export')
+ assert.equal(closeCases.length,3,'Close preparation keeps distinct cash, bad-debt and unobserved-credit cases before export')
+ assert.ok(closeCases.some(row=>row.evidence.credit===closeSources.credit.credit&&row.evidence.status==='unobserved'),'An unobserved credit is unknown coverage, not a claimed missing ledger memo')
  const capture=Object.fromEntries(await Promise.all(['manifest','customers','products','prices','subscriptions','invoices','meters'].map(async name=>[name,file(`${name}.json`,await readFile(new URL(`../fixtures/stripe/${name}.json`,import.meta.url)),'application/json')])))
  const preview=await api('import.preview',cookie,capture);await api('import.apply',cookie,{...capture,fingerprint:preview.fingerprint})
  const customer=(await api('customers',cookie)).find(c=>c.external_id==='cus_NcAtlasFreight01')

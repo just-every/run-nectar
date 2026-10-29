@@ -36,6 +36,8 @@ try {
           assert.equal(new URL(page.url()).searchParams.get('error'), null)
           assert.equal(await page.locator('article').filter({ hasText: 'Unapplied received cash' }).count(), 1)
           assert.equal(await page.locator('article').filter({ hasText: 'Bad-debt synchronization failure' }).count(), 1)
+          assert.equal(await page.locator('article').filter({ hasText: 'Payout and fee reconciliation' }).count(), 1)
+          assert.equal(await page.locator('article').filter({ hasText: 'Credit-note synchronization' }).count(), 1)
           const recheck = page.locator('form[action="/app/do/assurance.recheck"]').first()
           await Promise.all([page.waitForNavigation(), recheck.getByRole('button').click()])
           assert.equal(new URL(page.url()).searchParams.get('error'), null)

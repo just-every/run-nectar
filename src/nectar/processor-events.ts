@@ -1,3 +1,4 @@
+import { payoutChecks, PayoutComparisonError } from './close-payouts'
 import type { Bindings } from '../auth.server'
 import { requireMember, requireRead, type Actor } from './actor'
 import { requireFreshFactor } from './mfa'
@@ -76,7 +77,7 @@ export async function applyProcessorEvent(env:Bindings,account:string|null,event
  }catch(error) {
   if((await one(env,'SELECT status FROM nc_processor_events WHERE id=?',id))?.status==='applied')return {id,replayed:true}
   const code=error instanceof NectarError?error.code:'processor_provider_or_storage_failure'
-  await commit(env,[stmt(env,`INSERT INTO nc_processor_events(id,account_ref,event_ref,event_type,object_ref,customer_id,invoice_id,status,occurred_at,received_at,error_code) VALUES(?,?,?,?,?,?,?,'failed',?,?,?)
+  await commit(env,[...authority,...(error instanceof PayoutComparisonError?error.statements:[]),stmt(env,`INSERT INTO nc_processor_events(id,account_ref,event_ref,event_type,object_ref,customer_id,invoice_id,status,occurred_at,received_at,error_code) VALUES(?,?,?,?,?,?,?,'failed',?,?,?)
    ON CONFLICT(id) DO NOTHING`,id,account,eventRef,event.type,objectRef,customer,invoice,occurred,clockInstant(env),code),
    ...await alertStatements(env,'webhook_failure',id,`/app/processor-events#${id}`,'processor')],{actor:'system:processor',action:'processor.event.failure',subject:id,detail:{eventRef,code}})
   await deliverAlerts(env,'webhook_failure',id,'system:processor')
@@ -86,7 +87,7 @@ export async function applyProcessorEvent(env:Bindings,account:string|null,event
 export async function processorEvents(env:Bindings,actor:Actor,customer?:string) {
  requireRead(actor,'payments');requireRead(actor,'invoices')
  const active=`AND (customer_id IS NULL OR EXISTS(SELECT 1 FROM nc_customers c WHERE c.id=customer_id AND c.erased_at IS NULL AND NOT EXISTS(SELECT 1 FROM nc_erased_records e WHERE e.record_id=c.id)))`
- return {cashReturns:await readProcessorCashReturns(env,actor,customer),unmatched:await unmatchedProcessorCash(env,actor,customer),cashBalances:await all(env,`SELECT * FROM nc_processor_cash_balances WHERE 1=1 ${active} ${customer?'AND customer_id=?':''}`, ...(customer?[customer]:[])),
+ return {payoutChecks:customer?[]:await payoutChecks(env),cashReturns:await readProcessorCashReturns(env,actor,customer),unmatched:await unmatchedProcessorCash(env,actor,customer),cashBalances:await all(env,`SELECT * FROM nc_processor_cash_balances WHERE 1=1 ${active} ${customer?'AND customer_id=?':''}`, ...(customer?[customer]:[])),
   cashTransactions:await all(env,`SELECT * FROM nc_processor_cash_transactions WHERE 1=1 ${active} ${customer?'AND customer_id=?':''} ORDER BY occurred_at,transaction_ref`,...(customer?[customer]:[])),
   cashApplications:await all(env,`SELECT id,customer_id,invoice_id,transfer_ref,amount_cents,currency,status,payment_intent_ref,payment_id,allocation_id FROM nc_processor_cash_applications WHERE 1=1 ${active} ${customer?'AND customer_id=?':''} ORDER BY claimed_at,id`,...(customer?[customer]:[])),
   importedCashApplications:await all(env,`SELECT * FROM nc_processor_cash_imported_applications WHERE 1=1 ${active} ${customer?'AND customer_id=?':''} ORDER BY claimed_at,id`,...(customer?[customer]:[])),

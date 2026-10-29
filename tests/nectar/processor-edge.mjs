@@ -1,6 +1,6 @@
 // Fake only the paid network edge. Worker, authentication, D1 and reports are real.
 import assert from 'node:assert/strict'
-export function processorEdge() {
+export function processorEdge({at=Date.parse('2026-10-22T10:00:00Z')/1000}={}) {
  const account='synthetic-nectar-account',customerRef='synthetic-nectar-customer',calls=[],events=new Map(),objects=new Map(),transactions=new Map(),payoutMembers=new Map()
  let fail=false
  const list=data=>({object:'list',data,has_more:false})
@@ -24,7 +24,6 @@ export function processorEdge() {
   if(object)return Response.json(object)
   throw new Error(`Unexpected processor edge request ${path}`)
  }
- const at=Date.parse('2026-10-22T10:00:00Z')/1000
  function seed(invoice,amount=10000,suffix='1') {
   const intent={object:'payment_intent',id:`synthetic-nectar-intent-${suffix}`,customer:customerRef,status:'succeeded',currency:'usd',livemode:false,amount,amount_received:amount,metadata:{nectar_native_invoice:invoice},latest_charge:`synthetic-nectar-charge-${suffix}`}
   const charge={object:'charge',id:intent.latest_charge,customer:customerRef,payment_intent:intent.id,status:'succeeded',paid:true,captured:true,amount,amount_captured:amount,amount_refunded:0,refunded:false,disputed:false,currency:'usd',livemode:false,created:at,metadata:{},balance_transaction:`synthetic-nectar-txn-${suffix}`,payment_method_details:{type:'card'}}
