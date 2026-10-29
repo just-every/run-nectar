@@ -194,7 +194,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "03d022b52a661aa949295a17d107e9b0c55108897b72068aeb4de2a6008a13f8",
+      "sha256": "90ec9ff0cc81ada221facd1133b66d4c7ef0ab93c3c184f73822ca343d2219d2",
       "executable": false
     },
     "DEMO.md": {
@@ -5190,7 +5190,7 @@
       "executable": false
     },
     "tests/nectar/dunning-sequences.mjs": {
-      "sha256": "ab14c15402598a73600eccdf5e9f2a79fe3ec1d7afc67e18ec65bd088f8025f4",
+      "sha256": "7108b1c1511d429fbf5fdd964564e73aa2515684b4112e14743a24b8069efd8a",
       "executable": false
     },
     "tests/nectar/enterprise-identity-browser.mjs": {
@@ -5750,7 +5750,7 @@
       "executable": false
     },
     "tests/nectar/webhooks.mjs": {
-      "sha256": "05e8bbf4e242e8b6bd0ed99accb7fbe4dda50f7e57d8d6a2130ecae2cd98da04",
+      "sha256": "f428e9c702d9bf547238f2c53c64a2a95414bc5fb1ab081953826e77d1aa7f41",
       "executable": false
     },
     "tests/nectar/write-off-browser.mjs": {
