@@ -174,7 +174,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "7ca307965c99f7d3a0d40c3a7ee2ddbe30e30ecd7376d2a1967a29ec798e0734",
+      "sha256": "2022ebb7e37db407ec8889f7978118971bf302f193213783b264d819aa0ed2c4",
       "executable": false
     },
     "AGENTS.consumer.md": {
@@ -194,7 +194,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "13417be1848b5b8b6f7d531e63a2f3d139634707dc09387860e14c8a6f50a439",
+      "sha256": "dc29962c76aa29449484b95ae65e113738aa7f4d0970c9929e31fef575d1b33c",
       "executable": false
     },
     "DEMO.md": {
@@ -230,7 +230,7 @@
       "executable": false
     },
     "docs/CLAIMS.md": {
-      "sha256": "7c4ce0e1962652b874975c36445d6ae210d643fedf2df4c5a9227b91cd6571e9",
+      "sha256": "4b62142dffa9667e51bb640a87e4569207e12a4031866a1a8274db56fa6d6275",
       "executable": false
     },
     "docs/composition-baseline.json": {
@@ -5186,7 +5186,7 @@
       "executable": false
     },
     "tests/nectar/journey.mjs": {
-      "sha256": "3a28d2aedfaf3e433b75fb01502a83225a49ca7ea2621c90a56a3488aa55a914",
+      "sha256": "aaa0268ac37cd689ffe559ed274f6c85257015d1310e5acfd182580fdfeea71b",
       "executable": false
     },
     "tests/nectar/journeys.json": {
@@ -5254,7 +5254,7 @@
       "executable": false
     },
     "tests/nectar/one-time.mjs": {
-      "sha256": "2ea85513897e17fc8c1dc5b0d84f69f31bef3d79c0eb67217f5f4a1d4a2e54cb",
+      "sha256": "2a6f20b6e025073ca9aabfe6f45357ed0cc31615f61804260389aa11a04af5fd",
       "executable": false
     },
     "tests/nectar/openapi-client.mjs": {
@@ -5390,7 +5390,7 @@
       "executable": false
     },
     "tests/nectar/processor-journey.mjs": {
-      "sha256": "77ac2f2a8fefc279f20c94a126bb2c54a31650034fb11b4670cfa7c3a8348b10",
+      "sha256": "af94bab66fd6e4c1b2def6064b255a48ee3b668c29062a90a74ec29e608a4823",
       "executable": false
     },
     "tests/nectar/processor-recovery.mjs": {
@@ -5418,7 +5418,7 @@
       "executable": false
     },
     "tests/nectar/recovery.mjs": {
-      "sha256": "5941b08c1a149cfb822d8537ae73d50318d7a80009006080720892005f1f9f09",
+      "sha256": "871da288912af4585970f9faf002bc56c9d11a6f819d9b9806745e001beec0aa",
       "executable": false
     },
     "tests/nectar/remittance-files.mjs": {
