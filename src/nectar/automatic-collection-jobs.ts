@@ -27,9 +27,13 @@ async function outcome(env:Bindings,row:Row,status:string,values:Row={},facts:D1
  {actor:actorLabel(system(row.id)),action:`automatic.collection.${status}`,subject:row.id,detail:{invoice:row.invoice_id,errorCode:values.error_code??null,paymentIntentRef:values.payment_intent_ref??row.payment_intent_ref}})
  return storedAutomaticCollection(env,row.id)
 }
-export async function settleAutomaticIntent(env:Bindings,row:Row,stripe:StripeClient,intent:Row,identity:PaymentIdentity){
+export async function settleAutomaticIntent(env:Bindings,row:Row,stripe:StripeClient,intent:Row,identity:PaymentIdentity,initialCapture=false){
  const intentRef=verifyIntent(intent,identity)
- if(!row.payment_intent_ref){
+ // A freshly acknowledged successful card capture can bind its verified intent
+ // in the same transaction as cash and allocation. Unknown results, ACH and
+ // all read-only reconcilers retain the existing durable binding step.
+ const bindWithCash=initialCapture&&row.status==='claimed'&&row.method_kind==='card'&&intent.status==='succeeded'
+ if(!row.payment_intent_ref&&!bindWithCash){
   try{row=await outcome(env,row,'uncertain',{payment_intent_ref:intentRef})}catch(error){
    const current=await storedAutomaticCollection(env,row.id)
    // A concurrent reconciler already bound this verified intent. Its captured
@@ -71,8 +75,8 @@ export async function settleAutomaticIntent(env:Bindings,row:Row,stripe:StripeCl
  evidence:canonical({...proof,settledAt,method:row.method_kind})})
  const funding=await prepaidFundingForInvoice(env,row.invoice_id)
  const funded=funding?await prepaidFundingStatements(env,funding.id,{paymentId:financial.paymentId,invoiceId:row.invoice_id,amountCents:row.amount_cents,providerRef:intentRef}):[]
- await commit(env,[guard(env,'automatic_collection_state_changed',"EXISTS(SELECT 1 FROM nc_automatic_collections WHERE id=? AND revision=? AND status IN ('claimed','uncertain','pending_settlement') AND payment_id IS NULL)",row.id,row.revision),
- ...financial.statements,...funded,stmt(env,"UPDATE nc_automatic_collections SET status='collected',charge_ref=?,payment_id=?,allocation_id=?,settled_at=?,error_code=NULL,revision=? WHERE id=?",proof.chargeRef,financial.paymentId,financial.allocationId,settledAt,newId(),row.id)],
+ await commit(env,[guard(env,'automatic_collection_state_changed',"EXISTS(SELECT 1 FROM nc_automatic_collections WHERE id=? AND revision=? AND status IN ('claimed','uncertain','pending_settlement') AND payment_id IS NULL AND (payment_intent_ref IS NULL OR payment_intent_ref=?))",row.id,row.revision,intentRef),
+ ...financial.statements,...funded,stmt(env,"UPDATE nc_automatic_collections SET status='collected',payment_intent_ref=?,charge_ref=?,payment_id=?,allocation_id=?,settled_at=?,error_code=NULL,revision=? WHERE id=?",intentRef,proof.chargeRef,financial.paymentId,financial.allocationId,settledAt,newId(),row.id)],
  [...financial.audits,{actor:actorLabel(system(row.id)),action:'automatic.collection.collected',subject:row.id,detail:{invoice:row.invoice_id,payment:financial.paymentId,amountCents:row.amount_cents,paymentIntentRef:intentRef,settledAt}}])
  const collected=await storedAutomaticCollection(env,row.id);await recordRetrySuccess(env,collected);return automaticView(collected)
 }
@@ -97,6 +101,7 @@ export async function reconcileAutomaticCollection(env:Bindings,id:string){
 export async function collectAutomaticInvoice(env:Bindings,invoice:string){
  let row=await one(env,"SELECT * FROM nc_automatic_collections WHERE invoice_id=? AND status='active' ORDER BY prepared_at DESC LIMIT 1",invoice)
  if(!row)return
+ let acknowledgedIntent:string|null=null
  try{
   insist(!await one(env,'SELECT 1 FROM nc_prepaid_topup_claims WHERE invoice_id=?',invoice),'prepaid_topup_invoice_managed',409)
   const q=await validateAutomaticBasis(row),source=await nativeCollectionSource(env,invoice),{stripe}=await stripeForAccount(env,q.accountRef),at=clockInstant(env)
@@ -120,11 +125,13 @@ export async function collectAutomaticInvoice(env:Bindings,invoice:string){
    if(!(error instanceof NativeStripeError)||!error.intentRef)throw error
    intent=await readIntent(stripe,identity,error.intentRef,at,clockInstant(env))
   }
-  await settleAutomaticIntent(env,row,stripe,intent,identity)
+  acknowledgedIntent=verifyIntent(intent,identity)
+  await settleAutomaticIntent(env,row,stripe,intent,identity,true)
  }catch(error){
   const current=await storedAutomaticCollection(env,row.id)
   if(['collected','refused','returned','invalidated'].includes(current.status))return
-  await outcome(env,current,current.claimed_at?'uncertain':'invalidated',{error_code:error instanceof NectarError?error.code:'processor_outcome_unconfirmed'})
+  await outcome(env,current,current.claimed_at?'uncertain':'invalidated',{error_code:error instanceof NectarError?error.code:'processor_outcome_unconfirmed',
+   ...(!current.payment_intent_ref&&acknowledgedIntent?{payment_intent_ref:acknowledgedIntent}:{})})
  }
 }
 export async function runAutomaticCollections(env:Bindings){

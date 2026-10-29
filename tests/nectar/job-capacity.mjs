@@ -164,6 +164,29 @@ export async function nativeJobCapacityFlow(h,owner){
   assert.equal(new Set(collections.entries.map(row=>row.paymentId)).size,count,'One recorded receipt per captured payment')
   assert.deepEqual(new Set(collections.entries.map(row=>row.number)),new Set([...captures.values()].map(id=>`stripe:synthetic-nectar-native-account-1:${id}`)))
   assert.ok(collections.entries.every(row=>row.sourceKind==='payment'&&row.amountCents===100))
+  // Reconcile exact allocation lineage as well as equal aggregate cents.
+  const invoiceByNumber=new Map(issued.map(invoice=>[invoice.number,invoice]))
+  const receiptIds=new Set(),allocationIds=new Set()
+  await parallel(customers,async customer=>{
+    const balance=await api(`customers/${customer}/balance`)
+    const receipts=balance.ledger.filter(row=>row.kind==='receipt'),allocations=balance.ledger.filter(row=>row.kind==='allocation')
+    assert.equal(balance.customer,customer);assert.deepEqual(balance.payments,[])
+    assert.equal(receipts.length,perCustomer);assert.equal(allocations.length,perCustomer)
+    const references=new Set(receipts.map(row=>row.reference))
+    assert.equal(references.size,perCustomer)
+    for(const receipt of receipts){
+      assert.equal(receipt.amountCents,100);assert.equal(receiptIds.has(receipt.id),false);receiptIds.add(receipt.id)
+    }
+    for(const allocation of allocations){
+      const invoice=invoiceByNumber.get(allocation.invoice)
+      assert.ok(invoice);assert.equal(invoice.customer_id,customer)
+      assert.equal(allocation.reference,`stripe:synthetic-nectar-native-account-1:${captures.get(invoice.id)}`)
+      assert.ok(references.has(allocation.reference));assert.equal(allocation.amountCents,100)
+      assert.equal(allocationIds.has(allocation.id),false);allocationIds.add(allocation.id)
+    }
+  })
+  assert.deepEqual(receiptIds,new Set(collections.entries.map(row=>row.paymentId)))
+  assert.equal(allocationIds.size,count)
   const readReport=async path=>{const response=await h.raw(path,{cookie:owner});assert.equal(response.status,200);return response.json()}
   const billings=await readReport('/api/nectar/reports/billings?period=2026-11'),ar=await readReport('/api/nectar/reports/ar')
   assert.equal(billings.totalCents,1000000);assert.deepEqual(new Set(billings.entries.map(row=>row.invoiceId)),invoiceIds)
@@ -187,7 +210,7 @@ export async function nativeJobCapacityFlow(h,owner){
   assert.equal(edge.intents.size,count);assert.equal(edge.calls.filter(call=>call.method==='POST'&&call.path==='/payment_intents').length,count)
   const completionMs=Math.round(completedAt-started)
   const receipt={head,activeSubscriptions:subscriptions.size,issuedInvoices:issued.length,capturedPayments:captures.size,allocatedCents,
-    recordedReceipts:collections.entries.length,revenueSchedules:revenue.contributions.filter(row=>row.kind==='recognition').length,reconciled:true,
+    recordedReceipts:receiptIds.size,paymentAllocations:allocationIds.size,revenueSchedules:revenue.contributions.filter(row=>row.kind==='recognition').length,reconciled:true,
     realWorkerRestart:true,workerRestarts:2,preparationMs:Math.round(preparedAt-started),explicitConsentMs:Math.round(consentedAt-preparedAt),
     seedCreationMs:Math.round(started-seedStart),completionMs,nativeTimingPassed:completionMs<15*60_000,processingMs:Math.round(preparedAt-started+completedAt-consentedAt),
     qualified:false,boundary:'native processor edge; explicit invoice consent and owner-confirmed continuation; unattended and live provider capacity remain unqualified'}

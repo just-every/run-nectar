@@ -46,7 +46,7 @@ export async function commit(env: Bindings, statements: D1PreparedStatement[], a
       // lifecycle observer records its derived facts for the same revision.
       ...events.map(event => stmt(env, 'INSERT INTO nc_audit (at, actor, action, subject, detail) VALUES (?, ?, ?, ?, ?)', now(), event.actor, event.action, event.subject, JSON.stringify(event.detail ?? {}))),
       ...due.after,
-      ...await captureSubscriptionStates(env, events),
+      ...await captureSubscriptionStates(env, events, due.reviewedSourceUnchanged),
       stmt(env, 'DELETE FROM nc_guard'),
     ])
   } catch (error) {

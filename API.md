@@ -1053,3 +1053,14 @@ Preparation leases and report send opt-ins are excluded from archives. Restored
 report history remains readable under ordinary current authority, while each
 recipient must opt in again locally. A retained failed snapshot or claimed send
 never regains execution authority from restoration.
+
+
+## Initial captured-card outcome custody
+
+A verified successful initial card capture records its provider intent identity,
+received payment, invoice allocation and financial audit atomically. A refused
+financial audit leaves no payment or allocation. The original claimed attempt
+retains the verified intent identity for read-only reconciliation; ordinary ticks
+can record that original capture once without a second processor payment.
+Pending bank collection and unknown provider outcomes retain their existing
+binding and settlement checks.

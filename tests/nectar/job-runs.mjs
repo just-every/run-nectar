@@ -371,6 +371,34 @@ async function invoiceJobResumption(h, owner, { finance, factor, financeFactor, 
   await api('invoice.automation.resume',{run:execution.id,revision:execution.execution_revision,confirm:true},409)
   assert.equal((await tick()).status,200)
   assert.equal(await financialSnapshot(),snapshot)
+  // A known initial capture binds its provider identity with cash atomically.
+  // A refused financial audit leaves a read-only recoverable claim, no cash
+  // and no allocation; overlapping ordinary ticks apply that same capture once.
+  const priorPayments=await api('payments'),priorPosts=edge.calls.filter(call=>call.method==='POST'&&call.path==='/payment_intents').length
+  const charge=await api('charge.add',{customer:customers[0],amount:'100',description:'Synthetic captured audit refusal',effective_date:'2026-11-01',taxable:false})
+  const draft=await api('invoice.manual',{customer:customers[0],charges:[charge.charge],service_date:'2026-11-01'})
+  const request=await api('automatic.collection.prepare',{invoice:draft.id,issue_date:'2026-11-01'})
+  const consent=await api('portal.session.issue',{customer:customers[0],origin:h.origin,audience:'hosted'})
+  assert.equal((await h.raw(`/portal/automatic-collections/${request.id}?session=${encodeURIComponent(consent.token)}`,{body:{request:request.id,basis_hash:request.basis,accept:true}})).status,200)
+  await h.api('automatic.collection.decide',finance,{request:request.id,basis_hash:request.basis,decision:'approved',confirm:true})
+  await api('invoice.approve',{invoice:draft.id,acknowledge:true})
+  await h.rejectAudit('automatic.collection.collected')
+  try{await api('invoice.finalise',{invoice:draft.id,issue_date:'2026-11-01'})}finally{await h.rejectAudit()}
+  const failedCapture=(await api('automatic-collections')).find(row=>row.id===request.id)
+  const captured=[...edge.intents.values()].filter(row=>row.value.metadata.nectar_native_invoice===draft.id)
+  assert.equal(captured.length,1);assert.equal(captured[0].value.status,'succeeded')
+  assert.equal(failedCapture.status,'uncertain');assert.equal(failedCapture.paymentIntentRef,captured[0].value.id)
+  assert.deepEqual(await api('payments'),priorPayments,'Refused financial audit records neither cash nor allocation')
+  assert.deepEqual((await api(`invoices/${draft.id}`)).allocations,[])
+  for(const response of await Promise.all([tick(),tick()]))assert.equal(response.status,200)
+  const recovered=await api(`invoices/${draft.id}`),afterPayments=await api('payments')
+  assert.deepEqual([recovered.paidCents,recovered.balanceCents,recovered.allocations.length],[10000,0,1])
+  assert.equal(afterPayments.length,priorPayments.length+1)
+  assert.equal(afterPayments.reduce((sum,row)=>sum+row.amount_cents,0)-priorPayments.reduce((sum,row)=>sum+row.amount_cents,0),10000)
+  assert.equal((await api('automatic.collection.reconcile',{request:request.id})).paymentIntentRef,captured[0].value.id)
+  assert.equal(edge.calls.filter(call=>call.method==='POST'&&call.path==='/payment_intents').length,priorPosts+1)
+  const captureAudit=await api('audit')
+  for(const action of ['automatic.collection.claim','automatic.collection.collected'])assert.equal(captureAudit.filter(event=>event.action===action&&event.subject===request.id).length,1)
   // A failed future run cannot borrow approval from a changed policy or day.
   instant=Date.parse('2026-12-01T10:00:00Z');await h.advanceClock(new Date(instant).toISOString());await refresh()
   await h.rejectAudit('invoice.approve')

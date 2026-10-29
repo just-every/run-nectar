@@ -12,7 +12,8 @@ const changesState = /^(subscription\.(?!state\.)|trial\.|automatic\.collection\
 // These review and initial-claim transitions change neither issued debt nor a
 // lifecycle or an observed failure. Due date boundaries still run before every
 // source transaction below. Avoid rebuilding the full after-source projection
-// for facts those transactions cannot change; unknown actions keep that work.
+// for facts those transactions cannot change once history exists. A first
+// observation and unknown actions still use the complete projection.
 const reviewOnly = new Set([
   'invoice.approve', 'automatic.collection.prepare',
   'automatic.collection.accept', 'automatic.collection.approved',
@@ -47,8 +48,8 @@ function sourceReferences(events: Audit[]) {
   }))])
 }
 
-export async function captureSubscriptionStates(env: Bindings, events: Audit[]) {
-  if (!events.some(event => changesState.test(event.action) && !reviewOnly.has(event.action))) return []
+export async function captureSubscriptionStates(env: Bindings, events: Audit[], reviewedSourceUnchanged = false) {
+  if (reviewedSourceUnchanged || !events.some(event => changesState.test(event.action))) return []
   const business = (await all(env, 'SELECT timezone FROM nc_business WHERE singleton=1'))[0]
   if (!business) return []
   const at = clockInstant(env), day = today(business.timezone, at), batch = newId()
@@ -118,14 +119,19 @@ export async function captureSubscriptionStates(env: Bindings, events: Audit[]) 
 // its statements in that same batch. The early guard fences the read basis
 // without changing audit or privacy counters used by the source's own guards.
 export async function captureDueSubscriptionStates(env: Bindings, events: Audit[]) {
-  const empty = { before: [] as D1PreparedStatement[], after: [] as D1PreparedStatement[] }
+  const empty = { before: [] as D1PreparedStatement[], after: [] as D1PreparedStatement[], reviewedSourceUnchanged: false }
   if (!events.some(event => changesState.test(event.action))) return empty
   const business = await one(env, 'SELECT timezone FROM nc_business WHERE singleton=1')
   if (!business) return empty
-  const generation = (await one(env, 'SELECT value FROM nc_privacy_generation WHERE id=1'))!.value
-  const audit = (await one(env, 'SELECT COALESCE(MAX(seq),0) seq FROM nc_audit'))!.seq
   const at = clockInstant(env), refs = sourceReferences(events)
-  const subs = await all(env, `${sources} SELECT * FROM facts`,refs,today(business.timezone,at))
+  // Read the fence counters with the exact source facts in one snapshot. This
+  // retains the guard against every later write and avoids two round trips on
+  // each review, claim and financial transaction.
+  const captured = await all(env, `${sources} SELECT facts.*,
+    (SELECT value FROM nc_privacy_generation WHERE id=1) AS capture_generation,
+    (SELECT COALESCE(MAX(seq),0) FROM nc_audit) AS capture_audit FROM facts`,refs,today(business.timezone,at))
+  const generation=captured[0]?.capture_generation,audit=captured[0]?.capture_audit
+  const subs=captured.map(({capture_generation:_generation,capture_audit:_audit,...sub})=>sub)
   const records: D1PreparedStatement[] = []
   for (const sub of subs) {
     if (!sub.previous_id) continue
@@ -158,6 +164,11 @@ export async function captureDueSubscriptionStates(env: Bindings, events: Audit[
       previousId=id;previousState=state
     }
   }
-  if (!records.length) return empty
-  return {before:[guard(env,'subscription_state_changed','(SELECT value FROM nc_privacy_generation WHERE id=1)=? AND (SELECT COALESCE(MAX(seq),0) FROM nc_audit)=?',generation,audit)],after:records}
+  // The before-source lookup already established history for these exact
+  // subscriptions. Never skip a first observation for a restored or imported
+  // subscription that has not yet reached the scheduled observer.
+  const reviewedSourceUnchanged = events.filter(event=>changesState.test(event.action)).every(event=>reviewOnly.has(event.action))
+    && subs.every(sub=>!!sub.previous_id)
+  if (!records.length) return {...empty,reviewedSourceUnchanged}
+  return {reviewedSourceUnchanged,before:[guard(env,'subscription_state_changed','(SELECT value FROM nc_privacy_generation WHERE id=1)=? AND (SELECT COALESCE(MAX(seq),0) FROM nc_audit)=?',generation,audit)],after:records}
 }
