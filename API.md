@@ -935,3 +935,7 @@ Repeat the deposit amount and date for each invoice row. Receipt IDs are immutab
 `GET /api/nectar/remittances` lists staged sources, short payments and unallocated funds under the same read authority, with the ordinary `limit` and `cursor` pagination. For received funds awaiting allocation, call `remittance.allocate.preview` with `receipt`, `invoice` and `amount`, then `remittance.allocate` with the same values, returned fingerprint and `confirm: true`. Ordinary `payment.allocate` and write-off recovery refuse these sources, and customer-balance application excludes them even under an automatic policy, so the separate review cannot be bypassed. Both confirmation doors require a person; application credentials and read-only members cannot move money. Replays, changed source payloads, stale balances, foreign customers, other currencies and erased sources cannot create another payment or allocation. Source-identity tombstones survive financial removal; restored receipts confer no automatic execution authority.
 
 These doors record an operator-confirmed USD receipt from a file. They do not charge a processor, attest bank verification, claim processor settlement or complete the Plaid and PAY-007 acceptance still named in AR-002.
+
+## Company agent door
+
+The shared `/mcp` door, `/agents` and `/api/rer/agent-policy` use Nectar's declared CORE registry. See [the supported jobs and limits](docs/agent-door.md) and `agent-surface.json`. Existing application, device, import and provider credentials keep their native purposes.

@@ -14,7 +14,7 @@ import { deliverAlerts } from './notification-mail'
 // proposal. Approving a data correction re-prepares a draft bill run but
 // approves no invoice: those still need their own approval.
 import type { Bindings } from '../auth.server'
-import { actorLabel, requireCapability, requireMember, type Actor } from './actor'
+import { actorLabel, companyAgentDetail, requireCapability, requireMember, type Actor } from './actor'
 import { requireBusiness, type Business } from './business'
 import { all, canonical, commit, guard, insist, newId, now, one, parseJson, stmt, type Row } from './core'
 import { addDays } from './dates'
@@ -101,7 +101,7 @@ export async function proposeDraft(env: Bindings, actor: Actor, input: Input) {
   const id = newId()
   await commit(env, [...await assuranceProposalGuards(env,assurance),...(collectionSeq === null ? [] : [cadenceSourceGuard(env,collectionSeq)]),...await alertStatements(env,'proposals',id,`/app/proposals/${id}`),stmt(env, "INSERT INTO nc_proposals (id, kind, title, payload_json, evidence_json, impact_json, basis_json, status, created_by, created_by_kind, created_at, prepared_by_id) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?)",
     id, kind, title, JSON.stringify(prepared.normalized), JSON.stringify(evidence), JSON.stringify(prepared.impact), JSON.stringify(prepared.basis), actorLabel(actor), actor.kind, now(), actor.id)],
-  { actor: actorLabel(actor), action: 'proposal.create', subject: id, detail: { kind, title } })
+  { actor: actorLabel(actor), action: 'proposal.create', subject: id, detail: { kind, title, ...companyAgentDetail(actor) } })
   await deliverAlerts(env,'proposals',id,actorLabel(actor))
   return { id, kind, impact: prepared.impact }
 }

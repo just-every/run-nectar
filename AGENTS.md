@@ -141,3 +141,5 @@ CONTRACT.md is the acceptance and status source. After changing it, run
 Commit the generated ACCEPTANCE.md and docs/CLAIMS.md with the source.
 Regenerate the edition source lock last with
 `node scripts/edition-authoring/cli.mjs lock`, then run its `check`.
+
+Lander-Regenerate: node scripts/contract-docs.mjs write
