@@ -1,4 +1,4 @@
-import { moveInvestigationsFlow } from './move-investigations.mjs'
+import { moveInvestigationsFlow,harnessOptions as moveOptions } from './move-investigations.mjs'
 import { reconciliationFlow } from './reconciliation.mjs'
 import { commitments } from './commitments.mjs'
 import { seedPortalRecords } from './portal-sessions.mjs'
@@ -24,7 +24,7 @@ const kind=process.argv[2],directory=process.env.NECTAR_EVIDENCE_DIR??`.evidence
 assert.ok(['move-investigations','assurance','entitlements','portal-usage','erasure','history','collection','numbering','intervals','cancellation','entity-setup','prepaid','native-collection'].includes(kind))
 await mkdir(directory,{recursive:true})
 const captures=[]
-const h=await harness({assets:true,...(kind==='collection'?collectionOptions():kind==='native-collection'?nativeOptions():{})});let browser
+const h=await harness({assets:true,...(kind==='collection'?collectionOptions():kind==='native-collection'?nativeOptions():kind==='move-investigations'?moveOptions():{})});let browser
 try {
   await h.raw('/auth/bootstrap',{body:{token:h.vars.SETUP_TOKEN,displayName:'Nectar Owner'}})
   const owner=await h.signIn(h.vars.OWNER_EMAIL)
@@ -62,13 +62,21 @@ try {
     await moveInvestigationsFlow(h,owner,{onState:async state=>{
       await page.setViewportSize({width:1440,height:950})
       await page.goto(h.origin+state.path)
-      assert.equal(await page.locator('[data-move-case]').count(),3)
+      assert.equal(await page.locator('[data-move-case]').count(),state.cases.length)
       if(state.label==='three-differences') {
         assert.match(await page.locator('main').innerText(),/Quantity/)
         assert.match(await page.locator('main').innerText(),/Unit price/)
         assert.match(await page.locator('main').innerText(),/Service ends/)
         await submit(form('move.investigate'))
         assert.equal(await page.locator('[data-move-case]').count(),3,'native repeated investigation keeps three cases')
+      } else if(state.label==='method-difference') {
+        assert.match(await page.locator('main').innerText(),/Captured saved method/)
+      } else if(state.label==='event-difference') {
+        assert.match(await page.locator('main').innerText(),/Subscription event items/)
+        assert.match(await page.locator('main').innerText(),/4 at synthetic-nectar-price-1/)
+      } else if(state.label==='customer-difference') {
+        assert.match(await page.locator('main').innerText(),/Billing address/)
+        assert.match(await page.locator('main').innerText(),/Changed value/)
       } else {
         assert.equal(await form('assurance.approve').count(),0,'resolved cases need no further confirmation')
         await submit(form('assurance.recheck').first())

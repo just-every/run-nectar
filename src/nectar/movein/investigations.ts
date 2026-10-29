@@ -7,6 +7,8 @@ import { isDate, periodContaining } from '../dates'
 import { decimalText, micros } from '../decimal'
 import { rated } from '../inputs'
 import { historyReference } from './history-reports'
+import { moveCustomerEvidence } from './customer-comparisons'
+import { moveEventEvidence } from './event-comparisons'
 
 export const MOVE_KIND = 'move_comparison'
 
@@ -60,5 +62,5 @@ export async function moveInvestigationEvidence(env: Bindings): Promise<Row[]> {
       comparisons,differences,mismatch:differences.length>0}
     results.push({...proof,basis:await fingerprint(proof)})
   }
-  return results
+  return [...results,...await moveCustomerEvidence(env),...await moveEventEvidence(env)]
 }

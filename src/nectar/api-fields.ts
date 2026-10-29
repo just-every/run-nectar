@@ -695,6 +695,18 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
   "move.investigate": {
     "owner": "text"
   },
+  "move.rollback.confirm": {
+    "acknowledge_discrepancies": "flag",
+    "basis": "text",
+    "confirm": "flag",
+    "request": "text"
+  },
+  "move.rollback.prepare": {
+    "cutover_start": "text",
+    "instructions": "text",
+    "processor_ref": "text",
+    "subscription": "text"
+  },
   "note.add": {
     "body": "text",
     "kind": "text",

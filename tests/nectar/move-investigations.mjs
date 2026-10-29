@@ -2,6 +2,25 @@ import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { file } from './harness.mjs'
 
+let provider
+export function harnessOptions() {
+  provider={inventory:true,events:new Map(),calls:[]}
+  return {stripeSecret:'synthetic-nectar-1',stripeFetch:async request=>{
+    const url=new URL(request.url),path=url.pathname.slice(3)
+    provider.calls.push({path,method:request.method})
+    assert.equal(request.method,'GET','investigation preparation only reads the processor edge')
+    const customer='synthetic-nectar-customer-1',method='synthetic-nectar-method-1'
+    const card={id:method,object:'payment_method',customer,livemode:false,type:'card',card:{brand:'visa',last4:'4242',exp_month:12,exp_year:2035}}
+    if(path==='/account')return Response.json({id:'synthetic-nectar-source-account-1',object:'account'})
+    if(path===`/customers/${customer}`)return Response.json({id:customer,object:'customer',livemode:false,invoice_settings:{default_payment_method:method}})
+    if(path===`/payment_methods/${method}`)return Response.json(card)
+    if(path==='/payment_methods')return Response.json({object:'list',has_more:false,data:url.searchParams.get('type')==='card'&&provider.inventory?[card]:[]})
+    if(path.startsWith('/events/'))return Response.json(provider.events.get(path.slice('/events/'.length)))
+    throw new Error('Unexpected synthetic processor path')
+  }}
+}
+
+
 // One journey through uploaded capture, case, governed correction and privacy doors.
 export async function moveInvestigationsFlow(h,owner,{onState=async()=>{}}={}) {
   const api=(path,body,status)=>h.api(path,owner,body,status)
@@ -13,7 +32,7 @@ export async function moveInvestigationsFlow(h,owner,{onState=async()=>{}}={}) {
   for(let index=1;index<=4;index++) {
     const id=kind=>`synthetic-nectar-${kind}-${index}`
     const price={id:id('price'),object:'price',product:id('product'),type:'recurring',currency:'usd',unit_amount:index===2?2000:2500,recurring:{interval:'month',interval_count:1,usage_type:'licensed'},metadata:{nectar_kind:'seat'}}
-    records.customers.push({id:id('customer'),name:`Synthetic comparison ${index}`,email:h.vars.OWNER_EMAIL.replace('owner',`synthetic-nectar-${index}`),tax_exempt:'none'})
+    records.customers.push({id:id('customer'),name:`Synthetic comparison ${index}`,email:h.vars.OWNER_EMAIL.replace('owner',`synthetic-nectar-${index}`),tax_exempt:'none',...(index===1?{invoice_settings:{default_payment_method:'synthetic-nectar-method-1'}}:{})})
     records.products.push({id:id('product'),name:`Synthetic comparison product ${index}`,active:true})
     records.prices.push(price)
     records.subscriptions.push({id:id('subscription'),object:'subscription',customer:id('customer'),status:'active',start_date:stamp('2026-07-01'),billing_cycle_anchor:stamp('2026-07-01'),items:list([{id:id('item'),price,quantity:2}])})
@@ -38,7 +57,7 @@ export async function moveInvestigationsFlow(h,owner,{onState=async()=>{}}={}) {
   assert.deepEqual(await h.api('assurance-cases',agent),[])
   await h.rejectAudit(null)
   const scanned=await scan()
-  assert.equal(scanned.compared,4)
+  assert.equal(scanned.compared,8)
   assert.equal(scanned.opened.length,3,'three independently planted differences, with no case for the clean control')
   assert.deepEqual((await scan()).opened,[])
   const concurrent=await Promise.all([1,2].map(()=>h.raw('/api/nectar/move.investigate',{...agent,body:{owner:ownerId}})))
@@ -123,12 +142,149 @@ export async function moveInvestigationsFlow(h,owner,{onState=async()=>{}}={}) {
   assert.equal((await api('shadow')).length,4,'investigation and corrections grant no cutover authority')
   noOriginal(await h.page('/app/import/investigations',owner))
 
+  // An exact owner review retains a plan and processor references without activating a cutover.
+  const subId=subscriptions[0].id,rollbackPath=`move-rollbacks/${subId}`
+  const plan={subscription:subId,cutover_start:'2026-11-01',processor_ref:'synthetic-nectar-source-account-1',instructions:'Keep source billing in place until a person verifies the last source period. If cutover fails, stop new billing and have the owner reconcile both processors before any manual recovery.'}
+  await h.api('move.rollback.prepare',agent,plan,403)
+  await h.api(rollbackPath,agent,undefined,403)
+  await h.rejectAudit('move.rollback.prepare');await api('move.rollback.prepare',plan,500)
+  assert.deepEqual(await api(rollbackPath),[])
+  await h.rejectAudit(null)
+  const prepared=await api('move.rollback.prepare',plan)
+  assert.equal((await api('move.rollback.prepare',plan)).id,prepared.id)
+  assert.equal(prepared.instructions,plan.instructions)
+  assert.equal(prepared.executionAuthority,false)
+  assert.equal(prepared.stale,false)
+  assert.deepEqual(prepared.snapshot.references.invoices,['synthetic-nectar-invoice-1'])
+  assert.equal(prepared.snapshot.references.customer,'synthetic-nectar-customer-1')
+  assert.equal(prepared.snapshot.references.subscription,'synthetic-nectar-subscription-1')
+  const confirmation={request:prepared.id,basis:prepared.basis_hash,confirm:true}
+  await api('move.rollback.confirm',{...confirmation,confirm:false},400)
+  await api('move.rollback.confirm',{...confirmation,basis:'synthetic-nectar-stale-basis'},409)
+  await h.api('move.rollback.confirm',agent,confirmation,403)
+  await h.rejectAudit('move.rollback.confirm');await api('move.rollback.confirm',confirmation,500)
+  assert.equal((await api(rollbackPath))[0].confirmed_at,null)
+  await h.rejectAudit(null)
+  const confirmed=await api('move.rollback.confirm',confirmation)
+  assert.equal(confirmed.confirmed_by,ownerId)
+  assert.ok(confirmed.confirmed_at)
+  assert.equal((await api('move.rollback.confirm',confirmation)).confirmed_at,confirmed.confirmed_at)
+  assert.equal((await api(rollbackPath)).length,1)
+  assert.equal((await api('shadow')).length,4,'a reviewed plan still grants no cutover or billing authority')
+  await api('import.job',{job:imported.job,action:'undo'},409)
+
+  // A changed customer opens a source-cited case without copying their contact into agent evidence.
+  const originalCustomer=await api(`customers/${cases[0].customer_id}`)
+  const customerUpdate={customer:originalCustomer.id,revision:originalCustomer.revision,name:originalCustomer.name,billing_email:originalCustomer.billing_email,address:'Synthetic changed address',tax_exempt:originalCustomer.tax_exempt}
+  await h.api('customer.update',agent,customerUpdate,403)
+  await api('customer.update',customerUpdate)
+  assert.equal((await api(rollbackPath))[0].stale,true)
+  await api('move.rollback.confirm',confirmation,409)
+  const changedScan=await scan()
+  assert.equal(changedScan.opened.length,1)
+  const customerCase=(await h.api('assurance-cases',agent)).find(row=>row.evidence.category==='customer')
+  assert.deepEqual(customerCase.evidence.differences,[{field:'address',captured:'Captured value',engine:'Changed value'}])
+  assert.deepEqual(customerCase.evidence.citation,{job:imported.job,artifactHash:createHash('sha256').update(JSON.stringify(capture.customers)).digest('hex'),sourceHash:createHash('sha256').update(canonical(records.customers[0])).digest('hex'),row:1})
+  assert.ok(!JSON.stringify(customerCase).includes(customerUpdate.address))
+  assert.ok(!JSON.stringify(customerCase).includes(originalCustomer.billing_email))
+  assert.equal((await scan()).opened.length,0)
+  await api('assurance.approve',{case:customerCase.id,basis:customerCase.basis_hash},409)
+  const mismatchPlan=await api('move.rollback.prepare',plan)
+  const mismatchConfirmation={request:mismatchPlan.id,basis:mismatchPlan.basis_hash,confirm:true}
+  await api('move.rollback.confirm',mismatchConfirmation,409)
+  await api('move.rollback.confirm',{...mismatchConfirmation,acknowledge_discrepancies:true})
+  await onState({label:'customer-difference',path:'/app/import/investigations',cases:[...cases,customerCase]})
+  const changedCustomer=await api(`customers/${originalCustomer.id}`)
+  await api('customer.update',{...customerUpdate,revision:changedCustomer.revision,address:originalCustomer.address})
+  const checkedCustomer=await h.api('assurance.recheck',agent,{case:customerCase.id})
+  assert.equal(checkedCustomer.evidence.mismatch,false)
+  await api('assurance.approve',{case:customerCase.id,basis:checkedCustomer.evidence.basis})
+  assert.equal((await h.api('assurance.recheck',agent,{case:customerCase.id})).status,'resolved')
+  assert.equal((await read(customerCase)).observations.length,3)
+  // The captured default is compared to an independently refreshed, binding-valid inventory.
+  await api('collection.customer.bind',{customer:originalCustomer.id,account_ref:plan.processor_ref,stripe_customer_ref:records.customers[0].id,confirm:true})
+  await api('customer.payment_methods.refresh',{customer:originalCustomer.id})
+  const cleanMethodScan=await scan()
+  assert.equal(cleanMethodScan.opened.length,0)
+  assert.equal(cleanMethodScan.compared,9)
+  provider.inventory=false
+  await api('customer.payment_methods.refresh',{customer:originalCustomer.id})
+  assert.equal((await scan()).opened.length,1)
+  const methodCase=(await h.api('assurance-cases',agent)).find(row=>row.evidence.category==='payment-method')
+  assert.deepEqual(methodCase.evidence.differences,[{field:'savedMethod',captured:'synthetic-nectar-method-1',engine:null}])
+  assert.equal(methodCase.evidence.coverage,'captured-default-membership-only')
+  assert.equal(methodCase.evidence.citation.sourceHash,customerCase.evidence.citation.sourceHash)
+  await api('assurance.approve',{case:methodCase.id,basis:methodCase.basis_hash},409)
+  await onState({label:'method-difference',path:'/app/import/investigations',cases:[...cases,customerCase,methodCase]})
+  provider.inventory=true
+  await api('customer.payment_methods.refresh',{customer:originalCustomer.id})
+  assert.equal((await h.api(`assurance-cases/${methodCase.id}`,agent)).stale,true)
+  const methodChecked=await h.api('assurance.recheck',agent,{case:methodCase.id})
+  assert.equal(methodChecked.evidence.mismatch,false)
+  await api('assurance.approve',{case:methodCase.id,basis:methodChecked.evidence.basis})
+  assert.equal((await h.api('assurance.recheck',agent,{case:methodCase.id})).status,'resolved')
+
+  // Only authenticated source events enter the comparison; old arrival order cannot replace the latest event.
+  await api('webhook.register',{url:'https://receiver.nectar-app.com/webhooks',consent:true})
+  const created=Math.floor(Date.now()/1000)+10
+  const sourceEvent=(id,quantity,time)=>({id,object:'event',type:'customer.subscription.updated',livemode:false,created:time,data:{object:{id:records.subscriptions[0].id,object:'subscription',customer:records.customers[0].id,status:'active',items:list([{id:'synthetic-nectar-item-1',price:'synthetic-nectar-price-1',quantity}]),description:privateMarker}}})
+  const consume=async event=>{
+    provider.events.set(event.id,event)
+    return api('webhook.stripe.consume',{customer:originalCustomer.id,account_ref:plan.processor_ref,event_ref:event.id,consent:true})
+  }
+  await consume(sourceEvent('synthetic-nectar-event-2',4,created))
+  assert.equal((await scan()).opened.length,1)
+  const eventCase=(await h.api('assurance-cases',agent)).find(row=>row.evidence.category==='webhook')
+  assert.deepEqual(eventCase.evidence.differences,[{field:'eventItems',captured:[{price_ref:'synthetic-nectar-price-1',quantity:4}],engine:[{price_ref:'synthetic-nectar-price-1',quantity:3}]}])
+  assert.deepEqual(eventCase.evidence.citation,{event:'synthetic-nectar-event-2',account:plan.processor_ref,capturedAt:created*1000})
+  noOriginal(eventCase)
+  await consume(sourceEvent('synthetic-nectar-event-1',3,created-1))
+  assert.equal((await h.api(`assurance-cases/${eventCase.id}`,agent)).stale,false)
+  assert.equal((await scan()).opened.length,0)
+  await api('assurance.approve',{case:eventCase.id,basis:eventCase.basis_hash},409)
+  await onState({label:'event-difference',path:'/app/import/investigations',cases:[...cases,customerCase,methodCase,eventCase]})
+  const quantityNow=await api(`subscriptions/${subId}`),liveItem=quantityNow.items.find(row=>row.effective_to===null)
+  const eventFix=await api('change.prepare',{subscription:subId,item:liveItem.id,quantity:4,effective_date:'2026-10-01'})
+  await api('change.decide',{change:eventFix.change,decision:'approved'})
+  const eventChecked=await h.api('assurance.recheck',agent,{case:eventCase.id})
+  assert.equal(eventChecked.evidence.mismatch,false)
+  await api('assurance.approve',{case:eventCase.id,basis:eventChecked.evidence.basis})
+  assert.equal((await h.api('assurance.recheck',agent,{case:eventCase.id})).status,'resolved')
+  const scans=(await h.api('assurance-cases',agent)).length
+  assert.equal((await scan()).opened.length,0)
+  assert.equal((await h.api('assurance-cases',agent)).length,scans)
+  assert.ok(provider.calls.every(call=>call.method==='GET'),'no scan or review can write a processor object')
+  assert.deepEqual(await Promise.all(customers.map(customer=>api(`customers/${customer.id}`).then(row=>row.ledger))),moneyBefore)
+
+  const freshPlan=await api('move.rollback.prepare',plan)
+  const concurrentReviews=await Promise.all([1,2].map(()=>h.raw('/api/nectar/move.rollback.confirm',{cookie:owner,body:{request:freshPlan.id,basis:freshPlan.basis_hash,confirm:true}})))
+  assert.ok(concurrentReviews.every(response=>[200,409].includes(response.status)))
+  assert.equal((await api(rollbackPath)).filter(row=>row.id===freshPlan.id&&row.confirmed_at).length,1)
+  const confirmedAudits=(await api('audit')).filter(row=>row.action==='move.rollback.confirm'&&row.subject===freshPlan.id)
+  assert.equal(confirmedAudits.length,1,'concurrent confirmation retains one audited review')
+  assert.deepEqual(await api('runs'),runsBefore)
+  noOriginal(await api(rollbackPath))
+  const unsupportedEvent=sourceEvent('synthetic-nectar-event-3',4,created+1)
+  unsupportedEvent.data.object.status='paused'
+  await consume(unsupportedEvent)
+  assert.equal((await h.api(`assurance-cases/${eventCase.id}`,agent)).stale,true,'a newer unsupported source cannot leave an older explanation current')
+  await h.api('assurance.recheck',agent,{case:eventCase.id},409)
+  await api('assurance.approve',{case:eventCase.id,basis:eventChecked.evidence.basis},409)
+
   // Erasure withdraws case evidence and replay cannot reconstruct it.
   const erasedCustomer=customers.find(row=>row.id===cases[0].customer_id)
   const request=await api('erasure.request',{customer:erasedCustomer.id})
   await api('erasure.verify',{request:request.id,reason:'Synthetic independent owner verification',evidence:file('synthetic-verification.txt','Synthetic identity verified independently','text/plain')})
   await api('erasure.approve',{request:request.id,confirm:true})
   await h.api(`assurance-cases/${cases[0].id}`,agent,undefined,404)
+  await h.api(`assurance-cases/${customerCase.id}`,agent,undefined,404)
+  await h.api(`assurance-cases/${methodCase.id}`,agent,undefined,404)
+  await h.api(`assurance-cases/${eventCase.id}`,agent,undefined,404)
+  await api('webhook.stripe.consume',{customer:originalCustomer.id,account_ref:plan.processor_ref,event_ref:'synthetic-nectar-event-2',consent:true},409)
+  await api('customer.payment_methods.refresh',{customer:originalCustomer.id},404)
+  assert.deepEqual(await api(rollbackPath),[])
+  await api('move.rollback.confirm',{request:freshPlan.id,basis:freshPlan.basis_hash,confirm:true},404)
+  await api('move.rollback.prepare',plan,409)
   await scan()
   assert.equal((await h.api('assurance-cases',agent)).some(row=>row.id===cases[0].id),false)
   assert.equal((await api('import.preview',files,409)).error,'erased_import_source')
