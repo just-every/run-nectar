@@ -58,9 +58,9 @@ export async function assertCustomerPaymentMethods(h, owner, { customer, other, 
 }
 
 // Processor fixtures only: every transition under test still uses real HTTP and D1.
-export function hostedSetupEdge(baseFetch) {
+export function hostedSetupEdge(baseFetch, { customerRefs = [] } = {}) {
   const sessions = new Map(), calls = [], defaults = new Map()
-  const customers=new Set(['synthetic-nectar-native-customer-1','synthetic-nectar-native-customer-3'])
+  const customers=new Set(['synthetic-nectar-native-customer-1','synthetic-nectar-native-customer-3',...customerRefs])
   let fault = null
   const fetch = async request => {
     const path = new URL(request.url).pathname.slice(3)
