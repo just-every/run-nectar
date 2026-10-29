@@ -26,8 +26,12 @@ function validateInstructions(row: Row): TransferInstructions {
   insist(row.object === 'funding_instructions' && row.funding_type === 'bank_transfer' && row.currency === 'usd'
     && row.livemode === false && row.bank_transfer?.type === 'us_bank_transfer' && row.bank_transfer.country === 'US', invalid, 409)
   const addresses = row.bank_transfer.financial_addresses
-  insist(Array.isArray(addresses) && addresses.length === 1 && addresses[0]?.type === 'aba', invalid, 409)
-  const address = addresses[0], aba = address.aba
+  insist(Array.isArray(addresses), invalid, 409)
+  // Stripe also supplies international addresses. Only one unambiguous US
+  // address may enter the domestic instructions; other networks stay private.
+  const domestic = addresses.filter(address => address?.type === 'aba')
+  insist(domestic.length === 1, invalid, 409)
+  const address = domestic[0], aba = address.aba
   insist(aba && typeof aba.account_number === 'string' && /^\d{4,17}$/.test(aba.account_number)
     && typeof aba.routing_number === 'string' && /^\d{9}$/.test(aba.routing_number)
     && ['checking','savings'].includes(aba.account_type)

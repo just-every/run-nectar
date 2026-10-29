@@ -4438,7 +4438,7 @@
       "executable": false
     },
     "src/nectar/transfer-instructions.ts": {
-      "sha256": "a9ed6b18d998d6008e0b468639ba66efc7732fb8ce5d73d97daa6ecfea75fb12",
+      "sha256": "892d66686bce0f718636f126772df0feb1a0231f901980cf467da79208b9dd3f",
       "executable": false
     },
     "src/nectar/trial-collection-invoice.ts": {
@@ -5729,8 +5729,12 @@
       "sha256": "224786fb85132e790b7b2e77cf7104fadc951e68e44333976caa8f8ca4db3658",
       "executable": false
     },
+    "tests/nectar/transfer-instructions-sandbox.mjs": {
+      "sha256": "b609d7424fa66358f7bc97d658d465afb8f73c1a1632781094c9a91c0b9db8c3",
+      "executable": false
+    },
     "tests/nectar/transfer-instructions.mjs": {
-      "sha256": "a31d3f7d01890721ef67ade50cca3f3ef4c92dde6e4a1d952c7746e00bdf2853",
+      "sha256": "15829bf48890614bde26f62cc20830a6e426c2c6df7bd707eecaf7c75811e68e",
       "executable": false
     },
     "tests/nectar/upcoming.mjs": {
