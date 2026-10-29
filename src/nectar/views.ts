@@ -1,6 +1,7 @@
 import { portalChangeSettings } from './portal-change-policy'
 import { readRemittances } from './remittances'
 import { processorEvents } from './processor-events'
+import { billingNotices } from './billing-notices'
 import { dunningReport } from './dunning'
 import { retryComparisonReport } from './retry-comparison'
 import { retryRecoveryReport } from './retry-report'
@@ -114,6 +115,7 @@ export const views: Record<string, View> = {
   prepaidTopupAuthorizations:(env,actor,_r,_id,url)=>readPrepaidTopupAuthorizations(env,actor,url.searchParams.get('subscription')??undefined),
   prepaidTopupClaims:(env,actor,_r,_id,url)=>readPrepaidTopupClaims(env,actor,url.searchParams.get('subscription')??undefined),
   paymentLinks:(env,actor)=>readPaymentLinks(env,actor),
+  billingNotices:(env,actor)=>billingNotices(env,actor),
   dunning:(env,actor)=>dunningReport(env,actor),
   retryComparison:(env,actor)=>retryComparisonReport(env,actor),
   retryRecovery:(env,actor)=>retryRecoveryReport(env,actor),
