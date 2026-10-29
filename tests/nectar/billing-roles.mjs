@@ -18,8 +18,8 @@ const API_PROBE = { periodCloses: 'period-closes', customerBalance: 'customers/n
 const PAGE_PROBE = { prepaid:'/app/prepaid/none', prepaidSource:'/app/prepaid/none/entries/none', prepaidCsv:'/app/exports/prepaid/none.csv', importOriginals:'/app/import/none/originals/'+ '0'.repeat(64), metadata: '/app/metadata/price/none', report: '/app/reports/billings', reportInvoice: '/app/reports/billings/none', reportCsv: '/app/exports/reports/billings.csv', metadataCsv: '/app/exports/objects/customer.csv', reportLine: '/app/invoices/none/lines/none' }
 const fill = pattern => pattern.replace(/^\^|\$$/g, '').replace(/\(\[[^)]*\]\+\)/g, 'none').replace(/\\\./g, '.')
 
-const READ_ALL_API = API_DOORS.map(([, name]) => name).filter(name => !['dunning','sso','paymentLinks','trialCollections','prepaidRefundNotices','hierarchies','webhooks','webhookDelivery','members', 'roles', 'imports', 'audit', 'reportSchedule', 'reportDelivery', 'noteMembers','billingEntities','nativeCollections','prepaidTopupAuthorizations','prepaidTopupClaims'].includes(name))
-const READ_ALL_PAGES = PAGE_DOORS.map(([, name]) => name).filter(name => !['dunning','sso','paymentLinks','hierarchies','webhooks','webhookDelivery','prepaidRefundProof','prepaidRefundCsv','prepaidTopupSource','prepaidCsv', 'revenueJournalCsv', 'numberRegisterCsv', 'erasureEvidence', 'revenueCsv', 'reportSchedule', 'reportDelivery', 'reportDeliveryCsv', 'reportCsv', 'metadataCsv', 'runFile', 'import', 'exports', 'customersFile', 'invoicesFile', 'usageFile', 'subscriptionsFile', 'audit', 'noticeFile','importOriginals'].includes(name))
+const READ_ALL_API = API_DOORS.map(([, name]) => name).filter(name => !['sandbox','sandboxCustomer','dunning','sso','paymentLinks','trialCollections','prepaidRefundNotices','hierarchies','webhooks','webhookDelivery','members', 'roles', 'imports', 'audit', 'reportSchedule', 'reportDelivery', 'noteMembers','billingEntities','nativeCollections','prepaidTopupAuthorizations','prepaidTopupClaims'].includes(name))
+const READ_ALL_PAGES = PAGE_DOORS.map(([, name]) => name).filter(name => !['sandbox','sandboxCustomer','dunning','sso','paymentLinks','hierarchies','webhooks','webhookDelivery','prepaidRefundProof','prepaidRefundCsv','prepaidTopupSource','prepaidCsv', 'revenueJournalCsv', 'numberRegisterCsv', 'erasureEvidence', 'revenueCsv', 'reportSchedule', 'reportDelivery', 'reportDeliveryCsv', 'reportCsv', 'metadataCsv', 'runFile', 'import', 'exports', 'customersFile', 'invoicesFile', 'usageFile', 'subscriptionsFile', 'audit', 'noticeFile','importOriginals'].includes(name))
 const COMMON = { api: ['openapi', 'me', 'notifications', 'mfa'], pages: ['home', 'more', 'security', 'passkeyScript'] }
 const EXPECTED = {
   collections: {
@@ -38,8 +38,8 @@ const EXPECTED = {
     pages: ['portalChanges','processorEvents','paymentReceipt','prepaidRefundList', 'prepaidRefundSource', 'numberRegister', 'customers', 'customer', 'certificateFile', 'subscription', 'prepaid', 'prepaidSource', 'invoice', 'receivables', 'billingAnswers', 'reportLine', 'metadataList'],
   },
   developer: {
-    actions: ['invoice.refund.preview', 'credential.issue', 'credential.revoke', 'credential.version', 'webhook.stripe.consume', 'webhook.register', 'webhook.rotate', 'webhook.disable', 'webhook.replay', 'webhook.dispatch', 'answer.read', 'meter.preview', 'usage.correction.preview'],
-    api: [...READ_ALL_API,'webhooks','webhookDelivery'], pages: [...READ_ALL_PAGES,'webhooks','webhookDelivery'],
+    actions: ['sandbox.catalog.copy','sandbox.customer.create','sandbox.clock.advance','invoice.refund.preview', 'credential.issue', 'credential.revoke', 'credential.version', 'webhook.stripe.consume', 'webhook.register', 'webhook.rotate', 'webhook.disable', 'webhook.replay', 'webhook.dispatch', 'answer.read', 'meter.preview', 'usage.correction.preview'],
+    api: [...READ_ALL_API,'sandbox','sandboxCustomer','webhooks','webhookDelivery'], pages: [...READ_ALL_PAGES,'sandbox','sandboxCustomer','webhooks','webhookDelivery'],
   },
   analyst: {
     actions: ['report.schedule'],
