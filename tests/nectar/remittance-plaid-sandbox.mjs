@@ -27,13 +27,13 @@ async function request(path,fields={}) {
  return value
 }
 try {
- const created=await request('/sandbox/public_token/create',{institution_id:'ins_109508',initial_products:['transactions']})
+ const deposits=[['wire',600.06],['ach',125],['short',35],['unknown',7]]
+ const custom={override_accounts:[{type:'depository',subtype:'checking',starting_balance:1000,currency:'USD',meta:{name:tag},transactions:deposits.map(([kind,amount])=>({amount:-amount,currency:'USD',date_transacted:day,date_posted:day,description:`${tag}-${kind}`}))}]}
+ const created=await request('/sandbox/public_token/create',{institution_id:'ins_109508',initial_products:['transactions'],options:{override_username:'user_custom',override_password:JSON.stringify(custom)}})
  const exchanged=await request('/item/public_token/exchange',{public_token:created.public_token});accessToken=exchanged.access_token
  const connected=await request('/accounts/get',{access_token:accessToken})
  const account=connected.accounts.find(row=>row.type==='depository'&&row.subtype==='checking'&&row.balances?.iso_currency_code==='USD')?.account_id
  assert.ok(account,'A USD depository account is required')
- const deposits=[['wire',600.06],['ach',125],['short',35],['unknown',7]]
- await request('/sandbox/transactions/create',{access_token:accessToken,transactions:deposits.map(([kind,amount])=>({account_id:account,amount:-amount,iso_currency_code:'USD',date_transacted:day,date_posted:day,description:`${tag}-${kind}`}))})
  let posted=[]
  for(const wait of [0,2000,5000,10000,15000]){
   if(wait)await delay(wait)
@@ -97,6 +97,7 @@ try {
 } catch(error) {
  // Assertion messages contain only product figures or typed refusals; never print provider bodies.
  console.error(error instanceof assert.AssertionError?`Sandbox assertion: ${error.message}`:error.message)
+ console.error(JSON.stringify({head,provider:'plaid_sandbox',requests}))
  process.exitCode=1
 } finally {
  if(accessToken&&!removed){try{await request('/item/remove',{access_token:accessToken});console.log('Temporary Plaid sandbox Item removed')}catch(error){console.error(error.message);process.exitCode=1}}

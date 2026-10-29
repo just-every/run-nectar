@@ -841,6 +841,10 @@
       "sha256": "6edf6dceb4b5e3c01c58d81855479c21029962327b83ac903c65a3d8fa968fce",
       "executable": false
     },
+    "migrations/core/0112_plaid_deposits.sql": {
+      "sha256": "b07fe314d53967a694e4167b6779703531dbffa1e6ef49abf5efc28cde143ce9",
+      "executable": false
+    },
     "ONBOARDING.md": {
       "sha256": "95bb235abff28ac36979868486caf2cb73bfbe4ab63037f3e301d189bb9398d9",
       "executable": false
@@ -3422,7 +3426,7 @@
       "executable": false
     },
     "src/nectar/erasure-purge.ts": {
-      "sha256": "de64b5f0dc72033127d777ec129ca1bc090792b7b0631577853cea95644dcfc7",
+      "sha256": "e68d9f614c81b0571cf2dad7928ff467a732c009144191f671e1a45b5dc6609d",
       "executable": false
     },
     "src/nectar/erasure-records.ts": {
@@ -3442,7 +3446,7 @@
       "executable": false
     },
     "src/nectar/erasure.ts": {
-      "sha256": "ce857a803aec3bf839d9e8ce54b7f08494dd580c3d822812eb8b4479d3825a84",
+      "sha256": "59c6a0a68991f696d4c5d93194aa3b60dd9c7e95a432ab3d62ddb8a60ed4eceb",
       "executable": false
     },
     "src/nectar/exports.ts": {
@@ -3863,6 +3867,10 @@
     },
     "src/nectar/period-close.ts": {
       "sha256": "ea8daa965ad835e6645206af9966e0a3cd56ed05943c12e74a721c3a9c16f5a0",
+      "executable": false
+    },
+    "src/nectar/plaid-remittances.ts": {
+      "sha256": "88ece2bc99d02f4583c171f248af0b351ffecdc8369e782ae1cd03e984554738",
       "executable": false
     },
     "src/nectar/plan-change-history.ts": {
@@ -5518,7 +5526,7 @@
       "executable": false
     },
     "tests/nectar/processor-archive.mjs": {
-      "sha256": "8257cca7bb741d1fe55a7286352eaf0b43a086f79188193a100a6f89d86c803f",
+      "sha256": "e0ab6a563cc31f3abcaa9a1ee7b5055252c2b036c1d42062eb265323f8a0aa6b",
       "executable": false
     },
     "tests/nectar/processor-cash-imported-sandbox.mjs": {
@@ -5583,6 +5591,14 @@
     },
     "tests/nectar/remittance-files.mjs": {
       "sha256": "9230e357af6a32b2847983e425c55bd6d67284fe7352d38503cb933df73644a8",
+      "executable": false
+    },
+    "tests/nectar/remittance-plaid-sandbox.mjs": {
+      "sha256": "3ef26b3b310c98030efdf3ff66a4511bb9b181ef9823a26f40e65c16d9e32204",
+      "executable": false
+    },
+    "tests/nectar/remittance-plaid.mjs": {
+      "sha256": "bec146de5280cbc268c42f9326a128b6a16454a13eba8e8115bc67d7b2cbd08f",
       "executable": false
     },
     "tests/nectar/renewal-pricing.mjs": {

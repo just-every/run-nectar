@@ -31,8 +31,9 @@ export async function approveErasure(env: Bindings, actor: Actor, input: Input) 
   const collected=[...await all(env,"SELECT * FROM nc_imported_collections WHERE customer_id=? AND charge_ref IS NOT NULL AND charge_ref<>'' AND collected_on IS NOT NULL",customer.id),...await importedCashCollections(env,customer.id)]
   const importedMoney=await all(env,"SELECT * FROM nc_incumbent_history WHERE customer_id=? AND amount_cents IS NOT NULL",customer.id)
   const processorMoney=[...await all(env,'SELECT id,amount_cents,occurred_at FROM nc_processor_cash_transactions WHERE customer_id=? AND amount_cents<>0',customer.id),...await all(env,'SELECT id,amount_cents,occurred_at FROM nc_processor_transactions WHERE customer_id=? AND amount_cents<>0',customer.id)]
+  const bankMoney=await all(env,'SELECT id,amount_cents,received_on FROM nc_plaid_deposits WHERE customer_id=?',customer.id)
   const cashReturns=await all(env,'SELECT id,amount_cents,provider_created_at,completed_at FROM nc_processor_cash_returns WHERE customer_id=? AND provider_created_at IS NOT NULL',customer.id)
-  const dates=[...processorMoney.map(record=>localDate(record.occurred_at,b.timezone)),...cashReturns.flatMap(record=>[record.provider_created_at,record.completed_at].filter(Boolean).map(at=>localDate(at,b.timezone))),...collected.map(record=>record.collected_on),...importedMoney.map(record=>record.occurred_on),...incumbent.map(record=>record.issue_date).filter(Boolean),...invoices.map(i=>i.issue_date),...payments.map(p=>p.received_on),...credits.map(c=>localDate(c.issued_at,b.timezone))].filter(Boolean).sort()
+  const dates=[...bankMoney.map(record=>record.received_on),...processorMoney.map(record=>localDate(record.occurred_at,b.timezone)),...cashReturns.flatMap(record=>[record.provider_created_at,record.completed_at].filter(Boolean).map(at=>localDate(at,b.timezone))),...collected.map(record=>record.collected_on),...importedMoney.map(record=>record.occurred_on),...incumbent.map(record=>record.issue_date).filter(Boolean),...invoices.map(i=>i.issue_date),...payments.map(p=>p.received_on),...credits.map(c=>localDate(c.issued_at,b.timezone))].filter(Boolean).sort()
   const legacyAnchor=incumbent.some(record=>!record.issue_date)?localDate(at,b.timezone):null
   if(legacyAnchor)dates.push(legacyAnchor)
   dates.sort()
@@ -54,6 +55,7 @@ export async function approveErasure(env: Bindings, actor: Actor, input: Input) 
   for(const record of collected)retained.push([id,'incumbent-collection',record.id,customer.name,record.amount_cents,0,record.collected_on,until,'{}'])
   for(const record of importedMoney)retained.push([id,`incumbent-${record.kind}`,record.id,customer.name,record.amount_cents,0,record.occurred_on,until,'{}'])
   for(const record of processorMoney)retained.push([id,'processor-cash',record.id,customer.name,record.amount_cents,0,localDate(record.occurred_at,b.timezone),until,'{}'])
+  for(const record of bankMoney)retained.push([id,'bank-deposit',record.id,customer.name,record.amount_cents,0,record.received_on,until,'{}'])
   for(const record of cashReturns)retained.push([id,'processor-cash-return',record.id,customer.name,-record.amount_cents,0,localDate(record.completed_at??record.provider_created_at,b.timezone),until,'{}'])
   statements.push(...erasureInsertStatements('nc_erasure_financial',['request_id','kind','record_id','legal_name','amount_cents','tax_cents','document_date','retain_until','tax_json'],retained))
   // Every request for this customer loses its recipient/token, not just the one
