@@ -2,8 +2,11 @@ import assert from 'node:assert/strict'
 import { mkdir } from 'node:fs/promises'
 import { chromium } from '@playwright/test'
 import { harness } from './harness.mjs'
+import { enterpriseLinkingFlow } from './enterprise-linking.mjs'
 import { enterpriseIdentityFlow } from './enterprise-identity.mjs'
 
+if (process.argv[2] === 'linking') await linkingBrowser()
+else {
 const directory = process.env.NECTAR_EVIDENCE_DIR ?? '.evidence/enterprise-identity'
 await mkdir(directory, { recursive: true })
 const h = await harness({ assets: true })
@@ -13,7 +16,7 @@ try {
   const owner = await h.signIn(h.vars.OWNER_EMAIL)
   await h.raw('/setup', { cookie: owner, form: new URLSearchParams({ confirm: 'yes' }) })
   await h.api('business.configure', owner, { legal_name: 'Alder Research Software', timezone: 'UTC', invoice_prefix: 'ALDER', payment_terms_days: 30 })
-  browser = await chromium.launch({ headless: true, args: ['--use-mock-keychain', '--password-store=basic'] })
+  browser = await chromium.launch({ headless: true, executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH, args: ['--use-mock-keychain', '--password-store=basic', '--no-sandbox'] })
   const context = await browser.newContext()
   await context.addCookies(owner.split('; ').map(value => { const i = value.indexOf('='); return { name: value.slice(0, i), value: value.slice(i + 1), url: h.origin } }))
   const page = await context.newPage()
@@ -61,3 +64,65 @@ try {
     }
   } })
 } finally { await browser?.close(); await h.close() }
+
+}
+
+async function linkingBrowser() {
+  const directory = process.env.NECTAR_EVIDENCE_DIR ?? '.evidence/enterprise-linking'
+  await mkdir(directory, { recursive: true })
+  const h = await harness({ assets: true })
+  let browser
+  try {
+    await h.raw('/auth/bootstrap', { body: { token: h.vars.SETUP_TOKEN, displayName: 'Nectar owner' } })
+    const owner = await h.signIn(h.vars.OWNER_EMAIL)
+    await h.raw('/setup', { cookie: owner, form: new URLSearchParams({ confirm: 'yes' }) })
+    await h.api('business.configure', owner, { legal_name: 'Nectar linking journey', timezone: 'UTC', invoice_prefix: 'LINK', payment_terms_days: 30 })
+    browser = await chromium.launch({ headless: true, executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH, args: ['--no-sandbox', '--use-mock-keychain', '--password-store=basic'] })
+    const contexts = new Map()
+    async function pageFor(cookie) {
+      if (contexts.has(cookie)) return contexts.get(cookie)
+      const context = await browser.newContext({ viewport: { width: 1440, height: 950 } })
+      await context.addCookies(cookie.split('; ').map(value => { const i = value.indexOf('='); return { name: value.slice(0, i), value: value.slice(i + 1), url: h.origin } }))
+      const page = await context.newPage()
+      contexts.set(cookie, page)
+      return page
+    }
+    async function capture(page, label, path) {
+      await page.setViewportSize({ width: 1440, height: 950 })
+      await page.goto(h.origin + path)
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, label + ' fits')
+      assert.equal(await page.locator('a,button,[role=button]').evaluateAll(nodes => nodes.filter(node => !node.textContent.trim() && node.querySelector('svg,img') && !node.getAttribute('aria-describedby')).length), 0)
+      for (const width of [1440, 390]) {
+        await page.setViewportSize({ width, height: 950 })
+        await page.screenshot({ path: `${directory}/${width}-${label}.png`, fullPage: true, mask: [page.locator('code.credential')] })
+        console.log('BROWSER', width, label)
+      }
+      await page.setViewportSize({ width: 1440, height: 950 })
+    }
+    const ownerPage = await pageFor(owner)
+    await enterpriseLinkingFlow(h, owner, {
+      onState: async ({ label, member, request }) => {
+        await capture(ownerPage, label, '/app/sso')
+        if (label === 'link-pending') {
+          assert.equal(await ownerPage.locator(`form input[name=link][value="${request.id}"]`).count(), 1)
+          const memberPage = await pageFor(member.cookie)
+          await capture(memberPage, 'member-link-start', '/app/security')
+          assert.equal(await memberPage.getByRole('link', { name: 'Prove provider identity' }).count(), 1)
+        }
+        if (label === 'link-approved') {
+          assert.match(await ownerPage.locator('body').innerText(), /Active/)
+          const linkedPage = await pageFor(member.cookie)
+          await linkedPage.goto(h.origin + '/app/security')
+          assert.equal(await linkedPage.getByRole('link', { name: 'Prove provider identity' }).count(), 0, 'A managed member is already bound')
+        }
+        if (label === 'link-deprovisioned') assert.match(await ownerPage.locator('body').innerText(), /Ended/)
+      },
+      approve: async ({ request }) => {
+        await ownerPage.goto(h.origin + '/app/sso')
+        const form = ownerPage.locator('form').filter({ has: ownerPage.locator(`input[name=link][value="${request.id}"]`) })
+        await Promise.all([ownerPage.waitForNavigation(), form.getByRole('button', { name: 'Approve member link' }).click()])
+        assert.equal(await ownerPage.locator(`input[name=link][value="${request.id}"]`).count(), 0, 'Native form consumes the exact reviewed request')
+      },
+    })
+  } finally { await browser?.close(); await h.close() }
+}
