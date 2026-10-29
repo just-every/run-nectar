@@ -42,8 +42,14 @@ export async function reportJobRestartFlow(h,owner){
   assert.equal(JSON.stringify([await api('payments'),await api(`invoices/${invoice}`)]),financial)
   await h.restart(new Date(instant).toISOString())
   gate={entered:deferred(),release:deferred()}
-  const active=gate,pending=[tick().catch(()=>null),tick().catch(()=>null)]
-  await Promise.race([active.entered.promise,new Promise((_,reject)=>setTimeout(()=>reject(new Error('report mail edge did not pause')),15000))])
+  const active=gate,pending=[tick().catch(()=>null)]
+  // Establish the durable snapshot and send claim before overlapping another
+  // dispatcher. Unrelated audit writes deliberately invalidate an unclaimed
+  // report snapshot; the concurrent-send proof must retain that source fence.
+  let timer
+  try{await Promise.race([active.entered.promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('report mail edge did not pause')),15000)})])}
+  finally{clearTimeout(timer)}
+  pending.push(tick().catch(()=>null))
   const running=(await api('job-runs')).runs.find(run=>run.jobs.find(job=>job.job==='scheduled-reports')?.status==='running')
   assert.ok(running)
   const snapshot=await api(`report-deliveries/${failed.id}`)
@@ -76,5 +82,5 @@ export async function reportJobRestartFlow(h,owner){
   assert.equal(audit.filter(event=>event.action==='report.delivery.interrupted'&&event.subject===failed.id).length,1)
   await api('report.schedule',{enabled:false,day:1});await h.api('report.schedule',finance,{enabled:false,day:1})
   assert.equal((await tick()).status,200);assert.equal(mails.length,2)
-  console.log('reportJobRestartFlow: refused snapshot resumes once under current opt-in, concurrent preparation claim, actual Worker interruption preserves uncertain send, unstarted recipient completes, exact report and audit and financial parity passed')
+  console.log('reportJobRestartFlow: refused snapshot resumes once under current opt-in, concurrent ticks retain one send claim, actual Worker interruption preserves uncertain send, unstarted recipient completes, exact report and audit and financial parity passed')
 }
