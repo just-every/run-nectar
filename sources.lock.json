@@ -3134,7 +3134,7 @@
       "executable": false
     },
     "src/nectar/api-fields.ts": {
-      "sha256": "15c66b26583647f576db78db99c63537946f1c4afb9fa2f3eb2d8c12917c50eb",
+      "sha256": "6672ade63088370bf21bf1002c7cbd2ec6dd030aeafb99007bc298113b1fb4dc",
       "executable": false
     },
     "src/nectar/api-versions.ts": {
@@ -3378,7 +3378,7 @@
       "executable": false
     },
     "src/nectar/doors.ts": {
-      "sha256": "05675e68acab7afa1a8c07e8b03a5288d358ab78921e14bdfd4f2c61aafb45d0",
+      "sha256": "d62941680232907d78b7b8157ab5675a947ecb23b7ffb058b5d98321d7b5a3a1",
       "executable": false
     },
     "src/nectar/draft-correction-mail.ts": {
