@@ -68,7 +68,16 @@ export interface Actor {
   sessionId: string | null
   capabilities: Set<Capability>
   /** A credential's pinned dated API version (DEV-002); members use the latest unless a request names one. */
+  attribution?: string
   apiVersion?: string
+  /** Immutable company-door attribution, supplied from the admitted tool context. */
+  readonly companyAgent?: {
+    readonly operationId: string
+    readonly clientId: string | null
+    readonly agent: { readonly id: string; readonly name: string }
+    readonly sponsor: { readonly id: string; readonly name: string }
+    readonly approvers: readonly { readonly id: string; readonly name: string }[]
+  }
 }
 
 export const can = (actor: Actor, capability: Capability) => actor.capabilities.has(capability)
@@ -106,7 +115,10 @@ export function requireOwner(actor: Actor) {
   insist(actor.kind === 'member' && actor.role === 'owner', 'owner_required', 403)
 }
 
-export const actorLabel = (actor: Actor) => actor.kind === 'agent' ? `agent:${actor.name}` : actor.email
+export const actorLabel = (actor: Actor) => actor.attribution ?? (actor.kind === 'agent' ? `agent:${actor.name}` : actor.email)
+
+/** Ordinary native actors retain their existing audit-detail shape. */
+export const companyAgentDetail = (actor: Actor) => actor.companyAgent ? { companyAgent: actor.companyAgent } : {}
 
 export async function currentActor(env: Bindings, request: Request): Promise<Actor | null> {
   const bearer = request.headers.get('authorization')?.match(/^Bearer (nectar_[A-Za-z0-9_-]{20,100})$/)?.[1]
@@ -114,19 +126,26 @@ export async function currentActor(env: Bindings, request: Request): Promise<Act
   const session = await operatorAuth(env).getSession(request)
   if (!session) return null
   const email = session.operator.email.toLowerCase()
-  if (session.operator.role === 'owner') await ensureOwnerMember(env, email, session.operator.displayName || email)
+  if (session.operator.role === 'owner') await ensureOwnerMember(env, email, session.operator.displayName || email, session.operator.id)
   // The role (and a custom role's capabilities) is read on every request, so a
   // change the owner makes applies from the member's next request.
   const member = await one<{ id: string; name: string; role: Role; status: string; custom_name: string | null; custom_capabilities: string | null }>(env,
-    'SELECT m.id, m.name, m.role, m.status, r.name AS custom_name, r.capabilities AS custom_capabilities FROM nc_members m LEFT JOIN nc_roles r ON r.id = m.custom_role_id WHERE m.email = ?', email)
+    'SELECT m.id, m.name, m.role, m.status, r.name AS custom_name, r.capabilities AS custom_capabilities FROM nc_members m LEFT JOIN nc_roles r ON r.id = m.custom_role_id JOIN oa_nectar_members identity ON identity.member_id=m.id WHERE identity.operator_id = ?', session.operator.id)
   insist(member && member.status === 'active', 'not_a_member', 403)
   const role: Role = session.operator.role === 'owner' ? 'owner' : member.role === 'owner' ? 'finance' : member.role
   return { id: member.id, kind: 'member', name: member.name, email, role, ...(role === 'custom' && member.custom_name ? { roleName: member.custom_name } : {}), sessionId: session.id, capabilities: memberCapabilities(role, member.custom_capabilities) }
 }
 
-async function ensureOwnerMember(env: Bindings, email: string, name: string) {
+async function ensureOwnerMember(env: Bindings, email: string, name: string, operatorId: string) {
   await env.DB.batch([
-    stmt(env, "INSERT INTO nc_members (id, email, name, role, status, created_at, updated_at) VALUES (?, ?, ?, 'owner', 'active', ?, ?) ON CONFLICT(email) DO UPDATE SET role = 'owner', status = 'active'", newId(), email, name, now(), now()),
+    stmt(env, `INSERT INTO nc_members (id,email,name,role,status,created_at,updated_at)
+      VALUES(COALESCE((SELECT member_id FROM oa_nectar_members WHERE operator_id=?),
+        (SELECT id FROM nc_members WHERE email=?),?),?,?,'owner','active',?,?)
+      ON CONFLICT(id) DO UPDATE SET role='owner',status='active',email=excluded.email,name=excluded.name`,
+    operatorId, email, newId(), email, name, now(), now()),
+    stmt(env, `INSERT INTO oa_nectar_members(member_id,operator_id)
+      SELECT id,? FROM nc_members WHERE email=?
+      ON CONFLICT(operator_id) DO NOTHING`, operatorId, email),
   ])
 }
 

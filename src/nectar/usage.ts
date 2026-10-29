@@ -4,7 +4,7 @@
 // shows, before rating, each subscription's exact period totals, days with no
 // usage, late events and events no price rates.
 import type { Bindings } from '../auth.server'
-import { actorLabel, requireCapability, type Actor } from './actor'
+import { actorLabel, companyAgentDetail, requireCapability, type Actor } from './actor'
 import { requireBusiness } from './business'
 import { NectarError, all, canonical, commit, insist, newId, now, one, sha256Hex, stmt, type Row } from './core'
 import { decimalText, micros } from './decimal'
@@ -103,7 +103,7 @@ export function ingestStatements(env: Bindings, actor: Actor, screened: Screened
       ...screened.accepted.map(event => stmt(env, 'INSERT INTO nc_usage_events (id, event_id, meter_id, customer_id, quantity, occurred_at, occurred_text, received_at, batch_id, payload_hash,properties_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?)',
         newId(), event.eventId, event.meterId, event.customerId, event.quantity, event.occurredAt, event.occurredText, at, batchId, event.hash,canonicalJson(event.properties))),
     ],
-    audit: { actor: actorLabel(actor), action: 'usage.ingest', subject: batchId, detail: { source: source.kind, filename: source.filename ?? null, ...screened.counts } },
+    audit: { actor: actorLabel(actor), action: 'usage.ingest', subject: batchId, detail: { source: source.kind, filename: source.filename ?? null, ...screened.counts, ...companyAgentDetail(actor) } },
   }
 }
 
