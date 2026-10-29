@@ -100,5 +100,12 @@ export async function subscriptionStatesFlow(h,owner,{onState=async()=>{}}={}) {
  assert.deepEqual(visible.map(row=>row.state),expected)
  assert.ok(visible.every(row=>row.cause.day&&row.cause.timezone),'Authorized billing readers retain typed dated causes')
  assert.ok(visible.some(row=>JSON.stringify(row.cause).includes(invoice)),'Accountant billing access retains recorded invoice evidence')
+ await api('access.give',{email:'state-sales@example.test',name:'State sales',role:'sales'})
+ const sales=await h.signIn('state-sales@example.test',{requested:true})
+ const restricted=(await h.api(`subscriptions/${subscription}?include_state=true`,sales)).stateHistory
+ assert.deepEqual(restricted.map(row=>row.state),expected,'Main preserves dated states for subscription readers')
+ assert.ok(restricted.every(row=>Object.keys(row.cause).sort().join(',')==='day,timezone'),'Subscription-only readers cannot read payment-derived cause facts')
+ assert.ok(!JSON.stringify(restricted).includes(invoice),'Restricted history cannot expose an invoice source')
+ await onState({state:'restricted-reader',subscription,actor:sales,history:restricted})
  console.log('subscriptionStatesFlow: scheduled trial, active, decline, unpaid, allocated recovery, pause, resume and end; immutable causes, signed per-step events, replay and atomic audit rollback')
 }

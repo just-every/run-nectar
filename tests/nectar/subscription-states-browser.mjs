@@ -19,7 +19,28 @@ try{
  const context=await browser.newContext({viewport:{width:1440,height:1000}})
  await context.addCookies(owner.split('; ').map(value=>{const index=value.indexOf('=');return {name:value.slice(0,index),value:value.slice(index+1),url:h.origin}}))
  const page=await context.newPage()
- await subscriptionStatesFlow(h,owner,{onState:async({state,subscription,history})=>{
+ await subscriptionStatesFlow(h,owner,{onState:async({state,subscription,history,actor})=>{
+  if(state==='restricted-reader'){
+   const restricted=await browser.newContext({viewport:{width:1440,height:1000}})
+   try{
+    await restricted.addCookies(actor.split('; ').map(value=>{const index=value.indexOf('=');return {name:value.slice(0,index),value:value.slice(index+1),url:h.origin}}))
+    const view=await restricted.newPage()
+    await view.goto(h.origin+`/app/subscriptions/${subscription}`)
+    const table=view.getByRole('heading',{name:'State history',exact:true}).locator('..').getByRole('table').first()
+    assert.equal(await table.locator('tbody tr').count(),history.length)
+    const causes=await table.locator('tbody tr td:last-child').allTextContents()
+    for(const [index,cause] of causes.entries()){
+     assert.ok(cause.includes(history[index].cause.day)&&cause.includes('UTC'),'Restricted causes retain their date and timezone')
+     assert.ok(!/payment|invoice|allocation|dunning|sourceActions/.test(cause),'Restricted browser cannot expose financial cause facts')
+    }
+    for(const width of [1440,390]){
+     await view.setViewportSize({width,height:1000})
+     await view.screenshot({path:`${directory}/${width}-restricted-state-history.png`,fullPage:true})
+     console.log('BROWSER',width,'restricted-state-history')
+    }
+   }finally{await restricted.close()}
+   return
+  }
   if(state!=='ended')return
   await page.goto(h.origin+`/app/subscriptions/${subscription}`)
   const table=page.getByRole('heading',{name:'State history',exact:true}).locator('..').getByRole('table').first()
