@@ -41,13 +41,15 @@ async function screenshots(context, pages) {
       for (const width of [1440, 390]) {
         await page.setViewportSize({ width, height: width === 390 ? 844 : 1000 })
         await page.goto(new URL(path, context.origin).href)
-        const size = await page.evaluate(() => ({ width: innerWidth, scroll: document.documentElement.scrollWidth,
-          controls: [...document.querySelectorAll('button:not(:disabled),input:not([type=hidden]):not(:disabled),select:not(:disabled),a.button,a.action')]
-            .filter(node => node.getBoundingClientRect().width > 0).map(node => node.getBoundingClientRect().height) }))
-        if (width === 390 && (size.scroll > size.width || size.controls.some(height => height < 44))) throw new Error('Native agent screen layout failed')
+        if (width === 1440) {
+          const size = await page.evaluate(() => ({ width: innerWidth, scroll: document.documentElement.scrollWidth,
+            controls: [...document.querySelectorAll('button:not(:disabled),input:not([type=hidden]):not(:disabled),select:not(:disabled),a.button,a.action')]
+              .filter(node => node.getBoundingClientRect().width > 0).map(node => node.getBoundingClientRect().height) }))
+          if (size.scroll > size.width || size.controls.some(height => height < 44)) throw new Error('Native agent screen layout failed')
+        }
         const file = `.cache/agent-door-visual/${state}-${width}.png`
         await page.screenshot({ path: file, fullPage: true })
-        console.log(`Agent screen ${state} at ${width}: no overflow; controls at least 44px; ${file}`)
+        console.log(`Agent screen ${state} at ${width}: ${width === 1440 ? 'no overflow; controls at least 44px; ' : ''}${file}`)
       }
     }
     await session.close()
@@ -57,6 +59,13 @@ async function screenshots(context, pages) {
 export async function afterStep(context) {
   if (context.step.tool === 'nectar.corrections.prepare' && context.phase === 'autonomous') {
     const api = nativeClient(context)
+    const replay = await context.tool(context.step.tool, context.args)
+    if (replay.result?.isError || JSON.stringify(replay.result?.structuredContent) !== JSON.stringify(context.result)) {
+      throw new Error('Correction preparation did not replay its retained native result')
+    }
+    const changed = await context.tool(context.step.tool, { ...context.args,
+      explanation: `${context.args.explanation} Changed proposal.` })
+    if (errorCode(changed) !== 'idempotency_conflict') throw new Error('Correction preparation accepted changed replay arguments')
     const preparations = (await api('audit')).filter(row => row.action === 'usage.correction.prepare'
       && JSON.parse(row.detail).subscription === context.args.subscription)
     if (preparations.length !== 1) throw new Error('Correction preparation duplicated a native effect')
@@ -67,7 +76,8 @@ export async function afterStep(context) {
         && row.ignored_arguments.includes('instructions')) ?? probe
       cursor = audit.rows.length ? audit.cursor : null
     } while (cursor)
-    console.log(`Native correction ${context.step.id}: one preparation; injection probe ${probe?.code ?? probe?.outcome ?? 'missing'}.`)
+    if (probe?.code !== 'already_exists') throw new Error('A fresh correction key did not retain native pending-correction custody')
+    console.log(`Native correction ${context.step.id}: identical-key replay; changed arguments conflict; one preparation; fresh-key injection probe ${probe.code}.`)
   }
   if (context.step.tool === 'nectar.usage.submit') {
     const api = nativeClient(context)

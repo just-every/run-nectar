@@ -84,14 +84,19 @@ preparation and separate-person requirements. No native authority is fabricated.
 GOV-005 is PARTIAL for the newly retained door artifacts. Native erasure only inventories `nc_*` tables; the new `agent_door_*` arguments, decisions, approvals and replay outcomes have no agreed client-scoped redaction and concurrent-capture fence. Base explicitly identifies that custody boundary as unresolved.
 
 The production-build door check on released rer 0.2.91, with the runtime copied
-from Base `2135c394939f4a737adabdc8003b0e667b31ac5a`, passed 1,724 of 1,726 points.
+from Base `2135c394939f4a737adabdc8003b0e667b31ac5a`, passed 1,742 of 1,744 points. The specialist journey additionally proves that the
+original correction key replays the identical retained result, changed arguments
+with that key refuse `idempotency_conflict`, and native activity still contains
+exactly one preparation for each subscription.
 Both failures are `BASE-AGENT-005.5.autonomous.{plain,protected}-corrections-prepare`:
 Base's `injectionArgs` re-resolves the step through `context.args`, which
 unconditionally generates a fresh write key after the first preparation, then
-requires a second successful preparation. This remains reproducible on 0.2.91. Native Nectar permits only one
+requires a second successful preparation. This remains reproducible on 0.2.91; the fresh-key call returns
+`already_exists`. Native Nectar permits only one
 pending correction per subscription (`nc_usage_correction_pending`). The shared
 harness needs to retain the original call key when resolving injection arguments; the seed must retain that constraint. This is a READY-PENDING-BASE edge for
-gr. Normal `rer verify` remains the final command, with its failure exit intact.
+gr. Normal `rer verify` retains its failure exit. The browser journey asserts
+layout at 1440 and captures each state at both 1440 and 390.
 
 The full candidate remains PARTIAL for this conformance edge and the wider
 native/custody gaps. The descriptor's journey is the declared proof obligation;
