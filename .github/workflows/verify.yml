@@ -46,6 +46,10 @@ jobs:
         if: ${{ matrix.shard == 1 }}
         run: node tests/nectar/clause-browser.mjs native-collection
 
+      - name: Native mobile customer journey
+        if: ${{ matrix.shard == 1 }}
+        run: node tests/nectar/mobile-customer.mjs
+
       - name: Recovery reporting browser journeys
         if: ${{ matrix.shard == 0 }}
         run: |

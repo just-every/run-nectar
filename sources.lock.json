@@ -162,7 +162,7 @@
       "executable": false
     },
     ".github/workflows/verify.yml": {
-      "sha256": "9299f14f1e3bef89fafbaf002e1ab6293e578c57acc82ea5b6153396e998d25c",
+      "sha256": "fb70906699a2274ee9ea655db9273afefcb34d32b4768be0d2e080c4824ec7e4",
       "executable": false
     },
     ".gitignore": {
@@ -5339,6 +5339,10 @@
     },
     "tests/nectar/mfa.mjs": {
       "sha256": "9be917e5aa9e39f8aade33be866e6bcb394a78b8110c54de9e4991cceebd6a12",
+      "executable": false
+    },
+    "tests/nectar/mobile-customer.mjs": {
+      "sha256": "149a8a5e02c6666ef045bee834448cd9046770897feef922855dd7bc3fe70958",
       "executable": false
     },
     "tests/nectar/move-collection.mjs": {
