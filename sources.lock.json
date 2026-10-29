@@ -4262,7 +4262,7 @@
       "executable": false
     },
     "src/nectar/hosted-setup.ts": {
-      "sha256": "fdfc81d78c1c703ca70a3e2a64fb3c2b2c51c4640217901b381c4a1ddef609ac",
+      "sha256": "7805803418fec830c1dce09955e9bc255e203f1dcead1ce63ccb3a315d7f1b9f",
       "executable": false
     },
     "src/nectar/http.ts": {
@@ -4622,7 +4622,7 @@
       "executable": false
     },
     "src/nectar/payments/hosted-setup.ts": {
-      "sha256": "e47a0d5f442400c2453faadc4d1727a7bfc50e86e9761b21ef9fff9e5e2101e4",
+      "sha256": "86d20590203780eb4b5f201c4b0cee4d7540e7e34f5323c8843fd1c6a0c185ca",
       "executable": false
     },
     "src/nectar/payments/reconfirmation.ts": {
@@ -6002,7 +6002,7 @@
       "executable": false
     },
     "tests/nectar/customer-payment-methods.mjs": {
-      "sha256": "75e61ea07e4ca31b68ffa078eaef5bbc7c4dc9f8fd3fa3020081d80dd3d8e176",
+      "sha256": "679d8f1e1f4d6c4c6a3f9c32242b0a03beeb97a9723e001c59fc7212b8e06c2f",
       "executable": false
     },
     "tests/nectar/customer-record-browser.mjs": {
@@ -6094,7 +6094,7 @@
       "executable": false
     },
     "tests/nectar/hosted-setup-archive.mjs": {
-      "sha256": "8c0954a469eaa7609418bf6bf81d4aee0119628ea04481d80f935bd5c98bca86",
+      "sha256": "7d4617a03bbb91618914466baeeeafd3b56cee31d20e1eb03d798ec58df34381",
       "executable": false
     },
     "tests/nectar/hosted-setup-sandbox.mjs": {

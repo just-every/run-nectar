@@ -52,13 +52,19 @@ export async function customerHostedSetups(env: Bindings, customer: string) {
       const value=parseJson<Row>(row.method_json,{})
       insist(value.kind===row.method&&typeof value.last4==='string'&&/^\d{4}$/.test(value.last4),'hosted_setup_evidence_invalid',409)
       const methodRef=providerReference(value.methodRef)
+      // Older retained evidence may lack these facts. Absence stays unknown;
+      // neither restore nor a historical read invents provider acceptance.
+      const setupIntentRef=value.setupIntentRef==null?null:providerReference(value.setupIntentRef)
       if(row.method==='card'){
         insist(['amex','cartes_bancaires','diners','discover','eftpos_au','interac','jcb','link','mastercard','unionpay','visa','unknown'].includes(value.brand)
           &&Number.isSafeInteger(value.expMonth)&&value.expMonth>=1&&value.expMonth<=12&&Number.isSafeInteger(value.expYear)&&value.expYear>=2000&&value.expYear<=9999,'hosted_setup_evidence_invalid',409)
-        paymentMethod={methodRef,kind:'card',brand:value.brand,last4:value.last4,expMonth:value.expMonth,expYear:value.expYear,bankName:null,accountType:null,mandateRef:null,mandateText:null}
+        paymentMethod={methodRef,setupIntentRef,kind:'card',brand:value.brand,last4:value.last4,expMonth:value.expMonth,expYear:value.expYear,bankName:null,accountType:null,mandateRef:null,mandateText:null,mandateTextVersion:null,mandateStatus:null,mandateAcceptedAt:null,mandateAcceptanceType:null}
       }else{
         insist(typeof value.bankName==='string'&&value.bankName.trim().length>0&&value.bankName.length<=100&&!/[\u0000-\u001f\u007f]|\d{12}/.test(value.bankName)&&['checking','savings'].includes(value.accountType),'hosted_setup_evidence_invalid',409)
-        paymentMethod={methodRef,kind:'us_bank_account',brand:null,last4:value.last4,expMonth:null,expYear:null,bankName:value.bankName,accountType:value.accountType,mandateRef:providerReference(value.mandateRef),mandateText:null}
+        const mandateStatus=value.mandateStatus??null,mandateAcceptedAt=value.mandateAcceptedAt??null,mandateAcceptanceType=value.mandateAcceptanceType??null
+        insist((mandateStatus===null||mandateStatus==='active')&&(mandateAcceptedAt===null||Number.isSafeInteger(mandateAcceptedAt)&&mandateAcceptedAt>0)
+          &&(mandateAcceptanceType===null||mandateAcceptanceType==='online'),'hosted_setup_evidence_invalid',409)
+        paymentMethod={methodRef,setupIntentRef,kind:'us_bank_account',brand:null,last4:value.last4,expMonth:null,expYear:null,bankName:value.bankName,accountType:value.accountType,mandateRef:providerReference(value.mandateRef),mandateText:null,mandateTextVersion:null,mandateStatus,mandateAcceptedAt,mandateAcceptanceType}
       }
     }
     return {id:row.id,method:row.method,status:row.status,paymentMethod,completedAt:row.completed_at,defaultChoice:row.default_choice===1,consentHash:row.consent_hash,historical:row.historical===1,debitAuthority:false}
@@ -116,6 +122,7 @@ export async function operateHostedSetup(env: Bindings, session: CustomerSession
     return {id:row.id,status:'failed'}
   }
   const method=await readHostedSetup(stripe,{id:row.id,sessionRef:row.session_ref,customerRef:row.customer_ref,method:row.method,livemode:false}).catch(providerUnavailable)
+  const providerFacts={methodRef:method.methodRef,setupIntentRef:method.setupIntentRef,mandateRef:method.mandateRef,mandateStatus:method.mandateStatus,mandateAcceptedAt:method.mandateAcceptedAt,mandateAcceptanceType:method.mandateAcceptanceType}
   const reconciled=row.status==='updating'
   if(reconciled) {
     insist(operation==='reconcile' && source.invoice_settings?.default_payment_method===method.methodRef,'hosted_setup_uncertain',409)
@@ -125,7 +132,7 @@ export async function operateHostedSetup(env: Bindings, session: CustomerSession
       const current=source.invoice_settings?.default_payment_method
       insist((current?providerReference(current):null)===row.previous_default_ref,'hosted_setup_default_changed',409)
       // Durable claim before the one default POST. Lost responses are read back.
-      await commit(env,[setupSessionFence(env,session,row,'open'),fence(),stmt(env,"UPDATE nc_hosted_setups SET status='updating',method_json=? WHERE id=?",JSON.stringify(method),row.id),stmt(env,"UPDATE nc_hosted_setup_history SET status='updating',method_json=? WHERE id=?",JSON.stringify(method),row.id)],{actor:by,action:'checkout.setup.default',subject:row.id,detail:{customer:session.customer,previous:row.previous_default_ref,selected:method.methodRef,account:row.account_ref,testMode:true}})
+      await commit(env,[setupSessionFence(env,session,row,'open'),fence(),stmt(env,"UPDATE nc_hosted_setups SET status='updating',method_json=? WHERE id=?",JSON.stringify(method),row.id),stmt(env,"UPDATE nc_hosted_setup_history SET status='updating',method_json=? WHERE id=?",JSON.stringify(method),row.id)],{actor:by,action:'checkout.setup.default',subject:row.id,detail:{customer:session.customer,...providerFacts,previous:row.previous_default_ref,selected:method.methodRef,account:row.account_ref,testMode:true}})
       await setHostedDefault(stripe,row.customer_ref,method.methodRef,row.id).catch(providerUnavailable)
     }
   }
@@ -133,6 +140,6 @@ export async function operateHostedSetup(env: Bindings, session: CustomerSession
   await commit(env,[setupSessionFence(env,session,row,status),fence(),consumeSetupReturn(env,capability.hash),
     stmt(env,"UPDATE nc_hosted_setups SET status='complete',method_json=?,completed_at=? WHERE id=?",JSON.stringify(method),at,row.id),
     stmt(env,"UPDATE nc_hosted_setup_history SET status='complete',method_json=?,completed_at=? WHERE id=?",JSON.stringify(method),at,row.id),
-  ],{actor:by,action:reconciled?'checkout.setup.reconciled':'checkout.setup.complete',subject:row.id,detail:{customer:session.customer,methodRef:method.methodRef,mandateRef:method.mandateRef,defaultChoice:!!row.default_choice,previous:row.previous_default_ref,selected:row.default_choice?method.methodRef:row.previous_default_ref,account:row.account_ref,testMode:true}})
+  ],{actor:by,action:reconciled?'checkout.setup.reconciled':'checkout.setup.complete',subject:row.id,detail:{customer:session.customer,...providerFacts,defaultChoice:!!row.default_choice,previous:row.previous_default_ref,selected:row.default_choice?method.methodRef:row.previous_default_ref,account:row.account_ref,testMode:true}})
   return { id:row.id, status:'complete' }
 }
