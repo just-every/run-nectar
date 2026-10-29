@@ -68,9 +68,14 @@ export function retryMethodRecoveryView(row:Row){
  return {id:row.id,authentication:parseJson<AutomaticQuote>(row.quote_json,null as never)?.wordingVersion==='exact-invoice-authentication-1',collection:row.collection_id,invoice:row.invoice_id,customer:row.customer_id,status:row.status,quoteHash:row.quote_hash,
  quote:parseJson<AutomaticQuote>(row.quote_json,null as never),paymentIntentRef:row.payment_intent_ref,expectedAttempt:row.expected_attempt+1,deadline:row.deadline,preparedAt:row.prepared_at,acceptedAt:row.accepted_at}
 }
-// The last claimed method is the identity to use when reading a refused intent.
+// Read identity comes from retained claim facts, including after restoration.
+// Live authority remains required separately before any new confirmation.
 export async function retryAttemptQuote(env:Bindings,row:Row):Promise<AutomaticQuote>{
- const prior=await one(env,`SELECT r.* ${joined} WHERE r.collection_id=? AND z.status='consumed' ORDER BY r.expected_attempt DESC LIMIT 1`,row.id)
+ const prior=await one(env,`SELECT r.* FROM nc_retry_method_recoveries r
+ JOIN nc_retry_method_recovery_events e ON e.recovery_id=r.id AND e.customer_id=r.customer_id AND e.kind='claimed'
+ AND json_extract(e.detail_json,'$.quoteHash')=r.quote_hash AND json_extract(e.detail_json,'$.attempt')=r.expected_attempt+1
+ JOIN nc_retry_attempts t ON t.collection_id=r.collection_id AND t.invoice_id=r.invoice_id AND t.customer_id=r.customer_id AND t.attempt=r.expected_attempt+1
+ WHERE r.collection_id=? AND r.invoice_id=? AND r.customer_id=? AND t.amount_cents=? ORDER BY r.expected_attempt DESC LIMIT 1`,row.id,row.invoice_id,row.customer_id,row.amount_cents)
  return prior?checkedQuote(row,prior):validateAutomaticBasis(row)
 }
 export async function effectiveRetryQuote(env:Bindings,row:Row):Promise<AutomaticQuote>{

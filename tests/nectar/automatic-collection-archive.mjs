@@ -8,6 +8,7 @@ import { harness, file } from './harness.mjs'
 import { command } from './cli.mjs'
 import { processorSetup } from './processor-events.mjs'
 import { automaticEdge } from './automatic-collection.mjs'
+import { retryEdge } from './retry-edge.mjs'
 import { totp } from './mfa.mjs'
 
 let day='2026-10-22'
@@ -313,4 +314,162 @@ export async function automaticCollectionArchiveJourney(){
   console.log('automaticCollectionArchiveJourney: real export, reset and import preserve claimed, uncertain, pending ACH, collected, refused, returned, revoked and invalidated custody; restored authority is inert; reads reconcile original cash once; erasure checkpoints refuse older archives')
  }finally{await h?.close();await rm(scratch,{recursive:true,force:true})}
 }
-if(process.argv[1]===new URL(import.meta.url).pathname)await automaticCollectionArchiveJourney()
+
+// The same archive journey also follows an explicitly accepted replacement card.
+// A retained claim identifies a past write; it must never restore permission.
+export async function automaticCollectionRetryArchiveJourney(){
+ assert.equal(process.env.NECTAR_TEST_CHECKOUT,'1','Use only a disposable checkout: this journey resets local state')
+ const root=process.cwd(),edge=retryEdge(),at=Date.parse('2026-10-22T10:00:00Z')
+ await command(root,['reset','--yes'])
+ await mkdir(join(root,'exports'),{recursive:true})
+ const scratch=await mkdtemp(join(root,'exports','automatic-retry-archive-')),archive=name=>join(scratch,name+'.rer')
+ const config=JSON.parse(await readFile('wrangler.jsonc','utf8'))
+ const persistence=join(root,'.wrangler/state/v3'),databaseId=config.d1_databases.find(row=>row.binding==='DB').database_id
+ let h,owner,settings,secret,now=at
+ const api=(path,body,status)=>h.api(path,owner,body,status)
+ const rows=()=>api('automatic-collections')
+ const tick=async(status=200)=>{const response=await h.raw(`/cdn-cgi/local/scheduled?time=${now}&cron=${encodeURIComponent('* * * * *')}`);assert.equal(response.status,status,await response.text())}
+ const close=async()=>{settings={...h.vars};await h.close();h=null}
+ const open=async()=>{
+  now+=60000;edge.setTime(now)
+  h=await harness({assets:true,persistence,databaseId,applyMigrations:false,settings,localTime:new Date(now).toISOString(),stripeFetch:edge.fetch,stripeSecret:'synthetic-nectar-1'})
+  await h.raw('/auth/bootstrap',{body:{token:h.vars.SETUP_TOKEN,displayName:'Restored owner'}})
+  owner=await h.signIn(h.vars.OWNER_EMAIL)
+  await api('mfa.verify',{code:totp(secret,now)})
+ }
+ try{
+  await command(root,['export','--output',archive('empty')])
+  const setup=await processorSetup(edge,{persistence,databaseId,applyMigrations:false,localTime:new Date(at).toISOString()})
+  h=setup.h;owner=setup.owner
+  const factor=await api('mfa.totp.start',{});secret=factor.secret
+  await api('mfa.totp.confirm',{factor:factor.factor,code:totp(secret,at)})
+  await api('portal.configure',{hosts:[h.origin],parents:[]})
+  const targets=[]
+  console.log('automatic archive: prepare replacement outcomes')
+  const prepare=async(stage='active')=>{
+   const n=targets.length+1,ref=`synthetic-nectar-archive-retry-customer-${n}`,method=`synthetic-nectar-archive-retry-original-${n}`,replacement=`synthetic-nectar-archive-retry-replacement-${n}`
+   edge.customers.set(ref,{account:1,method});edge.rules.set(method,{code:'stolen_card',recoverAt:Infinity,advice:'do_not_try_again'})
+   const customer=(await api('customer.create',{external_id:`synthetic-nectar-archive-retry-${n}`,name:`Synthetic replacement ${n}`,billing_email:email(950+n)})).id
+   await api('collection.customer.bind',{customer,account_ref:'synthetic-nectar-native-account-1',stripe_customer_ref:ref,confirm:true})
+   const charge=(await api('charge.add',{customer,amount:'100',description:'Synthetic replacement archive service',effective_date:day,taxable:false})).charge
+   const invoice=(await api('invoice.manual',{customer,charges:[charge],service_date:day})).id
+   const original=await api('automatic.collection.prepare',{invoice,issue_date:day,enable_retries:true})
+   const session=await api('portal.session.issue',{customer,origin:h.origin,audience:'hosted'})
+   assert.equal((await h.raw(`/portal/automatic-collections/${original.id}?session=${session.token}`,{body:{request:original.id,basis_hash:original.basis,accept:true}})).status,200)
+   await api('automatic.collection.decide',{request:original.id,basis_hash:original.basis,decision:'approved',confirm:true,confirm_single:true})
+   await api('invoice.approve',{invoice,acknowledge:true});await api('invoice.finalise',{invoice,issue_date:day})
+   assert.equal((await rows()).find(row=>row.id===original.id).status,'refused')
+   edge.customers.get(ref).method=replacement
+   const recovery=await api('retry.method.prepare',{request:original.id,confirm:true})
+   const path=`/portal/retry-method-recoveries/${recovery.id}?session=${session.token}`
+   const acceptance={recovery:recovery.id,quote_hash:recovery.quoteHash,accept:true}
+   const decision={recovery:recovery.id,quote_hash:recovery.quoteHash,decision:'approved',confirm:true,confirm_single:true}
+   if(stage!=='awaiting_customer')assert.equal((await h.raw(path,{body:acceptance})).status,200)
+   if(stage==='active')await api('retry.method.decide',decision)
+   if(stage==='rejected')await api('retry.method.decide',{...decision,decision:'rejected'})
+   if(stage==='withdrawn')assert.equal((await h.raw(path,{body:{recovery:recovery.id,quote_hash:recovery.quoteHash,withdraw:true}})).status,200)
+   const target={...original,customer,invoice,replacement,recovery,path,session,acceptance,decision}
+   targets.push(target);return target
+  }
+  day='2026-10-22'
+  const paid=await prepare();await tick()
+  const refused=await prepare();edge.rules.set(refused.replacement,{code:'processing_error',recoverAt:Infinity});await tick()
+  const uncertain=await prepare();edge.lose();await tick()
+  const uncertainIntent=edge.intents.get(uncertain.recovery.paymentIntentRef).value
+  uncertainIntent.amount=10001
+  assert.equal((await api('automatic.collection.reconcile',{request:uncertain.id})).status,'uncertain')
+  const claimed=await prepare();edge.lose();await tick()
+  const awaiting=await prepare('awaiting_customer'),approval=await prepare('pending_approval'),active=await prepare(),rejected=await prepare('rejected'),withdrawn=await prepare('withdrawn')
+  const expected=['collected','refused','uncertain','claimed','refused','refused','refused','refused','refused']
+  assert.deepEqual(targets.map(target=>(edge.intents.get(target.recovery.paymentIntentRef).value.metadata.nectar_native_collection_request)),targets.map(target=>target.id))
+  assert.deepEqual(targets.map(target=>target.recovery.paymentIntentRef),edge.writes.filter(row=>!row.form).map(row=>row.id))
+  assert.equal(edge.writes.length,13,'Nine original invoices and four replacement confirmations use nine original intents')
+  const beforeRows=await rows()
+  assert.deepEqual(targets.map(target=>beforeRows.find(row=>row.id===target.id).status),expected)
+  const beforeRecovery=await api('recovery')
+  assert.deepEqual([beforeRecovery.totals.failedInvoices,beforeRecovery.totals.failedAmountCents,beforeRecovery.totals.recoveredAmountCents],[9,90000,10000])
+  await close()
+  console.log('automatic archive: export replacement claims and unclaimed preparations')
+  await command(root,['export','--output',archive('replacement')])
+  const exported=await archiveItems(archive('replacement'))
+  const tables=new Set(['nc_automatic_collections','nc_retry_method_recoveries','nc_retry_method_recovery_events','nc_retry_series','nc_retry_attempts','nc_payments','nc_allocations'])
+  const facts=items=>items.filter(item=>tables.has(item.table))
+  for(const table of ['nc_automatic_collection_authorizations','nc_retry_method_recovery_authorizations','nc_portal_sessions','nc_mfa_sessions'])assert.ok(!exported.some(item=>item.table===table))
+  const serialized=JSON.stringify(exported)
+  for(const value of [secret,settings.SESSION_SECRET,settings.PORTAL_KEY,settings.SETUP_TOKEN,settings.MFA_KEY,settings.STRIPE_BILLING_SECRET,...targets.map(target=>target.session.token)])assert.ok(!serialized.includes(value),'Historical replacement evidence excludes executable capabilities')
+  assert.equal(exported.filter(item=>item.table==='nc_retry_method_recovery_events'&&item.row.kind==='claimed').length,4)
+  await command(root,['reset','--yes'])
+  await command(root,['import','--input',archive('replacement'),'--yes'])
+  await command(root,['export','--output',archive('replacement-restored')])
+  assert.deepEqual(facts(await archiveItems(archive('replacement-restored'))),facts(exported),'Replacement quotes, claim events, attempt outcomes, payments and allocations restore exactly')
+  await open()
+  assert.ok((await rows()).every(row=>row.historical&&row.recoveries.every(recovery=>recovery.status==='historical')))
+  const writes=edge.writes.length
+  for(const target of targets){
+   await api('retry.method.decide',target.decision,409)
+   await api('retry.method.prepare',{request:target.id,confirm:true},409)
+   assert.equal((await h.raw(target.path,{body:target.acceptance})).status,401)
+   await api('collection.prepare',{invoice:target.invoice},409)
+   await api('invoice.finalise',{invoice:target.invoice},409)
+  }
+  await api('portal.configure',{hosts:[h.origin],parents:[]})
+  for(const target of [awaiting,approval,active,rejected,withdrawn]){
+   const session=await api('portal.session.issue',{customer:target.customer,origin:h.origin,audience:'hosted'})
+   assert.equal((await h.raw(`/portal/retry-method-recoveries/${target.recovery.id}?session=${session.token}`,{body:target.acceptance})).status,409)
+  }
+  assert.equal((await api('automatic.collection.reconcile',{request:uncertain.id})).status,'uncertain','A mismatched replacement amount records no cash')
+  assert.equal((await api('invoices/'+uncertain.invoice)).paidCents,0)
+  uncertainIntent.amount=10000
+  const claimedIntent=edge.intents.get(claimed.recovery.paymentIntentRef).value
+  const actualMethod=claimedIntent.payment_method
+  claimedIntent.payment_method=claimed.quote.method.paymentMethodRef
+  assert.equal((await api('automatic.collection.reconcile',{request:claimed.id})).status,'uncertain','An original card cannot stand in for the actually claimed replacement')
+  assert.equal((await api('invoices/'+claimed.invoice)).paidCents,0)
+  claimedIntent.payment_method=actualMethod
+  assert.equal((await api('automatic.collection.reconcile',{request:claimed.id})).status,'collected','Restored replacement claim reconciles its original captured outcome')
+  const concurrent=await Promise.all([api('automatic.collection.reconcile',{request:uncertain.id}),api('automatic.collection.reconcile',{request:uncertain.id})])
+  assert.ok(concurrent.every(row=>row.status==='collected'))
+  const event='synthetic-nectar-archive-retry-event-1'
+  edge.events.set(event,{object:'event',id:event,type:'payment_intent.succeeded',livemode:false,data:{object:claimedIntent}})
+  for(let n=0;n<2;n++)await api('automatic.collection.event',{request:claimed.id,event_ref:event})
+  await tick();await tick()
+  assert.equal(edge.writes.length,writes,'Restoration and replay never repeat a create or replacement confirmation')
+  for(const target of targets){
+   const invoice=await api('invoices/'+target.invoice),record=await api('customers/'+target.customer)
+   const paidCents=[paid,claimed,uncertain].includes(target)?10000:0
+   assert.deepEqual([invoice.paidCents,invoice.balanceCents,invoice.allocations.length],[paidCents,10000-paidCents,paidCents?1:0])
+   assert.deepEqual([record.ledger.invoicedCents,record.ledger.paidCents,record.ledger.balanceCents,record.ledger.unallocatedCents],[10000,paidCents,10000-paidCents,0])
+   assert.equal(record.ledger.payments.length,paidCents?1:0)
+   assert.equal(invoice.attempt_count,[paid,claimed,uncertain,refused].includes(target)?2:1)
+   assert.equal(invoice.next_payment_attempt,null)
+  }
+  assert.equal((await api('payments')).length,3)
+  assert.equal((await api('reports/billings?period=2026-10')).totalCents,90000)
+  assert.equal((await api('reports/collections?period=2026-10')).totalCents,30000)
+  assert.equal((await api('reports/ar')).totalCents,60000)
+  const recovered=await api('recovery')
+  assert.deepEqual([recovered.totals.failedInvoices,recovered.totals.failedAmountCents,recovered.totals.recoveredAmountCents],[9,90000,30000])
+  const erasure=await api('erasure.request',{customer:claimed.customer})
+  await api('erasure.verify',{request:erasure.id,reason:'Synthetic independent verification',evidence:file('synthetic-nectar-retry-identity.txt','Synthetic verified identity')})
+  await api('erasure.approve',{request:erasure.id,confirm:true})
+  await api('automatic.collection.reconcile',{request:claimed.id},404)
+  await api('automatic.collection.event',{request:claimed.id,event_ref:event},404)
+  await api('retry.method.decide',claimed.decision,404)
+  await close()
+  await command(root,['export','--output',archive('erased')])
+  const erased=await archiveItems(archive('erased'))
+  assert.ok(!JSON.stringify(erased).includes(email(954)))
+  await command(root,['reset','--yes'])
+  assert.match(await command(root,['import','--input',archive('replacement'),'--journal',relative(root,archive('erased')),'--yes'],{refuse:true}),/later_journal|erased_row|erasure_epoch/)
+  await command(root,['import','--input',archive('erased'),'--yes'])
+  await command(root,['export','--output',archive('erased-restored')])
+  assert.deepEqual(facts(await archiveItems(archive('erased-restored'))),facts(erased))
+  await open();await tick()
+  await api('automatic.collection.reconcile',{request:claimed.id},404)
+  assert.equal((await api('invoices/'+claimed.invoice)).paidCents,10000)
+  assert.equal((await api('reports/collections?period=2026-10')).totalCents,30000)
+  assert.equal(edge.writes.length,writes)
+  console.log('automaticCollectionRetryArchiveJourney: restored replacement claim identity reconciles once without debit authority; pending consent and approval stay inert; exact money and erasure custody survive real commands')
+ }finally{await h?.close();await rm(scratch,{recursive:true,force:true})}
+}
+if(process.argv[1]===new URL(import.meta.url).pathname){await automaticCollectionArchiveJourney();await automaticCollectionRetryArchiveJourney()}

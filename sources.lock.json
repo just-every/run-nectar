@@ -4334,7 +4334,7 @@
       "executable": false
     },
     "src/nectar/retry-method-recovery.ts": {
-      "sha256": "59325713b037d773a224887d89dda7ece97c4254368bf05a75d2cddbcb8076e5",
+      "sha256": "0cf2cd0993568de4120430ad5e06036ea4e6c77863c825526371fbc475550c8b",
       "executable": false
     },
     "src/nectar/retry-policy.ts": {
@@ -5046,7 +5046,7 @@
       "executable": false
     },
     "tests/nectar/automatic-collection-archive.mjs": {
-      "sha256": "f49eac789972704f80322409df7beeca3bb5a28ce27d44bf1137b11b00f55fa6",
+      "sha256": "8b8b54cf17a89b20907bf8291f137898b9878f36c16ac0f56bca3dbfb5e5a4d1",
       "executable": false
     },
     "tests/nectar/automatic-collection-browser.mjs": {
