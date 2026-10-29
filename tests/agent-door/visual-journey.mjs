@@ -53,6 +53,20 @@ async function screenshots(context, pages) {
 }
 
 export async function afterStep(context) {
+  if (context.step.tool === 'nectar.corrections.prepare' && context.phase === 'autonomous') {
+    const api = nativeClient(context)
+    const preparations = (await api('audit')).filter(row => row.action === 'usage.correction.prepare'
+      && JSON.parse(row.detail).subscription === context.args.subscription)
+    if (preparations.length !== 1) throw new Error('Correction preparation duplicated a native effect')
+    let cursor, probe
+    do {
+      const audit = await person(context, `/agents/api/audit${cursor ? `?after=${encodeURIComponent(cursor)}` : ''}`)
+      probe = audit.rows.find(row => row.tool === context.step.tool && row.resource?.id === context.args.subscription
+        && row.ignored_arguments.includes('instructions')) ?? probe
+      cursor = audit.rows.length ? audit.cursor : null
+    } while (cursor)
+    console.log(`Native correction ${context.step.id}: one preparation; injection probe ${probe?.code ?? probe?.outcome ?? 'missing'}.`)
+  }
   if (context.step.tool === 'nectar.usage.submit') {
     const api = nativeClient(context)
     const native = (await api('audit')).find(row => row.action === 'usage.ingest' && row.subject === context.result.batch)

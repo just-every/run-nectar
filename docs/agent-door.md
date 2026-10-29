@@ -80,6 +80,15 @@ preparation and separate-person requirements. No native authority is fabricated.
 
 GOV-005 is PARTIAL for the newly retained door artifacts. Native erasure only inventories `nc_*` tables; the new `agent_door_*` arguments, decisions, approvals and replay outcomes have no agreed client-scoped redaction and concurrent-capture fence. Base explicitly identifies that custody boundary as unresolved.
 
-The full candidate is PARTIAL until its integrated conformance and these wider
-native/custody gaps have been judged. The descriptor's journey is the declared
-proof obligation; copying Base source is not proof of any clause.
+The production-build door check on rer 0.2.88 passed 1,702 of 1,704 points.
+Both failures are `BASE-AGENT-005.5.autonomous.{plain,protected}-corrections-prepare`:
+Base's injection harness generates a fresh write key after the first preparation,
+then requires a second successful preparation. Native Nectar permits only one
+pending correction per subscription (`nc_usage_correction_pending`). The shared
+harness needs a replay-preserving injection or a native consumed-precondition
+hook; the seed must retain that constraint. This is a READY-PENDING-BASE edge for
+gr. Normal `rer verify` remains the final command, with its failure exit intact.
+
+The full candidate remains PARTIAL for this conformance edge and the wider
+native/custody gaps. The descriptor's journey is the declared proof obligation;
+copying Base source is not proof of any clause.
