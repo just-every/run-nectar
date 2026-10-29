@@ -69,6 +69,10 @@ export async function confirmRemittance(env: Bindings, actor: Actor, input: Inpu
   const payment = newId(), statements = [
     guard(env, 'stale', "EXISTS(SELECT 1 FROM nc_remittances WHERE id=? AND status='staged' AND payload_hash=?)", row.id, row.payload_hash),
     customerGuard(env, preview.customer, preview.customerRevision),
+    guard(env, 'stale', `NOT EXISTS(SELECT 1 FROM nc_customers WHERE (external_id=? OR id=?) AND id NOT IN(SELECT value FROM json_each(?)))
+      AND (SELECT COUNT(*) FROM nc_customers WHERE external_id=? OR id=?)=?`,
+      preview.source.customerReference, preview.source.customerReference, JSON.stringify(preview.customerCandidates),
+      preview.source.customerReference, preview.source.customerReference, preview.customerCandidates.length),
     paymentFactStatement(env, actor, { paymentId: payment, customerId: preview.customer, amountCents: row.amount_cents, receivedOn: row.received_on,
       currency: 'USD', method: 'bank_transfer', reference: `remittance:${row.id}`, evidence: '' }),
   ]

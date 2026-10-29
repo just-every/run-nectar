@@ -50,10 +50,13 @@ export async function remittanceMatch(env: Bindings, row: Row, customerId = '') 
   const source = parseJson<RemittanceSource>(row.source_json, null!)
   insist(source?.receiptId, 'remittance_erased', 409)
   let customer: Row | null = null
+  let customerCandidates: string[] = []
   if (source.customerReference) {
-    customer = await one(env, 'SELECT * FROM nc_customers WHERE external_id=? OR id=?', source.customerReference, source.customerReference)
-    insist(!customer?.erased_at, 'customer_not_found', 404)
-    insist(!customerId || !customer || customer.id === customerId, 'different_customer', 409)
+    const candidates = await all(env, 'SELECT * FROM nc_customers WHERE external_id=? OR id=? ORDER BY id', source.customerReference, source.customerReference)
+    customerCandidates = candidates.map(row => row.id)
+    insist(candidates.every(row => !row.erased_at), 'customer_not_found', 404)
+    if (candidates.length === 1) customer = candidates[0]
+    insist(!customerId || !candidates.length || customerCandidates.includes(customerId), 'different_customer', 409)
   }
   const referenced: Row[] = []
   let unresolved = false
@@ -71,7 +74,7 @@ export async function remittanceMatch(env: Bindings, row: Row, customerId = '') 
     insist(referenced.every(i => i.customer_id === customer!.id), 'different_customer', 409)
     insist(referenced.every(i => i.currency === 'USD'), 'currency_mismatch', 409)
   }
-  let matches: Row[] = [], reason = !customer ? 'unidentified_customer' : unresolved ? 'unmatched_reference' : ''
+  let matches: Row[] = [], reason = !customer ? customerCandidates.length > 1 ? 'ambiguous_customer' : 'unidentified_customer' : unresolved ? 'unmatched_reference' : ''
   if (customer && !unresolved) {
     if (source.lines.length) {
       // Never silently shorten advice or apply only its convenient subset.
@@ -87,7 +90,7 @@ export async function remittanceMatch(env: Bindings, row: Row, customerId = '') 
   const allocatedCents = allocations.reduce((sum, a) => sum + a.amountCents, 0)
   if (!reason && matches.some(i => i.amountCents < i.balance_cents)) reason = 'short_payment'
   if (!reason && allocatedCents < source.amountCents) reason = 'unallocated_funds'
-  const basis = { receipt: row.id, sourceHash: row.payload_hash, customer: customer?.id ?? null, customerRevision: customer?.revision ?? null, allocations, reason, amountCents: source.amountCents }
+  const basis = { receipt: row.id, sourceHash: row.payload_hash, customer: customer?.id ?? null, customerRevision: customer?.revision ?? null, customerCandidates, allocations, reason, amountCents: source.amountCents }
   return { ...basis, source, fingerprint: await fingerprint(basis), allocatedCents, unallocatedCents: source.amountCents - allocatedCents }
 }
 

@@ -36,7 +36,7 @@ export async function erasurePlan(env: Bindings, customer: Row): Promise<Erasure
     changed = false
     for (const image of images) {
       if (image.table === 'nc_audit' || image.table === 'nc_bill_runs' || image.table === 'nc_report_deliveries') continue
-      const owns = image.scoped || (image.table==='nc_remittances' && keyed(json(image.row.source_json),new Set([...ids,customer.external_id,customer.provider_ref,customer.billing_email].filter(Boolean)))) || Object.entries(image.row).some(([k,v]) => relation.has(k) && typeof v === 'string' && ids.has(v)) || (image.table === 'nc_proposals' && keyed(json(image.row.payload_json),ids))
+      const owns = image.scoped || (image.table==='nc_remittances' && !image.row.customer_id && keyed(json(image.row.source_json),new Set([...ids,customer.external_id,customer.provider_ref,customer.billing_email].filter(Boolean)))) || Object.entries(image.row).some(([k,v]) => relation.has(k) && typeof v === 'string' && ids.has(v)) || (image.table === 'nc_proposals' && keyed(json(image.row.payload_json),ids))
       if (!owns) continue
       if (!image.scoped) { image.scoped = true; changed = true }
       if (image.row.id && !ids.has(image.row.id)) { ids.add(image.row.id); changed = true }

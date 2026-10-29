@@ -1,6 +1,7 @@
 import type { Bindings } from '../../auth.server'
 import { can, type Actor } from '../actor'
 import { customers } from '../customers'
+import { cashApplicationQueue } from '../cash-application-queue'
 import { Input } from '../input'
 import { openInvoices } from '../receivables'
 import { previewRemittance, previewRemittanceAllocation, readRemittances } from '../remittances'
@@ -8,8 +9,19 @@ import { plainMoney } from '../decimal'
 import { cents, check, field, fileField, form, h, hidden, select, table } from './html'
 
 const reasons: Record<string,string> = { unidentified_customer: 'Customer needs identification', unmatched_reference: 'Invoice reference needs review',
+  ambiguous_customer: 'Several customers share this identifier', awaiting_confirmation: 'Ready for confirmation',
   balance_requires_review: 'Advice exceeds a current invoice balance', short_payment: 'Short payment: invoice balance remains', unallocated_funds: 'Received funds await allocation',
   ambiguous_amount: 'Several invoices have this amount', unmatched_amount: 'No exact invoice amount', source_requires_review: 'Source needs review', allocated: 'Allocated' }
+export async function cashApplicationPanel(env: Bindings, actor: Actor) {
+  const rows = await cashApplicationQueue(env, actor)
+  return h`<section class="card" id="cash-application-queue"><h2>Cash application queue</h2>
+    ${table(['Received','Source','Customer','Unallocated','State','Review'], rows.map(row => [row.receivedOn,
+      h`${row.source === 'processor_cash' ? 'Processor cash balance' : 'Remittance file'}<p>${row.sourceReference}</p>`,
+      row.customerName,cents(row.unallocatedCents,row.currency),
+      h`${row.status === 'staged' ? 'Awaiting receipt confirmation. ' : ''}${reasons[row.reason] ?? 'Needs allocation'}${row.daysLeft !== null ? h`<p>${row.ageDays} days old · ${row.daysLeft ? `${row.daysLeft} days until return deadline` : 'Return deadline reached'}</p><p>75-day processor deadline: ${row.returnDeadline?.slice(0,10)}</p>` : ''}`,
+      h`<a href="${row.href}">${row.source === 'processor_cash' ? 'Review transfer' : 'Review receipt'}</a>`,
+    ]), {empty:'No receipts or transfers need review.'})}</section>`
+}
 export async function remittancesPanel(env: Bindings, actor: Actor, url: URL) {
   const rows = await readRemittances(env, actor), operator = actor.kind === 'member' && can(actor, 'receivables')
   const back = '/app/receivables#remittances', selected = url.searchParams.get('remittance')
