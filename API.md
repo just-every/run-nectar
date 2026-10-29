@@ -1021,3 +1021,23 @@ recipient, language, source or wording changes invalidate its frozen basis.
 A prepared event cannot be replaced, including after expiry, provider refusal
 or uncertainty. Acceptance records provider acceptance rather than mailbox
 delivery. A receipt records an allocation, without claiming settlement.
+
+
+## Scheduled report preparation
+
+An existing member report opt-in still authorizes one previous-month report.
+Snapshot computation can resume after a refused preparation audit, or after a
+preparation loses its heartbeat for thirty minutes, under the unchanged current
+schedule revision and current report-read and export permissions. Each new
+preparer holds a distinct local revision; a stale preparer cannot claim a send
+or replace its successor's outcome. Source changes still refuse the snapshot.
+
+The snapshot and external mail claim commit together. A stopped claimed send
+becomes `uncertain` after its lease expires, with an audit event; it never sends
+again. Unstarted recipients continue independently. A handled snapshot failure
+also appears as a failed scheduled job without changing downstream dispatch.
+
+Preparation leases and report send opt-ins are excluded from archives. Restored
+report history remains readable under ordinary current authority, while each
+recipient must opt in again locally. A retained failed snapshot or claimed send
+never regains execution authority from restoration.

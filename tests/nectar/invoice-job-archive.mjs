@@ -53,15 +53,21 @@ export async function invoiceJobArchiveJourney() {
     try{await h.api('invoice.automation.run',owner,{},500)}finally{await h.rejectAudit()}
     const [pending]=(await h.api('invoice-automation',owner)).runs
     assert.equal(pending.status,'failed');assert.equal(pending.resumable,true)
-    const before={invoices:await h.api('invoices',owner),payments:await h.api('payments',owner)}
+    await h.api('report.schedule',owner,{enabled:true,day:1})
+    await h.rejectAudit('report.snapshot')
+    try{assert.equal((await h.raw(`/cdn-cgi/local/scheduled?time=${Date.parse(h.vars.NECTAR_LOCAL_TIME)}&cron=${encodeURIComponent('0 14 * * *')}`)).status,200)}finally{await h.rejectAudit()}
+    const [reportPreparation]=(await h.api('report-schedule',owner)).deliveries
+    assert.equal(reportPreparation.status,'failed')
+    const financial=async who=>{const invoices=await h.api('invoices',who),payments=await h.api('payments',who);invoices.data.sort((a,b)=>a.id.localeCompare(b.id));payments.sort((a,b)=>a.id.localeCompare(b.id));return {invoices,payments}}
+    const before=await financial(owner)
     await h.configureMail({provider:'resend',apiKey:'synthetic-nectar-archive-mail',from:h.vars.OWNER_EMAIL},null)
-    const settings={...h.vars},instant=settings.NECTAR_LOCAL_TIME
+    const settings={...h.vars},instant=new Date(Date.parse(settings.NECTAR_LOCAL_TIME)+30_000).toISOString()
     await h.close();h=null
     await command(root,['export','--output',path('populated')])
     const captured=await records(path('populated'))
     assert.ok(history(captured).some(item=>item.table==='nc_invoice_automation_periods'&&item.row.automation_id===pending.id))
     assert.ok(history(captured).some(item=>item.table==='nc_invoice_automation_runs'&&item.row.status==='completed'))
-    assert.ok(!captured.some(item=>item.table==='nc_invoice_automation_authority'),'No executable continuation authority enters an archive')
+    assert.ok(!captured.some(item=>['nc_invoice_automation_authority','nc_report_preparations','nc_report_schedules'].includes(item.table)),'No invoice continuation, report preparation or report send opt-in authority enters an archive')
     const serialized=JSON.stringify(captured)
     for(const value of [settings.SESSION_SECRET,settings.SETUP_TOKEN,settings.MFA_KEY,settings.STRIPE_BILLING_SECRET])
       assert.ok(value&&!serialized.includes(value),'Private installation keys do not enter historical records')
@@ -77,12 +83,16 @@ export async function invoiceJobArchiveJourney() {
     assert.equal((await h.raw('/auth/bootstrap',{body:{token:h.vars.SETUP_TOKEN,displayName:'Restored Nectar Owner'}})).status,303)
     const restoredOwner=await h.signIn(h.vars.OWNER_EMAIL)
     await h.api('mfa.verify',restoredOwner,{code:totp(factor,Date.parse(instant))})
+    assert.equal((await h.api('report-schedule',restoredOwner)).schedule.enabled,false,'Restoring evidence never restores a report send opt-in')
+    const mailCount=h.mails.length
     const restored=(await h.api('invoice-automation',restoredOwner)).runs.find(row=>row.id===pending.id)
     assert.equal(restored.status,'failed');assert.equal(restored.resumable,false)
     await h.api('invoice.automation.resume',restoredOwner,{run:pending.id,revision:pending.execution_revision,confirm:true},409)
-    assert.equal((await h.raw(`/cdn-cgi/local/scheduled?time=${Date.parse(instant)}&cron=${encodeURIComponent('* * * * *')}`)).status,200)
+    assert.equal((await h.raw(`/cdn-cgi/local/scheduled?time=${Date.parse(instant)}&cron=${encodeURIComponent('0 14 * * *')}`)).status,200)
     assert.equal(writes,0,'Restore, old confirmation and ordinary ticks cannot reactivate a saved invoice day')
-    assert.deepEqual({invoices:await h.api('invoices',restoredOwner),payments:await h.api('payments',restoredOwner)},before)
+    assert.equal(h.mails.length,mailCount,'Historical report preparation never recreates a send')
+    assert.equal((await h.api('report-schedule',restoredOwner)).deliveries.find(row=>row.id===reportPreparation.id).status,'failed')
+    assert.deepEqual(await financial(restoredOwner),before)
     console.log('invoiceJobArchiveJourney: actual export, reset and import retain exact historical checkpoints and financial records, exclude keys and execution authority, and refuse replay with zero provider writes')
   } finally {await h?.close();await rm(scratch,{recursive:true,force:true})}
 }

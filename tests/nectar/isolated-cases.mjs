@@ -93,4 +93,6 @@ export const isolatedJourneys = [
   { file: 'portal-change-requests', name: 'portalChangeRequestsFlow', load: () => import('./portal-change-requests.mjs') },
   { file: 'subscription-states', name: 'subscriptionStatesFlow', load: () => import('./subscription-states.mjs') },
   { file: 'job-runs', name: 'jobRunsFlow', load: () => import('./job-runs.mjs') },
+  { file: 'job-retry-restart', name: 'retryJobRestartFlow', load: () => import('./job-retry-restart.mjs') },
+  { file: 'job-report-restart', name: 'reportJobRestartFlow', load: () => import('./job-report-restart.mjs') },
 ]
