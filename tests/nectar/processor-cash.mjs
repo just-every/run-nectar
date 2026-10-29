@@ -1,5 +1,6 @@
 // Public Worker journey; only the Stripe network is substituted.
 import assert from 'node:assert/strict'
+import { remittanceFile } from './remittance-files.mjs'
 import { nativeCollectionEdge } from './native-collection.mjs'
 import { totp } from './mfa.mjs'
 import { processorCashReturnEdge, processorCashReturnFlow } from './processor-cash-return.mjs'
@@ -166,6 +167,20 @@ export async function processorCashFlow(h, owner, { cashEdge = edge, onState=asy
   const transfer=unmatchedState.unmatched.find(row=>row.amount_cents===8000)
   assert.equal(transfer.reference,(await api(`invoices/${otherInvoice}`)).number)
   assert.equal(transfer.sender,'Synthetic transfer sender');assert.equal(transfer.occurred_at,instant)
+  const uploaded=(await api('remittance.upload',{file:remittanceFile([['synthetic-nectar-980','2026-10-28','USD','9.99','','','']])})).id
+  const shared=await api('cash-application-queue'),queuedTransfer=shared.find(row=>row.id===transfer.id)
+  assert.equal(shared.find(row=>row.id===uploaded).source,'remittance','Uploaded receipts share the ordinary cash application queue')
+  assert.deepEqual([queuedTransfer.source,queuedTransfer.customer,queuedTransfer.unallocatedCents,queuedTransfer.ageDays,queuedTransfer.daysLeft],['processor_cash',customer,8000,0,75])
+  assert.equal(queuedTransfer.returnDeadline,'2027-01-11T10:00:00.000Z')
+  const paged=[];let nextPage=await api('cash-application-queue?limit=1')
+  for(let count=0;;count++){
+    assert.ok(count<10,'The combined queue cursor terminates')
+    paged.push(...nextPage.data.map(row=>row.id))
+    if(!nextPage.next_cursor)break
+    nextPage=await api(`cash-application-queue?limit=1&cursor=${encodeURIComponent(nextPage.next_cursor)}`)
+  }
+  assert.deepEqual(paged,shared.map(row=>row.id),'Paging retains every source in stable queue order')
+  await onState({customer,label:'cash-awaiting-allocation'})
   const desk=await h.page('/app/receivables',owner)
   assert.ok(desk.includes(transfer.id),'The ordinary receivables desk links to the exact unmatched transfer')
   const allocation={customer,account_ref:account,transfer_ref:transfer.transfer_ref,invoice:newer.id,amount:'45',confirm:true}
@@ -185,17 +200,20 @@ export async function processorCashFlow(h, owner, { cashEdge = edge, onState=asy
   assert.equal((await api(`invoices/${otherInvoice}`)).balanceCents,8000)
   assert.equal(cashEdge.available(remote),4500)
   const taskStart=(await api('tasks')).length
-  for(const [day,expected] of [['2026-11-03',0],['2026-11-04',1],['2026-11-27',2],['2026-12-27',3]]){
+  for(const [day,expected,age,left] of [['2026-11-03',0,6,69],['2026-11-04',1,7,68],['2026-11-27',2,30,45],['2026-12-27',3,60,15],['2027-01-10',3,74,1],['2027-01-11',3,75,0]]){
     const clock=`${day}T10:00:00Z`;await h.advanceClock(clock)
     for(let repeat=0;repeat<2;repeat++)assert.equal((await h.raw(`/cdn-cgi/local/scheduled?time=${Date.parse(clock)}&cron=${encodeURIComponent('0 14 * * *')}`)).status,200)
     const tasks=(await api('tasks')).slice(0).filter(row=>row.customer_id===customer&&row.title.startsWith('Unapplied bank transfer:'))
     assert.equal(tasks.length,expected,'Each due escalation produces exactly one owner task despite repeated ticks')
+    const queued=(await api('cash-application-queue')).find(row=>row.source==='processor_cash'&&row.customer===customer)
+    assert.deepEqual([queued.ageDays,queued.daysLeft,queued.unallocatedCents],[age,left,4500],'The received-funds clock, not the latest observation, governs the remaining deadline')
+    assert.equal(queued.returnDeadline,'2027-01-11T10:00:00.000Z')
   }
   assert.ok((await api('tasks')).length>=taskStart+3)
   const escalations=(await api('audit')).filter(row=>row.action==='processor.cash.escalate').map(row=>JSON.parse(row.detail))
   assert.deepEqual(escalations.map(row=>row.ageDays).sort((a,b)=>a-b),[7,30,60])
   assert.deepEqual([...new Set(escalations.map(row=>row.assignedOwner))],[me],'Each escalation is assigned to the actual active owner')
-  await api('mfa.verify',{code:totp(factor.secret,Date.parse('2026-12-27T10:00:00Z'))})
+  await api('mfa.verify',{code:totp(factor.secret,Date.parse('2027-01-11T10:00:00Z'))})
   const remaining=(await api(`processor-events?customer=${customer}`)).unmatched
   assert.equal(remaining.length,1);assert.equal(remaining[0].amount_cents,4500)
   const finalAllocation={...allocation,transfer_ref:remaining[0].transfer_ref,invoice:short.id}
@@ -206,6 +224,7 @@ export async function processorCashFlow(h, owner, { cashEdge = edge, onState=asy
   await apply(cashEdge.event(remote))
   assert.equal(cashEdge.available(remote),0,'Before and after day 76 the processor holds no unapplied transfer funds')
   assert.equal((await api(`processor-events?customer=${customer}`)).unmatched.length,0)
+  assert.equal((await api('cash-application-queue')).some(row=>row.source==='processor_cash'&&row.customer===customer),false,'Actually applied processor cash leaves the shared queue')
   assert.equal([...cashEdge.cashTransactions.values()].filter(row=>row.type!=='funded'&&row.type!=='applied_to_payment').length,0,'No transfer was returned by the processor')
   const cadenceState=await api('cadences'),paidIds=[byReference.id,byAmount.id,unknown.id]
   assert.equal(cadenceState.invoices.filter(row=>paidIds.includes(row.id)&&row.segment==='cash-transfer').length,3,'Paid transfer invoices retain their real prior collection enrollment')

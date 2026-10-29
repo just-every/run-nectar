@@ -1,3 +1,5 @@
+import { processorCashDeadline } from '../cash-application-queue'
+import { clockInstant } from '../clock'
 import type { Bindings } from '../../auth.server'
 import { can, canRead, type Actor } from '../actor'
 import { processorEvents } from '../processor-events'
@@ -17,8 +19,10 @@ export async function processorEventsPage(env:Bindings,actor:Actor,url:URL) {
  <h1>Processor reconciliation</h1>
  ${await cashReturnsSection(env,actor,url,data.cashBalances,data.cashReturns)}
  <section class="card processor-reconciliation"><h2>Unapplied bank transfers</h2>${data.unmatched.map(row=>{
+  const deadline=processorCashDeadline(row.occurred_at,clockInstant(env))
   const choices=invoices.filter(invoice=>invoice.customer_id===row.customer_id&&invoice.currency.toLowerCase()===row.currency)
   return h`<details id="${row.id}"><summary>${cents(row.amount_cents,row.currency.toUpperCase())} · ${new Date(row.occurred_at).toISOString().slice(0,10)} · ${row.reference||'No reference'}</summary>
+   <p>${deadline.ageDays} days old · ${deadline.daysLeft ? `${deadline.daysLeft} days until return deadline` : 'Return deadline reached'}. 75-day processor deadline: ${deadline.returnDeadline.slice(0,10)}.</p>
    <dl><dt>Sender</dt><dd>${row.sender||'Not supplied by processor'}</dd><dt>Reference</dt><dd>${row.reference||'Not supplied by processor'}</dd></dl>
    ${can(actor,'receivables')&&actor.kind==='member'&&choices.length?form('processor.cash.allocate',`/app/processor-events?customer=${row.customer_id}`,h`${hidden('customer',row.customer_id)}${hidden('account_ref',row.account_ref)}${hidden('transfer_ref',row.transfer_ref)}${select('Invoice','invoice',choices.map(invoice=>({value:invoice.id,label:`${invoice.number} · ${cents(invoice.balance_cents)}`})),choices[0].id)}${field('Amount','amount',{value:(Math.min(row.amount_cents,choices[0].balance_cents)/100).toFixed(2)})}<label><input type="checkbox" name="confirm" required> Apply these received funds to this invoice</label>`,'Apply cash') : ''}</details>`
  })}${!data.unmatched.length?h`<p class="empty">No unapplied transfers.</p>`:''}</section>

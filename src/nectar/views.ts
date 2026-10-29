@@ -1,5 +1,6 @@
 import { portalChangeSettings } from './portal-change-policy'
 import { readRemittances } from './remittances'
+import { cashApplicationQueue } from './cash-application-queue'
 import { processorEvents } from './processor-events'
 import { dunningReport } from './dunning'
 import { retryComparisonReport } from './retry-comparison'
@@ -159,6 +160,7 @@ export const views: Record<string, View> = {
   writeOffs: (env, actor) => writeOffList(env, actor),
   ledgerPostings: async (env, actor) => ({ postings: await ledgerPostings(env, actor) }),
   remittances: (env, actor) => readRemittances(env, actor),
+  cashApplicationQueue: (env, actor) => cashApplicationQueue(env, actor),
   payments: (env, actor,_r,_id,url) => payments(env, actor,undefined,url),
   notices: (env, actor) => notices(env, actor),
   tasks: (env, actor) => tasks(env, actor),
