@@ -1,3 +1,5 @@
+import { collectionPlan } from './proposals'
+import { collectionProposerGuards } from './collection-diagnosis'
 import { requireUsdCurrency,requireUsdReporting } from './currency'
 // Flow 12: ageing of open balances, reminder drafts and follow-up tasks.
 // A reminder records the balances it states; it is approved by a person only
@@ -39,13 +41,13 @@ export async function ageing(env: Bindings, actor: Actor) {
 export async function reminderBasis(env: Bindings, customerId: string) {
   const business = await requireBusiness(env)
   const day = today(business.timezone, clockInstant(env))
-  const customer = await one(env, 'SELECT id, name, billing_email FROM nc_customers WHERE id = ?', customerId)
+  const customer = await one(env, "SELECT id, name, billing_email, revision FROM nc_customers WHERE id = ? AND status='active' AND erased_at IS NULL AND NOT EXISTS(SELECT 1 FROM nc_erased_records WHERE record_id=nc_customers.id)", customerId)
   insist(customer, 'customer_not_found', 404)
   await requireUsdCurrency(env,{customerId})
   const candidates = (await openInvoices(env, customerId)).filter(row => row.due_date < day)
   const overdue = (await Promise.all(candidates.map(async row => {
     const held = await collectionHold(env, row.id)
-    return { id: row.id, number: row.number, dueDate: row.due_date, balanceCents: held.collectibleCents, daysOverdue: daysBetween(row.due_date, day),
+    return { id: row.id, number: row.number, sourceFingerprint: row.source_fingerprint, dueDate: row.due_date, balanceCents: held.collectibleCents, daysOverdue: daysBetween(row.due_date, day),
       invoiceBalanceCents: row.balance_cents, disputedCents: held.disputedCents, holdBasis: held.basis, paused: held.paused }
   }))).filter(row => !row.paused && row.balanceCents > 0)
   const recentPayments = (await all(env, 'SELECT reference, amount_cents, received_on FROM nc_payments WHERE customer_id = ? ORDER BY received_on DESC LIMIT 3', customerId)).map(row => ({ reference: row.reference, amountCents: row.amount_cents, receivedOn: row.received_on }))
@@ -121,7 +123,16 @@ export async function exportReminder(env: Bindings, actor: Actor, id: string) {
   insist(notice, 'notice_not_found', 404)
   insist(notice.status === 'approved' || notice.status === 'exported', 'not_approved', 409)
   insist(basisKey(await reminderBasis(env, notice.customer_id)) === notice.basis, 'balances_changed', 409)
-  if (notice.status === 'approved') await commit(env, [cadenceSourceGuard(env,seq),stmt(env, "UPDATE nc_notices SET status = 'exported', exported_at = ? WHERE id = ? AND status = 'approved'", now(), id)], { actor: actorLabel(actor), action: 'reminder.export', subject: id })
+  let proposalGuards: D1PreparedStatement[] = []
+  if (notice.proposal_id) {
+    const proposal = await one(env, 'SELECT * FROM nc_proposals WHERE id=?', notice.proposal_id)
+    insist(proposal?.status === 'approved', 'proposal_stale', 409)
+    const saved = parseJson<Row>(proposal.basis_json, {})
+    const current = await collectionPlan(env, parseJson<Row>(proposal.payload_json, {}))
+    insist(canonical(current.basis) === canonical(saved), 'proposal_stale', 409)
+    proposalGuards = await collectionProposerGuards(env, proposal)
+  }
+  if (notice.status === 'approved') await commit(env, [cadenceSourceGuard(env,seq),...proposalGuards,stmt(env, "UPDATE nc_notices SET status = 'exported', exported_at = ? WHERE id = ? AND status = 'approved'", now(), id)], { actor: actorLabel(actor), action: 'reminder.export', subject: id })
   const text = `To: ${notice.recipient}\nSubject: ${notice.subject}\n\n${notice.body}\n`
   return new Response(text, { headers: { 'content-type': 'text/plain; charset=utf-8', 'content-disposition': `attachment; filename="reminder-${id.slice(0, 8)}.txt"`, 'cache-control': 'private, no-store', 'x-content-type-options': 'nosniff' } })
 }
