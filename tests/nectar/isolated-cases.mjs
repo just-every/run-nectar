@@ -48,7 +48,6 @@ export const isolatedJourneys = [
   { file: 'prepaid-agent-corrections', name: 'prepaidAgentCreditFlow', load: () => import('./prepaid-agent-corrections.mjs') },
   { file: 'prepaid-agent-corrections', name: 'prepaidAgentDraftCorrectionsFlow', load: () => import('./prepaid-agent-corrections.mjs') },
   { file: 'prepaid-agent-corrections', name: 'prepaidCommercialMigrationFlow', load: () => import('./prepaid-agent-corrections.mjs') },
-  { file: 'collection-diagnosis', name: 'collectionDiagnosisFlow', load: () => import('./collection-diagnosis.mjs') },
   { file: 'native-collection', name: 'nativeCollectionFlow', load: () => import('./native-collection.mjs') },
   { file: 'retention', name: 'retentionIntervalFlow', load: () => import('./retention.mjs') },
   { file: 'erasure', name: 'nativeIntervalErasureFlow', load: () => import('./erasure.mjs') },
@@ -91,4 +90,5 @@ export const isolatedJourneys = [
   { file: 'assurance-detectors', name: 'assuranceDetectorsFlow', load: () => import('./assurance-detectors.mjs') },
   { file: 'assurance-detectors', name: 'assuranceScheduleFlow', load: () => import('./assurance-detectors.mjs') },
   { file: 'portal-change-requests', name: 'portalChangeRequestsFlow', load: () => import('./portal-change-requests.mjs') },
+  { file: 'collection-diagnosis', name: 'collectionDiagnosisFlow', load: () => import('./collection-diagnosis.mjs') },
 ]
