@@ -20,7 +20,8 @@ export async function moveInvestigationEvidence(env: Bindings): Promise<Row[]> {
   const results: Row[] = []
   for (const document of documents) {
     if (!isDate(document.period_start)) continue
-    const lines = parseJson<Row[]>(document.lines_json,[]).filter(line=>line.kind!=='discount')
+    const capturedLines = parseJson<Row[]>(document.lines_json,[])
+    const lines = capturedLines.filter(line=>line.kind!=='discount')
     // Ambiguous, metered and incomplete captures remain outside this supported comparison.
     if (!lines.length || new Set(lines.map(line=>line.price_ref)).size!==lines.length || lines.some(line=>
       !historyReference(line.source_id) || !historyReference(line.price_ref) || !isDate(line.period_start) || !isDate(line.period_end) ||
@@ -41,7 +42,7 @@ export async function moveInvestigationEvidence(env: Bindings): Promise<Row[]> {
         unitAmount:decimalText(micros(String(line.price_source.unit_amount_decimal??line.price_source.unit_amount))/100n),
         from:line.period_start,to:line.period_end,amountCents:line.amount_cents }
       const native = matches.length===1 ? matches[0] : null
-      const actual = native ? { item:native.evidence.item,price:native.priceId,quantity:Number(native.quantity),unitAmount:native.unitAmount,
+      const actual = native ? { item:native.evidence.item,price:native.priceId,quantity:Number(native.quantity),unitAmount:decimalText(micros(native.unitAmount)),
         from:native.periodStart,to:native.periodEnd,amountCents:native.amountCents } : null
       const fields = actual ? ['quantity','unitAmount','from','to','amountCents'].filter(key=>source[key as keyof typeof source]!==actual[key as keyof typeof actual]) : ['missing_line']
       for (const field of fields) differences.push({line:line.source_id,field,captured:field==='missing_line'?source:source[field as keyof typeof source],engine:actual?.[field as keyof typeof actual]??null})
@@ -49,9 +50,12 @@ export async function moveInvestigationEvidence(env: Bindings): Promise<Row[]> {
     }
     const unmatched = engine.rating.lines.filter(line=>line.priceId && !lines.some(source=>source.price_ref===refs.get(line.priceId!))).map(line=>({price:line.priceId,amountCents:line.amountCents}))
     if (unmatched.length) differences.push({field:'additional_lines',captured:[],engine:unmatched})
+    const capturedSubtotalCents=capturedLines.reduce((sum,line)=>sum+line.amount_cents,0)
+    if(capturedSubtotalCents!==engine.rating.subtotalCents && !differences.some(difference=>difference.field==='amountCents'))
+      differences.push({field:'subtotalCents',captured:capturedSubtotalCents,engine:engine.rating.subtotalCents})
     const proof = {kind:MOVE_KIND,source:`move:${document.id}`,customer:document.customer_id,subscription:document.subscription_id,
       capturedInvoice:document.id,invoiceReference:historyReference(document.provider_ref)?document.provider_ref:null,
-      period,citation:{job:provenance.job_id,artifactHash:record.artifactHash,sourceHash:record.sourceHash,row:record.location?.row},
+      period,capturedSubtotalCents,engineSubtotalCents:engine.rating.subtotalCents,citation:{job:provenance.job_id,artifactHash:record.artifactHash,sourceHash:record.sourceHash,row:record.location?.row},
       captureBasis:await fingerprint([document.source_json,document.lines_json]),engineBasis:engine.fingerprint,
       comparisons,differences,mismatch:differences.length>0}
     results.push({...proof,basis:await fingerprint(proof)})

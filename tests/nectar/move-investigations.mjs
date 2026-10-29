@@ -13,7 +13,7 @@ export async function moveInvestigationsFlow(h,owner,{onState=async()=>{}}={}) {
   for(let index=1;index<=4;index++) {
     const id=kind=>`synthetic-nectar-${kind}-${index}`
     const price={id:id('price'),object:'price',product:id('product'),type:'recurring',currency:'usd',unit_amount:index===2?2000:2500,recurring:{interval:'month',interval_count:1,usage_type:'licensed'},metadata:{nectar_kind:'seat'}}
-    records.customers.push({id:id('customer'),name:`Synthetic comparison ${index}`,tax_exempt:'none'})
+    records.customers.push({id:id('customer'),name:`Synthetic comparison ${index}`,email:h.vars.OWNER_EMAIL.replace('owner',`synthetic-nectar-${index}`),tax_exempt:'none'})
     records.products.push({id:id('product'),name:`Synthetic comparison product ${index}`,active:true})
     records.prices.push(price)
     records.subscriptions.push({id:id('subscription'),object:'subscription',customer:id('customer'),status:'active',start_date:stamp('2026-07-01'),billing_cycle_anchor:stamp('2026-07-01'),items:list([{id:id('item'),price,quantity:2}])})
@@ -96,17 +96,19 @@ export async function moveInvestigationsFlow(h,owner,{onState=async()=>{}}={}) {
   await api('proposal.decide',{proposal:correction.id,decision:'approved'})
   assert.equal((await read(cases[1])).status,'open','proposal approval is not case closure')
   await api('proposal.decide',{proposal:correction.id,decision:'approved'},409)
-  // Quantity and service-end corrections use their ordinary human doors.
+  // Quantity and a captured partial-service pause use their ordinary human doors.
   const quantitySub=await api(`subscriptions/${subscriptions[0].id}`)
   await h.api('change.prepare',agent,{subscription:quantitySub.id,item:quantitySub.items[0].id,quantity:3,effective_date:'2026-08-01'},403)
   const change=await api('change.prepare',{subscription:quantitySub.id,item:quantitySub.items[0].id,quantity:3,effective_date:'2026-08-01'})
   await api('change.decide',{change:change.change,decision:'approved'})
-  await h.api('subscription.end',agent,{subscription:subscriptions[2].id,end_date:'2026-08-16'},403)
-  await api('subscription.end',{subscription:subscriptions[2].id,end_date:'2026-08-16',reason:'Synthetic captured service end confirmed'})
+  const partialSub=await api(`subscriptions/${subscriptions[2].id}`)
+  const pause={subscription:partialSub.id,revision:partialSub.revision,effective_date:'2026-08-16',resume_date:'2026-09-01',access:'retain',reason:'Synthetic captured partial-service pause confirmed'}
+  await h.api('subscription.pause',agent,pause,403)
+  await api('subscription.pause',pause)
   for(const row of cases) {
     const checked=await h.api('assurance.recheck',agent,{case:row.id})
     assert.equal(checked.status,'open')
-    assert.equal(checked.evidence.mismatch,false,'ordinary authorized corrections reconcile every planted difference')
+    assert.equal(checked.evidence.mismatch,false,`ordinary authorized corrections reconcile every planted difference: ${JSON.stringify(checked.evidence.differences)}`)
     await api('assurance.approve',{case:row.id,basis:row.basis_hash},409)
     const confirmed=await h.submit('assurance.approve',owner,{case:row.id,basis:checked.evidence.basis},'/app/import/investigations')
     assert.equal(confirmed.searchParams.get('error'),null)
@@ -129,7 +131,8 @@ export async function moveInvestigationsFlow(h,owner,{onState=async()=>{}}={}) {
   await h.api(`assurance-cases/${cases[0].id}`,agent,undefined,404)
   await scan()
   assert.equal((await h.api('assurance-cases',agent)).some(row=>row.id===cases[0].id),false)
-  await api('import.apply',{...files,fingerprint:preview.fingerprint},409)
+  assert.equal((await api('import.preview',files,409)).error,'erased_import_source')
+  assert.equal((await api('import.apply',{...files,fingerprint:preview.fingerprint},409)).error,'erased_import_source')
   assert.equal((await h.api('assurance-cases',agent)).length,2)
   console.log('AGENT-005 uploaded comparisons, exact governed fixes, case custody and erasure passed')
 }
