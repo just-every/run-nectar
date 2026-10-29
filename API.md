@@ -943,3 +943,40 @@ These doors record an operator-confirmed USD receipt from a file. They do not ch
 Both upload doors return the canonical `id` and an opaque `source`. Pass those as `receipt` and `source` to `remittance.preview`, then confirm its exact `fingerprint` through `remittance.confirm` with `confirm: true`. Confirming the first source records and allocates the received funds. Confirming the other source of an already confirmed receipt records its provenance and audit against the existing payment without adding cash or allocations. This works in either order. Conflicting reuse of either stable identity is refused; matching amounts alone do not establish identity.
 
 The payment receipt API and its native receipt page list both confirmed recorded sources. Unconfirmed sources remain in the receivables review queue. Source confirmation requires the existing member receivables capability; credentials cannot confirm. Customer erasure hides source references and preserves opaque replay tombstones, so a repeated upload cannot recreate erased money.
+
+### Native sandbox previews
+
+Under GOV-001, current owner and developer members administer Test mode under
+Settings at `/app/settings/test-mode`. Other members and application credentials
+cannot read or change this sandbox. Administration checks current membership
+and the existing fresh-factor requirements. It grants no live financial action.
+
+- `GET /api/nectar/sandbox` returns the current source fingerprint, eligible
+  active USD simple fixed and seat prices, excluded prices, immutable saved
+  catalog copies and separate sandbox customers. Copy readiness requires an
+  owner-reviewed declared tax policy and an eligible price.
+- `POST /api/nectar/sandbox.catalog.copy` accepts `source_fingerprint` and
+  `confirm: true`. It atomically copies the reviewed timezone, declared tax and
+  billing intervals with prices, using separate sandbox price identifiers.
+  A changed source is refused. Repeating an unchanged copy returns its identity.
+  Later live price retirement, new versions and tax changes do not alter it.
+- `POST /api/nectar/sandbox.customer.create` accepts `catalog`, a synthetic
+  `label`, an ISO `clock` with an explicit offset, optional `trial_end`, and
+  parallel string arrays `price` and `quantity`. Only prices from that saved
+  sandbox catalog are accepted. No live customer or saved method is copied.
+- `GET /api/nectar/sandbox/customers/{id}` returns its independent clock,
+  revision, immutable clock history, copied basis and saved billing previews.
+- `POST /api/nectar/sandbox.clock.advance` accepts `customer`, its current
+  integer `revision`, an ISO `clock` and `confirm: true`. Time moves forward
+  only, within ten years of the sandbox start and 120 cumulative due windows.
+  Concurrent or stale changes are refused atomically with their previews and
+  audit. Each billing window is saved once. The same calendar and rating engine
+  handles annual terms, trials, calendar-day proration and exact declared tax.
+
+Forms use the same action doors. All amounts are previews: no invoice, payment,
+retry, message, provider write or live clock change occurs. These native copies
+cover the supported pricing slice only. Full configuration mirroring, other
+pricing instruments, processor test-key binding and the thirteen-month
+failing-card journey with actual invoices, renewals, retries, notices and state
+transitions remain DEV-004 work. A local journey clock is separate from this
+persisted product sandbox.
