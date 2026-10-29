@@ -145,6 +145,10 @@
     }
   ],
   "files": {
+    ".github/workflows/native-job-capacity.yml": {
+      "sha256": "0ef2bce8517a70b2bcf71108ae9838e830858ff99b34cc5bb37e1d48990ad158",
+      "executable": false
+    },
     ".github/workflows/nightly-acceptance.yml": {
       "sha256": "bf607f0fb965b7d19dbe2a4d52a3962019afc19339d154742e4c0d209484c8ac",
       "executable": false
