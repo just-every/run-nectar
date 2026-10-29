@@ -68,8 +68,28 @@ jobs:
         if: ${{ matrix.shard == 0 }}
         run: node tests/nectar/plan-changes-browser.mjs
 
+
+  # Keep the processor journeys independent of shard 0's full billing wall.
+  processor-reconciliation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      CI: 'true'
+      WRANGLER_SEND_METRICS: 'false'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1; action runtime Node 24
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0; action runtime Node 24
+        with:
+          node-version: '22.20.0'
+          package-manager-cache: false
+      - run: npm install --global pnpm@10.12.4
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run deps
+      - run: pnpm exec playwright install chromium
+      - run: pnpm exec vite build
       - name: Processor reconciliation journeys
-        if: ${{ matrix.shard == 0 }}
         run: |
           node tests/nectar/processor-events.mjs
           node tests/nectar/processor-cash.mjs
