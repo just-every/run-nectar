@@ -24,7 +24,7 @@ import { prepareAutomaticCollection,decideAutomaticCollection,revokeAutomaticCol
 import { checkAutomaticCollection,consumeAutomaticEvent } from './automatic-collection-events'
 import { prepareHostedSetup } from './hosted-setup'
 import { scanAssurance,assignAssurance,approveAssurance,recheckAssurance } from './assurance'
-import { prepareInvoiceAutomation,decideInvoiceAutomation,runInvoiceAutomationDoor } from './invoice-automation'
+import { prepareInvoiceAutomation,decideInvoiceAutomation,runInvoiceAutomationDoor,resumeInvoiceAutomation } from './invoice-automation'
 import { prepareShadowAppChange,confirmShadowAppChange,reconcileShadowAppChange,shadowInvoicePreview,appInvoicePreview } from './shadow-app'
 import { consumeStripeWebhookEvent } from './webhook-stripe'
 import { recordAchPaymentEvidence } from './ach-payment-evidence'
@@ -212,6 +212,7 @@ export const actions: Record<string, Handler> = {
   'invoice.automation.prepare':prepareInvoiceAutomation,
   'invoice.automation.decide':decideInvoiceAutomation,
   'invoice.automation.run':runInvoiceAutomationDoor,
+  'invoice.automation.resume':resumeInvoiceAutomation,
   'answer.read':billingAnswer,
   'answer.propose':proposeAnswerCredit,
   'retention.policy.prepare':prepareRetentionPolicy,

@@ -1,3 +1,4 @@
+import { invoiceAutomationRuns } from './invoice-automation'
 import { jobRuns } from './job-runs'
 import { portalChangeSettings } from './portal-change-policy'
 import { readRemittances } from './remittances'
@@ -98,6 +99,7 @@ export async function customerView(env: Bindings, actor: Actor, id: string, url?
 }
 
 export const views: Record<string, View> = {
+  invoiceAutomation: (env,actor)=>invoiceAutomationRuns(env,actor),
   jobRuns: (env,actor) => jobRuns(env,actor),
   portalChanges: (env,actor) => portalChangeSettings(env,actor),
   processorEvents:(env,actor,_r,_id,url)=>processorEvents(env,actor,url.searchParams.get('customer')??undefined),

@@ -90,6 +90,11 @@ export async function draftFor(env: Bindings, business: Business, sub: Row, peri
 
 /** Prepares (or prepares again) the draft run for a month. Earlier drafts for that month are discarded, never edited. */
 export async function prepareRun(env: Bindings, actor: Actor, input: Input) {
+  return prepareRunWithCheckpoint(env,actor,input)
+}
+
+/** Internal checkpoint participates in the same audited prepare transaction. */
+export async function prepareRunWithCheckpoint(env: Bindings, actor: Actor, input: Input, checkpoint?: (run: string) => D1PreparedStatement[]) {
   requireCapability(actor, 'records')
   const business = await requireBusiness(env)
   const month = input.text('period', { max: 7 })
@@ -128,7 +133,7 @@ export async function prepareRun(env: Bindings, actor: Actor, input: Input) {
     previous: previousRun ? { run: previousRun.id, period: previousRun.period, ...(parseJson<Row>(previousRun.summary_json, {}).currency?{currency:parseJson<Row>(previousRun.summary_json, {}).currency}:{}), totals: parseJson<Row>(previousRun.summary_json, {}).totals ?? null } : null,
   }
   const runVersion = drafts.find(draft => draft.input.version !== RATING_VERSION)?.input.version ?? RATING_VERSION
-  const runId = newId(), at = now(), statements: D1PreparedStatement[] = []
+  const runId = newId(), at = now(), statements: D1PreparedStatement[] = checkpoint?.(runId) ?? []
   const prior = await one(env, "SELECT id FROM nc_bill_runs WHERE period = ? AND kind = 'recurring' AND status = 'draft'", month)
   // A replaced draft keeps any invoice it already issued: it closes as finalised, otherwise it is discarded.
   if (prior) statements.push(

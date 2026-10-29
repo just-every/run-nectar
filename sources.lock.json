@@ -1206,7 +1206,7 @@
       "executable": false
     },
     "scripts/installer/local.mjs": {
-      "sha256": "8e787e4a1560cda6f5896c01c3a3e4fe7403f621026f3cd65ad3c19528d55903",
+      "sha256": "7081764e36691c7894e2ba5c00a2bef5cbad4025f9944ec8cb412d3602a9f4b2",
       "executable": false
     },
     "scripts/installer/seed.mjs": {
@@ -3118,7 +3118,7 @@
       "executable": false
     },
     "src/nectar/actions.ts": {
-      "sha256": "09e44f56184da65be614daa5d800f81145dd3632a1c1a60cea4b570e2712a457",
+      "sha256": "c1eda78723f52fdc53c31e1ebb9d20ea7b5cd1132f05d1fa8cac7380c07eff44",
       "executable": false
     },
     "src/nectar/actor.ts": {
@@ -3226,7 +3226,7 @@
       "executable": false
     },
     "src/nectar/billruns.ts": {
-      "sha256": "b256f5e9da874f5d25ee8d107ec69724024d9ebeca9e5ad11808e127f943eefb",
+      "sha256": "cf306ffc29cff4dbe4d80ddbc2f2d2a8b142e614c2408da9152d5f9799fc75da",
       "executable": false
     },
     "src/nectar/business.ts": {
@@ -3378,7 +3378,7 @@
       "executable": false
     },
     "src/nectar/doors.ts": {
-      "sha256": "59a0554662e5ffe0ab328b964637783489d33f154cf8d14bf53aa8a411980e19",
+      "sha256": "24893efe8ff473ac19fabe0795d3003566884b7f778eb84e87d62fbdcaea1d16",
       "executable": false
     },
     "src/nectar/draft-correction-mail.ts": {
@@ -3558,7 +3558,7 @@
       "executable": false
     },
     "src/nectar/invoice-automation.ts": {
-      "sha256": "64f4c86198c12cb32bc38bc5031d24a50255791659610aadcbcafc0384e5fc3c",
+      "sha256": "43d20f8fdb5b9ec7ba6f2c07125115e52d1477cbd385df1501e3972ad56cb757",
       "executable": false
     },
     "src/nectar/invoice-branding.ts": {
@@ -4794,7 +4794,7 @@
       "executable": false
     },
     "src/nectar/views.ts": {
-      "sha256": "183671dc5c429ee47927eb88c7d7a287f7078b865a06b22dd4d57c521a6b201d",
+      "sha256": "af007b1f394c85b79ecda07a457e74157af0a0b0b54f85772c304f5cef9fb974",
       "executable": false
     },
     "src/nectar/webauthn.ts": {
@@ -5062,7 +5062,7 @@
       "executable": false
     },
     "tests/nectar/billing-roles.mjs": {
-      "sha256": "a8eba303d190694547ae8fb2c5e6e22f410ea1f61198fcd5cf9ca2adc9ce1a3c",
+      "sha256": "5a598008c3526efb39fcf39f69dfb3aa78605493e0872645c983b816abb515f6",
       "executable": false
     },
     "tests/nectar/cadences.mjs": {

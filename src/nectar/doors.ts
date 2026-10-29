@@ -3,6 +3,7 @@
 // each role, so a new door cannot be added without being checked.
 // Patterns are relative to /api/nectar/ (API) or absolute (pages).
 export const API_DOORS: [string, string][] = [
+  ['^invoice-automation$', 'invoiceAutomation'],
   ['^job-runs$', 'jobRuns'],
   ['^portal-changes$', 'portalChanges'],
   ['^remittances$','remittances'],
