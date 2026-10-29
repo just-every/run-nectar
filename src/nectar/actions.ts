@@ -1,4 +1,5 @@
 import { preparePortalChangePolicy } from './portal-change-policy'
+import { bindSandboxProcessor, reconcileSandboxBilling } from './test-billing'
 import { uploadRemittances, previewRemittance, confirmRemittance, previewRemittanceAllocation, allocateRemittance } from './remittances'
 import { consumeProcessorEvent } from './processor-events'
 import { allocateProcessorCash } from './processor-cash-queue'
@@ -123,6 +124,8 @@ export const actions: Record<string, Handler> = {
   'sandbox.catalog.copy': copySandboxCatalog,
   'sandbox.customer.create': createSandboxCustomer,
   'sandbox.clock.advance': advanceSandboxClock,
+  'sandbox.processor.bind': bindSandboxProcessor,
+  'sandbox.billing.reconcile': reconcileSandboxBilling,
   'sso.configure': configureSso,
   'assurance.scan': scanAssurance,
   'assurance.assign': assignAssurance,

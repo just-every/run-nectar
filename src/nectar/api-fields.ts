@@ -1098,6 +1098,10 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "revision": "integer",
     "role": "text"
   },
+  "sandbox.billing.reconcile": {
+    "confirm": "flag",
+    "customer": "text"
+  },
   "sandbox.catalog.copy": {
     "confirm": "flag",
     "source_fingerprint": "text"
@@ -1115,6 +1119,11 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "price": "list",
     "quantity": "list",
     "trial_end": "text"
+  },
+  "sandbox.processor.bind": {
+    "confirm": "flag",
+    "customer": "text",
+    "stripe_customer_ref": "text"
   },
   "setup.resolve": {
     "proposal": "text",
