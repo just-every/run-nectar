@@ -92,6 +92,7 @@ export async function automaticCollectionArchiveJourney(){
    ['collected','pending_settlement','uncertain','uncertain','awaiting_customer','pending_approval','active','claimed'])
   assert.equal(writes(),5)
   const originalPaid=await api('invoices/'+paid.invoice)
+  const retiredOwner=owner
   const initialReport=await api('reports/collections?period=2026-10')
   assert.equal(initialReport.totalCents,10000)
   await close()
@@ -114,6 +115,8 @@ export async function automaticCollectionArchiveJourney(){
   assert.deepEqual(custody(await archiveItems(archive('restored'))),custody(exported),'Real import preserves exact claims, processor identities, cents, outcomes, cash and allocation IDs')
   console.log('automatic archive: restored public doors')
   await open()
+  assert.equal((await h.raw('/api/nectar/automatic.collection.reconcile',{cookie:retiredOwner,body:{request:claimed.id}})).status,401,
+   'An installation-local owner session cannot return through an archive')
   assert.ok((await list()).every(row=>row.historical))
   assert.deepEqual(await api('invoices/'+paid.invoice),originalPaid)
   assert.equal((await api('reports/collections?period=2026-10')).totalCents,10000)
@@ -209,15 +212,24 @@ export async function automaticCollectionArchiveJourney(){
   edge.customers.get('synthetic-nectar-native-customer-1').method=method
   const pending=await prepare(await draft(customers[1]),'active',true)
   await issue(pending.invoice)
-  const terminal=[refused,returned,withdrawn,invalidated,pending]
-  const expectedStates=['refused','returned','revoked','invalidated','pending_settlement']
+  const entity=await api('entity.create',{revision:(await api('business')).revision,legal_name:'Synthetic second entity',address:'2 Synthetic Way',ein:'12-3456789',
+   invoice_prefix:'SECOND',invoice_number_width:4,payment_terms_days:30,processor_account_ref:'synthetic-nectar-native-account-2',
+   ledger_company_ref:'synthetic-nectar-ledger-2',tax_registration:'Synthetic second entity registration'})
+  const secondCustomer=(await api('customer.create',{external_id:'synthetic-nectar-archive-2',name:'Synthetic second account',billing_email:email(2)})).id
+  await api('customer.entity',{revision:(await api('business')).revision,customer:secondCustomer,entity:entity.id,confirm:true})
+  await api('collection.customer.bind',{customer:secondCustomer,account_ref:'synthetic-nectar-native-account-2',stripe_customer_ref:'synthetic-nectar-native-customer-2',confirm:true})
+  const secondary=await prepare(await draft(secondCustomer))
+  edge.losePayment();await issue(secondary.invoice)
+  const terminal=[refused,returned,withdrawn,invalidated,pending,secondary]
+  const expectedStates=['refused','returned','revoked','invalidated','pending_settlement','uncertain']
   const terminalRows=await list()
   assert.deepEqual(terminal.map(target=>terminalRows.find(row=>row.id===target.id).status),expectedStates)
   const terminalWrites=writes()
-  assert.equal(terminalWrites,writeCount+3)
+  assert.equal(terminalWrites,writeCount+4)
   const terminalRecovery=await api('recovery')
   assert.deepEqual([terminalRecovery.totals.failedInvoices,terminalRecovery.totals.failedAmountCents,terminalRecovery.totals.recoveredAmountCents],[2,20000,0])
   await close()
+  console.log('automatic archive: export terminal and second-account custody')
   await command(root,['export','--output',archive('terminal')])
   const terminalItems=await archiveItems(archive('terminal'))
   await command(root,['reset','--yes'])
@@ -227,11 +239,15 @@ export async function automaticCollectionArchiveJourney(){
   const financialTables=new Set(['nc_automatic_collections','nc_payments','nc_allocations','nc_retry_series','nc_retry_attempts'])
   assert.deepEqual(restoredItems.filter(item=>financialTables.has(item.table)),terminalItems.filter(item=>financialTables.has(item.table)),
    'Terminal and pending claims, original failure dates and outcomes restore exactly')
+  console.log('automatic archive: restored terminal and second-account public doors')
   await open()
   const historical=await list()
   assert.deepEqual(terminal.map(target=>historical.find(row=>row.id===target.id).status),expectedStates)
   assert.ok(historical.every(row=>row.historical))
-  assert.deepEqual(await api('recovery'),terminalRecovery)
+  const restoredRecovery=await api('recovery')
+  assert.equal(restoredRecovery.asOf,Date.parse(h.vars.NECTAR_LOCAL_TIME))
+  const historicalRecovery=({asOf,...facts})=>facts
+  assert.deepEqual(historicalRecovery(restoredRecovery),historicalRecovery(terminalRecovery))
   for(const target of terminal){
    const invoice=await api('invoices/'+target.invoice)
    assert.deepEqual([invoice.paidCents,invoice.balanceCents,invoice.allocations.length],[0,10000,0])
@@ -243,10 +259,20 @@ export async function automaticCollectionArchiveJourney(){
    await api('collection.prepare',{invoice:target.invoice},409)
    assert.equal((await api('automatic.collection.reconcile',{request:target.id})).status,expectedStates[terminal.indexOf(target)])
   }
+  edge.accounts.set(2,'synthetic-nectar-archive-wrong-account')
+  await api('automatic.collection.reconcile',{request:secondary.id},409)
+  assert.equal((await api('invoices/'+secondary.invoice)).paidCents,0,'An unavailable original account never falls back to a different processor account')
+  edge.accounts.set(2,'synthetic-nectar-native-account-2')
+  const secondaryCollected=await api('automatic.collection.reconcile',{request:secondary.id})
+  assert.equal(secondaryCollected.status,'collected')
+  assert.equal(secondaryCollected.quote.accountRef,'synthetic-nectar-native-account-2')
+  const secondaryInvoice=await api('invoices/'+secondary.invoice)
+  assert.deepEqual([secondaryInvoice.paidCents,secondaryInvoice.balanceCents,secondaryInvoice.allocations.length],[10000,0,1])
+  assert.deepEqual((await api('payments')).filter(row=>row.customer_id===secondCustomer).map(row=>row.amount_cents),[10000])
   await tick()
   assert.equal(writes(),terminalWrites,'Restored refusal and return histories confer no retry authority')
-  assert.equal((await api('reports/billings?period=2026-10')).totalCents,110000)
-  assert.equal((await api('reports/collections?period=2026-10')).totalCents,40000)
+  assert.equal((await api('reports/billings?period=2026-10')).totalCents,120000)
+  assert.equal((await api('reports/collections?period=2026-10')).totalCents,50000)
   assert.equal((await api('reports/ar')).totalCents,70000)
   const erasure=await api('erasure.request',{customer:customers[1]})
   await api('erasure.verify',{request:erasure.id,reason:'Synthetic independent account verification',evidence:file('synthetic-nectar-933.txt','Synthetic signed identity verification')})
@@ -280,6 +306,9 @@ export async function automaticCollectionArchiveJourney(){
   assert.equal((await api('invoices/'+bank.invoice)).paidCents,10000)
   const restoredPending=await api('invoices/'+pending.invoice)
   assert.deepEqual([restoredPending.paidCents,restoredPending.balanceCents,restoredPending.allocations.length],[0,10000,0])
+  assert.equal((await api('reports/billings?period=2026-10')).totalCents,120000)
+  assert.equal((await api('reports/collections?period=2026-10')).totalCents,50000)
+  assert.equal((await api('reports/ar')).totalCents,70000)
   assert.equal(writes(),terminalWrites,'Erasure before settlement and anonymized restoration revive no provider write or cash')
   console.log('automaticCollectionArchiveJourney: real export, reset and import preserve claimed, uncertain, pending ACH, collected, refused, returned, revoked and invalidated custody; restored authority is inert; reads reconcile original cash once; erasure checkpoints refuse older archives')
  }finally{await h?.close();await rm(scratch,{recursive:true,force:true})}
