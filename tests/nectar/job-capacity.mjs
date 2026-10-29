@@ -61,35 +61,24 @@ export async function nativeJobCapacityFlow(h,owner){
     if(customers.length%100===0)console.log(JSON.stringify({phase:'seed',subscriptions:subscriptions.size,elapsedMs:Math.round(performance.now()-seedStart)}))
   })
   assert.equal(subscriptions.size,count)
-  // One separate review control pauses preparation at the real alert edge.
-  // It is never among the ten thousand supported invoice and charge targets.
-  const control=(await api('customer.create',{external_id:'synthetic-nectar-capacity-review',name:'Synthetic review control',billing_email:h.vars.OWNER_EMAIL,invoice_settings:{poRequired:true}})).id
-  await api('subscription.create',{customer:control,start_date:'2026-10-01',price:[price]})
   const policy=await api('invoice.automation.prepare',{enabled:true,hour:0})
   await api('invoice.automation.decide',{request:policy.request,decision:'approved',confirm_single:true})
-  await api('notification.preferences',{billrun_exceptions:true})
-  const alert={entered:deferred(),release:deferred()}
-  await h.configureMail({provider:'sendgrid',apiKey:'synthetic-nectar-6',from:h.vars.OWNER_EMAIL},async()=>{
-    alert.entered.resolve();await alert.release.promise
-    return new Response(null,{status:202})
-  })
   const tick=()=>h.raw(`/cdn-cgi/local/scheduled?time=${instant}&cron=${encodeURIComponent('* * * * *')}`)
-  const started=performance.now(),pending=tick().catch(()=>null)
-  await waitFor(alert.entered.promise,'capacity preparation did not reach its alert')
+  const started=performance.now()
+  await h.rejectAudit('invoice.approve')
+  try{assert.equal((await tick()).status,500)}finally{await h.rejectAudit()}
   const originalDispatch=(await api('job-runs')).runs[0]
-  assert.equal(originalDispatch.jobs.find(job=>job.job==='invoice-automation').status,'running')
+  assert.equal(originalDispatch.jobs.find(job=>job.job==='invoice-automation').status,'failed')
   const [execution]=(await api('invoice-automation')).runs,run=execution.periods[0].bill_run_id
   const drafts=(await api(`runs/${run}`)).invoices.filter(invoice=>subscriptions.has(invoice.subscription_id))
   assert.equal(drafts.length,count);assert.ok(drafts.every(invoice=>invoice.status==='draft'&&invoice.total_cents===100))
   const preparedAt=performance.now(),byCustomer=new Map(customers.map(id=>[id,[]]))
   for(const draft of drafts)byCustomer.get(draft.customer_id).push(draft.id)
-  // Stop preparation before the real provider timeout can let issue continue.
-  instant+=31*60_000
-  await h.restart(new Date(instant).toISOString());alert.release.resolve();await pending
+  // The refused approval leaves every checkpointed draft intact. Restart
+  // before collecting the exact customer and sole-owner consents.
+  await h.restart(new Date(instant).toISOString())
   assert.equal((await tick()).status,200)
   assert.equal(edge.intents.size,0)
-  await api('mfa.verify',{code:totp(factor.secret,instant)})
-  edge.capturedAt(new Date(instant).toISOString())
   let consented=0
   await parallel(customers,async customer=>{
     const session=await api('portal.session.issue',{customer,origin:h.origin,audience:'hosted'})
@@ -120,17 +109,21 @@ export async function nativeJobCapacityFlow(h,owner){
   assert.equal(result.status,'completed');assert.equal(result.issued.length,count);assert.equal(new Set(result.issued).size,count)
   assert.equal(edge.intents.size,count);assert.equal(edge.charges.size,count)
   assert.ok([...edge.intents.values()].every(row=>row.value.status==='succeeded'&&row.value.amount_received===100))
-  const issued=(await api(`runs/${run}`)).invoices.filter(invoice=>subscriptions.has(invoice.subscription_id))
+  const finished=await api(`runs/${run}`)
+  assert.equal(finished.status,'finalised')
+  const issued=finished.invoices.filter(invoice=>subscriptions.has(invoice.subscription_id))
   assert.equal(issued.length,count);assert.ok(issued.every(invoice=>invoice.status==='issued'&&invoice.total_cents===100))
   const response=await h.raw('/app/exports/invoices.csv',{cookie:owner});assert.equal(response.status,200)
   const invoiceIds=new Set(issued.map(invoice=>invoice.id))
-  const csv=csvRows(await response.text()).filter(row=>invoiceIds.has(row.invoice_id))
+  const csv=csvRows(await response.text())
+  assert.ok(csv.every(row=>invoiceIds.has(row.invoice_id)))
   assert.equal(csv.length,count);assert.equal(new Set(csv.map(row=>row.invoice_id)).size,count)
   assert.ok(csv.every(row=>row.total==='1.00'&&row.paid==='1.00'&&row.balance==='0.00'))
   const collections=await api('reports/collections?period=2026-11')
   assert.equal(collections.entries.length,count);assert.equal(collections.totalCents,count*100)
   const dispatch=(await api('job-runs')).runs.find(row=>row.id===originalDispatch.id)
-  assert.equal(dispatch.status,'interrupted')
+  assert.equal(dispatch.status,'failed')
+  assert.equal(dispatch.jobs.find(job=>job.job==='invoice-automation').error_code,'storage_failure')
   assert.equal((await tick()).status,200)
   assert.equal(edge.intents.size,count);assert.equal(edge.calls.filter(call=>call.method==='POST'&&call.path==='/payment_intents').length,count)
   const receipt={head,activeSubscriptions:count,issuedInvoices:count,capturedPayments:count,allocatedCents:count*100,
