@@ -5,7 +5,7 @@ import site from '../../../docs/site.json'
 import { renderMarkdown, type Rendered } from './render'
 import { PATHS, startLine, type RunData } from '../../base/run-site'
 
-export interface DocsPage { slug: string; title: string; file: string; summary: string }
+export interface DocsPage { slug: string; title: string; file: string | null; summary: string }
 export interface DocsSection { title: string; pages: DocsPage[] }
 
 const files = import.meta.glob('../../../docs/*.md', { query: '?raw', import: 'default', eager: true }) as Record<string, string>
@@ -21,10 +21,10 @@ export function renderedPages(run: RunData): (DocsPage & Rendered)[] {
   const named = new Set(docsPages.map(page => page.file))
   const unnamed = Object.keys(files).map(path => path.split('/').pop()!).filter(file => !named.has(file))
   if (unnamed.length) throw new Error(`docs/site.json does not name ${unnamed.join(', ')}`)
-  return docsPages.map(page => {
+  return docsPages.filter(page => page.file !== null).map(page => {
     const markdown = files[`../../../docs/${page.file}`]
     if (markdown === undefined) throw new Error(`docs/site.json names ${page.file}, which is not in docs/`)
-    return { ...page, ...renderMarkdown(markdown.replaceAll('{{run.startLine}}', startLine(run)).replaceAll('{{run.clone}}', run.clone).replaceAll('{{run.requirements}}', PATHS.self.requirements), page.file, slugs) }
+    return { ...page, ...renderMarkdown(markdown.replaceAll('{{run.startLine}}', startLine(run)).replaceAll('{{run.clone}}', run.clone).replaceAll('{{run.requirements}}', PATHS.self.requirements), page.file!, slugs) }
   })
 }
 
