@@ -42,6 +42,16 @@ try {
     await page.screenshot({path:`${directory}/${width}-${label}-${index}.png`,fullPage:true})
    }
   }
+  if(label==='reconciled'){
+   await page.setViewportSize({width:1440,height:1000});await page.goto(h.origin+'/app/processor-events')
+   await page.getByRole('link',{name:'Bank deposit matched',exact:true}).click()
+   const review=page.locator('#remittance-review')
+   assert.match(await review.innerText(),/\$26\.70/);assert.match(await review.innerText(),/synthetic-nectar-payout-bank-deposit/)
+   assert.equal(await review.locator('form').count(),0,'A matched payout is evidence without another customer payment action')
+   for(const width of [1440,390]){await page.setViewportSize({width,height:1000});await review.screenshot({path:`${directory}/${width}-matched-payout-source.png`})}
+   await review.getByRole('link',{name:'Open processor payout'}).click()
+   assert.match(new URL(page.url()).pathname,/processor-events$/)
+  }
  }
  if(cashMode){
   await cashModule.processorCashFlow(h,owner,{onState:state=>capture({...state,label:state.label??'cash-applied'}),allocate:async payload=>{
