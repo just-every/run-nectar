@@ -17,6 +17,10 @@ export function invoicePdf(data: Row): Uint8Array {
     ...data.credits.map((credit:Row)=>`${credit.number}: ${money(credit.amount_cents)}`),
     ...data.payments.map((payment:Row)=>`${L.t('portal.payment')} ${L.day(payment.received_on)}: ${money(payment.amount_cents)}`),
     `${L.t('portal.credited')}: ${money(row.credited_cents)}`,`${L.t('portal.paid')}: ${money(row.paid_cents)}`,`${L.t('portal.owed')}: ${money(row.balance_cents)}`,brand.footer]
+  return financialPdf(rows, brand)
+}
+
+export function financialPdf(rows: unknown[], brand: { color: string, logo: string }): Uint8Array {
   const wrap=(line:string)=>{
     const wrapped:string[]=[];let current=''
     for(const word of line.split(/\s+/)){

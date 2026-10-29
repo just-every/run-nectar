@@ -29,6 +29,7 @@ import { portalProposeCredit, portalCreditProposal, portalCreditProposalPage } f
 import { portalAnswer, portalAnswersPage } from './portal-answers'
 import { customerAnswerInvoice, customerAnswerLine } from './portal-answer-data'
 import { portalPrivacy, portalPrivacyRequest } from './portal-privacy'
+import { portalReceiptData, portalReceiptPage, portalReceiptPdf } from './portal-receipts'
 
 export async function portalResponse(request: Request, env: Bindings): Promise<Response | null> {
   const url = new URL(request.url)
@@ -46,6 +47,16 @@ export async function portalResponse(request: Request, env: Bindings): Promise<R
     const returned=isSetup && (!url.searchParams.has('session') || url.pathname.endsWith('/finish') || url.pathname.endsWith('/reconcile'))?await resolveSetupReturn(env,request):null
     const session = url.searchParams.has('session')?await customerSession(env, request):returned?.session??await customerSession(env,request)
     language = session.language
+    const receipt = url.pathname.match(/^\/portal\/receipts(?:\/([\w-]+))?$/)
+    if (receipt) {
+      const data = await portalReceiptData(env, session, receipt[1])
+      if (request.headers.get('accept')?.includes('application/json')) return Response.json(data, { headers })
+      if (receipt[1] && url.searchParams.get('format') === 'pdf') return new Response(request.method === 'HEAD' ? null : portalReceiptPdf(data).buffer as ArrayBuffer, { headers: { ...headers, 'content-type': 'application/pdf', 'content-disposition': 'attachment; filename=receipt.pdf', 'content-security-policy': "default-src 'none'; frame-ancestors 'none'" } })
+      const L = customerText(data.customer.language, data.customer.currency), token = url.searchParams.get('session')!
+      const link = (path: string) => `${path}?session=${encodeURIComponent(token)}`
+      const response = portalPage(L.t('portal.receipts.heading'), portalReceiptPage(data, receipt[1], link), { lang: L.tag, name: data.merchant?.legal_name, style: link('/portal/theme.css') })
+      return new Response(request.method === 'HEAD' ? null : response.body, { headers: { ...Object.fromEntries(response.headers), ...headers, 'content-security-policy': `default-src 'none'; style-src 'self'; font-src 'self'; frame-ancestors ${session.audience === 'embedded' ? session.parent : "'none'"}; base-uri 'none'; form-action 'none'` } })
+    }
     const renewal = url.pathname.match(/^\/portal\/(renewal|return)\/([\w-]+)$/)
     if (renewal) {
       const returning=renewal[1]==='return',subscription=renewal[2],token=url.searchParams.get('session')!
@@ -160,7 +171,7 @@ export async function portalResponse(request: Request, env: Bindings): Promise<R
     if(invoice&&url.searchParams.get('format')==='logo')return new Response(request.method==='HEAD'?null:Uint8Array.from(atob(data.content!.branding.logo),c=>c.charCodeAt(0)),{headers:{...headers,'content-type':'image/jpeg'}})
     const token = url.searchParams.get('session')!
     const link = (path: string) => `${path}?session=${encodeURIComponent(token)}`
-    const body = topupAuthorization?await portalTopupPage(env,request,session,topupAuthorization,link):url.pathname==='/portal/prepaid'?await portalPrepaidPage(env,session,link):prepaidSource?await portalPrepaidSourcePage(env,session,prepaidSource,link):url.pathname==='/portal/upcoming' ? await portalUpcomingPage(env,session,url,link) : url.pathname==='/portal/adjustments' ? await portalAdjustmentsPage(env,session,link) : proposal ? portalCreditProposalPage(session,await portalCreditProposal(env,session,proposal),link) : url.pathname === '/portal/answers' ? await portalAnswersPage(env,session,input,link) : url.pathname === '/portal/privacy' ? await portalPrivacy(env, session, link) : h`<header><h1>${L.t('portal.heading')}</h1><p>${data.customer.name}</p><p>${L.t('portal.readonly')}</p><a href="${link('/portal/payment-methods')}">${L.t('checkout.heading')}</a> · <a href="${link('/portal/privacy')}">${L.t('portal.privacy.heading')}</a> · <a href="${link('/portal/upcoming')}">${L.t('portal.upcoming.heading')}</a> · <a href="${link('/portal/adjustments')}">${L.t('portal.adjustments.heading')}</a> · <a href="${link('/portal/prepaid')}">${L.t('portal.prepaid.heading')}</a> · <a href="${link('/portal/changes')}">${L.t('portal.change.heading')}</a></header>
+    const body = topupAuthorization?await portalTopupPage(env,request,session,topupAuthorization,link):url.pathname==='/portal/prepaid'?await portalPrepaidPage(env,session,link):prepaidSource?await portalPrepaidSourcePage(env,session,prepaidSource,link):url.pathname==='/portal/upcoming' ? await portalUpcomingPage(env,session,url,link) : url.pathname==='/portal/adjustments' ? await portalAdjustmentsPage(env,session,link) : proposal ? portalCreditProposalPage(session,await portalCreditProposal(env,session,proposal),link) : url.pathname === '/portal/answers' ? await portalAnswersPage(env,session,input,link) : url.pathname === '/portal/privacy' ? await portalPrivacy(env, session, link) : h`<header><h1>${L.t('portal.heading')}</h1><p>${data.customer.name}</p><p>${L.t('portal.readonly')}</p><a href="${link('/portal/receipts')}">${L.t('portal.receipts.heading')}</a> · <a href="${link('/portal/payment-methods')}">${L.t('checkout.heading')}</a> · <a href="${link('/portal/privacy')}">${L.t('portal.privacy.heading')}</a> · <a href="${link('/portal/upcoming')}">${L.t('portal.upcoming.heading')}</a> · <a href="${link('/portal/adjustments')}">${L.t('portal.adjustments.heading')}</a> · <a href="${link('/portal/prepaid')}">${L.t('portal.prepaid.heading')}</a> · <a href="${link('/portal/changes')}">${L.t('portal.change.heading')}</a></header>
       ${invoice ? h`<p><a href="${link('/portal')}">${L.t('portal.back')}</a></p>` : ''}
       ${data.invoices.length ? data.invoices.map(row => h`<section class="card"><h2>${invoice ? row.number : h`<a href="${link(`/portal/invoices/${row.id}`)}">${row.number}</a>`}</h2>
         <dl><dt>${L.t('portal.issued')}</dt><dd>${L.day(row.issue_date)}</dd><dt>${L.t('portal.due')}</dt><dd>${L.day(row.due_date)}</dd>

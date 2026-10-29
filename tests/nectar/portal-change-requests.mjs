@@ -33,7 +33,7 @@ export async function seedPendingPortalChange(h, owner, customer) {
 
 // One seeded sanity journey covers the customer request, merchant review and
 // unsafe attempts through HTTP, then uses the actual forms without operator cookies.
-export async function portalChangeRequestsFlow(h, owner) {
+export async function portalChangeRequestsFlow(h, owner, { customerContext, onScreen, activate } = {}) {
   await h.advanceClock('2026-10-28T09:00:00Z')
   const records = await seedPortalChangeRecords(h, owner), { customer, subscription, prices } = records
   const email = role => `${role}-${h.vars.OWNER_EMAIL}`
@@ -118,9 +118,11 @@ export async function portalChangeRequestsFlow(h, owner) {
   const evidence = process.env.NECTAR_EVIDENCE_DIR
   if (evidence) await mkdir(evidence, { recursive: true })
   try {
-    browser = await chromium.launch({ headless: true, ...(existsSync('/usr/bin/chromium') ? { executablePath: '/usr/bin/chromium' } : {}), args: ['--no-sandbox','--use-mock-keychain','--password-store=basic'] })
-    const context = await browser.newContext({ viewport: { width: 1440, height: 950 } }), page = await context.newPage()
+    browser = customerContext?.browser() ?? await chromium.launch({ headless: true, ...(existsSync('/usr/bin/chromium') ? { executablePath: '/usr/bin/chromium' } : {}), args: ['--no-sandbox','--use-mock-keychain','--password-store=basic'] })
+    const context = customerContext ?? await browser.newContext({ viewport: { width: 1440, height: 950 } }), page = await context.newPage()
+    const press = control => activate ? activate(control) : control.click()
     const capture = async name => {
+      if (onScreen) return onScreen(page, name)
       if (!evidence) return
       for (const width of [1440,390]) {
         await page.setViewportSize({ width, height: 950 })
@@ -129,18 +131,20 @@ export async function portalChangeRequestsFlow(h, owner) {
       await page.setViewportSize({ width: 1440, height: 950 })
     }
     await page.goto(session.url)
-    await page.getByRole('link', { name: 'Plan change requests' }).click()
+    await press(page.getByRole('link', { name: 'Plan change requests' }))
     await page.getByRole('heading', { name: 'Plan change requests' }).waitFor()
     assert.equal(await page.getByRole('heading', { name: 'Pending merchant review' }).count(), 1)
     await capture('customer-request-index')
-    await page.getByRole('link', { name: 'Subscription 1', exact: true }).click()
+    await press(page.getByRole('link', { name: 'Subscription 1', exact: true }))
     await page.getByRole('heading', { name: 'Plan change requests' }).waitFor()
     assert.equal(await page.getByRole('button', { name: /(?:pause|cancel)/i }).count(), 0, 'Forbidden pause has no option')
     assert.match(await page.locator('main').innerText(), /Below|below your signed minimum/)
     await capture('english-pending')
+    if (activate) await activate(page.getByLabel('Requested plan and unit price'))
     await page.getByLabel('Requested plan and unit price').selectOption(prices[0])
+    if (activate) await activate(page.getByLabel('Seats', { exact: true }))
     await page.getByLabel('Seats', { exact: true }).fill('5')
-    await page.getByRole('button', { name: 'Request downgrade review' }).click()
+    await press(page.getByRole('button', { name: 'Request downgrade review' }))
     await page.getByRole('heading', { name: 'Plan change requests' }).waitFor()
     assert.equal((await options()).requests.length, 2, 'The native form records the exact seat reduction for review')
     await capture('english-seat-request')
@@ -198,8 +202,9 @@ export async function portalChangeRequestsFlow(h, owner) {
     await post({ ...flatBody, quantity: 2 }, 409, foreign)
     await page.goto(`${h.origin}/portal/changes/${peerSubscription}?session=${foreign.token}`)
     assert.equal(await page.getByLabel('Seats', { exact: true }).count(), 0, 'A flat plan has no editable seat quantity')
+    if (activate) await activate(page.getByLabel('Requested plan and unit price'))
     await page.getByLabel('Requested plan and unit price').selectOption(flatPrices[1])
-    await page.getByRole('button', { name: 'Request downgrade review' }).click()
+    await press(page.getByRole('button', { name: 'Request downgrade review' }))
     await page.getByRole('heading', { name: 'Plan change requests' }).waitFor()
     const flatStatus = await options(foreign, peerSubscription)
     assert.equal(flatStatus.requests.length, 1)
@@ -208,7 +213,7 @@ export async function portalChangeRequestsFlow(h, owner) {
     assert.deepEqual(await flatFacts(),flatBefore,'Flat request and refused alternatives change no plan, invoice or money')
     await capture('flat-plan-pending')
 
-  } finally { if (browser) await browser.close() }
+  } finally { if (browser && !customerContext) await browser.close() }
   assert.deepEqual(await money(), before, 'The customer form also changes no plan or money')
 
   const stalePolicy = await options()

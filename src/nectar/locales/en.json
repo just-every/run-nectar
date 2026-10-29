@@ -456,5 +456,15 @@
   "portal.change.afterAmount": "Proposed period total",
   "portal.change.difference": "Prorated difference",
   "portal.change.effective": "Effective date",
-  "portal.change.previewReadOnly": "This estimate does not change your subscription or charge you. Downgrades can be sent separately for merchant review."
+  "portal.change.previewReadOnly": "This estimate does not change your subscription or charge you. Downgrades can be sent separately for merchant review.",
+  "portal.receipts.heading": "Payment receipts",
+  "portal.receipts.recorded": "These receipts confirm recorded cash, not processor settlement.",
+  "portal.receipts.received": "Received on",
+  "portal.receipts.amount": "Received amount",
+  "portal.receipts.allocated": "Allocated amount",
+  "portal.receipts.returned": "Returned amount",
+  "portal.receipts.unallocated": "Unallocated amount",
+  "portal.receipts.allocations": "Allocations to your invoices",
+  "portal.receipts.pdf": "Download receipt PDF",
+  "portal.receipts.empty": "No recorded payment receipts."
 }

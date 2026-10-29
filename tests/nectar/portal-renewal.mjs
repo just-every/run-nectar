@@ -9,7 +9,7 @@ import { file } from './harness.mjs'
 export const harnessOptions=()=>({assets:true})
 
 // One customer lifecycle through the real portal, ordinary billing and Cron.
-export async function portalRenewalFlow(h,owner) {
+export async function portalRenewalFlow(h,owner,{customerContext,onScreen,activate}={}) {
   await h.advanceClock('2026-01-01T16:00:00Z')
   const api=(path,body,status)=>h.api(path,owner,body,status)
   const product=(await api('product.create',{code:'synthetic-nectar-portal-retention',name:'Customer workspace'})).id
@@ -105,20 +105,22 @@ export async function portalRenewalFlow(h,owner) {
   const evidence=process.env.NECTAR_EVIDENCE_DIR
   if(evidence)await mkdir(evidence,{recursive:true})
   try {
-    browser=await chromium.launch({headless:true,...(existsSync('/usr/bin/chromium')?{executablePath:'/usr/bin/chromium'}:{}),args:['--no-sandbox','--use-mock-keychain','--password-store=basic']})
-    const context=await browser.newContext({viewport:{width:1440,height:950}}),page=await context.newPage()
+    browser=customerContext?.browser()??await chromium.launch({headless:true,...(existsSync('/usr/bin/chromium')?{executablePath:'/usr/bin/chromium'}:{}),args:['--no-sandbox','--use-mock-keychain','--password-store=basic']})
+    const context=customerContext??await browser.newContext({viewport:{width:1440,height:950}}),page=await context.newPage()
+    const press=control=>activate?activate(control):control.click()
     async function capture(name) {
+      if(onScreen)return onScreen(page,name)
       if(!evidence)return
       for(const width of [1440,390]){await page.setViewportSize({width,height:950});await page.screenshot({path:`${evidence}/${name}-${width}.png`,fullPage:true})}
       await page.setViewportSize({width:1440,height:950})
     }
     await page.goto(`${h.origin}/portal/changes?session=${savedSession.token}`)
-    await page.getByRole('link',{name:'Manage renewal',exact:true}).click()
+    await press(page.getByRole('link',{name:'Manage renewal',exact:true}))
     await page.getByRole('button',{name:'Cancel renewal',exact:true}).waitFor()
     assert.equal(await page.locator('form').count(),1,'One confirmation includes both optional save and cancellation')
     assert.equal(await page.getByRole('button',{name:'Accept optional save',exact:true}).count(),1)
     await capture('portal-renewal-save-en')
-    await page.getByRole('button',{name:'Accept optional save',exact:true}).click()
+    await press(page.getByRole('button',{name:'Accept optional save',exact:true}))
     await page.getByRole('button',{name:'Cancel renewal',exact:true}).waitFor()
     assert.equal(await page.getByRole('button',{name:'Accept optional save',exact:true}).count(),0,'Accepted offer does not repeat')
     await capture('portal-renewal-save-applied')
@@ -136,7 +138,7 @@ export async function portalRenewalFlow(h,owner) {
     await post(cancelled,cancelSession,{basis:cancelOffer.basis,confirm:'cancel'},500)
     await h.rejectAudit(null)
     assert.equal((await get(cancelled,cancelSession)).term.autoRenew,true)
-    await cancelButton.click()
+    await press(cancelButton)
     assert.equal(await page.locator('button[value="cancel"]').count(),0)
     await capture('portal-renewal-cancelled-es')
     assert.deepEqual(await money(cancelled),cancelOriginal,'Cancelling renewal preserves issued financial facts')
@@ -152,9 +154,10 @@ export async function portalRenewalFlow(h,owner) {
       const customer=await api(`customers/${estimated.customer}`)
       await api('customer.update',{customer:estimated.customer,revision:customer.revision,name:customer.name,billing_email:customer.billing_email,language})
       await page.goto(`${h.origin}/portal/changes/${estimated.sub}?session=${nativeEstimateSession.token}`)
+      if(activate)await activate(page.locator('select[name="target_price"]'))
       await page.locator('select[name="target_price"]').selectOption(expensive)
       const facts=await estimatedFacts()
-      await page.locator('button[formaction]').click()
+      await press(page.locator('button[formaction]'))
       assert.equal(await page.locator('html').getAttribute('lang'),language)
       assert.match(await page.locator('main').innerText(),/USD 150.00/)
       assert.match(await page.locator('main').innerText(),/USD 50.00/)
@@ -168,7 +171,7 @@ export async function portalRenewalFlow(h,owner) {
     await page.goto(h.origin+path(stale,staleSession))
     await policy({save_percent:25})
     const refused=page.waitForResponse(r=>r.request().method()==='POST'&&new URL(r.url()).pathname===`/portal/renewal/${stale.sub}`)
-    await page.locator('button[value="save"]').click()
+    await press(page.locator('button[value="save"]'))
     assert.equal((await refused).status(),409)
     await capture('portal-stale-save-refused')
     await post(stale,staleSession,{basis:staleOffer.basis,confirm:'save',offer:staleOffer.save.id},409)
@@ -200,7 +203,7 @@ export async function portalRenewalFlow(h,owner) {
     await policy({save_kind:'downgrade',downgrade_source_price_id:price,downgrade_price_id:cheap,winback_enabled:false})
     const downgraded=await subscription({start:'2025-01-01',months:24}),downSession=await issue(downgraded),down=await get(downgraded,downSession)
     await page.goto(h.origin+path(downgraded,downSession));await capture('portal-approved-downgrade')
-    await page.locator('button[value="save"]').click()
+    await press(page.locator('button[value="save"]'))
     assert.equal((await api(`subscriptions/${downgraded.sub}/upcoming?period=2026-01`)).calculation.totalCents,6000)
     assert.equal((await api(`subscriptions/${downgraded.sub}/upcoming?period=2025-12`)).calculation.totalCents,10000)
 
@@ -243,7 +246,7 @@ export async function portalRenewalFlow(h,owner) {
     const returnBody={offer:returnOffer.id,confirm:'accept'}
     await post(cancelled,returning,returnBody,403,'return',{origin:'https://synthetic-nectar.example.test'})
     await page.goto(h.origin+path(cancelled,returning,'return'));await capture('portal-winback-es')
-    await page.locator('button[value="accept"]').click()
+    await press(page.locator('button[value="accept"]'))
     assert.equal((await api(`subscriptions/${cancelled.sub}`)).end_date,null)
     await post(cancelled,returning,returnBody,404,'return')
     await capture('portal-winback-accepted')
@@ -255,7 +258,7 @@ export async function portalRenewalFlow(h,owner) {
       await api('invoice.finalise',{invoice:invoice.id,issue_date:'2026-08-01'})
     }
     for(const original of originals)assert.deepEqual(await api(`invoices/${original.id}`),original,'Retention preserves issued originals')
-  } finally { if(browser)await browser.close() }
+  } finally { if(browser&&!customerContext)await browser.close() }
 
   const expiring=await issue(saved),expiryData=await get(saved,expiring)
   await h.advanceClock(new Date(expiring.expiresAt).toISOString())

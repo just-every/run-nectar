@@ -456,5 +456,15 @@
   "portal.change.afterAmount": "Total propuesto del período",
   "portal.change.difference": "Diferencia prorrateada",
   "portal.change.effective": "Fecha de entrada en vigor",
-  "portal.change.previewReadOnly": "Esta estimación no cambia su suscripción ni le cobra. Los cambios a un plan inferior se pueden enviar por separado para revisión de la empresa."
+  "portal.change.previewReadOnly": "Esta estimación no cambia su suscripción ni le cobra. Los cambios a un plan inferior se pueden enviar por separado para revisión de la empresa.",
+  "portal.receipts.heading": "Recibos de pago",
+  "portal.receipts.recorded": "Estos recibos confirman efectivo registrado, no la liquidación del procesador.",
+  "portal.receipts.received": "Fecha de recepción",
+  "portal.receipts.amount": "Importe recibido",
+  "portal.receipts.allocated": "Importe aplicado",
+  "portal.receipts.returned": "Importe devuelto",
+  "portal.receipts.unallocated": "Importe sin aplicar",
+  "portal.receipts.allocations": "Aplicaciones a tus facturas",
+  "portal.receipts.pdf": "Descargar recibo en PDF",
+  "portal.receipts.empty": "No hay recibos de pago registrados."
 }
