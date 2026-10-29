@@ -4,7 +4,8 @@
       "title": "Start here",
       "pages": [
         { "slug": "overview", "title": "What Nectar does", "file": "overview.md", "summary": "Plans, seats and usage turned into invoices that show every line’s calculation, and what happens to them after they are issued." },
-        { "slug": "getting-started", "title": "Getting started", "file": "getting-started.md", "summary": "Run Nectar on your computer, sign in, and enter the business and its tax policy." }
+        { "slug": "getting-started", "title": "Getting started", "file": "getting-started.md", "summary": "Run Nectar on your computer, sign in, and enter the business and its tax policy." },
+        { "slug": "hosting", "title": "Hosting", "file": null, "summary": "Run Nectar on your computer or put it online with Run Edit Run or your own Cloudflare account." }
       ]
     },
     {
