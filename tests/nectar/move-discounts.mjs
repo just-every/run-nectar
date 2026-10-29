@@ -61,6 +61,7 @@ export async function moveDiscountsFlow(h, owner, { onState = async () => {} } =
     s => { s.discounts = [s.discounts[0].id] },
     s => { s.discounts.push({ ...s.discounts[0], id: 'synthetic-nectar-extra-discount' }) },
     s => { s.discounts[0].coupon = s.discounts[0].coupon.id },
+    s => { s.discounts[0].coupon = { id: s.discounts[0].coupon.id } },
     s => { s.discounts[0].promotion_code = 'synthetic-nectar-unqualified-promotion' },
     s => { s.pause_collection = { behavior: 'void' } },
     s => { s.discounts[0].subscription = 'synthetic-nectar-other-subscription' },

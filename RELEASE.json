@@ -78,6 +78,7 @@
     "migrations/core/0085_ach_payment_evidence.sql",
     "migrations/core/0086_payment_receipts.sql",
     "migrations/core/0087_collection_webhooks.sql",
-    "migrations/core/0113_portal_retention_authority.sql"
+    "migrations/core/0113_portal_retention_authority.sql",
+    "migrations/core/0115_imported_amount_discounts.sql"
   ]
 }
