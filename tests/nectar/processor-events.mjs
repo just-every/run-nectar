@@ -1,3 +1,6 @@
+import { plaidRemittanceEdge } from './remittance-plaid.mjs'
+import { remittanceFile } from './remittance-files.mjs'
+import { totp } from './mfa.mjs'
 import assert from 'node:assert/strict'
 import { createHmac } from 'node:crypto'
 import { harness } from './harness.mjs'
@@ -8,13 +11,15 @@ import { processorRecoveryEdge, processorRecoveryFlow } from './processor-recove
 import { processorReturnFlow } from './processor-returns.mjs'
 export const webhookSecret='synthetic-nectar-webhook'
 export async function processorSetup(edge=processorRecoveryEdge(processorEdge()),options={}) {
- const h=await harness({assets:true,localTime:'2026-10-22T12:00:00Z',stripeFetch:edge.fetch,stripeSecret:'synthetic-nectar-1',stripeWebhookSecret:webhookSecret,...options})
+ const bankEdge=plaidRemittanceEdge()
+ const h=await harness({plaidFetch:bankEdge.fetch,settings:{PLAID_CLIENT_ID:'synthetic-nectar-plaid-client',PLAID_SECRET:'synthetic-nectar-plaid-secret',PLAID_ACCESS_TOKEN:'synthetic-nectar-plaid-access'},assets:true,localTime:'2026-10-22T12:00:00Z',stripeFetch:edge.fetch,stripeSecret:'synthetic-nectar-1',stripeWebhookSecret:webhookSecret,...options})
  await h.raw('/auth/bootstrap',{body:{token:h.vars.SETUP_TOKEN,displayName:'Nectar Owner'}})
  const owner=await h.signIn(h.vars.OWNER_EMAIL)
  await h.raw('/setup',{cookie:owner,form:new URLSearchParams({confirm:'yes'})})
  await h.api('business.configure',owner,{legal_name:'Cedar Finance',timezone:'UTC',invoice_prefix:'PAY',payment_terms_days:30})
  await applyPolicy(h,owner,'tax.declare',{tax_jurisdiction:'CA',tax_mode:'no_tax',tax_note:'Synthetic processor reconciliation'})
  await h.api('tax.review',owner,{revision:(await h.api('business',owner)).revision})
+ h.bankEdge=bankEdge
  return {h,owner,edge}
 }
 export async function processorEventFlow(h,owner,edge,{onState=async()=>{}}={}) {
@@ -104,6 +109,7 @@ export async function processorEventFlow(h,owner,edge,{onState=async()=>{}}={}) 
  assert.deepEqual(members.map(row=>row.transaction_ref).sort(),[source.transaction.id,refund.balance_transaction,'synthetic-nectar-txn-dispute',bank.transaction.id,bank.charge.failure_balance_transaction,'synthetic-nectar-prior-payout-debit'].sort())
  assert.equal(members.reduce((sum,row)=>sum+row.net_cents,0),payout.amount)
  assert.equal(reconciliation.transactions.find(row=>row.transaction_ref===payout.balance_transaction).amount_cents,-2670)
+ await payoutBankMatchFlow(h,owner,edge,payout)
  await api('report.schedule',{enabled:true,day:1})
  await h.advanceClock('2026-11-01T12:00:00Z')
  const tick=await h.raw(`/cdn-cgi/local/scheduled?time=${Date.parse('2026-11-01T12:00:00Z')}&cron=${encodeURIComponent('0 14 * * *')}`)
@@ -225,4 +231,44 @@ async function payoutArrivalFlow(api,edge,deliver,manual) {
 if(process.argv[1]===new URL(import.meta.url).pathname){
  const {h,owner,edge}=await processorSetup()
  try{await processorEventFlow(h,owner,edge);console.log('Processor events: signed intake, out-of-order refund and recovery, exactly-once cash, fees, reports, CSV and authorized failure alerts passed')}finally{await h.close()}
+}
+
+async function payoutBankMatchFlow(h,owner,edge,payout) {
+ const api=(path,body,status)=>h.api(path,owner,body,status),bank=h.bankEdge
+ const factor=await api('mfa.totp.start',{})
+ await api('mfa.totp.confirm',{factor:factor.factor,code:totp(factor.secret,Date.parse('2026-10-22T12:00:00Z'))})
+ const deposit=bank.seed('synthetic-nectar-payout-bank-deposit',26.70,'2026-10-22')
+ const advice=remittanceFile([[deposit.transaction_id,'2026-10-22','USD','26.70','','','']])
+ const source=await api('bank.remittance.preview',{account:bank.account,file:advice})
+ await api('bank.remittance.confirm',{account:bank.account,file:advice,fingerprint:source.fingerprint,confirm:true})
+ const receipt=source.receipts[0].id,payments=await api('payments')
+ const preview=await api('payout.match.preview',{receipt,processor_account:edge.account})
+ assert.equal(preview.payout.object_ref,payout.id);assert.equal(preview.amountCents,2670);assert.ok(preview.transactions.length>1)
+ await api('payout.match.preview',{receipt,processor_account:'synthetic-nectar-other-processor'},409)
+ await api('payout.match.preview',{receipt,processor_account:edge.account,payout:'synthetic-nectar-other-payout'},409)
+ const wrongAmount=bank.seed('synthetic-nectar-payout-other-amount',27.70,'2026-10-22')
+ const wrongFile=remittanceFile([[wrongAmount.transaction_id,'2026-10-22','USD','27.70','','','']])
+ const wrongSource=await api('bank.remittance.preview',{account:bank.account,file:wrongFile})
+ await api('bank.remittance.confirm',{account:bank.account,file:wrongFile,fingerprint:wrongSource.fingerprint,confirm:true})
+ await api('payout.match.preview',{receipt:wrongSource.receipts[0].id,processor_account:edge.account,payout:payout.id},409)
+ await h.advanceClock('2026-10-22T12:01:00Z')
+ await api('processor.event.consume',{account_ref:edge.account,event_ref:edge.event('synthetic-nectar-payout-new-observation','payout.updated',payout).id})
+ const payload={receipt,processor_account:edge.account,payout:payout.id,fingerprint:preview.fingerprint,confirm:true}
+ await api('payout.match.confirm',payload,409)
+ const fresh=await api('payout.match.preview',{receipt,processor_account:edge.account})
+ payload.fingerprint=fresh.fingerprint
+ await h.rejectAudit('payout.match.confirm')
+ assert.equal((await h.raw('/api/nectar/payout.match.confirm',{cookie:owner,body:payload})).status,500)
+ await h.rejectAudit(null)
+ assert.deepEqual((await api('processor-events')).bankPayoutMatches,[])
+ const race=await Promise.all([1,2].map(()=>h.raw('/api/nectar/payout.match.confirm',{cookie:owner,body:payload})))
+ assert.ok(race.every(response=>[200,409].includes(response.status)));assert.ok(race.some(response=>response.status===200));for(const response of race)await response.text()
+ assert.equal((await api('payout.match.confirm',payload)).duplicate,true)
+ assert.equal((await api('processor-events')).bankPayoutMatches.length,1)
+ assert.deepEqual(await api('payments'),payments,'Matching a processor payout never records customer cash a second time')
+ assert.equal((await api('cash-application-queue')).some(row=>row.id===receipt),false)
+ await api('remittance.preview',{receipt},409)
+ await api('remittance.confirm',{receipt,customer:(await api('customers')).find(row=>row.external_id==='synthetic-nectar-pay004').id,fingerprint:source.receipts[0].preview.fingerprint,confirm:true},409)
+ assert.deepEqual(await api('payments'),payments,'A matched payout cannot pass through ordinary received-funds confirmation')
+ console.log('Recorded processor payout matched to bank evidence once without double-counting customer receipts')
 }

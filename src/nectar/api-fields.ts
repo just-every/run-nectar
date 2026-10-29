@@ -771,6 +771,18 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "received_on": "text",
     "reference": "text"
   },
+  "payout.match.confirm": {
+    "confirm": "flag",
+    "fingerprint": "text",
+    "payout": "text",
+    "processor_account": "text",
+    "receipt": "text"
+  },
+  "payout.match.preview": {
+    "payout": "text",
+    "processor_account": "text",
+    "receipt": "text"
+  },
   "plan.change.credit.prepare": {
     "change": "text"
   },

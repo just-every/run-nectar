@@ -15,6 +15,7 @@ async function receipt(env: Bindings, input: Input) {
   const row = await one(env, 'SELECT * FROM nc_remittances WHERE id=?', input.text('receipt', { max: 100 }))
   insist(row, 'remittance_not_found', 404)
   insist(row.status !== 'erased', 'remittance_erased', 409)
+  insist(!await one(env,'SELECT 1 FROM nc_bank_payout_matches WHERE receipt_id=?',row.id),'bank_payout_already_matched',409)
   return row
 }
 export async function uploadRemittances(env: Bindings, actor: Actor, input: Input) {
@@ -82,6 +83,7 @@ export function remittanceConfirmationStatements(env: Bindings, actor: Actor, ro
   const payment = newId(), statements = [
     guard(env, 'stale', "EXISTS(SELECT 1 FROM nc_remittances WHERE id=? AND status='staged' AND payload_hash=?)", row.id, row.payload_hash),
     customerGuard(env, preview.customer, preview.customerRevision),
+    guard(env, 'bank_payout_already_matched', 'NOT EXISTS(SELECT 1 FROM nc_bank_payout_matches WHERE receipt_id=?)', row.id),
     guard(env, 'stale', `NOT EXISTS(SELECT 1 FROM nc_customers WHERE (external_id=? OR id=?) AND id NOT IN(SELECT value FROM json_each(?)))
       AND (SELECT COUNT(*) FROM nc_customers WHERE external_id=? OR id=?)=?`,
       preview.source.customerReference, preview.source.customerReference, JSON.stringify(preview.customerCandidates),
@@ -123,16 +125,17 @@ export async function allocateRemittance(env: Bindings, actor: Actor, input: Inp
 }
 export async function readRemittances(env: Bindings, actor: Actor): Promise<Row[]> {
   readable(actor)
-  const rows = await all(env, `SELECT r.*,c.name AS customer_name,b.transaction_ref AS bank_transaction_ref,b.account_ref AS bank_account_ref,${UNALLOCATED_SQL} AS available_cents FROM nc_remittances r LEFT JOIN nc_customers c ON c.id=r.customer_id LEFT JOIN nc_payments p ON p.id=r.payment_id LEFT JOIN nc_plaid_deposits b ON b.receipt_id=r.id WHERE r.status<>'erased' ORDER BY r.created_at DESC,r.id`)
+  const rows = await all(env, `SELECT r.*,c.name AS customer_name,b.transaction_ref AS bank_transaction_ref,b.account_ref AS bank_account_ref,m.payout_ref AS bank_payout_ref,${UNALLOCATED_SQL} AS available_cents FROM nc_remittances r LEFT JOIN nc_customers c ON c.id=r.customer_id LEFT JOIN nc_payments p ON p.id=r.payment_id LEFT JOIN nc_plaid_deposits b ON b.receipt_id=r.id LEFT JOIN nc_bank_payout_matches m ON m.receipt_id=r.id WHERE r.status<>'erased' ORDER BY r.created_at DESC,r.id`)
   return Promise.all(rows.map(async row => {
     const source = parseJson<Row>(row.source_json, {})
+    if (row.bank_payout_ref) return { ...row, source, preview:null, reason:'payout_matched' }
     if (row.status === 'staged') {
       // A stale source remains visible for review, without proposing any money movement.
       try { return { ...row, source, preview: await remittanceMatch(env, row) } }
       catch { return { ...row, source, preview: null, reason: 'source_requires_review' } }
     }
     const allocations = await all(env, 'SELECT a.invoice_id,a.amount_cents,i.number FROM nc_allocations a JOIN nc_invoices i ON i.id=a.invoice_id WHERE a.payment_id=? ORDER BY a.allocated_at,a.id', row.payment_id)
-    const short = await all(env, `SELECT i.number,${BALANCE_SQL} AS balance_cents FROM nc_invoices i WHERE i.customer_id=? AND i.status='issued' AND i.number IN(SELECT json_extract(value,'$.invoiceReference') FROM json_each(?)) AND ${BALANCE_SQL}>0`, row.customer_id, JSON.stringify(source.lines ?? []))
+    const short = await all(env, `SELECT i.id,i.number,${BALANCE_SQL} AS balance_cents FROM nc_invoices i WHERE i.customer_id=? AND i.status='issued' AND i.number IN(SELECT json_extract(value,'$.invoiceReference') FROM json_each(?)) AND ${BALANCE_SQL}>0`, row.customer_id, JSON.stringify(source.lines ?? []))
     return { ...row, source, allocations, short, reason: row.available_cents > 0 ? 'unallocated_funds' : short.length ? 'short_payment' : 'allocated' }
   }))
 }

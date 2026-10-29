@@ -20,7 +20,7 @@ const returnKinds=['nc_processor_cash_returns']
 const importedKinds=['nc_processor_cash_imported_applications','nc_processor_cash_imported_takeovers']
 const nativeKinds=[...new Set([...eventKinds,...cashKinds])]
 const remittanceKinds=['nc_remittances','nc_remittance_allocations','nc_plaid_deposits']
-const sourceKinds=[...nativeKinds,...returnKinds,...importedKinds,...remittanceKinds,'nc_remittance_source_keys']
+const sourceKinds=[...nativeKinds,...returnKinds,...importedKinds,...remittanceKinds,'nc_bank_payout_matches','nc_remittance_source_keys']
 const priorDay=day=>new Date(Date.parse(`${day}T12:00:00Z`)-86400000).toISOString()
 
 /** Reuse in the existing processor journey; targets already passed the real
@@ -124,9 +124,10 @@ export async function processorArchiveJourney() {
   // Let the real CLI create and ledger every migration before the Worker opens
   // exactly that binding. Product rows are created exclusively through HTTP.
   const only=process.argv[2]
+  assert.ok(!only||['native','returns','imported','remittances'].includes(only),'Select a supported archive phase')
   const config=JSON.parse(await readFile(join(root,'wrangler.jsonc'),'utf8'))
   const persistence=join(root,'.wrangler/state/v3'),databaseId=config.d1_databases.find(binding=>binding.binding==='DB').database_id
-  if(!only){
+  if(!only||only==='native'){
   await command(root,['export','--output',empty])
   const setup=await processorSetup(undefined,{persistence,databaseId,applyMigrations:false})
   h=setup.h
@@ -148,6 +149,8 @@ export async function processorArchiveJourney() {
   await command(root,['export','--output',populated])
   const before=await archiveItems(populated),captured=sources(before)
   for(const kind of nativeKinds)assert.ok(captured.some(item=>item.table===kind),`Actual archive includes populated ${kind}`)
+  const payoutMatch=captured.find(item=>item.table==='nc_bank_payout_matches')
+  assert.ok(payoutMatch,'The actual archive contains the matched bank deposit')
   for(const customer of [events.customer,cash.customer])assert.ok(captured.some(item=>item.row.customer_id===customer),'Erased financial custody remains in the archive until due')
   h=await harness({assets:true,persistence,databaseId,applyMigrations:false,settings,localTime:'2027-01-13T12:00:00Z'})
   const removalOwner=await restoredOwner(h,enrollment,'2027-01-13T12:00:00Z')
@@ -162,6 +165,15 @@ export async function processorArchiveJourney() {
   await command(root,['import','--input',populated,'--yes'])
   await command(root,['export','--output',restored])
   assert.deepEqual(sources(await archiveItems(restored)),captured,'Actual rer restore preserves every populated processor source exactly')
+  h=await harness({assets:true,persistence,databaseId,applyMigrations:false,settings,localTime:'2027-01-13T12:00:00Z'})
+  await h.raw('/auth/bootstrap',{body:{token:h.vars.SETUP_TOKEN,displayName:'Restored owner'}})
+  const payoutOwner=await restoredOwner(h,enrollment,'2027-01-13T12:00:00Z')
+  const payoutPayments=await h.api('payments',payoutOwner)
+  await h.api('remittance.preview',payoutOwner,{receipt:payoutMatch.row.receipt_id},409)
+  await h.api('remittance.confirm',payoutOwner,{receipt:payoutMatch.row.receipt_id,fingerprint:payoutMatch.row.basis_hash,confirm:true},409)
+  assert.equal((await h.api('cash-application-queue',payoutOwner)).some(row=>row.id===payoutMatch.row.receipt_id),false)
+  assert.deepEqual(await h.api('payments',payoutOwner),payoutPayments,'Restored payout evidence cannot create another customer receipt')
+  await h.close();h=null
   await command(root,['reset','--yes'])
   const refused=await command(root,['import','--input',populated,'--journal',relative(root,purged),'--yes'],{refuse:true})
   assert.match(refused,/later_journal|erased_row|erasure_epoch/,'The trusted later journal refuses older financial custody for a privacy reason')
