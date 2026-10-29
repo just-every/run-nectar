@@ -103,7 +103,7 @@ export async function executeInvoiceSchedule(env: Bindings, actor: Actor, input:
   let row = await partialPaymentRow(env, input.text('request', {max: 100})), basis = quote(row)
   insist(row.payment_kind === 'scheduled_ach' && row.prepared_by === actor.id && row.status === 'open' && !row.claimed_at, 'invoice_schedule_not_executable', 409)
   insist(input.flag('confirm') && input.text('basis_hash', {max: 100}) === row.basis_hash && input.text('scheduled_on', {max: 10}) === basis.scheduledOn
-    && input.integer('amount_cents', {min: 50}) === row.amount_cents && input.text('payment_method_ref', {max: 255}) === basis.method.paymentMethodRef,
+    && input.integer('amount_cents', {min: 50, max: 99999999}) === row.amount_cents && input.text('payment_method_ref', {max: 255}) === basis.method.paymentMethodRef,
     'invoice_schedule_confirmation_changed', 409)
   insist(localDate(clockInstant(env), basis.timezone) === basis.scheduledOn, 'invoice_schedule_not_today', 409)
   const source = await currentSource(env, row), {stripe} = await stripeForAccount(env, row.account_ref)

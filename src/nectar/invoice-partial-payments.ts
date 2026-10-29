@@ -127,8 +127,8 @@ export async function confirmInvoicePartial(env: Bindings, actor: Actor, input: 
   insist(input.flag('confirm'), 'confirmation_required')
   insist(input.text('basis_hash', { max: 100 }) === row.basis_hash && input.text('invoice', { max: 100 }) === row.invoice_id
     && input.text('customer', { max: 100 }) === row.customer_id && input.text('account_ref', { max: 255 }) === row.account_ref
-    && input.text('stripe_customer_ref', { max: 255 }) === row.customer_ref && input.integer('amount_cents', { min: 50 }) === row.amount_cents
-    && input.integer('balance_cents', { min: 50 }) === row.balance_cents, 'invoice_partial_confirmation_changed', 409)
+    && input.text('stripe_customer_ref', { max: 255 }) === row.customer_ref && input.integer('amount_cents', { min: 50, max: 99999999 }) === row.amount_cents
+    && input.integer('balance_cents', { min: 50, max: 99999999 }) === row.balance_cents, 'invoice_partial_confirmation_changed', 409)
   const source = await currentSource(env, row)
   if (row.payment_kind === 'scheduled_ach') await validateScheduleConfirmation(env, row, input)
   await commit(env, [...setupOwnerFence(env, actor), partialAuthorityGuard(env, row), rowGuard(env, row), nativeSourceGuard(env, source), bindingFence(env, row), eligibleGuard(env, row.invoice_id),
@@ -188,7 +188,7 @@ export async function startInvoicePartial(env: Bindings, session: CustomerSessio
       'line_items[0][price_data][product_data][name]':L.t('partial.title'),'line_items[0][quantity]':'1'}),`nectar-invoice-partial-${row.id}`)
     checkPartialSession(checkout,row)
     const url=new URL(checkout.url)
-    insist(url.origin==='https://checkout.stripe.com'&&!url.username&&!url.password&&!url.hash,'invoice_partial_checkout_invalid',409)
+    insist(url.origin==='https://checkout.stripe.com'&&!url.username&&!url.password,'invoice_partial_checkout_invalid',409)
     await commit(env,[rowGuard(env,current),reservationGuard(env,current),stmt(env,"UPDATE nc_invoice_partial_payments SET status='open',session_ref=?,revision=? WHERE id=?",providerReference(checkout.id),newId(),row.id)],
     {actor:'customer:invoice-partial',action:'invoice.partial.checkout',subject:row.id,detail:{invoice:row.invoice_id}})
     return {id:row.id,status:'open',url:url.href}

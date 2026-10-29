@@ -69,7 +69,7 @@ export async function erasurePlan(env: Bindings, customer: Row): Promise<Erasure
       if (foreignKeys.has(column) || (column.endsWith('_id') && !['external_id','event_id'].includes(column)) || column === 'id' || (column === 'subject' && table === 'nc_audit') || keep.has(column) || financialIdentifier(table,column) || typedPlanField(table,column) || /(?:_at|_on|_date|_from|_to|_start|_end)$/.test(column)) continue
       if (column === 'external_id' || column === 'event_id' || column === 'reference') updates[column] = `erased-${row.id ?? customer.id}`
       else if (column === 'name' && table === 'nc_customers') updates[column] = 'Erased customer'
-      else if (['payment_intent_ref','charge_ref','payment_method_ref','refund_ref'].includes(column) || (table==='nc_payment_link_attributions'&&['customer_ref','session_ref'].includes(column))) updates[column]=`erased-${row.id ?? customer.id}`
+      else if (['payment_intent_ref','charge_ref','payment_method_ref','refund_ref'].includes(column) || (['nc_payment_link_attributions','nc_invoice_partial_payments'].includes(table)&&['customer_ref','session_ref'].includes(column))) updates[column]=`erased-${row.id ?? customer.id}`
       else if (column === 'provider_ref' || column === 'provider_schedule_ref' || column === 'stripe_customer_ref') updates[column] = required.has(column) ? `erased-${row.id ?? customer.id}` : null
       else updates[column] = column==='body' && table==='nc_notes' ? '[erased]' : ''
     }

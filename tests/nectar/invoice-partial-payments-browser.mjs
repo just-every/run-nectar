@@ -62,6 +62,7 @@ try {
         const result=await response;assert.equal(result.status(),303)
         const headers=await result.allHeaders()
         assert.match(headers.location,/^https:\/\/checkout\.stripe\.com\//)
+        await customer.waitForURL('https://checkout.stripe.com/**')
         return {started:{status:'open'},cookie:headers['set-cookie'].split(';')[0]}
       },
       schedulePrepare:async({invoice,body})=>{

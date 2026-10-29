@@ -1,5 +1,6 @@
 // Outside Verify: inject the held Stripe test source as STRIPE_SECRET_KEY.
 // Only safe object references, request IDs and assertion outcomes reach stdout.
+import {mkdir} from 'node:fs/promises'
 import {execFileSync} from 'node:child_process'
 import {chromium} from '@playwright/test'
 import {harness} from './harness.mjs'
@@ -10,7 +11,7 @@ import {stripeSandbox,check,reference,safeError,SandboxFailure} from './stripe-s
 
 const facts={head:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),journey:'INV-007 genuine partial card and dated ACH instruction',checks:{},providerFailures:[],cleanup:[]}
 const stripe=stripeSandbox(process.env.STRIPE_SECRET_KEY),workerWrites=[]
-let h,browser,customerRef,owner,factor,phase='provider-customer'
+let h,browser,page,customerRef,owner,factor,phase='provider-customer'
 let at=Math.floor(Date.now()/30000)*30000
 const day=()=>new Date(at).toISOString().slice(0,10)
 async function api(path,body,status=200){
@@ -27,6 +28,11 @@ const forward=async request=>{
       workerWrites.push({path:entry.path,key:entry.idempotencyKey})
     }
   })
+  if(response.ok&&new URL(request.url).pathname==='/v1/checkout/sessions'&&request.method==='POST'){
+    const returned=await response.clone().json(),url=new URL(returned.url)
+    facts.checkoutShape={object:returned.object,mode:returned.mode,livemode:returned.livemode,currency:returned.currency,amountCents:returned.amount_total,
+      ownCustomer:reference(returned.customer)===customerRef,hasFragment:!!url.hash,hasCredentials:!!(url.username||url.password),stripeOrigin:url.origin==='https://checkout.stripe.com'}
+  }
   if(!response.ok){const value=await response.clone().json();facts.providerFailures.push(safeError({code:value?.error?.code??value?.error?.type,param:value?.error?.param,status:response.status}))}
   return response
 }
@@ -53,19 +59,26 @@ try{
   await api('invoice.partial.confirm',partial.confirm)
   browser=await chromium.launch({headless:true,executablePath:process.env.NECTAR_CHROMIUM_PATH??'/usr/bin/chromium',args:['--no-sandbox','--use-mock-keychain','--password-store=basic'],
     ...(process.env.HTTPS_PROXY?{proxy:{server:process.env.HTTPS_PROXY,bypass:'localhost,127.0.0.1'}}:{})})
-  const context=await browser.newContext(),page=await context.newPage();page.setDefaultTimeout(30000)
+  const context=await browser.newContext();page=await context.newPage();page.setDefaultTimeout(30000)
   await page.goto(`${h.origin}/portal/invoices/${invoice.id}?session=${session.token}`)
   const consent=page.locator(`[data-partial="${partial.id}"] form`).first()
-  await consent.locator('[name=accept]').check();await consent.locator('button').click()
+  await consent.locator('[name=accept]').check()
+  const checkoutResponse=page.waitForResponse(r=>new URL(r.url()).pathname==='/portal/invoice-payment/start'&&r.request().method()==='POST')
+  await consent.locator('button').click()
+  const checkoutHeaders=await (await checkoutResponse).allHeaders()
+  check(checkoutHeaders.location?.startsWith('https://checkout.stripe.com/'),'native_checkout_destination_unavailable')
   phase='processor-hosted-card'
   await page.waitForURL('https://checkout.stripe.com/**',{timeout:60000})
+  phase='processor-card-number'
   await page.locator('#cardNumber').fill('4242424242424242')
+  phase='processor-card-expiry'
   await page.locator('#cardExpiry').fill('1235');await page.locator('#cardCvc').fill('123')
   const email=page.locator('#email');if(await email.count())await email.fill(['synthetic-nectar-'+stripe.run,'example.test'].join(String.fromCharCode(64)))
   const country=page.locator('#billingCountry');if(await country.count())await country.selectOption('US')
   const name=page.locator('#billingName');if(await name.count())await name.fill('Synthetic partial customer')
   const postal=page.locator('#billingPostalCode');if(await postal.count())await postal.fill('94105')
   const link=page.locator('#enableStripePass');if(await link.count())await link.uncheck()
+  phase='processor-card-submit'
   await page.locator('button[type=submit]').click();await page.waitForURL(`${h.origin}/portal/invoice-payment/return`,{timeout:60000})
   phase='native-capture'
   // Keep native and processor time aligned without extending customer authority.
@@ -113,7 +126,15 @@ try{
   check(workerWrites.length===2,'ach_submission_replayed')
   facts.checks.ach={amountCents:60000,state:reconciled.status,recordedCashCents:40000,balanceCents:60000,submissions:1,settlement:'unproved-real-time-provider-boundary'}
   facts.status='passed-current-provider-boundary'
-}catch(error){facts.status='not-qualified';facts.failure={phase,...safeError(error)};process.exitCode=1}
+}catch(error){
+  facts.status='not-qualified';facts.failure={phase,...safeError(error),errorClass:['TimeoutError','Error'].includes(error?.name)?error.name:'other'}
+  const transport=String(error?.message??'').match(/net::(ERR_[A-Z_]+)/);if(transport)facts.failure.transport=transport[1]
+  if(page){
+    facts.browserFields=await page.locator('input:not([type=hidden])').evaluateAll(nodes=>nodes.map(n=>({id:n.id,name:n.name,type:n.type}))).catch(()=>[])
+    if(process.env.NECTAR_EVIDENCE_DIR){await mkdir(process.env.NECTAR_EVIDENCE_DIR,{recursive:true});await page.screenshot({path:process.env.NECTAR_EVIDENCE_DIR+'/provider-boundary.png',fullPage:true}).catch(()=>{})}
+  }
+  process.exitCode=1
+}
 finally{
   await browser?.close();await h?.close()
   if(customerRef){
