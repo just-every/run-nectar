@@ -219,7 +219,7 @@
       "executable": false
     },
     "agent-surface.json": {
-      "sha256": "1a50d39d3a335165a42f8df3a4301d934d5f90028d5fea27f07c28a78316902a",
+      "sha256": "f71da6cbab6604b3d58283f47f37d28a76dc9af471a9f0e563a3b77742a2733d",
       "executable": false
     },
     "AGENTS.consumer.md": {
@@ -5488,6 +5488,10 @@
     },
     "tests/agent-door/native-client.mjs": {
       "sha256": "1c1f00329a76433c89a64091022b20f28df8e513e58bb40f864ed5466fc5933a",
+      "executable": false
+    },
+    "tests/agent-door/visual-journey.mjs": {
+      "sha256": "33dab06c55f1c6307b646e816492d7a1eed11e81996368422a196baa5be6b4ac",
       "executable": false
     },
     "tests/fixtures/invoice-logo.jpg": {

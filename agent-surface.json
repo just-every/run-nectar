@@ -207,7 +207,8 @@
     },
     "fixtures": {
       "module": "tests/agent-door/fixtures.mjs"
-    }
+    },
+    "journey": "tests/agent-door/visual-journey.mjs"
   },
   "journey": [
     {
