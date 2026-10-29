@@ -1,5 +1,8 @@
 import { mkdir } from 'node:fs/promises'
 import { chromium } from '@playwright/test'
+import { randomUUID } from 'node:crypto'
+import { currentNativeFixture } from './fixtures.mjs'
+import { nativeClient } from './native-client.mjs'
 
 let captured = false
 
@@ -66,6 +69,14 @@ export async function afterStep(context) {
   captured = true
 }
 
-export default async function finish() {
+export default async function finish(context) {
   if (!captured) throw new Error('Native agent screens were not exercised')
+  const api = nativeClient(context), fixture = currentNativeFixture()
+  const narrow = await context.tool('nectar.answers.get', fixture.answer, { client: 'sender' })
+  if (narrow.status !== 403) throw new Error('Native usage credential widened its scope')
+  await api('credential.revoke', { key: fixture.sender })
+  const before = JSON.stringify(await api('audit'))
+  const refused = await context.tool('nectar.usage.submit', { ...fixture.localUsage, idempotency_key: randomUUID() }, { client: 'sender' })
+  if (refused.status !== 401 || before !== JSON.stringify(await api('audit'))) throw new Error('Revoked native credential made an effect')
+  console.log('Native local credential: scoped usage call, read-scope refusal and next-effect revocation proved.')
 }

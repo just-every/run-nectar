@@ -3,6 +3,8 @@ import { nativeClient } from './native-client.mjs'
 
 const PERIOD = '2020-01'
 const PROTECTED_ID = '123-45-6789' // Synthetic protected-content classification fixture, never a real person.
+let latest
+export const currentNativeFixture = () => latest
 
 async function prepareAccount(api, owner, suffix, protectedContent) {
   const key = `door-${protectedContent ? 'id' : 'plain'}-${suffix}`
@@ -112,5 +114,10 @@ export default async function prepareFixtures({ phase, request, origin, cookie }
   // Financial issue and assurance sequence guards are intentionally serialized.
   const plain = await finishAccount(api, plainAccount, invoiceFor(plainAccount))
   const protectedFixture = await finishAccount(api, protectedAccount, invoiceFor(protectedAccount))
-  return { values: { phase, owner: owner.id, plain, protected: protectedFixture } }
+  const sender = await api('credential.issue', { name: 'Cedar usage sender', scopes: ['usage'] })
+  const localUsage = { events: [{ ...plain.event, event_id: `${plain.externalId}:local-journey` }] }
+  latest = { sender: sender.id, answer: plain.args.answer, localUsage }
+  return { values: { phase, owner: owner.id, plain, protected: protectedFixture, localUsage },
+    clients: { sender: { token: sender.key, clientId: sender.id,
+      agent: { id: sender.id, name: sender.name, specialist: 'billing-controller' } } } }
 }

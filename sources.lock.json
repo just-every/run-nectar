@@ -219,7 +219,7 @@
       "executable": false
     },
     "agent-surface.json": {
-      "sha256": "f71da6cbab6604b3d58283f47f37d28a76dc9af471a9f0e563a3b77742a2733d",
+      "sha256": "fb16da7888b346a7caba3bae3cc85a1f72a4326fbd48506ee9f0fe5c6f41da7e",
       "executable": false
     },
     "AGENTS.consumer.md": {
@@ -5479,7 +5479,7 @@
       "executable": false
     },
     "tests/agent-door/fixtures.mjs": {
-      "sha256": "e3ec6f7f81e255513a863ef121da107dba7c18e9601dd196dad87d244786fe1b",
+      "sha256": "56dacc87bc5db3f2ed7abbf6ae57557505b634ac76d690e649cb6145b8d2d013",
       "executable": false
     },
     "tests/agent-door/initialize-owner.mjs": {
@@ -5491,7 +5491,7 @@
       "executable": false
     },
     "tests/agent-door/visual-journey.mjs": {
-      "sha256": "33dab06c55f1c6307b646e816492d7a1eed11e81996368422a196baa5be6b4ac",
+      "sha256": "12221d9454de9833e98c08efe85554e2963445f1212722255fad0e72db98b566",
       "executable": false
     },
     "tests/fixtures/invoice-logo.jpg": {
