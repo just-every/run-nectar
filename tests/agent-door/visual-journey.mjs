@@ -3,6 +3,7 @@ import { chromium } from '@playwright/test'
 import { randomUUID } from 'node:crypto'
 import { currentNativeFixture } from './fixtures.mjs'
 import { nativeClient } from './native-client.mjs'
+import { errorCode } from '../../src/modules/agent-door/conformance/protocol.mjs'
 
 let captured = false
 
@@ -92,4 +93,17 @@ export default async function finish(context) {
   const refused = await context.tool('nectar.usage.submit', { ...fixture.localUsage, idempotency_key: randomUUID() }, { client: 'sender' })
   if (refused.status !== 401 || before !== JSON.stringify(await api('audit'))) throw new Error('Revoked native credential made an effect')
   console.log('Native local credential: scoped usage call, read-scope refusal and next-effect revocation proved.')
+  const stale = await context.tool('nectar.controls.record', { ...fixture.control,
+    expected_revision: 'stale-native-revision', idempotency_key: randomUUID() })
+  if (errorCode(stale) !== 'revision_conflict' || before !== JSON.stringify(await api('audit'))) {
+    throw new Error('Stale native control revision made an effect')
+  }
+  await person(context, '/agents/api/pause', { paused: true })
+  try {
+    const paused = await context.tool('nectar.usage.submit', { ...fixture.localUsage, idempotency_key: randomUUID() })
+    if (errorCode(paused) !== 'agents_paused' || before !== JSON.stringify(await api('audit'))) {
+      throw new Error('Local Pause allowed a native effect')
+    }
+  } finally { await person(context, '/agents/api/pause', { paused: false }) }
+  console.log('Native revision conflict and local Pause: refused with unchanged native activity.')
 }

@@ -116,7 +116,7 @@ export default async function prepareFixtures({ phase, request, origin, cookie }
   const protectedFixture = await finishAccount(api, protectedAccount, invoiceFor(protectedAccount))
   const sender = await api('credential.issue', { name: 'Cedar usage sender', scopes: ['usage'] })
   const localUsage = { events: [{ ...plain.event, event_id: `${plain.externalId}:local-journey` }] }
-  latest = { sender: sender.id, answer: plain.args.answer, localUsage }
+  latest = { sender: sender.id, answer: plain.args.answer, control: plain.args.control, localUsage }
   return { values: { phase, owner: owner.id, plain, protected: protectedFixture, localUsage },
     clients: { sender: { token: sender.key, clientId: sender.id,
       agent: { id: sender.id, name: sender.name, specialist: 'billing-controller' } } } }

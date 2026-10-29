@@ -5479,7 +5479,7 @@
       "executable": false
     },
     "tests/agent-door/fixtures.mjs": {
-      "sha256": "56dacc87bc5db3f2ed7abbf6ae57557505b634ac76d690e649cb6145b8d2d013",
+      "sha256": "fc92e835c86f29dec74d948de784dac4ca86ea067a3f5cd6c41c89025480d8f5",
       "executable": false
     },
     "tests/agent-door/initialize-owner.mjs": {
@@ -5491,7 +5491,7 @@
       "executable": false
     },
     "tests/agent-door/visual-journey.mjs": {
-      "sha256": "5026f931bf081887a67075815970cdedac8d543f8ec3b395ad2226c2c47e6d19",
+      "sha256": "d3955bd77b375c02b6b57542e8e3e57c2fd2312093b1cba8a23a8c58f1805bd8",
       "executable": false
     },
     "tests/fixtures/invoice-logo.jpg": {
