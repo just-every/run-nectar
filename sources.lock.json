@@ -162,7 +162,7 @@
       "executable": false
     },
     ".github/workflows/verify.yml": {
-      "sha256": "06c30c5147aec5e3332dab287d0c6ce8d6d6344fa2b89233193c29e0e8b622db",
+      "sha256": "6c205250bc8e5f80b61de0a4069234a4681a8bea65aa7360c240441bb8a59e47",
       "executable": false
     },
     ".gitignore": {
@@ -174,7 +174,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "8e7cd81adfeb3556462c690504ff8a814c20d0087adc04be89dbbc5f49f8eada",
+      "sha256": "3581ebdbc4508bf7a9164d449241582b3c59091c6bfd05e71367262ae331bf36",
       "executable": false
     },
     "AGENTS.consumer.md": {
@@ -194,7 +194,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "20ece4643c654422ad20143e029a9dab4089fec13972d3100fcf3f8dec1510a4",
+      "sha256": "a3ccbcdb3d2c25844c6aa6d05ebe00171d72e54c24b590b19673349bd69fa148",
       "executable": false
     },
     "DEMO.md": {
@@ -230,7 +230,7 @@
       "executable": false
     },
     "docs/CLAIMS.md": {
-      "sha256": "0dffdab89355e708d1f4999fcf90cccadaf3160e8e2bd532f44bddf7cf32fbe4",
+      "sha256": "e1aab6c8ee1890d52bd4b690742c2e74fb15abaf07d0cd245d82c26149b56776",
       "executable": false
     },
     "docs/composition-baseline.json": {
@@ -5290,7 +5290,7 @@
       "executable": false
     },
     "tests/nectar/isolated-cases.mjs": {
-      "sha256": "956cda27a26b6d59958c40ac7d3eb9225e28f7b54316ff8e86cb482551de6fc4",
+      "sha256": "0486db70e3bfb36582b7fd139a76a3e26e6472371b61c04debfac412159b3b55",
       "executable": false
     },
     "tests/nectar/isolated.mjs": {
@@ -5570,7 +5570,7 @@
       "executable": false
     },
     "tests/nectar/processor-archive.mjs": {
-      "sha256": "0692ecb8b219827c3550d40e28ad9867a75d0cd0a9dba70a25e1bb725df9ff29",
+      "sha256": "7b3563ff1513e49a719a2daf316469a7e295c819a7021e3a5a9840ae7f9f8941",
       "executable": false
     },
     "tests/nectar/processor-cash-imported-sandbox.mjs": {
@@ -5717,8 +5717,16 @@
       "sha256": "f694b47d8cf576f12853280e85bc241cfd5c3c5058eaa93016793a827e44776a",
       "executable": false
     },
+    "tests/nectar/subscription-states-browser.mjs": {
+      "sha256": "cad5010aaa4b0560a31c82f310773a108b29b703d3a6169316b0989a3ccc7d71",
+      "executable": false
+    },
     "tests/nectar/subscription-states-sandbox.mjs": {
       "sha256": "a8a6688a89b10f45d0b7d1cda9a23327b9fd10eb03a9a977389b37acd15cf3ef",
+      "executable": false
+    },
+    "tests/nectar/subscription-states.mjs": {
+      "sha256": "224786fb85132e790b7b2e77cf7104fadc951e68e44333976caa8f8ca4db3658",
       "executable": false
     },
     "tests/nectar/transfer-instructions.mjs": {
