@@ -174,7 +174,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "2f7ad5e3a220ccee2fed8e5479306a07dd69e12c7726d24b5376577b5c041bf3",
+      "sha256": "0787bc5915f6166367a8cf97f2834b399dcd5e9e707b112e4ed136218198b338",
       "executable": false
     },
     "AGENTS.consumer.md": {
@@ -194,7 +194,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "926e1d2081701ef89ce110163936bac71ba8b8a2cc5a5fb904aa01d6894aa1de",
+      "sha256": "2aa00346804dd5c7850a13ea85b8fbb7cc82529b5aab09acceab9720b62167e5",
       "executable": false
     },
     "DEMO.md": {
@@ -230,7 +230,7 @@
       "executable": false
     },
     "docs/CLAIMS.md": {
-      "sha256": "57049b1f7898cc6587d64537584b7a3afc68d54e5156a6b976fab0ce4a44c27d",
+      "sha256": "a5fea35bc2fb592b471d8c71123d2d74904c513786d79b6479b8e329dfd1bc8e",
       "executable": false
     },
     "docs/composition-baseline.json": {
@@ -855,6 +855,10 @@
     },
     "migrations/core/0115_billing_notices.sql": {
       "sha256": "d8f37039177035f0b2ceccbe7abd4b2d6cb3d7d80da18bb0998d102a05d36e2f",
+      "executable": false
+    },
+    "migrations/core/0116_invoice_partial_payments.sql": {
+      "sha256": "09eb60985566e1639d09f4a2de9da5b8225dfbcbf41687ab7b09205707dee43d",
       "executable": false
     },
     "ONBOARDING.md": {
@@ -3585,6 +3589,18 @@
       "sha256": "e068f69f446f0bf3947c3cc7dcdef479a44214eb3501005517519da7e0e9c5bd",
       "executable": false
     },
+    "src/nectar/invoice-partial-payment-http.ts": {
+      "sha256": "ac79a0753cd0a043e8e6c0ae32daf9a6b31df01266a4e701859570aa6e7fba0a",
+      "executable": false
+    },
+    "src/nectar/invoice-partial-payment-page.ts": {
+      "sha256": "75b2af7350dec8f683b3e23ab1f54fdbca690b3e267a9cfb29cc3c349da38740",
+      "executable": false
+    },
+    "src/nectar/invoice-partial-payments.ts": {
+      "sha256": "2f3e803836eb9e3b3f9d7c878031997c54fa1c9062ac8fbd3afa62475afb466a",
+      "executable": false
+    },
     "src/nectar/invoice-pdf.ts": {
       "sha256": "a6d57175c6a2daa52995dccacea059ce46a43b014dbb72675b560e90b7ce273c",
       "executable": false
@@ -3658,11 +3674,11 @@
       "executable": false
     },
     "src/nectar/locales/en.json": {
-      "sha256": "87f7438a2896dabd6c1005617b4e94ff48e28016a25d4c7d9a70166e30178004",
+      "sha256": "1aa8dc1d1e9dbc43a1c3d0af51d02620bd99d22cae785fe691df092bac716cd1",
       "executable": false
     },
     "src/nectar/locales/es-US.json": {
-      "sha256": "13aac16d416c25e90b046eb81fe456f3d2c4f61bc4d4ade9d4cbf4e2e4da68da",
+      "sha256": "a13abbd26aaa874ac3ec1363395eb39d7a068b8a4ea7526920338887092441c9",
       "executable": false
     },
     "src/nectar/manual-invoices.ts": {
@@ -4573,6 +4589,10 @@
       "sha256": "190b630f3bac14c07b4526d6ca7734f3284cfb8bd178feb1773592849a057e7e",
       "executable": false
     },
+    "src/nectar/ui/invoice-partial-payments.ts": {
+      "sha256": "05be3df829012ce5000248ea2e0f4f0e7503b7008fa729f738b1ac5bf2476ee5",
+      "executable": false
+    },
     "src/nectar/ui/invoice-series.ts": {
       "sha256": "27e2858ef4be03a97f3468651c816fe9f78c7747e89dea95d6ae6db131448fd4",
       "executable": false
@@ -4990,7 +5010,7 @@
       "executable": false
     },
     "tests/fixtures/locales/fr.json": {
-      "sha256": "a1e145efb8d60b3c9a313de3c5ea693c1b205469d473ca69401f7f59e340e111",
+      "sha256": "b4d2a7370cda8ab959e5a1a9a5bb4855e87cea19d648d100bc9080cd4d8d0e47",
       "executable": false
     },
     "tests/fixtures/stripe-collection-edge.mjs": {
@@ -5279,6 +5299,18 @@
     },
     "tests/nectar/invoice-pagination.mjs": {
       "sha256": "f7f264407f5c766db36bec1cba28c99b4b3e3e929ed6dc9f119dc08af4558267",
+      "executable": false
+    },
+    "tests/nectar/invoice-partial-payments-archive.mjs": {
+      "sha256": "2287dbe8a9b48d1868ca0067dbe89b707ddb961492e0f2f0a5608a1d8b224a9c",
+      "executable": false
+    },
+    "tests/nectar/invoice-partial-payments-browser.mjs": {
+      "sha256": "e8c6aa2fff4401796420a9f95db60f1b05ad6a0b1058fdeaf2663685b4231fba",
+      "executable": false
+    },
+    "tests/nectar/invoice-partial-payments.mjs": {
+      "sha256": "222771d7f7159b4d45430e2f1c94958064a075c3dd7e187375fae679808485f4",
       "executable": false
     },
     "tests/nectar/invoice-refund-preview.mjs": {
