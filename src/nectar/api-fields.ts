@@ -55,9 +55,6 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
   "assurance.recheck": {
     "case": "text"
   },
-  "move.investigate": {
-    "owner": "text"
-  },
   "assurance.scan": {
     "owner": "text",
     "period": "text"
@@ -700,6 +697,9 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
   },
   "mfa.verify": {
     "code": "text"
+  },
+  "move.investigate": {
+    "owner": "text"
   },
   "note.add": {
     "body": "text",
