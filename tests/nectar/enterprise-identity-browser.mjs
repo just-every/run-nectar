@@ -156,7 +156,8 @@ async function oidcBrowser() {
     }
     await enterpriseOidcFlow(h, owner, { onState: async ({ label, session }) => {
       await capture(ownerPage, label + '-settings', '/app/sso')
-      assert.equal(await ownerPage.getByRole('heading', { name: 'OpenID Connect connection' }).count(), 1)
+      assert.ok((await ownerPage.locator('code').allTextContents()).includes(h.origin + '/sso/oidc/callback'), 'The owner sees the callback of this running installation')
+      assert.equal(await ownerPage.locator('a[href="/sso/start"]').count(), 1, 'The configured member entry is available')
       assert.equal(await ownerPage.locator('[name=certificate]').count(), 0, 'OIDC settings never present an unrelated SAML reconfiguration form')
       const memberContext = await browser.newContext()
       await memberContext.addCookies(session.split('; ').map(value => { const i = value.indexOf('='); return { name: value.slice(0, i), value: value.slice(i + 1), url: h.origin } }))

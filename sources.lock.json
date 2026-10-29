@@ -5210,7 +5210,7 @@
       "executable": false
     },
     "tests/nectar/enterprise-identity-browser.mjs": {
-      "sha256": "3ded763d8d9e131f4869f048e285bd9d393fcc73df9b46b2cfce74703cf8e90e",
+      "sha256": "995d2ee77550962e9559dd8c4fe51255ea5422de6bef7c393162ab3c7d09bbb0",
       "executable": false
     },
     "tests/nectar/enterprise-identity-sandbox.mjs": {
@@ -5226,7 +5226,7 @@
       "executable": false
     },
     "tests/nectar/enterprise-oidc.mjs": {
-      "sha256": "123f2be9b3473a22b74eea6e5428c2920489315677a87665bdf73c6b64f2538f",
+      "sha256": "9fa873caae105e759373ecb66e824801a71aa2f21eee4351b98f086b7aa48e17",
       "executable": false
     },
     "tests/nectar/entitlement-quotas.mjs": {

@@ -26,7 +26,7 @@ export async function enterpriseOidcFlow(h, owner, { onState } = {}) {
   const email = address(201)
   const user = await scim('', { method: 'POST', body: { externalId: 'synthetic-nectar-oidc', userName: email, roles: [{ value: 'billing' }] }, status: 201 })
   const begin = async (options = {}) => {
-    const response = await h.raw('/sso/oidc/start' + (options.link ? '?link=1' : ''), { body: {}, cookie: options.cookie })
+    const response = await h.raw((options.publicStart ? '/sso/start' : '/sso/oidc/start') + (options.link ? '?link=1' : ''), { ...(options.publicStart ? {} : { body: {} }), cookie: options.cookie })
     assert.equal(response.status, 303, 'OIDC start returns the pinned provider')
     return { response, binding: cookies(response), callback: idp.authorize(response.headers.get('location'), { email, ...options.claims }) }
   }
@@ -37,7 +37,8 @@ export async function enterpriseOidcFlow(h, owner, { onState } = {}) {
     return { start, response, session: cookies(response) }
   }
   assert.equal((await h.raw('/sso/oidc/start', { body: {}, headers: { origin: 'https://foreign.nectar-app.com' } })).status, 403)
-  const browserBound = await begin()
+  assert.equal((await h.raw('/sso/start', { headers: { 'sec-fetch-site': 'cross-site' } })).status, 403)
+  const browserBound = await begin({ publicStart: true })
   assert.equal((await finish(browserBound, { cookie: 'synthetic-nectar-unbound' })).status, 403)
   const first = await finish(browserBound)
   assert.equal(first.status, 303)
