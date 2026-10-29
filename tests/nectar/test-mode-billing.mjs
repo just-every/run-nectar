@@ -192,5 +192,5 @@ export async function testModeBillingFlow(h, owner, { provision = sandboxProcess
     assert.equal(edge.writes.length, countBefore, 'An account change permits no processor write')
   }
   console.log(`DEV-004 sandbox billing: thirteen-month annual invoices, independent cents, ${attemptsPerInvoice * 2} test declines, copied retry policy, inbox-only notices, state history, replay and live isolation passed`)
-  return { customer: c.id, catalog: catalog.id, remote, invoices: invoices.map(i => ({ id: i.id, amountCents: i.invoice.rating.totalCents })), attempts: state.billing.attempts.map(a => ({ id: a.id, intent: a.intent_ref, dueAt: a.due_at, status: a.status })), clock: state.clock_at }
+  return { customer: c.id, catalog: catalog.id, remote, liveCustomer, invoices: invoices.map(i => ({ id: i.id, amountCents: i.invoice.rating.totalCents })), attempts: state.billing.attempts.map(a => ({ id: a.id, intent: a.intent_ref, dueAt: a.due_at, status: a.status })), clock: state.clock_at }
 }
