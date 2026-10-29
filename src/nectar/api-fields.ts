@@ -1135,6 +1135,11 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "revision": "integer",
     "role_map": "json"
   },
+  "sso.oidc.configure": {
+    "provider": "json",
+    "role_map": "json",
+    "revision": "integer"
+  },
   "sso.link.approve": {
     "basis": "text",
     "link": "text"

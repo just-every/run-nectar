@@ -3,6 +3,7 @@ import { escalateProcessorCash } from './nectar/processor-cash-queue'
 import { observeSubscriptionStates } from './nectar/subscription-states'
 import { retryMethodRecoveryResponse } from './nectar/retry-method-http'
 import { cardLifecycleWebhook } from './nectar/card-lifecycle-webhook'
+import { oidcResponse } from './nectar/oidc'
 import { samlResponse } from './nectar/saml'
 import { scimResponse } from './nectar/scim'
 import { expirePaymentLinkAttempts } from './nectar/payment-links-expiry'
@@ -87,7 +88,7 @@ export default withDemo({
     if(paymentEvent)return paymentEvent
     const cardEvent=await cardLifecycleWebhook(request,runtimeBindings(env))
     if(cardEvent)return cardEvent
-    const enterprise = await samlResponse(request, runtimeBindings(env)) ?? await scimResponse(request, runtimeBindings(env))
+    const enterprise = await oidcResponse(request, runtimeBindings(env)) ?? await samlResponse(request, runtimeBindings(env)) ?? await scimResponse(request, runtimeBindings(env))
     if (enterprise) return enterprise
     const asset = await staticAssetResponse(request, env)
     if (asset) return asset

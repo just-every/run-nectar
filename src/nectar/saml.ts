@@ -65,7 +65,7 @@ export async function samlResponse(request: Request, env: Bindings): Promise<Res
   try {
     insist(url.origin === env.AUTH_ORIGIN, 'invalid_host', 403)
     const config = await ssoConfig(env)
-    insist(config, 'sso_not_configured', 404)
+    insist(config?.protocol === 'saml', 'sso_not_configured', 404)
     if (request.method === 'GET' && url.pathname === '/sso/start') {
       const link = url.searchParams.get('link') === '1' ? await linkingBasis(env, request) : null
       const state = ssoToken(), binding = ssoToken(), hash = await sha256Hex(state)

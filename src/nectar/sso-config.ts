@@ -5,7 +5,7 @@ import { all, commit, guard, insist, now, one, sha256Hex, stmt } from './core'
 import type { Input } from './input'
 import { requireFreshFactor } from './mfa'
 
-export type SsoConfig = { revision: number; issuer: string; entry_point: string; certificate: string; role_map: string; scim_hash: string }
+export type SsoConfig = { revision: number; protocol: 'saml' | 'oidc'; issuer: string; entry_point: string; certificate: string; role_map: string; scim_hash: string }
 export const ssoConfig = (env: Bindings) => one<SsoConfig>(env, 'SELECT * FROM nc_sso_config WHERE singleton=1')
 export const ssoToken = () => Array.from(crypto.getRandomValues(new Uint8Array(32)), b => b.toString(16).padStart(2, '0')).join('')
 export const ssoEntity = (env: Bindings) => env.AUTH_ORIGIN + '/sso/metadata'
@@ -38,7 +38,7 @@ export async function configureSso(env: Bindings, actor: Actor, input: Input) {
   insist(!old || (old.issuer === issuer && users.every(user => JSON.parse(old.role_map)[user.source_role] === (mapping as Record<string, unknown>)[user.source_role])), 'provisioned_identity_fixed', 409)
   const token = ssoToken(), next = (old?.revision ?? 0) + 1
   await commit(env, [guard(env, 'stale', 'COALESCE((SELECT revision FROM nc_sso_config WHERE singleton=1),0)=?', revision),
-    stmt(env, 'INSERT INTO nc_sso_config VALUES(1,?,?,?,?,?,?,?) ON CONFLICT(singleton) DO UPDATE SET revision=excluded.revision,issuer=excluded.issuer,entry_point=excluded.entry_point,certificate=excluded.certificate,role_map=excluded.role_map,scim_hash=excluded.scim_hash,updated_at=excluded.updated_at', next, issuer, entry, certificate, JSON.stringify(mapping), await sha256Hex(token), now()),
+    stmt(env, `INSERT INTO nc_sso_config(singleton,revision,issuer,entry_point,certificate,role_map,scim_hash,updated_at) VALUES(1,?,?,?,?,?,?,?) ON CONFLICT(singleton) DO UPDATE SET revision=excluded.revision,issuer=excluded.issuer,entry_point=excluded.entry_point,certificate=excluded.certificate,role_map=excluded.role_map,scim_hash=excluded.scim_hash,updated_at=excluded.updated_at,protocol='saml'`, next, issuer, entry, certificate, JSON.stringify(mapping), await sha256Hex(token), now()),
     stmt(env, 'DELETE FROM nc_saml_transactions'),
     stmt(env, "UPDATE oa_sessions SET revoked_at=? WHERE id IN (SELECT session_id FROM oa_provider_sessions WHERE issuer=?)", now(), issuer),
     stmt(env, 'UPDATE oa_auth_settings SET idp_sign_in=1 WHERE singleton=1')],

@@ -52,7 +52,7 @@ export async function standing(env: Bindings, actor: Actor) {
   const session = actor.sessionId ? await one<{ verified_at: number; method: string }>(env, 'SELECT verified_at, method FROM nc_mfa_sessions WHERE session_id = ? AND member_id = ?', actor.sessionId, actor.id) : null
   const required = covers(policy, actor)
   const reason = !usable.length && unreadable.length ? (env.MFA_KEY ? 'mfa_key_changed' : 'mfa_key_missing') : null
-  const state: 'enroll' | 'verify' | null = !required ? null : session?.method === 'saml' ? null : !usable.length ? 'enroll' : !session ? 'verify' : null
+  const state: 'enroll' | 'verify' | null = !required ? null : (session?.method === 'saml' || session?.method === 'oidc') ? null : !usable.length ? 'enroll' : !session ? 'verify' : null
   return { policy, required, usable, unreadable, verifiedAt: session?.verified_at ?? null, state, reason }
 }
 

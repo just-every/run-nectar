@@ -951,3 +951,29 @@ An active member in a preset role opens **Sign-in security**, then **Prove provi
 The owner reviews **Enterprise sign-in** under Access and confirms a second factor, even when the installation-wide MFA policy is off. `GET /api/nectar/sso-links` lists current owner-visible requests. `POST /api/nectar/sso.link.approve` takes `link` and the exact reviewed `basis` fingerprint. Approval rechecks the connection revision, immutable provider subject, original member session, member and operator state, role and MFA evidence. Binding, audit and termination of prior member sessions and unused sign-in tokens commit together. Member and operator identifiers and historical attribution remain unchanged.
 
 A pending request has an inactive SCIM reservation with its request identifier. SCIM can read or deactivate it; activation cannot grant authority. Deactivation invalidates pending proofs and blocks that subject until fresh owner connection authorization. Removing a linked user ends existing sessions and in-flight sign-ins immediately; reactivation never revives an old session. Configuration changes rotate provisioning credentials and invalidate pending requests. Exported archives retain billing and audit history but contain no connection, binding, enterprise session or pending-link authority. Live provider qualification and OIDC coverage remain separate obligations in GOV-003.
+
+### Enterprise OIDC connection
+
+The current owner, with a second factor verified within fifteen minutes, may
+call `sso.oidc.configure` with `provider`, `role_map` and the current `revision`.
+The provider object accepts the pinned Base presets (`okta`, `microsoft`,
+`google`, `auth`, or explicitly pinned `legacy-rs256`), `issuer`, `tenant`,
+`clientId`, `tokenAuthMethod` and `endpointPins` as appropriate to that preset.
+Install the independent private runtime secret `SSO_OIDC_TRANSACTION_SECRET`
+and either `SSO_OIDC_SECRET` or the private JWK `SSO_OIDC_PRIVATE_KEY` before
+configuration. These credentials are never request fields or archive records.
+The response shows the rotated SCIM credential once and the callback URL.
+
+Members use `./sso/start`, or a same-origin POST to `./sso/oidc/start`.
+Existing members use `./sso/start?link=1` with their current Nectar session and
+the same exact owner approval as SAML. Discovery endpoints are pinned by owner
+authorization; changed endpoints or runtime client credentials require fresh
+authorization. Codes use S256 PKCE and a sealed, browser-bound, once-only
+five-minute transaction. Signed issuer, subject, audience, nonce, role and
+provider authentication time must agree; matching email alone never links an
+account. Required MFA uses the signed actual MFA methods or recognized class,
+with the original provider time. Removal ends sessions and pending sign-ins;
+reactivation restores neither. Connection and pending OIDC records remain
+installation-bound. This native protocol proof establishes no live provider
+interoperability. Owner, custom-role and broader administrator provisioning
+remain outside the currently approved non-owner preset-role policy.

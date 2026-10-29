@@ -35,6 +35,10 @@ export interface Bindings {
  SESSION_SECRET: string
  /** GOV-007: seals authenticator-app secrets at rest; never the session secret. */
  MFA_KEY?: string
+ /** Enterprise OIDC runtime credentials; never stored in portable records. */
+ SSO_OIDC_TRANSACTION_SECRET?: string
+ SSO_OIDC_SECRET?: string
+ SSO_OIDC_PRIVATE_KEY?: string
  /** PORT-005: installation-held customer-session signer; excluded from archives. */
  PORTAL_KEY?: string
  SETUP_TOKEN?: string
