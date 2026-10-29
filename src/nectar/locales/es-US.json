@@ -456,5 +456,20 @@
   "portal.change.afterAmount": "Total propuesto del período",
   "portal.change.difference": "Diferencia prorrateada",
   "portal.change.effective": "Fecha de entrada en vigor",
-  "portal.change.previewReadOnly": "Esta estimación no cambia su suscripción ni le cobra. Los cambios a un plan inferior se pueden enviar por separado para revisión de la empresa."
+  "portal.change.previewReadOnly": "Esta estimación no cambia su suscripción ni le cobra. Los cambios a un plan inferior se pueden enviar por separado para revisión de la empresa.",
+  "transfer.heading": "Instrucciones de transferencia bancaria",
+  "transfer.testMode": "Solo modo de prueba. Estas instrucciones no aceptan fondos reales.",
+  "transfer.bankName": "Banco",
+  "transfer.accountHolderName": "Titular de la cuenta",
+  "transfer.accountNumber": "Número de cuenta",
+  "transfer.routingNumber": "Número de ruta",
+  "transfer.accountType": "Tipo de cuenta",
+  "transfer.networks": "Redes de transferencia",
+  "transfer.currency": "Moneda",
+  "transfer.country": "País",
+  "transfer.checking": "Cuenta corriente",
+  "transfer.savings": "Cuenta de ahorros",
+  "transfer.ach": "Crédito ACH",
+  "transfer.domestic_wire_us": "Transferencia nacional de EE. UU.",
+  "transfer.US": "Estados Unidos"
 }

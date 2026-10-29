@@ -42,6 +42,10 @@ jobs:
       # still fail if runtime support is missing. Avoid an unbounded apt mirror.
       - run: pnpm exec playwright install chromium
       - run: pnpm run verify
+      - name: Customer transfer instruction browser journey
+        if: ${{ matrix.shard == 1 }}
+        run: node tests/nectar/clause-browser.mjs transfer-instructions
+
       - name: Native same-intent collection browser journey
         if: ${{ matrix.shard == 1 }}
         run: node tests/nectar/clause-browser.mjs native-collection
@@ -119,3 +123,4 @@ jobs:
       - run: pnpm run deps
       - run: pnpm exec vite build
       - run: NECTAR_TEST_CHECKOUT=1 node tests/nectar/processor-archive.mjs remittances
+      - run: NECTAR_TEST_CHECKOUT=1 node tests/nectar/processor-archive.mjs transfer-instructions

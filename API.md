@@ -943,3 +943,25 @@ These doors record an operator-confirmed USD receipt from a file. They do not ch
 Both upload doors return the canonical `id` and an opaque `source`. Pass those as `receipt` and `source` to `remittance.preview`, then confirm its exact `fingerprint` through `remittance.confirm` with `confirm: true`. Confirming the first source records and allocates the received funds. Confirming the other source of an already confirmed receipt records its provenance and audit against the existing payment without adding cash or allocations. This works in either order. Conflicting reuse of either stable identity is refused; matching amounts alone do not establish identity.
 
 The payment receipt API and its native receipt page list both confirmed recorded sources. Unconfirmed sources remain in the receivables review queue. Source confirmation requires the existing member receivables capability; credentials cannot confirm. Customer erasure hides source references and preserves opaque replay tombstones, so a repeated upload cannot recreate erased money.
+
+## Test bank-transfer instructions
+
+An owner with a current local authenticator or passkey factor calls
+`transfer.instructions.prepare` with `customer` and `account_ref` for an existing
+owner-confirmed Stripe binding. The provider customer must be in test mode and
+its cash-balance reconciliation must already be manual. Review the returned
+exact basis, then pass its `confirm` object to `transfer.instructions.confirm`
+only after explicit owner confirmation. This requests US bank-transfer funding
+instructions for USD; it changes no reconciliation policy and authorizes no
+collection, application or return. Unknown responses stay unavailable and can
+never be resent. The owner can read retained status at
+`/api/nectar/customers/{customer}/transfer-instructions`.
+
+Only validated virtual remit-to fields are retained. Newly issued native USD
+invoices freeze the instructions for their own processor route. Previously
+issued invoices keep their original evidence. The own-customer invoice page,
+PDF and portal show the frozen test instructions in the customer's language.
+Preparations are installation authority and are excluded from archives; retained
+claims prevent repeat requests after restoration. Erasure withdraws remit-to
+fields and customer access. No live processor or invoice-email qualification is
+claimed by this foundation.

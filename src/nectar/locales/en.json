@@ -456,5 +456,20 @@
   "portal.change.afterAmount": "Proposed period total",
   "portal.change.difference": "Prorated difference",
   "portal.change.effective": "Effective date",
-  "portal.change.previewReadOnly": "This estimate does not change your subscription or charge you. Downgrades can be sent separately for merchant review."
+  "portal.change.previewReadOnly": "This estimate does not change your subscription or charge you. Downgrades can be sent separately for merchant review.",
+  "transfer.heading": "Bank transfer instructions",
+  "transfer.testMode": "Test mode only. These instructions do not accept live funds.",
+  "transfer.bankName": "Bank",
+  "transfer.accountHolderName": "Account holder",
+  "transfer.accountNumber": "Account number",
+  "transfer.routingNumber": "Routing number",
+  "transfer.accountType": "Account type",
+  "transfer.networks": "Transfer networks",
+  "transfer.currency": "Currency",
+  "transfer.country": "Country",
+  "transfer.checking": "Checking",
+  "transfer.savings": "Savings",
+  "transfer.ach": "ACH credit",
+  "transfer.domestic_wire_us": "US domestic wire",
+  "transfer.US": "United States"
 }
