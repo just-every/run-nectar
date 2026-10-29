@@ -1,3 +1,4 @@
+import { approveLink } from './sso-linking'
 import { preparePortalChangePolicy } from './portal-change-policy'
 import { uploadRemittances, previewRemittance, confirmRemittance, previewRemittanceAllocation, allocateRemittance } from './remittances'
 import { consumeProcessorEvent } from './processor-events'
@@ -118,6 +119,7 @@ type Handler = (env: Bindings, actor: Actor, input: Input, request: Request) => 
 
 export const actions: Record<string, Handler> = {
   'sso.configure': configureSso,
+  'sso.link.approve': approveLink,
   'assurance.scan': scanAssurance,
   'assurance.assign': assignAssurance,
   'assurance.approve': approveAssurance,
