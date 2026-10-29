@@ -865,6 +865,10 @@
       "sha256": "2ec1dee05a5ddd20615fe78a1b44341c87068e1891d050564fe06de6bcba5fff",
       "executable": false
     },
+    "migrations/core/0117_report_preparations.sql": {
+      "sha256": "77c56318d9d15dc101d493f203a4edcf9579785ff31b8ef7af77f429ab85d95f",
+      "executable": false
+    },
     "ONBOARDING.md": {
       "sha256": "95bb235abff28ac36979868486caf2cb73bfbe4ab63037f3e301d189bb9398d9",
       "executable": false
@@ -5315,6 +5319,18 @@
     },
     "tests/nectar/isolated.mjs": {
       "sha256": "84963202cc537c0d53606702cb9f8a5cdcb4db4996ac4f64a495cb52c92c32e3",
+      "executable": false
+    },
+    "tests/nectar/job-capacity.mjs": {
+      "sha256": "67c1d47f682ea9f7eb6154de30c16ba733efa3f7ec9570788f77711bff0e3570",
+      "executable": false
+    },
+    "tests/nectar/job-report-restart.mjs": {
+      "sha256": "d2d942e3b795e182e84ca16a5c9e339c6556761922473b2194b6fa29b7289728",
+      "executable": false
+    },
+    "tests/nectar/job-retry-restart.mjs": {
+      "sha256": "945ca27b8ef4372360767c0c1084e813b92d4af6ef282d840a599141a926ef89",
       "executable": false
     },
     "tests/nectar/job-runs.mjs": {
