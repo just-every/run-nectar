@@ -162,7 +162,7 @@
       "executable": false
     },
     ".github/workflows/verify.yml": {
-      "sha256": "709b17e528dacceaab8941954724101e9d845cbd86973ddd7a61059cf732a006",
+      "sha256": "06c30c5147aec5e3332dab287d0c6ce8d6d6344fa2b89233193c29e0e8b622db",
       "executable": false
     },
     ".gitignore": {
@@ -174,7 +174,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "727c45d6671e6444d2de69017d59d2741676a29d4abbbaca22580bccd19c8f1c",
+      "sha256": "8e7cd81adfeb3556462c690504ff8a814c20d0087adc04be89dbbc5f49f8eada",
       "executable": false
     },
     "AGENTS.consumer.md": {
@@ -194,7 +194,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "87464cec26695f17a6c8d5f8524babccabb56023bf905d470272494977285a9d",
+      "sha256": "20ece4643c654422ad20143e029a9dab4089fec13972d3100fcf3f8dec1510a4",
       "executable": false
     },
     "DEMO.md": {
@@ -230,7 +230,7 @@
       "executable": false
     },
     "docs/CLAIMS.md": {
-      "sha256": "bce15b3d28478d30963ab98d8468418649b1386c76fb535c61a19569269e34fe",
+      "sha256": "0dffdab89355e708d1f4999fcf90cccadaf3160e8e2bd532f44bddf7cf32fbe4",
       "executable": false
     },
     "docs/composition-baseline.json": {
@@ -4438,7 +4438,7 @@
       "executable": false
     },
     "src/nectar/transfer-instructions.ts": {
-      "sha256": "5608b3a3845bca552783b858502e701852fac69c9e2274bfd8610eaf5ed1338c",
+      "sha256": "a9ed6b18d998d6008e0b468639ba66efc7732fb8ce5d73d97daa6ecfea75fb12",
       "executable": false
     },
     "src/nectar/trial-collection-invoice.ts": {
@@ -4994,7 +4994,7 @@
       "executable": false
     },
     "tests/fixtures/locales/fr.json": {
-      "sha256": "1f9fb0b982a18fdec4171ab0c3cfe58215636a7bcdbfa7f7058bccf468fbae39",
+      "sha256": "ce5d7362cfe84a43ca6fb38055e1efd1537aee7d5091a5a65e9d3165708f9953",
       "executable": false
     },
     "tests/fixtures/stripe-collection-edge.mjs": {
@@ -5570,7 +5570,7 @@
       "executable": false
     },
     "tests/nectar/processor-archive.mjs": {
-      "sha256": "574d17b0086203616b9cb1d2c29dac5e71a5ecb0a0a301c64ebcf58668e9f3f9",
+      "sha256": "0692ecb8b219827c3550d40e28ad9867a75d0cd0a9dba70a25e1bb725df9ff29",
       "executable": false
     },
     "tests/nectar/processor-cash-imported-sandbox.mjs": {
@@ -5722,7 +5722,7 @@
       "executable": false
     },
     "tests/nectar/transfer-instructions.mjs": {
-      "sha256": "668a8b572d1154a88efe98ba5e84794408495282a143e6f8f0e538cfe1c9ef9f",
+      "sha256": "a31d3f7d01890721ef67ade50cca3f3ef4c92dde6e4a1d952c7746e00bdf2853",
       "executable": false
     },
     "tests/nectar/upcoming.mjs": {

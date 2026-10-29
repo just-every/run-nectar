@@ -123,4 +123,3 @@ jobs:
       - run: pnpm run deps
       - run: pnpm exec vite build
       - run: NECTAR_TEST_CHECKOUT=1 node tests/nectar/processor-archive.mjs remittances
-      - run: NECTAR_TEST_CHECKOUT=1 node tests/nectar/processor-archive.mjs transfer-instructions

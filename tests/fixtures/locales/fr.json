@@ -456,5 +456,20 @@
   "portal.change.afterAmount": "Total proposé de la période",
   "portal.change.difference": "Différence au prorata",
   "portal.change.effective": "Date d’effet",
-  "portal.change.previewReadOnly": "Cette estimation ne modifie pas votre abonnement et ne vous facture rien. Les demandes de réduction peuvent être envoyées séparément au marchand pour examen."
+  "portal.change.previewReadOnly": "Cette estimation ne modifie pas votre abonnement et ne vous facture rien. Les demandes de réduction peuvent être envoyées séparément au marchand pour examen.",
+  "transfer.heading": "Instructions de virement bancaire",
+  "transfer.testMode": "Mode test uniquement. Ces instructions ne permettent pas de recevoir des fonds réels.",
+  "transfer.bankName": "Banque",
+  "transfer.accountHolderName": "Titulaire du compte",
+  "transfer.accountNumber": "Numéro de compte",
+  "transfer.routingNumber": "Numéro de routage",
+  "transfer.accountType": "Type de compte",
+  "transfer.networks": "Réseaux de virement",
+  "transfer.currency": "Devise",
+  "transfer.country": "Pays",
+  "transfer.checking": "Compte courant",
+  "transfer.savings": "Compte épargne",
+  "transfer.ach": "Crédit ACH",
+  "transfer.domestic_wire_us": "Virement national américain",
+  "transfer.US": "États-Unis"
 }

@@ -104,6 +104,8 @@ export async function confirmTransferInstructions(env: Bindings, actor: Actor, i
     await setupOwner(env,actor)
     insist(canonical(await source(env,basis.customer,basis.accountRef)) === canonical(basis),'transfer_instruction_binding_changed',409)
     await providerSource(env,basis)
+    await setupOwner(env,actor)
+    insist(canonical(await source(env,basis.customer,basis.accountRef)) === canonical(basis),'transfer_instruction_binding_changed',409)
     const result = await selected.stripe(`/customers/${encodeURIComponent(basis.customerRef)}/funding_instructions`,
       new URLSearchParams({funding_type:'bank_transfer',currency:'usd','bank_transfer[type]':'us_bank_transfer'}),`nectar-transfer-instructions-${id}`)
     const fields = validateInstructions(result), sourceHash = await fingerprint({account:basis.accountRef,customer:basis.customerRef,fields})
