@@ -152,8 +152,7 @@ main.door { padding-top: 16vh; }
 }
 
 /* Base's /run and not-found pages wear the homepage's look: the grid page,
-   the header lockup, a heavy ink headline, white hairline step cards, coral
-   step numbers and ink code cards. */
+   the header lockup, a heavy ink headline and ink code cards. */
 /* They keep the Base tokens they are live with on run-nectar.com; the app's
    greys and 10px fields above are for the app, sign-in, setup and the Lobby. */
 body:has(> header.bar) { --rer-text: #1c1a17; --rer-muted: #5f5a52; --rer-border: #cfc6b6; --rer-accent: #1c1a17; --rer-accent-text: #fffcf5; --rer-focus: #1c1a17; --rer-radius: 18px; --rer-button-radius: 999px; }
@@ -167,9 +166,6 @@ body > header.bar nav a:hover { color: var(--nc-ink); text-decoration-thickness:
 body > header.bar ~ main h1 { font-weight: 900; letter-spacing: -.045em; color: var(--nc-ink); }
 body > header.bar ~ main .intro h1 { font-size: 72px; line-height: 1; }
 body > header.bar ~ main .sub { color: var(--nc-body); }
-body > header.bar ~ main .step { background: var(--nc-surface); border-color: var(--nc-card-edge); border-radius: var(--nc-radius); box-shadow: var(--nc-card-shadow); backdrop-filter: none; }
-body > header.bar ~ main .num { background: var(--nc-icon-gradient); color: #fff; font-weight: 800; box-shadow: 0 6px 14px -6px rgba(252, 84, 80, .7); }
-body > header.bar ~ main .step h2 { font-weight: 800; letter-spacing: -.02em; }
 body > header.bar ~ main .code { border-radius: 14px; }
 body > header.bar ~ main .btn { background: var(--nc-ink); color: #fff; border-radius: 16px; }
 body > header.bar ~ main .link { color: var(--nc-ink); }

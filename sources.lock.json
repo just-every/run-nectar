@@ -922,7 +922,7 @@
       "executable": false
     },
     "public/fonts/fonts.css": {
-      "sha256": "4258cc89ad8a7119866d06750f517a1208bba3a2aa425617b03d967f27336e85",
+      "sha256": "8694ee27ca985c4b531c672fb18e0b0ed642ffd4ea62a59e15753888c098a80e",
       "executable": false
     },
     "public/fonts/hanken-grotesk/hanken-grotesk-latin-ext-wght-normal.woff2": {
@@ -5630,11 +5630,11 @@
       "executable": false
     },
     "src/site/pages.ts": {
-      "sha256": "0cbf3a685e5b4c75cf6db63706253af25128f35acda83888684e6d3071d9fc8e",
+      "sha256": "aedd870dab6d39ce46238536a045ccd608d9a94410b3b58a6af6ec781241b0e9",
       "executable": false
     },
     "src/site/run.json": {
-      "sha256": "ae44444c44880f35232878c4f2c4a1bb8a78dd1609457f027635704c700d67ff",
+      "sha256": "b4b096bb4da535f2268d82a1df368b175bd2f999c93a41151867ad3c9e3c4bd0",
       "executable": false
     },
     "src/site/shell.ts": {
