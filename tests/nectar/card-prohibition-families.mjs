@@ -21,7 +21,10 @@ function prohibitionEdge() {
     if(path==='/invoice_payments')return Response.json({object:'list',data:[],has_more:false})
     if(path.startsWith('/invoices/')) {
       const row=invoices.get(path.split('/')[2]);assert.ok(row)
-      if(form){assert.equal(form.get('auto_advance'),'false');row.auto_advance=false}
+      if(form){
+        if(path.endsWith('/pay')){assert.equal(form.get('paid_out_of_band'),'true');Object.assign(row,{status:'paid',amount_paid:row.total,amount_remaining:0,auto_advance:false,paid_out_of_band:true})}
+        else {assert.equal(form.get('auto_advance'),'false');row.auto_advance=false}
+      }
       return Response.json(row)
     }
     const response=await base.fetch(request)
@@ -125,6 +128,7 @@ export async function cardProhibitionFamiliesFlow(h,owner) {
       const preview=await api('import.preview',files);assert.deepEqual(preview.rejected,[])
       await api('import.apply',{...files,fingerprint:preview.fingerprint})
       row.customer=(await api('customers')).find(c=>c.external_id===originalCustomer).id
+      await api('customer.entity',{revision:(await api('business')).revision,customer:row.customer,entity:secondary,confirm:true})
       documents=(await api(`customers/${row.customer}`)).incumbentHistory.documents.filter(d=>d.status==='open')
     } else row.customer=(await api('customer.create',{external_id:provider,name:`Saved card ${family} ${code}`,billing_email:h.vars.OWNER_EMAIL.replace('owner',provider)})).id
     let binding=family==='imported'?null:await api('collection.customer.bind',{customer:row.customer,account_ref:row.account,stripe_customer_ref:row.provider,confirm:true})
@@ -184,7 +188,7 @@ export async function cardProhibitionFamiliesFlow(h,owner) {
     }
     assert.equal(edge.writes().length,before+1,`${family}: the original authorized refusal reaches Stripe once`)
     await refused(row,code)
-    binding??=await api('collection.customer.bind',{customer:row.customer,account_ref:row.account,stripe_customer_ref:row.provider,confirm:true})
+    binding??={id:(await lifecycle(row)).find(record=>record.methodRef===method).binding}
     edge.rules.delete(method)
     const blockedWrites=edge.writes().length,blockedPayments=await api('payments')
     await api('collection.prepare',{invoice:freshInvoice??await invoice(row)},409)
@@ -227,12 +231,23 @@ export async function cardProhibitionFamiliesFlow(h,owner) {
     // A new, separately reviewed collection can use the replacement, while an
     // ordinary later provider observation of the old card cannot restore it.
     edge.customers.get(row.provider).method=`${method}-replacement`
-    const replacementInvoice=freshInvoice??await invoice(row)
-    const replacement=await api('collection.prepare',{invoice:replacementInvoice})
-    assert.equal((await api('collection.confirm',replacement.instructions.confirm)).status,'collected')
-    assert.equal((await api(`invoices/${replacementInvoice}`)).paidCents,10000)
-    edge.customers.get(row.provider).method=method
-    await api('collection.prepare',{invoice:await invoice(row)},409)
+    if(family==='imported') {
+      edge.invoices.get(documents[2].provider_ref).default_payment_method=`${method}-replacement`
+      const replacement=await api('imported.collection.prepare',{invoice:documents[2].id})
+      const captured=await api('imported.collection.execute',replacement.instructions.execute)
+      assert.equal(captured.status,'uncertain');assert.ok(captured.charge_ref)
+      assert.equal((await api('imported.collection.finalize',{request:captured.id,confirm:true})).status,'collected')
+      assert.equal((await api(`customers/${row.customer}`)).importedCollections.find(r=>r.id===captured.id).amount_cents,11000)
+      edge.customers.get(row.provider).method=method
+      await api('imported.collection.execute',pending.instructions.execute,409)
+    } else {
+      const replacementInvoice=freshInvoice??await invoice(row)
+      const replacement=await api('collection.prepare',{invoice:replacementInvoice})
+      assert.equal((await api('collection.confirm',replacement.instructions.confirm)).status,'collected')
+      assert.equal((await api(`invoices/${replacementInvoice}`)).paidCents,10000)
+      edge.customers.get(row.provider).method=method
+      await api('collection.prepare',{invoice:await invoice(row)},409)
+    }
     await refused(row,code)
     // Equal method references on a different customer, and on a different
     // account, remain independently collectible under explicit new authority.

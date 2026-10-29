@@ -7,8 +7,7 @@ import { actorLabel, type Actor } from '../actor'
 import { requireBusiness } from '../business'
 import { clockInstant } from '../clock'
 import { all, canonical, commit, fingerprint, guard, insist, newId, stmt, type Row } from '../core'
-import { Input } from '../input'
-import { bindNativeCollectionCustomer } from '../payments/customer'
+import type { Input } from '../input'
 import { refusedPaymentEvidence } from '../payments/stripe'
 import { CollectionProviderError, collectionIntentIdentity, collectionProviderRefusal, collectionStripe, invoiceFacts, readCollectionIntent,
   stripeCollectedEvidence, stripeCollectionSnapshot, type CollectionStripe } from './collection-provider'
@@ -60,16 +59,14 @@ async function saveIntent(env: Bindings, actor: Actor, request: Row, basis: Coll
   return collectionChange(env, actor, request, { payment_intent_ref: id }, 'intent.record')
 }
 // Definitive, identity-matched refusal is permanent evidence, never a reason
-// to create another intent. Association uses the same owner-confirmed tuple
-// and the ordinary binding door; it supplies no collection authorization.
+// to create another intent. The confirmed claim retains the original-account
+// association even when the current billing route has since changed.
 async function saveRefusal(env: Bindings, actor: Actor, request: Row, basis: CollectionBasis, stripe: CollectionStripe, intent: Row) {
   collectionIntentIdentity(intent,basis,request)
   const refusal = await refusedPaymentEvidence(stripe,intent,basis.snapshot.invoice.customer)
   if (!refusal) return null
   const code = refusal.declineCode ?? refusal.errorCode
   if (HARD_CARD_DECLINES.has(code)) {
-    await bindNativeCollectionCustomer(env,actor,Input.of({customer:request.customer_id,account_ref:basis.snapshot.account,
-      stripe_customer_ref:basis.snapshot.invoice.customer,confirm:true}))
     await recordUnusableMethod(env,{accountRef:basis.snapshot.account,customerRef:basis.snapshot.invoice.customer,
       paymentMethodRef:basis.snapshot.paymentMethod,requestId:request.id,invoiceId:request.invoice_id,
       key:basis.intentKey,amountCents:request.amount_cents,currency:request.currency,livemode:basis.snapshot.invoice.livemode},code)
@@ -112,6 +109,13 @@ export async function executeImportedCollection(env: Bindings, actor: Actor, inp
   insist(await fingerprint(await collectionBasis(source, current, actor)) === request.basis_hash, 'stripe_invoice_source_changed', 409)
   const claimed = clockInstant(env), revision = newId()
   await commit(env, [collectionAuthority(env, actor), collectionSourceGuard(env, source),unusableMethodGuard(env,basis.snapshot.account,basis.snapshot.invoice.customer,basis.snapshot.paymentMethod),
+    // The owner's exact original-invoice confirmation establishes identity only.
+    // Preserve it before the provider write; no current-route or debit authority
+    // is inferred, and concurrent claims cannot replace an existing association.
+    stmt(env,'INSERT OR IGNORE INTO nc_stripe_customer_bindings(id,customer_id,account_ref,stripe_customer_ref,revision,created_by,created_at) VALUES(?,?,?,?,?,?,?)',
+      newId(),source.row.customer_id,basis.snapshot.account,basis.snapshot.invoice.customer,newId(),actor.id,claimed),
+    guard(env,'imported_collection_binding_mismatch',`EXISTS(SELECT 1 FROM nc_stripe_customer_bindings b WHERE b.customer_id=? AND b.account_ref=? AND b.stripe_customer_ref=?
+      AND NOT EXISTS(SELECT 1 FROM nc_erased_records WHERE record_id=b.id))`,source.row.customer_id,basis.snapshot.account,basis.snapshot.invoice.customer),
     guard(env, 'collection_already_executed', "EXISTS(SELECT 1 FROM nc_imported_collections WHERE id=? AND status='pending' AND revision=? AND basis_hash=?)", request.id, request.revision, request.basis_hash),
     stmt(env, "UPDATE nc_imported_collections SET status='claimed',approved_by=?,approved_at=?,claimed_at=?,revision=? WHERE id=?", actor.id, claimed, claimed, revision, request.id),
   ], { actor: actorLabel(actor), action: 'imported.collection.claim', subject: request.id,
