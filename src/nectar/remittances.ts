@@ -73,9 +73,11 @@ async function confirmationPreview(env: Bindings, row: Row, origin: Row, custome
     insist(!customer || customer === row.customer_id, 'different_customer', 409)
     const person = await one(env, "SELECT * FROM nc_customers WHERE id=? AND erased_at IS NULL AND status='active'", row.customer_id)
     insist(person, 'customer_not_found', 404)
+    const cash = await one(env, `SELECT ${UNALLOCATED_SQL} AS available FROM nc_payments p WHERE p.id=?`, row.payment_id)
+    insist(cash, 'payment_not_found', 404)
     const basis = { receipt: row.id, sourceHash: row.payload_hash, origin: origin.source_key_hash, customer: row.customer_id,
       customerRevision: person.revision, payment: row.payment_id }
-    return { ...basis, origin, source: parseJson<Row>(row.source_json, {}), allocations: [] as Row[], allocatedCents: 0, unallocatedCents: 0,
+    return { ...basis, origin, source: parseJson<Row>(row.source_json, {}), allocations: [] as Row[], allocatedCents: 0, unallocatedCents: cash.available,
       existingPayment: row.payment_id as string, reason: 'already_recorded', fingerprint: origin.confirmation_hash ?? await fingerprint(basis) }
   }
   const match = await remittanceMatch(env, row, customer)

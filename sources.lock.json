@@ -174,7 +174,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "30b68eeaa7c5a9982787d38093f44f633dea6159944c99a59cfe84aa4d26221b",
+      "sha256": "33e782321c333e38ac963ad796b32856cf1324db99c54ac1dc8894f70b968212",
       "executable": false
     },
     "AGENTS.consumer.md": {
@@ -186,7 +186,7 @@
       "executable": false
     },
     "API.md": {
-      "sha256": "c4e32a5171e5e84d59631ba8cc9573bc5a175683c296baa67b21ab9a1b29e4d7",
+      "sha256": "baace774d9754365d077a2f5d14a73a7544c7dd595f689ddd698555492207715",
       "executable": false
     },
     "base-copies.json": {
@@ -194,7 +194,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "e438d31bdaac7a0ef84c52a522c78612f6df2c8f8b4d7986b04030759feb13a8",
+      "sha256": "df17f911c66ee7b4116786f66ac7c3166fe63622ec12ed1ef6b3106d66a9af23",
       "executable": false
     },
     "DEMO.md": {
@@ -230,7 +230,7 @@
       "executable": false
     },
     "docs/CLAIMS.md": {
-      "sha256": "83246748b2facdbd703e5b241444df975865ec48221bcb821d74c00176722a48",
+      "sha256": "746a86c98b4c5cd1277575099d922beea8b1f39fbbc000b1e65e62e5543b5cb0",
       "executable": false
     },
     "docs/composition-baseline.json": {
@@ -847,6 +847,10 @@
     },
     "migrations/core/0113_portal_retention_authority.sql": {
       "sha256": "4a6a7ddba65d8e285f18e617a826dd5f184e14d8d40d13c55e2bc4473a366882",
+      "executable": false
+    },
+    "migrations/core/0114_remittance_origins.sql": {
+      "sha256": "87494a215e5b54c0796fb5dfaeff01ff2cf36eb8816510b7ae70ed07ecf48082",
       "executable": false
     },
     "ONBOARDING.md": {
@@ -4210,7 +4214,7 @@
       "executable": false
     },
     "src/nectar/remittances.ts": {
-      "sha256": "adc8ed57fe8790bae863c4a755fb8a7e481212ab83d692ae5640082a45ef398d",
+      "sha256": "689bf81ef7e5102a036ed02a209cdae815adcfbdf42b18743ce9fcbabf1f982b",
       "executable": false
     },
     "src/nectar/renewal-calendar.ts": {
