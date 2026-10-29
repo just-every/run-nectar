@@ -47,6 +47,17 @@ try {
       }
       await page.screenshot({ path: `${directory}/${width}-${state}.png`, fullPage: true })
       console.log(`BROWSER ${width} ${state}`)
+      if (state === 'open' || state === 'resolved') {
+        await page.goto(`${h.origin}/app/processor-events`)
+        await page.getByRole('heading', { name: 'Processor reconciliation', exact: true }).waitFor()
+        assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, `The ${state} processor comparisons fit at ${width}`)
+        if (width === 1440) {
+          const section = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Payout comparisons', exact: true }) })
+          assert.equal(await section.locator('tbody tr').count(), 2)
+          assert.ok((await section.innerText()).includes(state === 'open' ? 'processor_payout_does_not_reconcile' : 'Observed agreement'))
+        }
+        await page.screenshot({ path: `${directory}/${width}-processor-${state}.png`, fullPage: true })
+      }
     }
   } })
 } finally { await browser?.close(); await h.close() }

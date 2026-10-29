@@ -3,6 +3,7 @@
 // reports into one immutable packet, and saves one summarized journal per
 // ledger company for the posting queue. Contributions arriving later for a
 // closed month are reported in the earliest open month (period-close-keys.ts).
+import { closeSequence, closeTieout, CLOSE_KINDS } from './close-tieout'
 import type { Bindings } from '../auth.server'
 import { actorLabel, requireMember, requireRead, type Actor } from './actor'
 import { requireBusiness } from './business'
@@ -44,6 +45,19 @@ export async function closePeriod(env: Bindings, actor: Actor, input: Input) {
   insist(period < current, 'period_not_ended', 409)
   const closed = await closedPeriods(env)
   insist(!closed.through || period === nextMonth(closed.through), closed.through && period <= closed.through ? 'period_already_closed' : 'period_out_of_order', 409)
+  // An explicitly reviewed preparation packet is optional for existing close
+  // callers. Naming one binds that exact source and its supported case decisions.
+  let preparation: Awaited<ReturnType<typeof closeTieout>> | null = null
+  let preparationSequence: number | null = null
+  if (input.has('close_basis')) {
+    preparationSequence = await closeSequence(env)
+    preparation = await closeTieout(env, actor, period)
+    insist(preparation.basis === input.text('close_basis', { max: 64 }), 'close_source_changed', 409)
+    insist(preparation.proofs.every(proof => !proof.mismatch), 'close_preparation_unresolved', 409)
+    const cases = await all(env, `SELECT a.* FROM nc_assurance_cases a JOIN nc_customers c ON c.id=a.customer_id
+      WHERE c.erased_at IS NULL AND json_extract(a.evidence_json,'$.period')=?`, period)
+    insist(cases.filter(row => CLOSE_KINDS.includes(row.kind)).every(row => row.status === 'resolved' && preparation!.proofs.some(proof => proof.source === row.source_id && proof.basis === row.basis_hash)), 'close_preparation_unresolved', 409)
+  }
   const overall = await revenueReport(env, actor, query({ period }))
   const keys = overall.contributions.filter(row => row.period === period).map(contributionKey).sort()
   const month = overall.months[0]
@@ -57,6 +71,7 @@ export async function closePeriod(env: Bindings, actor: Actor, input: Input) {
   }
   const id = newId(), at = clockInstant(env)
   const packet = { period, closedAt: at, closedBy: actorLabel(actor), policyVersion: overall.policyVersion, rollforward: { openingCents: month.openingCents, billingsCents: month.billingsCents, creditsCents: month.creditsCents, netBillingsCents: month.netBillingsCents, recognizedCents: month.recognizedCents, closingCents: month.closingCents, accruedContractAssetCents: month.accruedContractAssetCents, deferredLiabilityCents: month.deferredLiabilityCents },
+    ...(preparation ? { closePreparation: preparation } : {}),
     journals: books.map(({ key, name, entries, debitCents, creditCents }) => ({ book: key, name, entries, debitCents, creditCents })), reports, contributions: keys.length }
   insist(BigInt(month.openingCents) + BigInt(month.netBillingsCents) - BigInt(month.recognizedCents) === BigInt(month.closingCents), 'revenue_rollforward_mismatch', 409)
   const date = addDays(addMonths(`${period}-01`, 1), -1)
@@ -65,6 +80,7 @@ export async function closePeriod(env: Bindings, actor: Actor, input: Input) {
     return { id: newId(), kind: 'period_close', sourceId: `${id}:${book.key}`, period, txnDate: date, entityId: book.entityId, companyRef: book.companyRef, amountCents: book.debitCents, lines, docNumber: `PC-${period}-${book.entityId ? book.entityId.slice(0, 8) : 'BUSINESS'}`.slice(0, 21) }
   })
   await commit(env, [
+    ...(preparationSequence !== null ? [guard(env, 'close_source_changed', '(SELECT COALESCE(MAX(seq),0) FROM nc_audit)=?', preparationSequence)] : []),
     guard(env, 'period_out_of_order', closed.through ? 'NOT EXISTS(SELECT 1 FROM nc_period_closes WHERE period>=?)' : 'NOT EXISTS(SELECT 1 FROM nc_period_closes)', ...(closed.through ? [period] : [])),
     guard(env, 'forbidden', "EXISTS(SELECT 1 FROM nc_members WHERE id=? AND status='active')", actor.id),
     stmt(env, 'INSERT INTO nc_period_closes(id,period,closed_by_id,closed_by,closed_at,keys_json,keys_hash,packet_json,packet_hash) VALUES(?,?,?,?,?,?,?,?,?)', id, period, actor.id, actorLabel(actor), at, JSON.stringify(keys), await fingerprint(keys), canonical(packet), await fingerprint(packet)),

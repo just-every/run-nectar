@@ -14,6 +14,7 @@ export async function closeTieoutPage(env: Bindings, actor: Actor, url: URL) {
   const cases = await assuranceCases(env, actor)
   const owners = await all(env, "SELECT id,name FROM nc_members WHERE status='active' AND role IN ('owner','finance') ORDER BY name,id")
   const prepare = can(actor, 'propose'), approve = can(actor, 'approve') && actor.kind === 'member'
+  const ended = packet.period < localDate(clockInstant(env), business.timezone).slice(0, 7)
   const returnTo = `/app/close-tieout?period=${packet.period}`
   const { debt, cash, credit, revenue } = packet.totals
   const items = packet.proofs.filter(proof => proof.mismatch || cases.some(row => row.source_id === proof.source))
@@ -46,6 +47,7 @@ export async function closeTieoutPage(env: Bindings, actor: Actor, url: URL) {
         </article>`
       }) : h`<p>No supported review item is present in these native sources. Uncovered areas remain unqualified.</p>`}
     </section>
+    ${approve && ended ? h`<section class="card"><h2>Human period close</h2><p>This uses the existing finance close authority. Every supported break and its current case decision must agree. Uncovered provider and accounting duties remain unqualified.</p>${form('revenue.close', returnTo, h`${hidden('period', packet.period)}${hidden('close_basis', packet.basis)}`, 'Close reviewed native period', { secondary: true })}</section>` : ''}
     <section class="card"><h2>Source register</h2>
       ${table(['Issued invoice', 'Issued total$', 'Current debt$'], packet.sources.invoices.map(row => [h`<a href="/app/invoices/${row.id}">${row.number}</a>`, cents(row.total_cents), cents(row.balance_cents)]))}
       ${table(['Received payment', 'Received$', 'Unapplied$'], packet.sources.payments.map(row => [h`<a href="/app/payments/${row.id}/receipt">${row.id}</a>`, cents(row.amount_cents), cents(row.unallocated_cents)]))}

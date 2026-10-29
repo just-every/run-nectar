@@ -1104,6 +1104,7 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "segment": "text"
   },
   "revenue.close": {
+    "close_basis": "text",
     "period": "text"
   },
   "role.define": {
