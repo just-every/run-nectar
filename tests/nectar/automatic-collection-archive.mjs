@@ -427,15 +427,16 @@ export async function automaticCollectionRetryArchiveJourney(){
   const cancelledAuthentication=await prepare('active',true);await startAuthentication(cancelledAuthentication);edge.authenticate(cancelledAuthentication.recovery.paymentIntentRef,false)
   assert.equal((await api('automatic.collection.reconcile',{request:cancelledAuthentication.id})).status,'refused')
   const waitingAuthentication=await prepare('awaiting_customer',true),approvalAuthentication=await prepare('pending_approval',true),activeAuthentication=await prepare('active',true),rejectedAuthentication=await prepare('rejected',true),withdrawnAuthentication=await prepare('withdrawn',true)
+  const erasedAuthentication=await prepare('active',true);await startAuthentication(erasedAuthentication)
   const expected=['collected','refused','uncertain','claimed','refused','refused','refused','refused','refused',
-   'collected','claimed','uncertain','refused','refused','refused','refused','refused','refused']
+   'collected','claimed','uncertain','refused','refused','refused','refused','refused','refused','claimed']
   assert.deepEqual(targets.map(target=>(edge.intents.get(target.recovery.paymentIntentRef).value.metadata.nectar_native_collection_request)),targets.map(target=>target.id))
   assert.deepEqual(targets.map(target=>target.recovery.paymentIntentRef),edge.writes.filter(row=>!row.form).map(row=>row.id))
-  assert.equal(edge.writes.length,26,'Eighteen original invoices and eight recovery confirmations retain eighteen original intents')
+  assert.equal(edge.writes.length,28,'Nineteen original invoices and nine recovery confirmations retain nineteen original intents')
   const beforeRows=await rows()
   assert.deepEqual(targets.map(target=>beforeRows.find(row=>row.id===target.id).status),expected)
   const beforeRecovery=await api('recovery')
-  assert.deepEqual([beforeRecovery.totals.failedInvoices,beforeRecovery.totals.failedAmountCents,beforeRecovery.totals.recoveredAmountCents],[18,180000,20000])
+  assert.deepEqual([beforeRecovery.totals.failedInvoices,beforeRecovery.totals.failedAmountCents,beforeRecovery.totals.recoveredAmountCents],[19,190000,20000])
   await close()
   console.log('automatic archive: export replacement claims and unclaimed preparations')
   await command(root,['export','--output',archive('replacement')])
@@ -445,7 +446,7 @@ export async function automaticCollectionRetryArchiveJourney(){
   for(const table of ['nc_automatic_collection_authorizations','nc_retry_method_recovery_authorizations','nc_portal_sessions','nc_mfa_sessions'])assert.ok(!exported.some(item=>item.table===table))
   const serialized=JSON.stringify(exported)
   for(const value of [secret,settings.SESSION_SECRET,settings.PORTAL_KEY,settings.SETUP_TOKEN,settings.MFA_KEY,settings.STRIPE_BILLING_SECRET,...targets.map(target=>target.session.token),...targets.filter(target=>target.returnCookie).map(target=>target.returnCookie.split('=')[1])])assert.ok(!serialized.includes(value),'Historical replacement evidence excludes executable capabilities')
-  assert.equal(exported.filter(item=>item.table==='nc_retry_method_recovery_events'&&item.row.kind==='claimed').length,8)
+  assert.equal(exported.filter(item=>item.table==='nc_retry_method_recovery_events'&&item.row.kind==='claimed').length,9)
   await command(root,['reset','--yes'])
   await command(root,['import','--input',archive('replacement'),'--yes'])
   await command(root,['export','--output',archive('replacement-restored')])
@@ -466,7 +467,7 @@ export async function automaticCollectionRetryArchiveJourney(){
    await api('invoice.finalise',{invoice:target.invoice},409)
   }
   await api('portal.configure',{hosts:[h.origin],parents:[]})
-  for(const target of [awaiting,approval,active,rejected,withdrawn,authenticated,authenticating,unknownAuthentication,cancelledAuthentication,waitingAuthentication,approvalAuthentication,activeAuthentication,rejectedAuthentication,withdrawnAuthentication]){
+  for(const target of [awaiting,approval,active,rejected,withdrawn,authenticated,authenticating,unknownAuthentication,cancelledAuthentication,erasedAuthentication,waitingAuthentication,approvalAuthentication,activeAuthentication,rejectedAuthentication,withdrawnAuthentication]){
    const session=await api('portal.session.issue',{customer:target.customer,origin:h.origin,audience:'hosted'})
    const path=`/portal/retry-method-recoveries/${target.recovery.id}?session=${session.token}`
    assert.equal((await h.raw(path,{body:target.acceptance})).status,409)
@@ -505,16 +506,16 @@ export async function automaticCollectionRetryArchiveJourney(){
    assert.deepEqual([invoice.paidCents,invoice.balanceCents,invoice.allocations.length],[paidCents,10000-paidCents,paidCents?1:0])
    assert.deepEqual([record.ledger.invoicedCents,record.ledger.paidCents,record.ledger.balanceCents,record.ledger.unallocatedCents],[10000,paidCents,10000-paidCents,0])
    assert.equal(record.ledger.payments.length,paidCents?1:0)
-   assert.equal(invoice.attempt_count,[paid,claimed,uncertain,refused,authenticated,authenticating,unknownAuthentication,cancelledAuthentication].includes(target)?2:1)
+   assert.equal(invoice.attempt_count,[paid,claimed,uncertain,refused,authenticated,authenticating,unknownAuthentication,cancelledAuthentication,erasedAuthentication].includes(target)?2:1)
    assert.equal(invoice.next_payment_attempt,null)
   }
   assert.equal((await api('payments')).length,6)
-  assert.equal((await report('billings')).totalCents,180000)
+  assert.equal((await report('billings')).totalCents,190000)
   assert.equal((await report('collections')).totalCents,60000)
-  assert.equal((await report('ar')).totalCents,120000)
+  assert.equal((await report('ar')).totalCents,130000)
   const recovered=await api('recovery')
-  assert.deepEqual([recovered.totals.failedInvoices,recovered.totals.failedAmountCents,recovered.totals.recoveredAmountCents],[18,180000,60000])
-  for(const target of [claimed,authenticating]){
+  assert.deepEqual([recovered.totals.failedInvoices,recovered.totals.failedAmountCents,recovered.totals.recoveredAmountCents],[19,190000,60000])
+  for(const target of [claimed,authenticating,erasedAuthentication]){
    const erasure=await api('erasure.request',{customer:target.customer})
    await api('erasure.verify',{request:erasure.id,reason:'Synthetic independent verification',evidence:file('synthetic-nectar-retry-identity.txt','Synthetic verified identity')})
    await api('erasure.approve',{request:erasure.id,confirm:true})
@@ -522,11 +523,19 @@ export async function automaticCollectionRetryArchiveJourney(){
    await api('automatic.collection.event',{request:target.id,event_ref:event},404)
    await api('retry.method.decide',target.decision,404)
   }
-  assert.equal((await h.raw(authenticating.path,{body:{recovery:authenticating.recovery.id,quote_hash:authenticating.recovery.quoteHash,authenticate:true}})).status,401)
+  for(const target of [authenticating,erasedAuthentication])assert.equal((await h.raw(target.path,{body:{recovery:target.recovery.id,quote_hash:target.recovery.quoteHash,authenticate:true}})).status,401)
+  edge.authenticate(erasedAuthentication.recovery.paymentIntentRef)
+  const erasedEvent='synthetic-nectar-erased-authentication-event'
+  edge.events.set(erasedEvent,{object:'event',id:erasedEvent,type:'payment_intent.succeeded',livemode:false,data:{object:structuredClone(edge.intents.get(erasedAuthentication.recovery.paymentIntentRef).value)}})
+  await api('automatic.collection.event',{request:erasedAuthentication.id,event_ref:erasedEvent},404)
+  await tick()
+  const erasedPending=await api('invoices/'+erasedAuthentication.invoice)
+  assert.deepEqual([erasedPending.paidCents,erasedPending.balanceCents,erasedPending.allocations.length],[0,10000,0],
+   'Erasure before original hosted authentication finishes cannot admit later captured cash')
   await close()
   await command(root,['export','--output',archive('erased')])
   const erased=await archiveItems(archive('erased'))
-  for(const n of [954,961])assert.ok(!JSON.stringify(erased).includes(email(n)))
+  for(const n of [954,961,969])assert.ok(!JSON.stringify(erased).includes(email(n)))
   await command(root,['reset','--yes'])
   assert.match(await command(root,['import','--input',archive('replacement'),'--journal',relative(root,archive('erased')),'--yes'],{refuse:true}),/later_journal|erased_row|erasure_epoch/)
   await command(root,['import','--input',archive('erased'),'--yes'])
@@ -537,7 +546,12 @@ export async function automaticCollectionRetryArchiveJourney(){
    await api('automatic.collection.reconcile',{request:target.id},404)
    assert.equal((await api('invoices/'+target.invoice)).paidCents,10000)
   }
+  await api('automatic.collection.reconcile',{request:erasedAuthentication.id},404)
+  await api('automatic.collection.event',{request:erasedAuthentication.id,event_ref:erasedEvent},404)
+  const restoredErased=await api('invoices/'+erasedAuthentication.invoice)
+  assert.deepEqual([restoredErased.paidCents,restoredErased.balanceCents,restoredErased.allocations.length],[0,10000,0])
   assert.equal((await report('collections')).totalCents,60000)
+  assert.equal((await report('ar')).totalCents,130000)
   assert.equal(edge.writes.length,writes)
   console.log('automaticCollectionRetryArchiveJourney: restored replacement and hosted authentication claims reconcile once without debit authority; pending consent and approval and old return cookies stay inert; exact money and erasure custody survive real commands')
  }finally{await h?.close();await rm(scratch,{recursive:true,force:true})}
