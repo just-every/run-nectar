@@ -17,6 +17,7 @@ export const API_DOORS: [string, string][] = [
   ['^webhooks/([\\w-]+)$','webhookDelivery'],
   ['^period-closes(?:/(\\d{4}-\\d{2}))?$','periodCloses'],
   ['^customers/([\\w-]+)/balance$','customerBalance'],
+  ['^customers/([\\w-]+)/collection-diagnosis$','collectionDiagnosis'],
   ['^promotions$','promotions'],
   ['^write-offs$','writeOffs'],
   ['^ledger-postings$','ledgerPostings'],
