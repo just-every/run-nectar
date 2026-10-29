@@ -174,7 +174,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "d019e231f4044794efee06a684c4126e2fafd93fcdb8a2f8228ffeb735068624",
+      "sha256": "28781b99d3b9cfc4315c9709fb2c4147fd45464b9dbf0eea6660d52013381f56",
       "executable": false
     },
     "AGENTS.consumer.md": {
@@ -186,7 +186,7 @@
       "executable": false
     },
     "API.md": {
-      "sha256": "baace774d9754365d077a2f5d14a73a7544c7dd595f689ddd698555492207715",
+      "sha256": "2a77007fb9eda90445ed7e07f939d6eaf159737052353c9b3074d2c547dbba0c",
       "executable": false
     },
     "base-copies.json": {
@@ -194,7 +194,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "31eae621657efb8c60aa50e7bd0ab361e4866c16571cdd64c1911c410550bd85",
+      "sha256": "ad3d86edc8407329dad2f71d7bdf6e8d62665adb6de4e38b74da3d41293cb718",
       "executable": false
     },
     "DEMO.md": {
@@ -230,7 +230,7 @@
       "executable": false
     },
     "docs/CLAIMS.md": {
-      "sha256": "6ced1afe6706b846f595387f54aac43aa22f2ddce8ed20e5166dd072fa05d7eb",
+      "sha256": "0a12b70e9ed1e02ec0f6ae1488df10a0f61e776276e371f0a9c2b26b51635eb0",
       "executable": false
     },
     "docs/composition-baseline.json": {
@@ -374,7 +374,7 @@
       "executable": false
     },
     "management/integration/deployment-spec.json": {
-      "sha256": "217b9d6d4a251dd9bdeaf08d73b50f6b13e9d822e3279a68983beae7a7138775",
+      "sha256": "c649421fa2dca5c43d2d3c492396771dda44ac72033f470f3b61949c8f1f022a",
       "executable": false
     },
     "migrations/core/0001_owner.sql": {
@@ -853,6 +853,10 @@
       "sha256": "87494a215e5b54c0796fb5dfaeff01ff2cf36eb8816510b7ae70ed07ecf48082",
       "executable": false
     },
+    "migrations/core/0115_billing_notices.sql": {
+      "sha256": "d8f37039177035f0b2ceccbe7abd4b2d6cb3d7d80da18bb0998d102a05d36e2f",
+      "executable": false
+    },
     "ONBOARDING.md": {
       "sha256": "95bb235abff28ac36979868486caf2cb73bfbe4ab63037f3e301d189bb9398d9",
       "executable": false
@@ -1026,7 +1030,7 @@
       "executable": false
     },
     "RELEASE.json": {
-      "sha256": "49afcaecfc14da3fd561061ea9b74e9b500ff8759e684ab44fbe77adca0633f3",
+      "sha256": "c489feb7bafbb06076c20a4459391c06403685ba3a490bb359322a163c9d8078",
       "executable": false
     },
     "rer-project.json": {
@@ -1202,7 +1206,7 @@
       "executable": false
     },
     "scripts/installer/local.mjs": {
-      "sha256": "8e787e4a1560cda6f5896c01c3a3e4fe7403f621026f3cd65ad3c19528d55903",
+      "sha256": "048907551c3cc3b89e3f47a097a88a94e687ac1ffbe896add32592ba475cbf32",
       "executable": false
     },
     "scripts/installer/seed.mjs": {
@@ -3114,7 +3118,7 @@
       "executable": false
     },
     "src/nectar/actions.ts": {
-      "sha256": "09e44f56184da65be614daa5d800f81145dd3632a1c1a60cea4b570e2712a457",
+      "sha256": "84adf93e094d3b4c169d938e2a4a8c0fe06ef175b011600d9fe9b4758e5a041a",
       "executable": false
     },
     "src/nectar/actor.ts": {
@@ -3130,7 +3134,7 @@
       "executable": false
     },
     "src/nectar/api-fields.ts": {
-      "sha256": "15c66b26583647f576db78db99c63537946f1c4afb9fa2f3eb2d8c12917c50eb",
+      "sha256": "081a394c95b37390196cd6ae6fc4bd08c4139455944373e30d6a0b651a8a8773",
       "executable": false
     },
     "src/nectar/api-versions.ts": {
@@ -3215,6 +3219,10 @@
     },
     "src/nectar/billing-entities.ts": {
       "sha256": "eaa76c4fe8e3d0a4e2763770ddbdc1a82648dfb6678628ac2c43b071d85b6aa6",
+      "executable": false
+    },
+    "src/nectar/billing-notices.ts": {
+      "sha256": "e5fb6ab5492589d2b83d1c55110560e7b11d8b16186684180a274f09edcfd1df",
       "executable": false
     },
     "src/nectar/billing-plan.ts": {
@@ -3374,7 +3382,7 @@
       "executable": false
     },
     "src/nectar/doors.ts": {
-      "sha256": "851b063a4ba882e4a2ca77b14f6c1c1d1fcdf838a4525069242e3999e9b10cc8",
+      "sha256": "23e94d607ac16e4fe7404a5e8403eaca72937e5a061b8a599a280af77ad514c7",
       "executable": false
     },
     "src/nectar/draft-correction-mail.ts": {
@@ -3418,7 +3426,7 @@
       "executable": false
     },
     "src/nectar/erasure-checkpoint.ts": {
-      "sha256": "6d540eb5bfaed9a7c81ccae002500451c833d4fb951810eb58ac8933e30167e6",
+      "sha256": "af4cf194f0ae52529c791104678a3517270d799b3928a34b76fc0030d737e13b",
       "executable": false
     },
     "src/nectar/erasure-import.ts": {
@@ -3434,7 +3442,7 @@
       "executable": false
     },
     "src/nectar/erasure-records.ts": {
-      "sha256": "ed380566d9ca73264e79cd3c3fadf6800f68760cdc95ee00704dc6f56f88c88d",
+      "sha256": "7f326811c1998c1e92ed858101528ba3a2a842882a808fdbaf9bef774f1cd706",
       "executable": false
     },
     "src/nectar/erasure-requests.ts": {
@@ -3650,11 +3658,11 @@
       "executable": false
     },
     "src/nectar/locales/en.json": {
-      "sha256": "7cf4094ee44ea6fa80a2fb59a44de66bec9d01e95ceec4feb5186f0558ec9b83",
+      "sha256": "b65b0242d1f73d74ef9c3bf21bcccea9d32b0386d9b4a0781a71dc0a7ad0300c",
       "executable": false
     },
     "src/nectar/locales/es-US.json": {
-      "sha256": "3f38b0f6b407fdb9f6977acdfebbcc639553c4143d73b8658d6b3c2d90e36b31",
+      "sha256": "87c6a88d775f59222d60370658648330e87fba9d26f66b7246f285745b8c39e6",
       "executable": false
     },
     "src/nectar/manual-invoices.ts": {
@@ -4786,7 +4794,7 @@
       "executable": false
     },
     "src/nectar/views.ts": {
-      "sha256": "7a868f418f41c7e5de79d876d4154ad30e83107224f78c381e96bbdc9c78a1ed",
+      "sha256": "1b432ee76c36da4dd2d7e13183b7a65d583e84d217a82a0d92bd980cf4db06c8",
       "executable": false
     },
     "src/nectar/webauthn.ts": {
@@ -4982,7 +4990,7 @@
       "executable": false
     },
     "tests/fixtures/locales/fr.json": {
-      "sha256": "1f9fb0b982a18fdec4171ab0c3cfe58215636a7bcdbfa7f7058bccf468fbae39",
+      "sha256": "a1e145efb8d60b3c9a313de3c5ea693c1b205469d473ca69401f7f59e340e111",
       "executable": false
     },
     "tests/fixtures/stripe-collection-edge.mjs": {
@@ -5038,7 +5046,7 @@
       "executable": false
     },
     "tests/nectar/automatic-collection-archive.mjs": {
-      "sha256": "6e86f3b670638ea070b61530a7b12d0a2fbc939f64ff0bd5e138ea527e887867",
+      "sha256": "d98a3ae708949dc6351b1e56a4604680f639a5c022bc05c86e2d0668cccd046e",
       "executable": false
     },
     "tests/nectar/automatic-collection-browser.mjs": {
@@ -5057,8 +5065,16 @@
       "sha256": "9fbe8028738b8542f4ddde00cbfb7a27ba64027336fe8fb708c62856a1dbe5ce",
       "executable": false
     },
+    "tests/nectar/billing-notices-sandbox.mjs": {
+      "sha256": "df9cba88c58f6cce1295ea8c79052dba78b368654fa7f4d44471a8c0fc9e69d9",
+      "executable": false
+    },
+    "tests/nectar/billing-notices.mjs": {
+      "sha256": "af5b588f571d7f7c739c126f9f0d21a3d74b93a67a3f62d38005a52e11b0f3ca",
+      "executable": false
+    },
     "tests/nectar/billing-roles.mjs": {
-      "sha256": "4c314b39e4e1ad31a977d24550a26d544a99ccbb4106f8cfed9269bb13d93ebe",
+      "sha256": "c019fcbbc77eb01dfe0e5908d5c86bc58358b17a56dfe46886b2b9f7287f3f7d",
       "executable": false
     },
     "tests/nectar/cadences.mjs": {
@@ -5226,7 +5242,7 @@
       "executable": false
     },
     "tests/nectar/flows.mjs": {
-      "sha256": "4be896f2a5a8b66d50602fe61f54253afd563f25c7e7ae8c9a3c29d45241b876",
+      "sha256": "c21880943d3365fdbb55509627652186645c24081edeb933175b6a66102adaf0",
       "executable": false
     },
     "tests/nectar/harness.mjs": {
@@ -5402,7 +5418,7 @@
       "executable": false
     },
     "tests/nectar/payment-retries-browser.mjs": {
-      "sha256": "9a4618fd6285a5de4c6cbe68953b4489f8906e2578b78ffbf8bdaddd0c5636f1",
+      "sha256": "c38c8945b2c893e7fdce9dc988a025b689c0fe3e1b561d756719362c131f36cd",
       "executable": false
     },
     "tests/nectar/payment-retries-sandbox.mjs": {
@@ -5410,7 +5426,7 @@
       "executable": false
     },
     "tests/nectar/payment-retries.mjs": {
-      "sha256": "d4d4bdad1af37f25c4c5ee1d149c5998e2a7ea1c61241ef8b6ae41a1a3612b73",
+      "sha256": "66b67128fbc0dc296fd01a25880a6a164f104a776f30a1c39004260d7603568b",
       "executable": false
     },
     "tests/nectar/period-close-browser.mjs": {

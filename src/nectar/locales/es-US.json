@@ -456,5 +456,9 @@
   "portal.change.afterAmount": "Total propuesto del período",
   "portal.change.difference": "Diferencia prorrateada",
   "portal.change.effective": "Fecha de entrada en vigor",
-  "portal.change.previewReadOnly": "Esta estimación no cambia su suscripción ni le cobra. Los cambios a un plan inferior se pueden enviar por separado para revisión de la empresa."
+  "portal.change.previewReadOnly": "Esta estimación no cambia su suscripción ni le cobra. Los cambios a un plan inferior se pueden enviar por separado para revisión de la empresa.",
+  "billing_notice.payment_receipt.subject": "Pago registrado para la factura {invoice}",
+  "billing_notice.payment_receipt.body": "{merchant} registró un pago de {amount} el {date} para la factura {invoice}.",
+  "billing_notice.payment_failed.subject": "Falló el pago de la factura {invoice}",
+  "billing_notice.payment_failed.body": "Falló el pago de la factura {invoice} de {merchant} el {date}. El importe cobrable actual es {amount}. Este mensaje no confirma ningún pago."
 }
