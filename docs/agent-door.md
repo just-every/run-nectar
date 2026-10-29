@@ -40,7 +40,7 @@ keep their existing API purpose, but require native reissue before admission to
 the company door: their saved author email cannot establish a sponsor ID.
 Neither scope acquires financial approval authority.
 
-Nectar's setup manifest retains its native setup-token lifecycle, explicitly at
+Nectar's setup manifest retains its native setup-token lifecycle, whose native endpoint is
 `/auth/bootstrap`. The initializer posts the per-run setup credential to that
 production bootstrap handler, then configures a real native business and reviews
 its tax declaration through ordinary owner HTTP. The separate paired
