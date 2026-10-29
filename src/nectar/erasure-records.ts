@@ -65,6 +65,9 @@ export async function erasurePlan(env: Bindings, customer: Row): Promise<Erasure
       if (column === 'csv') { updates[column] = affected ? '' : redactSnapshotCsv(String(value),personal); continue }
       if (!affected || typeof value !== 'string') continue
       if (column === 'token_hash') { updates[column] = null; continue }
+      // NULL withdraws the Checkout identifier without making unrelated erased
+      // payments collide in the account-scoped unique session index.
+      if (table==='nc_invoice_partial_payments' && column==='session_ref') { updates[column]=null; continue }
       if (table==='nc_subscriptions'&&column==='trial_payment') { updates[column]=null; continue }
       if (foreignKeys.has(column) || (column.endsWith('_id') && !['external_id','event_id'].includes(column)) || column === 'id' || (column === 'subject' && table === 'nc_audit') || keep.has(column) || financialIdentifier(table,column) || typedPlanField(table,column) || /(?:_at|_on|_date|_from|_to|_start|_end)$/.test(column)) continue
       if (column === 'external_id' || column === 'event_id' || column === 'reference') updates[column] = `erased-${row.id ?? customer.id}`

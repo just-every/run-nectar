@@ -79,9 +79,15 @@ export function partialAuthorityGuard(env: Bindings, row: Row) {
     AND a.factor_verified_at BETWEEN ? AND ? AND f.method IN ('totp','passkey') AND f.verified_at>=a.factor_verified_at
     AND f.verified_at BETWEEN ? AND ?)`, row.prepared_by, row.id, at-STEP_UP_MS, at, at-STEP_UP_MS, at)
 }
-async function currentSource(env: Bindings, row: Row) {
+async function currentSource(env: Bindings, row: Row, reconciliation = false) {
   const source = await sourceForPartial(env, row.invoice_id, row.id), basis = parseJson<Row>(row.basis_json, {})
-  insist(await fingerprint(basis) === row.basis_hash && source.sourceHash === basis.sourceHash && source.row.balance_cents === row.balance_cents,
+  // Checkout still requires the exact customer revision. Read-only cash
+  // reconciliation binds the immutable issued invoice and original request;
+  // a later contact edit cannot strand an already captured payment. The
+  // transaction below fences the current complete source before recording it.
+  insist(await fingerprint(basis) === row.basis_hash && (reconciliation || source.sourceHash === basis.sourceHash)
+    && basis.invoice === source.row.id && basis.customer === source.row.customer_id && basis.number === source.row.number
+    && source.row.balance_cents === row.balance_cents,
     'invoice_partial_source_changed', 409)
   const binding = await one(env, 'SELECT * FROM nc_stripe_customer_bindings WHERE id=? AND revision=? AND customer_id=? AND account_ref=? AND stripe_customer_ref=?',
     row.binding_id, row.binding_revision, row.customer_id, row.account_ref, row.customer_ref)
@@ -222,7 +228,7 @@ export async function reconcilePartial(env: Bindings,row: Row,actor?: Actor,sess
   if(['collected','expired'].includes(row.status))return row
   insist(['claimed','open','uncertain'].includes(row.status),'invoice_partial_not_reconcilable',409)
   if(session)insist(row.customer_id===session.customer&&session.audience==='hosted','forbidden',403)
-  const source=await currentSource(env,row),selected=await stripeForAccount(env,row.account_ref),checkout=await findCheckout(selected.stripe,row)
+  const source=await currentSource(env,row,true),selected=await stripeForAccount(env,row.account_ref),checkout=await findCheckout(selected.stripe,row)
   const guards=[rowGuard(env,row),reservationGuard(env,row),nativeSourceGuard(env,source),bindingFence(env,row),...(session?[customerSessionGuard(env,session)]:[])]
   if(returnHash)guards.push(guard(env,'invalid_customer_session','EXISTS(SELECT 1 FROM nc_invoice_partial_returns WHERE id=? AND request_id=? AND consumed_at IS NULL AND expires_at>?)',returnHash,row.id,clockInstant(env)))
   let proof:Row|null=null
