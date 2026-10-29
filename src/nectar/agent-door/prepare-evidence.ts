@@ -16,6 +16,7 @@ import { isMonth, periodStartingIn, requireDate, today, zonedStart } from '../da
 import { canonicalDecimal } from '../decimal'
 import { Input } from '../input'
 import { aggregateMetric } from '../metric-aggregate'
+import type { MetricPlan } from '../metric-plan'
 import { metricEvents, metricRequests } from '../meter-definitions'
 import { controlTotals } from '../reconciliation'
 import { requireSubscription } from '../subscriptions'
@@ -132,7 +133,8 @@ export function correctionEvidence(prepare: boolean): EvidenceReader {
 
 export const meterPreviewEvidence: EvidenceReader = async (env, actor, input) => {
   requireCapability(actor, 'read')
-  const request = (await metricRequests(env, actor)).find(row => row.id === input.text('request', { max: 100 }))
+  const requests = await metricRequests(env, actor) as Array<Row & { plan: MetricPlan }>
+  const request = requests.find(row => row.id === input.text('request', { max: 100 }))
   insist(request, 'metric_request_not_found', 404)
   const key = input.text('customer', { max: 100 }), month = input.text('period', { max: 7 })
   insist(isMonth(month), 'invalid_period')
