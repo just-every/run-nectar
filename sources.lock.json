@@ -3611,7 +3611,7 @@
       "executable": false
     },
     "src/nectar/agent-door/native.ts": {
-      "sha256": "e9999669adab6946f2c56c0c94ffecf07f336a3af8c529da642b71ba562be3d5",
+      "sha256": "8b7d7989f5dd243c12c99cd811ccadff68a64bde464dc00521d4a849cb89c118",
       "executable": false
     },
     "src/nectar/agent-door/people.ts": {

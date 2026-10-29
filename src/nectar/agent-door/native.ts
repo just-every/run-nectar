@@ -44,11 +44,13 @@ export function contentClasses(value: unknown, measure = 1): ClassAndFacts[] {
     const current = typeof identity === 'string' ? identity : record
     for (const [key, content] of Object.entries(row)) {
       if (content && typeof content === 'object') { visit(content, `${path}/${key}`, current); continue }
-      if (typeof content !== 'string' || opaque.test(key) || !content || /^(?:[x*• -]+|.*(?:last.?four|last.?4|ending in)\D*\d{4})$/i.test(content)) continue
-      const kind = /\b\d{3}-\d{2}-\d{4}\b|\b\d{2}-\d{7}\b/.test(content) || /^(?:ssn|ein|tax_?id)$/.test(key) ? 'ID'
-        : /(?:bank|routing|iban|account_number)/i.test(key) || /\b(?:bank|routing|account)[ _-]?(?:number|no)[\s:=_-]*\d{6,}\b/i.test(content) ? 'bank'
-        : /(?:card_number|pan)/i.test(key) || /\b(?:card|pan)[ _-]?(?:number|no)?[\s:=_-]*\d{13,19}\b/i.test(content) ? 'card'
-        : /(?:diagnosis|medical_record|patient|health)/i.test(key) || /\b(?:diagnos(?:is|ed)|patient|HIV|medical history)\b/i.test(content) ? 'health'
+      if (!['string', 'number', 'boolean'].includes(typeof content) || opaque.test(key) || content === '') continue
+      const text = String(content)
+      if (/^(?:[x*• -]+|.*(?:last.?four|last.?4|ending in)\D*\d{4})$/i.test(text)) continue
+      const kind = /\b\d{3}-\d{2}-\d{4}\b|\b\d{2}-\d{7}\b/.test(text) || /^(?:ssn|ein|tax_?id)$/i.test(key) ? 'ID'
+        : /(?:bank|routing|iban|account_number)/i.test(key) || /\b(?:bank|routing|account)[ _-]?(?:number|no)[\s:=_-]*\d{6,}\b/i.test(text) ? 'bank'
+        : /(?:card_number|pan)/i.test(key) || /\b(?:card|pan)[ _-]?(?:number|no)?[\s:=_-]*\d{13,19}\b/i.test(text) ? 'card'
+        : /(?:diagnosis|medical_record|patient|health)/i.test(key) || /\b(?:diagnos(?:is|ed)|patient|HIV|medical history)\b/i.test(text) ? 'health'
         : /(?:payroll|salary|wage)/i.test(key) ? 'payroll' : null
       if (kind) { const found = records.get(kind) ?? new Set<string>(); found.add(current); records.set(kind, found) }
     }
