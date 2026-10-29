@@ -42,7 +42,7 @@ export async function accountContactHold(env: Bindings, customer: string) {
   const local = await all(env, `SELECT d.id,d.invoice_id,d.amount_cents FROM nc_cadence_disputes d
     JOIN nc_invoices i ON i.id=d.invoice_id WHERE i.customer_id=? AND d.resolved_at IS NULL ORDER BY d.id`, customer)
   const processor = await all(env, `SELECT p.account_ref,p.invoice_id,p.object_ref,p.amount_cents,p.status FROM nc_processor_objects p
-    JOIN nc_invoices i ON i.id=p.invoice_id WHERE i.customer_id=? AND p.kind IN ('dispute','ach_return')
+    WHERE p.customer_id=? AND p.kind IN ('dispute','ach_return')
     AND p.status IN ('needs_response','under_review','lost','warning_needs_response','warning_under_review') ORDER BY p.account_ref,p.object_ref`, customer)
   return { held: local.length > 0 || processor.length > 0, local, processor }
 }

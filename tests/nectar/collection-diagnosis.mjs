@@ -1,13 +1,16 @@
 // Public Worker and D1 journey; only Stripe's network boundary is simulated.
 import assert from 'node:assert/strict'
 import { nativeCollectionEdge } from './native-collection.mjs'
+import { processorEdge } from './processor-edge.mjs'
 import { file } from './harness.mjs'
 import { totp } from './mfa.mjs'
 
 const edge = nativeCollectionEdge()
+const processor = processorEdge()
 let inventory = 'expired', observedMethod = 'synthetic-nectar-native-card-1'
 const fetch = async request => {
   const path = new URL(request.url).pathname
+  if (path.startsWith('/v1/events/') || processor.objects.has(path.split('/').at(-1)) || path.startsWith('/v1/balance_transactions/')) return processor.fetch(request)
   if (path === '/v1/payment_methods') {
     const type = new URL(request.url).searchParams.get('type')
     return Response.json({ object: 'list', has_more: false, data: type === 'card' ? [{ object: 'payment_method', id: observedMethod,
@@ -44,6 +47,10 @@ export async function collectionDiagnosisFlow(h, owner, { onState = async () => 
   await api('mfa.totp.confirm', { factor: factor.factor, code: totp(factor.secret, instant) })
   await api('mfa.policy', { scope: 'all' })
   const binding = await api('collection.customer.bind', { customer, account_ref: 'synthetic-nectar-native-account-1', stripe_customer_ref: 'synthetic-nectar-native-customer-1', confirm: true })
+  const external = processor.seed(null, 2300, 'unallocated')
+  external.intent.customer = external.charge.customer = 'synthetic-nectar-native-customer-1'
+  external.intent.metadata = {}
+  await api('payment.record', { customer, amount: '23', received_on: '2026-10-22', method: 'card_external', reference: `stripe:synthetic-nectar-native-account-1:${external.intent.id}` })
   const prepared = await api('collection.prepare', { invoice: failed.id })
   edge.refuseNext('card_declined', 'expired_card')
   const refusal = await api('collection.confirm', prepared.instructions.confirm)
@@ -112,6 +119,34 @@ export async function collectionDiagnosisFlow(h, owner, { onState = async () => 
   assert.equal((await propose()).id, known.id, 'Approval and repeated download confer no new proposal or send')
   assert.deepEqual([writes(), h.mails.length], counts.slice(2), 'Approval only exports a reviewed reminder; no provider POST or customer mail')
   await onState({ label: 'approved-download', customer, proposal: known.id, notice: notice.id })
+
+  // A known customer's external payment can be disputed before allocation.
+  // Its account hold must not depend on an invoice link.
+  const externalDispute = { object: 'dispute', id: 'synthetic-nectar-unallocated-dispute', charge: external.charge.id,
+    status: 'needs_response', amount: 2300, currency: 'usd', reason: 'fraudulent', livemode: false, balance_transactions: [] }
+  processor.objects.set(externalDispute.id, externalDispute)
+  const observeDispute = async (suffix, type) => {
+    const event = processor.event(`synthetic-nectar-unallocated-${suffix}`, type, externalDispute)
+    await api('processor.event.consume', { account_ref: 'synthetic-nectar-native-account-1', event_ref: event.id })
+    return (await api(`processor-events?customer=${customer}`)).objects.find(row => row.object_ref === externalDispute.id)
+  }
+  const disputed = await observeDispute('open', 'charge.dispute.created')
+  assert.deepEqual([disputed.customer_id, disputed.invoice_id, disputed.status], [customer, null, 'needs_response'])
+  await propose(other)
+  const beforeExternalHold = [await api('proposals'), await api('notices'), await api('tasks'), await api('audit'), writes(), h.mails.length]
+  const refusedPreparation = await h.raw('/api/nectar/proposal.create', { ...agent, body: { kind: 'collection', title: 'Disputed account', payload: { customer } } })
+  const refusedDownload = await h.raw(`/app/notices/${notice.id}.txt`, { cookie: owner })
+  console.log('Unallocated external dispute contact doors', { preparation: refusedPreparation.status, download: refusedDownload.status })
+  assert.equal(refusedPreparation.status, 409, 'An unallocated external dispute stops account proposal preparation')
+  assert.equal(refusedDownload.status, 409, 'An unallocated external dispute stops an already approved reminder download')
+  assert.equal((await refusedPreparation.json()).error, 'collection_account_disputed')
+  assert.ok((await refusedDownload.text()).includes('collection account disputed'))
+  assert.deepEqual([await api('proposals'), await api('notices'), await api('tasks'), await api('audit'), writes(), h.mails.length], beforeExternalHold, 'Disputed contact refusals change no proposal, reminder, task, audit or send')
+  assert.deepEqual(await Promise.all([failed, unproved].map(async row => (await api(`invoices/${row.id}`)).balanceCents)), [10000, 10000])
+  externalDispute.status = 'won'
+  assert.equal((await observeDispute('closed', 'charge.dispute.closed')).status, 'won')
+  assert.equal((await propose()).id, known.id)
+  assert.equal(await h.page(`/app/notices/${notice.id}.txt`, owner), exportedText, 'Resolved disputes restore only the unchanged approved reminder')
 
   // Conflicting, missing, and stale observations yield unknown and invalidate review.
   inventory = 'future'
