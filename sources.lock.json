@@ -186,7 +186,7 @@
       "executable": false
     },
     "API.md": {
-      "sha256": "2a77007fb9eda90445ed7e07f939d6eaf159737052353c9b3074d2c547dbba0c",
+      "sha256": "784b2f90a2010c06cd85ee921b8f822724e543152d84377e88109946a4cfb9f2",
       "executable": false
     },
     "base-copies.json": {
@@ -5250,7 +5250,7 @@
       "executable": false
     },
     "tests/nectar/hosted-setup-archive.mjs": {
-      "sha256": "8dde5b06082711be6de2a57f1e057ba138b9f7b7d2cf617ebe2a94068300cdff",
+      "sha256": "1672dc4c28140b4ec7f39ae1aad43f9d71ae6486f5670b67a2b013e0857fe662",
       "executable": false
     },
     "tests/nectar/hosted-setup-sandbox.mjs": {

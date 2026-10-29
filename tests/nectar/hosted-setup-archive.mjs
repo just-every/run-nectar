@@ -193,8 +193,24 @@ export async function hostedSetupArchiveJourney() {
     const restoredArchive=await archiveItems(archive('restored'))
     assert.deepEqual(history(restoredArchive),captured,'Actual restore preserves every historical evidence byte')
     assert.deepEqual(restoredArchive.find(item=>item.table==='nc_audit'&&item.row.seq===achAudit.row.seq),achAudit,'Actual restore preserves the original mandate audit facts')
+    for(const event of before.filter(item=>item.table==='nc_audit'&&item.row.action.startsWith('checkout.setup.'))){
+      assert.deepEqual(restoredArchive.find(item=>item.table==='nc_audit'&&item.row.seq===event.row.seq),event,'Restoration preserves every original setup audit event')
+    }
     await restart({fresh:true})
     assert.deepEqual(await money(updating.customer),financial)
+    const restoredAudit=await api('audit')
+    for(const row of captured){
+      const event=restoredAudit.find(event=>event.action==='checkout.setup.start'&&event.subject===row.id)
+      assert.ok(event,'An authorized operator can retrieve the original accepted wording')
+      const facts=JSON.parse(event.detail)
+      assert.deepEqual(facts.wording,JSON.parse(row.consent_json))
+      assert.equal(facts.wordingHash,row.consent_hash)
+      assert.equal(facts.acceptedAt,row.accepted_at)
+      assert.equal(facts.defaultChoice,!!row.default_choice)
+      assert.equal(facts.customer,row.customer_id)
+      assert.equal(facts.account,row.account_ref)
+      assert.equal(facts.testMode,true)
+    }
     for(const target of [...targets.slice(0,4),failed]){
       const rows=await currentRows(target.customer)
       assert.equal(rows.length,expected.filter(row=>row.customer===target.customer).length)
