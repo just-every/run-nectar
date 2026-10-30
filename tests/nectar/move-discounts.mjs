@@ -9,15 +9,15 @@ export function amountDiscountCapture() {
   const reference = (kind, index) => 'synthetic-nectar-discount-' + kind + '-' + index
   const start = unix('2026-10-01'), end = unix('2026-11-01')
   const products = [{ id: reference('product', 1), name: 'Synthetic eligible' }, { id: reference('product', 2), name: 'Synthetic uncovered' }]
-  const prices = [30000, 10000, 10000].map((amount, index) => ({
+  const prices = [30000, 10000, 10000, 15000].map((amount, index) => ({
     id: reference('price', index), product: products[index === 1 ? 1 : 0].id, type: 'recurring', currency: 'usd',
-    unit_amount: amount, recurring: { interval: 'month', interval_count: 1, usage_type: 'licensed' }, metadata: { nectar_kind: 'flat' },
+    unit_amount: amount, recurring: { interval: 'month', interval_count: 1, usage_type: 'licensed' }, metadata: { nectar_kind: index === 3 ? 'seat' : 'flat' },
   }))
   const customers = Array.from({ length: 4 }, (_, index) => ({ id: reference('customer', index), name: 'Synthetic imported discount ' + index, email: [reference('mail', index), 'example.test'].join('@') }))
   const subscriptions = customers.map((customer, index) => ({
     id: reference('subscription', index), object: 'subscription', customer: customer.id, status: 'active', start_date: start,
     billing_cycle_anchor: start, current_period_start: end, current_period_end: unix('2026-12-01'),
-    items: { data: [prices[index === 1 ? 2 : 0], prices[1]].map((price, part) => ({ id: reference('item', index * 2 + part), price: { id: price.id }, quantity: 1 })), has_more: false },
+    items: { data: [prices[index === 1 ? 2 : index === 3 ? 3 : 0], prices[1]].map((price, part) => ({ id: reference('item', index * 2 + part), price: { id: price.id }, quantity: index === 3 && part === 0 ? 2 : 1 })), has_more: false },
     discounts: [{ id: reference('discount', index), start: index === 2 ? end : start,
       end: index === 0 ? unix('2027-01-01') : null,
       coupon: { id: reference('coupon', index), amount_off: 20000, percent_off: null, currency: 'usd',
@@ -33,7 +33,7 @@ export function amountDiscountCapture() {
       total, tax: (gross - discount) / 10, amount_paid: total, amount_remaining: 0,
       total_discount_amounts: discount ? [{ amount: discount }] : [],
       lines: { data: subscription.items.data.map((item, part) => ({ id: reference('line', index * 2 + part), type: 'subscription',
-        price: item.price, quantity: 1, amount: prices.find(price => price.id === item.price.id).unit_amount, period: { start, end } })), has_more: false } }
+        price: item.price, quantity: item.quantity, amount: prices.find(price => price.id === item.price.id).unit_amount * item.quantity, period: { start, end } })), has_more: false } }
   })
   const lists = { customers, products, prices, subscriptions, invoices }
   return { manifest: { source: 'stripe', files: Object.fromEntries(Object.entries(lists).map(([name, rows]) => [name, { count: rows.length, has_more: false }])) },
@@ -66,8 +66,9 @@ export async function moveDiscountsFlow(h, owner, { onState = async () => {} } =
     s => { s.discounts[0].subscription = 'synthetic-nectar-other-subscription' },
     s => { s.discounts[0].customer = 'synthetic-nectar-other-customer' },
     s => { s.items.data[0].discounts = ['synthetic-nectar-item-discount'] },
+    (s, capture) => { capture.subscriptions.data[1].discounts[0].id = s.discounts[0].id },
   ]) {
-    const invalid = structuredClone(capture); change(invalid.subscriptions.data[0])
+    const invalid = structuredClone(capture); change(invalid.subscriptions.data[0], invalid)
     assert.equal((await api('import.apply', { ...discountFiles(invalid), fingerprint: preview.fingerprint }, 400)).error, 'unsupported_imported_discount')
     assert.deepEqual(await api('customers'), baseline)
   }
@@ -125,8 +126,9 @@ export async function moveDiscountsFlow(h, owner, { onState = async () => {} } =
       assert.equal(term.source.discount, capture.subscriptions.data[index].discounts[0].id)
       assert.equal(term.value, '200.00')
       assert.equal(term.months, index === 0 ? 3 : null)
-      assert.equal(term.priceIds.length, 2, 'the eligible product retains all its captured price versions')
+      assert.equal(term.priceIds.length, 3, 'the eligible product retains all its captured price versions')
       assert.equal(invoice.lines.filter(line => line.kind === 'discount').reduce((sum, line) => sum + line.amount_cents, 0), expected[index] === 44000 ? 0 : index === 1 ? -10000 : -20000)
+      if (index === 3) assert.deepEqual(invoice.lines.filter(line => line.kind === 'seat').map(line => [line.quantity, line.amount_cents]), [['2', 30000]], 'consumed once terms do not restart on a seat subscription')
       if (index === 1) assert.equal(invoice.lines.find(line => line.kind === 'flat' && /uncovered/.test(line.description)).amount_cents, 10000)
       await api('invoice.approve', { invoice: invoice.id, acknowledge: true })
       await api('invoice.finalise', { invoice: invoice.id, issue_date: invoice.period_end })
@@ -137,6 +139,21 @@ export async function moveDiscountsFlow(h, owner, { onState = async () => {} } =
   assert.equal((await api('import.job', { job: imported.job, action: 'undo' }, 409)).error, 'undo_blocked')
   await api('import.apply', { ...discountFiles(altered), fingerprint: (await api('import.preview', discountFiles(altered))).fingerprint }, 409)
   assert.deepEqual(await Promise.all(saved.map(invoice => api('invoices/' + invoice.id))), saved, 'replay, changed source and unsafe undo leave issued calculations immutable')
+  // Erasure retires captured identities while retaining anonymous money facts.
+  const request = await api('erasure.request', { customer: ordered[0].id })
+  await api('erasure.verify', { request: request.id, reason: 'Independently verified imported discount owner', evidence: file('synthetic-nectar-owner.txt', 'Signed source owner request', 'text/plain') })
+  const erased = await api('erasure.approve', { request: request.id, confirm: true })
+  assert.equal(erased.receipt.changed.find(row => row.kind === 'nc_coupon_amount_terms').records, 1)
+  const anonymous = await api('customers/' + ordered[0].id)
+  assert.equal(anonymous.name, 'Erased customer')
+  const replay = await api('import.preview', files)
+  assert.equal((await api('import.apply', { ...files, fingerprint: replay.fingerprint }, 409)).error, 'reviewed_fingerprint_changed')
+  assert.deepEqual(await api('customers/' + ordered[0].id), anonymous, 'retired capture cannot resurrect the erased person')
+  for (const original of saved.filter(invoice => invoice.customer_id === ordered[0].id)) {
+    const retained = await api('invoices/' + original.id)
+    assert.deepEqual([retained.number, retained.total_cents, retained.tax_cents], [original.number, original.total_cents, original.tax_cents], 'erasure and replay preserve anonymous issued money')
+  }
+  await onState({ label: 'erased-source', path: '/app/customers/' + ordered[0].id })
   console.log('MOVE-008 imported amount terms: original consumed month, exact expiry, once and forever, restrictions, cap, tax, replay, authority, atomic audit refusal, undo and immutable issued calculations passed')
   return { capture, files, customers: ordered, subscriptions, invoices: saved }
 }
