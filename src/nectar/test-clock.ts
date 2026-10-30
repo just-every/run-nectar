@@ -1,5 +1,5 @@
-// Only this customer's persisted sandbox clock advances. Ratings are frozen
-// previews, never issued invoices, collection attempts or notification jobs.
+// Only this customer's persisted sandbox clock advances. Frozen previews may
+// feed explicitly enabled test billing; live financial records stay separate.
 import type { Bindings } from '../auth.server'
 import { actorLabel, type Actor } from './actor'
 import { dueBillingWindows, INTERVAL_RATING_VERSION } from './billing-calendar'
