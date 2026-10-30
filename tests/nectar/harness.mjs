@@ -12,7 +12,8 @@ import { httpListener } from './http-listener.mjs'
 const wrangler = createRequire(import.meta.url)('wrangler')
 const { Miniflare, convertV4MiniflareOptions } = createRequire(createRequire(import.meta.url).resolve('wrangler'))('miniflare')
 
-export async function harness({ assets = false, localTime, hostname = '127.0.0.1', stripeFetch, stripeSecret, stripeSecondarySecret, stripeWebhookSecret, quickbooksFetch, webhookFetch, persistence, databaseId='nectar', applyMigrations=true, settings={} } = {}) {
+export async function harness({ assets = false, localTime, wallTime = false, hostname = '127.0.0.1', stripeFetch, stripeSecret, stripeSecondarySecret, stripeWebhookSecret, quickbooksFetch, webhookFetch, persistence, databaseId='nectar', applyMigrations=true, settings={} } = {}) {
+  assert.ok(!wallTime || localTime===undefined&&!('NECTAR_LOCAL_TIME' in settings),'Wall-time journeys refuse a simulated clock')
   const secret = () => randomBytes(32).toString('base64url')
   const vars = { AUTH_LOCAL: 'true', OWNER_EMAIL: 'owner@example.test', SESSION_SECRET: secret(), SETUP_TOKEN: secret(), MFA_KEY: secret(), PORTAL_KEY: secret(), MAIL_PROVIDER: 'resend', MAIL_API_KEY: 'test-only-resend-key', MAIL_FROM: 'auth@example.test' }
   // Persistent journeys keep their private runtime keys in memory across
@@ -131,7 +132,7 @@ export async function harness({ assets = false, localTime, hostname = '127.0.0.1
     }
   }
 
-  async function advanceClock(instant){assert.ok(Number.isFinite(Date.parse(instant)));vars.NECTAR_LOCAL_TIME=instant;await mf.setOptions(convertV4MiniflareOptions({...options,bindings:{...vars}}));await mf.ready;db=await mf.getD1Database('DB')}
+  async function advanceClock(instant){assert.ok(!wallTime,'Wall-time journeys cannot advance the clock');assert.ok(Number.isFinite(Date.parse(instant)));vars.NECTAR_LOCAL_TIME=instant;await mf.setOptions(convertV4MiniflareOptions({...options,bindings:{...vars}}));await mf.ready;db=await mf.getD1Database('DB')}
   async function configureMail({provider,apiKey,from},transport) {
     Object.assign(vars,{MAIL_PROVIDER:provider,MAIL_API_KEY:apiKey,MAIL_FROM:from});nativeMailFetch=transport
     await mf.setOptions(convertV4MiniflareOptions({...options,bindings:{...vars}}));await mf.ready;db=await mf.getD1Database('DB')
