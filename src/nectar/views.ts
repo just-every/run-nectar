@@ -1,4 +1,6 @@
 import { closeTieout } from './close-tieout'
+import { sandboxView } from './test-mode'
+import { sandboxCustomerView } from './test-clock'
 import { portalChangeSettings } from './portal-change-policy'
 import { readRemittances } from './remittances'
 import { processorEvents } from './processor-events'
@@ -99,6 +101,8 @@ export async function customerView(env: Bindings, actor: Actor, id: string, url?
 }
 
 export const views: Record<string, View> = {
+  sandbox: (env,actor) => sandboxView(env,actor),
+  sandboxCustomer: (env,actor,_r,id) => sandboxCustomerView(env,actor,id),
   portalChanges: (env,actor) => portalChangeSettings(env,actor),
   processorEvents:(env,actor,_r,_id,url)=>processorEvents(env,actor,url.searchParams.get('customer')??undefined),
   closeTieout: (env,actor,_r,_id,url)=>closeTieout(env,actor,url.searchParams.get('period')??undefined),

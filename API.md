@@ -966,3 +966,40 @@ delivery. A receipt records an allocation, without claiming settlement.
 `POST /api/nectar/close.scan` takes `period`, the exact returned `basis` and an active owner or finance member ID in `owner`. It requires full billing read and proposal capabilities, rechecks the source basis and records cases atomically with its audit. Repeated scans reuse the same source case. Unapplied received cash is a review item; a pending existing bad-debt journal is a synchronization failure. These meanings do not establish missing processor fees, unsynced credit notes or failed provider tax commitments.
 
 Use existing ordinary authorized financial doors for any fix. `assurance.approve` only confirms agreement on the exact current case basis; `assurance.recheck` resolves it after that confirmation and a fresh successful comparison. Neither scanning nor confirming grants allocation, journal-posting or period-close authority. The accountant page is `/app/close-tieout`, linked from Revenue schedules. Complete connector, entity, currency, payout, fee and provider tax qualification remains outside this native packet.
+
+### Native sandbox previews
+
+Under GOV-001, current owner and developer members administer Test mode under
+Settings at `/app/settings/test-mode`. Other members and application credentials
+cannot read or change this sandbox. Administration checks current membership
+and the existing fresh-factor requirements. It grants no live financial action.
+
+- `GET /api/nectar/sandbox` returns the current source fingerprint, eligible
+  active USD simple fixed and seat prices, excluded prices, immutable saved
+  catalog copies and separate sandbox customers. Copy readiness requires an
+  owner-reviewed declared tax policy and an eligible price.
+- `POST /api/nectar/sandbox.catalog.copy` accepts `source_fingerprint` and
+  `confirm: true`. It atomically copies the reviewed timezone, declared tax and
+  billing intervals with prices, using separate sandbox price identifiers.
+  A changed source is refused. Repeating an unchanged copy returns its identity.
+  Later live price retirement, new versions and tax changes do not alter it.
+- `POST /api/nectar/sandbox.customer.create` accepts `catalog`, a synthetic
+  `label`, an ISO `clock` with an explicit offset, optional `trial_end`, and
+  parallel string arrays `price` and `quantity`. Only prices from that saved
+  sandbox catalog are accepted. No live customer or saved method is copied.
+- `GET /api/nectar/sandbox/customers/{id}` returns its independent clock,
+  revision, immutable clock history, copied basis and saved billing previews.
+- `POST /api/nectar/sandbox.clock.advance` accepts `customer`, its current
+  integer `revision`, an ISO `clock` and `confirm: true`. Time moves forward
+  only, within ten years of the sandbox start and 120 cumulative due windows.
+  Concurrent or stale changes are refused atomically with their previews and
+  audit. Each billing window is saved once. The same calendar and rating engine
+  handles annual terms, trials, calendar-day proration and exact declared tax.
+
+Forms use the same action doors. All amounts are previews: no invoice, payment,
+retry, message, provider write or live clock change occurs. These native copies
+cover the supported pricing slice only. Full configuration mirroring, other
+pricing instruments, processor test-key binding and the thirteen-month
+failing-card journey with actual invoices, renewals, retries, notices and state
+transitions remain DEV-004 work. A local journey clock is separate from this
+persisted product sandbox.

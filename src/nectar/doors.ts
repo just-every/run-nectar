@@ -4,6 +4,8 @@
 // Patterns are relative to /api/nectar/ (API) or absolute (pages).
 export const API_DOORS: [string, string][] = [
   ['^close-tieout$', 'closeTieout'],
+  ['^sandbox$', 'sandbox'],
+  ['^sandbox/customers/([\\w-]+)$', 'sandboxCustomer'],
   ['^portal-changes$', 'portalChanges'],
   ['^remittances$','remittances'],
   ['^processor-events$','processorEvents'],
@@ -63,6 +65,8 @@ export const LIST_DOORS = ['remittances','paymentLinks','automaticCollections','
 
 export const PAGE_DOORS: [string, string][] = [
   ['^/app/close-tieout$', 'closeTieout'],
+  ['^/app/settings/test-mode$', 'sandbox'],
+  ['^/app/settings/test-mode/([\\w-]+)$', 'sandboxCustomer'],
   ['^/app/settings/portal-changes$', 'portalChanges'],
   ['^/app/processor-events$','processorEvents'],
   ['^/app/payments/([\\w-]+)/receipt$','paymentReceipt'],
