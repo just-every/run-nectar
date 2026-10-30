@@ -1,3 +1,4 @@
+import { moveInvestigationsFlow } from './move-investigations.mjs'
 import { reconciliationFlow } from './reconciliation.mjs'
 import { commitments } from './commitments.mjs'
 import { seedPortalRecords } from './portal-sessions.mjs'
@@ -20,7 +21,7 @@ import { contractEntitySetup } from './contract-setup.mjs'
 import { intervalCancellationFlow } from './interval-cancel.mjs'
 import { numberingEntitiesFlow } from './numbering-entities.mjs'
 const kind=process.argv[2],directory=process.env.NECTAR_EVIDENCE_DIR??`.evidence/${kind}`
-assert.ok(['assurance','entitlements','portal-usage','erasure','history','collection','numbering','intervals','cancellation','entity-setup','prepaid','native-collection'].includes(kind))
+assert.ok(['move-investigations','assurance','entitlements','portal-usage','erasure','history','collection','numbering','intervals','cancellation','entity-setup','prepaid','native-collection'].includes(kind))
 await mkdir(directory,{recursive:true})
 const captures=[]
 const h=await harness({assets:true,...(kind==='collection'?collectionOptions():kind==='native-collection'?nativeOptions():{})});let browser
@@ -57,7 +58,33 @@ try {
     const url=new URL(page.url())
     assert.equal(url.searchParams.get('error'),null,`Native form submission ${url.pathname}: ${url.searchParams.get('error')}`)
   }
-  if(kind==='assurance') {
+  if(kind==='move-investigations') {
+    await moveInvestigationsFlow(h,owner,{onState:async state=>{
+      await page.setViewportSize({width:1440,height:950})
+      await page.goto(h.origin+state.path)
+      assert.equal(await page.locator('[data-move-case]').count(),3)
+      if(state.label==='three-differences') {
+        assert.match(await page.locator('main').innerText(),/Quantity/)
+        assert.match(await page.locator('main').innerText(),/Unit price/)
+        assert.match(await page.locator('main').innerText(),/Service ends/)
+        await submit(form('move.investigate'))
+        assert.equal(await page.locator('[data-move-case]').count(),3,'native repeated investigation keeps three cases')
+      } else {
+        assert.equal(await form('assurance.approve').count(),0,'resolved cases need no further confirmation')
+        await submit(form('assurance.recheck').first())
+        assert.match(await page.locator('[data-move-case]').first().innerText(),/resolved/)
+      }
+      assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false)
+      assert.equal(await page.locator('main button').evaluateAll(nodes=>nodes.filter(node=>!node.textContent.trim()).length),0)
+      for(const width of [1440,390]) {
+        await page.setViewportSize({width,height:950})
+        await page.screenshot({path:`${directory}/${width}-${state.label}.png`,fullPage:true})
+        captures.push({label:state.label,width,file:`${width}-${state.label}.png`})
+        console.log(`BROWSER ${width} ${state.label}`)
+      }
+    }})
+  }
+  else if(kind==='assurance') {
     await reconciliationFlow(h,owner,async state=>{
       await both(`assurance-${state.label}`,state.path,async()=>{
         if(state.label==='assignee-demoted') {

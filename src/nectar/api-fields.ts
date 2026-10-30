@@ -718,6 +718,9 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
   "mfa.verify": {
     "code": "text"
   },
+  "move.investigate": {
+    "owner": "text"
+  },
   "note.add": {
     "body": "text",
     "kind": "text",
