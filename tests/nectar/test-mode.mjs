@@ -149,5 +149,22 @@ export async function testModeFlow(h, owner, { onState = async () => {}, copyCat
   await api('access.end', { member: member.id })
   await h.api('sandbox.clock.advance', developer, { ...annual, revision: 3, clock: '2028-03-01T08:00:00Z' }, 401)
   assert.deepEqual(await read(first.id), stableFirst, 'Ended membership cannot advance a retained sandbox')
+  // Copied catalog names can contain personal text. Ordinary erasure must
+  // withdraw that text from sandbox copies without losing prices or cents.
+  const privateName = catalog.prices.find(p => p.sourceId === flat).label
+  const person = (await api('customer.create', { external_id: 'synthetic-nectar-818', name: privateName, billing_email: address(818) })).id
+  const namedSandbox = await api('sandbox.customer.create', { ...fields, label: privateName })
+  const erasure = await api('erasure.request', { customer: person })
+  const message = h.mails.findLast(m => [m.to].flat().includes(address(818)))
+  const link = new URL(`${message.text ?? ''} ${message.html ?? ''}`.match(/https?:\/\/[^\s"<]+\/erase\/[a-f0-9]{64}/)[0])
+  assert.equal((await h.raw(link.pathname, { form: new URLSearchParams({ confirm: 'yes' }) })).status, 200)
+  await api('erasure.approve', { request: erasure.id, confirm: true })
+  const redacted = await read(first.id)
+  assert.ok(!JSON.stringify(redacted).includes(privateName), 'An erased person is absent from copied price labels and saved preview descriptions')
+  assert.ok(!(await read(namedSandbox.id)).label.includes(privateName), 'Synthetic customer labels participate in incidental identity erasure')
+  assert.deepEqual(redacted.previews.map(p => p.rating.totalCents), stableFirst.previews.map(p => p.rating.totalCents), 'Erasure preserves exact sandbox preview money')
+  await api('sandbox.catalog.copy', { source_fingerprint: source.sourceFingerprint, confirm: true }, 409)
+  await api('sandbox.clock.advance', { customer: person, revision: 1, clock: annual.clock, confirm: true }, 404)
+  await onState({ label: 'privacy-redacted-clock', path: `/app/settings/test-mode/${first.id}`, owner, first: first.id, second: secondId })
   console.log('DEV-004 testModeFlow: reviewed immutable copy, independent thirteen-month annual previews, exact cents, atomic stale and concurrent refusal, live isolation and current developer authority passed')
 }
