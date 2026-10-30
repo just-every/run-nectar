@@ -20,7 +20,11 @@ if (process.env.NECTAR_VERIFY_SHARD !== '0') {
     const excluded = new Set(['.git', 'node_modules', '.dev.vars', '.wrangler', '.rer', '.cache', '.evidence', 'exports'])
     await cp(root, checkout, { recursive: true, filter: source => source === root || !excluded.has(basename(source)) })
     await symlink(join(root, 'node_modules'), join(checkout, 'node_modules'), 'dir')
-    await run('tests/nectar/enterprise-linking.mjs', ['archive'], checkout, { ...process.env, NECTAR_TEST_CHECKOUT: '1' })
+    // The outer verify operation belongs to root. This independent checkout
+    // must acquire its own local-operation lock; keep the shared job lease.
+    const archiveEnv = { ...process.env, NECTAR_TEST_CHECKOUT: '1' }
+    delete archiveEnv.RER_LOCAL_OPERATION
+    await run('tests/nectar/enterprise-linking.mjs', ['archive'], checkout, archiveEnv)
   } finally {
     await rm(scratch, { recursive: true, force: true })
   }
