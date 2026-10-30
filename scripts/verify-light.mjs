@@ -11,7 +11,7 @@ const scripts = {
  'pnpm run test:flows': 'tests/nectar/flows.mjs',
  'pnpm run test:journey': 'tests/nectar/journey.mjs',
 };
-const checks = new Set(['node scripts/contract-docs.mjs check', 'node scripts/edition-authoring/cli.mjs check',
+const checks = new Set(['node scripts/contract-docs.mjs check', 'node node_modules/@runeditrun/rer/edition-authoring/cli.mjs check',
  'pnpm run check', 'pnpm run typecheck', 'pnpm run build --site']);
 const relative = path => typeof path === 'string' && path.length > 0 && !path.startsWith('/')
  && !path.includes('\\') && !path.split('/').some(part => !part || part === '.' || part === '..');

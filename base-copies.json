@@ -42,7 +42,7 @@
       },
       "acknowledged": {
         ".github/workflows/verify.yml": {
-          "sha256": "0f504df577e4f05fa8816b859c75ba3301bb2de91a4503a3c446b91d00ebb740",
+          "sha256": "00e694fb4a9d6170bc1bd20643b46a38fa1fbff5939ca18ebb3e8c2cc3310327",
           "mode": "100644"
         }
       }
@@ -2666,7 +2666,16 @@
       },
       "originFiles": [
         "export/verify-ci.mjs"
-      ]
+      ],
+      "adapted": {
+        "scripts/verify-ci.mjs": "f96363bf919ea3e7ed1837daba6894810a50e4a6"
+      },
+      "acknowledged": {
+        "scripts/verify-ci.mjs": {
+          "sha256": "059b3b1b5608fe2b718b22c45a76d74fcbc0014ff747153612ac1a0bdf70155b",
+          "mode": "100644"
+        }
+      }
     },
     {
       "path": "scripts/verify-evidence.mjs",
@@ -2700,7 +2709,7 @@
       },
       "acknowledged": {
         "scripts/verify-light.mjs": {
-          "sha256": "8fc63119d18d63fac2d3b3ffc4e08089f1002c72e15563739c7b1b6270076df9",
+          "sha256": "a4fd76e5877512d180bd62de3290a27ed4b40e4b1b5a19d009c56d5da12f1d77",
           "mode": "100644"
         }
       }
@@ -8361,7 +8370,16 @@
       },
       "originFiles": [
         "export/VERIFY-WORKFLOW.md"
-      ]
+      ],
+      "adapted": {
+        "VERIFY-WORKFLOW.md": "f96363bf919ea3e7ed1837daba6894810a50e4a6"
+      },
+      "acknowledged": {
+        "VERIFY-WORKFLOW.md": {
+          "sha256": "dc9d4cf979d29c2217d5250edf5fa5d84e89683de5fe0bd11ecdab868c6aa6c8",
+          "mode": "100644"
+        }
+      }
     }
   ]
 }

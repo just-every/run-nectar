@@ -140,4 +140,4 @@ CONTRACT.md is the acceptance and status source. After changing it, run
 `node scripts/contract-docs.mjs write` and `node scripts/contract-docs.mjs check`.
 Commit the generated ACCEPTANCE.md and docs/CLAIMS.md with the source.
 Regenerate the edition source lock last with
-`node scripts/edition-authoring/cli.mjs lock`, then run its `check`.
+`node node_modules/@runeditrun/rer/edition-authoring/cli.mjs lock`, then run its `check`.
