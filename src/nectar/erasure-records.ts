@@ -61,6 +61,8 @@ export async function erasurePlan(env: Bindings, customer: Row): Promise<Erasure
       if (column in key || value === null) continue
       const shared = !affected && typeof value === 'string' && (column.endsWith('_json') || column === 'detail' || column === 'csv' || column === 'report_json') && (keyed(json(value),ids) || personal.some(v=>value.includes(v)))
       if (!affected && !shared) continue
+      // Internal product scopes and the duration enum are anonymous financial operands.
+      if (affected && table === 'nc_coupon_amount_terms' && ['duration','price_ids_json'].includes(column)) continue
       if (column.endsWith('_json') || column === 'detail') { updates[column] = affected ? blankJson(String(value)) : JSON.stringify(redactShared(json(value),ids,personal)); continue }
       if (column === 'csv') { updates[column] = affected ? '' : redactSnapshotCsv(String(value),personal); continue }
       if (!affected || typeof value !== 'string') continue

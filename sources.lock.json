@@ -857,6 +857,10 @@
       "sha256": "d8f37039177035f0b2ceccbe7abd4b2d6cb3d7d80da18bb0998d102a05d36e2f",
       "executable": false
     },
+    "migrations/core/0116_imported_amount_discounts.sql": {
+      "sha256": "8dccc75729700e18128b7150e4630442b6e6461c00dca680166fd99fbdc8139a",
+      "executable": false
+    },
     "ONBOARDING.md": {
       "sha256": "95bb235abff28ac36979868486caf2cb73bfbe4ab63037f3e301d189bb9398d9",
       "executable": false
@@ -3442,7 +3446,7 @@
       "executable": false
     },
     "src/nectar/erasure-records.ts": {
-      "sha256": "7f326811c1998c1e92ed858101528ba3a2a842882a808fdbaf9bef774f1cd706",
+      "sha256": "1b88e3662325adb0411b6531e194d88850bd521f4a7f08d50b0e8261a84d2374",
       "executable": false
     },
     "src/nectar/erasure-requests.ts": {
@@ -3749,12 +3753,16 @@
       "sha256": "edff711494944466c943c6f99b0b30e0eb4791312dba9fdc4dc52c8ea9c6687f",
       "executable": false
     },
+    "src/nectar/movein/imported-discounts.ts": {
+      "sha256": "4ca47f9f4927b783b2d8efdf0cc5d762ce9bf3ad0ae10cc374fd2661ec264dcd",
+      "executable": false
+    },
     "src/nectar/movein/stripe.ts": {
-      "sha256": "b31ab7550e92645a88a7779aeb941d803e4ab9e00f80f4420e6cd66db268720c",
+      "sha256": "06dbd133f22dc8c6b6a73861c85c9321c4de97b0efe5279d05063e2c21269fc8",
       "executable": false
     },
     "src/nectar/movein/target.ts": {
-      "sha256": "237f2d0f40db41ae2e7f2c06bfa10692a2cf0329a756f0f2f326d3dd45aac1e0",
+      "sha256": "e24d1a8ae392103d27a7d8079c62e63f73a955b8cd615a0f4cbd8ab61da9cef4",
       "executable": false
     },
     "src/nectar/note-records.ts": {
@@ -4202,7 +4210,7 @@
       "executable": false
     },
     "src/nectar/promotions.ts": {
-      "sha256": "37ce309209bfb10ce0f495a68f198ccafb54530f09d8eeefcb4a4e5bc624008f",
+      "sha256": "61949143053804ccf1a111503bde70dab728664148f6dd567f34f195cd632d50",
       "executable": false
     },
     "src/nectar/proposals.ts": {
