@@ -959,3 +959,6 @@ recipient, language, source or wording changes invalidate its frozen basis.
 A prepared event cannot be replaced, including after expiry, provider refusal
 or uncertainty. Acceptance records provider acceptance rather than mailbox
 delivery. A receipt records an allocation, without claiming settlement.
+## Company agent door
+
+The shared `/mcp` door, `/agents` and `/api/rer/agent-policy` use Nectar's declared CORE registry. See [the supported jobs and limits](docs/agent-door.md) and `agent-surface.json`. Existing application, device, import and provider credentials keep their native purposes.
