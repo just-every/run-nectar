@@ -194,7 +194,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "5a235901eaf5a82039b0ac99989c5ed72cdc1e37ea400f364501753d216b9b79",
+      "sha256": "f2274a59013043dae6dd93349ba9ef4a4ee8437f0b12eb30605658fe97c3af58",
       "executable": false
     },
     "DEMO.md": {
@@ -6010,7 +6010,7 @@
       "executable": false
     },
     "tests/nectar/journeys.json": {
-      "sha256": "3bb69716b666c0a62b88a963ebb5c3b6e127012c1eb0cf21762b307837eedf31",
+      "sha256": "25c8c4fcea0a6158197fac88f55d5bf4c70a46aec99ae325be124285423880dc",
       "executable": false
     },
     "tests/nectar/lifecycle-cancel.mjs": {
@@ -6350,7 +6350,7 @@
       "executable": false
     },
     "tests/nectar/recovery.mjs": {
-      "sha256": "fa8a9f299bf0b096911b259b241de7ce54f669d2ea49958b2aa6d4384b952c86",
+      "sha256": "375621c7cbc32088ffed8bcc203608a93ce9ebe4017bc0aa37a56b7173f23b94",
       "executable": false
     },
     "tests/nectar/remittance-files.mjs": {
@@ -6494,7 +6494,7 @@
       "executable": false
     },
     "verification.json": {
-      "sha256": "bc7853ba5680c65f8932223a3741509fbb3886126d52c3802e8b57ca8f13ccf2",
+      "sha256": "d5d887839b2bae7241d7b3ca3aa39ddcdf141ce9fe447b2bf531ef89c9c1699a",
       "executable": false
     },
     "VERIFY-WORKFLOW.md": {

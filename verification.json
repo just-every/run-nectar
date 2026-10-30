@@ -54,7 +54,8 @@
       "commands": [
         "node tests/nectar/journey.mjs",
         "node tests/nectar/mfa-passkey.mjs",
-        "node tests/nectar/sanity.mjs entitlementQuotasFlow moveHistoryFlow assuranceDetectorsFlow paymentLinksFlow creditCorrectionFlow processorCashImportedFlow prepaidTopupFlow numberingEntitiesFlow lifecycleFlow"
+        "node tests/nectar/sanity.mjs entitlementQuotasFlow moveHistoryFlow assuranceDetectorsFlow paymentLinksFlow creditCorrectionFlow processorCashImportedFlow prepaidTopupFlow numberingEntitiesFlow lifecycleFlow",
+        "node tests/nectar/sanity.mjs remittanceFilesFlow"
       ],
       "hosted": true
     },

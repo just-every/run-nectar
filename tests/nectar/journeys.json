@@ -494,5 +494,14 @@
         "invoiceAutomationFlow"
       ]
     ]
+  },
+  {
+    "name": "remittanceFilesFlow",
+    "steps": [
+      [
+        "remittance-files",
+        "remittanceFilesFlow"
+      ]
+    ]
   }
 ]
