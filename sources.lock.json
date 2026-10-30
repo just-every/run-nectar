@@ -6,7 +6,7 @@
   "toolchain": {
     "id": "runeditrun/edition-authoring",
     "version": "1.1.0",
-    "sha256": "5cfbabc877752218b1fdb82052bf220ee2be22ef21b573650005250661f70cd8"
+    "sha256": "a44bae4aae36d7a2e3d5e2da4e080d3c92eb11f226f6e7322b23680f43e6f982"
   },
   "components": [
     {
@@ -374,7 +374,7 @@
       "executable": false
     },
     "management/integration/deployment-spec.json": {
-      "sha256": "c649421fa2dca5c43d2d3c492396771dda44ac72033f470f3b61949c8f1f022a",
+      "sha256": "97d0e247160c8339b6fe90c6037b00320c8f3f21c94327f1f00b290266de4cbd",
       "executable": false
     },
     "migrations/core/0001_owner.sql": {
@@ -1038,7 +1038,7 @@
       "executable": false
     },
     "RELEASE.json": {
-      "sha256": "c489feb7bafbb06076c20a4459391c06403685ba3a490bb359322a163c9d8078",
+      "sha256": "91abc02e6b6e0df6e55b4a687001c9ce7a7f426d771ad17970f0291a6ab345d2",
       "executable": false
     },
     "rer-project.json": {
