@@ -5734,7 +5734,7 @@
       "executable": false
     },
     "tests/nectar/sanity.mjs": {
-      "sha256": "022e1b9c7410b634785a9279b2d7e6a1c87b56394af5873270f576e8698357f3",
+      "sha256": "d7817bb1528b5cce2ee5bea602ac621b8ef836c7ea5c41ccbf12c9fa65b67903",
       "executable": false
     },
     "tests/nectar/sdk-typescript.mjs": {
