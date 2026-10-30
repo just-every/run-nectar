@@ -140,7 +140,9 @@ export async function processorArchiveJourney() {
   await h.close();h=null
   h=await harness({assets:true,persistence,databaseId,applyMigrations:false,settings,localTime:'2026-10-28T10:00:00Z',stripeFetch:cashEdge.fetch,stripeSecret:'synthetic-nectar-1',stripeSecondarySecret:'synthetic-nectar-2'})
   const cashOwner=await restoredOwner(h,enrollment,'2026-10-28T10:00:00Z')
-  const cash=await processorCashFlow(h,cashOwner,{cashEdge})
+  // The returns phase below runs every return assertion in its own installation:
+  // the event journey has already frozen this installation's October report.
+  const cash=await processorCashFlow(h,cashOwner,{cashEdge,includeReturns:false})
   const peer=await cashPeer(h,cashOwner,cashEdge)
   await erase(h,cashOwner,cash.customer)
   settings={...h.vars};await h.close();h=null

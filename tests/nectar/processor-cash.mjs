@@ -81,7 +81,7 @@ export const harnessOptions = () => {
   return { localTime: '2026-10-28T10:00:00Z', stripeFetch: edge.fetch, stripeSecret: 'synthetic-nectar-1', stripeSecondarySecret: 'synthetic-nectar-2' }
 }
 
-export async function processorCashFlow(h, owner, { cashEdge = edge, onState=async()=>{},allocate } = {}) {
+export async function processorCashFlow(h, owner, { cashEdge = edge, onState=async()=>{},allocate, includeReturns=true } = {}) {
   const api = (path, body, status) => h.api(path, owner, body, status)
   const instant = Date.parse('2026-10-28T10:00:00Z')
   await h.advanceClock(new Date(instant).toISOString())
@@ -215,7 +215,7 @@ export async function processorCashFlow(h, owner, { cashEdge = edge, onState=asy
   assert.equal((await api('dunning')).series.filter(row=>paidIds.includes(row.invoice)).length,0)
   await h.advanceClock('2026-10-28T10:02:00Z')
   await onState({customer})
-  await processorCashReturnFlow(h,owner,{cashReturnEdge:cashEdge})
+  if(includeReturns)await processorCashReturnFlow(h,owner,{cashReturnEdge:cashEdge})
   return { customer, invoices: [byReference.id, byAmount.id, unknown.id,short.id,oldest.id,newer.id], unappliedCents: 0 }
 }
 
