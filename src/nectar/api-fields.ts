@@ -266,6 +266,11 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "customer": "text",
     "method": "text"
   },
+  "close.scan": {
+    "basis": "text",
+    "owner": "text",
+    "period": "text"
+  },
   "collection.confirm": {
     "account_ref": "text",
     "amount_cents": "integer",
