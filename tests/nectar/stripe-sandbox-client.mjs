@@ -19,6 +19,10 @@ export function stripeSandbox(secret, {run = randomUUID()} = {}) {
   check(typeof secret === 'string' && /^(?:sk|rk)_test_[A-Za-z0-9]+$/.test(secret), 'stripe_test_key_required')
   check(typeof run==='string'&&/^[a-f0-9-]{36}$/.test(run),'invalid_sandbox_run_identity')
   const authorization = `Basic ${Buffer.from(`${secret}:`).toString('base64')}`
+  // The run identity survives restarts; helper POST identities must not collide
+  // with a previous invocation's unrelated object creation. Worker payment
+  // identities still pass through unchanged and never receive a new key here.
+  const invocation=randomUUID()
   const requests=[]
   const counts = { GET: 0, POST: 0, DELETE: 0 }
   let sequence = 0
@@ -32,7 +36,7 @@ export function stripeSandbox(secret, {run = randomUUID()} = {}) {
       response = await fetch(`https://api.stripe.com${path}${method === 'GET' && params.size ? `?${params}` : ''}`, {
         method, signal: AbortSignal.timeout(Math.max(1, timeout)),
         headers: { authorization, 'Stripe-Version': '2025-09-30.clover',
-          ...(method === 'POST' ? { 'content-type': 'application/x-www-form-urlencoded', 'Idempotency-Key': `nectar-history-${run}-${++sequence}` } : {}) },
+          ...(method === 'POST' ? { 'content-type': 'application/x-www-form-urlencoded', 'Idempotency-Key': `nectar-history-${run}-${invocation}-${++sequence}` } : {}) },
         ...(method === 'POST' ? { body: params } : {}),
       })
     } catch { throw new SandboxFailure('stripe_transport_failed') }
