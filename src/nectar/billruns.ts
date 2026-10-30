@@ -340,7 +340,7 @@ async function finaliseCore(env: Bindings, actor: Actor, input: Input, trialAuth
   }
   // A run whose every live draft is issued is finalised.
   for (const run of new Set(targets.map(invoice => invoice.bill_run_id as string)))
-    if (issued.length && !await one(env, "SELECT 1 FROM nc_invoices WHERE bill_run_id = ? AND status IN ('draft', 'approved')", run))
+    if (issued.length && !await one(env, "SELECT 1 FROM nc_invoices WHERE bill_run_id = ? AND status IN ('draft', 'approved') LIMIT 1", run))
       await commit(env, [stmt(env, "UPDATE nc_bill_runs SET status = 'finalised', finalised_by = ?, finalised_at = ? WHERE id = ? AND status = 'draft'", actorLabel(actor), now(), run)], { actor: actorLabel(actor), action: 'billrun.finalise', subject: run, detail: { issued } })
   insist(issued.length, 'source_changed', 409, refused)
   return { issued, refused }

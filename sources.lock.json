@@ -877,6 +877,10 @@
       "sha256": "23c91da455f15461a1580c598a9e1d8714321e6b170efe2220791a4bebd4f2a4",
       "executable": false
     },
+    "migrations/core/0119_billing_completion_index.sql": {
+      "sha256": "7d9e1f15b7c3435655e1cc1413369e1f8f844a8408b4c342204fb44dc9c41539",
+      "executable": false
+    },
     "ONBOARDING.md": {
       "sha256": "95bb235abff28ac36979868486caf2cb73bfbe4ab63037f3e301d189bb9398d9",
       "executable": false
@@ -3250,7 +3254,7 @@
       "executable": false
     },
     "src/nectar/billruns.ts": {
-      "sha256": "7f4aaaacc4cf2ce72558198abd5ef6f0f9289cd1ed7a64c327f9c9bd76bce7e5",
+      "sha256": "238ba2b7b5a06ce792e95065ab8a70151a8c239f7901c3142c9d88e67bdf2bed",
       "executable": false
     },
     "src/nectar/business.ts": {
