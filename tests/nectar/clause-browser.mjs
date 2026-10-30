@@ -1,3 +1,4 @@
+import { moveDiscountsFlow, harnessOptions as discountOptions } from './move-discounts.mjs'
 import { reconciliationFlow } from './reconciliation.mjs'
 import { commitments } from './commitments.mjs'
 import { seedPortalRecords } from './portal-sessions.mjs'
@@ -20,10 +21,10 @@ import { contractEntitySetup } from './contract-setup.mjs'
 import { intervalCancellationFlow } from './interval-cancel.mjs'
 import { numberingEntitiesFlow } from './numbering-entities.mjs'
 const kind=process.argv[2],directory=process.env.NECTAR_EVIDENCE_DIR??`.evidence/${kind}`
-assert.ok(['assurance','entitlements','portal-usage','erasure','history','collection','numbering','intervals','cancellation','entity-setup','prepaid','native-collection'].includes(kind))
+assert.ok(['discounts','assurance','entitlements','portal-usage','erasure','history','collection','numbering','intervals','cancellation','entity-setup','prepaid','native-collection'].includes(kind))
 await mkdir(directory,{recursive:true})
 const captures=[]
-const h=await harness({assets:true,...(kind==='collection'?collectionOptions():kind==='native-collection'?nativeOptions():{})});let browser
+const h=await harness({assets:true,...(kind==='discounts'?discountOptions():kind==='collection'?collectionOptions():kind==='native-collection'?nativeOptions():{})});let browser
 try {
   await h.raw('/auth/bootstrap',{body:{token:h.vars.SETUP_TOKEN,displayName:'Nectar Owner'}})
   const owner=await h.signIn(h.vars.OWNER_EMAIL)
@@ -57,7 +58,8 @@ try {
     const url=new URL(page.url())
     assert.equal(url.searchParams.get('error'),null,`Native form submission ${url.pathname}: ${url.searchParams.get('error')}`)
   }
-  if(kind==='assurance') {
+  if(kind==='discounts')await moveDiscountsFlow(h,owner,{onState:async state=>{await both('discount-'+state.label,state.path)}})
+  else if(kind==='assurance') {
     await reconciliationFlow(h,owner,async state=>{
       await both(`assurance-${state.label}`,state.path,async()=>{
         if(state.label==='assignee-demoted') {
