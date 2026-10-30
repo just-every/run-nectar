@@ -13,7 +13,7 @@ export async function runIsolated(file, name, load) {
     assert.equal((await h.raw('/auth/bootstrap',{body:{token:h.vars.SETUP_TOKEN,displayName:'Nectar Owner'}})).status,303)
     const owner=await h.signIn(h.vars.OWNER_EMAIL)
     await h.raw('/setup',{cookie:owner,form:new URLSearchParams({confirm:'yes'})})
-    await h.api('business.configure',owner,{legal_name:'Cedar Software Inc',timezone:'America/Los_Angeles',invoice_prefix:'CD',payment_terms_days:30})
+    await h.api('business.configure',owner,{legal_name:'Cedar Software Inc',timezone:module.businessTimezone??'America/Los_Angeles',invoice_prefix:'CD',payment_terms_days:30})
     await applyPolicy(h,owner,'tax.declare',{tax_jurisdiction:'CA',tax_mode:'no_tax',tax_note:'Reviewed isolated contract journey'})
     await h.api('tax.review',owner,{revision:(await h.api('business',owner)).revision})
     await module[name](h,owner)

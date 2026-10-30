@@ -1,3 +1,4 @@
+import { portalAnswersFlow } from './portal-answers.mjs'
 import assert from 'node:assert/strict'
 import { applyPolicy } from './policy-helper.mjs'
 
@@ -161,5 +162,6 @@ export async function billingAnswersFlow(h, owner) {
   await api('proposal.decide', { proposal: prepared.id, decision: 'rejected' })
   assert.deepEqual(await api(`invoices/${invoice}`), current, 'AGENT-007 rejecting the suggestion leaves issued and financial evidence unchanged')
   console.log('AGENT-007 ten cited evidence questions across every current reader, foreign-customer refusal and proposal-only credits passed')
+  await portalAnswersFlow(h,owner,async()=>{},fixture)
   return { ...fixture, questions, answers }
 }
