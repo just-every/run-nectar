@@ -242,7 +242,7 @@
       "executable": false
     },
     "docs/enterprise-sign-in.md": {
-      "sha256": "286a6a75fedca4bd2096e5860244a5cdd64d3ad5d2f0e7e8da3856c443eb52b3",
+      "sha256": "07e1aa18d612fd3b68138ac44f9654dcf1aa4b89fa62bde2cbc01d4906181d42",
       "executable": false
     },
     "docs/evidence/processor-events-sandbox.json": {
@@ -1290,7 +1290,7 @@
       "executable": false
     },
     "src/auth.server.ts": {
-      "sha256": "9a7c6e27a935aa3b290c1e2c495894328344ff336598a50904855581bdcde9ad",
+      "sha256": "9fe33da8d458963cc5a62f3cdebb8c0a4338e6f54dec7d542b26672000df9335",
       "executable": false
     },
     "src/base/contract-filter.ts": {
@@ -4734,7 +4734,7 @@
       "executable": false
     },
     "src/nectar/ui/security.ts": {
-      "sha256": "89cd470e8934fea13d85c55a272392ad00e11b7d0aacce9fa51e193e9f8fd40b",
+      "sha256": "a69877215d05eca2e59dd285ffba5d208edbd0f049f340abdfd7164ba365769d",
       "executable": false
     },
     "src/nectar/ui/shell.ts": {
@@ -5206,7 +5206,7 @@
       "executable": false
     },
     "tests/nectar/enterprise-identity-browser.mjs": {
-      "sha256": "84387fe678b1c9ab5828d9d31e27407c3f8b93cd5d8c3c26a00a1286c21d17d4",
+      "sha256": "4a4ab20fde2fc45a9fd2116ec95f6bc97bc53243ec452d356c98a9f53add7891",
       "executable": false
     },
     "tests/nectar/enterprise-identity-sandbox.mjs": {
@@ -5218,7 +5218,7 @@
       "executable": false
     },
     "tests/nectar/enterprise-linking.mjs": {
-      "sha256": "f35f949f241cc7092e6a8bdcf1259bf7c1e98312c4a9000f74e7ffde76ce9713",
+      "sha256": "56c0e59249b2cb2e0e2354fbc45ab8b13f37726c236ad6dbacbbdcb1885a3ab0",
       "executable": false
     },
     "tests/nectar/entitlement-quotas.mjs": {

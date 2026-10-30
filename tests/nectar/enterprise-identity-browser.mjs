@@ -109,7 +109,12 @@ async function linkingBrowser() {
           await capture(memberPage, 'member-link-start', '/app/security')
           assert.equal(await memberPage.getByRole('link', { name: 'Prove provider identity' }).count(), 1)
         }
-        if (label === 'link-approved') assert.match(await ownerPage.locator('body').innerText(), /Active/)
+        if (label === 'link-approved') {
+          assert.match(await ownerPage.locator('body').innerText(), /Active/)
+          const linkedPage = await pageFor(member.cookie)
+          await linkedPage.goto(h.origin + '/app/security')
+          assert.equal(await linkedPage.getByRole('link', { name: 'Prove provider identity' }).count(), 0, 'A managed member is already bound')
+        }
         if (label === 'link-deprovisioned') assert.match(await ownerPage.locator('body').innerText(), /Ended/)
       },
       approve: async ({ request }) => {

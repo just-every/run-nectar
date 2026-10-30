@@ -6,6 +6,7 @@ import { safeReturnTo } from '../../modules/operator-auth/index.mjs'
 import type { Actor } from '../actor'
 import { ssoConfig } from '../sso-config'
 import { business } from '../business'
+import { one } from '../core'
 import type { Input } from '../input'
 import { KEY_REASONS, confirmTotp, mfaView, startTotp, verifyFactor } from '../mfa'
 import { failure } from '../http'
@@ -31,7 +32,7 @@ export async function securityPage(env: Bindings, actor: Actor, url: URL, extra:
   const add = enrollable ? h`<section class="card" aria-labelledby="add"><h2 id="add">Add a second factor</h2>
     <form method="post" action="/app/security/totp" class="columns">${hidden('returnTo', returnTo)}${field('Authenticator app name', 'label', { value: 'Authenticator app', required: false })}<button type="submit">Set up an authenticator app</button></form>
     <div class="columns">${field('Passkey name', 'passkey-label', { value: 'Passkey', required: false })}<button type="button" data-passkey="register" data-return-to="${returnTo}">Add a passkey</button></div></section>` : h``
-  const providerLink = actor.role !== 'owner' && actor.role !== 'custom' && !view.state && await ssoConfig(env) ? h`<section class="card"><h2>Link your provider identity</h2><p>Prove your provider identity while signed in here, then ask the owner to approve the exact account and role. Approval ends your old sessions.</p><p><a class="button" href="/sso/start?link=1">Prove provider identity</a></p></section>` : h``
+  const providerLink = actor.role !== 'owner' && actor.role !== 'custom' && !view.state && await ssoConfig(env) && !await one(env, 'SELECT 1 FROM nc_scim_users WHERE member_id=?', actor.id) ? h`<section class="card"><h2>Link your provider identity</h2><p>Prove your provider identity while signed in here, then ask the owner to approve the exact account and role. Approval ends your old sessions.</p><p><a class="button" href="/sso/start?link=1">Prove provider identity</a></p></section>` : h``
   const factors = h`<section class="card" aria-labelledby="factors"><h2 id="factors">Your factors</h2>${table(['Factor', 'Kind', 'Added', 'Status', ''], view.factors.map(f => [f.label, f.kind === 'totp' ? 'Authenticator app' : 'Passkey', when(f.created_at, zone), tag(f.usable ? 'Active' : 'Needs enrolling again'), view.state ? '' : form('mfa.remove', '/app/security', hidden('factor', f.id), 'Remove', { secondary: true })]), { empty: 'No second factor yet.' })}
     <p class="hint">${view.recovery_codes_left} unused recovery codes. Removing a factor signs you out everywhere.</p></section>`
   return page('Sign-in security', actor, h`<h1>Sign-in security</h1>${held}${extra}<p id="passkey-status" role="status"></p>${confirm}${add}${factors}${providerLink}`, { url, current: '/app/security', status, showNav: !view.state, script: '/app/security/passkey.js' })
