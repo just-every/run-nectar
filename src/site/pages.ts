@@ -4,6 +4,7 @@
 // Every Run page string and command is in run.json; nothing here reads
 // installation data.
 import { contractPageHtml } from '../base/contract-page'
+import { hostingPageHtml } from '../base/hosting-page'
 import { runPageHtml, siteNotFoundHtml, type RunData, type SiteBuild, type SiteContext } from '../base/run-site'
 import { identity } from '../identity'
 import { runPricing } from '../base/run-pricing'
@@ -16,7 +17,7 @@ import { landing } from './homepage/landing'
 import run from './run.json'
 import { siteDocument, siteFooter, siteHeader } from './shell'
 
-export function sitePages({ styles, contract }: SiteContext): SiteBuild {
+export function sitePages({ styles, contract, hosting }: SiteContext): SiteBuild {
   const data: RunData = { ...run, pricing: runPricing }
   const homepageHeader = { html: siteHeader(data), styles }
   const docs = renderedPages(data).map(page => ({ path: `/docs/${page.slug}`, html: siteDocument({ title: `${page.title} · Nectar docs`, description: page.summary, styles, body: docsPageBody(data, page) }) }))
@@ -27,6 +28,7 @@ export function sitePages({ styles, contract }: SiteContext): SiteBuild {
       ...(contract ? [{ path: '/contract', html: contractPageHtml(identity, data, contract) }] : []),
       { path: '/docs', html: siteDocument({ title: 'Docs · Nectar', description: docsLead, styles, body: docsIndexBody(data) }) },
       ...docs,
+      { path: '/docs/hosting', html: hostingPageHtml(identity, data, hosting ?? null, contract, { html: siteHeader(data, 'docs'), styles }) },
       { path: '/404', html: siteNotFoundHtml(identity, data, contract) },
     ],
     assets: ['rer-theme.css', 'fonts', 'brand', 'site', 'favicon.ico'],
