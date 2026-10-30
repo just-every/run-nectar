@@ -73,7 +73,28 @@
     "adapters": []
   },
   "limits": {
-    "status": "unmeasured"
+    "status": "unmeasured",
+    "nativeBillingRehearsal": {
+      "sourceRevision": "a46fb4dafcc2e23e628986cfb3976e640cd0b05c",
+      "activeSubscriptions": 10000,
+      "issuedInvoices": 10000,
+      "capturedPayments": 10000,
+      "recordedReceipts": 10000,
+      "paymentAllocations": 10000,
+      "revenueSchedules": 10000,
+      "allocatedCents": 1000000,
+      "billingDayMs": 845560,
+      "seedCreationMs": 114162,
+      "preparationMs": 48388,
+      "explicitConsentMs": 297565,
+      "processingMs": 547995,
+      "includesExplicitConsent": true,
+      "workerRestarts": 2,
+      "reconciled": true,
+      "withinFifteenMinutes": true,
+      "qualified": false,
+      "scope": "Native Worker and D1 with a synthetic processor edge, explicit invoice consent and owner-confirmed continuation; complete unattended and live processor qualification remains owed."
+    }
   },
   "accessibility": {
     "level": "WCAG 2.2 AA",

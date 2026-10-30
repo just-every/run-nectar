@@ -1003,8 +1003,9 @@ storage failure stops dispatch rather than silently executing unobserved work;
 if a final observation cannot be stored, the running record expires on a later
 tick. There is no operational activation, resend or retry action.
 
-Capacity remains unmeasured in `seed.json`. This history does not qualify the
-required ten-thousand-subscription billing day or its timing and restart proof.
+Overall capacity remains unmeasured in `seed.json`. Its separate
+`nativeBillingRehearsal` records the source-bound native timing result. Complete
+unattended billing and live processor qualification remain owed.
 
 The separate `Native billing capacity` workflow is started only by explicit
 workflow dispatch. Its committed command is
