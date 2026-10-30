@@ -113,9 +113,6 @@ jobs:
         with:
           node-version: '22.20.0'
           package-manager-cache: false
-      - name: Check edition source lock freshness
-        if: ${{ hashFiles('edition.json', 'sources.lock.json') != '' }}
-        run: node scripts/edition-authoring/cli.mjs check
       - run: npm install --global pnpm@10.12.4
       - name: Set runner-owned pnpm store
         run: pnpm config set store-dir "$RUNNER_TEMP/pnpm-store"
@@ -142,6 +139,9 @@ jobs:
           # Old snapshots contain absolute HOME paths; do not restore them here.
           key: seed-ubuntu24-temp-store-${{ runner.arch }}-browser-${{ matrix.browser }}-${{ hashFiles('pnpm-lock.yaml', 'package.json') }}
       - run: pnpm install --frozen-lockfile
+      - name: Check edition source lock freshness
+        if: ${{ hashFiles('edition.json', 'sources.lock.json') != '' }}
+        run: node node_modules/@runeditrun/rer/edition-authoring/cli.mjs check
       - run: pnpm run deps
       - name: Install and probe Chromium before system dependencies
         if: matrix.browser
