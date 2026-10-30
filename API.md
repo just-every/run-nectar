@@ -966,3 +966,25 @@ delivery. A receipt records an allocation, without claiming settlement.
 `POST /api/nectar/close.scan` takes `period`, the exact returned `basis` and an active owner or finance member ID in `owner`. It requires full billing read and proposal capabilities, rechecks the source basis and records cases atomically with its audit. Repeated scans reuse the same source case. Unapplied received cash is a review item; a pending existing bad-debt journal is a synchronization failure. These meanings do not establish missing processor fees, unsynced credit notes or failed provider tax commitments.
 
 Use existing ordinary authorized financial doors for any fix. `assurance.approve` only confirms agreement on the exact current case basis; `assurance.recheck` resolves it after that confirmation and a fresh successful comparison. Neither scanning nor confirming grants allocation, journal-posting or period-close authority. The accountant page is `/app/close-tieout`, linked from Revenue schedules. Complete connector, entity, currency, payout, fee and provider tax qualification remains outside this native packet.
+
+## Test bank-transfer instructions
+
+An owner with a current local authenticator or passkey factor calls
+`transfer.instructions.prepare` with `customer` and `account_ref` for an existing
+owner-confirmed Stripe binding. The provider customer must be in test mode and
+its cash-balance reconciliation must already be manual. Review the returned
+exact basis, then pass its `confirm` object to `transfer.instructions.confirm`
+only after explicit owner confirmation. This requests US bank-transfer funding
+instructions for USD; it changes no reconciliation policy and authorizes no
+collection, application or return. Unknown responses stay unavailable and can
+never be resent. The owner can read retained status at
+`/api/nectar/customers/{customer}/transfer-instructions`.
+
+Only validated virtual remit-to fields are retained. Newly issued native USD
+invoices freeze the instructions for their own processor route. Previously
+issued invoices keep their original evidence. The own-customer invoice page,
+PDF and portal show the frozen test instructions in the customer's language.
+Preparations are installation authority and are excluded from archives; retained
+claims prevent repeat requests after restoration. Erasure withdraws remit-to
+fields and customer access. No live processor or invoice-email qualification is
+claimed by this foundation.

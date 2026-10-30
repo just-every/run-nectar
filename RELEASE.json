@@ -81,6 +81,7 @@
     "migrations/core/0113_portal_retention_authority.sql",
     "migrations/core/0115_billing_notices.sql",
     "migrations/core/0116_operator_last_signin.sql",
-    "migrations/core/0117_operator_scheduled_policy.sql"
+    "migrations/core/0117_operator_scheduled_policy.sql",
+    "migrations/core/0118_transfer_instructions.sql"
   ]
 }
