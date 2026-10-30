@@ -6302,7 +6302,7 @@
       "executable": false
     },
     "tests/nectar/processor-archive.mjs": {
-      "sha256": "0692ecb8b219827c3550d40e28ad9867a75d0cd0a9dba70a25e1bb725df9ff29",
+      "sha256": "7b3563ff1513e49a719a2daf316469a7e295c819a7021e3a5a9840ae7f9f8941",
       "executable": false
     },
     "tests/nectar/processor-cash-imported-sandbox.mjs": {
