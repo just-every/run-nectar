@@ -174,7 +174,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "5206a8fdfaaab119815b7e337ca9bd714dc6d74c24354994c09a43d29740c329",
+      "sha256": "974c084f39c47383afd6425aa4b21b96743ce9f08eaeb550a1eb046664286ab8",
       "executable": false
     },
     "AGENTS.consumer.md": {
@@ -194,7 +194,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "f2274a59013043dae6dd93349ba9ef4a4ee8437f0b12eb30605658fe97c3af58",
+      "sha256": "8b2eede83a4feab824273630c860a1d185f2263a12d430d89324b9d4792e1bcd",
       "executable": false
     },
     "DEMO.md": {
@@ -230,7 +230,7 @@
       "executable": false
     },
     "docs/CLAIMS.md": {
-      "sha256": "62fed4043eff1eb0e5bfcf17841efa92218e8a0697863151ac6ee0c70fdcaebb",
+      "sha256": "6d961120d105e8d922ff79a159d11f747efe41354b726ccfb83c42e98034f8e5",
       "executable": false
     },
     "docs/composition-baseline.json": {
@@ -5886,7 +5886,7 @@
       "executable": false
     },
     "tests/nectar/customer-payment-methods.mjs": {
-      "sha256": "fbce24d5d665f091850bbc3439d50ddc4a0322d91805a0a23d68e26f25671b40",
+      "sha256": "75e61ea07e4ca31b68ffa078eaef5bbc7c4dc9f8fd3fa3020081d80dd3d8e176",
       "executable": false
     },
     "tests/nectar/customer-record-browser.mjs": {
@@ -5963,6 +5963,10 @@
     },
     "tests/nectar/hierarchies.mjs": {
       "sha256": "04a694dceac3c5bccd105bf6eb4b7fb0e23df4ac5425ae1c437ac3c4b5bebe41",
+      "executable": false
+    },
+    "tests/nectar/hosted-setup-archive.mjs": {
+      "sha256": "8c0954a469eaa7609418bf6bf81d4aee0119628ea04481d80f935bd5c98bca86",
       "executable": false
     },
     "tests/nectar/hosted-setup-sandbox.mjs": {
@@ -6290,7 +6294,7 @@
       "executable": false
     },
     "tests/nectar/processor-archive.mjs": {
-      "sha256": "5da329c237091ba89550ea2c5c89917fde930a111355d1bc6cb2a517adfc47ec",
+      "sha256": "631a67fac084675d8727dca739055d88e764bcea30a846c0d143194a6d265180",
       "executable": false
     },
     "tests/nectar/processor-cash-imported-sandbox.mjs": {
