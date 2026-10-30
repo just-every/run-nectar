@@ -117,7 +117,13 @@ import { prepareMetric,previewMetric,activateMetric } from './meter-definitions'
 
 type Handler = (env: Bindings, actor: Actor, input: Input, request: Request) => Promise<unknown>
 
+import { copySandboxCatalog } from './test-mode'
+import { createSandboxCustomer, advanceSandboxClock } from './test-clock'
+
 export const actions: Record<string, Handler> = {
+  'sandbox.catalog.copy': copySandboxCatalog,
+  'sandbox.customer.create': createSandboxCustomer,
+  'sandbox.clock.advance': advanceSandboxClock,
   'sso.configure': configureSso,
   'assurance.scan': scanAssurance,
   'assurance.assign': assignAssurance,
