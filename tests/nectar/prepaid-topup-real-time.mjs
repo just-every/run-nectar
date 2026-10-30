@@ -156,7 +156,7 @@ async function fundAndAuthorize(){
   const prepared=await api('collection.prepare',{invoice:purchase.invoice})
   check(prepared.review.amountCents===1000000&&prepared.review.accountRef===account.id&&prepared.review.customerRef===providerCustomer.id&&prepared.review.paymentMethodRef===method&&!prepared.review.livemode,'initial_exact_owner_review_mismatch')
   const collected=await api('collection.confirm',prepared.instructions.confirm);check(collected.status==='collected','initial_real_purchase_not_collected')
-  receipt.purchases=[await providerProof(collected,1000000)]
+  receipt.purchases=[await providerProof(collected,1000000)];receipt.checks.initialCapturedAndAllocatedOnce=true
   fundedOn=receipt.purchases[0].capturedOn;receipt.fundingDate=fundedOn
   const initialPosts=posts();await api('collection.confirm',prepared.instructions.confirm,409)
   check((await api('collection.reconcile',{request:collected.id})).payment_id===collected.payment_id&&posts()===initialPosts,'initial_purchase_replay_created_provider_write')
@@ -280,6 +280,17 @@ async function cleanup(){
   step('confirmed-owned-test-resource-cleanup')
   const original=await stripe.request('GET','/v1/account')
   check(original.id===receipt.ids.accountId,'cleanup_original_account_required')
+  if(receipt.ids.paymentMethodId&&!receipt.cleanup.methodDetached){
+    const card=await stripe.request('GET',`/v1/payment_methods/${receipt.ids.paymentMethodId}`)
+    check(!reference(card.customer)||reference(card.customer)===receipt.ids.customerId,'cleanup_foreign_method_refused')
+    if(reference(card.customer)){
+      const detached=await stripe.request('POST',`/v1/payment_methods/${card.id}/detach`)
+      check(detached.id===card.id&&!reference(detached.customer),'owned_method_detach_unconfirmed')
+    }
+    const confirmed=await stripe.request('GET',`/v1/payment_methods/${receipt.ids.paymentMethodId}`)
+    check(!reference(confirmed.customer),'owned_method_not_detached')
+    receipt.cleanup.methodDetached=true;await save()
+  }
   if(receipt.ids.customerId&&!receipt.cleanup.customerDeleted){
     const customer=await stripe.request('GET',`/v1/customers/${receipt.ids.customerId}`)
     if(!customer.deleted){
@@ -290,10 +301,6 @@ async function cleanup(){
     const confirmed=await stripe.request('GET',`/v1/customers/${receipt.ids.customerId}`)
     check(confirmed.deleted===true,'owned_customer_deletion_not_confirmed')
     receipt.cleanup.customerDeleted=true;await save()
-  }
-  if(receipt.ids.paymentMethodId){
-    const card=await stripe.request('GET',`/v1/payment_methods/${receipt.ids.paymentMethodId}`)
-    check(card.customer===null,'owned_method_not_detached');receipt.cleanup.methodDetached=true
   }
   receipt.cleanup={...receipt.cleanup,confirmed:true,confirmedAt:new Date().toISOString(),clock:'not created; both systems used wall time'}
   if(h){await h.close();h=null}
@@ -319,7 +326,7 @@ try{
     else{
       stripe=stripeSandbox(process.env.STRIPE_SECRET_KEY,{run:receipt.runId})
       if(command==='cleanup'){
-        writable=true;await cleanup();receipt.status=receipt.stage==='qualified'?'passed':'incomplete';receipt.inflight=null
+        writable=true;await cleanup();receipt.status=receipt.stage==='qualified'?'passed':'incomplete';receipt.inflight=null;receipt.nextEligibleAt=null
       }else{
         check(receipt.head===execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim()&&!execFileSync('git',['status','--porcelain','--untracked-files=no'],{encoding:'utf8'}).trim(),'original_clean_candidate_required')
         check(!receipt.inflight&&!['failed','incomplete','passed'].includes(receipt.status),'interrupted_or_closed_run_needs_inspection_no_retry')
@@ -327,7 +334,7 @@ try{
         writable=true;receipt.status='running'
         await resumeWorker()
         if(receipt.stage==='funded'){
-          if(date(Date.now())<dayOffset(fundedOn,2))waitUntil(dayOffset(fundedOn,2))
+          if(date(Date.now())<dayOffset(fundedOn,2)){const before=posts();await parity(1100000,1000000);check(posts()===before,'waiting_resume_must_not_create_payment');receipt.checks.persistentFundingRetainedWithoutNewPayment=true;waitUntil(dayOffset(fundedOn,2))}
           else{
             await perform('completed_usage_and_topup',async()=>{await consume();await topup(privateState.authorization)})
             receipt.capUsageAt=Date.now()
