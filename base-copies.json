@@ -253,28 +253,28 @@
       ]
     },
     {
-      "path": "migrations/core/0115_operator_last_signin.sql",
+      "path": "migrations/core/0116_operator_last_signin.sql",
       "originPath": "modules/operator-auth/accounts/schema/last-signin.sql",
       "revision": "f96363bf919ea3e7ed1837daba6894810a50e4a6",
       "files": {
-        "migrations/core/0115_operator_last_signin.sql": "289f99fd90e5263e9bb421f14887b0540e0686f7c7aa72110dd1ad20374bc945"
+        "migrations/core/0116_operator_last_signin.sql": "289f99fd90e5263e9bb421f14887b0540e0686f7c7aa72110dd1ad20374bc945"
       },
       "modes": {
-        "migrations/core/0115_operator_last_signin.sql": "100644"
+        "migrations/core/0116_operator_last_signin.sql": "100644"
       },
       "originFiles": [
         "modules/operator-auth/accounts/schema/last-signin.sql"
       ]
     },
     {
-      "path": "migrations/core/0116_operator_scheduled_policy.sql",
+      "path": "migrations/core/0117_operator_scheduled_policy.sql",
       "originPath": "modules/operator-auth/accounts/schema/scheduled-policy.sql",
       "revision": "f96363bf919ea3e7ed1837daba6894810a50e4a6",
       "files": {
-        "migrations/core/0116_operator_scheduled_policy.sql": "377fa07ed05a95b64385af865b66d695c127a1086c0d85fe093c3eb5bebf3ebe"
+        "migrations/core/0117_operator_scheduled_policy.sql": "377fa07ed05a95b64385af865b66d695c127a1086c0d85fe093c3eb5bebf3ebe"
       },
       "modes": {
-        "migrations/core/0116_operator_scheduled_policy.sql": "100644"
+        "migrations/core/0117_operator_scheduled_policy.sql": "100644"
       },
       "originFiles": [
         "modules/operator-auth/accounts/schema/scheduled-policy.sql"
