@@ -114,3 +114,11 @@ network runtime. Existing applied migrations and native authority are unchanged.
 The five pre-existing copied upstream test files that differ from this runtime
 revision retain their original bytes as explicit source-copy adaptations. No
 upstream test is removed or weakened by the runtime refresh.
+
+The first-party source check also requires one operator-auth runtime/schema pin.
+All retained operator-auth runtime and schema bytes already match the same
+0.2.94 release. Their singleton records are reconciled into one directory record
+at that revision. The OIDC README adopts the release’s equivalent example
+syntax, assigning its client-authentication method to a named constant. Applied
+migration records retain their historical revisions. No authentication code or
+schema bytes change.
