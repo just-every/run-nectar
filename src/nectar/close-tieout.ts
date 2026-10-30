@@ -5,7 +5,7 @@ import { balanceSources } from './balance'
 import { BALANCE_SQL } from './balance-sql'
 import { requireBusiness } from './business'
 import { clockInstant } from './clock'
-import { all, fingerprint, insist, one, type Row } from './core'
+import { all, fingerprint, insist, NectarError, one, type Row } from './core'
 import { requireUsdReporting } from './currency'
 import { isMonth, localDate } from './dates'
 import type { Input } from './input'
@@ -16,7 +16,7 @@ import { saveAssuranceProofs } from './assurance'
 export const CLOSE_CASH_KIND = 'close_unapplied_cash'
 export const CLOSE_LEDGER_KIND = 'close_bad_debt_sync'
 export const CLOSE_KINDS = [CLOSE_CASH_KIND, CLOSE_LEDGER_KIND]
-export const CLOSE_DEFINITION = 'Current recorded native USD sources through the selected month, with their current allocations, credits, returns and posting outcomes. Later human fixes change this preparation basis. This is not a frozen historical balance, bank settlement, provider tax commitment or ledger balance certification. Cash and goodwill remain separate; cash applications are counted once from allocations. A scan only records review cases. Existing financial approval and period-close authority remain required.'
+export const CLOSE_DEFINITION = 'Current recorded native USD sources through the selected month, with their current allocations, credits, returns and posting outcomes. Later human fixes change this preparation basis. Erased customer sources are withdrawn; required anonymous financial custody remains in ordinary reports and archives. This is not a frozen historical balance, bank settlement, provider tax commitment or ledger balance certification. Cash and goodwill remain separate; cash applications are counted once from allocations. A scan only records review cases. Existing financial approval and period-close authority remain required.'
 
 // Refuse a mixed snapshot if an ordinary writer commits while the packet is read.
 export const closeSequence = async (env: Bindings) => Number((await one(env, 'SELECT COALESCE(MAX(seq),0) AS seq FROM nc_audit'))!.seq)
@@ -120,6 +120,7 @@ export async function closeTieout(env: Bindings, actor: Actor, selectedPeriod?: 
     { area: 'Customer credit movements', state: 'native_sources', detail: 'Current goodwill grants and applications, recorded cash returns and available carried correction credit. Cash application entries are not counted twice.' },
     { area: 'Revenue roll-forward', state: 'native_sources', detail: 'Active native issued schedules and credit contributions with existing closed-period adjustments. Imported and erased sources are excluded.' },
     { area: 'Bad-debt journal synchronization', state: 'limited', detail: 'Only existing bad-debt and recovery journal outcomes. No live ledger balance or credit-note synchronization qualification.' },
+    { area: 'Erased customer sources', state: 'excluded', detail: 'Operational sources and cases are withdrawn. Required anonymous financial facts remain in ordinary retained reports and archives.' },
     { area: 'Payouts and processor fees', state: 'not_covered', detail: 'Complete payout and fee reconciliation remains unqualified.' },
     { area: 'Provider tax commitments', state: 'not_covered', detail: 'Native declared tax is not provider commitment proof.' },
     { area: 'Connectors, entities and currencies', state: 'limited', detail: 'USD native preparation only. Complete connector and entity qualification and other currencies remain required.' },
@@ -144,5 +145,14 @@ export async function scanCloseTieout(env: Bindings, actor: Actor, input: Input)
   const period = input.text('period', { max: 7 }), basis = input.text('basis', { max: 64 }), owner = input.text('owner', { max: 100 })
   const seq = await closeSequence(env), packet = await closeTieout(env, actor, period)
   insist(packet.basis === basis, 'close_source_changed', 409)
-  return await saveAssuranceProofs(env, actor, packet.proofs, owner, period, seq, CLOSE_KINDS, 'close.scan')
+  try {
+    return await saveAssuranceProofs(env, actor, packet.proofs, owner, period, seq, CLOSE_KINDS, 'close.scan')
+  } catch (error) {
+    // Existing batch guards use a generic refusal for concurrent source changes.
+    // Explain that refusal only when the guarded audit sequence actually moved.
+    if (error instanceof NectarError && error.code === 'precondition_failed' && await closeSequence(env) !== seq) {
+      throw new NectarError('assurance_source_changed', 409)
+    }
+    throw error
+  }
 }

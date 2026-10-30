@@ -3306,7 +3306,7 @@
       "executable": false
     },
     "src/nectar/close-tieout.ts": {
-      "sha256": "5845387d9aa1fabf53764f9dafff837e9962ed5ade393450ac64f757b4af93da",
+      "sha256": "19f314990c01db5cbd64fd3e78bbc62813dca7a8ce658495245cbbab80be7159",
       "executable": false
     },
     "src/nectar/collections.ts": {
@@ -5130,7 +5130,7 @@
       "executable": false
     },
     "tests/nectar/close-tieout.mjs": {
-      "sha256": "58effa0d8e6d83016dcb7063c5b54ad077c6e70aa57155352e4af6d4ea2b35a1",
+      "sha256": "7ed318232f31e0dd923d41de742f9fc56f8918f48f323dd065692c00073d79d8",
       "executable": false
     },
     "tests/nectar/commitments.mjs": {

@@ -9,10 +9,10 @@ export const harnessOptions = () => { edge = quickbooksEdge(); return { quickboo
 export async function seedCloseSources(h, owner) {
   const api = (path, body, status) => h.api(path, owner, body, status)
   const mailbox = (await api('me')).email
-  const customer = (await api('customer.create', { external_id: 'synthetic-nectar-1', name: 'Native close review', billing_email: mailbox })).id
-  const clean = (await api('customer.create', { external_id: 'synthetic-nectar-2', name: 'Clean close control', billing_email: mailbox })).id
+  const customer = (await api('customer.create', { external_id: 'synthetic-nectar-8001', name: 'Native close review', billing_email: mailbox })).id
+  const clean = (await api('customer.create', { external_id: 'synthetic-nectar-8002', name: 'Clean close control', billing_email: mailbox })).id
   edge?.addCustomer('Native close review')
-  const product = (await api('product.create', { code: 'synthetic-nectar-1', name: 'Annual service' })).id
+  const product = (await api('product.create', { code: 'synthetic-nectar-8001', name: 'Annual service' })).id
   const price = (await api('price.create', { product, kind: 'flat', unit_amount: '1200', billing_interval: 'annual', billing_timing: 'advance', taxable: false })).id
   await api('subscription.create', { customer, start_date: '2026-08-01', billing_anchor_date: '2026-08-01', price: [price] })
   const run = await api('billrun.prepare', { period: '2026-08' })
@@ -32,9 +32,10 @@ export async function seedCloseSources(h, owner) {
   await api('balance.apply', { invoice: annual })
   await api('balance.goodwill', { customer: clean, amount: '10', reason: 'Unused clean-control goodwill' })
   await api('credit.issue', { invoice: annual, amount: '50', reason: 'Reviewed annual service concession' })
-  const payment = (await api('payment.record', { customer, amount: '120', received_on: '2026-09-15', method: 'bank_transfer', reference: 'synthetic-nectar-1' })).payment
+  const payment = (await api('payment.record', { customer, amount: '150', received_on: '2026-09-15', method: 'bank_transfer', reference: 'synthetic-nectar-8001' })).payment
   await api('payment.allocate', { payment, invoice: annual, amount: '100' })
-  const cleanPayment = (await api('payment.record', { customer: clean, amount: '200', received_on: '2026-09-15', method: 'bank_transfer', reference: 'synthetic-nectar-2' })).payment
+  await api('balance.return', { customer, payment, amount: '30', reason: 'Reviewed cash overpayment returned externally', reference: 'synthetic-nectar-return' })
+  const cleanPayment = (await api('payment.record', { customer: clean, amount: '200', received_on: '2026-09-15', method: 'bank_transfer', reference: 'synthetic-nectar-8002' })).payment
   await api('payment.allocate', { payment: cleanPayment, invoice: cleanInvoice, amount: '200' })
   edge?.setOutage('down')
   const written = await api('writeoff.issue', { invoice: badDebtInvoice, amount: '100', reason: 'Reviewed uncollectable balance' })
@@ -61,7 +62,7 @@ export async function closeTieoutFlow(h, owner, { onState = async () => {} } = {
   const baseline = await snapshot(), before = await packet()
   // Expected figures come from the public writes above, not the packet's input arrays.
   assert.deepEqual(before.totals.debt, { issuedCents: 170000, creditNotesCents: 5000, allocatedCents: 30000, carriedAppliedCents: 0, goodwillAppliedCents: 3000, writeOffCents: 10000, recoveryCents: 0, reversedCents: 0, reportedCents: 122000, computedCents: 122000, differenceCents: 0 })
-  assert.deepEqual(before.totals.cash, { receivedCents: 32000, allocatedCents: 30000, returnedCents: 0, reportedUnappliedCents: 2000, computedUnappliedCents: 2000, differenceCents: 0 })
+  assert.deepEqual(before.totals.cash, { receivedCents: 35000, allocatedCents: 30000, returnedCents: 3000, reportedUnappliedCents: 2000, computedUnappliedCents: 2000, differenceCents: 0 })
   assert.deepEqual(before.totals.credit, { grantedCents: 4000, appliedCents: 3000, reportedGoodwillCents: 1000, carriedCents: 0, computedGoodwillCents: 1000, differenceCents: 0 })
   assert.deepEqual(before.totals.revenue, { openingCents: 110000, netBillingsCents: 45000, recognizedCents: 55000, closingCents: 100000, differenceCents: 0, rollforwardDifferenceCents: 0 })
   assert.equal(before.sources.invoices.length, 3)
@@ -105,6 +106,17 @@ export async function closeTieoutFlow(h, owner, { onState = async () => {} } = {
   }
   assert.equal((await api('assurance-cases')).length, 2)
   assert.deepEqual(await snapshot(), baseline, 'Scanning allocates nothing, posts nothing and closes nothing')
+  const assigneeEmail = (await api('me')).email.replace(/^[^@]+/, 'synthetic-nectar-assignee')
+  const assignee = await api('access.give', { email: assigneeEmail, name: 'Close case assignee', role: 'finance' })
+  await api('assurance.assign', { case: cashCase.id, owner: assignee.id })
+  await api('access.end', { member: assignee.id })
+  await h.api('assurance.recheck', agent, { case: cashCase.id }, 409)
+  assert.equal((await api(`assurance-cases/${cashCase.id}`)).status, 'open', 'An unavailable assignee cannot resolve the case')
+  await api('assurance.assign', { case: cashCase.id, owner: ownerId })
+  for (const who of [agent, identities.accountant, identities.collections, identities.developer]) {
+    await h.api('assurance.assign', who, { case: cashCase.id, owner: ownerId }, 403)
+    await h.api('assurance.approve', who, { case: cashCase.id, basis: cash.basis }, 403)
+  }
   await onState('open', sources)
   await api('assurance.approve', { case: cashCase.id, basis: cash.basis }, 409)
   await h.api('assurance.approve', agent, { case: cashCase.id, basis: cash.basis }, 403)
@@ -167,3 +179,89 @@ export async function closeTieoutFlow(h, owner, { onState = async () => {} } = {
   console.log('AGENT-008 native close preparation, independent totals, case custody and safe human fixes passed')
   return sources
 }
+
+// Focused real archive custody without starting an installer or a development server.
+export async function closeTieoutArchive() {
+  const { access, mkdir, mkdtemp, readFile, rm } = await import('node:fs/promises')
+  const { join } = await import('node:path')
+  const { readArchive } = await import('@runeditrun/rer/modules/portability')
+  const { harness, file } = await import('./harness.mjs')
+  const { command } = await import('./cli.mjs')
+  const { applyPolicy } = await import('./policy-helper.mjs')
+  assert.equal(process.env.NECTAR_TEST_CHECKOUT, '1', 'Use a disposable checkout')
+  const root = process.cwd()
+  for (const name of ['.dev.vars', '.wrangler/state']) await access(join(root, name)).then(() => { throw new Error('A fresh unconfigured checkout is required') }, error => { if (error.code !== 'ENOENT') throw error })
+  await mkdir('exports', { recursive: true })
+  const scratch = await mkdtemp(join(root, 'exports', 'close-archive-'))
+  const archive = name => join(scratch, `${name}.rer`)
+  const items = async name => {
+    const bytes = await readFile(archive(name)), rows = []
+    for await (const record of readArchive(new ReadableStream({ start(controller) { controller.enqueue(bytes); controller.close() } }))) {
+      if (record.kind === 'part') rows.push(...record.items.map(({ index, ...item }) => item))
+    }
+    return rows
+  }
+  const config = JSON.parse(await readFile('wrangler.jsonc', 'utf8'))
+  const persistence = join(root, '.wrangler/state/v3'), databaseId = config.d1_databases.find(row => row.binding === 'DB').database_id
+  const options = harnessOptions()
+  let h, owner, settings
+  const start = async () => {
+    h = await harness({ ...options, persistence, databaseId, applyMigrations: false, ...(settings ? { settings } : {}) })
+    assert.equal((await h.raw('/auth/bootstrap', { body: { token: h.vars.SETUP_TOKEN, displayName: 'Close Owner' } })).status, 303, 'The restored owner explicitly bootstraps new local sign-in authority')
+    owner = await h.signIn(h.vars.OWNER_EMAIL)
+    settings = { ...h.vars }
+  }
+  const stop = async () => { await h?.close(); h = null }
+  const selected = rows => rows.filter(row => row.kind === 'row' && ['nc_assurance_cases', 'nc_assurance_observations', 'nc_ledger_postings'].includes(row.table))
+  try {
+    await command(root, ['export', '--output', archive('empty')])
+    await start()
+    await h.raw('/setup', { cookie: owner, form: new URLSearchParams({ confirm: 'yes' }) })
+    await h.api('business.configure', owner, { legal_name: 'Close Archive Software', timezone: 'America/Los_Angeles', invoice_prefix: 'CLOSE', payment_terms_days: 30 })
+    await applyPolicy(h, owner, 'tax.declare', { tax_jurisdiction: 'CA', tax_mode: 'no_tax', tax_note: 'Reviewed close archive journey' })
+    await h.api('tax.review', owner, { revision: (await h.api('business', owner)).revision })
+    const source = await seedCloseSources(h, owner)
+    const basis = (await h.api('close-tieout?period=2026-09', owner)).basis
+    const ownerId = (await h.api('me', owner)).id
+    await h.api('close.scan', owner, { period: '2026-09', basis, owner: ownerId })
+    const cases = await h.api('assurance-cases', owner)
+    assert.equal(cases.length, 2)
+    await stop()
+    await command(root, ['export', '--output', archive('populated')])
+    const populated = selected(await items('populated'))
+    assert.equal(populated.filter(row => row.table === 'nc_assurance_cases').length, 2)
+    assert.equal(populated.filter(row => row.table === 'nc_assurance_observations').length, 2)
+    assert.equal(populated.filter(row => row.table === 'nc_ledger_postings').length, 1)
+    const calls = edge.calls.length
+    await command(root, ['reset', '--yes'])
+    await command(root, ['import', '--input', archive('populated'), '--yes'])
+    await command(root, ['export', '--output', archive('restored')])
+    assert.deepEqual(selected(await items('restored')), populated, 'Actual restore preserves exact case, observation and financial posting evidence')
+    await start()
+    assert.equal((await h.api('close-tieout?period=2026-09', owner)).basis, basis)
+    assert.equal(edge.calls.length, calls, 'Restoration and packet reads create no ledger request')
+    assert.deepEqual((await h.api('period-closes', owner)).closes, [])
+    const request = await h.api('erasure.request', owner, { customer: source.customer })
+    await h.api('erasure.verify', owner, { request: request.id, reason: 'Independent close-source erasure verification', evidence: file('verification.txt', 'Synthetic independent verification', 'text/plain') })
+    await h.api('erasure.approve', owner, { request: request.id, confirm: true })
+    assert.deepEqual(await h.api('assurance-cases', owner), [])
+    await stop()
+    await command(root, ['export', '--output', archive('anonymous')])
+    const anonymous = await items('anonymous')
+    assert.ok(!selected(anonymous).some(row => ['nc_assurance_cases', 'nc_assurance_observations'].includes(row.table)), 'Erased operational investigations are absent')
+    assert.equal(selected(anonymous).find(row => row.table === 'nc_ledger_postings' && row.row.id === source.posting).row.amount_cents, 10000, 'Minimal financial custody retains the bad-debt amount')
+    await command(root, ['reset', '--yes'])
+    await command(root, ['import', '--input', archive('populated'), '--journal', archive('anonymous'), '--yes'], { refuse: true })
+    await command(root, ['import', '--input', archive('anonymous'), '--yes'])
+    await start()
+    const restored = await h.api('close-tieout?period=2026-09', owner)
+    assert.equal(restored.sources.invoices.length, 1, 'The clean peer survives anonymous restoration')
+    assert.ok(restored.proofs.every(row => row.customer !== source.customer))
+    await h.api('close.scan', owner, { period: '2026-09', basis, owner: ownerId }, 409)
+    assert.deepEqual(await h.api('assurance-cases', owner), [], 'An old packet cannot resurrect erased investigations')
+    assert.equal(edge.calls.length, calls, 'Archive operations confer no posting authority')
+    console.log('AGENT-008 actual export, exact restore, erasure, old-archive refusal and anonymous close custody passed')
+  } finally { await stop(); await rm(scratch, { recursive: true, force: true }) }
+}
+
+if (process.argv[1] === new URL(import.meta.url).pathname && process.argv[2] === 'archive') await closeTieoutArchive()
