@@ -19,7 +19,7 @@ import { siteDocument, siteFooter, siteHeader } from './shell'
 export function sitePages({ styles, contract }: SiteContext): SiteBuild {
   const data: RunData = { ...run, pricing: runPricing }
   const homepageHeader = { html: siteHeader(data), styles }
-  const docs = renderedPages().map(page => ({ path: `/docs/${page.slug}`, html: siteDocument({ title: `${page.title} · Nectar docs`, description: page.summary, styles, body: docsPageBody(data, page) }) }))
+  const docs = renderedPages(data).map(page => ({ path: `/docs/${page.slug}`, html: siteDocument({ title: `${page.title} · Nectar docs`, description: page.summary, styles, body: docsPageBody(data, page) }) }))
   return {
     pages: [
       { path: '/', html: siteDocument({ title: copy.title, description: copy.description, styles, body: landing(siteHeader(data), siteFooter(data)) }) },
