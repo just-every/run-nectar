@@ -460,5 +460,20 @@
   "billing_notice.payment_receipt.subject": "Paiement enregistré pour la facture {invoice}",
   "billing_notice.payment_receipt.body": "{merchant} a enregistré un paiement de {amount} le {date} pour la facture {invoice}.",
   "billing_notice.payment_failed.subject": "Échec du paiement de la facture {invoice}",
-  "billing_notice.payment_failed.body": "Le paiement de la facture {invoice} de {merchant} a échoué le {date}. Le montant actuellement exigible est de {amount}. Ce message ne confirme aucun paiement."
+  "billing_notice.payment_failed.body": "Le paiement de la facture {invoice} de {merchant} a échoué le {date}. Le montant actuellement exigible est de {amount}. Ce message ne confirme aucun paiement.",
+  "transfer.heading": "Instructions de virement bancaire",
+  "transfer.testMode": "Mode test uniquement. Ces instructions ne permettent pas de recevoir des fonds réels.",
+  "transfer.bankName": "Banque",
+  "transfer.accountHolderName": "Titulaire du compte",
+  "transfer.accountNumber": "Numéro de compte",
+  "transfer.routingNumber": "Numéro de routage",
+  "transfer.accountType": "Type de compte",
+  "transfer.networks": "Réseaux de virement",
+  "transfer.currency": "Devise",
+  "transfer.country": "Pays",
+  "transfer.checking": "Compte courant",
+  "transfer.savings": "Compte épargne",
+  "transfer.ach": "Crédit ACH",
+  "transfer.domestic_wire_us": "Virement national américain",
+  "transfer.US": "États-Unis"
 }
