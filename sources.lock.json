@@ -5126,7 +5126,7 @@
       "executable": false
     },
     "tests/nectar/cli.mjs": {
-      "sha256": "1244fe34ac4d1b717076bbfa58583ff6e86d9875149d1717e433dba2e97bcf0f",
+      "sha256": "b184690f41f504a69eb26fa5e7602676976d3f587bc84f85697d9b557cc7c733",
       "executable": false
     },
     "tests/nectar/commitments.mjs": {
@@ -5646,7 +5646,7 @@
       "executable": false
     },
     "tests/nectar/public-door-journey.mjs": {
-      "sha256": "aaa0268ac37cd689ffe559ed274f6c85257015d1310e5acfd182580fdfeea71b",
+      "sha256": "88eb43b1cbc663e7c34d0fdd1e3f47f24e06668277c173fb682ce3e9fa17d343",
       "executable": false
     },
     "tests/nectar/quickbooks-edge.mjs": {

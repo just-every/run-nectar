@@ -7,6 +7,8 @@ const __rerTestEntryArgs = args => args[1] === 'dev' && !args.some(arg => ['--fo
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
 
+// Drives the public `rer` commands of a checkout. Failures show
+// the command's output with dev keys and sign-in tokens redacted.
 const env = () => ({ ...process.env, WRANGLER_SEND_METRICS: 'false' })
 
 const redact = output => output.replace(/(rer-dev=|token=|RER_DEV_KEY=)[^&\s"']+/g, '$1[redacted]').slice(-4000)
@@ -29,6 +31,7 @@ export async function command(root, args, { refuse = false } = {}) {
   return output
 }
 
+/** Starts a managed dev or preview server and waits for RER_READY. */
 export async function serving(root, verb, port, extra = []) {
   const child = spawn(process.execPath, __rerTestEntryArgs([__rerTestEntry, verb, '--port', String(port), ...extra]), { cwd: root, stdio: ['ignore', 'pipe', 'pipe'], env: env() })
   let output = ''
