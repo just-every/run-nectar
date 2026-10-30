@@ -174,7 +174,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "48983549a3f7ddf04024119d87ae28f624defe2e2d21d16010ac85d6422fd17a",
+      "sha256": "e74c6d7e3a031ee72d493e4f69d4c22b567cd50faddc2810fa821b70f3872bfe",
       "executable": false
     },
     "AGENTS.consumer.md": {
@@ -194,7 +194,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "87f993f1f99336660974eb1765c44297ce0fd23a0bf10a285ec7b30d7e0303d6",
+      "sha256": "4402ef89d7bcaba5d143174109a9245e699935860b75f5729a10c6ceb66dbf2b",
       "executable": false
     },
     "DEMO.md": {
@@ -230,7 +230,7 @@
       "executable": false
     },
     "docs/CLAIMS.md": {
-      "sha256": "618e68a43b2362d586dbbd3623d29b087c8a2a0384141096d6e48f0a8ba9eb85",
+      "sha256": "6c2bc5a45053edf15a798e9b06fd8287ae3132e6df5bbd86114208e42c1d137c",
       "executable": false
     },
     "docs/composition-baseline.json": {
@@ -4446,7 +4446,7 @@
       "executable": false
     },
     "src/nectar/transfer-instructions.ts": {
-      "sha256": "5608b3a3845bca552783b858502e701852fac69c9e2274bfd8610eaf5ed1338c",
+      "sha256": "a9ed6b18d998d6008e0b468639ba66efc7732fb8ce5d73d97daa6ecfea75fb12",
       "executable": false
     },
     "src/nectar/trial-collection-invoice.ts": {
@@ -5002,7 +5002,7 @@
       "executable": false
     },
     "tests/fixtures/locales/fr.json": {
-      "sha256": "a1e145efb8d60b3c9a313de3c5ea693c1b205469d473ca69401f7f59e340e111",
+      "sha256": "5571eeba78a1515913dacbe25446ddeb1f14ae0acbd63abeeedab59c13220d64",
       "executable": false
     },
     "tests/fixtures/stripe-collection-edge.mjs": {
@@ -5586,7 +5586,7 @@
       "executable": false
     },
     "tests/nectar/processor-archive.mjs": {
-      "sha256": "574d17b0086203616b9cb1d2c29dac5e71a5ecb0a0a301c64ebcf58668e9f3f9",
+      "sha256": "0692ecb8b219827c3550d40e28ad9867a75d0cd0a9dba70a25e1bb725df9ff29",
       "executable": false
     },
     "tests/nectar/processor-cash-imported-sandbox.mjs": {
@@ -5746,7 +5746,7 @@
       "executable": false
     },
     "tests/nectar/transfer-instructions.mjs": {
-      "sha256": "668a8b572d1154a88efe98ba5e84794408495282a143e6f8f0e538cfe1c9ef9f",
+      "sha256": "a31d3f7d01890721ef67ade50cca3f3ef4c92dde6e4a1d952c7746e00bdf2853",
       "executable": false
     },
     "tests/nectar/upcoming.mjs": {
