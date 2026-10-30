@@ -1,5 +1,6 @@
 import { moveInvestigationsFlow } from './move-investigations.mjs'
 import { transferInstructionsFlow,harnessOptions as transferOptions } from './transfer-instructions.mjs'
+import { collectionDiagnosisFlow, harnessOptions as diagnosisOptions } from './collection-diagnosis.mjs'
 import { reconciliationFlow } from './reconciliation.mjs'
 import { commitments } from './commitments.mjs'
 import { seedPortalRecords } from './portal-sessions.mjs'
@@ -23,10 +24,10 @@ import { contractEntitySetup } from './contract-setup.mjs'
 import { intervalCancellationFlow } from './interval-cancel.mjs'
 import { numberingEntitiesFlow } from './numbering-entities.mjs'
 const kind=process.argv[2],directory=process.env.NECTAR_EVIDENCE_DIR??`.evidence/${kind}`
-assert.ok(['move-investigations','transfer-instructions','assurance','entitlements','portal-usage','erasure','history','collection','numbering','intervals','cancellation','entity-setup','prepaid','native-collection'].includes(kind))
+assert.ok(['move-investigations','transfer-instructions','assurance','entitlements','portal-usage','erasure','history','collection','numbering','intervals','cancellation','entity-setup','prepaid','native-collection','collection-diagnosis'].includes(kind))
 await mkdir(directory,{recursive:true})
 const captures=[]
-const h=await harness({assets:true,...(kind==='transfer-instructions'?transferOptions():kind==='collection'?collectionOptions():kind==='native-collection'?nativeOptions():{})});let browser
+const h=await harness({assets:true,...(kind==='transfer-instructions'?transferOptions():kind==='collection'?collectionOptions():kind==='native-collection'?nativeOptions():kind==='collection-diagnosis'?diagnosisOptions():{})});let browser
 try {
   await h.raw('/auth/bootstrap',{body:{token:h.vars.SETUP_TOKEN,displayName:'Nectar Owner'}})
   const owner=await h.signIn(h.vars.OWNER_EMAIL)
@@ -97,6 +98,50 @@ try {
       }
     })
   }})
+  else if(kind==='collection-diagnosis') {
+    await collectionDiagnosisFlow(h,owner,{
+      onState:async state=>{
+        const path=`/app/proposals/${state.proposal}`
+        for(const width of [1440,390]) {
+          await page.setViewportSize({width,height:950})
+          await page.goto(h.origin+path)
+          if(width===1440) {
+            const text=await page.locator('main').innerText()
+            assert.ok(text.includes(state.label==='stale-evidence'?'Stale':state.label==='approved-download'?'Approved':'Expired card'))
+            if(state.label==='expired-card-review') {
+              assert.ok(text.includes(state.review.payload.recipient) && text.includes(state.review.payload.body))
+              assert.equal(await page.locator('a', {hasText:'Invoice-linked payment failure'}).count(),1)
+            }
+            if(state.label==='approved-download') {
+              const [download]=await Promise.all([page.waitForEvent('download'),page.getByRole('link',{name:'Download approved reminder'}).click()])
+              assert.equal(await download.failure(),null)
+              const stream=await download.createReadStream(), chunks=[]
+              for await(const chunk of stream)chunks.push(chunk)
+              assert.ok(Buffer.concat(chunks).toString().includes('card ending 4242 expired'))
+            }
+            assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false)
+            const unlabeled=await page.locator('button,a,[role="button"]').evaluateAll(nodes=>nodes.filter(n=>getComputedStyle(n).display!=='none'&&!n.textContent.trim()&&n.querySelector('svg,img')).length)
+            assert.equal(unlabeled,0,'All proposal controls have visible text labels')
+            const small=await page.locator('main article,main pre.message,main button,main h4').evaluateAll(nodes=>nodes.filter(node=>parseFloat(getComputedStyle(node).fontSize)<13).length)
+            assert.equal(small,0,'Changed proposal content is readable')
+          }
+          await page.screenshot({path:`${directory}/${width}-${state.label}.png`,fullPage:true})
+          captures.push({label:state.label,width,file:`${width}-${state.label}.png`})
+          console.log(`BROWSER ${width} ${state.label}`)
+        }
+      },
+      approve:async({proposal,review})=>{
+        await page.setViewportSize({width:1440,height:950})
+        await page.goto(`${h.origin}/app/proposals/${proposal}`)
+        const approval=form('proposal.decide').filter({has:page.locator('input[name="decision"][value="approved"]')})
+        assert.equal(await approval.locator('input[name="recipient"]').inputValue(),review.payload.recipient)
+        await submit(approval)
+        const saved=await h.api(`proposals/${proposal}`,owner)
+        assert.equal(saved.status,'approved')
+        return {id:proposal,status:saved.status,notice:saved.result.notice}
+      },
+    })
+  }
   else if(kind==='assurance') {
     await reconciliationFlow(h,owner,async state=>{
       await both(`assurance-${state.label}`,state.path,async()=>{
@@ -295,10 +340,12 @@ try {
   }})
   await writeFile(`${directory}/screens.json`,JSON.stringify({kind,captures},null,2))
 } finally {await browser?.close();await h.close()}
-// Keep the transfer screen proof in Verify's existing native-collection entry point.
+// Keep the transfer and collection-diagnosis screen proofs in Verify's existing native-collection entry point.
 if(kind==='native-collection'){
-  const result=spawnSync(process.execPath,[process.argv[1],'transfer-instructions'],{stdio:'inherit',env:{...process.env,NECTAR_EVIDENCE_DIR:`${directory}/transfer-instructions`}})
-  assert.equal(result.status,0,'Customer transfer instruction browser journey')
+  for(const [child,label] of [['transfer-instructions','Customer transfer instruction browser journey'],['collection-diagnosis','Collection diagnosis and exact reminder review browser journey']]){
+    const result=spawnSync(process.execPath,[process.argv[1],child],{stdio:'inherit',env:{...process.env,NECTAR_EVIDENCE_DIR:`${directory}/${child}`}})
+    assert.equal(result.status,0,label)
+  }
 }
 
 
