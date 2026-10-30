@@ -194,7 +194,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "55f8f3b87cacebf5bbedc64a0519f98deab442bb24ccf88b55cf12840dabe7be",
+      "sha256": "3f9a5450f8a788c6cd99b8d967f546a5039e60c380da8e5ed6648790a50cd5f5",
       "executable": false
     },
     "DEMO.md": {
@@ -6250,7 +6250,7 @@
       "executable": false
     },
     "tests/nectar/prepaid-topup-real-time.mjs": {
-      "sha256": "5ce4745dc8f5b02ceeca514152c4797ec6305b5337ddaf501b3c2fa6b2212a75",
+      "sha256": "40bb3320e5998d3f24f0a92039d1b5f7b2e817b6bb4dc57143aa2138634708b0",
       "executable": false
     },
     "tests/nectar/prepaid-topup-sandbox.mjs": {
@@ -6438,7 +6438,7 @@
       "executable": false
     },
     "tests/nectar/stripe-sandbox-client.mjs": {
-      "sha256": "5960c80dfbbd1ab8cffdce2df5444d6682add0f3ec3d426047723c0a4f36af0a",
+      "sha256": "c467b9ce11eb7b2c08ccaf485c0bfac35994f58107927f0d03bd3eec53e9720f",
       "executable": false
     },
     "tests/nectar/subscription-states-browser.mjs": {
