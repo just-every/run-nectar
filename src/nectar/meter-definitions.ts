@@ -1,7 +1,7 @@
 // Meter previews evaluate only projected customer/source events. Caller SQL is
 // parsed into the same exact engine as a native meter, never executed in D1.
 import type { Bindings } from '../auth.server'
-import { requireRead, actorLabel, requireCapability, requireMember, type Actor } from './actor'
+import { requireRead, actorLabel, companyAgentDetail, requireCapability, requireMember, type Actor } from './actor'
 import { all, commit, fingerprint, guard, insist, newId, now, one, parseJson, stmt, type Row } from './core'
 import { isMonth, periodStartingIn, today, zonedStart } from './dates'
 import { requireBusiness } from './business'
@@ -39,7 +39,7 @@ function nativePlan(definition:unknown):MetricPlan {
 export async function metricEvents(env:Bindings,customer:string,source:string,before:number):Promise<(MetricEvent&{meterId:string;invoiceId:string|null})[]> {
   return (await all(env,"SELECT event_id,meter_id,quantity,occurred_at,properties_json,invoice_id FROM nc_usage_events WHERE customer_id=? AND meter_id=? AND status='active' AND NOT EXISTS(SELECT 1 FROM nc_usage_voids v WHERE v.event_id=nc_usage_events.event_id) AND occurred_at<? ORDER BY occurred_at,event_id",customer,source,before)).map(e=>({eventId:e.event_id,meterId:e.meter_id,quantity:e.quantity,occurredAt:e.occurred_at,properties:parseJson(e.properties_json,{}),invoiceId:e.invoice_id}))
 }
-export async function metricRequests(env:Bindings,actor:Actor) {
+export async function metricRequests(env:Bindings,actor:Actor): Promise<Row[]> {
   requireRead(actor,'catalog')
   return await Promise.all((await all(env,'SELECT * FROM nc_metric_requests ORDER BY prepared_at,id')).map(async r=>({...r,plan:parseJson(r.plan_json,{}),plan_json:undefined,previews:(await all(env,'SELECT * FROM nc_metric_previews WHERE request_id=? ORDER BY prepared_at,id',r.id)).map(p=>({...p,result:parseJson(p.result_json,[]),result_json:undefined}))})))
 }
@@ -65,7 +65,7 @@ export async function previewMetric(env:Bindings,actor:Actor,input:Input) {
   requireCapability(actor,'read')
   const r=await one(env,'SELECT * FROM nc_metric_requests WHERE id=?',input.text('request',{max:100}));insist(r,'metric_request_not_found',404)
   const month=input.text('period',{max:7}),result=await previewBasis(env,r,input.text('customer',{max:100}),month),id=newId()
-  await commit(env,[stmt(env,'INSERT INTO nc_metric_previews(id,request_id,customer_id,period,source_fingerprint,result_json,prepared_by,prepared_at) VALUES(?,?,?,?,?,?,?,?)',id,r.id,result.customer,month,result.fingerprint,JSON.stringify(result.result),actorLabel(actor),now())],{actor:actorLabel(actor),action:'meter.preview',subject:id,detail:{request:r.id,period:month,fingerprint:result.fingerprint}})
+  await commit(env,[stmt(env,'INSERT INTO nc_metric_previews(id,request_id,customer_id,period,source_fingerprint,result_json,prepared_by,prepared_at) VALUES(?,?,?,?,?,?,?,?)',id,r.id,result.customer,month,result.fingerprint,JSON.stringify(result.result),actorLabel(actor),now())],{actor:actorLabel(actor),action:'meter.preview',subject:id,detail:{request:r.id,period:month,fingerprint:result.fingerprint,...companyAgentDetail(actor)}})
   return {preview:id,period:result.period,fingerprint:result.fingerprint,results:result.result}
 }
 export async function activateMetric(env:Bindings,actor:Actor,input:Input) {

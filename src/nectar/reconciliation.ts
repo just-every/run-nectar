@@ -1,7 +1,7 @@
 // Source totals are assertions about a customer's meter on a billing-zone day.
 // An acknowledgement binds the exact source and ingested totals, not a date alone.
 import type { Bindings } from '../auth.server'
-import { actorLabel, requireCapability, requireMember, type Actor } from './actor'
+import { actorLabel, companyAgentDetail, requireCapability, requireMember, type Actor } from './actor'
 import { requireBusiness } from './business'
 import { all, commit, fingerprint, guard, insist, newId, one, stmt, type Row } from './core'
 import { canonicalDecimal, decimalText, micros } from './decimal'
@@ -52,7 +52,7 @@ export async function recordControl(env: Bindings, actor: Actor, input: Input) {
     ...(prior ? [guard(env, 'stale', 'EXISTS(SELECT 1 FROM nc_usage_controls WHERE id = ? AND revision = ?)', id, prior.revision)] : []),
     prior ? stmt(env, 'UPDATE nc_usage_controls SET expected_count = ?, expected_quantity = ?, revision = ?, acknowledged_basis = NULL, acknowledged_by = NULL, acknowledged_reason = NULL WHERE id = ?', count, quantity, revision, id)
       : stmt(env, 'INSERT INTO nc_usage_controls (id, customer_id, meter_id, day, expected_count, expected_quantity, revision) VALUES (?, ?, ?, ?, ?, ?, ?)', id, customer.id, meter.id, day, count, quantity, revision),
-  ], { actor: actorLabel(actor), action: 'usage.control', subject: id, detail: { customer: customer.id, meter: meter.id, day, expectedCount: count, expectedQuantity: quantity } })
+  ], { actor: actorLabel(actor), action: 'usage.control', subject: id, detail: { customer: customer.id, meter: meter.id, day, expectedCount: count, expectedQuantity: quantity, ...companyAgentDetail(actor) } })
   return { id }
 }
 
