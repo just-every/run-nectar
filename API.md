@@ -990,10 +990,10 @@ and the existing fresh-factor requirements. It grants no live financial action.
   handles annual terms, trials, calendar-day proration and exact declared tax.
 
 - `POST /api/nectar/sandbox.processor.bind` accepts `customer`,
-  `stripe_customer_ref` and `confirm: true`. The installation-held Stripe
+  `stripe_customer_ref`, optional `test_method_ref` and `confirm: true`. The installation-held Stripe
   binding must return a test-mode balance. The separate provider customer must
   have exact `nectar_sandbox_customer` and `nectar_sandbox_catalog` metadata and
-  a saved test card. Current live Nectar associations and foreign sandbox
+  a saved test card. An explicitly supplied unattached test card must itself carry the same exact sandbox metadata; it is never inferred from another customer. Current live Nectar associations and foreign sandbox
   customers are refused in both directions. No key is accepted or returned.
 - With that explicit test-only consent, a clock advance issues separate sandbox
   invoices from its immutable engine calculations and confirms test-card

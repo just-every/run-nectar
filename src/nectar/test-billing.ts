@@ -25,22 +25,23 @@ export async function sandboxBillingView(env: Bindings, customer: string) {
 export async function bindSandboxProcessor(env: Bindings, actor: Actor, input: Input) {
   requireSandbox(actor)
   await requireFreshFactor(env, actor)
-  input.only(['customer', 'stripe_customer_ref', 'confirm', 'returnTo'])
+  input.only(['customer', 'stripe_customer_ref', 'test_method_ref', 'confirm', 'returnTo'])
   insist(input.flag('confirm'), 'sandbox_confirmation_required')
   const c = await one(env, 'SELECT * FROM nc_sandbox_customers WHERE id=?', input.text('customer', { max: 100 }))
   insist(c, 'sandbox_customer_not_found', 404)
   const remote = input.text('stripe_customer_ref', { max: 255 })
+  const method = input.text('test_method_ref', { max: 255, optional: true })
   insist(!await one(env, 'SELECT 1 FROM nc_stripe_customer_bindings WHERE stripe_customer_ref=?', remote), 'sandbox_live_customer_refused', 409)
-  const selected = await sandboxStripe(env), card = await sandboxProviderCustomer(selected, c.id, c.catalog_id, remote)
+  const selected = await sandboxStripe(env), card = await sandboxProviderCustomer(selected, c.id, c.catalog_id, remote, method || undefined)
   const existing = await one(env, 'SELECT * FROM nc_sandbox_processor_authority WHERE customer_id=?', c.id)
   if (existing) {
-    insist(existing.account_ref === selected.accountRef && existing.customer_ref === remote && existing.method_ref === card.methodId, 'sandbox_processor_binding_fixed', 409)
+    insist(existing.account_ref === selected.accountRef && existing.customer_ref === remote && existing.method_ref === card.methodId && existing.standalone_card === (method ? 1 : 0), 'sandbox_processor_binding_fixed', 409)
     return { id: c.id, enabled: true }
   }
   insist(!await one(env, 'SELECT 1 FROM nc_sandbox_invoices WHERE customer_id=?', c.id), 'sandbox_processor_binding_fixed', 409)
   await commit(env, [memberFence(env, actor),
     guard(env, 'sandbox_live_customer_refused', 'NOT EXISTS(SELECT 1 FROM nc_stripe_customer_bindings WHERE stripe_customer_ref=?)', remote),
-    stmt(env, 'INSERT INTO nc_sandbox_processor_authority(customer_id,account_ref,customer_ref,method_ref,created_by,created_at) VALUES(?,?,?,?,?,?)', c.id, selected.accountRef, remote, card.methodId, actor.id, now()),
+    stmt(env, 'INSERT INTO nc_sandbox_processor_authority(customer_id,account_ref,customer_ref,method_ref,standalone_card,created_by,created_at) VALUES(?,?,?,?,?,?,?)', c.id, selected.accountRef, remote, card.methodId, method ? 1 : 0, actor.id, now()),
     event(env, c.id, 'billing-enabled', c.clock_at, c.trial_end && localDate(c.clock_at, (await sandboxCatalog(env, c.catalog_id)).configuration.timezone) < c.trial_end ? 'trialing' : 'active', { mode: 'sandbox', account: selected.accountRef }),
   ], { actor: actorLabel(actor), action: 'sandbox.processor.bind', subject: c.id, detail: { account: selected.accountRef, customer: remote } })
   return { id: c.id, enabled: true }
@@ -53,7 +54,7 @@ async function binding(env: Bindings, actor: Actor, customer: string) {
   const authority = await one(env, 'SELECT * FROM nc_sandbox_processor_authority WHERE customer_id=?', customer)
   insist(authority, 'sandbox_processor_confirmation_required', 409)
   const selected = await sandboxStripe(env, authority.account_ref)
-  const card = await sandboxProviderCustomer(selected, c.id, c.catalog_id, authority.customer_ref)
+  const card = await sandboxProviderCustomer(selected, c.id, c.catalog_id, authority.customer_ref, authority.standalone_card ? authority.method_ref : undefined)
   insist(card.methodId === authority.method_ref && !await one(env, 'SELECT 1 FROM nc_stripe_customer_bindings WHERE stripe_customer_ref=?', authority.customer_ref), 'sandbox_processor_binding_changed', 409)
   return { c, authority, selected, catalog: await sandboxCatalog(env, c.catalog_id) }
 }
@@ -66,20 +67,33 @@ function verifyIntent(intent: Row, origin: string, invoice: Row, authority: Row)
   'sandbox_processor_intent_mismatch', 409)
 }
 
-async function finishAttempt(env: Bindings, actor: Actor, attempt: Row, invoice: Row, authority: Row, intent: Row) {
+async function finishAttempt(env: Bindings, actor: Actor, attempt: Row, invoice: Row, authority: Row, intent: Row, selected: Awaited<ReturnType<typeof sandboxStripe>>) {
   const origin = (await one(env, 'SELECT id FROM nc_sandbox_attempts WHERE invoice_id=? AND attempt=1', invoice.id))!.id
   verifyIntent(intent, origin, invoice, authority)
   const paid = intent.status === 'succeeded' && intent.amount_received === intent.amount
   const declined = intent.status === 'requires_payment_method' && intent.amount_received === 0 && intent.last_payment_error
   if (!paid && !declined) return false
+  const charges = await selected.request(`/charges?${new URLSearchParams({ payment_intent: intent.id, limit: '100' })}`)
+  insist(charges.object === 'list' && charges.has_more === false && Array.isArray(charges.data)
+    && new Set(charges.data.map((charge: Row) => charge.id)).size === charges.data.length
+    && charges.data.every((charge: Row) => charge.object === 'charge' && charge.livemode === false && charge.payment_intent === intent.id
+      && charge.customer === authority.customer_ref && charge.amount === intent.amount && charge.currency === 'usd'), 'sandbox_charge_evidence_invalid', 409)
+  // An old intent error cannot prove a later confirmation was processed. A
+  // lost response needs the next distinct charge, not yesterday's failure.
+  if (charges.data.length !== attempt.attempt) return false
+  const captured = charges.data.filter((charge: Row) => charge.status === 'succeeded' && charge.paid === true && charge.captured === true)
+  if (paid ? captured.length !== 1 || captured[0].amount_captured !== intent.amount : captured.length !== 0 || charges.data.some((charge: Row) => charge.status !== 'failed' || charge.paid || charge.captured)) return false
   const code = declined ? String(intent.last_payment_error.decline_code ?? intent.last_payment_error.code) : null
   insist(!code || /^[a-z_]{1,100}$/.test(code), 'sandbox_processor_refusal_invalid', 409)
   const c = (await one(env, 'SELECT catalog_id FROM nc_sandbox_customers WHERE id=?', attempt.customer_id))!
   const catalog = await sandboxCatalog(env, c.catalog_id)
   const first = (await one(env, 'SELECT MIN(due_at) AS at FROM nc_sandbox_attempts WHERE invoice_id=?', invoice.id))!.at
-  const next = paid ? null : nextRetry(code!, 'card', attempt.attempt, attempt.due_at, first,
+  const prohibited = charges.data.some((charge: Row) => charge.outcome?.advice_code === 'do_not_try_again')
+  const next = paid || prohibited ? null : nextRetry(code!, 'card', attempt.attempt, attempt.due_at, first,
     catalog.configuration.retry ?? { version: 'legacy-copy', maxAttempts: 8, windowDays: 14, scope: 'default' })
-  const result = { mode: 'test', providerStatus: intent.status, declineCode: code, amountCents: intent.amount, receivedCents: intent.amount_received }
+  const result = { mode: 'test', providerStatus: intent.status, declineCode: code, retryProhibited: prohibited, amountCents: intent.amount, receivedCents: intent.amount_received,
+    providerCreatedAt: Number.isSafeInteger(intent.created) ? intent.created * 1000 : null,
+    charges: charges.data.map((charge: Row) => ({ id: charge.id, createdAt: Number.isSafeInteger(charge.created) ? charge.created * 1000 : null, status: charge.status, paid: charge.paid, captured: charge.captured, amountCents: charge.amount })) }
   await commit(env, [memberFence(env, actor),
     guard(env, 'sandbox_attempt_changed', "EXISTS(SELECT 1 FROM nc_sandbox_attempts WHERE id=? AND status IN ('claimed','unconfirmed'))", attempt.id),
     stmt(env, 'UPDATE nc_sandbox_attempts SET status=?,intent_ref=?,result_json=?,next_at=? WHERE id=?', paid ? 'paid' : 'declined', intent.id, canonical(result), next, attempt.id),
@@ -89,6 +103,12 @@ async function finishAttempt(env: Bindings, actor: Actor, attempt: Row, invoice:
     event(env, attempt.customer_id, `${attempt.id}:notice`, attempt.due_at, paid ? 'receipt_preview' : 'failure_notice_preview', { invoice: invoice.id, amountCents: intent.amount, delivered: false, boundary: 'Sandbox inbox only; no external message' }),
   ], { actor: actorLabel(actor), action: 'sandbox.payment.observe', subject: attempt.id, detail: result })
   return true
+}
+
+async function markUnconfirmed(env: Bindings, actor: Actor, attempt: Row, intent: string | null = null) {
+  await commit(env, [guard(env, 'sandbox_attempt_changed', "EXISTS(SELECT 1 FROM nc_sandbox_attempts WHERE id=? AND status='claimed')", attempt.id),
+    stmt(env, "UPDATE nc_sandbox_attempts SET status='unconfirmed',intent_ref=COALESCE(?,intent_ref) WHERE id=?", intent, attempt.id),
+  ], { actor: actorLabel(actor), action: 'sandbox.payment.unconfirmed', subject: attempt.id, detail: { invoice: attempt.invoice_id, attempt: attempt.attempt } })
 }
 
 export async function executeSandboxBilling(env: Bindings, actor: Actor, customer: string) {
@@ -135,12 +155,12 @@ export async function executeSandboxBilling(env: Bindings, actor: Actor, custome
         new URLSearchParams({ payment_method: authority.method_ref, off_session: 'true', error_on_requires_action: 'true' }), attempt.id)
         : await selected.request('/payment_intents', new URLSearchParams({ customer: authority.customer_ref, payment_method: authority.method_ref, amount: String(amount), currency: 'usd', confirm: 'true', off_session: 'true', 'payment_method_types[]': 'card',
           'metadata[nectar_sandbox_attempt]': attempt.id, 'metadata[nectar_sandbox_invoice]': invoice.id }), attempt.id)
-      if (!await finishAttempt(env, actor, attempt, invoice, authority, intent)) {
-        await stmt(env, "UPDATE nc_sandbox_attempts SET status='unconfirmed',intent_ref=? WHERE id=?", intent.id, attempt.id).run()
+      if (!await finishAttempt(env, actor, attempt, invoice, authority, intent, selected)) {
+        await markUnconfirmed(env, actor, attempt, intent.id)
         return { status: 'unconfirmed' }
       }
     } catch {
-      await stmt(env, "UPDATE nc_sandbox_attempts SET status='unconfirmed' WHERE id=? AND status='claimed'", attempt.id).run()
+      await markUnconfirmed(env, actor, attempt)
       return { status: 'unconfirmed' }
     }
   }
@@ -162,7 +182,7 @@ export async function reconcileSandboxBilling(env: Bindings, actor: Actor, input
     if (!found.length) return { id: customer, status: 'unconfirmed' }
     insist(found.length === 1, 'sandbox_processor_intent_mismatch', 409)
     const invoice = (await one(env, 'SELECT * FROM nc_sandbox_invoices WHERE id=?', attempt.invoice_id))!
-    if (!await finishAttempt(env, actor, attempt, invoice, authority, found[0])) return { id: customer, status: 'unconfirmed' }
+    if (!await finishAttempt(env, actor, attempt, invoice, authority, found[0], selected)) return { id: customer, status: 'unconfirmed' }
   }
   return { id: customer, status: 'reconciled' }
 }

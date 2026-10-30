@@ -1151,7 +1151,8 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
   "sandbox.processor.bind": {
     "confirm": "flag",
     "customer": "text",
-    "stripe_customer_ref": "text"
+    "stripe_customer_ref": "text",
+    "test_method_ref": "text"
   },
   "setup.resolve": {
     "proposal": "text",
