@@ -24,7 +24,7 @@ const fetch = async request => {
 }
 export const harnessOptions = () => ({ stripeFetch: fetch, stripeSecret: 'synthetic-nectar-1' })
 
-export async function collectionDiagnosisFlow(h, owner, { onState = async () => {} } = {}) {
+export async function collectionDiagnosisFlow(h, owner, { onState = async () => {}, approve } = {}) {
   let instant = Date.parse('2026-10-22T10:00:00Z')
   const clock = async value => { instant = Date.parse(value); await h.advanceClock(value); edge.capturedAt(value) }
   await clock('2026-10-22T10:00:00Z')
@@ -98,8 +98,10 @@ export async function collectionDiagnosisFlow(h, owner, { onState = async () => 
   await h.rejectAudit(null)
   assert.equal((await detail(known.id)).status, 'pending')
   assert.deepEqual([await noticeCount(), await taskCount()], counts.slice(0, 2), 'Audit failure rolls back the decision, reminder and follow-up task')
-  const approved = await api('proposal.decide', { proposal: known.id, decision: 'approved', recipient: review.payload.recipient, subject: review.payload.subject, body: review.payload.body })
+  const approved = approve ? await approve({ proposal: known.id, review }) : await api('proposal.decide', { proposal: known.id, decision: 'approved', recipient: review.payload.recipient, subject: review.payload.subject, body: review.payload.body })
   assert.equal((await detail(known.id)).status, 'approved')
+  assert.deepEqual((await api(`invoices/${failed.id}`)).calculation, failed.calculation, 'Reminder approval preserves issued financial evidence')
+  assert.equal((await api(`invoices/${failed.id}`)).balanceCents, 10000)
   await api('proposal.decide', { proposal: known.id, decision: 'approved' }, 409)
   const notice = (await api('notices')).find(row => row.id === approved.notice)
   assert.deepEqual([notice.recipient, notice.subject, notice.body], [review.payload.recipient, review.payload.subject, review.payload.body])
@@ -140,6 +142,11 @@ export async function collectionDiagnosisFlow(h, owner, { onState = async () => 
   const c = await api(`customers/${customer}`)
   await api('customer.update', { customer, revision: c.revision, name: c.name, billing_email: address(303) })
   await api('proposal.decide', { proposal: recipient.id, decision: 'approved' }, 409)
+  const beforeFailedCreate = await api('proposals')
+  await h.rejectAudit('proposal.create')
+  await propose(customer, {}, 500)
+  await h.rejectAudit(null)
+  assert.deepEqual(await api('proposals'), beforeFailedCreate, 'A failed preparation audit leaves no proposal or source claim')
   const balanced = await propose()
   await api('credit.issue', { invoice: unproved.id, amount: '10', reason: 'Synthetic approved correction' })
   await api('proposal.decide', { proposal: balanced.id, decision: 'approved' }, 409)
@@ -175,6 +182,11 @@ export async function collectionDiagnosisFlow(h, owner, { onState = async () => 
   await api('proposal.decide', { proposal: revoke.id, decision: 'approved' }, 409)
   await h.page(`/app/notices/${notice.id}.txt`, owner, 409)
   assert.ok(!(await h.page('/app/proposals', owner)).includes('card ending 4242 expired'))
+  const erasedPage = await h.page(`/app/proposals/${revoke.id}`, owner, 410)
+  assert.ok(!erasedPage.includes('card ending 4242 expired') && !erasedPage.includes(address(303)))
+  await api('proposal.create', { kind: 'collection', title: 'Erased account replay', payload: { customer } }, 404)
+  await api(`customers/${customer}/collection-diagnosis`, undefined, 404)
+  await api('customer.payment_methods.refresh', { customer }, 404)
 
   // Fully paid accounts have nothing to chase; no proposal or contact is created.
   const payment = await api('payment.record', { customer: other, amount: '100', received_on: '2026-10-22', method: 'bank_transfer', reference: 'synthetic-nectar-304' })

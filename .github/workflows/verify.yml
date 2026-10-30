@@ -46,6 +46,10 @@ jobs:
         if: ${{ matrix.shard == 1 }}
         run: node tests/nectar/clause-browser.mjs native-collection
 
+      - name: Collection diagnosis and exact reminder review
+        if: ${{ matrix.shard == 1 }}
+        run: node tests/nectar/clause-browser.mjs collection-diagnosis
+
       - name: Recovery reporting browser journeys
         if: ${{ matrix.shard == 0 }}
         run: |
