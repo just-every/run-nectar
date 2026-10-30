@@ -114,6 +114,11 @@ export async function currentActor(env: Bindings, request: Request): Promise<Act
   const session = await operatorAuth(env).getSession(request)
   if (!session) return null
   const email = session.operator.email.toLowerCase()
+  const managed = await one(env, 'SELECT external_id,active FROM nc_scim_users WHERE operator_id=?', session.operator.id)
+  if (managed) {
+    const provider = await one(env, 'SELECT 1 FROM oa_provider_sessions p JOIN nc_sso_config c ON c.issuer=p.issuer WHERE p.session_id=? AND p.subject=?', session.id, managed.external_id)
+    insist(managed.active && provider, 'provider_required', 401)
+  }
   if (session.operator.role === 'owner') await ensureOwnerMember(env, email, session.operator.displayName || email)
   // The role (and a custom role's capabilities) is read on every request, so a
   // change the owner makes applies from the member's next request.

@@ -13,6 +13,7 @@ export const isolatedJourneys = [
   { file: 'card-lifecycle-webhook', name: 'cardLifecycleWebhookFlow', load: () => import('./card-lifecycle-webhook.mjs') },
   { file: 'card-expiry-notices', name: 'cardExpiryNoticesFlow', load: () => import('./card-expiry-notices.mjs') },
   { file: 'card-lifecycle', name: 'lifecycleFlow', load: () => import('./card-lifecycle.mjs') },
+  { file: 'enterprise-linking', name: 'enterpriseLinkingFlow', load: () => import('./enterprise-linking.mjs') },
   { file: 'enterprise-identity', name: 'enterpriseIdentityFlow', load: () => import('./enterprise-identity.mjs') },
   { file: 'payment-links', name: 'paymentLinksFlow', load: () => import('./payment-links.mjs') },
   { file: 'automatic-collection', name: 'automaticCollectionFlow', load: () => import('./automatic-collection.mjs') },

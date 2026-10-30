@@ -16,12 +16,35 @@ export async function scimResponse(request: Request, env: Bindings): Promise<Res
     const match = url.pathname.match(/^\/scim\/v2\/Users(?:\/([\w-]+))?$/)
     insist(match, 'not_found', 404)
     const id = match[1], row = id ? await one(env, 'SELECT * FROM nc_scim_users WHERE id=?', id) : null
-    if (id) insist(row, 'not_found', 404)
+    const pending = id && !row ? await one(env, "SELECT * FROM nc_sso_links WHERE id=? AND status!='approved'", id) : null
+    if (id) insist(row || pending, 'not_found', 404)
+    if (pending) {
+      const basis = JSON.parse(pending.basis_json)
+      const reserved = { id, external_id: pending.subject, email: basis.email, source_role: pending.source_role, active: 0, revision: 1 }
+      if (request.method === 'GET') return json(resource(env, reserved))
+      let inactive = request.method === 'DELETE'
+      if (request.method === 'PATCH') {
+        const body: any = await request.json(), op = body.Operations?.[0]
+        inactive = body.Operations?.length === 1 && String(op.op).toLowerCase() === 'replace' && (op.path === 'active' && op.value === false || !op.path && Object.keys(op.value ?? {}).join() === 'active' && op.value.active === false)
+      }
+      if (request.method === 'PUT') {
+        const body: any = await request.json()
+        inactive = body.active === false && body.externalId === reserved.external_id && body.userName?.toLowerCase() === reserved.email && body.roles?.length === 1 && body.roles[0].value === reserved.source_role
+      }
+      insist(inactive, 'pending_link_has_no_authority', 409)
+      await commit(env, [guard(env, 'stale', 'EXISTS(SELECT 1 FROM nc_sso_config WHERE revision=?) AND NOT EXISTS(SELECT 1 FROM nc_scim_users WHERE id=?)', config.revision, id),
+        stmt(env, "UPDATE nc_sso_links SET status='revoked' WHERE subject=?", pending.subject),
+        stmt(env, "DELETE FROM nc_saml_transactions WHERE json_extract(link_basis,'$.member')=?", basis.member)],
+      { actor: 'system:scim', action: 'scim.link.deprovision', subject: basis.member, detail: { user: id } })
+      return request.method === 'DELETE' ? new Response(null, { status: 204 }) : json(resource(env, reserved))
+    }
     if (request.method === 'GET') {
       if (row) return json(resource(env, row))
       const filter = url.searchParams.get('filter'), parts = filter?.match(/^(userName|externalId) eq "([^"\\]{1,255})"$/)
       insist(!filter || parts, 'invalid_filter')
       const found = parts ? await all(env, `SELECT * FROM nc_scim_users WHERE ${parts[1] === 'userName' ? 'email' : 'external_id'}=?`, parts[1] === 'userName' ? parts[2].toLowerCase() : parts[2]) : await all(env, 'SELECT * FROM nc_scim_users ORDER BY id LIMIT 100')
+      const pendingRows = (await all(env, "SELECT * FROM nc_sso_links WHERE status!='approved'")).map(link => ({ id: link.id, external_id: link.subject, email: JSON.parse(link.basis_json).email, source_role: link.source_role, active: 0, revision: 1 })).filter(link => !parts || (parts[1] === 'userName' ? link.email === parts[2].toLowerCase() : link.external_id === parts[2]))
+      found.push(...pendingRows)
       return json({ schemas: ['urn:ietf:params:scim:api:messages:2.0:ListResponse'], totalResults: found.length, startIndex: 1, itemsPerPage: found.length, Resources: found.map(row => resource(env, row)) })
     }
     insist(Number(request.headers.get('content-length') ?? 0) <= 32768, 'body_too_large', 413)
@@ -57,6 +80,8 @@ export async function scimResponse(request: Request, env: Bindings): Promise<Res
     await commit(env, [guard(env, 'stale', 'EXISTS(SELECT 1 FROM nc_scim_users WHERE id=? AND revision=?)', id, row.revision),
       stmt(env, 'UPDATE oa_sessions SET revoked_at=COALESCE(revoked_at,?) WHERE operator_id=?', now(), row.operator_id),
       stmt(env, 'DELETE FROM nc_mfa_sessions WHERE member_id=?', row.member_id),
+      stmt(env, "UPDATE nc_sso_links SET status='revoked' WHERE json_extract(basis_json,'$.member')=?", row.member_id),
+      stmt(env, "DELETE FROM nc_saml_transactions WHERE json_extract(link_basis,'$.member')=?", row.member_id),
       stmt(env, "UPDATE oa_operators SET status=? WHERE id=? AND role='member'", active ? 'active' : 'inactive', row.operator_id),
       stmt(env, 'UPDATE nc_members SET status=?,updated_at=? WHERE id=?', active ? 'active' : 'ended', now(), row.member_id),
       stmt(env, 'UPDATE nc_scim_users SET active=?,revision=revision+1 WHERE id=?', active ? 1 : 0, id),
