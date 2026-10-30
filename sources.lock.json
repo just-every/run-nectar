@@ -174,7 +174,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "e74c6d7e3a031ee72d493e4f69d4c22b567cd50faddc2810fa821b70f3872bfe",
+      "sha256": "6b6dfd767ce240db832bd115827334675d448580c9c67eb0a165e16dfb04436e",
       "executable": false
     },
     "AGENTS.consumer.md": {
@@ -194,7 +194,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "4402ef89d7bcaba5d143174109a9245e699935860b75f5729a10c6ceb66dbf2b",
+      "sha256": "76e1bb7dabb411448d0501751fa5820b631a91c1217608ff713a26fda4455e84",
       "executable": false
     },
     "DEMO.md": {
@@ -230,7 +230,7 @@
       "executable": false
     },
     "docs/CLAIMS.md": {
-      "sha256": "6c2bc5a45053edf15a798e9b06fd8287ae3132e6df5bbd86114208e42c1d137c",
+      "sha256": "547a8544b7fee0355278ed86bd400ad7517314dfe8ac1304384c32f879990d7a",
       "executable": false
     },
     "docs/composition-baseline.json": {
@@ -3138,7 +3138,7 @@
       "executable": false
     },
     "src/nectar/api-fields.ts": {
-      "sha256": "45c6fb704687f5178b0a732b7102c51ac3befb3cbf4a88ae0124bedfafb962de",
+      "sha256": "507ad4c76129914de769e4fb7e45e4e770670162d23f8ad7a9d4195d895e2060",
       "executable": false
     },
     "src/nectar/api-versions.ts": {
@@ -4106,7 +4106,7 @@
       "executable": false
     },
     "src/nectar/prepaid-topup-purchase.ts": {
-      "sha256": "e1e99c17c9faca3a6857d5485174ae558ead7a89f1dbe336448d8e22420aa5c9",
+      "sha256": "743ffba89efe051db6b98fe0a77e5d817f4e0bf5777f8ac332c840cb66ed7e50",
       "executable": false
     },
     "src/nectar/prepaid-topup-records.ts": {
@@ -5550,7 +5550,7 @@
       "executable": false
     },
     "tests/nectar/prepaid-topup.mjs": {
-      "sha256": "a3b7e10f64047057aec8392496dada308e7ee414bd1fa7a114589a21cf9b5a4a",
+      "sha256": "ad76aa81b9890784f93a12344f3c7a144b45ffff18cb46050c9d49e8ad477c78",
       "executable": false
     },
     "tests/nectar/prepaid.mjs": {
