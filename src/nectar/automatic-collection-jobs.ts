@@ -150,7 +150,7 @@ export async function runAutomaticCollections(env:Bindings){
    const result=await reconcileAutomaticCollection(env,row.id,observation)
    // Losing the original intent-binding race defers to its existing owner;
    // it is not a new failed reconciliation or permission to write again.
-   failed ||= !observation.deferred&&jobNeedsAttention(result.status)
+   failed ||= !observation.deferred&&(jobNeedsAttention(result.status)||Boolean(result.errorCode))
   }
  }
  return {status:failed?'failed':'completed'}

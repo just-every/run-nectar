@@ -3202,7 +3202,7 @@
       "executable": false
     },
     "src/nectar/automatic-collection-jobs.ts": {
-      "sha256": "299781f81ddd6ff186e39572e9e7c8e422622dd230b376773be354a9a9a6ff62",
+      "sha256": "0a8eeee27949d1bc82a6832e0ded92c76f359defbafce27b6d7753d6e8e3fe81",
       "executable": false
     },
     "src/nectar/automatic-collection-records.ts": {
