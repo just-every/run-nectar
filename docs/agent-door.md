@@ -36,7 +36,7 @@ members receive native Accountant and no policy-editing role. Native promotion
 alone never changes the signed Business role. Current membership, operator
 admission and native roles are re-read; token email cannot select a sponsor and
 must match the current bound native address. Unknown-subject and changed-email
-refusals pass the 0.2.91 conformance journey. Inactive and allow-list-excluded
+refusals pass the 0.2.94 conformance journey. Inactive and allow-list-excluded
 sponsor fixtures remain undeclared and are not claimed as measured proof.
 New application keys retain their native sponsor ID. Legacy prepare/usage keys
 keep their existing API purpose, but require native reissue before admission to
@@ -83,24 +83,33 @@ preparation and separate-person requirements. No native authority is fabricated.
 
 GOV-005 is PARTIAL for the newly retained door artifacts. Native erasure only inventories `nc_*` tables; the new `agent_door_*` arguments, decisions, approvals and replay outcomes have no agreed client-scoped redaction and concurrent-capture fence. Base explicitly identifies that custody boundary as unresolved.
 
-The production-build door check on released rer 0.2.91, with the runtime copied
-from Base `2135c394939f4a737adabdc8003b0e667b31ac5a`, passed 1,742 of 1,744 points. The specialist journey additionally proves that the
-original correction key replays the identical retained result, changed arguments
-with that key refuse `idempotency_conflict`, and native activity still contains
-exactly one preparation for each subscription.
-Both failures are `BASE-AGENT-005.5.autonomous.{plain,protected}-corrections-prepare`:
-Base's `injectionArgs` re-resolves the step through `context.args`, which
-unconditionally generates a fresh write key after the first preparation, then
-requires a second successful preparation. This remains reproducible on 0.2.91; the fresh-key call returns
-`already_exists`. Native Nectar permits only one
-pending correction per subscription (`nc_usage_correction_pending`). The shared
-harness needs to retain the original call key when resolving injection arguments; the seed must retain that constraint. This is a READY-PENDING-BASE edge for
-gr. Normal `rer verify` retains its failure exit. The browser journey asserts
-layout at 1440 and captures each state at both 1440 and 390.
+The production-build door check on released rer 0.2.94, with the runtime copied
+from Base `e881e6f66ce7cd737d17dbeb945995aab83c30d8` (`rer-v0.2.94`),
+passed 1,821 of 1,821 points. The measured total includes the native specialist
+journey and all declared CORE checks; it is not a claim of the historical
+1,726-point row. Static surface validation passes 208 of 208 points.
 
-The full candidate remains PARTIAL for this conformance edge and the wider
-native/custody gaps. The descriptor's journey is the declared proof obligation;
-copying Base source is not proof of any clause.
+The specialist journey proves that the original correction key replays the
+identical retained result, changed arguments with that key refuse
+`idempotency_conflict`, and native activity contains exactly one preparation
+for each subscription. Both
+`BASE-AGENT-005.5.autonomous.{plain,protected}-corrections-prepare` injection
+probes now replay successfully on 0.2.94. No second native preparation is
+required, and the native one-pending-correction constraint is preserved.
+The browser journey asserts layout at 1440 and captures each state at both
+1440 and 390. Scoped local credentials, scope refusal, revocation, stale native
+revisions and local Pause preserve the native activity witness.
+
+The shared clauses remain PARTIAL for the wider native, optional-family and
+custody gaps described above. The descriptor's journey is the declared proof
+obligation; copying Base source is not proof of any clause.
+
+The refresh uses the authenticated release archive and a temporary record of
+only the agent-door and Business settings copies, then reconciles those two
+records into the complete inventory. Older unrelated records require historical
+Git source unavailable through an archive and are preserved at their own pins.
+`miniflare` is a direct development dependency required by the copied conformance
+network runtime. Existing applied migrations and native authority are unchanged.
 
 The five pre-existing copied upstream test files that differ from this runtime
 revision retain their original bytes as explicit source-copy adaptations. No
