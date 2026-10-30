@@ -135,6 +135,11 @@ export async function automaticCollectionArchiveJourney(){
   await issue(active.invoice)
   assert.equal((await list()).find(row=>row.id===active.id).status,'active','Restored unclaimed terms remain inert historical evidence')
   assert.equal(writes(),writeCount)
+  const competing=await Promise.all([
+   h.raw('/api/nectar/automatic.collection.reconcile',{cookie:owner,body:{request:claimed.id}}),
+   h.raw('/api/nectar/collection.prepare',{cookie:owner,body:{invoice:claimed.invoice}}),
+  ])
+  assert.deepEqual(competing.map(response=>response.status),[200,409],'Reading the original claimed outcome cannot admit a competing native debit')
   await tick()
   const reconciled=await list()
   for(const target of [claimed,uncertain])assert.equal(reconciled.find(row=>row.id===target.id).status,'collected')
@@ -161,15 +166,22 @@ export async function automaticCollectionArchiveJourney(){
    assert.equal(row.paymentIntentRef,originalIntent.id)
    assert.equal((await api('payments')).filter(payment=>payment.id===row.payment).length,1)
   }
-  for(const customer of customers){
-   const record=await api('customers/'+customer)
+  // Expected debt and cash come from the six ordinary issued 100-dollar
+  // invoices, independently of the collection statuses and report totals.
+  for(const [customer,issuedCount,paidCount] of [[customers[0],3,2],[customers[1],1,1],[customers[2],2,1]]){
+   const record=await api('customers/'+customer),ledger=record.ledger
    const issued=record.billingRecord.automaticCollections.filter(row=>['collected','uncertain','active'].includes(row.status))
-   const paidCount=final.filter(row=>row.customer===customer&&row.status==='collected').length
    assert.equal(record.ledger.paidCents,paidCount*10000)
    assert.ok(issued.length)
+   assert.deepEqual([ledger.invoices.length,ledger.invoicedCents,ledger.paidCents,ledger.balanceCents,ledger.creditedCents,ledger.writtenOffCents,ledger.unallocatedCents],
+    [issuedCount,issuedCount*10000,paidCount*10000,(issuedCount-paidCount)*10000,0,0,0])
+   assert.equal(ledger.payments.length,paidCount)
+   assert.equal(ledger.payments.reduce((sum,row)=>sum+row.amount_cents,0),paidCount*10000)
   }
   assert.equal((await api('payments')).length,4)
+  assert.equal((await api('reports/billings?period=2026-10')).totalCents,60000)
   assert.equal((await api('reports/collections?period=2026-10')).totalCents,40000)
+  assert.equal((await api('reports/ar')).totalCents,20000)
   const erasure=await api('erasure.request',{customer:customers[1]})
   await api('erasure.verify',{request:erasure.id,reason:'Synthetic independent account verification',evidence:file('synthetic-nectar-933.txt','Synthetic signed identity verification')})
   await api('erasure.approve',{request:erasure.id,confirm:true})
