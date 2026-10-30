@@ -12,6 +12,7 @@ import { processorCashEdge, processorCashFlow } from './processor-cash.mjs'
 import { processorCashReturnEdge, processorCashReturnFlow } from './processor-cash-return.mjs'
 import { importedCashEdge, processorCashImportedFlow } from './processor-cash-imported.mjs'
 import { totp } from './mfa.mjs'
+import { hostedSetupArchiveJourney } from './hosted-setup-archive.mjs'
 
 const eventKinds=['nc_processor_events','nc_processor_transactions','nc_processor_objects','nc_processor_failures','nc_processor_reversals']
 const cashKinds=['nc_processor_events','nc_processor_cash_applications','nc_processor_cash_balances','nc_processor_cash_transactions','nc_processor_cash_unmatched','nc_processor_cash_escalations']
@@ -254,4 +255,11 @@ async function additionalArchivePhase(root,scratch,{label,persistence,databaseId
  } finally {await h?.close()}
 }
 
-if(process.argv[1]===new URL(import.meta.url).pathname)await processorArchiveJourney()
+if(process.argv[1]===new URL(import.meta.url).pathname){
+ // Keep hosted setup custody in Verify's existing fresh-checkout archive job.
+ if(!process.argv[2]){
+  await hostedSetupArchiveJourney()
+  await command(process.cwd(),['reset','--yes'])
+ }
+ await processorArchiveJourney()
+}
