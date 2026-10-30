@@ -6306,7 +6306,7 @@
       "executable": false
     },
     "tests/nectar/processor-events-browser.mjs": {
-      "sha256": "4f154c6c8b16756c51b59c06427ae0c8892136aa6738c3344bbd681a565747ad",
+      "sha256": "4b00d379f3972eb750d21e413cb1a3bdf371e62c9f9ed8975036583a099219a6",
       "executable": false
     },
     "tests/nectar/processor-events-sandbox.mjs": {
@@ -6354,7 +6354,7 @@
       "executable": false
     },
     "tests/nectar/recovery.mjs": {
-      "sha256": "871da288912af4585970f9faf002bc56c9d11a6f819d9b9806745e001beec0aa",
+      "sha256": "25b553b965e1bd2512c6f03f4a6888d2573db5c8ffcd46d68d1bc9b8fd35506a",
       "executable": false
     },
     "tests/nectar/remittance-files.mjs": {
