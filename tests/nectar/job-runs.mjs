@@ -189,6 +189,10 @@ export async function jobRunsFlow(h, owner) {
   try {
     assert.equal((await tick()).status, 200)
     assert.equal((await api('automatic-collections')).find(row => row.id === uncertain.request.id).status, 'uncertain')
+    const [reported] = await read()
+    assert.equal(reported.status, 'failed', 'handled collection outages remain visible to the owner')
+    assert.equal(reported.jobs.find(job => job.job === 'automatic-collections').error_code, 'job_reported_failure')
+    assert.equal(reported.jobs.at(-1).status, 'completed', 'a handled outage preserves downstream dispatch')
     assert.equal((await api(`invoices/${uncertain.invoice}`)).paidCents, 0)
     assert.equal(writes(), count, 'processor outage cannot authorize a replacement payment')
   } finally { refuseReads = false }

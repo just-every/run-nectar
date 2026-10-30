@@ -7,12 +7,13 @@ import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import {receiver,verify} from '../../examples/webhook-receiver/server.mjs'
 
-let persistence,receive,gate,instant,secret,requests,received
+let persistence,receive,gate,instant,secret,requests,received,refuse
 const deferred=()=>{let resolve;const promise=new Promise(done=>{resolve=done});return {promise,resolve}}
 export function harnessOptions(){
-  persistence=mkdtempSync(join(tmpdir(),'nectar-webhook-restart-'));gate=null;requests=[];received=[]
+  persistence=mkdtempSync(join(tmpdir(),'nectar-webhook-restart-'));gate=null;requests=[];received=[];refuse=false
   instant=Date.parse('2026-11-01T10:00:00Z')
   return {persistence,localTime:new Date(instant).toISOString(),webhookFetch:async request=>{
+    if(refuse)return new Response('Synthetic private receiver unavailable',{status:503})
     const body=await request.text(),header=request.headers.get('nectar-signature')
     requests.push({body,header,at:instant})
     const response=await receive(new Request(request.url,{method:'POST',headers:request.headers,body}))
@@ -75,6 +76,24 @@ export async function webhookJobRestartFlow(h,owner){
   assert.equal(requests.filter(row=>JSON.parse(row.body).id===refused.event_id).length,2)
   const audit=await api('audit')
   for(const id of [delivery.id,refused.id])assert.equal(audit.filter(row=>row.action==='webhook.delivery'&&row.subject===id).length,1)
+  const unavailable=(await api('customer.create',{external_id:'synthetic-nectar-webhook-unavailable',name:'Synthetic receiver outage',billing_email:h.vars.OWNER_EMAIL})).id
+  const waiting=(await api('webhooks')).deliveries.find(row=>row.subject===unavailable)
+  refuse=true
+  try{
+    assert.equal((await tick()).status,200)
+    const [failure]=(await api('job-runs')).runs
+    assert.equal(failure.status,'failed')
+    assert.equal(failure.jobs.find(job=>job.job==='webhooks').error_code,'job_reported_failure')
+    assert.equal(failure.jobs.at(-1).status,'completed')
+    const attempt=await api(`webhooks/${waiting.id}`)
+    assert.equal(attempt.status,'pending');assert.equal(attempt.attempts[0].http_status,503)
+    assert.equal(received.length,2,'a receiver refusal performs no receiving business action')
+  }finally{refuse=false}
+  instant+=2*60_000;await h.advanceClock(new Date(instant).toISOString())
+  assert.equal((await tick()).status,200)
+  assert.equal((await api(`webhooks/${waiting.id}`)).status,'delivered')
+  assert.equal((await api('job-runs')).runs[0].status,'completed')
+  assert.equal(received.length,3)
   await api('webhook.disable',{endpoint:endpoint.id})
   await api('webhook.replay',{delivery:delivery.id},409)
   await api('customer.create',{external_id:'synthetic-nectar-webhook-disabled',name:'Synthetic disabled endpoint control',billing_email:h.vars.OWNER_EMAIL})

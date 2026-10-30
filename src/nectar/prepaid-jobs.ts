@@ -1,3 +1,4 @@
+import { jobNeedsAttention } from './job-outcome'
 import { runPrepaidTopups } from './prepaid-topup-jobs'
 // Approved expiry/rollover and exact customer-authorized standing policies.
 import type { Bindings } from '../auth.server'
@@ -8,5 +9,6 @@ export async function runPrepaidSettlement(env: Bindings) {
   if(!owner)return {settled:[],deferred:[]}
   const actor={id:owner.id,kind:'member',role:'owner',name:owner.name,email:owner.email,sessionId:null,capabilities:new Set<import('./actor').Capability>(['read','settings'])} as import('./actor').Actor
   const settlement=await settlePrepaidScheduled(env,actor)
-  return {...settlement,topups:await runPrepaidTopups(env,actor)}
+  const topups=await runPrepaidTopups(env,actor)
+  return {...settlement,topups,status:topups.results.some(row=>jobNeedsAttention(row.status))?'failed':'completed'}
 }

@@ -1,3 +1,4 @@
+import { jobNeedsAttention } from './job-outcome'
 import { unusableMethodGuard } from './card-lifecycle'
 import { refusedPaymentWithLifecycle } from './payments/refusal'
 // Trial-only scheduled capture. A persisted human authority and an invoice-
@@ -105,6 +106,7 @@ async function collectTrial(env: Bindings, authorization: string) {
 
 export async function runTrialCollections(env: Bindings) {
   const business = await requireBusiness(env), date = today(business.timezone, clockInstant(env))
+  let failed=false
   for (const row of await all(env, "SELECT * FROM nc_trial_collections WHERE status IN ('pending_owner','pending_approval','active') AND trial_end<=? ORDER BY trial_end,id", date)) {
     if (row.trial_end < date) {
       await commit(env, [guard(env, 'trial_collection_state_changed', 'EXISTS(SELECT 1 FROM nc_trial_collections WHERE id=? AND revision=?)', row.id, row.revision),
@@ -113,7 +115,11 @@ export async function runTrialCollections(env: Bindings) {
       continue
     }
     if (row.status !== 'active') continue
-    try { await collectTrial(env, row.id) } catch (error) {
+    try {
+      await collectTrial(env, row.id)
+      failed ||= jobNeedsAttention((await storedTrialCollection(env,row.id)).status)
+    } catch (error) {
+      failed=true
       // Pre-claim failures invalidate the authority. After a claim the existing
       // native record is the only recovery path, with read-only reconciliation.
       const held = await storedTrialCollection(env, row.id)
@@ -124,4 +130,5 @@ export async function runTrialCollections(env: Bindings) {
       { actor: actorLabel(trialSystem(row.id)), action: 'trial.collection.invalidated', subject: held.id, detail: { errorCode: code, noPaymentAttempt: true } })
     }
   }
+  return {status:failed?'failed':'completed'}
 }

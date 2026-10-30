@@ -165,6 +165,15 @@ export async function trialsFlow(h, owner, onState = async () => {}, interaction
   await onState({ phase: 'extended', ext, none })
 
   // At the end date a trial with a payment method converts and one without ends unpaid; both are daily and once.
+  await h.rejectAudit('trial.converted')
+  try{
+    await tick('2026-09-15T21:00:00Z')
+    assert.deepEqual(await state(card), ['2026-09-15', null, 'card', null])
+    const [failure]=(await api('job-runs')).runs
+    assert.equal(failure.jobs.find(job=>job.job==='trials').status,'failed')
+    assert.equal(failure.jobs.find(job=>job.job==='trials').error_code,'job_reported_failure')
+    assert.equal(failure.jobs.at(-1).status,'completed')
+  }finally{await h.rejectAudit()}
   await tick('2026-09-15T21:00:00Z')
   assert.deepEqual(await state(none), ['2026-09-15', '2026-09-15', 'none', 'ended_unpaid'])
   assert.deepEqual(await state(card), ['2026-09-15', null, 'card', 'converted'])
@@ -284,6 +293,10 @@ async function automaticTrialFlow(h, owner, onState, interaction) {
   await tick('2026-11-16T20:00:00Z')
   const uncertain = await view(unknown)
   assert.equal(uncertain.status, 'uncertain')
+  const [reported]=(await api('job-runs')).runs
+  assert.equal(reported.jobs.find(job=>job.job==='trials').status,'failed')
+  assert.equal(reported.jobs.find(job=>job.job==='trials').error_code,'job_reported_failure')
+  assert.equal(reported.jobs.at(-1).status,'completed')
   assert.equal((await api(`invoices/${uncertain.invoice}`)).paidCents, 0)
   const claims = posts()
   await tick('2026-11-18T20:00:00Z')

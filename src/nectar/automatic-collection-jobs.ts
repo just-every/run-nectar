@@ -28,7 +28,8 @@ async function outcome(env:Bindings,row:Row,status:string,values:Row={},facts:D1
  {actor:actorLabel(system(row.id)),action:`automatic.collection.${status}`,subject:row.id,detail:{invoice:row.invoice_id,errorCode:values.error_code??null,paymentIntentRef:values.payment_intent_ref??row.payment_intent_ref}})
  return storedAutomaticCollection(env,row.id)
 }
-export async function settleAutomaticIntent(env:Bindings,row:Row,stripe:StripeClient,intent:Row,identity:PaymentIdentity,initialCapture=false){
+type ReconciliationObservation={deferred?:boolean}
+export async function settleAutomaticIntent(env:Bindings,row:Row,stripe:StripeClient,intent:Row,identity:PaymentIdentity,initialCapture=false,observation?:ReconciliationObservation){
  const intentRef=verifyIntent(intent,identity)
  // A freshly acknowledged successful card capture can bind its verified intent
  // in the same transaction as cash and allocation. Unknown results, ACH and
@@ -40,7 +41,10 @@ export async function settleAutomaticIntent(env:Bindings,row:Row,stripe:StripeCl
    // A concurrent reconciler already bound this verified intent. Its captured
    // cash transaction owns the new revision; a stale reader must not replace it
    // with another uncertain revision while that transaction is still running.
-   if(error instanceof NectarError&&current.revision!==row.revision&&current.payment_intent_ref===intentRef)return automaticView(current)
+   if(error instanceof NectarError&&current.revision!==row.revision&&current.payment_intent_ref===intentRef){
+    if(observation)observation.deferred=true
+    return automaticView(current)
+   }
    throw error
   }
  }
@@ -86,13 +90,13 @@ export async function identityFor(env:Bindings,row:Row):Promise<PaymentIdentity>
  return {invoiceId:row.invoice_id,requestId:row.id,accountRef:q.accountRef,customerRef:q.method.customerRef,paymentMethodRef:q.method.paymentMethodRef,
  livemode:false,key:await import('./core').then(m=>m.fingerprint(['nectar-automatic-collection-1',q.accountRef,row.invoice_id])),amountCents:q.amountCents,currency:'usd'}
 }
-export async function reconcileAutomaticCollection(env:Bindings,id:string){
+export async function reconcileAutomaticCollection(env:Bindings,id:string,observation?:ReconciliationObservation){
  let row=await storedAutomaticCollection(env,id)
  if(['refused','returned'].includes(row.status)){await recordRetryFailure(env,row,row.error_code);return automaticView(row)}
  if(['collected','revoked','invalidated'].includes(row.status))return automaticView(row)
  insist(row.claimed_at&&['claimed','uncertain','pending_settlement'].includes(row.status),'automatic_collection_not_claimed',409)
  const identity=await identityFor(env,row),{stripe}=await stripeForAccount(env,row.account_ref)
- try{return await settleAutomaticIntent(env,row,stripe,await readIntent(stripe,identity,row.payment_intent_ref,row.claimed_at,clockInstant(env)),identity)}catch(error){
+ try{return await settleAutomaticIntent(env,row,stripe,await readIntent(stripe,identity,row.payment_intent_ref,row.claimed_at,clockInstant(env)),identity,false,observation)}catch(error){
   const current=await storedAutomaticCollection(env,id)
   if(current.status==='collected')return automaticView(current)
   row=await outcome(env,current,current.status==='pending_settlement'?'pending_settlement':'uncertain',{error_code:error instanceof NectarError?error.code:'processor_outcome_unconfirmed'})
@@ -142,8 +146,11 @@ export async function runAutomaticCollections(env:Bindings){
    await collectAutomaticInvoice(env,row.invoice_id)
    failed ||= jobNeedsAttention((await storedAutomaticCollection(env,row.id)).status)
   }else{
-   const result=await reconcileAutomaticCollection(env,row.id)
-   failed ||= jobNeedsAttention(result.status) && result.errorCode !== 'automatic_collection_state_changed'
+   const observation:ReconciliationObservation={}
+   const result=await reconcileAutomaticCollection(env,row.id,observation)
+   // Losing the original intent-binding race defers to its existing owner;
+   // it is not a new failed reconciliation or permission to write again.
+   failed ||= !observation.deferred&&jobNeedsAttention(result.status)
   }
  }
  return {status:failed?'failed':'completed'}

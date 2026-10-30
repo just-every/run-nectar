@@ -7,7 +7,7 @@ import type { Bindings } from '../auth.server'
 import { actorLabel, requireCapability, requireMember, type Actor } from './actor'
 import { requireBusiness } from './business'
 import { clockInstant } from './clock'
-import { all, commit, guard, insist, newId, now, one, stmt, type Row } from './core'
+import { NectarError, all, commit, guard, insist, newId, now, one, stmt, type Row } from './core'
 import { addDays, today } from './dates'
 import type { Input } from './input'
 import { runTrialCollections } from './trial-collection-jobs'
@@ -60,10 +60,19 @@ export async function resolveTrial(env: Bindings, actor: Actor, input: Input) {
 
 /** The daily job: every trial whose end date has arrived and that declared its payment method. */
 export async function runTrials(env: Bindings, scheduledTime = clockInstant(env)) {
-  const business = await requireBusiness(env).catch(() => null)
-  if (!business) return
-  await runTrialCollections(env)
+  let business
+  try { business = await requireBusiness(env) } catch (error) {
+    // Preserve the existing downstream continuation while distinguishing an
+    // unconfigured installation from unavailable business storage.
+    return {status:error instanceof NectarError && error.code === 'business_not_configured'?'completed':'failed'}
+  }
+  let failed=(await runTrialCollections(env)).status==='failed'
   const system: Actor = { id: 'system', kind: 'agent', name: 'trial-scheduler', email: '', role: null, sessionId: null, capabilities: new Set() }
   for (const sub of await all(env, "SELECT * FROM nc_subscriptions WHERE billing_mode='live' AND trial_end IS NOT NULL AND trial_outcome IS NULL AND trial_payment IS NOT NULL AND trial_end<=? ORDER BY trial_end,id", today(business.timezone, scheduledTime)))
-    await resolveTrialRow(env, system, sub).catch(() => undefined)
+    await resolveTrialRow(env, system, sub).catch(error => {
+      // Another tick may have resolved this same trial. Other refused work
+      // remains retryable by its existing eligibility and visible operationally.
+      if (!(error instanceof NectarError && error.code === 'stale')) failed = true
+    })
+  return {status:failed?'failed':'completed'}
 }

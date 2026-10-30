@@ -98,7 +98,7 @@ export async function sendScheduledReports(env: Bindings, instant=Date.now()) {
       const current=await one(env,`SELECT m.id,m.role,r.capabilities AS custom FROM nc_members m JOIN nc_report_schedules s ON s.member_id=m.id LEFT JOIN nc_roles r ON r.id=m.custom_role_id
         WHERE m.id=? AND m.email=? AND m.status='active' AND s.enabled=1 AND s.revision=?`,member.id,member.email,member.revision)
       const eligible=current&&reportReader(current.role as Role,current.custom)
-      status='suppressed'
+      status=eligible?'failed':'suppressed'
       const mail=operatorMail(env)
       if(eligible&&mail&&env.MAIL_FROM){
         const link=new URL(`/app/report-deliveries/${id}`,env.AUTH_ORIGIN).href
@@ -107,7 +107,7 @@ export async function sendScheduledReports(env: Bindings, instant=Date.now()) {
         try {
           const result=await mail.send({deliveryId:`financial-report-${id}`,from:env.MAIL_FROM,to:[member.email],subject:`Financial reports: ${period}`,
             text:`${figures}\n\nFrozen report and CSV (sign in): ${link}`,html:`<pre>${esc(figures)}</pre><p><a href="${esc(link)}">Sign in for the frozen report and CSV</a></p>`,headers:{'Auto-Submitted':'auto-generated'}})
-          status=result.status==='accepted'?'accepted':result.status==='development'?'suppressed':result.status
+          status=result.status==='accepted'?'accepted':result.status==='development'?'suppressed':result.status==='rate_limited'?'failed':result.status
           provider=result.providerMessageId??null
         }catch{status='uncertain'}
       }

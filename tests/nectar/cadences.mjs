@@ -238,6 +238,10 @@ export async function cadencesFlow(h, owner) {
       else delete h.vars.MAIL_PROVIDER
       await tick(instant)
       assert.equal((await delivery(invoice, 15)).status, expected)
+      const [execution]=(await h.api('job-runs',owner)).runs
+      assert.equal(execution.jobs.find(job=>job.job==='cadences').status,expected==='suppressed'?'completed':'failed')
+      if(expected!=='suppressed')assert.equal(execution.jobs.find(job=>job.job==='cadences').error_code,'job_reported_failure')
+      assert.equal(execution.jobs.at(-1).status,'completed')
       assert.equal((await delivery(invoice, 15)).provider_ref, null)
       assert.equal(mails(invoice).length, response ? 1 : 0)
       await tick(instant)

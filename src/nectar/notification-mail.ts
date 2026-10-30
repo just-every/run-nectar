@@ -24,7 +24,7 @@ export async function deliverAlerts(env: Bindings, event: AlertEvent, subject: s
         try {
           const result = await mail.send({ deliveryId: `notification-${event}-${subject}-${row.member_id}`, from:env.MAIL_FROM,to:[row.email],subject:ALERT_LABELS[event],
             text:`${ALERT_LABELS[event]}. Sign in to review this item:\n${link}`, html:`<p>${esc(ALERT_LABELS[event])}.</p><p><a href="${esc(link)}">Sign in to review this item</a></p>`,headers:{'Auto-Submitted':'auto-generated'} })
-          status = result.status === 'accepted' ? 'accepted' : result.status === 'development' ? 'suppressed' : result.status
+          status = result.status === 'accepted' ? 'accepted' : result.status === 'development' ? 'suppressed' : result.status === 'rate_limited' ? 'failed' : result.status
           provider = result.providerMessageId ?? null
         } catch { status = 'uncertain' }
       }

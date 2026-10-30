@@ -981,9 +981,19 @@ A job is `not_started` until the dispatcher reaches it, `running` during its
 call, then `completed` or `failed`. A thrown failure stops the same downstream
 work as before; those job rows retain null start and finish times. A returned
 `status: failed` is recorded without changing the job's existing continuation
-behavior. Completion means that invocation returned normally: handled
-per-item payment, delivery or synchronization failures remain in their
-existing source records and are not a claim of settlement or delivery.
+behavior. Native collection, retry, trial, prepaid top-up, webhook, reminder,
+alert, report and approved correction-mail jobs summarize handled unsuccessful
+outcomes as `failed`, including provider refusals, throttling and uncertainty.
+Their original item records retain the distinction between refusal and an
+unknown result; a failed job does not assert that a provider rejected an
+uncertain payment or message. Expected pending ACH settlement, deliberate
+suppression and ordinary eligibility holds do not become new attempts.
+
+`completed` means this invocation had no reported failure. A later invocation
+that finds no eligible work can complete while older failed or uncertain items
+remain in their source records. Neither completion nor provider acceptance
+claims settlement or mailbox delivery. Overlapping reconciliation that defers
+to the owner of the same verified intent claim is not a new failed attempt.
 
 The dispatcher renews a heartbeat each minute and between jobs. On a later
 normal tick, an invocation with no heartbeat for thirty minutes becomes

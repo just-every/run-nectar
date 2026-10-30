@@ -86,6 +86,18 @@ export async function exemptionCertificates(h, owner) {
   assert.match(await h.page(`/app/customers/${customer}`, owner), /TX-RESALE-RENEWED/)
   const audit = await h.api('audit', owner)
   assert.ok(audit.some(x => x.action === 'certificate.review' && x.subject === collected.certificate))
+  const refusedCustomer=(await h.api('customer.create',owner,{external_id:'synthetic-nectar-certificate-refusal',name:'Synthetic missing certificate',billing_email:h.vars.OWNER_EMAIL})).id
+  await h.api('exemption.claim',owner,{customer:refusedCustomer,state:'TX'})
+  h.mailResponses.push({to:h.vars.OWNER_EMAIL,status:422,body:{message:'Synthetic certificate recipient refused'}})
+  await tick('2026-08-02')
+  const [reported]=(await h.api('job-runs',owner)).runs
+  assert.equal(reported.jobs.find(job=>job.job==='certificate-reminders').status,'failed')
+  assert.equal(reported.jobs.find(job=>job.job==='certificate-reminders').error_code,'job_reported_failure')
+  assert.equal(reported.jobs.at(-1).status,'completed')
+  assert.equal((await h.api(`customers/${refusedCustomer}`,owner)).certificateReminders[0].status,'rejected')
+  const sends=h.mails.length
+  await tick('2026-08-02');assert.equal(h.mails.length,sends,'a refused certificate reminder never resends')
+  assert.deepEqual((await h.api(`invoices/${texas.id}`,owner)).calculation,frozen)
   await applyPolicy(h, owner, 'tax.declare', { tax_jurisdiction: before.tax_jurisdiction, tax_mode: before.tax_mode, tax_rate: before.tax_rate, tax_note: before.tax_note })
   if (before.taxReady) await h.api('tax.review', owner, { revision: (await h.api('business', owner)).revision })
   console.log('TAX-002 state-scoped certificate custody, review, expiry, reminder and unchanged issued evidence passed')

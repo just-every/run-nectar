@@ -139,6 +139,10 @@ export async function retentionFlow(h,owner,{onState=async()=>{}}={}) {
   h.mailResponses.push({status:422,body:{message:'Recipient refused'}})
   await tick('2026-10-01T16:00:00Z')
   assert.equal((await h.api('retention',owner)).offers.find(o=>o.subscription_id===rejectedSub&&o.kind==='winback').mail_status,'rejected','SUB-005 mail refusal is retained honestly')
+  const [reported]=(await h.api('job-runs',owner)).runs
+  assert.equal(reported.jobs.find(job=>job.job==='winbacks').status,'failed')
+  assert.equal(reported.jobs.find(job=>job.job==='winbacks').error_code,'job_reported_failure')
+  assert.equal(reported.jobs.at(-1).status,'completed')
   await tick('2026-10-02T16:00:00Z')
   assert.equal(h.mails.length,mailCount+1,'SUB-005 refused win-back sends never retry')
   await h.api('access.give',owner,{email:'retention-reader@example.test',role:'accountant',name:'Retention Reader'})

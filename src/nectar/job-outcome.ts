@@ -3,5 +3,6 @@
 export function jobNeedsAttention(status: string | undefined) {
   return status !== undefined && ['failed', 'rejected', 'rate_limited', 'uncertain',
     'unconfirmed', 'not_configured', 'refused', 'returned', 'invalidated',
-    'requires_action', 'requires_payment_method', 'blocked'].includes(status)
+    'requires_action', 'requires_payment_method', 'blocked', 'declined',
+    'customer_action_required', 'stopped'].includes(status)
 }

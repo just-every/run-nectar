@@ -82,5 +82,65 @@ export async function reportJobRestartFlow(h,owner){
   assert.equal(audit.filter(event=>event.action==='report.delivery.interrupted'&&event.subject===failed.id).length,1)
   await api('report.schedule',{enabled:false,day:1});await h.api('report.schedule',finance,{enabled:false,day:1})
   assert.equal((await tick()).status,200);assert.equal(mails.length,2)
+  // A completed invocation must not hide a rejected, throttled or unknown
+  // report send. Each month owns its original claim; a later tick never resends.
+  await h.api('report.schedule',finance,{enabled:false,day:1})
+  await api('report.schedule',{enabled:true,day:1})
+  for(const [month,code,expected] of [['12',400,'rejected'],['01',429,'failed'],['02',500,'uncertain']]){
+    instant=Date.parse(`${month==='12'?'2026':'2027'}-${month}-01T10:00:00Z`)
+    await h.advanceClock(new Date(instant).toISOString())
+    await h.configureMail({provider:'sendgrid',apiKey:'synthetic-nectar-4',from:h.vars.OWNER_EMAIL},async request=>{
+      mails.push(await request.text());return Response.json({errors:[{message:'Synthetic private provider detail'}]},{status:code})
+    })
+    const count=mails.length
+    const response=await tick()
+    assert.equal(response.status,200,`report ${month}: ${await response.text()}`)
+    const record=(await api('report-schedule')).deliveries.find(row=>row.period===new Date(instant-24*60*60_000).toISOString().slice(0,7))
+    assert.equal(record.status,expected)
+    const [failure]=(await api('job-runs')).runs
+    assert.equal(failure.status,'failed')
+    assert.equal(failure.jobs.find(job=>job.job==='scheduled-reports').error_code,'job_reported_failure')
+    assert.equal(failure.jobs.at(-1).status,'completed')
+    assert.equal((await tick()).status,200);assert.equal(mails.length,count+1)
+    assert.equal((await api('report-schedule')).deliveries.find(row=>row.id===record.id).status,expected)
+    const observations=JSON.stringify(await api('job-runs'))
+    for(const value of ['Synthetic private provider detail','synthetic-nectar-4',customer,h.vars.OWNER_EMAIL])assert.ok(!observations.includes(value))
+    assert.equal(JSON.stringify([await api('payments'),await api(`invoices/${invoice}`)]),financial)
+  }
+  await api('report.schedule',{enabled:false,day:1})
+  // Restart a foreground alert between its two opted-in recipients. The
+  // ordinary scheduler resumes only the unclaimed recipient, once, and reports
+  // its provider refusal without resending the uncertain first recipient.
+  await api('notification.preferences',{payment_mismatch:true})
+  await h.api('notification.preferences',finance,{payment_mismatch:true})
+  const alertGate={entered:deferred(),release:deferred()},alertMails=[]
+  await h.configureMail({provider:'sendgrid',apiKey:'synthetic-nectar-4',from:h.vars.OWNER_EMAIL},async request=>{
+    alertMails.push(await request.text());alertGate.entered.resolve();await alertGate.release.promise
+    return new Response(null,{status:202,headers:{'x-message-id':'synthetic-nectar-4'}})
+  })
+  const recording=api('payment.record',{customer,amount:'1',received_on:'2027-02-01',method:'bank_transfer',reference:'synthetic-nectar-alert-resumption'}).catch(()=>null)
+  let alertTimer
+  try{await Promise.race([alertGate.entered.promise,new Promise((_,reject)=>{alertTimer=setTimeout(()=>reject(new Error('alert provider did not pause')),15000)})])}
+  finally{clearTimeout(alertTimer)}
+  const receipt=(await api('payments')).find(row=>row.reference==='synthetic-nectar-alert-resumption')
+  const alertRows=async()=>[...(await api('notifications')).deliveries,...(await h.api('notifications',finance)).deliveries].filter(row=>row.subject===receipt.id)
+  assert.deepEqual((await alertRows()).map(row=>row.status).sort(),['pending','sending'])
+  await h.restart(new Date(instant).toISOString());alertGate.release.resolve();await recording
+  await h.configureMail({provider:'sendgrid',apiKey:'synthetic-nectar-4',from:h.vars.OWNER_EMAIL},async request=>{
+    alertMails.push(await request.text());return Response.json({errors:[{message:'Synthetic private alert refusal'}]},{status:429})
+  })
+  for(const response of await Promise.all([tick(),tick()]))assert.equal(response.status,200)
+  const alertExecutions=(await api('job-runs')).runs.slice(0,2)
+  assert.ok(alertExecutions.some(run=>run.jobs.find(job=>job.job==='alerts').error_code==='job_reported_failure'))
+  assert.ok(alertExecutions.every(run=>run.jobs.at(-1).status==='completed'))
+  assert.deepEqual((await alertRows()).map(row=>row.status).sort(),['failed','sending'])
+  assert.equal(alertMails.length,2)
+  assert.equal((await tick()).status,200);assert.equal(alertMails.length,2)
+  const cash=await api('payments')
+  assert.equal(cash.length,2);assert.equal(cash.reduce((sum,row)=>sum+row.amount_cents,0),4100)
+  assert.equal(JSON.stringify(await api(`invoices/${invoice}`)),JSON.stringify(JSON.parse(financial)[1]))
+  assert.equal((await api('audit')).filter(row=>row.subject===receipt.id&&row.action==='notification.delivery').length,1)
+  const alertHistory=JSON.stringify(await api('job-runs'))
+  for(const value of [receipt.id,customer,h.vars.OWNER_EMAIL,'Synthetic private alert refusal','synthetic-nectar-4'])assert.ok(!alertHistory.includes(value))
   console.log('reportJobRestartFlow: refused snapshot resumes once under current opt-in, concurrent ticks retain one send claim, actual Worker interruption preserves uncertain send, unstarted recipient completes, exact report and audit and financial parity passed')
 }

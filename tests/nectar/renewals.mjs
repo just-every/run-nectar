@@ -51,6 +51,10 @@ export async function renewalsFlow(h,owner,{onState=async()=>{}}={}) {
   assert.equal((await cancel.detail()).renewal.notices[0].status,'accepted','SUB-004 cancelling customer receives the accepted notice link')
   const outcomes=await Promise.all([renew,cancel,rejected,uncertain].map(async s=>(await s.detail()).renewal.notices[0].status))
   assert.deepEqual(outcomes.sort(),['accepted','accepted','rejected','uncertain'],'SUB-004 real adapter records each provider outcome honestly regardless of UUID processing order')
+  const [reported]=(await h.api('job-runs',owner)).runs
+  assert.equal(reported.jobs.find(job=>job.job==='renewals').status,'failed')
+  assert.equal(reported.jobs.find(job=>job.job==='renewals').error_code,'job_reported_failure')
+  assert.equal(reported.jobs.at(-1).status,'completed')
   await clock('2026-12-03T14:00:00Z')
   assert.equal(h.mails.length,before+4,'SUB-004 accepted/refused/unconfirmed notices never retry')
   await onState('notices',renew.sub)

@@ -1,3 +1,4 @@
+import { jobNeedsAttention } from './job-outcome'
 import { retryDunningStep } from './dunning-recovery'
 import { effectiveRetryQuote,claimRetryMethodRecovery } from './retry-method-recovery'
 import { bankReturnCode } from './retry-policy'
@@ -16,6 +17,7 @@ import { NativeStripeError,providerReference,readIntent,stripeForAccount } from 
 
 export async function runPaymentRetries(env:Bindings){
  const at=clockInstant(env)
+ let failed=false
  for(const series of await all(env,"SELECT * FROM nc_retry_series WHERE status='scheduled' AND next_at<=? ORDER BY next_at,collection_id",at)){
   try{
    const row=await storedAutomaticCollection(env,series.collection_id),q=await effectiveRetryQuote(env,row),hold=await collectionHold(env,row.invoice_id)
@@ -26,7 +28,8 @@ export async function runPaymentRetries(env:Bindings){
    insist(canonical(await savedCollectionMethod(stripe,q.method.customerRef,q.method.mandateRef??undefined))===canonical(q.method),'retry_method_changed',409)
    const identity=await identityFor(env,row),observed=await readIntent(stripe,identity,row.payment_intent_ref,row.claimed_at,at)
    if(observed.status!=='requires_payment_method'){
-    await settleAutomaticIntent(env,row,stripe,observed,identity)
+    const result=await settleAutomaticIntent(env,row,stripe,observed,identity)
+    failed ||= jobNeedsAttention(result.status)
     continue
    }
    const history=await stripe(`/charges?${new URLSearchParams({payment_intent:row.payment_intent_ref,limit:'100'})}`)
@@ -54,16 +57,19 @@ export async function runPaymentRetries(env:Bindings){
    let intent
    insist(clockInstant(env)<=series.deadline,'retry_window_expired',409)
    try{intent=await stripe(`/payment_intents/${encodeURIComponent(row.payment_intent_ref)}/confirm`,new URLSearchParams({payment_method:q.method.paymentMethodRef,off_session:'true',...(q.method.kind==='card'?{error_on_requires_action:'true'}:{mandate:q.method.mandateRef!})}),`nectar-retry-${row.id}-${attempt}`)}catch(error){
-    if(!(error instanceof NativeStripeError)||!error.intentRef)continue
+    if(!(error instanceof NativeStripeError)||!error.intentRef){failed=true;continue}
     intent=await readIntent(stripe,identity,error.intentRef,current.claimed_at,at)
    }
-   await settleAutomaticIntent(env,current,stripe,intent,await identityFor(env,current))
+   const result=await settleAutomaticIntent(env,current,stripe,intent,await identityFor(env,current))
+   failed ||= jobNeedsAttention(result.status)
   }catch(error){
    // Refusal before a durable claim makes no write; an interrupted claimed
    // attempt is reconciled by ordinary collection reads, never repeated.
    if(!(error instanceof NectarError))throw error
+   failed=true
    const current=await one(env,'SELECT status FROM nc_retry_series WHERE collection_id=?',series.collection_id)
    if(current?.status==='scheduled')await commit(env,[stmt(env,"UPDATE nc_retry_series SET status='blocked',next_at=NULL,revision=? WHERE collection_id=? AND revision=?",newId(),series.collection_id,series.revision)],{actor:'system:retries',action:'retry.blocked',subject:series.invoice_id,detail:{code:error.code}})
   }
  }
+ return {status:failed?'failed':'completed'}
 }
