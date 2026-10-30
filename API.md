@@ -959,3 +959,25 @@ recipient, language, source or wording changes invalidate its frozen basis.
 A prepared event cannot be replaced, including after expiry, provider refusal
 or uncertainty. Acceptance records provider acceptance rather than mailbox
 delivery. A receipt records an allocation, without claiming settlement.
+
+## Test bank-transfer instructions
+
+An owner with a current local authenticator or passkey factor calls
+`transfer.instructions.prepare` with `customer` and `account_ref` for an existing
+owner-confirmed Stripe binding. The provider customer must be in test mode and
+its cash-balance reconciliation must already be manual. Review the returned
+exact basis, then pass its `confirm` object to `transfer.instructions.confirm`
+only after explicit owner confirmation. This requests US bank-transfer funding
+instructions for USD; it changes no reconciliation policy and authorizes no
+collection, application or return. Unknown responses stay unavailable and can
+never be resent. The owner can read retained status at
+`/api/nectar/customers/{customer}/transfer-instructions`.
+
+Only validated virtual remit-to fields are retained. Newly issued native USD
+invoices freeze the instructions for their own processor route. Previously
+issued invoices keep their original evidence. The own-customer invoice page,
+PDF and portal show the frozen test instructions in the customer's language.
+Preparations are installation authority and are excluded from archives; retained
+claims prevent repeat requests after restoration. Erasure withdraws remit-to
+fields and customer access. No live processor or invoice-email qualification is
+claimed by this foundation.

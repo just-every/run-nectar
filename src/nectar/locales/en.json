@@ -460,5 +460,20 @@
   "billing_notice.payment_receipt.subject": "Payment recorded for invoice {invoice}",
   "billing_notice.payment_receipt.body": "{merchant} recorded a payment of {amount} on {date} for invoice {invoice}.",
   "billing_notice.payment_failed.subject": "Payment failed for invoice {invoice}",
-  "billing_notice.payment_failed.body": "The payment for invoice {invoice} from {merchant} failed on {date}. The current collectible amount is {amount}. No payment is confirmed by this message."
+  "billing_notice.payment_failed.body": "The payment for invoice {invoice} from {merchant} failed on {date}. The current collectible amount is {amount}. No payment is confirmed by this message.",
+  "transfer.heading": "Bank transfer instructions",
+  "transfer.testMode": "Test mode only. These instructions do not accept live funds.",
+  "transfer.bankName": "Bank",
+  "transfer.accountHolderName": "Account holder",
+  "transfer.accountNumber": "Account number",
+  "transfer.routingNumber": "Routing number",
+  "transfer.accountType": "Account type",
+  "transfer.networks": "Transfer networks",
+  "transfer.currency": "Currency",
+  "transfer.country": "Country",
+  "transfer.checking": "Checking",
+  "transfer.savings": "Savings",
+  "transfer.ach": "ACH credit",
+  "transfer.domestic_wire_us": "US domestic wire",
+  "transfer.US": "United States"
 }

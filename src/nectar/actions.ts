@@ -1,3 +1,4 @@
+import { prepareTransferInstructions, confirmTransferInstructions } from './transfer-instructions'
 import { preparePortalChangePolicy } from './portal-change-policy'
 import { uploadBankDeposit, uploadRemittances, previewRemittance, confirmRemittance, previewRemittanceAllocation, allocateRemittance } from './remittances'
 import { consumeProcessorEvent } from './processor-events'
@@ -140,6 +141,8 @@ export const actions: Record<string, Handler> = {
   'webhook.disable': disableWebhook,
   'webhook.replay': replayWebhook,
   'webhook.dispatch': dispatchWebhookDoor,
+  'transfer.instructions.prepare': prepareTransferInstructions,
+  'transfer.instructions.confirm': confirmTransferInstructions,
   'collection.customer.bind': bindNativeCollectionCustomer,
   'payment_link.approve': approvePaymentLink,
   'payment_link.activate': activatePaymentLink,

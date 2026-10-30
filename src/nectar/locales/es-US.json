@@ -460,5 +460,20 @@
   "billing_notice.payment_receipt.subject": "Pago registrado para la factura {invoice}",
   "billing_notice.payment_receipt.body": "{merchant} registró un pago de {amount} el {date} para la factura {invoice}.",
   "billing_notice.payment_failed.subject": "Falló el pago de la factura {invoice}",
-  "billing_notice.payment_failed.body": "Falló el pago de la factura {invoice} de {merchant} el {date}. El importe cobrable actual es {amount}. Este mensaje no confirma ningún pago."
+  "billing_notice.payment_failed.body": "Falló el pago de la factura {invoice} de {merchant} el {date}. El importe cobrable actual es {amount}. Este mensaje no confirma ningún pago.",
+  "transfer.heading": "Instrucciones de transferencia bancaria",
+  "transfer.testMode": "Solo modo de prueba. Estas instrucciones no aceptan fondos reales.",
+  "transfer.bankName": "Banco",
+  "transfer.accountHolderName": "Titular de la cuenta",
+  "transfer.accountNumber": "Número de cuenta",
+  "transfer.routingNumber": "Número de ruta",
+  "transfer.accountType": "Tipo de cuenta",
+  "transfer.networks": "Redes de transferencia",
+  "transfer.currency": "Moneda",
+  "transfer.country": "País",
+  "transfer.checking": "Cuenta corriente",
+  "transfer.savings": "Cuenta de ahorros",
+  "transfer.ach": "Crédito ACH",
+  "transfer.domestic_wire_us": "Transferencia nacional de EE. UU.",
+  "transfer.US": "Estados Unidos"
 }

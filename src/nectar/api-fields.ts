@@ -275,6 +275,8 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "request": "text",
     "stripe_customer_ref": "text"
   },
+  "transfer.instructions.prepare": {"customer":"text","account_ref":"text"},
+  "transfer.instructions.confirm": {"request":"text","basis_hash":"text","customer":"text","account_ref":"text","stripe_customer_ref":"text","binding_revision":"text","currency":"text","test_mode":"flag","confirm":"flag"},
   "collection.customer.bind": {
     "account_ref": "text",
     "confirm": "flag",
