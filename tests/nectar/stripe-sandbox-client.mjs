@@ -15,9 +15,10 @@ export const reference = value => typeof value === 'string' ? value : value?.id 
 export const monthTime = index => Date.UTC(2025, index, 1) / 1000
 export const monthName = index => new Date(monthTime(index) * 1000).toISOString().slice(0, 7)
 
-export function stripeSandbox(secret) {
+export function stripeSandbox(secret, {run = randomUUID()} = {}) {
   check(typeof secret === 'string' && /^(?:sk|rk)_test_[A-Za-z0-9]+$/.test(secret), 'stripe_test_key_required')
-  const run = randomUUID(), authorization = `Basic ${Buffer.from(`${secret}:`).toString('base64')}`
+  check(typeof run==='string'&&/^[a-f0-9-]{36}$/.test(run),'invalid_sandbox_run_identity')
+  const authorization = `Basic ${Buffer.from(`${secret}:`).toString('base64')}`
   const requests=[]
   const counts = { GET: 0, POST: 0, DELETE: 0 }
   let sequence = 0
@@ -67,7 +68,7 @@ export function stripeSandbox(secret) {
     check(['GET','POST'].includes(method), 'stripe_worker_method_refused')
     const body = method === 'POST' ? await incoming.arrayBuffer() : undefined
     const fields = body ? new URLSearchParams(new TextDecoder().decode(body)) : new URLSearchParams(url.search)
-    observe({ method, path: url.pathname, fields, idempotencyKey: incoming.headers.get('Idempotency-Key') })
+    await observe({ method, path: url.pathname, fields, idempotencyKey: incoming.headers.get('Idempotency-Key') })
     counts[method]++
     try {
       const response=await fetch(incoming.url, { method, headers: Object.fromEntries(['authorization','Stripe-Version','content-type','Idempotency-Key'].flatMap(name=>{const value=incoming.headers.get(name);return value?[[name,value]]:[]})), ...(body ? { body } : {}),

@@ -174,7 +174,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "5206a8fdfaaab119815b7e337ca9bd714dc6d74c24354994c09a43d29740c329",
+      "sha256": "203cad20aa558d89abc3cc27819a61a705da2585ad4dc9038484ffe4bde8cf86",
       "executable": false
     },
     "AGENTS.consumer.md": {
@@ -194,7 +194,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "f2274a59013043dae6dd93349ba9ef4a4ee8437f0b12eb30605658fe97c3af58",
+      "sha256": "9dced07417adb0c9aa9a9c8353a578646a2deb947d34e4fe1ed65d2f513b7275",
       "executable": false
     },
     "DEMO.md": {
@@ -230,7 +230,7 @@
       "executable": false
     },
     "docs/CLAIMS.md": {
-      "sha256": "62fed4043eff1eb0e5bfcf17841efa92218e8a0697863151ac6ee0c70fdcaebb",
+      "sha256": "2dce9834830251ce4bc5ac6802b6b944e9c91b94f3085b6e277a9e5e0d663d96",
       "executable": false
     },
     "docs/composition-baseline.json": {
@@ -5242,7 +5242,7 @@
       "executable": false
     },
     "tests/nectar/harness.mjs": {
-      "sha256": "961619183a437475874d4cbf8b207984452cc7e1d2591df884bf937c87027f82",
+      "sha256": "d21b7fccd6a0ddf42f58f7e67b1398d6b44ee3b2c8b7f677c2ba82cc3207270c",
       "executable": false
     },
     "tests/nectar/hierarchies.mjs": {
@@ -5533,8 +5533,12 @@
       "sha256": "a4bc34f58b560f78a4f5addbd29fb4d8a8628018a529b69f08a438432c61fdff",
       "executable": false
     },
+    "tests/nectar/prepaid-topup-real-time.mjs": {
+      "sha256": "5ce4745dc8f5b02ceeca514152c4797ec6305b5337ddaf501b3c2fa6b2212a75",
+      "executable": false
+    },
     "tests/nectar/prepaid-topup-sandbox.mjs": {
-      "sha256": "1ddc882b95a049b9d426d98ac8c63070da1e1e8350bca756b2c4c94a0518bf92",
+      "sha256": "ba1aec8d00dd505dcfd4c7fbd9243c93980f9ed9b8e49f661ee1ba4f3d5b6b8a",
       "executable": false
     },
     "tests/nectar/prepaid-topup.mjs": {
@@ -5718,7 +5722,7 @@
       "executable": false
     },
     "tests/nectar/stripe-sandbox-client.mjs": {
-      "sha256": "f694b47d8cf576f12853280e85bc241cfd5c3c5058eaa93016793a827e44776a",
+      "sha256": "5960c80dfbbd1ab8cffdce2df5444d6682add0f3ec3d426047723c0a4f36af0a",
       "executable": false
     },
     "tests/nectar/subscription-states-browser.mjs": {
