@@ -15,7 +15,16 @@ try {
   stripe = stripeSandbox(process.env.STRIPE_SECRET_KEY)
   const balance = await stripe.request('GET', '/v1/balance')
   check(balance.object === 'balance' && balance.livemode === false, 'test_balance_required')
-  h = await harness({ localTime: '2026-10-01T12:00:00Z', stripeSecret: process.env.STRIPE_SECRET_KEY, stripeFetch: request => stripe.forward(request) })
+  h = await harness({ localTime: '2026-10-01T12:00:00Z', stripeSecret: process.env.STRIPE_SECRET_KEY, stripeFetch: async request => {
+    const response = await stripe.forward(request)
+    if (!response.ok) {
+      let value
+      try { value = await response.clone().json() } catch { /* Safe status only. */ }
+      receipt.providerFailures ??= []
+      receipt.providerFailures.push({ path: new URL(request.url).pathname, ...safeError({ code: value?.error?.code ?? value?.error?.type, status: response.status, param: value?.error?.param }) })
+    }
+    return response
+  } })
   await h.raw('/auth/bootstrap', { body: { token: h.vars.SETUP_TOKEN, displayName: 'Nectar Owner' } })
   const owner = await h.signIn(h.vars.OWNER_EMAIL)
   await h.raw('/setup', { cookie: owner, form: new URLSearchParams({ confirm: 'yes' }) })
