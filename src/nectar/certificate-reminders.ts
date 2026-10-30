@@ -1,3 +1,4 @@
+import { jobNeedsAttention } from './job-outcome'
 // Daily expiry/remediation notices through the installation's configured mail.
 import type { Bindings } from '../auth.server'
 import { customerText } from './locale'
@@ -19,7 +20,7 @@ export async function sendCertificateReminders(env: Bindings, instant = Date.now
     ce.id AS certificate_id,ce.expires_on FROM nc_exemption_claims cl JOIN nc_customers c ON c.id=cl.customer_id
     LEFT JOIN nc_certificates ce ON ce.id=(SELECT id FROM nc_certificates WHERE customer_id=cl.customer_id AND state=cl.state AND status='validated' AND valid_from<=? ORDER BY expires_on DESC,id LIMIT 1)
     WHERE c.status='active'`, day)
-  let sent = 0
+  let sent = 0, failed = false
   for (const row of rows) {
     if (row.expires_on && row.expires_on > addDays(day, 30)) continue
     const kind = !row.certificate_id ? 'missing' : row.expires_on < day ? 'expired' : 'expiring'
@@ -32,6 +33,7 @@ export async function sendCertificateReminders(env: Bindings, instant = Date.now
     if (!claimed) continue
     const mail = operatorMail(env)
     if (!mail || !env.MAIL_FROM) {
+      failed = true
       await env.DB.prepare("UPDATE nc_certificate_reminders SET status='failed' WHERE delivery_id=?").bind(delivery).run()
       continue
     }
@@ -45,9 +47,10 @@ export async function sendCertificateReminders(env: Bindings, instant = Date.now
     } catch { status = 'uncertain' }
     await commit(env, [stmt(env, 'UPDATE nc_certificate_reminders SET status=?,provider_ref=?,sent_at=? WHERE delivery_id=?', status, provider, now(), delivery)],
       { actor: who, action: 'certificate.remind', subject: row.customer_id, detail: { policyRevision: policy.revision, delivery, state: row.state, kind, status } })
+    failed ||= jobNeedsAttention(status)
     if (status === 'accepted') sent++
   }
-  return { sent }
+  return { sent, status: failed ? 'failed' : 'completed' }
 }
 
 export async function remindCertificates(env: Bindings, actor: Actor) {

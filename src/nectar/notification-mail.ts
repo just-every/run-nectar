@@ -1,3 +1,4 @@
+import { jobNeedsAttention } from './job-outcome'
 import type { Bindings } from '../auth.server'
 import { operatorMail } from '../mail.server.mjs'
 import { all, commit, now, stmt } from './core'
@@ -9,6 +10,7 @@ export const ALERT_LABELS = { webhook_failure: 'Webhook processing or delivery f
 /** A sending claim is never automatically retried: an interrupted send may
  * already have reached the provider. Acceptance is not mailbox delivery. */
 export async function deliverAlerts(env: Bindings, event: AlertEvent, subject: string, by: string) {
+  let failed = false
   for (const row of await all(env,"SELECT * FROM nc_notifications WHERE event=? AND subject=? AND status='pending'",event,subject)) {
     const claimed = await env.DB.prepare("UPDATE nc_notifications SET status='sending',updated_at=? WHERE event=? AND subject=? AND member_id=? AND status='pending' RETURNING member_id").bind(now(),event,subject,row.member_id).first()
     if (!claimed) continue
@@ -27,13 +29,20 @@ export async function deliverAlerts(env: Bindings, event: AlertEvent, subject: s
         } catch { status = 'uncertain' }
       }
     }
+    failed ||= jobNeedsAttention(status)
     await commit(env,[stmt(env,'UPDATE nc_notifications SET status=?,provider_ref=?,updated_at=? WHERE event=? AND subject=? AND member_id=?',status,provider,now(),event,subject,row.member_id)],
       {actor:by,action:'notification.delivery',subject,detail:{event,member:row.member_id,status,provider}})
   }
+  return { status: failed ? 'failed' : 'completed' }
 }
 
 /** Resume queued, never-claimed deliveries after an interrupted request. */
 export async function deliverPendingAlerts(env: Bindings) {
   const pending = await all(env, "SELECT DISTINCT event,subject FROM nc_notifications WHERE status='pending' ORDER BY updated_at LIMIT 100")
-  for (const row of pending) await deliverAlerts(env,row.event,row.subject,'system:notifications')
+  let failed = false
+  for (const row of pending) {
+    const result = await deliverAlerts(env,row.event,row.subject,'system:notifications')
+    failed ||= result.status === 'failed'
+  }
+  return { status: failed ? 'failed' : 'completed' }
 }

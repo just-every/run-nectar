@@ -1,3 +1,4 @@
+import { jobNeedsAttention } from './job-outcome'
 import { prepareSaveOffer } from './retention-offers'
 import { customerText } from './locale'
 import type { Bindings } from '../auth.server'
@@ -40,10 +41,12 @@ async function notice(env:Bindings,term:Row,day:string) {
     try{const result=await mail.send({deliveryId:`renewal-${id}`,from:env.MAIL_FROM,to:[customer!.billing_email],subject:L.t('renewal.notice.subject',{date:L.day(term.end_date)}),text,html:`<p>${esc(text).replaceAll('\n','<br>')}</p>`,headers:{'Auto-Submitted':'auto-generated'}});status=result.status==='development'?'not_configured':result.status;provider=result.providerMessageId??null}catch{status='unconfirmed'}
   }
   await commit(env,[stmt(env,'UPDATE nc_renewal_notices SET status=?,provider_ref=? WHERE id=?',status,provider,id)],{actor:'system:renewals',action:'renewal.notice.outcome',subject:id,detail:{status,provider}})
+  return {status}
 }
 export async function runRenewals(env:Bindings,instant=Date.now()) {
   const b=await business(env);if(!b)return
   const day=localDate(instant,b.timezone)
+  let failed=false
   for(const initial of await all(env,"SELECT * FROM nc_renewal_terms WHERE status='active' ORDER BY end_date,id")) {
     let term=initial
     while(term.end_date<=day) {
@@ -54,6 +57,10 @@ export async function runRenewals(env:Bindings,instant=Date.now()) {
       if(!renew)break
       term=(await one(env,'SELECT * FROM nc_renewal_terms WHERE id=?',term.id))!
     }
-    if(term.status==='active')await notice(env,term,day)
+    if(term.status==='active'){
+      const result=await notice(env,term,day)
+      failed ||= jobNeedsAttention(result?.status)
+    }
   }
+  return {status:failed?'failed':'completed'}
 }

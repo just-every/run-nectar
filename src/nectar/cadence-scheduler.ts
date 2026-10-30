@@ -1,3 +1,4 @@
+import { jobNeedsAttention } from './job-outcome'
 import type { Bindings } from '../auth.server'
 import { requireMember, type Actor } from './actor'
 import { business } from './business'
@@ -16,20 +17,23 @@ export async function runCadences(env: Bindings, scheduledTime=clockInstant(env)
   if(!b||!(await currentCadencePolicy(env)).enabled)return {processed:0}
   const day=today(b.timezone,scheduledTime)
   const enrolled=await all(env,"SELECT e.invoice_id,i.due_date FROM nc_cadence_enrollments e JOIN nc_invoices i ON i.id=e.invoice_id JOIN nc_customers c ON c.id=i.customer_id WHERE i.status='issued' AND c.erased_at IS NULL ORDER BY i.due_date,e.invoice_id")
-  let processed=0
+  let processed=0,failed=false
   for(const row of enrolled) {
     const stage=latestCadenceStage(row.due_date,day)
     if(stage===null)continue
     try {
       const reservation=await reserveCadenceStage(env,row.invoice_id,stage,scheduledTime)
-      if('delivery' in reservation&&reservation.delivery)await sendCadenceDelivery(env,reservation.delivery,scheduledTime)
+      if('delivery' in reservation&&reservation.delivery){
+        const result=await sendCadenceDelivery(env,reservation.delivery,scheduledTime)
+        failed ||= jobNeedsAttention(result?.status)
+      }
       processed++
     }catch(error) {
       if(error instanceof NectarError&&['cadence_source_changed','cadence_already_reserved','cadence_already_claimed','already_exists','precondition_failed'].includes(error.code))continue
       throw error
     }
   }
-  return {processed}
+  return {processed,status:failed?'failed':'completed'}
 }
 
 export async function runCadencesManually(env: Bindings, actor: Actor) {

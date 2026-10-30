@@ -1,3 +1,4 @@
+import { jobNeedsAttention } from './job-outcome'
 // One durable reservation and claim; a lost response is never automatically retried.
 import type { Bindings } from '../auth.server'
 import { operatorMail } from '../mail.server.mjs'
@@ -14,8 +15,14 @@ export async function deliverUsageCorrectionMail(env: Bindings, id: string) {
     status=result.status==='accepted'?'accepted':result.status==='development'?'suppressed':['failed','rejected','rate_limited'].includes(result.status)?'failed':'uncertain';provider=result.providerMessageId??null}}
   catch{/* A thrown transport cannot prove non-acceptance. */}
   await commit(env,[stmt(env,"UPDATE nc_usage_correction_mail SET status=?,provider_ref=?,updated_at=? WHERE correction_id=? AND status='sending'",status,provider,now(),id)],{actor:'system:usage-correction',action:'usage.correction.mail.outcome',subject:id,detail:{status,provider}})
+  return {status}
 }
 
 export async function deliverPendingUsageCorrectionMail(env: Bindings) {
-  for(const row of await all(env,"SELECT correction_id FROM nc_usage_correction_mail WHERE status='pending' ORDER BY updated_at,correction_id LIMIT 100"))await deliverUsageCorrectionMail(env,row.correction_id)
+  let failed = false
+  for(const row of await all(env,"SELECT correction_id FROM nc_usage_correction_mail WHERE status='pending' ORDER BY updated_at,correction_id LIMIT 100")) {
+    const result = await deliverUsageCorrectionMail(env,row.correction_id)
+    failed ||= jobNeedsAttention(result?.status)
+  }
+  return { status: failed ? 'failed' : 'completed' }
 }

@@ -1,3 +1,4 @@
+import { jobNeedsAttention } from './job-outcome'
 import { retryAttemptQuote } from './retry-method-recovery'
 import { bankReturnCode } from './retry-policy'
 import { bankNetworkReturnCode, processorReturnStatements } from './processor-returns'
@@ -135,8 +136,15 @@ export async function collectAutomaticInvoice(env:Bindings,invoice:string){
  }
 }
 export async function runAutomaticCollections(env:Bindings){
+ let failed=false
  for(const row of await all(env,"SELECT a.id,a.invoice_id,a.status FROM nc_automatic_collections a JOIN nc_invoices i ON i.id=a.invoice_id JOIN nc_customers c ON c.id=a.customer_id WHERE c.erased_at IS NULL AND i.status='issued' AND (a.status IN ('active','claimed','uncertain','pending_settlement') OR (a.status IN ('refused','returned') AND NOT EXISTS(SELECT 1 FROM nc_retry_series r WHERE r.collection_id=a.id))) ORDER BY a.prepared_at,a.id")){
-  if(row.status==='active')await collectAutomaticInvoice(env,row.invoice_id)
-  else await reconcileAutomaticCollection(env,row.id)
+  if(row.status==='active'){
+   await collectAutomaticInvoice(env,row.invoice_id)
+   failed ||= jobNeedsAttention((await storedAutomaticCollection(env,row.id)).status)
+  }else{
+   const result=await reconcileAutomaticCollection(env,row.id)
+   failed ||= jobNeedsAttention(result.status) && result.errorCode !== 'automatic_collection_state_changed'
+  }
  }
+ return {status:failed?'failed':'completed'}
 }

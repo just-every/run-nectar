@@ -1,3 +1,4 @@
+import { jobNeedsAttention } from './job-outcome'
 import type { Bindings } from '../auth.server'
 import { operatorMail } from '../mail.server.mjs'
 import { business } from './business'
@@ -113,7 +114,7 @@ export async function sendScheduledReports(env: Bindings, instant=Date.now()) {
     }catch{status='failed'}finally{clearInterval(timer);await pending}
     // A stale preparer cannot overwrite a newer execution's delivery outcome.
     if(!await one(env,'SELECT 1 FROM nc_report_preparations WHERE delivery_id=? AND revision=?',id,revision))continue
-    failed ||= status==='failed'
+    failed ||= jobNeedsAttention(status)
     await commit(env,[preparationGuard(env,id,revision),stmt(env,'UPDATE nc_report_deliveries SET status=?,provider_ref=? WHERE id=?',status,provider,id)],
       {actor:'system:reports',action:'report.delivery',subject:id,detail:{period,status,provider}})
   }

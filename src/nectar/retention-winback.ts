@@ -1,3 +1,4 @@
+import { jobNeedsAttention } from './job-outcome'
 import type { Bindings } from '../auth.server'
 import { customerText } from './locale'
 import { operatorMail } from '../mail.server.mjs'
@@ -20,6 +21,7 @@ export async function runWinbacks(env:Bindings,instant=clockInstant(env)) {
   if(await one(env,"SELECT 1 FROM nc_retention_offers WHERE status='offered' AND to_date<?",day))await commit(env,[stmt(env,"UPDATE nc_retention_offers SET status='expired',token_hash=NULL,decided_at=? WHERE status='offered' AND to_date<?",now(),day)],{actor:'system:retention',action:'retention.expiry.tick',subject:day})
   if(!policy.enabled||!policy.winback_enabled||!policy.id)return
   const rows=await all(env,`SELECT s.*,c.billing_email,c.language FROM nc_subscriptions s JOIN nc_customers c ON c.id=s.customer_id WHERE c.erased_at IS NULL AND s.end_date<=? AND s.end_date>=? AND s.billing_mode='live' AND NOT EXISTS(SELECT 1 FROM nc_retention_offers o WHERE o.subscription_id=s.id AND o.kind='winback') AND NOT EXISTS(SELECT 1 FROM nc_renewal_terms t WHERE t.subscription_id=s.id AND t.status='active' AND t.auto_renew=1 AND t.cancelled_at IS NULL)`,day,addDays(day,-policy.winback_days))
+  let failed=false
   for(const sub of rows) {
     const id=newId(),token=Array.from(crypto.getRandomValues(new Uint8Array(32)),v=>v.toString(16).padStart(2,'0')).join(''),expires=addDays(sub.end_date,policy.winback_days),hash=await sha256Hex(token)
     let proposed:Row
@@ -32,8 +34,10 @@ export async function runWinbacks(env:Bindings,instant=clockInstant(env)) {
       status='unconfirmed'
       try{const result=await mail.send({deliveryId:`winback-${id}`,from:env.MAIL_FROM,to:[sub.billing_email],subject:L.t('winback.subject'),text,html:`<p>${esc(text)}</p>`,headers:{'Auto-Submitted':'auto-generated'}});status=result.status==='development'?'not_configured':result.status;provider=result.providerMessageId??null}catch{status='unconfirmed'}
     }
+    failed ||= jobNeedsAttention(status)
     await commit(env,[stmt(env,'UPDATE nc_retention_offers SET mail_status=?,provider_ref=? WHERE id=?',status,provider,id)],{actor:'system:retention',action:'retention.winback.outcome',subject:id,detail:{status,provider}})
   }
+  return {status:failed?'failed':'completed'}
 }
 export async function winbackForToken(env:Bindings,token:string) {
   if(!/^[a-f0-9]{64}$/.test(token))return null

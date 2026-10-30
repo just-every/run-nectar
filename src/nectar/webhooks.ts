@@ -81,6 +81,7 @@ export async function dispatchWebhooks(env: Bindings) {
   const dueAt=clockInstant(env)
   await env.DB.prepare('UPDATE nc_webhook_endpoints SET previous_sealed=NULL,overlap_until=NULL WHERE overlap_until<=?').bind(dueAt).run()
   const due=await all(env,`SELECT d.*,p.url,p.secret_sealed,p.previous_sealed,p.overlap_until,e.payload_json,e.type FROM nc_webhook_deliveries d JOIN nc_webhook_endpoints p ON p.id=d.endpoint_id JOIN nc_webhook_events e ON e.id=d.event_id LEFT JOIN nc_customers c ON c.id=d.customer_id WHERE p.enabled=1 AND c.erased_at IS NULL AND ((d.status='pending' AND d.next_at<=?) OR (d.status='sending' AND d.next_at<=?)) ORDER BY d.next_at,d.id LIMIT 50`,dueAt,dueAt)
+  let failed=false
   for(const d of due){
     // A slow earlier receiver must not age this delivery’s signature or lease.
     const at=clockInstant(env),claim=newId(),attempt=d.attempts+1
@@ -102,9 +103,10 @@ export async function dispatchWebhooks(env: Bindings) {
     const alerts=ok?[]:await alertStatements(env,'webhook_failure',d.id,`/app/webhooks/${d.id}`)
     await commit(env,[guard(env,'stale','EXISTS(SELECT 1 FROM nc_webhook_deliveries WHERE id=? AND claim=?)',d.id,claim),stmt(env,'INSERT INTO nc_webhook_attempts(id,delivery_id,customer_id,attempt,status,http_status,at) VALUES(?,?,?,?,?,?,?)',newId(),d.id,d.customer_id,attempt,outcome,code,at),stmt(env,'UPDATE nc_webhook_deliveries SET status=?,http_status=?,next_at=?,claim=NULL,updated_at=? WHERE id=?',status,code,Math.min(d.deadline,at+delays[Math.min(attempt-1,delays.length-1)]),at,d.id),...alerts],
       {actor:'system:webhooks',action:'webhook.delivery',subject:d.id,detail:{attempt,outcome,http_status:code}})
+    failed ||= !ok
     if(!ok)await deliverAlerts(env,'webhook_failure',d.id,'system:webhooks')
   }
-  return {processed:due.length}
+  return {processed:due.length,status:failed?'failed':'completed'}
 }
 export async function dispatchWebhookDoor(env: Bindings, actor: Actor, input: Input) {
   requireMember(actor,'credentials');input.only(['returnTo']);return await dispatchWebhooks(env)

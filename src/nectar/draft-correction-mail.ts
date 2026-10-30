@@ -1,3 +1,4 @@
+import { jobNeedsAttention } from './job-outcome'
 // Frozen, engine-derived customer explanations. Preparation never queues or sends.
 import { closedPeriods } from './period-close-keys'
 import type { Bindings } from '../auth.server'
@@ -215,5 +216,10 @@ export async function deliverPendingDraftCorrectionMail(env: Bindings) {
   const pending = await all(env, `SELECT DISTINCT m.proposal_id,m.created_at FROM nc_draft_correction_mail m
     JOIN nc_proposals p ON p.id=m.proposal_id WHERE m.status='pending' AND p.status='approved'
     ORDER BY m.created_at,m.proposal_id LIMIT 100`)
-  for (const row of pending) await deliverDraftCorrectionMail(env, row.proposal_id)
+  let failed = false
+  for (const row of pending) {
+    const outcomes = await deliverDraftCorrectionMail(env, row.proposal_id)
+    failed ||= outcomes.some(outcome => jobNeedsAttention(outcome.status))
+  }
+  return { status: failed ? 'failed' : 'completed' }
 }

@@ -1,3 +1,4 @@
+import { jobNeedsAttention } from './job-outcome'
 // CAT-012: terminal outcomes reserve one notice in the same database transaction.
 import type { Bindings } from '../auth.server'
 import { operatorMail } from '../mail.server.mjs'
@@ -126,5 +127,10 @@ export async function deliverPrepaidRefundNotice(env:Bindings,id:string){
 
 /** Recover reservations never claimed; a claimed attempt is never selected again. */
 export async function deliverPendingPrepaidRefundNotices(env:Bindings){
-  for(const row of await all(env,"SELECT refund_id FROM nc_prepaid_refund_mail m JOIN nc_customers c ON c.id=m.customer_id WHERE m.status='pending' AND c.erased_at IS NULL ORDER BY m.created_at,m.refund_id LIMIT 100"))await deliverPrepaidRefundNotice(env,row.refund_id)
+  let failed = false
+  for(const row of await all(env,"SELECT refund_id FROM nc_prepaid_refund_mail m JOIN nc_customers c ON c.id=m.customer_id WHERE m.status='pending' AND c.erased_at IS NULL ORDER BY m.created_at,m.refund_id LIMIT 100")) {
+    const result = await deliverPrepaidRefundNotice(env,row.refund_id)
+    failed ||= jobNeedsAttention(result?.status)
+  }
+  return { status: failed ? 'failed' : 'completed' }
 }

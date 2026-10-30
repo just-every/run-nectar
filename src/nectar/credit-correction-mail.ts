@@ -1,3 +1,4 @@
+import { jobNeedsAttention } from './job-outcome'
 // Delivery custody survives request/crash boundaries. Claimed sends are never retried.
 import type { Bindings } from '../auth.server'
 import { operatorMail } from '../mail.server.mjs'
@@ -37,5 +38,10 @@ export async function deliverCorrectionMail(env: Bindings, proposalId: string) {
 /** Resume only mail never claimed; sending/uncertain/failed mail is not retried. */
 export async function deliverPendingCorrectionMail(env: Bindings) {
   const rows = await all(env, "SELECT proposal_id FROM nc_credit_correction_mail WHERE status='pending' ORDER BY created_at,proposal_id LIMIT 100")
-  for (const row of rows) await deliverCorrectionMail(env, row.proposal_id)
+  let failed = false
+  for (const row of rows) {
+    const result = await deliverCorrectionMail(env, row.proposal_id)
+    failed ||= jobNeedsAttention(result?.status)
+  }
+  return { status: failed ? 'failed' : 'completed' }
 }
