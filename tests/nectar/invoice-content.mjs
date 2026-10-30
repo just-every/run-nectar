@@ -217,7 +217,10 @@ async function invoicePresentation(h,owner,{first,second,invoice,otherInvoice,br
   const data=await (await h.raw(`/portal/data?session=${encodeURIComponent(token)}`)).json()
   assert.equal(data.invoices.find(i=>i.id===draft.id).total_cents,25000)
   const page=await h.page(path(draft.id,hidden))
-  assert.match(page,/Descargar PDF/);assert.doesNotMatch(page,/synthetic-nectar-invoice-|150|tier|breakdown|quantity/)
+  // Opaque transport identifiers can randomly contain "150". Keep the full
+  // content fence, excluding only this request's exact invoice ID and token.
+  const invoiceContent=page.replaceAll(draft.id,'[invoice-id]').replaceAll(encodeURIComponent(token),'[session-token]')
+  assert.match(page,/Descargar PDF/);assert.doesNotMatch(invoiceContent,/synthetic-nectar-invoice-|150|tier|breakdown|quantity/)
   const pdf=await checkPdf(draft.id,hidden)
   assert.match(pdf.text,/USD 250.00/);assert.doesNotMatch(pdf.text,/synthetic-nectar-invoice-|150|tier|breakdown/)
   assert.equal((pdf.text.match(/API usage/g)??[]).length,1,'one summary line per metered price')
