@@ -32,7 +32,14 @@ import { pricingModels } from './pricing-models.mjs'
 const verifyShard=process.env.NECTAR_VERIFY_SHARD
 assert.ok(verifyShard===undefined||verifyShard==='0'||verifyShard==='1','invalid NECTAR_VERIFY_SHARD')
 let isolatedIndex=0
-const runIsolated=async(...args)=>{const index=isolatedIndex++;if(verifyShard===undefined||index%2===Number(verifyShard))await runIsolatedJourney(...args)}
+const runIsolated=async(...args)=>{
+  const index=isolatedIndex++
+  if(verifyShard===undefined||index%2===Number(verifyShard)) {
+    await runIsolatedJourney(...args)
+    // Exercise native sandbox forms through Verify's existing flow command.
+    if(args[0]==='test-mode')await import('./test-mode-browser.mjs')
+  }
+}
 
 const ACTIONS = [...(await readFile(new URL('../../src/nectar/actions.ts', import.meta.url), 'utf8')).matchAll(/^  '([\w.]+)':/gm)].map(match => match[1])
 // Keep the default CI wall intact; local changes to the core billing cycle
