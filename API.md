@@ -995,4 +995,6 @@ cover the supported pricing slice only. Full configuration mirroring, other
 pricing instruments, processor test-key binding and the thirteen-month
 failing-card journey with actual invoices, renewals, retries, notices and state
 transitions remain DEV-004 work. A local journey clock is separate from this
-persisted product sandbox.
+persisted product sandbox. Native erasure also withdraws incidental personal
+text in copied price labels, sandbox labels and preview descriptions while
+preserving the calendar and cent calculations.
