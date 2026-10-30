@@ -1,5 +1,86 @@
 {
-  "shards": [
+  "push": [
+    {
+      "name": "source",
+      "browser": false,
+      "hosted": false,
+      "commands": [
+        "node scripts/contract-docs.mjs check",
+        "node node_modules/@runeditrun/rer/edition-authoring/cli.mjs check",
+        "pnpm run check",
+        "pnpm run typecheck",
+        "pnpm run test:runtime",
+        "pnpm run build --site"
+      ]
+    },
+    {
+      "name": "flows-zero",
+      "browser": true,
+      "hosted": true,
+      "commands": [
+        "NECTAR_VERIFY_SHARD=0 pnpm run test:flows"
+      ]
+    },
+    {
+      "name": "flows-one",
+      "browser": true,
+      "hosted": false,
+      "commands": [
+        "NECTAR_VERIFY_SHARD=1 pnpm run test:flows",
+        "node tests/nectar/clause-browser.mjs native-collection",
+        "node tests/nectar/subscription-states-browser.mjs"
+      ]
+    },
+    {
+      "name": "recovery-browser",
+      "browser": true,
+      "hosted": false,
+      "commands": [
+        "node tests/nectar/payment-retries-browser.mjs",
+        "node tests/nectar/payment-retries-browser.mjs churn",
+        "node tests/nectar/dunning-browser.mjs",
+        "node tests/nectar/dunning-browser.mjs custody"
+      ]
+    },
+    {
+      "name": "invoices-browser",
+      "browser": true,
+      "hosted": false,
+      "commands": [
+        "node tests/nectar/invoice-void-browser.mjs",
+        "node tests/nectar/invoice-void-browser.mjs refunds",
+        "node tests/nectar/plan-changes-browser.mjs"
+      ]
+    },
+    {
+      "name": "processor-browser",
+      "browser": true,
+      "hosted": false,
+      "commands": [
+        "node tests/nectar/processor-events.mjs",
+        "node tests/nectar/processor-cash.mjs",
+        "node tests/nectar/processor-cash-imported.mjs",
+        "node tests/nectar/processor-events-browser.mjs",
+        "node tests/nectar/processor-events-browser.mjs cash",
+        "node tests/nectar/processor-events-browser.mjs imported"
+      ]
+    },
+    {
+      "name": "processor-archive",
+      "browser": false,
+      "hosted": false,
+      "commands": [
+        "NECTAR_TEST_CHECKOUT=1 node tests/nectar/processor-archive.mjs"
+      ]
+    },
+    {
+      "name": "remittance-archive",
+      "browser": false,
+      "hosted": false,
+      "commands": [
+        "NECTAR_TEST_CHECKOUT=1 node tests/nectar/processor-archive.mjs remittances"
+      ]
+    },
     {
       "name": "sanity-1",
       "browser": false,
@@ -8,7 +89,8 @@
         "node tests/nectar/flows.mjs --audit-only",
         "node tests/runtime.mjs",
         "node tests/nectar/sanity.mjs intervalsFlow cadencesFlow promotionsFlow retentionFlow commitments portalPrepaidFlow invoiceAutomationFlow invoiceRefundPreviewFlow periodCloseFlow mfaFlow"
-      ]
+      ],
+      "hosted": false
     },
     {
       "name": "sanity-2",
@@ -16,21 +98,24 @@
       "commands": [
         "node tests/nectar/processor-journey.mjs",
         "node tests/nectar/sanity.mjs paymentRetriesFlow dunning-sequences portalSessionsFlow planChangesFlow financialReportsFlow metricsFlow contractSetup upcomingFlow assuranceScheduleFlow invoiceContentFlow card-lifecycle enterprise-identity"
-      ]
+      ],
+      "hosted": false
     },
     {
       "name": "sanity-3",
       "browser": false,
       "commands": [
         "node tests/nectar/sanity.mjs usageReplayFlow renewalsFlow draftCorrectionsFlow customerLanguageFlow hierarchiesFlow billingAnswersFlow writeOffFlow billingRolesFlow currencyFlow intervalCancellationFlow"
-      ]
+      ],
+      "hosted": false
     },
     {
       "name": "sanity-4",
       "browser": false,
       "commands": [
         "node tests/nectar/sanity.mjs prepaidRefundFlow erasureFlow customerSearchFlow priceMigrations processorCashFlow apiPlatformFlow nativeCollectionFlow cardExpiryNoticesFlow revenueFlow webhooks reconciliationFlow"
-      ]
+      ],
+      "hosted": false
     },
     {
       "name": "browser",
@@ -43,28 +128,178 @@
         "node tests/nectar/public-door-journey.mjs --browser payment-retries-browser",
         "node tests/nectar/public-door-journey.mjs --browser payment-retries-browser churn",
         "node tests/nectar/clause-browser.mjs native-collection"
-      ]
+      ],
+      "hosted": false
     },
     {
       "name": "recovery",
       "browser": false,
       "commands": [
         "node scripts/verify-checkout.mjs"
-      ]
+      ],
+      "hosted": false
     },
     {
       "name": "done-1",
       "browser": false,
       "commands": [
         "node tests/nectar/sanity.mjs contractIntervalSetup prepaidRefreshLedgerFlow prepaidPurchaseCreditFlow prepaidRefreshTopupFlow prepaidAgentCreditFlow prepaidCommercialMigrationFlow nativeIntervalErasureFlow revenueErasureFlow retryPlanChurnFlow portalAnswersFlow automaticCollectionFlow portalRenewalFlow"
-      ]
+      ],
+      "hosted": false
     },
     {
       "name": "done-2",
       "browser": true,
       "commands": [
         "node tests/nectar/sanity.mjs contractEntitySetup prepaidCorrectionFlow prepaidErasureFlow prepaidRefundCorrectionFlow prepaidAgentDraftCorrectionsFlow retentionIntervalFlow metricZones periodCloseDeferredFlow retryComparisonFlow portalEmbeddingFlow moveCollectionFlow remittanceFilesFlow"
+      ],
+      "hosted": false
+    }
+  ],
+  "nightly": [
+    {
+      "name": "installation",
+      "browser": true,
+      "hosted": false,
+      "commands": [
+        "NECTAR_TEST_CHECKOUT=1 pnpm run test:journey"
+      ]
+    },
+    {
+      "name": "portal-installation",
+      "browser": true,
+      "hosted": false,
+      "commands": [
+        "NECTAR_TEST_CHECKOUT=1 node tests/nectar/portal-journey.mjs"
+      ]
+    },
+    {
+      "name": "erasure-archive",
+      "browser": true,
+      "hosted": false,
+      "commands": [
+        "NECTAR_TEST_CHECKOUT=1 node tests/nectar/erasure-archive.mjs"
+      ]
+    },
+    {
+      "name": "mfa-archive",
+      "browser": true,
+      "hosted": false,
+      "commands": [
+        "NECTAR_TEST_CHECKOUT=1 node tests/nectar/mfa-archive.mjs"
+      ]
+    },
+    {
+      "name": "focused-intervals",
+      "browser": true,
+      "hosted": false,
+      "commands": [
+        "node tests/nectar/clause-browser.mjs intervals"
+      ]
+    },
+    {
+      "name": "focused-prepaid",
+      "browser": true,
+      "hosted": false,
+      "commands": [
+        "node tests/nectar/clause-browser.mjs prepaid"
+      ]
+    },
+    {
+      "name": "focused-erasure",
+      "browser": true,
+      "hosted": false,
+      "commands": [
+        "node tests/nectar/clause-browser.mjs erasure"
+      ]
+    },
+    {
+      "name": "focused-history",
+      "browser": true,
+      "hosted": false,
+      "commands": [
+        "node tests/nectar/clause-browser.mjs history"
+      ]
+    },
+    {
+      "name": "focused-topup",
+      "browser": true,
+      "hosted": false,
+      "commands": [
+        "node tests/nectar/prepaid-topup-browser.mjs"
+      ]
+    },
+    {
+      "name": "focused-refund",
+      "browser": true,
+      "hosted": false,
+      "commands": [
+        "node tests/nectar/prepaid-refund-browser.mjs"
+      ]
+    },
+    {
+      "name": "focused-portal-prepaid",
+      "browser": true,
+      "hosted": false,
+      "commands": [
+        "node tests/nectar/portal-prepaid-browser.mjs"
+      ]
+    },
+    {
+      "name": "focused-passkey",
+      "browser": true,
+      "hosted": false,
+      "commands": [
+        "node tests/nectar/mfa-passkey.mjs"
+      ]
+    },
+    {
+      "name": "focused-erasure-scale",
+      "browser": false,
+      "hosted": false,
+      "commands": [
+        "node tests/nectar/clause-runner.mjs erasure erasureScaleFlow"
+      ]
+    },
+    {
+      "name": "focused-prepaid-scale",
+      "browser": false,
+      "hosted": false,
+      "commands": [
+        "node tests/nectar/clause-runner.mjs prepaid prepaidScaleErasureFlow"
+      ]
+    },
+    {
+      "name": "focused-history-scale",
+      "browser": false,
+      "hosted": false,
+      "commands": [
+        "node tests/nectar/clause-runner.mjs move-history moveHistoryErasureFlow"
       ]
     }
-  ]
+  ],
+  "readers": {
+    "tests/nectar/clause-browser.mjs": [],
+    "tests/nectar/payment-retries-browser.mjs": [],
+    "tests/nectar/dunning-browser.mjs": [],
+    "tests/nectar/invoice-void-browser.mjs": [],
+    "tests/nectar/plan-changes-browser.mjs": [],
+    "tests/nectar/processor-events.mjs": [],
+    "tests/nectar/processor-cash.mjs": [],
+    "tests/nectar/processor-cash-imported.mjs": [],
+    "tests/nectar/processor-events-browser.mjs": [],
+    "tests/nectar/processor-archive.mjs": [],
+    "tests/nectar/portal-journey.mjs": [],
+    "tests/nectar/erasure-archive.mjs": [],
+    "tests/nectar/mfa-archive.mjs": [],
+    "tests/nectar/prepaid-topup-browser.mjs": [],
+    "tests/nectar/prepaid-refund-browser.mjs": [],
+    "tests/nectar/portal-prepaid-browser.mjs": [],
+    "tests/nectar/mfa-passkey.mjs": [],
+    "tests/nectar/clause-runner.mjs": [],
+    "tests/runtime.mjs": [],
+    "tests/nectar/flows.mjs": [],
+    "tests/nectar/journey.mjs": [],
+    "tests/nectar/subscription-states-browser.mjs": []
+  }
 }

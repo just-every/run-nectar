@@ -1,25 +1,33 @@
-import assert from 'node:assert/strict'
-import { spawn } from 'node:child_process'
-import { readFile } from 'node:fs/promises'
-const config=JSON.parse(await readFile(new URL('../verification.json',import.meta.url)))
-const selection=process.env.NECTAR_VERIFY_GROUP
-const groups=config.shards
-assert.equal(new Set(groups.map(g=>g.name)).size,groups.length,'Shard names are unique')
-assert.ok(!selection||selection==='build'||groups.some(g=>g.name===selection),'Unknown verification group')
-const run=command=>new Promise((resolve,reject)=>{
- const child=spawn(command,{shell:true,stdio:'inherit',env:process.env})
- child.on('error',reject);child.on('exit',code=>code===0?resolve():reject(new Error(`${command} exited ${code}`)))
-})
-if(!process.env.NECTAR_BUILD_READY)await run('pnpm run build')
-if(!selection){await run('pnpm typecheck');await run('node scripts/contract-docs.mjs check');await run('node scripts/check-locales.mjs');await run('pnpm check:deployment-spec');await run('pnpm exec rer check --profile first-party')}
-// Current Verify uses two numeric shards. Keep its full original flow coverage
-// on both shards (flows.mjs partitions itself), then partition supplemental groups.
-const shard=process.env.NECTAR_VERIFY_SHARD
-if(!selection&&shard!==undefined){
- assert.ok(['0','1'].includes(shard),'Unknown numeric verification shard')
- await run('node tests/runtime.mjs')
- await run('node tests/nectar/flows.mjs')
- for(const [index,group] of groups.entries())if(index%2===Number(shard))for(const command of group.commands){
-  if(!['node tests/nectar/flows.mjs','node tests/runtime.mjs'].includes(command))await run(command)
+import { readFile } from 'node:fs/promises';
+import { spawnSync } from 'node:child_process';
+
+export async function verificationPlan() {
+ const plan = JSON.parse(await readFile(new URL('../verification.json', import.meta.url), 'utf8'));
+ const names = new Set();
+ for (const tier of ['push', 'nightly']) {
+  if (!Array.isArray(plan[tier])) throw Error(`Missing verification tier: ${tier}`);
+  for (const shard of plan[tier]) {
+   if (!/^[a-z][a-z0-9-]*$/.test(shard.name) || names.has(shard.name)) throw Error(`Invalid or duplicate shard: ${shard.name}`);
+   if (typeof shard.browser !== 'boolean' || typeof shard.hosted !== 'boolean' || !Array.isArray(shard.commands) || !shard.commands.length || shard.commands.some(command => typeof command !== 'string' || !command.trim())) throw Error(`Incomplete shard: ${shard.name}`);
+   names.add(shard.name);
+  }
  }
-}else for(const group of groups.filter(g=>!selection||g.name===selection))for(const command of group.commands)await run(command)
+ if (!plan.push.length || plan.push.filter(shard => shard.hosted).length !== 1) throw Error('Push verification must include the hosted production build');
+ return plan;
+}
+
+export function run(command, env = process.env) {
+ console.log(`> ${command}`);
+ const result = spawnSync('/bin/bash', ['-euo', 'pipefail', '-c', command], { stdio: 'inherit', env });
+ if (result.error) throw result.error;
+ if (result.status !== 0) process.exit(result.status ?? 1);
+}
+
+if (process.argv[1] === import.meta.filename) {
+ const plan = await verificationPlan();
+ const all = [...plan.push, ...plan.nightly];
+ const selected = process.env.SEED_VERIFY_SHARD;
+ const shards = selected ? all.filter(shard => shard.name === selected) : all;
+ if (!shards.length) throw Error(`Unknown verification shard: ${selected}`);
+ for (const shard of shards) for (const command of shard.commands) run(command);
+}
