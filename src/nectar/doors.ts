@@ -3,6 +3,7 @@
 // each role, so a new door cannot be added without being checked.
 // Patterns are relative to /api/nectar/ (API) or absolute (pages).
 export const API_DOORS: [string, string][] = [
+  ['^close-tieout$', 'closeTieout'],
   ['^portal-changes$', 'portalChanges'],
   ['^remittances$','remittances'],
   ['^processor-events$','processorEvents'],
@@ -61,6 +62,7 @@ export const API_DOORS: [string, string][] = [
 export const LIST_DOORS = ['remittances','paymentLinks','automaticCollections','assuranceCases','assuranceRuns','currencyRates','trialCollections','prepaidRefunds','prepaidTopupAuthorizations','prepaidTopupClaims','nativeCollections', 'usageCorrections', 'erasures', 'noteMembers', 'customers', 'batches', 'runs', 'payments', 'notices', 'tasks', 'policies', 'proposals', 'imports', 'shadow', 'members', 'roles', 'credentials', 'audit', 'metadataObjects', 'notes']
 
 export const PAGE_DOORS: [string, string][] = [
+  ['^/app/close-tieout$', 'closeTieout'],
   ['^/app/settings/portal-changes$', 'portalChanges'],
   ['^/app/processor-events$','processorEvents'],
   ['^/app/payments/([\\w-]+)/receipt$','paymentReceipt'],

@@ -959,3 +959,10 @@ recipient, language, source or wording changes invalidate its frozen basis.
 A prepared event cannot be replaced, including after expiry, provider refusal
 or uncertainty. Acceptance records provider acceptance rather than mailbox
 delivery. A receipt records an allocation, without claiming settlement.
+## Native close preparation
+
+`GET /api/nectar/close-tieout?period=2026-09` returns the current native USD preparation packet: source fingerprint `basis`, separate debt, received-cash, goodwill and revenue totals, exact source citations, explicit coverage states and supported case evidence. Full billing read authority is required. Issued invoices and received payments are selected through the requested month; their current allocations, credits, returns and journal outcomes are used. Customer credit movements are current. Revenue uses active native schedules and existing closed-period adjustments. Erased operational sources are withdrawn. This is a preparation view, not a frozen historical close or a provider reconciliation certificate.
+
+`POST /api/nectar/close.scan` takes `period`, the exact returned `basis` and an active owner or finance member ID in `owner`. It requires full billing read and proposal capabilities, rechecks the source basis and records cases atomically with its audit. Repeated scans reuse the same source case. Unapplied received cash is a review item; a pending existing bad-debt journal is a synchronization failure. These meanings do not establish missing processor fees, unsynced credit notes or failed provider tax commitments.
+
+Use existing ordinary authorized financial doors for any fix. `assurance.approve` only confirms agreement on the exact current case basis; `assurance.recheck` resolves it after that confirmation and a fresh successful comparison. Neither scanning nor confirming grants allocation, journal-posting or period-close authority. The accountant page is `/app/close-tieout`, linked from Revenue schedules. Complete connector, entity, currency, payout, fee and provider tax qualification remains outside this native packet.
