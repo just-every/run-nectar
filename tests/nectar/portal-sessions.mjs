@@ -1,5 +1,3 @@
-// PORT-005 round A: real Worker/D1, operator public doors issue a customer-only
-// signed capability; all customer reads go through /portal, never an Actor.
 import assert from 'node:assert/strict'
 import { createHmac } from 'node:crypto'
 import { totp } from './mfa.mjs'

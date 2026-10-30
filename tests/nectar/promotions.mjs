@@ -1,7 +1,3 @@
-// CAT-005 through public doors: reusable coupons, promotion codes with redemption
-// limits, expiry and first-time rules redeemed at subscription creation, product
-// restriction on a mixed invoice, and trials with or without a payment method on
-// file that extend, convert or end unpaid.
 import assert from 'node:assert/strict'
 import { nativeCollectionEdge } from './native-collection.mjs'
 import { totp } from './mfa.mjs'
@@ -196,7 +192,6 @@ export async function trialsFlow(h, owner, onState = async () => {}, interaction
   await automaticTrialFlow(h, owner, onState, interaction)
   console.log('CAT-005 trials passed')
 }
-
 
 async function automaticTrialFlow(h, owner, onState, interaction) {
   const api = (path, body, status) => h.api(path, owner, body, status)

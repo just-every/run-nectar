@@ -1,4 +1,3 @@
-// RPT-003: public-door report -> invoice contribution -> line -> saved events.
 import assert from 'node:assert/strict'
 import { applyPolicy } from './policy-helper.mjs'
 

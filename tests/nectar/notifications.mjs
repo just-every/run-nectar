@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict'
 
 const choices = (enabled = []) => Object.fromEntries(['mentions', 'payment_mismatch', 'billrun_exceptions', 'proposals', 'webhook_failure'].map(event => [event, enabled.includes(event)]))
+
 const content = mail => `${mail.subject} ${mail.text ?? ''} ${mail.html ?? ''}`
+
 const recipients = mails => mails.flatMap(mail => [mail.to].flat()).sort()
 
 // INT-003: preferences, event delivery and custody through the real HTTP doors.

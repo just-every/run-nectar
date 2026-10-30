@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { applyPolicy } from './policy-helper.mjs'
 
 const month = index => `${2026 + Math.floor(index / 12)}-${String(index % 12 + 1).padStart(2, '0')}`
+
 const lines = invoice => invoice.lines.map(line => ({ kind: line.kind, price: line.price_id, cents: line.amount_cents, from: line.period_start, to: line.period_end, evidence: line.evidence }))
 
 // CAT-001's real Worker/D1 billing clock. No database edits or calculated

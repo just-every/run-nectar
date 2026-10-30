@@ -1,4 +1,3 @@
-// Original imports and owner takeover use public Worker doors; only Stripe is fake.
 import assert from 'node:assert/strict'
 import { file } from './harness.mjs'
 import { processorCashEdge } from './processor-cash.mjs'
@@ -74,11 +73,14 @@ export function importedCashEdge() {
   return {id,payout,charge}
  }}
 }
+
 let edge
+
 export const harnessOptions=()=>{
  edge=importedCashEdge()
  return {localTime:'2026-10-28T10:00:00Z',stripeFetch:edge.fetch,stripeSecret:'synthetic-nectar-1'}
 }
+
 export async function processorCashImportedFlow(h,owner,{cashEdge=edge,keepFinancial=false,onState=async()=>{}}={}) {
  const api=(path,body,status)=>h.api(path,owner,body,status),remote='synthetic-nectar-1',account='synthetic-nectar-account'
  const capture=collectionCapture(),files=Object.fromEntries(Object.entries(capture).map(([name,value])=>[name,file(`${name}.json`,JSON.stringify(value),'application/json')]))
@@ -191,8 +193,4 @@ export async function processorCashImportedFlow(h,owner,{cashEdge=edge,keepFinan
   assert.ok(receipt.removal.records.some(row=>row.kind==='nc_processor_cash_imported_takeovers'&&row.records===2))
  }
  return {customer,invoice:first.id,request:request.id,retainUntil:erased.receipt.retained.until}
-}
-if(process.argv[1]===new URL(import.meta.url).pathname){
- const {processorSetup}=await import('./processor-events.mjs'),options=harnessOptions(),{h,owner}=await processorSetup(undefined,options)
- try{await processorCashImportedFlow(h,owner);console.log('Imported cash: explicit takeover, source custody, partial settlement, uncertainty and report parity passed')}finally{await h.close()}
 }

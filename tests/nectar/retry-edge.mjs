@@ -1,5 +1,5 @@
-// Only the processor network edge supplies known failure outcomes.
 import { nativeCollectionEdge } from './native-collection.mjs'
+
 export function retryEdge(){
  const base=nativeCollectionEdge(),rules=new Map(),attempts=new Map(),writes=[],delivered=[],events=new Map()
  let instant=Date.parse('2026-10-22T10:00:00Z'),lose=false

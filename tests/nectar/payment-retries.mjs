@@ -2,11 +2,13 @@ import { billingNoticeAssertions, sendBillingNoticeAssertions, billingNoticeCust
 import assert from 'node:assert/strict'
 import { retryEdge } from './retry-edge.mjs'
 import { totp } from './mfa.mjs'
-import { file } from './harness.mjs'
 import { assertComparisons, assertRecoveryBuckets, retryPolicyWrites } from './recovery-assertions.mjs'
-import { assertComparisonDescription, assertTimingTable } from './retry-comparison-description.mjs'
+import { assertTimingTable } from './retry-comparison-description.mjs'
+
 let edge
+
 export const harnessOptions=()=>{edge=retryEdge();return {assets:true,localTime:'2026-10-22T10:00:00Z',stripeFetch:edge.fetch,stripeSecret:'synthetic-nectar-1',webhookFetch:async request=>{edge.delivered.push(await request.json());return Response.json({accepted:true})}}}
+
 export async function paymentRetriesFlow(h,owner,{onState=async()=>{},prepareCollection,acceptCollection}={}){
  const api=(path,body,status)=>h.api(path,owner,body,status),first=Date.parse('2026-10-22T10:00:00Z'),day=86400000
  const policies=retryPolicyWrites(api)
@@ -177,144 +179,4 @@ export async function paymentRetriesFlow(h,owner,{onState=async()=>{},prepareCol
   await api('mfa.verify',{code:totp(factor.secret,instant)});verifiedAt=instant
  }})
  console.log('paymentRetriesFlow: consented policy, exact timing, hard and ACH prohibitions, caps, dispute hold, once-only cash and page API webhook parity')
-}
-
-export async function retryComparisonFlow(h,owner){
- const api=(p,b,status)=>h.api(p,owner,b,status)
- const record=await api('retry-comparison')
- await assertComparisons(record,new Map())
- await assertComparisonDescription(h,owner,record)
- console.log('retryComparisonFlow: published known outcomes independently sum to both schedules and the product description')
-}
-
-export async function retryPlanChurnFlow(h,owner,{onState=async()=>{},assignSegment,prepareCollection,acceptCollection}={}){
- const api=(p,b,status)=>h.api(p,owner,b,status)
- const policies=retryPolicyWrites(api)
- let instant=Date.parse('2026-10-22T10:00:00Z');await h.advanceClock(new Date(instant).toISOString());edge.setTime(instant)
- await api('business.configure',{...await api('business'),timezone:'UTC'})
- const factor=await api('mfa.totp.start',{});await api('mfa.totp.confirm',{factor:factor.factor,code:totp(factor.secret,instant)});await api('mfa.policy',{scope:'all'})
- const customer=(await api('customer.create',{external_id:'synthetic-nectar-churn',name:'Cedar ended account',billing_email:'ended@example.test'})).id
- await api('collection.customer.bind',{customer,account_ref:'synthetic-nectar-native-account-1',stripe_customer_ref:'synthetic-nectar-native-customer-1',confirm:true})
- const product=(await api('product.create',{code:'retry-plan',name:'Monthly retry plan'})).id
- const price=(await api('price.create',{product,kind:'flat',unit_amount:'100',taxable:false})).id
- await policies.configure({max_attempts:4,window_days:7,confirm:true})
- await policies.configure({plan:price,max_attempts:2,window_days:7,confirm:true})
- const sub=(await api('subscription.create',{customer,start_date:'2026-09-01',price:[price],quantity:['1']})).id
- const run=await api('billrun.prepare',{period:'2026-09'}),invoice=(await api(`runs/${run.id}`)).invoices.find(i=>i.subscription_id===sub).id
- await api('portal.configure',{hosts:[h.origin],parents:[]})
- const request=await api('automatic.collection.prepare',{invoice,issue_date:'2026-10-22',enable_retries:true})
- assert.equal(request.quote.retryPolicy.maxAttempts,2,'The invoice price override precedes the default')
- assert.equal(request.quote.retryPolicy.scope,`plan:${price}`)
- const session=await api('portal.session.issue',{customer,origin:h.origin,audience:'hosted'})
- assert.equal((await h.raw(`/portal/automatic-collections/${request.id}?session=${encodeURIComponent(session.token)}`,{body:{request:request.id,basis_hash:request.basis,accept:true}})).status,200)
- await api('automatic.collection.decide',{request:request.id,basis_hash:request.basis,decision:'approved',confirm:true,confirm_single:true})
- edge.rules.set('synthetic-nectar-native-card-1',{code:'do_not_honor',recoverAt:Infinity})
- await api('invoice.approve',{invoice,acknowledge:true});await api('invoice.finalise',{invoice,issue_date:'2026-10-22'})
- // A later broader default never widens customer-approved terms.
- await policies.configure({max_attempts:8,window_days:14,confirm:true})
- instant+=86400000;edge.setTime(instant);await h.advanceClock(new Date(instant).toISOString())
- assert.equal((await h.raw(`/cdn-cgi/local/scheduled?time=${instant}&cron=${encodeURIComponent('* * * * *')}`)).status,200)
- assert.equal((await api(`invoices/${invoice}`)).attempt_count,2);assert.equal((await api(`invoices/${invoice}`)).next_payment_attempt,null)
- await api('mfa.verify',{code:totp(factor.secret,instant)})
- await api('retry.churn.record',{invoice,subscription_revision:(await api(`subscriptions/${sub}`)).revision,end_date:'2026-10-23',confirm:true},409)
- assert.equal((await api('recovery')).involuntaryChurn.count,0)
- await api('subscription.end',{subscription:sub,end_date:'2026-10-23',reason:'Ended after unpaid failed renewal'})
- const ended=await api(`subscriptions/${sub}`),before=await api(`invoices/${invoice}`)
- await onState({state:'churn-candidate',invoice})
- await api('access.give',{email:'synthetic-nectar-901@example.test',name:'Synthetic churn support',role:'support'})
- const churnFinance=await h.signIn('synthetic-nectar-901@example.test',{requested:true})
- const churnFactor=await h.api('mfa.totp.start',churnFinance,{})
- await h.api('mfa.totp.confirm',churnFinance,{factor:churnFactor.factor,code:totp(churnFactor.secret,instant)})
- await h.api('retry.churn.record',churnFinance,{invoice,subscription_revision:ended.revision,end_date:ended.end_date,confirm:true},403)
- assert.equal((await api('recovery')).involuntaryChurn.count,0)
- await api('retry.churn.record',{invoice,subscription_revision:ended.revision,end_date:ended.end_date,confirm:true})
- const report=await api('recovery');assert.equal(report.involuntaryChurn.count,1)
- assert.equal(report.involuntaryChurn.records[0].subscription_id,sub)
- assert.equal(report.totals.failedInvoices,1);assert.equal(report.totals.failedAmountCents,10000);assert.equal(report.totals.recoveredAmountCents,0)
- await api('retry.churn.record',{invoice,subscription_revision:ended.revision,end_date:ended.end_date,confirm:true},409)
- assert.equal((await api(`invoices/${invoice}`)).balanceCents,before.balanceCents)
- await onState({state:'churn-recorded',invoice})
- // Explicit segments are separate from customer revision and from collections cadences.
- const customerRevision=(await api(`customers/${customer}`)).revision
- const assignmentInput={customer,customer_revision:customerRevision,segment:'synthetic-nectar-1',confirm:true}
- await policies.configure({segment:'synthetic-nectar-1',max_attempts:6,window_days:1,confirm:true})
- await policies.configure({segment:'synthetic-nectar-2',max_attempts:5,window_days:3,confirm:true})
- await api('retry.policy.configure',{plan:price,segment:'synthetic-nectar-1',max_attempts:3,window_days:2,confirm:true},400)
- await api('retry.policy.configure',{segment:'Invalid label',max_attempts:3,window_days:2,confirm:true},400)
- let assignment=await (assignSegment??(input=>api('retry.segment.assign',input)))(assignmentInput)
- assert.equal((await api(`customers/${customer}`)).revision,customerRevision,'Segment assignment preserves existing exact consent')
- await api('retry.segment.assign',assignmentInput,409)
- await api('retry.segment.assign',{...assignmentInput,revision:assignment.revision,customer_revision:'synthetic-nectar-3'},409)
- const prepare=async()=>{
-  const subscription=(await api('subscription.create',{customer,start_date:'2026-09-01',price:[price],quantity:['1']})).id
-  const nextRun=await api('billrun.prepare',{period:'2026-09'})
-  const id=(await api(`runs/${nextRun.id}`)).invoices.find(i=>i.subscription_id===subscription).id
-  const prepared=await (prepareCollection??(input=>api('automatic.collection.prepare',input)))({invoice:id,issue_date:'2026-10-23',enable_retries:true})
-  return {id,request:prepared}
- }
- const combined=await prepare()
- assert.equal(combined.request.quote.retryPolicy.maxAttempts,2,'The plan supplies the smaller count')
- assert.equal(combined.request.quote.retryPolicy.windowDays,1,'The segment independently supplies the shorter window')
- assert.equal(combined.request.quote.retryPolicy.scope,[`plan:${price}`,'segment:synthetic-nectar-1'].sort().join(', '))
- const combinedSession=await api('portal.session.issue',{customer,origin:h.origin,audience:'hosted'})
- const path=`/portal/automatic-collections/${combined.request.id}?session=${encodeURIComponent(combinedSession.token)}`
- if(acceptCollection)await acceptCollection({path,request:combined.request})
- else assert.equal((await h.raw(path,{body:{request:combined.request.id,basis_hash:combined.request.basis,accept:true}})).status,200)
- // Editing both inputs after acceptance cannot widen the accepted invoice's policy.
- assignment=await (assignSegment??(input=>api('retry.segment.assign',input)))({...assignmentInput,revision:assignment.revision,segment:'synthetic-nectar-2'})
- await policies.configure({plan:price,max_attempts:4,window_days:6,confirm:true})
- await policies.configure({segment:'synthetic-nectar-1',max_attempts:8,window_days:14,confirm:true})
- await api('automatic.collection.decide',{request:combined.request.id,basis_hash:combined.request.basis,decision:'approved',confirm:true,confirm_single:true})
- await api('invoice.approve',{invoice:combined.id,acknowledge:true});await api('invoice.finalise',{invoice:combined.id,issue_date:'2026-10-23'})
- const frozen=(await api('automatic-collections')).find(r=>r.id===combined.request.id)
- assert.deepEqual(frozen.quote.retryPolicy,combined.request.quote.retryPolicy)
- await onState({state:'segment-selected-invoice',...combined})
- await policies.configure({max_attempts:1,window_days:1,confirm:true})
- const changed=await prepare()
- assert.equal(changed.request.quote.retryPolicy.maxAttempts,4)
- assert.equal(changed.request.quote.retryPolicy.windowDays,3)
- assert.ok(changed.request.quote.retryPolicy.scope.includes('segment:synthetic-nectar-2'))
- assignment=await (assignSegment??(input=>api('retry.segment.assign',input)))({...assignmentInput,revision:assignment.revision,segment:''})
- assert.equal(assignment.segment,null)
- const cleared=await prepare()
- assert.equal(cleared.request.quote.retryPolicy.maxAttempts,4)
- assert.equal(cleared.request.quote.retryPolicy.windowDays,6)
- assert.equal(cleared.request.quote.retryPolicy.scope,`plan:${price}`)
- // Leave an explicit assignment for erasure to remove, then exercise denied roles.
- assignment=await api('retry.segment.assign',{...assignmentInput,revision:assignment.revision})
- await api('access.give',{email:'retry-segments@example.test',name:'Retry segment reader',role:'support'})
- const support=await h.signIn('retry-segments@example.test',{requested:true})
- const comparison=await api('retry-comparison')
- await assertComparisons(comparison,policies.expected)
-
- const trail=await api('audit'),assignmentEvents=trail.filter(e=>e.action==='retry.segment.assign'&&e.subject===customer)
- assert.equal(assignmentEvents.length,4)
- const ownerId=(await api('me')).id
- assert.ok(assignmentEvents.every(e=>e.actor===`member:${ownerId}`))
- assert.deepEqual(assignmentEvents.map(e=>JSON.parse(e.detail).segment).reverse(),['synthetic-nectar-1','synthetic-nectar-2',null,'synthetic-nectar-1'])
- await h.api('retry.segment.assign',support,{...assignmentInput,revision:assignment.revision},403)
- assert.deepEqual(await api('audit'),trail,'Refused assignment appends no audit event')
- instant+=86400000;edge.setTime(instant);await h.advanceClock(new Date(instant).toISOString())
- await api('retry.segment.assign',{...assignmentInput,revision:assignment.revision},403)
- assert.deepEqual(await api('audit'),trail,'An expired factor cannot change assignment')
- assert.equal((await h.raw(`/cdn-cgi/local/scheduled?time=${instant}&cron=${encodeURIComponent('* * * * *')}`)).status,200)
- const combinedFailed=await api(`invoices/${combined.id}`)
- assert.equal(combinedFailed.attempt_count,2);assert.equal(combinedFailed.next_payment_attempt,null,'Accepted segment terms keep their original cap after policy edits')
- await api('mfa.verify',{code:totp(factor.secret,instant)})
- const combinedSubscription=combinedFailed.subscription_id
- await api('subscription.end',{subscription:combinedSubscription,end_date:'2026-10-24',reason:'Synthetic ended paid renewal'})
- const payment=await api('payment.record',{customer,amount:(combinedFailed.balanceCents/100).toFixed(2),received_on:'2026-10-24',method:'bank_transfer',reference:'synthetic-nectar-902'})
- await api('payment.allocate',{payment:payment.payment,invoice:combined.id,amount:(combinedFailed.balanceCents/100).toFixed(2)})
- const paidEnded=await api(`subscriptions/${combinedSubscription}`)
- await api('retry.churn.record',{invoice:combined.id,subscription_revision:paidEnded.revision,end_date:paidEnded.end_date,confirm:true},409)
- assert.equal((await api('recovery')).involuntaryChurn.count,1,'An ended subscription with a fully paid failed invoice cannot add churn')
- const erasure=await api('erasure.request',{customer})
- await api('erasure.verify',{request:erasure.id,reason:'Independently verified identity',evidence:file('retry-segment-identity.txt','Synthetic verified identity','text/plain')})
- const erased=await api('erasure.approve',{request:erasure.id,confirm:true})
- assert.equal(erased.receipt.changed.find(r=>r.kind==='nc_retry_segments').records,1)
- await api('retry.segment.assign',{...assignmentInput,revision:assignment.revision},409)
- const erasedEvents=(await api('audit')).filter(e=>e.action==='retry.segment.assign'&&e.subject===customer)
- assert.equal(erasedEvents.length,4);assert.ok(erasedEvents.every(e=>JSON.stringify(e.detail)==='{}'||e.detail==='{}'))
- console.log('retryPlanChurnFlow: frozen plan and explicit segment independent limits, future assignment and clearing, erasure and confirmed ended-subscription churn')
-
 }

@@ -1,14 +1,13 @@
 import { publishPrice } from './price-helper.mjs'
-// CAT-002: real catalogue -> subscriptions -> usage -> bill run -> invoices.
-// Hand-computed dollars below retain every fractional cent until the line
-// rounds. Both seats and usage use the same commercial terms and expectations.
 import assert from 'node:assert/strict'
 
 const quantities = ['0', '1', '1000', '1001', '2500000']
+
 const band = (tier, quantity, unitAmount, flatAmount, amountExact, extra = {}) => ({
   tier, fromExclusive: tier === 1 ? '0.00' : '1000.00', upTo: tier === 1 ? '1000.00' : null,
   quantity, unitAmount, flatAmount, amountExact, ...extra,
 })
+
 const terms = {
   graduated: {
     tiers: [{ up_to: '1000', unit_amount: '0.002', flat_amount: '0.006' }, { up_to: null, unit_amount: '0.0014', flat_amount: '0.006' }],

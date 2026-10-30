@@ -156,7 +156,6 @@ export async function reconciliationFlow(h, owner, onState=async()=>{}) {
   assert.ok(trail.some(r=>r.action==='assurance.recheck'&&r.subject===sourceCase.id&&r.actor==='agent:Synthetic source investigator'&&JSON.parse(r.detail).status==='resolved'))
   assert.ok(trail.some(r=>r.action==='assurance.assign'&&r.subject===sourceCase.id&&r.actor==='owner@example.test'&&JSON.parse(r.detail).owner===financeId))
 
-
   assert.equal((await h.api('invoice.finalise', owner, { invoice: draft.invoice.id }, 409)).error, 'source_changed')
   await send([['source-later', '1', '2026-06-01'], ['source-surplus', '1', '2026-06-02']])
   view = await h.api('usage/inspect?period=2026-06', owner)

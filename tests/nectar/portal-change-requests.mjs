@@ -161,6 +161,7 @@ export async function portalChangeRequestsFlow(h, owner) {
     assert.equal(await operatorPage.getByRole('heading', { name: /Cedar customer/ }).count(), 2)
     if (evidence) for (const width of [1440,390]) { await operatorPage.setViewportSize({ width, height: 950 }); await operatorPage.screenshot({ path: `${evidence}/merchant-review-${width}.png`, fullPage: true }) }
     assert.equal((await h.api('portal-changes', finance)).requests.length, 2)
+    await operatorPage.setViewportSize({ width: 1440, height: 950 })
     // Save real restrictions in Settings, then independently approve them.
     await operatorPage.getByLabel('Minimum seats', { exact: true }).fill('6')
     await Promise.all([operatorPage.waitForNavigation(), operatorPage.getByRole('button', { name: 'Prepare restrictions' }).click()])

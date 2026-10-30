@@ -27,11 +27,12 @@
     "check": "rer check",
     "deps": "rer install",
     "rer": "rer",
-    "test:flows": "rer queue test:flows -- sh -c \"node tests/nectar/flows.mjs\"",
+    "test:flows": "node tests/nectar/flows.mjs && node tests/nectar/sanity.mjs && node tests/nectar/processor-journey.mjs",
     "test:journey": "node tests/nectar/journey.mjs",
     "test:passkey": "node tests/nectar/mfa-passkey.mjs",
     "delivery:spec": "node scripts/build-deployment-spec.mjs",
-    "check:deployment-spec": "node scripts/build-deployment-spec.mjs --check"
+    "check:deployment-spec": "node scripts/build-deployment-spec.mjs --check",
+    "test:recovery": "node scripts/verify-checkout.mjs"
   },
   "dependencies": {
     "@node-saml/node-saml": "5.1.0",

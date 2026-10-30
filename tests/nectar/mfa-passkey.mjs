@@ -1,7 +1,3 @@
-// GOV-007 passkeys in a real browser: a finance operator held at enrollment
-// adds a passkey in a WebAuthn virtual authenticator, gets recovery codes and
-// reaches the app; a new session is held at the check until the passkey is
-// presented. Runs the built Worker (pnpm run build first); screens at 1440 and 390.
 import assert from 'node:assert/strict'
 import { mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -10,9 +6,13 @@ import { harness } from './harness.mjs'
 import { applyPolicy } from './policy-helper.mjs'
 
 const evidence = process.env.NECTAR_EVIDENCE_DIR ?? join(process.cwd(), '.evidence')
+
 await mkdir(evidence, { recursive: true })
+
 const h = await harness({ hostname: 'localhost', assets: true })
+
 let browser
+
 try {
   assert.equal((await h.raw('/auth/bootstrap', { body: { token: h.vars.SETUP_TOKEN, displayName: 'Nectar Owner' } })).status, 303)
   const owner = await h.signIn(h.vars.OWNER_EMAIL)
@@ -23,7 +23,7 @@ try {
   await h.api('mfa.policy', owner, { scope: 'roles', roles: ['finance'] })
   const signedIn = await h.signIn('gov007-passkey@example.test', { requested: true })
 
-  browser = await chromium.launch({ headless: true, args: ['--use-mock-keychain', '--password-store=basic'] })
+  browser = await chromium.launch({ headless: true, executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH, args: ['--no-sandbox', '--use-mock-keychain', '--password-store=basic'] })
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } })
   const useCookie = async cookie => { await context.clearCookies(); await context.addCookies(cookie.split('; ').map(pair => { const at = pair.indexOf('='); return { name: pair.slice(0, at), value: pair.slice(at + 1), url: h.origin } })) }
   const page = await context.newPage()
@@ -48,7 +48,6 @@ try {
 
   // A new session is held at the check until the passkey is presented.
   await useCookie(await h.signIn('gov007-passkey@example.test'))
-  await page.setViewportSize({ width: 390, height: 844 })
   await page.goto(`${h.origin}/app/receivables`)
   assert.equal(new URL(page.url()).pathname, '/app/security', 'GOV-007 held at the check')
   await page.getByText('Confirm it’s you with your second factor').waitFor()

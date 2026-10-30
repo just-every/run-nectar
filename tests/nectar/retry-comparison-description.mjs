@@ -1,10 +1,8 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
-import { comparisonFixture, comparisonOutcomes } from './recovery-assertions.mjs'
 
-const number=text=>{const words=['zero','one','two','three','four','five','six','seven','eight'];return text==='a'?1:words.includes(text.toLowerCase())?words.indexOf(text.toLowerCase()):Number(text.replaceAll(',',''))}
-const dollars=cents=>`$${(cents/100).toLocaleString('en-US')}`
 const rows=text=>text.split('\n').filter(line=>line.startsWith('| ')).map(line=>line.split('|').slice(1,-1).map(cell=>cell.trim()))
+
 const document=name=>readFile(new URL(`../../docs/${name}.md`,import.meta.url),'utf8')
 
 export async function assertTimingTable(observed){

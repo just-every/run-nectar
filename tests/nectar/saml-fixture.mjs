@@ -1,4 +1,3 @@
-// Only the IdP network edge is synthetic; assertions enter the built Worker.
 import { createRequire } from 'node:module'
 import { execFileSync } from 'node:child_process'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
@@ -6,9 +5,13 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { inflateRawSync } from 'node:zlib'
 import { randomUUID } from 'node:crypto'
+
 const require = createRequire(createRequire(import.meta.url).resolve('@node-saml/node-saml'))
+
 const { SignedXml } = require('xml-crypto')
+
 export const escape = value => String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('"', '&quot;')
+
 export async function samlFixture() {
   const directory = await mkdtemp(join(tmpdir(), 'nectar-idp-'))
   try {
@@ -29,11 +32,13 @@ export async function samlFixture() {
     } }
   } finally { await rm(directory, { recursive: true, force: true }) }
 }
+
 export async function startSaml(h) {
   const start = await h.raw('/sso/start'), target = new URL(start.headers.get('location'))
   const xml = inflateRawSync(Buffer.from(target.searchParams.get('SAMLRequest'), 'base64')).toString()
   return { target, requestId: xml.match(/\bID="([^"]+)"/)[1], binding: start.headers.getSetCookie().map(line => line.split(';')[0]).join('; ') }
 }
+
 export async function postSaml(h, start, response) {
   return h.raw('/sso/acs', { form: new URLSearchParams({ RelayState: start.target.searchParams.get('RelayState'), SAMLResponse: response }) })
 }

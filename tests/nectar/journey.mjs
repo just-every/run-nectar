@@ -1,37 +1,22 @@
-// The first-release journey in a real browser, run from a disposable fresh
-// clone through `rer`: setup, dev, then at 1440 pixels a whole billing cycle by
-// hand (business and tax, catalog, customers, a subscription with a contract
-// exception and a scheduled change, a usage file, a bill run approved and
-// finalised, a credit, a payment, a reminder, an agent proposal and a Stripe
-// move-in), every main screen again at 390 pixels, and finally export and
-// restore into a second fresh clone. Every business is invented.
+import { portalChangeRequestsFlow } from './portal-change-requests.mjs'
 import assert from 'node:assert/strict'
-import { randomUUID } from 'node:crypto'
-import { chromium } from '@playwright/test'
-import { access, chmod, copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
-import { spawn } from 'node:child_process'
-import { createServer } from 'node:net'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { readArchive } from '@runeditrun/rer/modules/portability'
-import { command, devKey, serving, signIn } from './cli.mjs'
+import { chromium } from '@playwright/test'
+import { harness } from './harness.mjs'
 
-assert.equal(process.env.NECTAR_TEST_CHECKOUT, '1', 'Set NECTAR_TEST_CHECKOUT=1 only in a disposable fresh git clone')
-const root = process.cwd()
-const evidence = process.env.NECTAR_EVIDENCE_DIR ?? join(root, '.evidence')
-await mkdir(evidence, { recursive: true })
-const configuredAudit = process.argv.includes('--configured')
-assert.ok(!configuredAudit || process.argv.includes('--audit-only'),'Configured mode is only for the audit proof in a disposable installation')
-if(configuredAudit) await access(join(root,'.dev.vars'))
-else await access(join(root, '.dev.vars')).then(() => { throw new Error('The journey needs an unconfigured fresh clone') }, error => { if (error.code !== 'ENOENT') throw error })
-const freePort = async () => { const socket = createServer(); await new Promise(resolve => socket.listen(0, '127.0.0.1', resolve)); const { port } = socket.address(); await new Promise(resolve => socket.close(resolve)); return port }
-const port = await freePort()
-let origin = `http://127.0.0.1:${port}`
-const scratch = await mkdtemp(join(tmpdir(), 'nectar-journey-'))
-const fixtures = new URL('../fixtures/stripe/', import.meta.url)
-const shots = []
-let server, browser, auditSnapshot
-const auditOnly = process.argv.includes('--audit-only')
+const evidence=process.env.NECTAR_EVIDENCE_DIR??'.evidence'
+
+await mkdir(evidence,{recursive:true})
+
+const h=await harness({assets:true}), origin=h.origin, shots=[]
+
+const fixtures=new URL('../fixtures/stripe/',import.meta.url)
+
+const scratch=await mkdtemp(join(tmpdir(),'nectar-browser-'))
+
+let browser
 
 async function shot(page, name) {
   const width = page.viewportSize().width
@@ -45,6 +30,7 @@ async function shot(page, name) {
 }
 
 const form = (page, action) => page.locator(`form[action="/app/do/${action}"]`)
+
 async function submit(page, locator, button) {
   await Promise.all([page.waitForNavigation({ waitUntil: 'load' }), locator.getByRole('button', { name: button }).click()])
   const error = new URL(page.url()).searchParams.get('error')
@@ -226,218 +212,28 @@ async function cycle(page) {
   for (const [path, name] of [['/app', 'home'], ['/app/more', 'more'], ['/app/exports', 'exports'], ['/app/audit', 'audit'], ['/app/settings', 'settings']]) { await page.goto(origin + path); await shot(page, name) }
 }
 
-async function auditCycle(page) {
-  const api = async (action, body) => {
-    const response = body === undefined ? await page.request.get(origin+'/api/nectar/'+action) : await page.request.post(origin+'/api/nectar/'+action,{headers:{origin},data:body})
-    assert.equal(response.status(),200,action)
-    return response.json()
-  }
-  const existing=await api('business')
-  await api('business.configure',{...(existing?{revision:existing.revision}:{}),legal_name:'Synthetic Audit Company',timezone:'UTC',invoice_prefix:'SA',payment_terms_days:30})
-  const policy=await api('tax.declare',{tax_jurisdiction:'CA',tax_mode:'no_tax',tax_note:'Synthetic reviewed audit journey'})
-  await api('policy.decide',{request:policy.request,decision:'approved',confirm_single:true})
-  await api('tax.review',{revision:(await api('business')).revision})
-  const external=`synthetic-nectar-audit-${randomUUID()}`
-  await page.goto(origin+'/app/customers')
-  const customerForm=form(page,'customer.create')
-  await customerForm.getByLabel('Customer ID',{exact:true}).fill(external)
-  await customerForm.getByLabel('Name',{exact:true}).fill('Synthetic Audit Customer')
-  await customerForm.getByLabel('Billing email',{exact:true}).fill('audit@example.test')
-  const before=await api('audit'),start=Date.now()
-  await submit(page,customerForm,'Add customer')
-  const customer=(await api('customers')).find(c=>c.external_id===external)
-  const created=(await api('audit')).filter(r=>!before.some(old=>old.seq===r.seq))
-  assert.equal(created.length,1)
-  assert.equal(created[0].action,'customer.create');assert.equal(created[0].subject,customer.id)
-  assert.equal(created[0].actor,'owner@example.test');assert.ok(created[0].at>=start&&created[0].at<=Date.now())
-  assert.equal(JSON.parse(created[0].detail).externalId,external)
-  const charge=await api('charge.add',{customer:customer.id,amount:'125',description:'Synthetic audit service',effective_date:'2026-01-05'})
-  const manual=await api('invoice.manual',{customer:customer.id,charges:[charge.charge],service_date:'2026-01-05'})
-  await api('invoice.approve',{invoice:manual.id,acknowledge:true})
-  await api('invoice.finalise',{invoice:manual.id,issue_date:'2026-01-06'})
-  for(const move of await api('imports'))if(move.state==='completed'&&!move.blockers.length)await api('import.job',{job:move.id,action:'undo'})
-  const product=await api('product.create',{code:external,name:'Synthetic audit service'})
-  const price=await api('price.create',{product:product.id,kind:'flat',unit_amount:'10'})
-  for(const width of [1440,390]) {
-    await page.setViewportSize({width,height:844})
-    const subscription=await api('subscription.create',{customer:customer.id,start_date:'2026-01-01',anchor_day:1,price:[price.id],quantity:['1']})
-    await page.goto(origin+`/app/subscriptions/${subscription.id}`)
-    const pauseForm=form(page,'subscription.pause')
-    await pauseForm.getByLabel('Pause from',{exact:true}).fill('2026-02-01')
-    await pauseForm.getByLabel('Resume on',{exact:true}).fill('2026-04-01')
-    await pauseForm.getByLabel('Reason',{exact:true}).fill('Synthetic audit pause')
-    let prior=await api('audit'),started=Date.now()
-    await submit(page,pauseForm,'Pause subscription')
-    let after=await api('audit'),added=after.filter(r=>!prior.some(old=>old.seq===r.seq))
-    let state=await api(`subscriptions/${subscription.id}`),event=state.lifecycle.find(r=>r.kind==='pause')
-    assert.equal(added.length,1);assert.equal(added[0].actor,'owner@example.test')
-    assert.equal(added[0].action,'subscription.pause');assert.equal(added[0].subject,subscription.id)
-    assert.ok(added[0].at>=started&&added[0].at<=Date.now())
-    assert.deepEqual(JSON.parse(added[0].detail),{id:event.id,from:'2026-02-01',until:'2026-04-01',access:'suspend',reason:'Synthetic audit pause'})
-    assert.deepEqual(after.filter(r=>r.seq<=prior[0].seq),prior)
-    await shot(page,'audit-subscription-paused')
-    const resumeForm=form(page,'subscription.resume')
-    await resumeForm.getByLabel('Resume earlier on',{exact:true}).fill('2026-03-01')
-    await resumeForm.getByLabel('Reason',{exact:true}).fill('Synthetic audit resume')
-    prior=after;started=Date.now()
-    await submit(page,resumeForm,'Resume subscription')
-    after=await api('audit');added=after.filter(r=>!prior.some(old=>old.seq===r.seq))
-    state=await api(`subscriptions/${subscription.id}`)
-    const resumed=state.lifecycle.find(r=>r.kind==='resume')
-    assert.equal(added.length,1);assert.equal(added[0].actor,'owner@example.test')
-    assert.equal(added[0].action,'subscription.resume');assert.equal(added[0].subject,subscription.id)
-    assert.ok(added[0].at>=started&&added[0].at<=Date.now())
-    assert.deepEqual(JSON.parse(added[0].detail),{id:resumed.id,pause:event.id,date:'2026-03-01',reason:'Synthetic audit resume'})
-    assert.deepEqual(after.filter(r=>r.seq<=prior[0].seq),prior)
-    const iconOnly=await page.locator('a,button').evaluateAll(nodes=>nodes.filter(n=>!n.textContent.trim()&&n.querySelector('svg')).map(n=>n.outerHTML))
-    assert.deepEqual(iconOnly,[],'subscription controls have visible words')
-    await shot(page,'audit-subscription-resumed')
-  }
-  await page.goto(origin+'/app/import')
-  const upload=page.locator('form[action="/app/import/preview"]')
-  for(const name of ['manifest','customers','products','prices','subscriptions','invoices','meters'])
-    await upload.locator(`input[name="${name}"]`).setInputFiles(new URL(`${name}.json`,fixtures).pathname)
-  await submit(page,upload,'Preview the move')
-  for(const width of [1440,390]) {
-    await page.setViewportSize({width,height:844})
-    await shot(page,'audit-import-preview')
-  }
-  const priorImport=await api('audit'),importStarted=Date.now()
-  await submit(page,form(page,'import.apply'),'Apply this exact move')
-  const imported=(await api('audit')).filter(r=>!priorImport.some(old=>old.seq===r.seq))
-  assert.equal(imported.filter(r=>r.action==='import.record.write').length,16)
-  for(const event of imported) {
-    assert.equal(event.actor,'owner@example.test');assert.ok(event.at>=importStarted&&event.at<=Date.now())
-  }
-  for(const width of [1440,390]) {
-    await page.setViewportSize({width,height:844})
-    await page.goto(origin+'/app/import')
-    const iconOnly=await page.locator('a,button').evaluateAll(nodes=>nodes.filter(n=>!n.textContent.trim()&&n.querySelector('svg')).map(n=>n.outerHTML))
-    assert.deepEqual(iconOnly,[],'import controls have visible words')
-    await shot(page,'audit-import-applied')
-  }
-  const existingAccountant=(await api('members')).find(m=>m.email==='audit-accountant@example.test')
-  if(existingAccountant) {
-    assert.equal(existingAccountant.role,'accountant');assert.equal(existingAccountant.status,'active')
-  } else await api('access.give',{email:'audit-accountant@example.test',name:'Audit Accountant',role:'accountant'})
-  const ownerTrail=await api('audit')
-  const key=await devKey(root)
-  const accountantContext=await browser.newContext()
-  try {
-    const response=await accountantContext.request.get(origin+'/auth/dev/enter?as=audit-accountant%40example.test&returnTo=%2Fapp',{headers:{'x-rer-dev-key':key},maxRedirects:0})
-    assert.equal(response.status(),303,'ordinary local invited-person sign-in')
-    const accountant=await accountantContext.newPage()
-    assert.deepEqual(await (await accountant.request.get(origin+'/api/nectar/audit')).json(),ownerTrail)
-    for (const [who,name] of [[page,'owner'],[accountant,'accountant']]) {
-      const document=await (await who.request.get(origin+`/app/billing/${manual.run}.json`)).json()
-      const invoice=document.invoices.find(r=>r.id===manual.id)
-      for(const action of ['invoice.manual','invoice.approve','invoice.issue']) {
-        const expected=ownerTrail.find(r=>r.action===action&&r.subject===manual.id)
-        assert.deepEqual(invoice.audit.find(r=>r.action===action),{at:expected.at,actor:expected.actor,action,detail:JSON.parse(expected.detail)})
-      }
-      for(const width of [1440,390]) {
-        await who.setViewportSize({width,height:844})
-        for(const [path,label] of [['/app/audit','audit'],[`/app/invoices/${manual.id}`,'invoice']]) {
-          await who.goto(origin+path)
-          await who.locator('details').evaluateAll(nodes=>nodes.forEach(n=>n.open=true))
-          if(label==='audit')for(const value of ['customer create','invoice issue','subscription pause','import record.write',manual.id])assert.ok((await who.locator('main').innerText()).includes(value),value)
-          const iconOnly=await who.locator('a,button').evaluateAll(nodes=>nodes.filter(n=>!n.textContent.trim()&&n.querySelector('svg')).map(n=>n.outerHTML))
-          assert.deepEqual(iconOnly,[],`${name} ${label}: controls have visible words`)
-          await shot(who,`${name}-${label}`)
-        }
-      }
-    }
-  } finally {await accountantContext.close()}
-  auditSnapshot=await api('audit')
-  assert.deepEqual(auditSnapshot,ownerTrail,'all role and page reads leave the trail unchanged')
-}
-
-const MAIN = ['home', 'customers', 'subscription', 'catalog', 'usage', 'bill-run', 'invoice', 'receivables', 'proposals', 'proposal', 'movein', 'exports', 'settings', 'access', 'more', 'audit']
-
 try {
-  // Setup answers live inside the checkout (ignored exports/ folder), private to this user.
-  await mkdir(join(root, 'exports'), { recursive: true })
-  await writeFile(join(root, 'exports/answers.json'), JSON.stringify({ OWNER_EMAIL: 'owner@example.test' }), { mode: 0o600 })
-  await chmod(join(root, 'exports/answers.json'), 0o600)
-  if(!configuredAudit) await command(root, ['setup', '--answers', 'exports/answers.json', '--non-interactive', '--port', String(port)])
-  server = await serving(root, 'dev', port)
-  const open = server.open()
-  assert.ok(open, 'dev prints a signed-in owner URL')
-  origin = new URL(open).origin
-  browser = await chromium.launch({ args: ['--use-mock-keychain', '--password-store=basic'] })
-  const desktop = await (await browser.newContext({ viewport: { width: 1440, height: 900 } })).newPage()
-  await desktop.goto(open)
-  await desktop.waitForURL(url => /^\/(app|setup)/.test(url.pathname))
-  if (new URL(desktop.url()).pathname === '/setup') {
-    await desktop.getByRole('checkbox').check()
-    await desktop.getByRole('button', { name: 'Finish setup' }).click()
-  }
-  if(auditOnly) await auditCycle(desktop)
-  else await cycle(desktop)
-  if (!auditOnly) {
-  // The same screens at phone width, and one piece of work done there.
-  const phone = await (await browser.newContext({ viewport: { width: 390, height: 844 }, storageState: await desktop.context().storageState() })).newPage()
-  for (const entry of shots.filter(entry => entry.viewport === 1440 && MAIN.includes(entry.screen))) { await phone.goto(origin + entry.path); await shot(phone, entry.screen) }
-  await phone.goto(`${origin}/app/receivables`)
-  const payment = form(phone, 'payment.record')
-  await payment.getByLabel('Customer', { exact: true }).selectOption({ label: 'Pinecrest Labs' })
-  await payment.getByLabel('Amount ($)', { exact: true }).fill('50.00')
-  await payment.getByLabel('Received on', { exact: true }).fill('2026-09-02')
-  await payment.getByLabel('Reference', { exact: true }).fill('CHK-2001')
-  await submit(phone, payment, 'Record payment')
-  await shot(phone, 'receivables-after-payment')
-  }
-  await browser.close(); browser = null
-  await server.stop(); server = null
-
-  // Leave with the data: export, refuse a corrupt or second import, restore into a fresh clone, export equal.
-  await command(root, ['export', '--output', 'public/exposed.rer'], { refuse: true })
-  const archivePath=auditOnly?`exports/audit-${randomUUID()}.rer`:'exports/journey.rer'
-  await command(root, ['export', '--output', archivePath])
-  const read = async path => { const data = await readFile(path), records = []; for await (const record of readArchive(new ReadableStream({ start(controller) { controller.enqueue(data); controller.close() } }))) records.push(record); return records }
-  const items = records => records.filter(record => record.kind === 'part').flatMap(record => record.items).map(({ index, ...item }) => item)
-  const before = await read(join(root, archivePath))
-  for (const table of ['nc_invoices', 'nc_invoice_lines', 'nc_usage_events', 'nc_audit', 'nc_proposals', 'ik_jobs']) assert.ok(before[0].tables.some(entry => entry.name === table), `${table} is in the archive`)
-  assert.ok(before[0].excludedTables.includes('oa_sessions'))
-  const issued = items(before).filter(item => item.kind === 'row' && item.table === 'nc_invoices' && item.row.status === 'issued')
-  assert.ok(issued.length >= (auditOnly?1:2) && issued.every(row => JSON.parse(row.row.calculation_json).inputs && row.row.approved_fingerprint))
-  if(auditOnly) {
-    const exported=items(before).filter(item=>item.kind==='row'&&item.table==='nc_audit').map(item=>item.row).sort((a,b)=>b.seq-a.seq)
-    assert.deepEqual(exported,auditSnapshot,'real rer export retains every audit row and every field unchanged')
-    await writeFile(join(evidence,'audit-results.json'),JSON.stringify({auditRows:exported.length,shots},null,2))
-    console.log(`AUDIT_JOURNEY_PASS ${exported.length} exact audit rows; ${shots.length} browser screens`)
-  } else {
-  const target = join(scratch, 'restored')
-  const clone = spawn('git', ['clone', '--quiet', '--no-local', root, target], { stdio: 'ignore' })
-  assert.equal(await new Promise(resolve => clone.once('exit', resolve)), 0)
-  await command(target, ['install'])
-  await mkdir(join(target, 'exports'), { recursive: true })
-  await copyFile(join(root, 'exports/journey.rer'), join(target, 'exports/journey.rer'))
-  await writeFile(join(target, 'exports/corrupt.rer'), (await readFile(join(target, 'exports/journey.rer'), 'utf8')).replace('"kind":"part"', '"kind":"bad"'), { mode: 0o600 })
-  await command(target, ['import', '--input', 'exports/corrupt.rer', '--yes'], { refuse: true })
-  await command(target, ['import', '--input', 'exports/journey.rer', '--yes'])
-  await command(target, ['import', '--input', 'exports/journey.rer', '--yes'], { refuse: true })
-  await command(target, ['export', '--output', 'exports/restored.rer'])
-  assert.deepEqual(items(await read(join(target, 'exports/restored.rer'))), items(before), 'every portable row survives an empty-target restore')
-  // The restored installation serves the issued invoices with their calculation evidence.
-  const restorePort = await freePort()
-  await writeFile(join(target, 'exports/answers.json'), JSON.stringify({ OWNER_EMAIL: 'owner@example.test' }), { mode: 0o600 })
-  await command(target, ['setup', '--answers', 'exports/answers.json', '--non-interactive', '--port', String(restorePort)])
-  server = await serving(target, 'dev', restorePort)
-  const restoredOrigin = `http://127.0.0.1:${restorePort}`
-  const cookie = await signIn(restoredOrigin, await devKey(target))
-  assert.equal((await fetch(`${restoredOrigin}/setup`, { method: 'POST', redirect: 'manual', headers: { cookie, origin: restoredOrigin, 'content-type': 'application/x-www-form-urlencoded' }, body: 'confirm=yes' })).status, 303)
-  for (const row of issued) {
-    const invoice = await (await fetch(`${restoredOrigin}/api/nectar/invoices/${row.row.id}`, { headers: { cookie } })).json()
-    assert.equal(invoice.number, row.row.number); assert.equal(invoice.total_cents, row.row.total_cents)
-    assert.equal(invoice.calculation.fingerprint, row.row.approved_fingerprint)
-  }
-  await server.stop(); server = null
-  await writeFile(join(evidence, 'manifest.json'), JSON.stringify({ commit: process.env.NECTAR_COMMIT ?? null, business: 'Riverbend Software Inc (synthetic)', scenario: 'First billing cycle: setup, catalog, customers, subscription with an approved exception, usage file, July bill run approved and finalised, payment, credit, reminder, scheduled change, agent proposal, Stripe move-in; then every main screen at phone width.', design: '12ui D.png (bill-run review)', shots }, null, 2))
-  console.log(`JOURNEY_PASS ${shots.length} screenshots; restore round trip equal`)
-  }
-} finally {
-  if (browser) await browser.close().catch(() => {})
-  if (server) await server.stop().catch(() => {})
-  await rm(scratch, { recursive: true, force: true })
-}
+  assert.equal((await h.raw('/auth/bootstrap',{body:{token:h.vars.SETUP_TOKEN,displayName:'Nectar Owner'}})).status,303)
+  const owner=await h.signIn(h.vars.OWNER_EMAIL)
+  await h.raw('/setup',{cookie:owner,form:new URLSearchParams({confirm:'yes'})})
+  browser=await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,args:['--no-sandbox']})
+  const context=await browser.newContext({viewport:{width:1440,height:900}})
+  await context.addCookies(owner.split('; ').map(pair=>{const i=pair.indexOf('=');return {name:pair.slice(0,i),value:pair.slice(i+1),url:origin}}))
+  const desktop=await context.newPage()
+  await cycle(desktop)
+  await portalChangeRequestsFlow(h,owner)
+  console.log('JOURNEY PASS desktop billing cycle')
+  const phone=await(await browser.newContext({viewport:{width:390,height:844},storageState:await context.storageState()})).newPage()
+  for(const entry of shots.filter(s=>s.viewport===1440)) {await phone.goto(origin+entry.path);await shot(phone,entry.screen)}
+  await phone.goto(origin+'/app/receivables')
+  const payment=form(phone,'payment.record')
+  await payment.getByLabel('Customer',{exact:true}).selectOption({label:'Pinecrest Labs'})
+  await payment.getByLabel('Amount ($)',{exact:true}).fill('50.00')
+  await payment.getByLabel('Received on',{exact:true}).fill('2026-09-02')
+  await payment.getByLabel('Reference',{exact:true}).fill('CHK-2001')
+  await submit(phone,payment,'Record payment')
+  await shot(phone,'receivables-after-payment')
+  const recorded=(await h.api('payments',owner)).find(p=>p.reference==='CHK-2001')
+  assert.equal(recorded.amount_cents,5000)
+  console.log('JOURNEY PASS phone screens and payment')
+} finally {await browser?.close();await h.close();await rm(scratch,{recursive:true,force:true})}

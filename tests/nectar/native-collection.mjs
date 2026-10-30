@@ -1,4 +1,3 @@
-// Real Worker/auth/D1/receivables, fake only at Stripe's paid network edge.
 import assert from 'node:assert/strict'
 import { file } from './harness.mjs'
 import { totp } from './mfa.mjs'
@@ -94,6 +93,7 @@ export function nativeCollectionEdge() {
 }
 
 const edge=nativeCollectionEdge()
+
 export const harnessOptions=()=>({stripeFetch:edge.fetch,stripeSecret:'synthetic-nectar-1',stripeSecondarySecret:'synthetic-nectar-2'})
 
 export async function nativeCollectionFlow(h,owner,{onState=async()=>{},confirm,prepareRecovery,confirmRecovery}={}) {
