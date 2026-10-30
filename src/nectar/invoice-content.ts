@@ -53,10 +53,13 @@ export function contentForSettings(business: Business, settings: InvoiceSettings
     branding: invoiceBranding(parseJson(business.invoice_branding_json, {})), businessFields, customerFields: settings.customFields, customFields: { ...businessFields, ...settings.customFields } }
 }
 export async function invoiceContent(env: Bindings, business: Business, customer: string): Promise<InvoiceContent> {
-  const row = await one(env, 'SELECT invoice_settings_json,billing_entity_id FROM nc_customers WHERE id=? AND erased_at IS NULL', customer)
+  const row = await one(env, `SELECT c.invoice_settings_json,c.billing_entity_id,
+    h.parent_id AS hierarchy_parent_id,h.revision AS hierarchy_revision,h.billing_mode AS hierarchy_billing_mode
+    FROM nc_customers c LEFT JOIN nc_customer_hierarchies h ON h.customer_id=c.id
+    WHERE c.id=? AND c.erased_at IS NULL`, customer)
   insist(row, 'customer_not_found', 404)
   const settings = invoiceSettings(parseJson(row.invoice_settings_json, {}))
-  const hierarchy=await one(env,'SELECT parent_id,revision,billing_mode FROM nc_customer_hierarchies WHERE customer_id=?',customer)
+  const hierarchy=row.hierarchy_parent_id!==null?{parent_id:row.hierarchy_parent_id,revision:row.hierarchy_revision,billing_mode:row.hierarchy_billing_mode}:null
   const content = {...contentForSettings(business, settings),...(hierarchy?{hierarchyPayer:{parent:hierarchy.parent_id,revision:hierarchy.revision,mode:hierarchy.billing_mode}}:{})}
   if (!row.billing_entity_id) return content
   const entity = await requireBillingEntity(env, row.billing_entity_id)

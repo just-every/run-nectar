@@ -7,13 +7,18 @@ const DISPUTED_SQL = 'SELECT COALESCE(SUM(amount_cents),0) AS cents FROM nc_cade
 
 export async function nativeCollectionSource(env: Bindings, invoiceId: string) {
   const row = await one(env, `SELECT i.*,${BALANCE_SQL} AS balance_cents,c.revision AS customer_revision,c.erased_at,c.status AS customer_status,
-    c.currency AS customer_currency,c.billing_entity_id AS customer_entity_id FROM nc_invoices i JOIN nc_customers c ON c.id=i.customer_id WHERE i.id=?`, invoiceId)
+    c.currency AS customer_currency,c.billing_entity_id AS customer_entity_id,
+    EXISTS(SELECT 1 FROM nc_erased_records WHERE record_id IN (i.id,c.id)) AS has_erased_records,
+    (SELECT COALESCE(SUM(amount_cents),0) FROM nc_cadence_disputes WHERE invoice_id=i.id AND resolved_at IS NULL) AS disputed_cents,
+    p.payer_id,pc.revision AS payer_revision,pc.currency AS payer_currency,pc.billing_entity_id AS payer_entity_id,pc.erased_at AS payer_erased_at,pc.status AS payer_status
+    FROM nc_invoices i JOIN nc_customers c ON c.id=i.customer_id LEFT JOIN nc_invoice_payers p ON p.invoice_id=i.id
+    LEFT JOIN nc_customers pc ON pc.id=p.payer_id WHERE i.id=?`, invoiceId)
   insist(row && row.status === 'issued' && row.customer_status === 'active' && !row.erased_at
-    && !await one(env, 'SELECT 1 FROM nc_erased_records WHERE record_id IN (?,?)', invoiceId, row.customer_id), 'native_issued_invoice_required', 409)
+    && !row.has_erased_records, 'native_issued_invoice_required', 409)
   assertSameCurrency(row.currency, row.customer_currency)
   insist(Number.isSafeInteger(row.balance_cents) && row.balance_cents >= 50 && row.balance_cents <= 99999999, 'native_collectible_balance_required', 409)
   // A recorded dispute pauses collection of exactly its disputed line amounts; the undisputed remainder stays collectible.
-  const disputedCents = (await one<{ cents: number }>(env, DISPUTED_SQL, invoiceId))!.cents, collectibleCents = Math.max(0, row.balance_cents - disputedCents)
+  const disputedCents = row.disputed_cents, collectibleCents = Math.max(0, row.balance_cents - disputedCents)
   insist(collectibleCents >= 50, disputedCents ? 'native_collection_paused_for_dispute' : 'native_collectible_balance_required', 409)
   const route = parseJson<Row>(row.billing_route_json, {}), calculation = parseJson<Row>(row.calculation_json, {})
   insist(calculation.inputs && row.source_fingerprint && route.entityId === row.billing_entity_id
@@ -21,7 +26,7 @@ export async function nativeCollectionSource(env: Bindings, invoiceId: string) {
   const accountRef = row.billing_entity_id ? route.processorAccountRef : null
   insist(row.billing_entity_id ? route.processor === 'stripe' && typeof accountRef === 'string' && /^[A-Za-z0-9_-]{1,255}$/.test(accountRef)
     : route.routingCustody === 'installation-business', 'native_invoice_route_invalid', 409)
-  const payer=await one(env,'SELECT p.payer_id,c.revision,c.currency,c.billing_entity_id,c.erased_at,c.status FROM nc_invoice_payers p JOIN nc_customers c ON c.id=p.payer_id WHERE p.invoice_id=?',row.id)
+  const payer=row.payer_id!==null&&row.payer_revision!==null?{payer_id:row.payer_id,revision:row.payer_revision,currency:row.payer_currency,billing_entity_id:row.payer_entity_id,erased_at:row.payer_erased_at,status:row.payer_status}:null
   insist(!payer||payer.erased_at===null&&payer.status==='active'&&payer.billing_entity_id===row.billing_entity_id,'native_payer_changed',409)
   if (payer) assertSameCurrency(row.currency, payer.currency)
   const payerId=payer?.payer_id??row.customer_id,payerRevision=payer?.revision??row.customer_revision

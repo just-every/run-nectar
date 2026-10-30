@@ -39,32 +39,39 @@ export async function pricesById(env: Bindings, ids: string[]): Promise<Record<s
 }
 
 export async function ratingInputs(env: Bindings, business: Business, subscriptionId: string, period: { start: string; end: string }, replaceItems?: ItemIn[], billing?: BillingWindow): Promise<RatingInput> {
-  const sub = await one(env, 'SELECT s.*, c.tax_exempt, c.tax_exempt_ref, c.currency FROM nc_subscriptions s JOIN nc_customers c ON c.id = s.customer_id WHERE s.id = ?', subscriptionId)
-  insist(sub, 'subscription_not_found', 404)
   // One database snapshot carries independent rows and feature-presence facts.
   // Empty optional domains need no follow-up reads; populated domains retain
   // their existing source readers and exact rating semantics.
-  const captured = (await one<Row>(env, `SELECT
+  const captured = (await one<Row>(env, `WITH source AS (
+    SELECT s.*,c.tax_exempt,c.tax_exempt_ref,c.currency FROM nc_subscriptions s
+    JOIN nc_customers c ON c.id=s.customer_id WHERE s.id=?1
+  ) SELECT source.*,
     (SELECT json_group_array(json_object('id',id,'price_id',price_id,'quantity',quantity,'effective_from',effective_from,'effective_to',effective_to))
-      FROM (SELECT id,price_id,quantity,effective_from,effective_to FROM nc_items WHERE subscription_id=? ORDER BY effective_from,id)) AS item_rows,
+      FROM (SELECT id,price_id,quantity,effective_from,effective_to FROM nc_items WHERE subscription_id=source.id ORDER BY effective_from,id)) AS item_rows,
     (SELECT json_group_array(json_object('id',id,'kind',kind,'value',value,'price_id',price_id,'scope_price_id',scope_price_id,'effective_from',effective_from,'effective_to',effective_to,'note',note))
-      FROM (SELECT a.*,(SELECT scope.price_id FROM nc_amendment_scopes scope WHERE scope.amendment_id=a.id) AS scope_price_id FROM nc_amendments a WHERE a.subscription_id=? AND a.status='approved'
+      FROM (SELECT a.*,(SELECT scope.price_id FROM nc_amendment_scopes scope WHERE scope.amendment_id=a.id) AS scope_price_id FROM nc_amendments a WHERE a.subscription_id=source.id AND a.status='approved'
         ${billing ? "AND (kind<>'fixed_credit' OR NOT EXISTS(SELECT 1 FROM nc_invoice_lines l JOIN nc_invoices i ON i.id=l.invoice_id WHERE i.subscription_id=a.subscription_id AND i.status='issued' AND l.kind='credit' AND json_extract(l.evidence_json,'$.amendment')=a.id))" : ''} ORDER BY effective_from,id)) AS amendment_rows,
     (SELECT json_group_array(json_object('id',id,'effective_date',effective_date,'uplift_percent',uplift_percent))
-      FROM (SELECT id,effective_date,uplift_percent FROM nc_renewal_events WHERE subscription_id=? AND kind='renew' ORDER BY effective_date,id)) AS renewal_rows,
+      FROM (SELECT id,effective_date,uplift_percent FROM nc_renewal_events WHERE subscription_id=source.id AND kind='renew' ORDER BY effective_date,id)) AS renewal_rows,
     (SELECT json_group_array(json_object('id',id,'period_start',period_start,'period_end',period_end,'timezone',timezone,'source_meter',source_meter))
       FROM (SELECT DISTINCT i.id,l.period_start,l.period_end,json_extract(i.calculation_json,'$.inputs.timezone') AS timezone,
         COALESCE(json_extract(i.calculation_json,'$.inputs.prices.' || json_quote(l.price_id) || '.metric.sourceId'),l.meter_id) AS source_meter
         FROM nc_invoices i JOIN nc_invoice_lines l ON l.invoice_id=i.id
-        WHERE i.subscription_id=? AND i.invoice_kind='recurring' AND i.status='issued' AND l.period_start<?
+        WHERE i.subscription_id=source.id AND i.invoice_kind='recurring' AND i.status='issued' AND l.period_start<?2
           AND l.meter_id IS NOT NULL AND l.price_id IS NOT NULL ORDER BY l.period_start,i.id)) AS prior_issued_rows,
-    (SELECT json_group_array(json_object('id',id)) FROM nc_usage_corrections WHERE subscription_id=? AND status='pending') AS pending_rows,
-    EXISTS(SELECT 1 FROM nc_contracts WHERE subscription_id=? AND status='approved') AS has_approved_contracts,
-    EXISTS(SELECT 1 FROM nc_exemption_claims WHERE customer_id=?) AS has_exemption_claims,
-    EXISTS(SELECT 1 FROM nc_prepaid_accounts WHERE subscription_id=?) AS has_prepaid_account,
-    (EXISTS(SELECT 1 FROM nc_usage_adjustments WHERE subscription_id=? AND invoice_id IS NULL AND target_invoice_id IS NULL)
-      OR EXISTS(SELECT 1 FROM nc_plan_change_adjustments WHERE subscription_id=? AND invoice_id IS NULL)) AS has_adjustments`,
-    sub.id,sub.id,sub.id,sub.id,period.start,sub.id,sub.id,sub.customer_id,sub.id,sub.id,sub.id))!
+    (SELECT json_group_array(json_object('id',id)) FROM nc_usage_corrections WHERE subscription_id=source.id AND status='pending') AS pending_rows,
+    EXISTS(SELECT 1 FROM nc_contracts WHERE subscription_id=source.id AND status='approved') AS has_approved_contracts,
+    EXISTS(SELECT 1 FROM nc_exemption_claims WHERE customer_id=source.customer_id) AS has_exemption_claims,
+    EXISTS(SELECT 1 FROM nc_prepaid_accounts WHERE subscription_id=source.id) AS has_prepaid_account,
+    (EXISTS(SELECT 1 FROM nc_usage_adjustments WHERE subscription_id=source.id AND invoice_id IS NULL AND target_invoice_id IS NULL)
+      OR EXISTS(SELECT 1 FROM nc_plan_change_adjustments WHERE subscription_id=source.id AND invoice_id IS NULL)) AS has_adjustments,
+    EXISTS(SELECT 1 FROM nc_subscription_lifecycle WHERE subscription_id=source.id) AS has_lifecycle,
+    EXISTS(SELECT 1 FROM nc_charges WHERE subscription_id=source.id AND invoice_id IS NULL) AS has_pending_charges,
+    EXISTS(SELECT 1 FROM nc_credit_notes WHERE customer_id=source.customer_id) AS has_carried_credits,
+    EXISTS(SELECT 1 FROM nc_coupon_amount_terms WHERE subscription_id=source.id) AS has_amount_coupons,
+    EXISTS(SELECT 1 FROM nc_renewal_terms WHERE subscription_id=source.id) AS has_renewal_terms FROM source`,subscriptionId,period.start))
+  insist(captured, 'subscription_not_found', 404)
+  const sub=captured
   const [itemRows,amendmentRows,renewalRows,priorIssuedRows,pendingRows] =
     ['item_rows','amendment_rows','renewal_rows','prior_issued_rows','pending_rows'].map(key=>({results:JSON.parse(captured[key]) as Row[]}))
   const items: ItemIn[] = replaceItems ?? itemRows.results.map(row => ({ id: row.id, priceId: row.price_id, quantity: row.quantity, from: row.effective_from, to: row.effective_to }))
@@ -81,10 +88,10 @@ export async function ratingInputs(env: Bindings, business: Business, subscripti
   const contracts=captured.has_approved_contracts?await contractBasis(env,sub.id):{commitments:[],included:[],invoices:[]}
   const hasContracts=contracts.commitments.length>0||contracts.included.length>0||!billing&&!!captured.has_approved_contracts
   const certificate = captured.has_exemption_claims?await certificateBasis(env, sub.customer_id, business.tax_jurisdiction, period):null
-  const intervals = lifecycleIntervals(await lifecycleHistory(env, sub.id))
+  const intervals = lifecycleIntervals(captured.has_lifecycle?await lifecycleHistory(env, sub.id):[])
   const billableEvents = activeSegments(period.start,period.end,intervals).length ? events : events.filter(e=>blockedAt(localDate(e.occurredAt,business.timezone),intervals).length > 0)
   const creditGovernance = intervals.length ? await creditPolicy(env) : null
-  const charges = (await pendingCharges(env, sub.id, period.end)).filter(charge => activeSegments(period.start,period.end,intervals).length > 0 && !intervals.some(i => i.from <= charge.date && (i.to ?? '9999') > charge.date && (i.to ?? '9999') >= period.end))
+  const charges = (captured.has_pending_charges?await pendingCharges(env, sub.id, period.end):[]).filter(charge => activeSegments(period.start,period.end,intervals).length > 0 && !intervals.some(i => i.from <= charge.date && (i.to ?? '9999') > charge.date && (i.to ?? '9999') >= period.end))
   const renewals=renewalRows.results.map(r=>({id:r.id,effectiveDate:r.effective_date,upliftPercent:r.uplift_percent}))
   // Every late event touching an issued service window must be resolved
   // against that saved window. Even sums can have nonlinear prices or a
@@ -96,13 +103,13 @@ export async function ratingInputs(env: Bindings, business: Business, subscripti
     return original?[{eventId:event.eventId,invoice:original.id,from:original.period_start,to:original.period_end}]:[]
   })
   const pendingAdjustments=captured.has_adjustments?await usageAdjustments(env,sub.id):[]
-  const adjustments=billing&&!billingServiceWindows(billing).some(window=>window.terms.timing==='arrears')?pendingAdjustments.filter(a=>a.source==='plan-change'):pendingAdjustments,credits=await carriedUsageCredits(env,sub.customer_id)
+  const adjustments=billing&&!billingServiceWindows(billing).some(window=>window.terms.timing==='arrears')?pendingAdjustments.filter(a=>a.source==='plan-change'):pendingAdjustments,credits=captured.has_carried_credits?await carriedUsageCredits(env,sub.customer_id):[]
   const pending=pendingRows.results.map(row=>row.id)
-  const term = billing ? await one(env, "SELECT end_date,auto_renew,cancelled_at FROM nc_renewal_terms WHERE subscription_id=? AND status='active' ORDER BY created_at DESC LIMIT 1", sub.id) : null
+  const term = billing && captured.has_renewal_terms ? await one(env, "SELECT end_date,auto_renew,cancelled_at FROM nc_renewal_terms WHERE subscription_id=? AND status='active' ORDER BY created_at DESC LIMIT 1", sub.id) : null
   const renewing = !!term?.auto_renew && !term.cancelled_at
   const recordedPrepaid = captured.has_prepaid_account?await prepaidSnapshot(env, sub.id):undefined
   const currency=billingCurrency(sub.currency)
-  const amountCoupons=await amountCouponInputs(env,sub.id)
+  const amountCoupons=captured.has_amount_coupons?await amountCouponInputs(env,sub.id):[]
   const prepaid = recordedPrepaid ? await prepaidRefundSpendableBasis(env,recordedPrepaid) : undefined
   return {
     ...(currency==='USD'?{}:{currency}),
