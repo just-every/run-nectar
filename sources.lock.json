@@ -5286,7 +5286,7 @@
       "executable": false
     },
     "tests/nectar/invoice-content.mjs": {
-      "sha256": "f54b049a103c8d3a1b2c145dec40b2dd2639897b20087a8fb08864cc1ae4e9ee",
+      "sha256": "294b78f686a1d594b027d74cffc11919cbf953bec4a41e682f3f4071900e773f",
       "executable": false
     },
     "tests/nectar/invoice-pagination.mjs": {
