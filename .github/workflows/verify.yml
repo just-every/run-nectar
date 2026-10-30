@@ -2,124 +2,253 @@ name: Verify
 
 on:
   push:
+    branches: ['**']
   pull_request:
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      tier:
+        type: string
+        default: push
+      timeout:
+        type: number
+        default: 25
 
 permissions:
   contents: read
 
+concurrency:
+  group: seed-verify-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref == 'refs/heads/main' && github.run_id || github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 jobs:
-  verify:
+  plan:
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [0, 1]
-    env:
-      CI: 'true'
-      NECTAR_VERIFY_SHARD: ${{ matrix.shard }}
-      WRANGLER_SEND_METRICS: 'false'
+    timeout-minutes: 1
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      skip: ${{ steps.plan.outputs.skip }}
+      coverage: ${{ steps.plan.outputs.coverage }}
+      tier: ${{ steps.plan.outputs.tier }}
+      readers: ${{ steps.plan.outputs.readers }}
+      has_shards: ${{ steps.plan.outputs.has_shards }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1; action runtime Node 24
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0; action runtime Node 24
+          fetch-depth: 2
+      - name: Check reusable workflow permissions
+        run: node scripts/verify-ci.mjs --check-workflows
+      - name: Look up complete nightly marker
+        id: nightly
+        if: ${{ github.event_name == 'schedule' || inputs.tier == 'nightly' }}
+        uses: actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684
         with:
-          node-version: '22.20.0'
-          package-manager-cache: false
-      - name: Check generated contract documents
-        run: node scripts/contract-docs.mjs check
-      - name: Check edition source lock freshness
-        # Technical foundation exports use composition.lock.json or reference-export.json.
-        # Edition-owned seeds must commit both edition.json and sources.lock.json.
-        if: ${{ hashFiles('edition.json', 'sources.lock.json') != '' }}
-        run: node scripts/edition-authoring/cli.mjs check
-      - run: npm install --global pnpm@10.12.4
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm run deps
-      # ubuntu-24.04 provides Chromium libraries; the real browser journeys
-      # still fail if runtime support is missing. Avoid an unbounded apt mirror.
-      - run: pnpm exec playwright install chromium
-      - run: pnpm run verify
-      - name: Native same-intent collection browser journey
-        if: ${{ matrix.shard == 1 }}
-        run: node tests/nectar/clause-browser.mjs native-collection
+          path: ${{ runner.temp }}/nightly-green
+          key: nightly-green-${{ github.sha }}
+          lookup-only: true
+      - id: plan
+        env:
+          TIER: ${{ inputs.tier || 'push' }}
+          GITHUB_TOKEN: ${{ github.token }}
+          NIGHTLY_CACHE_HIT: ${{ steps.nightly.outputs.cache-hit }}
+        run: node scripts/verify-ci.mjs --plan
 
-      - name: Recovery reporting browser journeys
-        if: ${{ matrix.shard == 0 }}
-        run: |
-          node tests/nectar/payment-retries-browser.mjs
-          node tests/nectar/payment-retries-browser.mjs churn
-
-      - name: Dunning sequence browser journeys
-        if: ${{ matrix.shard == 0 }}
-        run: |
-          node tests/nectar/dunning-browser.mjs
-          node tests/nectar/dunning-browser.mjs custody
-
-      - name: Invoice void and replacement browser proof
-        if: ${{ matrix.shard == 0 }}
-        run: |
-          node tests/nectar/invoice-void-browser.mjs
-          node tests/nectar/invoice-void-browser.mjs refunds
-
-      - name: Governed plan change browser journey
-        if: ${{ matrix.shard == 0 }}
-        run: node tests/nectar/plan-changes-browser.mjs
-
-      - name: Processor reconciliation journeys
-        if: ${{ matrix.shard == 0 }}
-        run: |
-          node tests/nectar/processor-events.mjs
-          node tests/nectar/processor-cash.mjs
-          node tests/nectar/processor-cash-imported.mjs
-          node tests/nectar/processor-events-browser.mjs
-          node tests/nectar/processor-events-browser.mjs cash
-          node tests/nectar/processor-events-browser.mjs imported
-
-      - name: Subscription state history browser journey
-        if: ${{ matrix.shard == 1 }}
-        run: node tests/nectar/subscription-states-browser.mjs
-
-  # The real rer export, restore and removal journey needs a fresh checkout and its own wall.
-  processor-archive:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 25
-    env:
-      CI: 'true'
-      WRANGLER_SEND_METRICS: 'false'
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1; action runtime Node 24
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0; action runtime Node 24
-        with:
-          node-version: '22.20.0'
-          package-manager-cache: false
-      - run: npm install --global pnpm@10.12.4
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm run deps
-      - run: pnpm exec vite build
-      - run: NECTAR_TEST_CHECKOUT=1 node tests/nectar/processor-archive.mjs
-
-
-  remittance-archive:
+  build:
+    needs: plan
+    if: ${{ needs.plan.outputs.has_shards == 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
       CI: 'true'
       WRANGLER_SEND_METRICS: 'false'
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1; action runtime Node 24
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0; action runtime Node 24
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
           node-version: '22.20.0'
           package-manager-cache: false
       - run: npm install --global pnpm@10.12.4
+      - run: pnpm config set store-dir "$RUNNER_TEMP/pnpm-store"
+      - uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684
+        with:
+          path: ${{ runner.temp }}/pnpm-store
+          key: seed-ubuntu24-temp-store-${{ runner.arch }}-build-${{ hashFiles('pnpm-lock.yaml', 'package.json') }}
       - run: pnpm install --frozen-lockfile
       - run: pnpm run deps
-      - run: pnpm exec vite build
-      - run: NECTAR_TEST_CHECKOUT=1 node tests/nectar/processor-archive.mjs remittances
+      - run: pnpm run build
+      - run: tar -czf "$RUNNER_TEMP/nectar-build.tgz" dist
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: nectar-build
+          path: ${{ runner.temp }}/nectar-build.tgz
+          retention-days: 1
+
+  shards:
+    name: shards (${{ matrix.name }})
+    needs: [plan, build]
+    if: ${{ needs.plan.outputs.has_shards == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: ${{ matrix.name == 'remittance-archive' && 10 || inputs.timeout || 25 }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    env:
+      CI: 'true'
+      WRANGLER_SEND_METRICS: 'false'
+      PLAYWRIGHT_SKIP_BROWSER_GC: '1'
+    steps:
+      # Job env is evaluated before the runner context is available.
+      - name: Set runner-owned browser cache
+        run: printf 'PLAYWRIGHT_BROWSERS_PATH=%s/ms-playwright\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22.20.0'
+          package-manager-cache: false
+      - name: Check edition source lock freshness
+        if: ${{ hashFiles('edition.json', 'sources.lock.json') != '' }}
+        run: node scripts/edition-authoring/cli.mjs check
+      - run: npm install --global pnpm@10.12.4
+      - name: Set runner-owned pnpm store
+        run: pnpm config set store-dir "$RUNNER_TEMP/pnpm-store"
+      - name: Prepare runner-owned browser and apt caches
+        if: matrix.browser
+        run: |
+          set -euo pipefail
+          id
+          printf 'Runner HOME=%s\n' "$HOME"
+          if [ -e "$HOME/.cache" ]; then
+            stat -c 'Home cache: %n uid=%u gid=%g mode=%a' "$HOME/.cache"
+          else
+            printf 'Home cache: absent\n'
+          fi
+          mkdir -p "$PLAYWRIGHT_BROWSERS_PATH" "$RUNNER_TEMP/rer-apt/archives"
+      # Save completed packages; apt keeps partial downloads private to _apt.
+      - name: Cache frozen dependencies and Chromium
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684
+        with:
+          path: |
+            ${{ runner.temp }}/pnpm-store
+            ${{ runner.temp }}/ms-playwright
+            ${{ runner.temp }}/rer-apt/archives/*.deb
+          # Old snapshots contain absolute HOME paths; do not restore them here.
+          key: seed-ubuntu24-temp-store-${{ runner.arch }}-browser-${{ matrix.browser }}-${{ hashFiles('pnpm-lock.yaml', 'package.json') }}
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run deps
+      - name: Install and probe Chromium before system dependencies
+        if: matrix.browser
+        run: |
+          set -euo pipefail
+          stat -c 'Before browser: %n uid=%u gid=%g mode=%a' "$PLAYWRIGHT_BROWSERS_PATH" "$RUNNER_TEMP/rer-apt/archives"
+          pnpm exec playwright install chromium
+          probe() { node --input-type=module -e "import { chromium } from '@playwright/test'; try { const browser = await chromium.launch({headless: true}); await browser.close(); } catch (error) { console.error(error); process.exit(/EACCES|permission denied/i.test(String(error)) ? 77 : 1); }"; }
+          if probe; then
+            :
+          else
+            status=$?
+            if [ "$status" -eq 77 ]; then exit "$status"; fi
+            sudo env "PATH=$PATH" "APT_ARCHIVES=$RUNNER_TEMP/rer-apt/archives" python3 scripts/install-chromium-deps.py
+            stat -c 'After apt: %n uid=%u gid=%g mode=%a' "$PLAYWRIGHT_BROWSERS_PATH" "$RUNNER_TEMP/rer-apt/archives"
+            probe
+          fi
+      - name: Reserve disk for native runtime journeys
+        if: matrix.browser
+        run: |
+          free_kib() { df -Pk "$GITHUB_WORKSPACE" | awk 'END { print $4 }'; }
+          for unused_tools in /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL; do
+            if [ "$(free_kib)" -ge "$((20 * 1024 * 1024))" ]; then break; fi
+            sudo rm -rf -- "$unused_tools"
+          done
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: nectar-build
+          path: ${{ runner.temp }}
+      - run: tar -xzf "$RUNNER_TEMP/nectar-build.tgz"
+      - name: Run this shard
+        env:
+          SHARD: ${{ matrix.name }}
+        run: node scripts/verify-ci.mjs "$SHARD"
+
+  light:
+    needs: plan
+    if: ${{ needs.plan.outputs.coverage == 'light' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      CI: 'true'
+      WRANGLER_SEND_METRICS: 'false'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22.20.0'
+          package-manager-cache: false
+      - run: npm install --global pnpm@10.12.4
+      - run: pnpm config set store-dir "$RUNNER_TEMP/pnpm-store"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run deps
+      - name: Run the changed files' reviewed readers and build the run site
+        env:
+          LIGHT_READERS: ${{ needs.plan.outputs.readers }}
+        run: node scripts/verify-ci.mjs --light
+
+  full-push-proof:
+    needs: [plan, build, shards]
+    if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/heads/') && needs.plan.outputs.tier == 'push' && needs.plan.outputs.coverage == 'full' && needs.build.result == 'success' && needs.shards.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 1
+    steps:
+      - run: test '${{ needs.shards.result }}' = success
+
+  nightly-proof:
+    needs: [plan, build, shards]
+    if: ${{ github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && (needs.plan.outputs.tier == 'nightly' || needs.plan.outputs.tier == 'all') && needs.plan.outputs.coverage == 'full' && needs.build.result == 'success' && needs.shards.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 1
+    steps:
+      - name: Mark successful complete nightly coverage
+        run: mkdir -p "$RUNNER_TEMP/nightly-green" && printf '%s\n' '${{ github.sha }}' > "$RUNNER_TEMP/nightly-green/sha"
+      - uses: actions/cache/save@5a3ec84eff668545956fd18022155c47e93e2684
+        with:
+          path: ${{ runner.temp }}/nightly-green
+          key: nightly-green-${{ github.sha }}
+
+  verify:
+    needs: [plan, build, shards, light, full-push-proof, nightly-proof]
+    if: ${{ always() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 1
+    steps:
+      - name: Require the selected coverage and its proof
+        env:
+          PLAN: ${{ needs.plan.result }}
+          BUILD: ${{ needs.build.result }}
+          SHARDS: ${{ needs.shards.result }}
+          LIGHT: ${{ needs.light.result }}
+          PUSH_PROOF: ${{ needs.full-push-proof.result }}
+          NIGHTLY_PROOF: ${{ needs.nightly-proof.result }}
+          COVERAGE: ${{ needs.plan.outputs.coverage }}
+          HAS_SHARDS: ${{ needs.plan.outputs.has_shards }}
+          SKIP: ${{ needs.plan.outputs.skip }}
+        run: |
+          set -euo pipefail
+          test "$PLAN" = success
+          case "$PUSH_PROOF:$NIGHTLY_PROOF" in
+            *failure*|*cancelled*) exit 1 ;;
+          esac
+          case "$COVERAGE" in
+            reuse) test "$SKIP" = true && test "$SHARDS" = skipped && test "$LIGHT" = skipped ;;
+            light) test "$SKIP" = false && test "$LIGHT" = success && test "$SHARDS" = skipped ;;
+            full) test "$LIGHT" = skipped && test "$BUILD" = success && { test "$SHARDS" = success || { test "$HAS_SHARDS" = false && test "$SHARDS" = skipped; }; } ;;
+            *) exit 1 ;;
+          esac

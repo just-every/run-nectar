@@ -146,7 +146,7 @@
   ],
   "files": {
     ".github/workflows/nightly-acceptance.yml": {
-      "sha256": "bf607f0fb965b7d19dbe2a4d52a3962019afc19339d154742e4c0d209484c8ac",
+      "sha256": "b7d7c922ae841e2696eb610fd85123e32bdd93f3d7d7b086b338f0533f63718a",
       "executable": false
     },
     ".github/workflows/rer-managed.yml": {
@@ -154,15 +154,15 @@
       "executable": false
     },
     ".github/workflows/run-demo.yml": {
-      "sha256": "41365ec7c002e9451166313b085f9e64ed2e3ea002c27f3d5ead845bc9c302b2",
+      "sha256": "cd478e5acaa5b7ecac7c8d93069a928886b59bc48e72c495700e42aa3c1b5232",
       "executable": false
     },
     ".github/workflows/run-site.yml": {
-      "sha256": "1466e0cc78eeee30a85f1602c0b4bbb74f053fc9f1aa723635c5f0fc5a0f19b0",
+      "sha256": "3e4af8c2770ce5d7ce91ad59bfe1c637d454cef160eec63d0ea11735b6a1cf08",
       "executable": false
     },
     ".github/workflows/verify.yml": {
-      "sha256": "70a18b90556b9adc197f0b0f5db1bb752898ed99495eb1eb6cab0869b31ae3e9",
+      "sha256": "0f504df577e4f05fa8816b859c75ba3301bb2de91a4503a3c446b91d00ebb740",
       "executable": false
     },
     ".gitignore": {
@@ -190,7 +190,7 @@
       "executable": false
     },
     "base-copies.json": {
-      "sha256": "3436031f2d32d512aa5c935d27c7d0bd5369c4660301e703300b1a7f07857809",
+      "sha256": "e2f25fbc01188ae528d65a9f69521e8bc92ba932acc04d17a4399c72a10bf7f5",
       "executable": false
     },
     "CONTRACT.md": {
@@ -878,7 +878,7 @@
       "executable": false
     },
     "package.json": {
-      "sha256": "522c0fb5f0d1ed20ad82dba9734b1e7473ed907814a9ef8b47f805331ab9ee97",
+      "sha256": "efc56075989e04eed247d59426cb5ac54af6c7576bbe69338826937c3a0787ff",
       "executable": false
     },
     "packaging.json": {
@@ -1737,6 +1737,10 @@
       "sha256": "d0e747277142e54d86acd1c01549ee8b76bf15c060366387bd074c57f77f7d2d",
       "executable": false
     },
+    "scripts/install-chromium-deps.py": {
+      "sha256": "d3027108ad8e08ceeddb0ed477d967b1207e40bb6bf5ae941854c534c2cf4004",
+      "executable": false
+    },
     "scripts/install.mjs": {
       "sha256": "ce9c6eb4f127e88b32d538655a3fb3a2dc9fc3e83e48782fd56ffd3377da16fd",
       "executable": false
@@ -1759,6 +1763,26 @@
     },
     "scripts/operations-config.mjs": {
       "sha256": "decbd8619e40c741708b49639d54282bd19edc4581a782b240d96a423ad47f01",
+      "executable": false
+    },
+    "scripts/verify-app.mjs": {
+      "sha256": "4c3a87c809e2b671a555dc36171b60675f87be96362de7d2269d9f5e1c3100b6",
+      "executable": false
+    },
+    "scripts/verify-ci.mjs": {
+      "sha256": "cf1ceb8773ed276f82245fb8fb4c4bdc95bff40ecc0e8ca8ac9e776978b17340",
+      "executable": false
+    },
+    "scripts/verify-evidence.mjs": {
+      "sha256": "9224f772d6a17f043448694eca3c149df83070417b995a2840497e36a9ad0100",
+      "executable": false
+    },
+    "scripts/verify-light.mjs": {
+      "sha256": "8fc63119d18d63fac2d3b3ffc4e08089f1002c72e15563739c7b1b6270076df9",
+      "executable": false
+    },
+    "scripts/verify-plan.mjs": {
+      "sha256": "45fe2ab9c5cbc72d0186bf77fab32c985605caae6ecee50676dd618612c3e78f",
       "executable": false
     },
     "sdks/typescript/.gitignore": {
@@ -6449,8 +6473,12 @@
       "sha256": "722b028ab0c49191f72308e69f2079d3a62cd6489d0405de50f97ded2f9a4c08",
       "executable": false
     },
+    "verification.json": {
+      "sha256": "1f4dbf8bfb3b26ba3c07823b3fbd9c99d71af6a73df6ed107e069fda69950006",
+      "executable": false
+    },
     "VERIFY-WORKFLOW.md": {
-      "sha256": "dfcd729a5ac6d3387b0e0e94d73852f0a07addd26e7a51c4fc8c608412e2ceaf",
+      "sha256": "dc9d4cf979d29c2217d5250edf5fa5d84e89683de5fe0bd11ecdab868c6aa6c8",
       "executable": false
     },
     "vite.config.ts": {
