@@ -966,3 +966,42 @@ delivery. A receipt records an allocation, without claiming settlement.
 `POST /api/nectar/close.scan` takes `period`, the exact returned `basis` and an active owner or finance member ID in `owner`. It requires full billing read and proposal capabilities, rechecks the source basis and records cases atomically with its audit. Repeated scans reuse the same source case. Unapplied received cash is a review item; a pending existing bad-debt journal is a synchronization failure. These meanings do not establish missing processor fees, unsynced credit notes or failed provider tax commitments.
 
 Use existing ordinary authorized financial doors for any fix. `assurance.approve` only confirms agreement on the exact current case basis; `assurance.recheck` resolves it after that confirmation and a fresh successful comparison. Neither scanning nor confirming grants allocation, journal-posting or period-close authority. The accountant page is `/app/close-tieout`, linked from Revenue schedules. Complete connector, entity, currency, payout, fee and provider tax qualification remains outside this native packet.
+
+## Scheduled execution observations
+
+An authenticated owner member can read `GET /api/nectar/job-runs`.
+Finance, other roles and application credentials cannot read this door.
+It returns `runs`, the latest 50 dispatcher invocations, newest first. Each
+has an immutable invocation identity, cron expression, scheduled instant,
+actual start and finish instants, status, sanitized error category and its
+ordered jobs. Timestamps are Unix milliseconds. Repeated or concurrent
+invocations of the same scheduled instant retain separate identities.
+
+A job is `not_started` until the dispatcher reaches it, `running` during its
+call, then `completed` or `failed`. A thrown failure stops the same downstream
+work as before; those job rows retain null start and finish times. A returned
+`status: failed` is recorded without changing the job's existing continuation
+behavior. Completion means that invocation returned normally: handled
+per-item payment, delivery or synchronization failures remain in their
+existing source records and are not a claim of settlement or delivery.
+
+The dispatcher renews a heartbeat each minute and between jobs. On a later
+normal tick, an invocation with no heartbeat for thirty minutes becomes
+`interrupted`; its running job becomes interrupted and downstream jobs stay
+unstarted. This reports an expired execution lease, including a stopped Worker,
+rather than claiming to distinguish every cause of a lost heartbeat. Neither
+this classification nor reading history retries any work. Ordinary future
+ticks retain each product job's existing eligibility, authority and once-only
+claims; interrupted invoice automation is not automatically recovered.
+
+Error categories are only `storage_failure`, `job_failure`,
+`job_reported_failure` and `execution_lease_expired`. Observations store no
+customer identifiers, request or provider payloads, exception messages,
+credentials or new executable authority. They are separate from the business
+audit trail so a refused business audit can still be reported. Observation
+storage failure stops dispatch rather than silently executing unobserved work;
+if a final observation cannot be stored, the running record expires on a later
+tick. There is no operational activation, resend or retry action.
+
+Capacity remains unmeasured in `seed.json`. This history does not qualify the
+required ten-thousand-subscription billing day or its timing and restart proof.

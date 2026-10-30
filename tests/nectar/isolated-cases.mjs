@@ -93,4 +93,5 @@ export const isolatedJourneys = [
   { file: 'portal-change-requests', name: 'portalChangeRequestsFlow', load: () => import('./portal-change-requests.mjs') },
   { file: 'subscription-states', name: 'subscriptionStatesFlow', load: () => import('./subscription-states.mjs') },
   { file: 'close-tieout', name: 'closeTieoutFlow', load: () => import('./close-tieout.mjs') },
+  { file: 'job-runs', name: 'jobRunsFlow', load: () => import('./job-runs.mjs') },
 ]
