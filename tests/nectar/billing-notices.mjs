@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { totp } from './mfa.mjs'
 
 // Invoked inside paymentRetriesFlow so notice assertions use its real failures,
 // processor recovery and independently reconciled allocation ledger.
@@ -90,4 +91,40 @@ export async function billingNoticeCustodyAssertions(h,owner,{invoice,customer,r
  await api('billing.notice.send',{notice:note.id,basis_hash:note.basis,confirm:true},409)
  await api('billing.notice.prepare',{kind:'payment_failed',invoice,confirm:true},409)
  assert.equal(h.mails.filter(m=>m.text===note.body).length,0,'Erasure never resumes the unsent notice')
+}
+
+// Contrast every frozen external basis through the existing invoice commands.
+export async function billingNoticeBasisAssertions(h,owner,create) {
+ const api=(p,b,s)=>h.api(p,owner,b,s)
+ const other=await api('access.give',{email:'synthetic-nectar-notice-support@example.test',name:'Synthetic notice support',role:'support'})
+ const support=await h.signIn(other.email??'synthetic-nectar-notice-support@example.test',{requested:true})
+ const supportFactor=await h.api('mfa.totp.start',support,{})
+ await h.api('mfa.totp.confirm',support,{factor:supportFactor.factor,code:totp(supportFactor.secret,Date.parse(h.vars.NECTAR_LOCAL_TIME))})
+ const setting=(await api('billing-notices')).settings.find(s=>s.kind==='payment_failed')
+ await h.api('billing.notice.configure',support,{kind:'payment_failed',sender:'nectar',revision:setting.revision,language:'en',confirm:true},403)
+ const mail={provider:h.vars.MAIL_PROVIDER,apiKey:h.vars.MAIL_API_KEY,from:h.vars.MAIL_FROM}
+ for(const change of ['recipient','language','revision','mail-sender','mail-credential']) {
+  const invoice=await create(),source=await api(`invoices/${invoice.id}`)
+  const customer=await api(`customers/${source.customer_id}`)
+  const n=await api('billing.notice.prepare',{kind:'payment_failed',invoice:invoice.id,confirm:true})
+  const before=h.mails.length,recovery=await api('recovery')
+  await h.api('billing.notice.prepare',support,{kind:'payment_failed',invoice:invoice.id,confirm:true},403)
+  await h.api('billing.notice.send',support,{notice:n.id,basis_hash:n.basis,confirm:true},403)
+  await h.api('billing.notice.send',undefined,{notice:n.id,basis_hash:n.basis,confirm:true},401)
+  await api('billing.notice.send',{notice:n.id,basis_hash:n.basis,confirm:true,recipient:'synthetic-nectar-substitute@example.test'},400)
+  if(change.startsWith('mail-'))await h.configureMail({...mail,...(change==='mail-sender'?{from:'synthetic-nectar-sender@example.test'}:{apiKey:'synthetic-nectar-rotated'})})
+  else await api('customer.update',{customer:customer.id,revision:customer.revision,name:customer.name,billing_email:change==='recipient'?'synthetic-nectar-revised@example.test':customer.billing_email,language:change==='language'?'es-US':customer.language})
+  const refused=await api('billing.notice.send',{notice:n.id,basis_hash:n.basis,confirm:true},409)
+  assert.equal(refused.error,'notice_source_changed',change+' invalidates the frozen notice')
+  await api('billing.notice.prepare',{kind:'payment_failed',invoice:invoice.id,confirm:true},409)
+  assert.equal(h.mails.length,before,change+' cannot submit mail')
+  assert.deepEqual(await api('recovery'),recovery,change+' cannot change cash or recovery attribution')
+  const saved=(await api('billing-notices')).deliveries.find(d=>d.id===n.id)
+  assert.equal(saved.status,'prepared');assert.equal(saved.claimed_at,null)
+  if(change.startsWith('mail-'))await h.configureMail(mail)
+  else {
+   const updated=await api(`customers/${customer.id}`)
+   await api('customer.update',{customer:customer.id,revision:updated.revision,name:customer.name,billing_email:customer.billing_email,language:customer.language})
+  }
+ }
 }
