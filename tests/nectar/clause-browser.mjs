@@ -1,4 +1,5 @@
 import { moveInvestigationsFlow } from './move-investigations.mjs'
+import { transferInstructionsFlow,harnessOptions as transferOptions } from './transfer-instructions.mjs'
 import { reconciliationFlow } from './reconciliation.mjs'
 import { commitments } from './commitments.mjs'
 import { seedPortalRecords } from './portal-sessions.mjs'
@@ -21,10 +22,10 @@ import { contractEntitySetup } from './contract-setup.mjs'
 import { intervalCancellationFlow } from './interval-cancel.mjs'
 import { numberingEntitiesFlow } from './numbering-entities.mjs'
 const kind=process.argv[2],directory=process.env.NECTAR_EVIDENCE_DIR??`.evidence/${kind}`
-assert.ok(['move-investigations','assurance','entitlements','portal-usage','erasure','history','collection','numbering','intervals','cancellation','entity-setup','prepaid','native-collection'].includes(kind))
+assert.ok(['move-investigations','transfer-instructions','assurance','entitlements','portal-usage','erasure','history','collection','numbering','intervals','cancellation','entity-setup','prepaid','native-collection'].includes(kind))
 await mkdir(directory,{recursive:true})
 const captures=[]
-const h=await harness({assets:true,...(kind==='collection'?collectionOptions():kind==='native-collection'?nativeOptions():{})});let browser
+const h=await harness({assets:true,...(kind==='transfer-instructions'?transferOptions():kind==='collection'?collectionOptions():kind==='native-collection'?nativeOptions():{})});let browser
 try {
   await h.raw('/auth/bootstrap',{body:{token:h.vars.SETUP_TOKEN,displayName:'Nectar Owner'}})
   const owner=await h.signIn(h.vars.OWNER_EMAIL)
@@ -84,6 +85,17 @@ try {
       }
     }})
   }
+  else if(kind==='transfer-instructions')await transferInstructionsFlow(h,owner,{onState:async state=>{
+    await both(state.label,state.path,async()=>{
+      if(page.viewportSize().width===1440){
+        const section=page.locator('section[aria-label]').first()
+        for(const value of [state.fields.bankName,state.fields.accountHolderName,state.fields.accountNumber,state.fields.routingNumber])assert.ok((await section.innerText()).includes(value))
+        const small=await page.locator('main *').evaluateAll(nodes=>nodes.filter(n=>n.textContent.trim()&&getComputedStyle(n).display!=='none'&&Number.parseFloat(getComputedStyle(n).fontSize)<13).map(n=>n.tagName))
+        assert.deepEqual(small,[],'Customer instruction text is at least 13px')
+        assert.equal(await page.locator('button:has(svg),a:has(svg)').count(),0,'Every customer control has a visible label')
+      }
+    })
+  }})
   else if(kind==='assurance') {
     await reconciliationFlow(h,owner,async state=>{
       await both(`assurance-${state.label}`,state.path,async()=>{

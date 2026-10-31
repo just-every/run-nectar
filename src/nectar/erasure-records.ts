@@ -60,7 +60,7 @@ export async function erasurePlan(env: Bindings, customer: Row): Promise<Erasure
       continue
     }
     // Customer capabilities and investigations are operational custody, not retained financial facts.
-    if (['nc_billing_notice_authority','nc_billing_notices','nc_native_reconfirmation_authority','nc_native_reconfirmations','nc_subscription_states','nc_dunning_recoveries','nc_dunning_mail_authority','nc_dunning_deliveries','nc_dunning_authority','nc_dunning_series','nc_retry_segments','nc_retry_method_recovery_authorizations','nc_retry_method_recovery_events','nc_retry_method_recoveries','nc_retry_churn','nc_retry_series','nc_retry_attempts','nc_card_expiry_notices','nc_card_expiry_notice_authority','nc_portal_method_actions','nc_portal_method_action_history','nc_automatic_collection_authorizations','nc_payment_link_attempts','nc_hosted_setup_returns','nc_hosted_setup_history','nc_hosted_setups','nc_portal_sessions','nc_portal_change_requests','nc_assurance_cases','nc_assurance_observations'].includes(table) && image.scoped) {
+    if (['nc_transfer_instruction_preparations','nc_billing_notice_authority','nc_billing_notices','nc_native_reconfirmation_authority','nc_native_reconfirmations','nc_subscription_states','nc_dunning_recoveries','nc_dunning_mail_authority','nc_dunning_deliveries','nc_dunning_authority','nc_dunning_series','nc_retry_segments','nc_retry_method_recovery_authorizations','nc_retry_method_recovery_events','nc_retry_method_recoveries','nc_retry_churn','nc_retry_series','nc_retry_attempts','nc_card_expiry_notices','nc_card_expiry_notice_authority','nc_portal_method_actions','nc_portal_method_action_history','nc_automatic_collection_authorizations','nc_payment_link_attempts','nc_hosted_setup_returns','nc_hosted_setup_history','nc_hosted_setups','nc_portal_sessions','nc_portal_change_requests','nc_assurance_cases','nc_assurance_observations'].includes(table) && image.scoped) {
       mutations.push({ table, row, key, updates: null })
       const entry = changes.get(table) ?? { kind: table, fields: new Set<string>(), records: 0 }
       Object.keys(row).forEach(field => entry.fields.add(field)); entry.records++; changes.set(table, entry)
@@ -90,6 +90,7 @@ export async function erasurePlan(env: Bindings, customer: Row): Promise<Erasure
       if (['nc_usage_correction_mail','nc_credit_correction_mail','nc_draft_correction_mail','nc_notifications','nc_note_mentions','nc_renewal_notices','nc_card_expiry_notices'].includes(table)) updates.status='suppressed'
       if (table==='nc_cadence_deliveries') updates.status='superseded'
       if (table==='nc_webhook_deliveries') {updates.status='suppressed';updates.claim=null}
+      if (table==='nc_transfer_instructions') updates.status='erased'
       if (table==='nc_remittances') updates.status='erased'
       if (table==='nc_notices') updates.status='discarded'
       if (table==='nc_tasks') updates.status='done'

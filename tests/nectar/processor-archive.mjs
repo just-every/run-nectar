@@ -1,3 +1,4 @@
+import { transferInstructionEdge, transferInstructionsFlow, harnessOptions as transferOptions } from './transfer-instructions.mjs'
 import { remittanceFile, remittanceFixtures } from './remittance-files.mjs'
 import { file } from './harness.mjs'
 // Public processor capture, statutory removal and actual rer archive restore.
@@ -19,7 +20,7 @@ const returnKinds=['nc_processor_cash_returns']
 const importedKinds=['nc_processor_cash_imported_applications','nc_processor_cash_imported_takeovers']
 const nativeKinds=[...new Set([...eventKinds,...cashKinds])]
 const remittanceKinds=['nc_remittances','nc_remittance_allocations','nc_remittance_origins']
-const sourceKinds=[...nativeKinds,...returnKinds,...importedKinds,...remittanceKinds,'nc_remittance_source_keys']
+const sourceKinds=[...nativeKinds,...returnKinds,...importedKinds,...remittanceKinds,'nc_remittance_source_keys','nc_transfer_instructions']
 const priorDay=day=>new Date(Date.parse(`${day}T12:00:00Z`)-86400000).toISOString()
 
 /** Reuse in the existing processor journey; targets already passed the real
@@ -212,6 +213,18 @@ export async function processorArchiveJourney() {
      const payments=await restored.api('payments',owner)
      assert.equal(payments.filter(p=>p.customer_id===customer).length,removed?0:1)
      if(!removed)assert.equal(payments.find(p=>p.id===confirmed.payment).amount_cents,2500)
+    }}
+   }})
+  if(only==='transfer-instructions')await additionalArchivePhase(root,scratch,{label:'transfer-instructions',persistence,databaseId,edge:{fetch:transferOptions().stripeFetch},requiredKinds:['nc_transfer_instructions'],localTime:'2026-10-29T12:00:00Z',
+   async populate(worker,who){
+    const result=await transferInstructionsFlow(worker,who)
+    return {...result,async restoreCheck(restored,owner,removed=false){
+     await restored.api('transfer.instructions.confirm',owner,result.pending,409)
+     await restored.api('transfer.instructions.confirm',owner,result.claimed,409)
+     const retained=await restored.api(`customers/${result.customer}/transfer-instructions`,owner)
+     assert.equal(retained.instructions.length,removed?0:1)
+     if(!removed){assert.equal(retained.instructions[0].instructions,null);assert.equal((await restored.api(`invoices/${result.invoice}`,owner)).transfer_instructions_json,'{}')}
+     await restored.assertStorageExcludes(['990000123456','Synthetic Remittance Bank','Synthetic Merchant Treasury'])
     }}
    }})
   console.log(`Processor archive${only?` ${only} phase`:''}: public capture, exact rer restore, owner-only due removal, unchanged peers and older-archive refusal passed`)
