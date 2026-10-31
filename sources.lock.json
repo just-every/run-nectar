@@ -194,7 +194,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "a42135289f54fcd66e8febd501fb7484e58a31bda701d68ca5ce01e90545ccc8",
+      "sha256": "e7d2791bb63862cc6398008c36a0f70aa7c6703d2b123838a923c0efd685d4ab",
       "executable": false
     },
     "DEMO.md": {
@@ -3910,7 +3910,7 @@
       "executable": false
     },
     "src/nectar/automatic-collection-jobs.ts": {
-      "sha256": "ed6f964632f98894bdd1defeff4d7b85c867499f2953e721286a7416e56287aa",
+      "sha256": "cfe5f29e14e3b18e27b61dd855e493bcc3d71e27d12de94ffb8c2504e0ef2a24",
       "executable": false
     },
     "src/nectar/automatic-collection-records.ts": {
@@ -5829,6 +5829,10 @@
       "sha256": "9651f8f94efa2cefdcbec130ec6527444bf859db3eef4eec1d189909939612c5",
       "executable": false
     },
+    "tests/nectar/automatic-collection-archive.mjs": {
+      "sha256": "1f9c9ee1dd2de0a7ace25f567f5bceb20b7c5d3b90711cb84f2e4ec26afd8e01",
+      "executable": false
+    },
     "tests/nectar/automatic-collection-browser.mjs": {
       "sha256": "4e37e426ee79eab69ec260542fd207f1037ccf473f0cf247748c2681876397cf",
       "executable": false
@@ -6382,7 +6386,7 @@
       "executable": false
     },
     "tests/nectar/processor-archive.mjs": {
-      "sha256": "d676ad9b915280e563679b01e7d7af2ca6450fbd51cea87a8cad3dfc64653597",
+      "sha256": "29d12bf8edcae371b35570b9a26ab1354546e5e6333ba7c209e2ca9123e1a156",
       "executable": false
     },
     "tests/nectar/processor-cash-imported-sandbox.mjs": {
