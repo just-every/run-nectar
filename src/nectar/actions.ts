@@ -1,4 +1,5 @@
 import { scanCloseTieout } from './close-tieout'
+import { approveLink } from './sso-linking'
 import { preparePortalChangePolicy } from './portal-change-policy'
 import { uploadBankDeposit, uploadRemittances, previewRemittance, confirmRemittance, previewRemittanceAllocation, allocateRemittance } from './remittances'
 import { consumeProcessorEvent } from './processor-events'
@@ -127,6 +128,7 @@ export const actions: Record<string, Handler> = {
   'sandbox.clock.advance': advanceSandboxClock,
   'sso.configure': configureSso,
   'close.scan': scanCloseTieout,
+  'sso.link.approve': approveLink,
   'assurance.scan': scanAssurance,
   'assurance.assign': assignAssurance,
   'assurance.approve': approveAssurance,

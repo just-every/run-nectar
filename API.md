@@ -1043,3 +1043,11 @@ tick. There is no operational activation, resend or retry action.
 
 Capacity remains unmeasured in `seed.json`. This history does not qualify the
 required ten-thousand-subscription billing day or its timing and restart proof.
+
+### Link an existing member to enterprise sign-in
+
+An active member in a preset role opens **Sign-in security**, then **Prove provider identity**. The browser must retain that exact Nectar session and the one-use SAML browser binding. A valid signed provider assertion creates a short-lived request; an email match alone grants nothing. Its mapped role must equal the member's existing role. Owner and custom-role provisioning remain unsupported.
+
+The owner reviews **Enterprise sign-in** under Access and confirms a second factor, even when the installation-wide MFA policy is off. `GET /api/nectar/sso-links` lists current owner-visible requests. `POST /api/nectar/sso.link.approve` takes `link` and the exact reviewed `basis` fingerprint. Approval rechecks the connection revision, immutable provider subject, original member session, member and operator state, role and MFA evidence. Binding, audit and termination of prior member sessions and unused sign-in tokens commit together. Member and operator identifiers and historical attribution remain unchanged.
+
+A pending request has an inactive SCIM reservation with its request identifier. SCIM can read or deactivate it; activation cannot grant authority. Deactivation invalidates pending proofs and blocks that subject until fresh owner connection authorization. Removing a linked user ends existing sessions and in-flight sign-ins immediately; reactivation never revives an old session. Configuration changes rotate provisioning credentials and invalidate pending requests. Exported archives retain billing and audit history but contain no connection, binding, enterprise session or pending-link authority. Live provider qualification and OIDC coverage remain separate obligations in GOV-003.

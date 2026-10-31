@@ -2,6 +2,7 @@ import { closeTieout } from './close-tieout'
 import { sandboxView } from './test-mode'
 import { sandboxCustomerView } from './test-clock'
 import { jobRuns } from './job-runs'
+import { pendingLinks } from './sso-linking'
 import { portalChangeSettings } from './portal-change-policy'
 import { readRemittances } from './remittances'
 import { processorEvents } from './processor-events'
@@ -105,6 +106,7 @@ export const views: Record<string, View> = {
   sandbox: (env,actor) => sandboxView(env,actor),
   sandboxCustomer: (env,actor,_r,id) => sandboxCustomerView(env,actor,id),
   jobRuns: (env,actor) => jobRuns(env,actor),
+  ssoLinks: pendingLinks,
   portalChanges: (env,actor) => portalChangeSettings(env,actor),
   processorEvents:(env,actor,_r,_id,url)=>processorEvents(env,actor,url.searchParams.get('customer')??undefined),
   closeTieout: (env,actor,_r,_id,url)=>closeTieout(env,actor,url.searchParams.get('period')??undefined),
