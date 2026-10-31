@@ -85,6 +85,7 @@
     "migrations/core/0118_sandbox.sql",
     "migrations/core/0119_sandbox_privacy.sql",
     "migrations/core/0120_sandbox_billing.sql",
-    "migrations/core/0121_sandbox_card_fixtures.sql"
+    "migrations/core/0121_sandbox_card_fixtures.sql",
+    "migrations/core/0122_sandbox_processor_custody.sql"
   ]
 }
