@@ -254,4 +254,7 @@ async function additionalArchivePhase(root,scratch,{label,persistence,databaseId
  } finally {await h?.close()}
 }
 
-if(process.argv[1]===new URL(import.meta.url).pathname)await processorArchiveJourney()
+if(process.argv[1]===new URL(import.meta.url).pathname){
+ await processorArchiveJourney()
+ if(!process.argv[2])await (await import('./automatic-collection-archive.mjs')).isolatedAutomaticCollectionArchiveJourney()
+}
