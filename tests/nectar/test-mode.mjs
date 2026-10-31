@@ -1,15 +1,16 @@
 import assert from 'node:assert/strict'
 import { applyPolicy } from './policy-helper.mjs'
 import { publishPrice } from './price-helper.mjs'
+import { sandboxProcessor, testModeBillingFlow } from './test-mode-billing.mjs'
 
 export const sandboxTimezone = ['America', 'Los_Angeles'].join('/')
-export const harnessOptions = () => ({ localTime: '2026-10-01T12:00:00Z' })
+export const harnessOptions = () => ({ localTime: '2026-10-01T12:00:00Z', stripeFetch: sandboxProcessor.fetch, stripeSecret: 'synthetic-nectar-sandbox-secret' })
 const address = n => `synthetic-nectar-${n}${String.fromCharCode(64)}example.test`
 const round = (n, d) => Number((n + d / 2n) / d)
 
 // One native sanity journey: reviewed copy, independent annual clocks, exact
 // cents, source isolation and both sides of the authority boundary.
-export async function testModeFlow(h, owner, { onState = async () => {}, copyCatalog, createSecond, advanceSecond } = {}) {
+export async function testModeFlow(h, owner, { onState = async () => {}, copyCatalog, createSecond, advanceSecond, bindProcessor } = {}) {
   const api = (path, body, status) => h.api(path, owner, body, status)
   await applyPolicy(h, owner, 'tax.declare', { tax_jurisdiction: 'CA', tax_mode: 'flat_rate', tax_rate: '7.25', tax_note: 'Synthetic reviewed sandbox basis' })
   const product = async n => (await api('product.create', { code: `synthetic-nectar-${n}`, name: `Synthetic plan ${n}` })).id
@@ -128,7 +129,7 @@ export async function testModeFlow(h, owner, { onState = async () => {}, copyCat
   await api(`customers/${first.id}`, undefined, 404)
   for (const action of ['billrun.prepare', 'invoice.finalise', 'payment.record', 'credit.issue', 'subscription.create', 'collection.confirm', 'business.configure']) await h.api(action, developer, {}, 403)
   const credential = await api('credential.issue', { name: 'Synthetic sandbox refusal', scopes: ['prepare'] })
-  for (const action of ['sandbox.catalog.copy', 'sandbox.customer.create', 'sandbox.clock.advance']) await h.api(action, { bearer: credential.key }, {}, 403)
+  for (const action of ['sandbox.catalog.copy', 'sandbox.customer.create', 'sandbox.clock.advance', 'sandbox.processor.bind', 'sandbox.billing.reconcile']) await h.api(action, { bearer: credential.key }, {}, 403)
   await h.api('sandbox', { bearer: credential.key }, undefined, 403)
   await api('credential.revoke', { key: credential.id })
   await h.api('sandbox', { bearer: credential.key }, undefined, 401)
@@ -166,5 +167,6 @@ export async function testModeFlow(h, owner, { onState = async () => {}, copyCat
   await api('sandbox.catalog.copy', { source_fingerprint: source.sourceFingerprint, confirm: true }, 409)
   await api('sandbox.clock.advance', { customer: person, revision: 1, clock: annual.clock, confirm: true }, 404)
   await onState({ label: 'privacy-redacted-clock', path: `/app/settings/test-mode/${first.id}`, owner, first: first.id, second: secondId })
+  await testModeBillingFlow(h, owner, { onState, bindProcessor })
   console.log('DEV-004 testModeFlow: reviewed immutable copy, independent thirteen-month annual previews, exact cents, atomic stale and concurrent refusal, live isolation and current developer authority passed')
 }
