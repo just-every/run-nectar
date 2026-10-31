@@ -194,7 +194,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "a42135289f54fcd66e8febd501fb7484e58a31bda701d68ca5ce01e90545ccc8",
+      "sha256": "16d7affffdd883e23fdbf192adb8b14f2a367d94e5b48ec2b5cbfb1f962aacbd",
       "executable": false
     },
     "DEMO.md": {
@@ -4006,7 +4006,7 @@
       "executable": false
     },
     "src/nectar/card-expiry-notices.ts": {
-      "sha256": "99940f0858be8aa28a9bec9300bdb7415930a5ffc0796758dd2f0ef0a0583c36",
+      "sha256": "8fa4cb709d1e2ec2317f24d9a56978ea80dc1bfe9e01bb9c95e98f6d338cc21c",
       "executable": false
     },
     "src/nectar/card-lifecycle-webhook.ts": {
@@ -5970,7 +5970,7 @@
       "executable": false
     },
     "tests/nectar/customer-search.mjs": {
-      "sha256": "916a5a80ecd7674a2ad011e0aebf42e4f462467fc4249bdae8d9a61224ee8bd5",
+      "sha256": "d9a454cf307c096bd885ac4bdc5db072052a99769cd586c385ac7c39630ae1d8",
       "executable": false
     },
     "tests/nectar/draft-corrections.mjs": {
@@ -6157,6 +6157,10 @@
       "sha256": "9be917e5aa9e39f8aade33be866e6bcb394a78b8110c54de9e4991cceebd6a12",
       "executable": false
     },
+    "tests/nectar/mobile-customer.mjs": {
+      "sha256": "6bf488435596726d9baa825ec9dfeb8af3161384a715ba9f012a4d05490b1b82",
+      "executable": false
+    },
     "tests/nectar/move-collection.mjs": {
       "sha256": "c64d7b593d65a4b3c33e23677dd87f25e308ddcd213c3fbade486132439abaeb",
       "executable": false
@@ -6274,7 +6278,7 @@
       "executable": false
     },
     "tests/nectar/portal-method-actions.mjs": {
-      "sha256": "e4c456b0dda36d8bac67a0ad65d2d47d037e3d3405f3beb0bd908042b69fa51e",
+      "sha256": "9f96a55ba0bd53059b2c2f930d648571bf1cde4bd435752af77f8bd8b5fb75fa",
       "executable": false
     },
     "tests/nectar/portal-methods-browser.mjs": {
@@ -6622,7 +6626,7 @@
       "executable": false
     },
     "verification.json": {
-      "sha256": "dee3402d082142d989600bd1c9623d9c8b7616cfb50bcab1d90d4a22c72a6f9d",
+      "sha256": "5ca0da4101a2d8c332abf59b56c285167c480846c77135592a3fe720c123d116",
       "executable": false
     },
     "VERIFY-WORKFLOW.md": {
