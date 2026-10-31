@@ -1,4 +1,5 @@
 import { closeTieout } from './close-tieout'
+import { readTransferInstructions } from './transfer-instructions'
 import { portalChangeSettings } from './portal-change-policy'
 import { readRemittances } from './remittances'
 import { processorEvents } from './processor-events'
@@ -122,6 +123,7 @@ export const views: Record<string, View> = {
   retryComparison:(env,actor)=>retryComparisonReport(env,actor),
   retryRecovery:(env,actor)=>retryRecoveryReport(env,actor),
   automaticCollections:(env,actor,_r,_id,url)=>automaticCollections(env,actor,url.searchParams.get('customer')??undefined),
+  transferInstructions:(env,actor,_r,id)=>readTransferInstructions(env,actor,id),
   nativeCollections:(env,actor,_r,_id,url)=>readNativeCollections(env,actor,url.searchParams.get('customer')??undefined),
   prepaid:(env,actor,_r,id,url)=>prepaidState(env,actor,id,url.searchParams.get('date')??undefined),
   prepaidSource:(env,actor,_r,id)=>{const [subscription,entry]=id.split('/entries/');return prepaidSource(env,actor,subscription,decodeURIComponent(entry))},
