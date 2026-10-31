@@ -10,6 +10,7 @@ import { prepaidBrowser } from './prepaid-browser.mjs'
 import { nativeCollectionFlow,harnessOptions as nativeOptions } from './native-collection.mjs'
 // Focused real-browser use of a clause's own public pages and native forms.
 import assert from 'node:assert/strict'
+import { spawnSync } from 'node:child_process'
 import { chromium } from '@playwright/test'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { harness } from './harness.mjs'
@@ -294,6 +295,12 @@ try {
   }})
   await writeFile(`${directory}/screens.json`,JSON.stringify({kind,captures},null,2))
 } finally {await browser?.close();await h.close()}
+// Keep the transfer screen proof in Verify's existing native-collection entry point.
+if(kind==='native-collection'){
+  const result=spawnSync(process.execPath,[process.argv[1],'transfer-instructions'],{stdio:'inherit',env:{...process.env,NECTAR_EVIDENCE_DIR:`${directory}/transfer-instructions`}})
+  assert.equal(result.status,0,'Customer transfer instruction browser journey')
+}
+
 
 async function nativeIntervalForms({h,owner,page,both,form,submit}) {
   await h.advanceClock('2034-01-01T20:00:00Z')
