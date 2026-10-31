@@ -67,6 +67,7 @@ export const PAGE_DOORS: [string, string][] = [
   ['^/app/close-tieout$', 'closeTieout'],
   ['^/app/settings/test-mode$', 'sandbox'],
   ['^/app/settings/test-mode/([\\w-]+)$', 'sandboxCustomer'],
+  ['^/app/import/investigations$', 'moveInvestigations'],
   ['^/app/settings/portal-changes$', 'portalChanges'],
   ['^/app/processor-events$','processorEvents'],
   ['^/app/payments/([\\w-]+)/receipt$','paymentReceipt'],
