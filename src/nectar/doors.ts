@@ -63,6 +63,7 @@ export const LIST_DOORS = ['remittances','paymentLinks','automaticCollections','
 
 export const PAGE_DOORS: [string, string][] = [
   ['^/app/close-tieout$', 'closeTieout'],
+  ['^/app/import/investigations$', 'moveInvestigations'],
   ['^/app/settings/portal-changes$', 'portalChanges'],
   ['^/app/processor-events$','processorEvents'],
   ['^/app/payments/([\\w-]+)/receipt$','paymentReceipt'],

@@ -25,7 +25,7 @@ import { configureRetryPolicy } from './retry-policy'
 import { prepareAutomaticCollection,decideAutomaticCollection,revokeAutomaticCollection } from './automatic-collection'
 import { checkAutomaticCollection,consumeAutomaticEvent } from './automatic-collection-events'
 import { prepareHostedSetup } from './hosted-setup'
-import { scanAssurance,assignAssurance,approveAssurance,recheckAssurance } from './assurance'
+import { investigateMove,scanAssurance,assignAssurance,approveAssurance,recheckAssurance } from './assurance'
 import { prepareInvoiceAutomation,decideInvoiceAutomation,runInvoiceAutomationDoor } from './invoice-automation'
 import { prepareShadowAppChange,confirmShadowAppChange,reconcileShadowAppChange,shadowInvoicePreview,appInvoicePreview } from './shadow-app'
 import { consumeStripeWebhookEvent } from './webhook-stripe'
@@ -121,6 +121,7 @@ type Handler = (env: Bindings, actor: Actor, input: Input, request: Request) => 
 export const actions: Record<string, Handler> = {
   'sso.configure': configureSso,
   'close.scan': scanCloseTieout,
+  'move.investigate': investigateMove,
   'assurance.scan': scanAssurance,
   'assurance.assign': assignAssurance,
   'assurance.approve': approveAssurance,

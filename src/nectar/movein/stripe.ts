@@ -127,6 +127,10 @@ async function build(env: Bindings, actor: Actor, input: Input) {
   for (const [file, kind] of [['payments','payment'],['refunds','refund'],['disputes','dispute'],['subscription_events','subscription_event']] as const)
     for (const [index, item] of (lists[file] ?? []).entries()) record(kind, item, file, index)
 
+  // Erased imported identities cannot be revived by replaying their uploaded capture.
+  const erasedCustomers = new Set((await all(env, 'SELECT id FROM nc_customers WHERE erased_at IS NOT NULL')).map(row => row.id))
+  insist(!lists.customers.some(customer => erasedCustomers.has(targetIds.customer(customer.id))), 'erased_import_source', 409)
+
   // What already exists in Nectar.
   const nativeCustomers = new Map((await all(env, "SELECT id, external_id, origin FROM nc_customers")).map(row => [row.external_id, row]))
   const nativeProducts = new Set((await all(env, "SELECT code FROM nc_products WHERE origin = 'native'")).map(row => row.code))

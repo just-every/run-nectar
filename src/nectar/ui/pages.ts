@@ -1,4 +1,5 @@
 import { closeTieoutPage } from './close-tieout'
+import { moveInvestigationsPage } from './move-investigations'
 import { portalChangeSettingsPage } from './portal-changes'
 import { processorEventsPage } from './processor-events'
 import { dunningPage } from './dunning'
@@ -59,6 +60,7 @@ type Page = (env: Bindings, actor: Actor, request: Request, url: URL, id: string
 
 export const pages: Record<string, Page> = {
   closeTieout: (env,actor,_r,url)=>closeTieoutPage(env,actor,url),
+  moveInvestigations:(env,actor,_r,url)=>moveInvestigationsPage(env,actor,url),
   portalChanges: (env,actor,_r,url) => portalChangeSettingsPage(env,actor,url),
   processorEvents:(env,actor,_r,url)=>processorEventsPage(env,actor,url),
   paymentLinks:async(env,actor,_r,url)=>page('Payment links',actor,await paymentLinksScreen(env,actor),{current:'/app/settings',url}),
