@@ -1,5 +1,5 @@
-// Only this customer's persisted sandbox clock advances. Ratings are frozen
-// previews, never issued invoices, collection attempts or notification jobs.
+// Only this customer's persisted sandbox clock advances. Frozen previews may
+// feed explicitly enabled test billing; live financial records stay separate.
 import type { Bindings } from '../auth.server'
 import { actorLabel, type Actor } from './actor'
 import { dueBillingWindows, INTERVAL_RATING_VERSION } from './billing-calendar'
@@ -9,6 +9,7 @@ import type { Input } from './input'
 import { requireFreshFactor } from './mfa'
 import { rate, type ItemIn, type RatingInput } from './rating'
 import { requireSandbox, sandboxCatalog } from './test-mode'
+import { executeSandboxBilling, sandboxBillingView } from './test-billing'
 
 interface SandboxCustomer {
   id: string; catalog_id: string; label: string; start_date: string; trial_end: string | null
@@ -39,6 +40,7 @@ export async function sandboxCustomerView(env: Bindings, actor: Actor, id: strin
   requireSandbox(actor)
   const c = await customer(env, id)
   return { ...c, items: JSON.parse(c.items_json), items_json: undefined, catalog: await sandboxCatalog(env, c.catalog_id),
+    billing: await sandboxBillingView(env, c.id),
     history: await all(env, 'SELECT revision,previous_at,clock_at,created_at FROM nc_sandbox_clock_events WHERE customer_id=? ORDER BY revision', c.id),
     previews: (await all(env, 'SELECT preview_json FROM nc_sandbox_previews WHERE customer_id=? ORDER BY due_date,window_key', c.id)).map(row => JSON.parse(row.preview_json)) }
 }
@@ -91,5 +93,7 @@ export async function advanceSandboxClock(env: Bindings, actor: Actor, input: In
     stmt(env, 'INSERT INTO nc_sandbox_clock_events(customer_id,revision,previous_at,clock_at,created_at) VALUES(?,?,?,?,?)', c.id, c.revision + 1, c.clock_at, clock, now()),
     ...previewStatements(env, c.id, next),
   ], { actor: actorLabel(actor), action: 'sandbox.clock.advance', subject: c.id, detail: { from: c.clock_at, to: clock, revision: c.revision + 1, previews: next.length } })
-  return { id: c.id, revision: c.revision + 1, clock_at: clock, addedPreviews: next.length }
+  const billing = await one(env, 'SELECT 1 FROM nc_sandbox_processor_authority WHERE customer_id=?', c.id)
+  const execution = billing ? await executeSandboxBilling(env, actor, c.id) : null
+  return { id: c.id, revision: c.revision + 1, clock_at: clock, addedPreviews: next.length, execution }
 }

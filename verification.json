@@ -80,6 +80,14 @@
       "commands": [
         "NECTAR_TEST_CHECKOUT=1 node tests/nectar/processor-archive.mjs remittances"
       ]
+    },
+    {
+      "name": "sandbox-archive",
+      "browser": false,
+      "hosted": false,
+      "commands": [
+        "NECTAR_TEST_CHECKOUT=1 node tests/nectar/test-mode-archive.mjs"
+      ]
     }
   ],
   "nightly": [
@@ -226,6 +234,8 @@
     "tests/runtime.mjs": [],
     "tests/nectar/flows.mjs": [],
     "tests/nectar/journey.mjs": [],
-    "tests/nectar/subscription-states-browser.mjs": []
+    "tests/nectar/subscription-states-browser.mjs": [],
+    "tests/nectar/test-mode-browser.mjs": [],
+    "tests/nectar/test-mode-archive.mjs": []
   }
 }

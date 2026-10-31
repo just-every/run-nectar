@@ -30,6 +30,15 @@ try {
   }
   const form = action => page.locator(`form[action="/app/do/${action}"]`)
   await testModeFlow(h, owner, {
+    bindProcessor: async (payload, developer) => {
+      await as(developer)
+      await page.goto(h.origin + `/app/settings/test-mode/${payload.customer}`)
+      await page.locator('summary').filter({ hasText: /^Enable test billing$/ }).click()
+      const fields = form('sandbox.processor.bind')
+      await fields.locator('[name="stripe_customer_ref"]').fill(payload.stripe_customer_ref)
+      await fields.locator('[name="confirm"]').check()
+      await submit(fields)
+    },
     copyCatalog: async source => {
       await as(owner)
       await page.goto(h.origin + '/app/settings/test-mode')
@@ -72,6 +81,17 @@ try {
         const state = await h.api(`sandbox/customers/${path.split('/').at(-1)}`, owner)
         assert.equal(await page.getByRole('heading', { name: 'Due 2028-01-31', exact: true }).count(), 2)
         for (const preview of state.previews) assert.ok((await page.locator('main').innerText()).includes((preview.rating.totalCents / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' })), 'Visible totals match saved previews')
+      }
+      if (label === 'sandbox-annual-failures') {
+        assert.equal(await page.getByRole('heading', { name: 'Sandbox invoices', exact: true }).count(), 1)
+        assert.equal(await page.getByRole('heading', { name: 'Sandbox inbox and history', exact: true }).count(), 1)
+        const text = await page.locator('main').innerText()
+        assert.ok(text.includes('$10.98') && text.includes('$12.00'), 'Annual test invoices show independently reconciled cents')
+        assert.equal((text.match(/failure notice preview/g) ?? []).length, 6)
+      }
+      if (label === 'sandbox-unconfirmed') {
+        assert.equal(await page.getByRole('heading', { name: 'Test payment attempts', exact: true }).count(), 1)
+        assert.ok((await page.locator('main').innerText()).includes('unconfirmed'))
       }
       for (const width of [1440, 390]) {
         await page.setViewportSize({ width, height: 1000 })
