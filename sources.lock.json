@@ -5790,7 +5790,7 @@
       "executable": false
     },
     "tests/nectar/billing-roles.mjs": {
-      "sha256": "76b4845d6c8b2c975dd83b28532803d2da215d520c9ba28b6a5a9ea6d8dfaff6",
+      "sha256": "2ce6d759b00f4777ec7e84919b15e22905c52f800c49db16c9166ff787e3541e",
       "executable": false
     },
     "tests/nectar/cadences.mjs": {
@@ -5826,7 +5826,7 @@
       "executable": false
     },
     "tests/nectar/clause-browser.mjs": {
-      "sha256": "617e53e05816a40810ae02d1a6a0fbf8275b9965b341b43112dd44e7e070169a",
+      "sha256": "822d85d48cffafbb16f3ad8959357f365677c19bbcb9fd642c457ffd58750752",
       "executable": false
     },
     "tests/nectar/clause-runner.mjs": {
@@ -6306,7 +6306,7 @@
       "executable": false
     },
     "tests/nectar/processor-archive.mjs": {
-      "sha256": "7b3563ff1513e49a719a2daf316469a7e295c819a7021e3a5a9840ae7f9f8941",
+      "sha256": "0692ecb8b219827c3550d40e28ad9867a75d0cd0a9dba70a25e1bb725df9ff29",
       "executable": false
     },
     "tests/nectar/processor-cash-imported-sandbox.mjs": {
