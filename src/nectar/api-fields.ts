@@ -280,8 +280,6 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "request": "text",
     "stripe_customer_ref": "text"
   },
-  "transfer.instructions.prepare": {"customer":"text","account_ref":"text"},
-  "transfer.instructions.confirm": {"request":"text","basis_hash":"text","customer":"text","account_ref":"text","stripe_customer_ref":"text","binding_revision":"text","currency":"text","test_mode":"flag","confirm":"flag"},
   "collection.customer.bind": {
     "account_ref": "text",
     "confirm": "flag",
@@ -1293,6 +1291,21 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "subscription": "text",
     "term_start": "text",
     "uplift_percent": "text"
+  },
+  "transfer.instructions.confirm": {
+    "account_ref": "text",
+    "basis_hash": "text",
+    "binding_revision": "text",
+    "confirm": "flag",
+    "currency": "text",
+    "customer": "text",
+    "request": "text",
+    "stripe_customer_ref": "text",
+    "test_mode": "flag"
+  },
+  "transfer.instructions.prepare": {
+    "account_ref": "text",
+    "customer": "text"
   },
   "trial.collection.approve": {
     "basis_hash": "text",
