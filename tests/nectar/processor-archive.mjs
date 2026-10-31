@@ -1,4 +1,4 @@
-import { transferInstructionEdge, transferInstructionsFlow, harnessOptions as transferOptions } from './transfer-instructions.mjs'
+import { transferInstructionsFlow, harnessOptions as transferOptions } from './transfer-instructions.mjs'
 import { remittanceFile, remittanceFixtures } from './remittance-files.mjs'
 import { file } from './harness.mjs'
 // Public processor capture, statutory removal and actual rer archive restore.
@@ -213,10 +213,10 @@ export async function processorArchiveJourney() {
      if(!removed)assert.equal(payments.find(p=>p.id===confirmed.payment).amount_cents,2500)
     }}
    }})
-  if(only==='transfer-instructions')await additionalArchivePhase(root,scratch,{label:'transfer-instructions',persistence,databaseId,edge:{fetch:transferOptions().stripeFetch},requiredKinds:['nc_transfer_instructions'],localTime:'2026-10-29T12:00:00Z',
+  if(only==='transfer-instructions'||only==='remittances')await additionalArchivePhase(root,scratch,{label:'transfer-instructions',persistence,databaseId,edge:{fetch:transferOptions().stripeFetch},requiredKinds:['nc_transfer_instructions'],localTime:'2026-10-29T12:00:00Z',
    async populate(worker,who){
     const result=await transferInstructionsFlow(worker,who)
-    return {...result,async restoreCheck(restored,owner,removed=false){
+    return {...result,freshOwnerForRestore:true,async restoreCheck(restored,owner,removed=false){
      await restored.api('transfer.instructions.confirm',owner,result.pending,409)
      await restored.api('transfer.instructions.confirm',owner,result.claimed,409)
      const retained=await restored.api(`customers/${result.customer}/transfer-instructions`,owner)
@@ -244,12 +244,17 @@ async function additionalArchivePhase(root,scratch,{label,persistence,databaseId
   const settings={...h.vars}
   await h.close();h=null
   await command(root,['export','--output',path('populated')])
-  const captured=sources(await archiveItems(path('populated')))
+  const populatedItems=await archiveItems(path('populated')),captured=sources(populatedItems)
+  if(target.freshOwnerForRestore)assert.ok(!populatedItems.some(item=>item.table==='nc_transfer_instruction_preparations'),'Actual archive excludes executable funding preparation authority')
   for(const kind of requiredKinds)assert.ok(captured.some(item=>item.table===kind&&item.row.customer_id===target.customer),`Actual ${label} archive includes populated ${kind}`)
   h=await harness({assets:true,persistence,databaseId,applyMigrations:false,settings,localTime:'2026-11-02T12:00:00Z'})
   const owner=await restoredOwner(h,enrollment,'2026-11-02T12:00:00Z'),finance=await h.signIn(target.financeEmail)
   await processorFinancialRemovalFlow(h,owner,{finance,peer:target.peer,targets:[{customer:target.customer,kinds:requiredKinds}]})
-  if(target.restoreCheck)await target.restoreCheck(h,owner,true)
+  if(target.restoreCheck){
+   let checkingOwner=owner
+   if(target.freshOwnerForRestore){const instant=new Date(Date.parse(h.vars.NECTAR_LOCAL_TIME)+60000).toISOString();await h.advanceClock(instant);checkingOwner=await restoredOwner(h,enrollment,instant)}
+   await target.restoreCheck(h,checkingOwner,true)
+  }
   await h.close();h=null
   await command(root,['export','--output',path('purged')])
   const removed=sources(await archiveItems(path('purged')))
