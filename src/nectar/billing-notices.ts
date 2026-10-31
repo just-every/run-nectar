@@ -73,7 +73,8 @@ async function basis(env:Bindings,kind:string,invoiceId:string,eventKey?:string)
  const subject=template?expand(template.subject,values):L.t(`billing_notice.${kind}.subject`,values)
  const body=template?expand(template.body,values):L.t(`billing_notice.${kind}.body`,values)
  const source={kind,invoice:invoiceId,key,customer:customer.id,revision:customer.revision,recipient:customer.billing_email,language:L.tag,
-  holdBasis:invoice.basis,sourceEvent,amount,date,settingsRevision:settings.revision,subject,body,from:env.MAIL_FROM??'',provider:env.MAIL_PROVIDER??''}
+  holdBasis:invoice.basis,sourceEvent,amount,date,settingsRevision:settings.revision,subject,body,from:env.MAIL_FROM??'',provider:env.MAIL_PROVIDER??'',
+  mailBinding:await fingerprint([env.MAIL_PROVIDER??'',env.MAIL_FROM??'',env.MAIL_API_KEY??''])}
  return {source,basis:canonical(source)}
 }
 
