@@ -194,7 +194,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "cff4c898c722e13307e97ada9b574d4cd22bca95c363fea2cbcfb5fae0366221",
+      "sha256": "53b6b685f496adc87e0726ed50c201edbbd4228fe256280cd11df71c3f179324",
       "executable": false
     },
     "DEMO.md": {
@@ -5778,7 +5778,7 @@
       "executable": false
     },
     "tests/nectar/automatic-collection-archive.mjs": {
-      "sha256": "1f9c9ee1dd2de0a7ace25f567f5bceb20b7c5d3b90711cb84f2e4ec26afd8e01",
+      "sha256": "21a983e57e3544929f57bdefbae30be5193c7441bceaad8e457201a3d7d9e407",
       "executable": false
     },
     "tests/nectar/automatic-collection-browser.mjs": {
