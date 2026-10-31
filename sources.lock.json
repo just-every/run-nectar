@@ -186,7 +186,7 @@
       "executable": false
     },
     "API.md": {
-      "sha256": "f3eac513ad43cab6b4d5c6b1b5866a1791302b11ad5ca337d0fe633a29461a30",
+      "sha256": "9c66f375e07355ca479b6d8009d07d34ec3ff51d5b1f4854d32082161d335d5c",
       "executable": false
     },
     "base-copies.json": {
@@ -869,6 +869,10 @@
       "sha256": "b6b04511880aea6e0de4a46e2ef841a3972ae3a4b82581779cf6d573650c3728",
       "executable": false
     },
+    "migrations/core/0119_sandbox_privacy.sql": {
+      "sha256": "a221f0406a8084a30f60f57acedacf0ab68df02c4eee593f3f7b066d74bdfad0",
+      "executable": false
+    },
     "ONBOARDING.md": {
       "sha256": "95bb235abff28ac36979868486caf2cb73bfbe4ab63037f3e301d189bb9398d9",
       "executable": false
@@ -1042,7 +1046,7 @@
       "executable": false
     },
     "RELEASE.json": {
-      "sha256": "91abc02e6b6e0df6e55b4a687001c9ce7a7f426d771ad17970f0291a6ab345d2",
+      "sha256": "1f0e52e81e56ec60698fae4735a48b036c6a8a01937c3c70a82e38572503ed15",
       "executable": false
     },
     "rer-project.json": {
@@ -3838,7 +3842,7 @@
       "executable": false
     },
     "src/nectar/api-fields.ts": {
-      "sha256": "21cd4f1942639d07ba6931dfab12e8f3c1b3f810ea68a4e2766ffe6b1b51adf4",
+      "sha256": "f121243caa9a086c8a947d6ac7e0660b7a8e4ab0a3edf585729030df989bbc20",
       "executable": false
     },
     "src/nectar/api-versions.ts": {
@@ -4150,7 +4154,7 @@
       "executable": false
     },
     "src/nectar/erasure-records.ts": {
-      "sha256": "7f326811c1998c1e92ed858101528ba3a2a842882a808fdbaf9bef774f1cd706",
+      "sha256": "2aa33a7f1e93671d96137f48e3cdcc630be7f1707ee259889056b7bfc6ce4c6d",
       "executable": false
     },
     "src/nectar/erasure-requests.ts": {
@@ -5147,6 +5151,10 @@
     },
     "src/nectar/test-clock.ts": {
       "sha256": "5e183c1c66e4d306bf8462b7cd3bcc881d9fc9b4cd01d8ded2f9d714a1d478bc",
+      "executable": false
+    },
+    "src/nectar/test-mode-privacy.ts": {
+      "sha256": "be06521e7bd24568d21dc126d067dbe8884e0425b79784a4f2f421f98da4be93",
       "executable": false
     },
     "src/nectar/test-mode.ts": {
@@ -6470,7 +6478,7 @@
       "executable": false
     },
     "tests/nectar/test-mode.mjs": {
-      "sha256": "ac5edf8f7a0520203b5e550378708c1b7c45586a187290d43710fabaa1ae146b",
+      "sha256": "3a00508c796732d63b5d98e4b8426e6f7825a102f18abfb5552316f73f7ada49",
       "executable": false
     },
     "tests/nectar/upcoming.mjs": {
