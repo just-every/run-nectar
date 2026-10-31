@@ -1,6 +1,7 @@
 // Automatic purchases use the ordinary immutable liability calculation,
 // numbering and recognition policy. The signed, independently approved quote
 // authorizes only this fixed amount and original grant terms, within its cap.
+import { transferInstructionIssue } from './transfer-instructions'
 import type { Bindings } from '../auth.server'
 import { actorLabel, type Actor } from './actor'
 import { requireBusiness, taxReady } from './business'
@@ -37,6 +38,7 @@ export async function issueAuthorizedPrepaidTopupPurchase(env:Bindings,actor:Act
     stmt(env,'UPDATE nc_prepaid_funding_intents SET invoice_id=? WHERE id=? AND status=\'pending\'',invoice,claim.funding_id),
     stmt(env,"UPDATE nc_invoices SET status='approved',approved_fingerprint=source_fingerprint,approved_by=?,approved_at=? WHERE id=?",`prepaid-policy:${row.id}:${row.approved_by_id}`,row.approved_at,invoice),
     guard(env,'native_collection_already_claimed','NOT EXISTS(SELECT 1 FROM nc_native_collection_claims WHERE invoice_id=?)',invoice),
+    ...await transferInstructionIssue(env,{...invoiceRow,currency:'USD'},allocation.routeJson),
     stmt(env,"UPDATE nc_invoices SET status='issued',number=?,issue_date=?,due_date=?,issued_by=?,issued_at=?,legal_name=?,billing_entity_id=?,billing_route_json=? WHERE id=?",allocation.number,date,addDays(date,q.content.paymentTermsDays),actorLabel(actor),at,customer.name,allocation.entityId,allocation.routeJson,invoice),
     ...prepaidPurchaseIssueStatements(env,invoiceRow,calculation.input),
     stmt(env,"UPDATE nc_prepaid_topup_claims SET invoice_id=?,status='issued' WHERE id=?",invoice,claimId),
