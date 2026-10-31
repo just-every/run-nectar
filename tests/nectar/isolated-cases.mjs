@@ -94,4 +94,5 @@ export const isolatedJourneys = [
   { file: 'subscription-states', name: 'subscriptionStatesFlow', load: () => import('./subscription-states.mjs') },
   { file: 'close-tieout', name: 'closeTieoutFlow', load: () => import('./close-tieout.mjs') },
   { file: 'test-mode', name: 'testModeFlow', load: () => import('./test-mode.mjs') },
+  { file: 'job-runs', name: 'jobRunsFlow', load: () => import('./job-runs.mjs') },
 ]

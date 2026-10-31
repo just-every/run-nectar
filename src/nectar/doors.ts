@@ -6,6 +6,7 @@ export const API_DOORS: [string, string][] = [
   ['^close-tieout$', 'closeTieout'],
   ['^sandbox$', 'sandbox'],
   ['^sandbox/customers/([\\w-]+)$', 'sandboxCustomer'],
+  ['^job-runs$', 'jobRuns'],
   ['^portal-changes$', 'portalChanges'],
   ['^remittances$','remittances'],
   ['^processor-events$','processorEvents'],

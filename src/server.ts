@@ -1,3 +1,4 @@
+import { runScheduledJobs } from './nectar/job-runs'
 import { processorWebhook } from './nectar/processor-http'
 import { escalateProcessorCash } from './nectar/processor-cash-queue'
 import { observeSubscriptionStates } from './nectar/subscription-states'
@@ -57,30 +58,33 @@ function noTransform(response: Response): Response {
 
 export default withDemo({
   async scheduled(controller, env) {
-    await observeSubscriptionStates(runtimeBindings(env))
-    await dispatchWebhooks(runtimeBindings(env))
-    await expirePaymentLinkAttempts(runtimeBindings(env))
-    await runAutomaticCollections(runtimeBindings(env))
-    await runPaymentRetries(runtimeBindings(env))
-    await runInvoiceAutomation(runtimeBindings(env),controller.scheduledTime)
-    await observeSubscriptionStates(runtimeBindings(env))
-    if(controller.cron==='* * * * *')return
-    await removeExpiredFinancialRecords(runtimeBindings(env))
-    await escalateProcessorCash(runtimeBindings(env),controller.scheduledTime)
-    await runPrepaidSettlement(runtimeBindings(env))
-    await runCadences(runtimeBindings(env),controller.scheduledTime)
-    await runTrials(runtimeBindings(env),controller.scheduledTime)
-    await runRenewals(runtimeBindings(env),controller.scheduledTime)
-    await runWinbacks(runtimeBindings(env),controller.scheduledTime)
-    await sendCertificateReminders(env, controller.scheduledTime)
-    await deliverPendingAlerts(runtimeBindings(env))
-    await sendScheduledReports(runtimeBindings(env),controller.scheduledTime)
-    await deliverPendingCorrectionMail(runtimeBindings(env))
-    await deliverPendingUsageCorrectionMail(runtimeBindings(env))
-    await deliverPendingDraftCorrectionMail(runtimeBindings(env))
-    await deliverPendingPrepaidRefundNotices(runtimeBindings(env))
-    await runAssurance(runtimeBindings(env),controller.scheduledTime)
-    await observeSubscriptionStates(runtimeBindings(env))
+    await runScheduledJobs(runtimeBindings(env), controller, [
+      { name: 'subscription-states-before', run: () => observeSubscriptionStates(runtimeBindings(env)) },
+      { name: 'webhooks', run: () => dispatchWebhooks(runtimeBindings(env)) },
+      { name: 'payment-link-expiry', run: () => expirePaymentLinkAttempts(runtimeBindings(env)) },
+      { name: 'automatic-collections', run: () => runAutomaticCollections(runtimeBindings(env)) },
+      { name: 'payment-retries', run: () => runPaymentRetries(runtimeBindings(env)) },
+      { name: 'invoice-automation', run: () => runInvoiceAutomation(runtimeBindings(env),controller.scheduledTime) },
+      { name: 'subscription-states-after-invoices', run: () => observeSubscriptionStates(runtimeBindings(env)) },
+      ...(controller.cron === '* * * * *' ? [] : [
+        { name: 'financial-retention', run: () => removeExpiredFinancialRecords(runtimeBindings(env)) },
+        { name: 'processor-cash-escalation', run: () => escalateProcessorCash(runtimeBindings(env),controller.scheduledTime) },
+        { name: 'prepaid-settlement', run: () => runPrepaidSettlement(runtimeBindings(env)) },
+        { name: 'cadences', run: () => runCadences(runtimeBindings(env),controller.scheduledTime) },
+        { name: 'trials', run: () => runTrials(runtimeBindings(env),controller.scheduledTime) },
+        { name: 'renewals', run: () => runRenewals(runtimeBindings(env),controller.scheduledTime) },
+        { name: 'winbacks', run: () => runWinbacks(runtimeBindings(env),controller.scheduledTime) },
+        { name: 'certificate-reminders', run: () => sendCertificateReminders(env, controller.scheduledTime) },
+        { name: 'alerts', run: () => deliverPendingAlerts(runtimeBindings(env)) },
+        { name: 'scheduled-reports', run: () => sendScheduledReports(runtimeBindings(env),controller.scheduledTime) },
+        { name: 'correction-mail', run: () => deliverPendingCorrectionMail(runtimeBindings(env)) },
+        { name: 'usage-correction-mail', run: () => deliverPendingUsageCorrectionMail(runtimeBindings(env)) },
+        { name: 'draft-correction-mail', run: () => deliverPendingDraftCorrectionMail(runtimeBindings(env)) },
+        { name: 'prepaid-refund-notices', run: () => deliverPendingPrepaidRefundNotices(runtimeBindings(env)) },
+        { name: 'assurance', run: () => runAssurance(runtimeBindings(env),controller.scheduledTime) },
+        { name: 'subscription-states-final', run: () => observeSubscriptionStates(runtimeBindings(env)) },
+      ]),
+    ])
   },
   async fetch(request, env, execution) {
     const paymentEvent=await processorWebhook(request,runtimeBindings(env))
