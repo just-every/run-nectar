@@ -1019,7 +1019,7 @@ invoice-state history. Sandbox inbox entries are notice and receipt previews,
 never external deliveries. No sandbox operation issues a live invoice, allocates
 live cash, sends external mail or changes production time. Provider timestamps
 remain provider facts; retry due times use the native customer's simulated time.
-Archives retain test history but exclude executable processor consent, so a
+Archives retain test history and test-object identity custody but exclude executable processor consent, so a
 restore cannot resume test debits. A restored customer with issued test history
 cannot be rebound; create a new sandbox customer for another execution.
 
