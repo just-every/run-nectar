@@ -33,7 +33,7 @@ try {
     bindProcessor: async (payload, developer) => {
       await as(developer)
       await page.goto(h.origin + `/app/settings/test-mode/${payload.customer}`)
-      await page.getByText('Enable test billing', { exact: true }).click()
+      await page.locator('summary').filter({ hasText: /^Enable test billing$/ }).click()
       const fields = form('sandbox.processor.bind')
       await fields.locator('[name="stripe_customer_ref"]').fill(payload.stripe_customer_ref)
       await fields.locator('[name="confirm"]').check()
@@ -88,6 +88,10 @@ try {
         const text = await page.locator('main').innerText()
         assert.ok(text.includes('$10.98') && text.includes('$12.00'), 'Annual test invoices show independently reconciled cents')
         assert.equal((text.match(/failure notice preview/g) ?? []).length, 6)
+      }
+      if (label === 'sandbox-unconfirmed') {
+        assert.equal(await page.getByRole('heading', { name: 'Test payment attempts', exact: true }).count(), 1)
+        assert.ok((await page.locator('main').innerText()).includes('unconfirmed'))
       }
       for (const width of [1440, 390]) {
         await page.setViewportSize({ width, height: 1000 })

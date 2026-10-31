@@ -26,14 +26,14 @@ export async function sandboxStripe(env: Bindings, expectedAccount?: string) {
   return { accountRef, request }
 }
 
-export async function sandboxProviderCustomer(selected: Awaited<ReturnType<typeof sandboxStripe>>, customerId: string, catalogId: string, remoteId: string) {
+export async function sandboxProviderCustomer(selected: Awaited<ReturnType<typeof sandboxStripe>>, customerId: string, catalogId: string, remoteId: string, standaloneMethod?: string) {
   const customer = await selected.request(`/customers/${encodeURIComponent(providerReference(remoteId))}`)
   insist(customer.object === 'customer' && customer.id === remoteId && customer.livemode === false && !customer.deleted
     && customer.metadata?.nectar_sandbox_customer === customerId && customer.metadata?.nectar_sandbox_catalog === catalogId,
   'sandbox_processor_customer_mismatch', 409)
-  const methodId = providerReference(customer.invoice_settings?.default_payment_method)
+  const methodId = providerReference(standaloneMethod ?? customer.invoice_settings?.default_payment_method)
   const method = await selected.request(`/payment_methods/${encodeURIComponent(methodId)}`)
   insist(method.object === 'payment_method' && method.id === methodId && method.type === 'card' && method.livemode === false
-    && method.customer === remoteId, 'sandbox_test_card_required', 409)
+    && (standaloneMethod ? method.customer === null && method.metadata?.nectar_sandbox_customer === customerId && method.metadata?.nectar_sandbox_catalog === catalogId : method.customer === remoteId), 'sandbox_test_card_required', 409)
   return { customer, methodId }
 }
