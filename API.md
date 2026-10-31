@@ -966,3 +966,7 @@ delivery. A receipt records an allocation, without claiming settlement.
 `POST /api/nectar/close.scan` takes `period`, the exact returned `basis` and an active owner or finance member ID in `owner`. It requires full billing read and proposal capabilities, rechecks the source basis and records cases atomically with its audit. Repeated scans reuse the same source case. Unapplied received cash is a review item; a pending existing bad-debt journal is a synchronization failure. These meanings do not establish missing processor fees, unsynced credit notes or failed provider tax commitments.
 
 Use existing ordinary authorized financial doors for any fix. `assurance.approve` only confirms agreement on the exact current case basis; `assurance.recheck` resolves it after that confirmation and a fresh successful comparison. Neither scanning nor confirming grants allocation, journal-posting or period-close authority. The accountant page is `/app/close-tieout`, linked from Revenue schedules. Complete connector, entity, currency, payout, fee and provider tax qualification remains outside this native packet.
+
+## Company agent door
+
+The shared `/mcp` door, `/agents` and `/api/rer/agent-policy` use Nectar's declared CORE registry. See [the supported jobs and limits](docs/agent-door.md) and `agent-surface.json`. Existing application, device, import and provider credentials keep their native purposes.

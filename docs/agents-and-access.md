@@ -61,3 +61,5 @@ Proposals** to read it, then **Approve** or **Reject**. A proposal whose
 records changed after it was prepared cannot be approved; ask for a new one.
 Approving a usage correction prepares the draft run again; its invoices still
 need their own approval.
+
+Company agents use the [shared door](agent-door.md), with their current native sponsor and the company's signed policy. Native person-only decisions and fresh-factor requirements still apply.
