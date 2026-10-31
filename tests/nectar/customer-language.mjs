@@ -173,7 +173,7 @@ export async function translationFiles() {
     build()
     // Each built copy initializes its runtime in its own working directory.
     const journey = name => {
-      const result=spawnSync(process.execPath,[join(home,'tests/nectar/clause-runner.mjs'),'customer-language',name],{cwd:root,encoding:'utf8',timeout:180000,killSignal:'SIGKILL'})
+      const result=spawnSync(process.execPath,[join(home,'tests/nectar/sanity.mjs'),'--clause','customer-language',name],{cwd:root,encoding:'utf8',timeout:180000,killSignal:'SIGKILL'})
       const diagnostic=String(result.error?.message??result.stderr).replace(/\/(renew|return|erase)\/[a-f0-9]{64}/g,'/$1/[redacted]').replace(/(token=|rer-dev=|RER_DEV_KEY=)[^&\s"']+/g,'$1[redacted]')
       assert.equal(result.status,0,`PORT-006 ${name}: ${diagnostic}`)
     }

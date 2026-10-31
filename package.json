@@ -31,7 +31,9 @@
     "test:journey": "node tests/nectar/journey.mjs",
     "test:passkey": "node tests/nectar/mfa-passkey.mjs",
     "delivery:spec": "node scripts/build-deployment-spec.mjs",
-    "check:deployment-spec": "node scripts/build-deployment-spec.mjs --check"
+    "check:deployment-spec": "node scripts/build-deployment-spec.mjs --check",
+    "test:recovery": "node scripts/verify-checkout.mjs",
+    "test:audit-consolidated": "node tests/nectar/sanity.mjs && node tests/nectar/processor-journey.mjs"
   },
   "dependencies": {
     "@node-saml/node-saml": "5.1.0",

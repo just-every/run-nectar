@@ -159,7 +159,7 @@ export async function remittanceFilesFlow(h, owner) {
 }
 
 async function remittanceScreens(h,owner,{customer,invoice,rows}) {
-  const browser=await chromium.launch({headless:true,executablePath:process.env.NECTAR_CHROMIUM_PATH,args:['--no-sandbox','--use-mock-keychain','--password-store=basic']})
+  const browser=await chromium.launch({headless:true,executablePath:process.env.NECTAR_CHROMIUM_PATH??process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,args:['--no-sandbox','--use-mock-keychain','--password-store=basic']})
   try {
     const context=await browser.newContext({viewport:{width:1440,height:950}})
     await context.addCookies(owner.split('; ').map(value=>{const i=value.indexOf('=');return {name:value.slice(0,i),value:value.slice(i+1),url:h.origin}}))
@@ -224,7 +224,7 @@ async function crossSourcePayments(h,owner,{issue}) {
     return api('remittance.confirm',{receipt:source.id,source:source.source,customer:preview.customer,fingerprint:preview.fingerprint,confirm:true},status)
   }
   // Native forms perform deposit then identical ordinary CSV, including both confirmations.
-  const browser=await chromium.launch({headless:true,executablePath:process.env.NECTAR_CHROMIUM_PATH,args:['--no-sandbox','--use-mock-keychain','--password-store=basic']})
+  const browser=await chromium.launch({headless:true,executablePath:process.env.NECTAR_CHROMIUM_PATH??process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,args:['--no-sandbox','--use-mock-keychain','--password-store=basic']})
   let payment
   try {
     const context=await browser.newContext({viewport:{width:1440,height:1000}})

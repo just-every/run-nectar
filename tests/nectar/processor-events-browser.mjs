@@ -39,7 +39,8 @@ try {
   }
  }
  if(cashMode){
-  await cashModule.processorCashFlow(h,owner,{onState:state=>capture({...state,label:'cash-applied'}),allocate:async payload=>{
+  // The following return journey supplies its own real browser form actions.
+  await cashModule.processorCashFlow(h,owner,{includeReturns:false,onState:state=>capture({...state,label:'cash-applied'}),allocate:async payload=>{
    await page.goto(h.origin+`/app/processor-events?customer=${payload.customer}`)
    const form=page.locator('form').filter({has:page.locator(`input[name="transfer_ref"][value="${payload.transfer_ref}"]`)})
    const details=form.locator('..');await details.locator('summary').click()

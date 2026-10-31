@@ -1,0 +1,718 @@
+[
+  {
+    "name": "intervalsFlow",
+    "steps": [
+      [
+        "intervals",
+        "intervalsFlow"
+      ],
+      [
+        "commitments",
+        "intervalCommitmentsFlow"
+      ]
+    ]
+  },
+  {
+    "name": "intervalCancellationFlow",
+    "steps": [
+      [
+        "interval-cancel",
+        "intervalCancellationFlow"
+      ]
+    ]
+  },
+  {
+    "name": "commitments",
+    "steps": [
+      [
+        "commitments",
+        "commitments"
+      ]
+    ]
+  },
+  {
+    "name": "contractSetup",
+    "steps": [
+      [
+        "contract-setup",
+        "contractSetup"
+      ]
+    ]
+  },
+  {
+    "name": "priceMigrations",
+    "steps": [
+      [
+        "price-migrations",
+        "priceMigrations"
+      ],
+      [
+        "pricing-simulation",
+        "pricingSimulation"
+      ]
+    ]
+  },
+  {
+    "name": "metricsFlow",
+    "steps": [
+      [
+        "metrics",
+        "metricsFlow"
+      ]
+    ]
+  },
+  {
+    "name": "usageReplayFlow",
+    "steps": [
+      [
+        "usage-replay",
+        "usageReplayFlow"
+      ]
+    ]
+  },
+  {
+    "name": "upcomingFlow",
+    "steps": [
+      [
+        "upcoming",
+        "upcomingFlow"
+      ]
+    ]
+  },
+  {
+    "name": "reconciliationFlow",
+    "steps": [
+      [
+        "reconciliation",
+        "reconciliationFlow"
+      ]
+    ]
+  },
+  {
+    "name": "assuranceDetectorsFlow",
+    "steps": [
+      [
+        "assurance-detectors",
+        "assuranceDetectorsFlow"
+      ]
+    ]
+  },
+  {
+    "name": "assuranceScheduleFlow",
+    "steps": [
+      [
+        "assurance-detectors",
+        "assuranceScheduleFlow"
+      ]
+    ]
+  },
+  {
+    "name": "lifecycleFlow",
+    "steps": [
+      [
+        "lifecycle",
+        "lifecycleFlow"
+      ]
+    ]
+  },
+  {
+    "name": "renewalsFlow",
+    "steps": [
+      [
+        "renewals",
+        "renewalsFlow"
+      ],
+      [
+        "renewal-pricing",
+        "renewalPricing"
+      ]
+    ]
+  },
+  {
+    "name": "retentionFlow",
+    "steps": [
+      [
+        "retention",
+        "retentionFlow"
+      ]
+    ]
+  },
+  {
+    "name": "portalPrepaidFlow",
+    "steps": [
+      [
+        "portal-prepaid",
+        "portalPrepaidFlow"
+      ]
+    ]
+  },
+  {
+    "name": "prepaidRefundFlow",
+    "steps": [
+      [
+        "prepaid-refunds",
+        "prepaidRefundFlow"
+      ]
+    ]
+  },
+  {
+    "name": "prepaidTopupFlow",
+    "steps": [
+      [
+        "prepaid-topup",
+        "prepaidTopupFlow"
+      ]
+    ]
+  },
+  {
+    "name": "customerSearchFlow",
+    "steps": [
+      [
+        "customer-search",
+        "customerSearchFlow"
+      ]
+    ]
+  },
+  {
+    "name": "currencyFlow",
+    "steps": [
+      [
+        "currency",
+        "currencyFlow"
+      ]
+    ]
+  },
+  {
+    "name": "hierarchiesFlow",
+    "steps": [
+      [
+        "hierarchies",
+        "hierarchiesFlow"
+      ]
+    ]
+  },
+  {
+    "name": "planChangesFlow",
+    "steps": [
+      [
+        "plan-changes",
+        "planChangesFlow"
+      ]
+    ]
+  },
+  {
+    "name": "paymentLinksFlow",
+    "steps": [
+      [
+        "payment-links",
+        "paymentLinksFlow"
+      ]
+    ]
+  },
+  {
+    "name": "paymentRetriesFlow",
+    "steps": [
+      [
+        "payment-retries",
+        "paymentRetriesFlow"
+      ]
+    ]
+  },
+  {
+    "name": "cadencesFlow",
+    "steps": [
+      [
+        "cadences",
+        "cadencesFlow"
+      ]
+    ]
+  },
+  {
+    "name": "writeOffFlow",
+    "steps": [
+      [
+        "write-offs",
+        "writeOffFlow"
+      ]
+    ]
+  },
+  {
+    "name": "portalSessionsFlow",
+    "steps": [
+      [
+        "portal-sessions",
+        "portalSessionsFlow"
+      ]
+    ]
+  },
+  {
+    "name": "customerLanguageFlow",
+    "steps": [
+      [
+        "customer-language",
+        "customerLanguageFlow"
+      ]
+    ]
+  },
+  {
+    "name": "revenueFlow",
+    "steps": [
+      [
+        "revenue",
+        "revenueFlow"
+      ],
+      [
+        "revenue-policy",
+        "revenuePolicyFlow"
+      ]
+    ]
+  },
+  {
+    "name": "periodCloseFlow",
+    "steps": [
+      [
+        "period-close",
+        "periodCloseFlow"
+      ]
+    ]
+  },
+  {
+    "name": "financialReportsFlow",
+    "steps": [
+      [
+        "financial-reports",
+        "financialReportsFlow"
+      ]
+    ]
+  },
+  {
+    "name": "moveHistoryFlow",
+    "steps": [
+      [
+        "move-history",
+        "moveHistoryFlow"
+      ],
+      [
+        "import-originals",
+        "importOriginalsFlow"
+      ]
+    ]
+  },
+  {
+    "name": "billingRolesFlow",
+    "steps": [
+      [
+        "billing-roles",
+        "billingRolesFlow"
+      ]
+    ]
+  },
+  {
+    "name": "erasureFlow",
+    "steps": [
+      [
+        "erasure",
+        "erasureFlow"
+      ]
+    ]
+  },
+  {
+    "name": "mfaFlow",
+    "steps": [
+      [
+        "mfa",
+        "mfaFlow"
+      ]
+    ]
+  },
+  {
+    "name": "creditCorrectionFlow",
+    "steps": [
+      [
+        "credit-correction",
+        "creditCorrectionFlow"
+      ]
+    ]
+  },
+  {
+    "name": "draftCorrectionsFlow",
+    "steps": [
+      [
+        "draft-corrections",
+        "draftCorrectionsFlow"
+      ]
+    ]
+  },
+  {
+    "name": "billingAnswersFlow",
+    "steps": [
+      [
+        "billing-answers",
+        "billingAnswersFlow"
+      ]
+    ]
+  },
+  {
+    "name": "invoiceContentFlow",
+    "steps": [
+      [
+        "invoice-content",
+        "invoiceContentFlow"
+      ]
+    ]
+  },
+  {
+    "name": "nativeCollectionFlow",
+    "steps": [
+      [
+        "native-collection",
+        "nativeCollectionFlow"
+      ]
+    ]
+  },
+  {
+    "name": "apiPlatformFlow",
+    "steps": [
+      [
+        "api-platform",
+        "apiPlatformFlow"
+      ],
+      [
+        "sdk-typescript",
+        "sdkTypescriptFlow"
+      ]
+    ]
+  },
+  {
+    "name": "entitlementQuotasFlow",
+    "steps": [
+      [
+        "entitlement-quotas",
+        "entitlementQuotasFlow"
+      ]
+    ]
+  },
+  {
+    "name": "dunning-sequences",
+    "steps": [
+      [
+        "dunning-sequences",
+        "dunningSequenceFlow"
+      ]
+    ]
+  },
+  {
+    "name": "card-lifecycle",
+    "steps": [
+      [
+        "card-lifecycle",
+        "lifecycleFlow"
+      ]
+    ]
+  },
+  {
+    "name": "enterprise-identity",
+    "steps": [
+      [
+        "enterprise-identity",
+        "enterpriseIdentityFlow"
+      ]
+    ]
+  },
+  {
+    "name": "webhooks",
+    "steps": [
+      [
+        "webhooks",
+        "webhooksFlow"
+      ]
+    ]
+  },
+  {
+    "name": "processorCashFlow",
+    "steps": [
+      [
+        "processor-cash",
+        "processorCashFlow"
+      ]
+    ]
+  },
+  {
+    "name": "processorCashImportedFlow",
+    "steps": [
+      [
+        "processor-cash-imported",
+        "processorCashImportedFlow"
+      ]
+    ]
+  },
+  {
+    "name": "numberingEntitiesFlow",
+    "steps": [
+      [
+        "numbering-entities",
+        "numberingEntitiesFlow"
+      ]
+    ]
+  },
+  {
+    "name": "cardExpiryNoticesFlow",
+    "steps": [
+      [
+        "card-expiry-notices",
+        "cardExpiryNoticesFlow"
+      ]
+    ]
+  },
+  {
+    "name": "promotionsFlow",
+    "steps": [
+      [
+        "promotions",
+        "promotionsFlow"
+      ],
+      [
+        "promotions",
+        "trialsFlow"
+      ]
+    ]
+  },
+  {
+    "name": "invoiceRefundPreviewFlow",
+    "steps": [
+      [
+        "invoice-refund-preview",
+        "invoiceRefundPreviewFlow"
+      ]
+    ]
+  },
+  {
+    "name": "invoiceAutomationFlow",
+    "steps": [
+      [
+        "invoice-content",
+        "invoiceAutomationFlow"
+      ]
+    ]
+  },
+  {
+    "name": "contractIntervalSetup",
+    "steps": [
+      [
+        "contract-setup",
+        "contractIntervalSetup"
+      ]
+    ]
+  },
+  {
+    "name": "contractEntitySetup",
+    "steps": [
+      [
+        "contract-setup",
+        "contractEntitySetup"
+      ]
+    ]
+  },
+  {
+    "name": "prepaidRefreshLedgerFlow",
+    "steps": [
+      [
+        "prepaid",
+        "prepaidRefreshLedgerFlow"
+      ]
+    ]
+  },
+  {
+    "name": "prepaidCorrectionFlow",
+    "steps": [
+      [
+        "prepaid",
+        "prepaidCorrectionFlow"
+      ]
+    ]
+  },
+  {
+    "name": "prepaidPurchaseCreditFlow",
+    "steps": [
+      [
+        "prepaid",
+        "prepaidPurchaseCreditFlow"
+      ]
+    ]
+  },
+  {
+    "name": "prepaidErasureFlow",
+    "steps": [
+      [
+        "prepaid",
+        "prepaidErasureFlow"
+      ]
+    ]
+  },
+  {
+    "name": "prepaidRefreshTopupFlow",
+    "steps": [
+      [
+        "prepaid",
+        "prepaidRefreshTopupFlow"
+      ]
+    ],
+    "harness": "prepaidRefreshHarnessOptions"
+  },
+  {
+    "name": "prepaidRefundCorrectionFlow",
+    "steps": [
+      [
+        "prepaid-refunds",
+        "prepaidRefundCorrectionFlow"
+      ]
+    ]
+  },
+  {
+    "name": "prepaidAgentCreditFlow",
+    "steps": [
+      [
+        "credit-correction",
+        "prepaidAgentCreditFlow"
+      ]
+    ]
+  },
+  {
+    "name": "prepaidAgentDraftCorrectionsFlow",
+    "steps": [
+      [
+        "credit-correction",
+        "prepaidAgentDraftCorrectionsFlow"
+      ]
+    ]
+  },
+  {
+    "name": "prepaidCommercialMigrationFlow",
+    "steps": [
+      [
+        "credit-correction",
+        "prepaidCommercialMigrationFlow"
+      ]
+    ]
+  },
+  {
+    "name": "retentionIntervalFlow",
+    "steps": [
+      [
+        "retention",
+        "retentionIntervalFlow"
+      ]
+    ]
+  },
+  {
+    "name": "nativeIntervalErasureFlow",
+    "steps": [
+      [
+        "erasure",
+        "nativeIntervalErasureFlow"
+      ]
+    ]
+  },
+  {
+    "name": "metricZones",
+    "steps": [
+      [
+        "metrics",
+        "metricZones"
+      ]
+    ]
+  },
+  {
+    "name": "revenueErasureFlow",
+    "steps": [
+      [
+        "revenue",
+        "revenueErasureFlow"
+      ]
+    ],
+    "businessTimezone": "UTC"
+  },
+  {
+    "name": "periodCloseDeferredFlow",
+    "steps": [
+      [
+        "period-close",
+        "periodCloseDeferredFlow"
+      ]
+    ]
+  },
+  {
+    "name": "retryPlanChurnFlow",
+    "steps": [
+      [
+        "payment-retries",
+        "retryPlanChurnFlow"
+      ]
+    ]
+  },
+  {
+    "name": "retryComparisonFlow",
+    "steps": [
+      [
+        "payment-retries",
+        "retryComparisonFlow"
+      ]
+    ]
+  },
+  {
+    "name": "portalAnswersFlow",
+    "steps": [
+      [
+        "portal-answers",
+        "portalAnswersFlow"
+      ]
+    ]
+  },
+  {
+    "name": "portalEmbeddingFlow",
+    "steps": [
+      [
+        "portal-sessions",
+        "portalEmbeddingFlow"
+      ]
+    ]
+  },
+  {
+    "name": "automaticCollectionFlow",
+    "steps": [
+      [
+        "native-collection",
+        "automaticCollectionFlow"
+      ]
+    ],
+    "harness": "automaticHarnessOptions"
+  },
+  {
+    "name": "moveCollectionFlow",
+    "steps": [
+      [
+        "move-history",
+        "moveCollectionFlow"
+      ]
+    ],
+    "harness": "moveCollectionHarnessOptions"
+  },
+  {
+    "name": "portalRenewalFlow",
+    "steps": [
+      [
+        "portal-renewal",
+        "portalRenewalFlow"
+      ]
+    ]
+  },
+  {
+    "name": "remittanceFilesFlow",
+    "steps": [
+      [
+        "remittance-files",
+        "remittanceFilesFlow"
+      ]
+    ]
+  }
+]
