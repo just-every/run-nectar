@@ -215,7 +215,7 @@ export async function processorArchiveJourney() {
      if(!removed)assert.equal(payments.find(p=>p.id===confirmed.payment).amount_cents,2500)
     }}
    }})
-  if(only==='transfer-instructions'||only==='remittances')await additionalArchivePhase(root,scratch,{label:'transfer-instructions',persistence,databaseId,edge:{fetch:transferOptions().stripeFetch},requiredKinds:['nc_transfer_instructions'],localTime:'2026-10-29T12:00:00Z',
+  if(only==='transfer-instructions')await additionalArchivePhase(root,scratch,{label:'transfer-instructions',persistence,databaseId,edge:{fetch:transferOptions().stripeFetch},requiredKinds:['nc_transfer_instructions'],localTime:'2026-10-29T12:00:00Z',
    async populate(worker,who){
     const result=await transferInstructionsFlow(worker,who)
     return {...result,freshOwnerForRestore:true,async restoreCheck(restored,owner,removed=false){
