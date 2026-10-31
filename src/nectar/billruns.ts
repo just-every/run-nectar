@@ -1,3 +1,4 @@
+import { transferInstructionIssue } from './transfer-instructions'
 import { invoiceRefunds } from './invoice-refunds'
 import { currencyRecord } from './currency-rates'
 import { planChangeInvoiceFingerprint } from './plan-changes'
@@ -320,6 +321,7 @@ async function finaliseCore(env: Bindings, actor: Actor, input: Input, trialAuth
       ...charges.map(id => guard(env, 'charges_already_billed_or_missing', 'EXISTS(SELECT 1 FROM nc_charges WHERE id=? AND invoice_id IS NULL)', id)),
       ...charges.map(id => stmt(env, 'UPDATE nc_charges SET invoice_id=? WHERE id=?', invoice.id, id)),
       ...chunk(consumed, 90).map(ids => stmt(env, `UPDATE nc_usage_events SET invoice_id = ? WHERE event_id IN (${ids.map(() => '?').join(',')})`, invoice.id, ...ids)),
+      ...await transferInstructionIssue(env,invoice,allocation.routeJson),
       stmt(env, "UPDATE nc_invoices SET legal_name=(SELECT name FROM nc_customers WHERE id=nc_invoices.customer_id), status = 'issued', number = ?, issue_date = ?, due_date = ?, issued_by = ?, issued_at = ?,billing_entity_id=?,billing_route_json=? WHERE id = ?", number, issueDate, due, actorLabel(actor), now(),allocation.entityId,allocation.routeJson, invoice.id),
       ...await hierarchyIssueStatements(env,invoice),
       ...prepaidPurchaseIssueStatements(env,invoice,calculation.inputs ?? {}),
