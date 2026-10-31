@@ -80,6 +80,80 @@
       "commands": [
         "NECTAR_TEST_CHECKOUT=1 node tests/nectar/processor-archive.mjs remittances"
       ]
+    },
+    {
+      "name": "sanity-1",
+      "browser": false,
+      "commands": [
+        "node tests/nectar/flows.mjs --core-only",
+        "node tests/nectar/flows.mjs --audit-only",
+        "node tests/runtime.mjs",
+        "node tests/nectar/sanity.mjs intervalsFlow cadencesFlow promotionsFlow retentionFlow commitments portalPrepaidFlow invoiceAutomationFlow invoiceRefundPreviewFlow periodCloseFlow mfaFlow"
+      ],
+      "hosted": false
+    },
+    {
+      "name": "sanity-2",
+      "browser": false,
+      "commands": [
+        "node tests/nectar/processor-journey.mjs",
+        "node tests/nectar/sanity.mjs paymentRetriesFlow dunning-sequences portalSessionsFlow planChangesFlow financialReportsFlow metricsFlow contractSetup upcomingFlow assuranceScheduleFlow invoiceContentFlow card-lifecycle enterprise-identity"
+      ],
+      "hosted": false
+    },
+    {
+      "name": "sanity-3",
+      "browser": false,
+      "commands": [
+        "node tests/nectar/sanity.mjs usageReplayFlow renewalsFlow draftCorrectionsFlow customerLanguageFlow hierarchiesFlow billingAnswersFlow writeOffFlow billingRolesFlow currencyFlow intervalCancellationFlow"
+      ],
+      "hosted": false
+    },
+    {
+      "name": "sanity-4",
+      "browser": false,
+      "commands": [
+        "node tests/nectar/sanity.mjs prepaidRefundFlow erasureFlow customerSearchFlow priceMigrations processorCashFlow apiPlatformFlow nativeCollectionFlow cardExpiryNoticesFlow revenueFlow webhooks reconciliationFlow"
+      ],
+      "hosted": false
+    },
+    {
+      "name": "browser",
+      "browser": true,
+      "commands": [
+        "node tests/nectar/public-door-journey.mjs",
+        "node tests/nectar/mfa-passkey.mjs",
+        "node tests/nectar/sanity.mjs entitlementQuotasFlow moveHistoryFlow assuranceDetectorsFlow paymentLinksFlow creditCorrectionFlow processorCashImportedFlow prepaidTopupFlow numberingEntitiesFlow lifecycleFlow",
+        "node tests/nectar/public-door-journey.mjs --browser clause-browser native-collection",
+        "node tests/nectar/public-door-journey.mjs --browser payment-retries-browser",
+        "node tests/nectar/public-door-journey.mjs --browser payment-retries-browser churn",
+        "node tests/nectar/clause-browser.mjs native-collection"
+      ],
+      "hosted": false
+    },
+    {
+      "name": "recovery",
+      "browser": false,
+      "commands": [
+        "node scripts/verify-checkout.mjs"
+      ],
+      "hosted": false
+    },
+    {
+      "name": "done-1",
+      "browser": false,
+      "commands": [
+        "node tests/nectar/sanity.mjs contractIntervalSetup prepaidRefreshLedgerFlow prepaidPurchaseCreditFlow prepaidRefreshTopupFlow prepaidAgentCreditFlow prepaidCommercialMigrationFlow nativeIntervalErasureFlow revenueErasureFlow retryPlanChurnFlow portalAnswersFlow automaticCollectionFlow portalRenewalFlow"
+      ],
+      "hosted": false
+    },
+    {
+      "name": "done-2",
+      "browser": true,
+      "commands": [
+        "node tests/nectar/sanity.mjs contractEntitySetup prepaidCorrectionFlow prepaidErasureFlow prepaidRefundCorrectionFlow prepaidAgentDraftCorrectionsFlow retentionIntervalFlow metricZones periodCloseDeferredFlow retryComparisonFlow portalEmbeddingFlow moveCollectionFlow remittanceFilesFlow"
+      ],
+      "hosted": false
     }
   ],
   "nightly": [

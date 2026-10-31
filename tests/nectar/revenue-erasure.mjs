@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { erasureFlow } from './erasure.mjs'
+export { businessTimezone } from './erasure.mjs'
 
 // REV-001 inherits the complete GOV-005 journey with real issued schedules.
 export async function revenueErasureFlow(h,owner){
