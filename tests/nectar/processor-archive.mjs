@@ -284,4 +284,5 @@ if(process.argv[1]===new URL(import.meta.url).pathname){
   await command(process.cwd(),['reset','--yes'])
  }
  if(phase!=='hosted')await processorArchiveJourney()
+ if(!phase||phase==='supplemental')await (await import('./automatic-collection-archive.mjs')).isolatedAutomaticCollectionArchiveJourney()
 }

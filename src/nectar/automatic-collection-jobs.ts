@@ -95,7 +95,10 @@ export async function reconcileAutomaticCollection(env:Bindings,id:string){
  }
 }
 export async function collectAutomaticInvoice(env:Bindings,invoice:string){
- let row=await one(env,"SELECT * FROM nc_automatic_collections WHERE invoice_id=? AND status='active' ORDER BY prepared_at DESC LIMIT 1",invoice)
+ // Restored unclaimed terms are evidence. Only installation-local authority
+ // admits a new provider attempt; reconciliation of existing claims stays read-only.
+ let row=await one(env,`SELECT a.* FROM nc_automatic_collections a JOIN nc_automatic_collection_authorizations z
+ ON z.id=a.id AND z.basis_hash=a.basis_hash WHERE a.invoice_id=? AND a.status='active' ORDER BY a.prepared_at DESC LIMIT 1`,invoice)
  if(!row)return
  try{
   insist(!await one(env,'SELECT 1 FROM nc_prepaid_topup_claims WHERE invoice_id=?',invoice),'prepaid_topup_invoice_managed',409)
