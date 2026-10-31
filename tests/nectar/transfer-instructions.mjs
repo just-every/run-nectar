@@ -43,6 +43,10 @@ export async function transferInstructionsFlow(h,owner,{onState=async()=>{}}={})
   const mfa=await api('mfa.totp.start',{})
   const fresh=()=>api('mfa.verify',{method:'totp',code:totp(mfa.secret,instant)})
   await api('mfa.totp.confirm',{factor:mfa.factor,code:totp(mfa.secret,instant)})
+  const entityTerms={legal_name:'Synthetic transfer treasury',address:'Synthetic Way',ein:'11-3456789',invoice_prefix:'TRANSFER',invoice_number_width:4,payment_terms_days:30,processor_account_ref:account_ref,ledger_company_ref:'synthetic-nectar-transfer-ledger',tax_registration:'Synthetic registration'}
+  const entity=(await api('entity.create',{revision:(await api('business')).revision,...entityTerms})).id
+  await api('customer.entity',{revision:(await api('business')).revision,customer:customers[0],entity,confirm:true})
+
   for(let i=1;i<=7;i++)await api('collection.customer.bind',{customer:customers[i-1],account_ref,stripe_customer_ref:`synthetic-nectar-transfer-${i}`,confirm:true})
   const issue=async(customer,description='Transfer service')=>{
     const charge=await api('charge.add',{customer,amount:'100',description,effective_date:'2026-10-28',taxable:false})
@@ -105,6 +109,10 @@ export async function transferInstructionsFlow(h,owner,{onState=async()=>{}}={})
   }
   assert.equal(first.transfer_instructions_json,second.transfer_instructions_json)
   assert.equal(foreign.transfer_instructions_json,null)
+  await api('entity.update',{revision:(await api('business')).revision,entity,...entityTerms,processor_account_ref:'synthetic-nectar-other-account'})
+  const otherRoute=await issue(customers[0],'Other processor route')
+  assert.equal(otherRoute.transfer_instructions_json,null,'An invoice routed to a different processor account never receives these remit-to instructions')
+
   assert.equal(await pdf(originalSession.token,old.id),oldPdf,'New instructions do not rewrite an already-issued PDF')
   for(const language of ['en','es-US']) {
     const customer=await api(`customers/${customers[0]}`)
@@ -165,7 +173,8 @@ export async function transferInstructionsFlow(h,owner,{onState=async()=>{}}={})
   await api('erasure.verify',{request:erasePending.id,reason:'Synthetic identity checked',evidence:file('synthetic-nectar-pending.txt','Synthetic verification')})
   await api('erasure.approve',{request:erasePending.id,confirm:true})
   await api('transfer.instructions.confirm',pending.confirm,409)
+  const portablePending=await prepare(customers[6])
   assert.equal(posts(),4,'Only the supported request and three uncertain requests reached Stripe; no payment or policy POST exists')
   console.log('Transfer instruction confirmation, immutable invoice and PDF and portal parity, refusals, once-only claims, uncertainty and erasure passed')
-  return {customer:customers[0],invoice:first.id,financeEmail:financeAddress,pending:pending.confirm,claimed:review.confirm}
+  return {customer:customers[0],invoice:first.id,financeEmail:financeAddress,pending:portablePending.confirm,claimed:review.confirm}
 }
