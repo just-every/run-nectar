@@ -28,7 +28,8 @@
       "commands": [
         "NECTAR_VERIFY_SHARD=1 pnpm run test:flows",
         "node tests/nectar/clause-browser.mjs native-collection",
-        "node tests/nectar/subscription-states-browser.mjs"
+        "node tests/nectar/subscription-states-browser.mjs",
+        "node tests/nectar/test-mode-browser.mjs"
       ]
     },
     {
@@ -226,6 +227,7 @@
     "tests/runtime.mjs": [],
     "tests/nectar/flows.mjs": [],
     "tests/nectar/journey.mjs": [],
-    "tests/nectar/subscription-states-browser.mjs": []
+    "tests/nectar/subscription-states-browser.mjs": [],
+    "tests/nectar/test-mode-browser.mjs": []
   }
 }
