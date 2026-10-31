@@ -977,7 +977,7 @@ delivery. A receipt records an allocation, without claiming settlement.
 
 Use existing ordinary authorized financial doors for any fix. `assurance.approve` only confirms agreement on the exact current case basis; `assurance.recheck` resolves it after that confirmation and a fresh successful comparison. Neither scanning nor confirming grants allocation, journal-posting or period-close authority. The accountant page is `/app/close-tieout`, linked from Revenue schedules. Complete connector, entity, currency, payout, fee and provider tax qualification remains outside this native packet.
 
-### Native sandbox previews
+### Native sandbox clocks and test billing
 
 Under GOV-001, current owner and developer members administer Test mode under
 Settings at `/app/settings/test-mode`. Other members and application credentials
@@ -990,7 +990,7 @@ and the existing fresh-factor requirements. It grants no live financial action.
   owner-reviewed declared tax policy and an eligible price.
 - `POST /api/nectar/sandbox.catalog.copy` accepts `source_fingerprint` and
   `confirm: true`. It atomically copies the reviewed timezone, declared tax and
-  billing intervals with prices, using separate sandbox price identifiers.
+  billing intervals and the default retry count and window with prices, using separate sandbox price identifiers.
   A changed source is refused. Repeating an unchanged copy returns its identity.
   Later live price retirement, new versions and tax changes do not alter it.
 - `POST /api/nectar/sandbox.customer.create` accepts `catalog`, a synthetic
@@ -998,7 +998,7 @@ and the existing fresh-factor requirements. It grants no live financial action.
   parallel string arrays `price` and `quantity`. Only prices from that saved
   sandbox catalog are accepted. No live customer or saved method is copied.
 - `GET /api/nectar/sandbox/customers/{id}` returns its independent clock,
-  revision, immutable clock history, copied basis and saved billing previews.
+  revision, immutable clock history, copied basis, saved billing previews and isolated test-billing invoices, attempts and timeline.
 - `POST /api/nectar/sandbox.clock.advance` accepts `customer`, its current
   integer `revision`, an ISO `clock` and `confirm: true`. Time moves forward
   only, within ten years of the sandbox start and 120 cumulative due windows.
@@ -1006,15 +1006,40 @@ and the existing fresh-factor requirements. It grants no live financial action.
   audit. Each billing window is saved once. The same calendar and rating engine
   handles annual terms, trials, calendar-day proration and exact declared tax.
 
-Forms use the same action doors. All amounts are previews: no invoice, payment,
-retry, message, provider write or live clock change occurs. These native copies
-cover the supported pricing slice only. Full configuration mirroring, other
-pricing instruments, processor test-key binding and the thirteen-month
-failing-card journey with actual invoices, renewals, retries, notices and state
-transitions remain DEV-004 work. A local journey clock is separate from this
-persisted product sandbox. Native erasure also withdraws incidental personal
-text in copied price labels, sandbox labels and preview descriptions while
-preserving the calendar and cent calculations.
+- `POST /api/nectar/sandbox.processor.bind` accepts `customer`,
+  `stripe_customer_ref`, optional `test_method_ref` and `confirm: true`. The installation-held Stripe
+  binding must return a test-mode balance. The separate provider customer must
+  have exact `nectar_sandbox_customer` and `nectar_sandbox_catalog` metadata and
+  a saved test card. An explicitly supplied unattached test card must itself carry the same exact sandbox metadata; it is never inferred from another customer. Current live Nectar associations and foreign sandbox
+  customers are refused in both directions. No key is accepted or returned.
+- With that explicit test-only consent, a clock advance issues separate sandbox
+  invoices from its immutable engine calculations and confirms test-card
+  attempts. Every invoice retains its original PaymentIntent through retries.
+  The copied default retry count and window feed the existing decline scheduler.
+  Claims and audit precede provider writes; unknown outcomes stop further work.
+- `POST /api/nectar/sandbox.billing.reconcile` accepts `customer` and
+  `confirm: true`. It reads retained unknown test outcomes without creating or
+  confirming an intent. It never treats a provider-list miss as permission to
+  write again. Each advance processes at most 64 due attempts; remaining work
+  stays visible for a later explicit advance.
+
+Forms use the same action doors. Unbound customers retain preview-only clocks.
+Bound customers have isolated test invoices, attempts, retry due times and
+invoice-state history. Sandbox inbox entries are notice and receipt previews,
+never external deliveries. No sandbox operation issues a live invoice, allocates
+live cash, sends external mail or changes production time. Provider timestamps
+remain provider facts; retry due times use the native customer's simulated time.
+Archives retain test history and test-object identity custody but exclude executable processor consent, so a
+restore cannot resume test debits. A restored customer with issued test history
+cannot be rebound; create a new sandbox customer for another execution.
+
+These native copies cover the supported pricing slice only. Full configuration
+mirroring, other pricing instruments, plan and segment policies, complete
+renewal and dunning parity and external notices remain DEV-004 work. A local
+installation journey clock is separate from this persisted product sandbox.
+Native erasure withdraws incidental personal text in copied labels, saved
+previews and sandbox invoice calculations while retaining calendar and cents.
+
 ## Scheduled execution observations
 
 An authenticated owner member can read `GET /api/nectar/job-runs`.

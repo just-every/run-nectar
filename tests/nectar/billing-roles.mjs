@@ -38,7 +38,7 @@ const EXPECTED = {
     pages: ['portalChanges','processorEvents','paymentReceipt','prepaidRefundList', 'prepaidRefundSource', 'numberRegister', 'customers', 'customer', 'certificateFile', 'subscription', 'prepaid', 'prepaidSource', 'invoice', 'receivables', 'billingAnswers', 'reportLine', 'metadataList'],
   },
   developer: {
-    actions: ['sandbox.catalog.copy','sandbox.customer.create','sandbox.clock.advance','invoice.refund.preview', 'credential.issue', 'credential.revoke', 'credential.version', 'webhook.stripe.consume', 'webhook.register', 'webhook.rotate', 'webhook.disable', 'webhook.replay', 'webhook.dispatch', 'answer.read', 'meter.preview', 'usage.correction.preview'],
+    actions: ['sandbox.catalog.copy','sandbox.customer.create','sandbox.clock.advance','sandbox.processor.bind','sandbox.billing.reconcile','invoice.refund.preview', 'credential.issue', 'credential.revoke', 'credential.version', 'webhook.stripe.consume', 'webhook.register', 'webhook.rotate', 'webhook.disable', 'webhook.replay', 'webhook.dispatch', 'answer.read', 'meter.preview', 'usage.correction.preview'],
     api: [...READ_ALL_API,'sandbox','sandboxCustomer','webhooks','webhookDelivery'], pages: [...READ_ALL_PAGES,'sandbox','sandboxCustomer','webhooks','webhookDelivery'],
   },
   analyst: {
