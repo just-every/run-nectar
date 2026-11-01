@@ -2,7 +2,7 @@
   "push": [
     {
       "name": "source",
-      "browser": false,
+      "browser": true,
       "hosted": false,
       "commands": [
         "node scripts/contract-docs.mjs check",
@@ -10,7 +10,13 @@
         "pnpm run check",
         "pnpm run typecheck",
         "pnpm run test:runtime",
-        "pnpm run build --site"
+        "pnpm run build --site",
+        "node tests/nectar/payment-retries-browser.mjs",
+        "node tests/nectar/payment-retries-browser.mjs churn",
+        "node tests/nectar/dunning-browser.mjs",
+        "node tests/nectar/dunning-browser.mjs custody",
+        "node tests/nectar/processor-journey.mjs",
+        "node tests/nectar/sanity.mjs paymentRetriesFlow dunning-sequences portalSessionsFlow planChangesFlow financialReportsFlow metricsFlow contractSetup upcomingFlow assuranceScheduleFlow invoiceContentFlow card-lifecycle enterprise-identity"
       ]
     },
     {
@@ -30,17 +36,6 @@
       ]
     },
     {
-      "name": "recovery-browser",
-      "browser": true,
-      "hosted": false,
-      "commands": [
-        "node tests/nectar/payment-retries-browser.mjs",
-        "node tests/nectar/payment-retries-browser.mjs churn",
-        "node tests/nectar/dunning-browser.mjs",
-        "node tests/nectar/dunning-browser.mjs custody"
-      ]
-    },
-    {
       "name": "processor-browser",
       "browser": true,
       "hosted": false,
@@ -53,7 +48,11 @@
         "node tests/nectar/processor-events-browser.mjs imported",
         "node tests/nectar/invoice-void-browser.mjs",
         "node tests/nectar/invoice-void-browser.mjs refunds",
-        "node tests/nectar/plan-changes-browser.mjs"
+        "node tests/nectar/plan-changes-browser.mjs",
+        "node tests/nectar/flows.mjs --core-only",
+        "node tests/nectar/flows.mjs --audit-only",
+        "node tests/runtime.mjs",
+        "node tests/nectar/sanity.mjs intervalsFlow cadencesFlow promotionsFlow retentionFlow commitments portalPrepaidFlow invoiceAutomationFlow invoiceRefundPreviewFlow periodCloseFlow mfaFlow"
       ]
     },
     {
@@ -71,26 +70,6 @@
       "commands": [
         "NECTAR_TEST_CHECKOUT=1 node tests/nectar/processor-archive.mjs remittances"
       ]
-    },
-    {
-      "name": "sanity-1",
-      "browser": false,
-      "commands": [
-        "node tests/nectar/flows.mjs --core-only",
-        "node tests/nectar/flows.mjs --audit-only",
-        "node tests/runtime.mjs",
-        "node tests/nectar/sanity.mjs intervalsFlow cadencesFlow promotionsFlow retentionFlow commitments portalPrepaidFlow invoiceAutomationFlow invoiceRefundPreviewFlow periodCloseFlow mfaFlow"
-      ],
-      "hosted": false
-    },
-    {
-      "name": "sanity-2",
-      "browser": false,
-      "commands": [
-        "node tests/nectar/processor-journey.mjs",
-        "node tests/nectar/sanity.mjs paymentRetriesFlow dunning-sequences portalSessionsFlow planChangesFlow financialReportsFlow metricsFlow contractSetup upcomingFlow assuranceScheduleFlow invoiceContentFlow card-lifecycle enterprise-identity"
-      ],
-      "hosted": false
     },
     {
       "name": "sanity-3",
