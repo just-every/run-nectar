@@ -11,7 +11,7 @@ export type SavedPaymentMethod = { methodRef: string } & (
   { type: 'card'; brand: string; last4: string; expMonth: number; expYear: number } |
   { type: 'us_bank_account'; bankName: string; last4: string; accountType: 'checking' | 'savings' })
 export interface CustomerPaymentMethodSnapshot {
-  customer: string; accountRef: string; customerRef: string; bindingRevision: string; fetchedAt: number
+  snapshot: string; binding: string; customer: string; accountRef: string; customerRef: string; bindingRevision: string; fetchedAt: number
   historical: true; debitAuthority: false; methods: SavedPaymentMethod[]
 }
 const brands = new Set(['amex','cartes_bancaires','diners','discover','eftpos_au','interac','jcb','link','mastercard','unionpay','visa','unknown'])
@@ -94,11 +94,16 @@ export async function refreshCustomerPaymentMethods(env: Bindings, actor: Actor,
 export async function readCustomerPaymentMethods(env: Bindings, actor: Actor, customer: string): Promise<CustomerPaymentMethodSnapshot[]> {
   requireRead(actor, 'payments'); requireRead(actor, 'invoices')
   insist(typeof customer === 'string' && /^[\w-]{1,100}$/.test(customer), 'invalid_customer')
+  return bindingValidPaymentMethods(env, customer)
+}
+
+/** Internal evidence projection shared with invoice-linked diagnosis. */
+export async function bindingValidPaymentMethods(env: Bindings, customer: string): Promise<CustomerPaymentMethodSnapshot[]> {
   const snapshots = await all(env, `SELECT s.* FROM nc_customer_payment_method_snapshots s
     JOIN nc_customers c ON c.id=s.customer_id JOIN nc_stripe_customer_bindings b ON b.id=s.binding_id AND b.customer_id=s.customer_id
     WHERE s.customer_id=? AND c.erased_at IS NULL AND b.revision=s.binding_revision AND b.account_ref=s.account_ref AND b.stripe_customer_ref=s.stripe_customer_ref
     AND NOT EXISTS(SELECT 1 FROM nc_erased_records e WHERE e.record_id IN (s.customer_id,s.id,b.id)) ORDER BY s.account_ref,s.id`, customer)
-  return Promise.all(snapshots.map(async snapshot => ({ customer, accountRef: snapshot.account_ref, customerRef: snapshot.stripe_customer_ref,
+  return Promise.all(snapshots.map(async snapshot => ({ snapshot: snapshot.id, binding: snapshot.binding_id, customer, accountRef: snapshot.account_ref, customerRef: snapshot.stripe_customer_ref,
     bindingRevision: snapshot.binding_revision, fetchedAt: snapshot.fetched_at, historical: true as const, debitAuthority: false as const,
     methods: (await all(env, `SELECT m.* FROM nc_customer_payment_methods m WHERE m.customer_id=? AND m.snapshot_id=?
       AND NOT EXISTS(SELECT 1 FROM nc_erased_records e WHERE e.record_id=m.id) ORDER BY m.kind,m.payment_method_ref`, customer, snapshot.id)).map(row => row.kind === 'card'
