@@ -89,6 +89,7 @@
     "migrations/core/0122_sandbox_card_fixtures.sql",
     "migrations/core/0123_sandbox_processor_custody.sql",
     "migrations/core/0124_transfer_instructions.sql",
-    "migrations/core/0125_enterprise_linking.sql"
+    "migrations/core/0125_enterprise_linking.sql",
+    "migrations/core/0126_collection_proposal_sources.sql"
   ]
 }
