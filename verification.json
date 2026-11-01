@@ -29,6 +29,7 @@
         "NECTAR_VERIFY_SHARD=1 pnpm run test:flows",
         "node tests/nectar/clause-browser.mjs move-investigations",
         "node tests/nectar/clause-browser.mjs native-collection",
+        "node tests/nectar/clause-browser.mjs collection-diagnosis",
         "node tests/nectar/subscription-states-browser.mjs",
         "node tests/nectar/mobile-customer.mjs"
       ]
