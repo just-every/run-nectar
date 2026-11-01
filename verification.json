@@ -32,7 +32,8 @@
       "browser": true,
       "hosted": false,
       "commands": [
-        "NECTAR_VERIFY_SHARDS=4 NECTAR_VERIFY_CORE_SHARD=2 NECTAR_VERIFY_SHARD=1 pnpm run test:flows"
+        "NECTAR_VERIFY_SHARDS=4 NECTAR_VERIFY_CORE_SHARD=2 NECTAR_VERIFY_SHARD=1 pnpm run test:flows",
+        "node tests/nectar/clause-browser.mjs collection-diagnosis"
       ]
     },
     {
