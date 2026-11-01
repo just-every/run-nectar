@@ -6046,7 +6046,7 @@
       "executable": false
     },
     "tests/nectar/flows.mjs": {
-      "sha256": "0acbf3d2a18e9202a7ba1bc6ba9bcdb6de6dfc4d6fad3f5fd0f6493fae633f4f",
+      "sha256": "06820657842f6f0f556027ed9543342be2522e040c9ccc5398e37e86b6df0a28",
       "executable": false
     },
     "tests/nectar/harness.mjs": {
@@ -6406,7 +6406,7 @@
       "executable": false
     },
     "tests/nectar/processor-archive.mjs": {
-      "sha256": "9fef28ad52a719219641a020c025ab54d668724d5d9da7909fffb0351d618029",
+      "sha256": "2ef77997b788a0a2f9e2b99c40d5d40034e78f1aa6a127ec0dce01d9acad619c",
       "executable": false
     },
     "tests/nectar/processor-cash-imported-sandbox.mjs": {
@@ -6646,7 +6646,7 @@
       "executable": false
     },
     "verification.json": {
-      "sha256": "5ca0da4101a2d8c332abf59b56c285167c480846c77135592a3fe720c123d116",
+      "sha256": "c3f4445939b75204ce6d5a8cd4b915c12cd8621ceb3b8377494ba74f1be9581f",
       "executable": false
     },
     "VERIFY-WORKFLOW.md": {

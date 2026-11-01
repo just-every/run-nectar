@@ -18,7 +18,7 @@
       "browser": true,
       "hosted": true,
       "commands": [
-        "NECTAR_VERIFY_SHARD=0 pnpm run test:flows"
+        "NECTAR_VERIFY_SHARDS=4 NECTAR_VERIFY_CORE_SHARD=2 NECTAR_VERIFY_SHARD=0 pnpm run test:flows"
       ]
     },
     {
@@ -26,11 +26,7 @@
       "browser": true,
       "hosted": false,
       "commands": [
-        "NECTAR_VERIFY_SHARD=1 pnpm run test:flows",
-        "node tests/nectar/clause-browser.mjs move-investigations",
-        "node tests/nectar/clause-browser.mjs native-collection",
-        "node tests/nectar/subscription-states-browser.mjs",
-        "node tests/nectar/mobile-customer.mjs"
+        "NECTAR_VERIFY_SHARDS=4 NECTAR_VERIFY_CORE_SHARD=2 NECTAR_VERIFY_SHARD=1 pnpm run test:flows"
       ]
     },
     {
@@ -45,16 +41,6 @@
       ]
     },
     {
-      "name": "invoices-browser",
-      "browser": true,
-      "hosted": false,
-      "commands": [
-        "node tests/nectar/invoice-void-browser.mjs",
-        "node tests/nectar/invoice-void-browser.mjs refunds",
-        "node tests/nectar/plan-changes-browser.mjs"
-      ]
-    },
-    {
       "name": "processor-browser",
       "browser": true,
       "hosted": false,
@@ -64,7 +50,10 @@
         "node tests/nectar/processor-cash-imported.mjs",
         "node tests/nectar/processor-events-browser.mjs",
         "node tests/nectar/processor-events-browser.mjs cash",
-        "node tests/nectar/processor-events-browser.mjs imported"
+        "node tests/nectar/processor-events-browser.mjs imported",
+        "node tests/nectar/invoice-void-browser.mjs",
+        "node tests/nectar/invoice-void-browser.mjs refunds",
+        "node tests/nectar/plan-changes-browser.mjs"
       ]
     },
     {
@@ -72,7 +61,7 @@
       "browser": false,
       "hosted": false,
       "commands": [
-        "NECTAR_TEST_CHECKOUT=1 node tests/nectar/processor-archive.mjs"
+        "NECTAR_TEST_CHECKOUT=1 node tests/nectar/processor-archive.mjs native"
       ]
     },
     {
@@ -81,14 +70,6 @@
       "hosted": false,
       "commands": [
         "NECTAR_TEST_CHECKOUT=1 node tests/nectar/processor-archive.mjs remittances"
-      ]
-    },
-    {
-      "name": "sandbox-archive",
-      "browser": false,
-      "hosted": false,
-      "commands": [
-        "NECTAR_TEST_CHECKOUT=1 node tests/nectar/test-mode-archive.mjs"
       ]
     },
     {
@@ -115,7 +96,8 @@
       "name": "sanity-3",
       "browser": false,
       "commands": [
-        "node tests/nectar/sanity.mjs usageReplayFlow renewalsFlow draftCorrectionsFlow customerLanguageFlow hierarchiesFlow billingAnswersFlow writeOffFlow billingRolesFlow currencyFlow intervalCancellationFlow"
+        "node tests/nectar/sanity.mjs renewalsFlow draftCorrectionsFlow customerLanguageFlow hierarchiesFlow billingAnswersFlow writeOffFlow billingRolesFlow currencyFlow intervalCancellationFlow",
+        "NECTAR_TEST_CHECKOUT=1 node tests/nectar/test-mode-archive.mjs"
       ],
       "hosted": false
     },
@@ -123,7 +105,7 @@
       "name": "sanity-4",
       "browser": false,
       "commands": [
-        "node tests/nectar/sanity.mjs prepaidRefundFlow erasureFlow customerSearchFlow priceMigrations processorCashFlow apiPlatformFlow nativeCollectionFlow cardExpiryNoticesFlow revenueFlow webhooks reconciliationFlow"
+        "node tests/nectar/sanity.mjs prepaidRefundFlow erasureFlow customerSearchFlow priceMigrations processorCashFlow apiPlatformFlow nativeCollectionFlow cardExpiryNoticesFlow revenueFlow webhooks reconciliationFlow usageReplayFlow"
       ],
       "hosted": false
     },
@@ -151,19 +133,48 @@
     },
     {
       "name": "done-1",
-      "browser": false,
+      "browser": true,
       "commands": [
-        "node tests/nectar/sanity.mjs contractIntervalSetup prepaidRefreshLedgerFlow prepaidPurchaseCreditFlow prepaidRefreshTopupFlow prepaidAgentCreditFlow prepaidCommercialMigrationFlow nativeIntervalErasureFlow revenueErasureFlow retryPlanChurnFlow portalAnswersFlow automaticCollectionFlow portalRenewalFlow"
+        "node tests/nectar/sanity.mjs contractIntervalSetup prepaidRefreshLedgerFlow prepaidPurchaseCreditFlow prepaidRefreshTopupFlow prepaidAgentCreditFlow prepaidCommercialMigrationFlow nativeIntervalErasureFlow revenueErasureFlow retryPlanChurnFlow portalAnswersFlow automaticCollectionFlow portalRenewalFlow",
+        "node tests/nectar/sanity.mjs contractEntitySetup prepaidCorrectionFlow prepaidErasureFlow prepaidRefundCorrectionFlow prepaidAgentDraftCorrectionsFlow retentionIntervalFlow metricZones periodCloseDeferredFlow retryComparisonFlow portalEmbeddingFlow moveCollectionFlow remittanceFilesFlow"
       ],
       "hosted": false
     },
     {
-      "name": "done-2",
+      "name": "hosted-setup-archive",
       "browser": true,
+      "hosted": false,
       "commands": [
-        "node tests/nectar/sanity.mjs contractEntitySetup prepaidCorrectionFlow prepaidErasureFlow prepaidRefundCorrectionFlow prepaidAgentDraftCorrectionsFlow retentionIntervalFlow metricZones periodCloseDeferredFlow retryComparisonFlow portalEmbeddingFlow moveCollectionFlow remittanceFilesFlow"
-      ],
-      "hosted": false
+        "NECTAR_TEST_CHECKOUT=1 node tests/nectar/processor-archive.mjs hosted"
+      ]
+    },
+    {
+      "name": "processor-supplemental-archive",
+      "browser": false,
+      "hosted": false,
+      "commands": [
+        "NECTAR_TEST_CHECKOUT=1 node tests/nectar/processor-archive.mjs supplemental"
+      ]
+    },
+    {
+      "name": "flows-two",
+      "browser": true,
+      "hosted": false,
+      "commands": [
+        "NECTAR_VERIFY_SHARDS=4 NECTAR_VERIFY_CORE_SHARD=2 NECTAR_VERIFY_SHARD=2 node tests/nectar/flows.mjs"
+      ]
+    },
+    {
+      "name": "flows-three",
+      "browser": true,
+      "hosted": false,
+      "commands": [
+        "NECTAR_VERIFY_SHARDS=4 NECTAR_VERIFY_CORE_SHARD=2 NECTAR_VERIFY_SHARD=3 node tests/nectar/flows.mjs",
+        "node tests/nectar/clause-browser.mjs move-investigations",
+        "node tests/nectar/clause-browser.mjs native-collection",
+        "node tests/nectar/subscription-states-browser.mjs",
+        "node tests/nectar/mobile-customer.mjs"
+      ]
     }
   ],
   "nightly": [

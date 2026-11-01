@@ -27,14 +27,18 @@ import { creditPolicy } from './credit-policy.mjs'
 import { exemptionCertificates } from './certificates.mjs'
 import { pricingModels } from './pricing-models.mjs'
 
-// The two CI jobs partition isolated installations; shard 0 also runs the
-// shared core sequence below. An ordinary local invocation still runs all.
+// CI partitions isolated installations, with one selected job also running
+// the shared core sequence. An ordinary local invocation still runs all.
 const verifyShard=process.env.NECTAR_VERIFY_SHARD
-assert.ok(verifyShard===undefined||verifyShard==='0'||verifyShard==='1','invalid NECTAR_VERIFY_SHARD')
+const verifyShards=Number(process.env.NECTAR_VERIFY_SHARDS??2)
+const coreShard=Number(process.env.NECTAR_VERIFY_CORE_SHARD??0)
+assert.ok(Number.isInteger(verifyShards)&&verifyShards>0&&verifyShards<=isolatedJourneys.length,'invalid NECTAR_VERIFY_SHARDS')
+assert.ok(Number.isInteger(coreShard)&&coreShard>=0&&coreShard<verifyShards,'invalid NECTAR_VERIFY_CORE_SHARD')
+assert.ok(verifyShard===undefined||/^(0|[1-9][0-9]*)$/.test(verifyShard)&&Number(verifyShard)<verifyShards,'invalid NECTAR_VERIFY_SHARD')
 let isolatedIndex=0
 const runIsolated=async(...args)=>{
   const index=isolatedIndex++
-  if(verifyShard===undefined||index%2===Number(verifyShard)) {
+  if(verifyShard===undefined||index%verifyShards===Number(verifyShard)) {
     await runIsolatedJourney(...args)
     // Exercise native sandbox forms through Verify's existing flow command.
     if(args[0]==='test-mode')await import('./test-mode-browser.mjs')
@@ -48,10 +52,11 @@ if (!process.argv.includes('--core-only') && !process.argv.includes('--audit-onl
 for (const { file, name, load } of isolatedJourneys) {
   const selectedLoad=name==='invoiceAutomationFlow'?async()=>({...await load(),invoiceAutomationFlow:auditAutomatedPolicyWrites}):load
   await runIsolated(file, name, selectedLoad)
-  if (name === 'customerLanguageFlow') await (await import('./customer-language.mjs')).translationFiles()
+  // Preserve the two existing translation-file checks as CI gains partitions.
+  if (name === 'customerLanguageFlow' && (verifyShard===undefined||Number(verifyShard)<2)) await (await import('./customer-language.mjs')).translationFiles()
 }
 }
-if(verifyShard==='1'){console.log('All isolated shard 1 journeys passed; core sequence belongs to shard 0');process.exit(0)}
+if(verifyShard!==undefined&&Number(verifyShard)!==coreShard){console.log(`All isolated shard ${verifyShard} journeys passed; core sequence belongs to shard ${coreShard}`);process.exit(0)}
 const h = await harness()
 const check = async (id, run) => { await run(); console.log(`${id} passed`) }
 const ids = {}, cookie = {}
