@@ -4962,7 +4962,7 @@
       "executable": false
     },
     "src/nectar/proposals.ts": {
-      "sha256": "247a1f4adb5d96aa104b152f37680b85bce2231ccb42279d56398fddd7428171",
+      "sha256": "85ae3ce94cc53a11d89c754a17b20823e655a9c3c23aae01d76818f754b8c08c",
       "executable": false
     },
     "src/nectar/rating.ts": {
@@ -4970,7 +4970,7 @@
       "executable": false
     },
     "src/nectar/receivables.ts": {
-      "sha256": "9827c2033c1dcccb2391d936397a9a01e8ceb511dd7d3a2ab9bbb27edeeb7502",
+      "sha256": "95fc600b743536de3496d29b2c18f9c35ca1d7a12f0cd96ec84c282b50a09cc7",
       "executable": false
     },
     "src/nectar/reconciliation.ts": {
@@ -5518,7 +5518,7 @@
       "executable": false
     },
     "src/nectar/ui/review.ts": {
-      "sha256": "3cfa0e4fd9d006ea893304e34fe09054955db83d1b20f5d84f8181ead6980227",
+      "sha256": "5f96b99b381ab9424caead9291552f236ba5009873a72b93e69d2140d4ad5ac0",
       "executable": false
     },
     "src/nectar/ui/security.ts": {
@@ -5910,7 +5910,7 @@
       "executable": false
     },
     "tests/nectar/clause-browser.mjs": {
-      "sha256": "d1f649927a988fd1dabea7158268cbb032e10afe147246d4aba802c2f680deae",
+      "sha256": "bbbeefa9fdd17be59d4a0ee45a47a19e4b502257a4dd59346f5b9f37fa6c3afe",
       "executable": false
     },
     "tests/nectar/clause-runner.mjs": {
@@ -5930,7 +5930,7 @@
       "executable": false
     },
     "tests/nectar/collection-diagnosis.mjs": {
-      "sha256": "6b676b59c33cdd6bdf15f06916670923f54ecafeeb67500666e54dc9a7c7035e",
+      "sha256": "d57996c44be5fc2693ee54b893b2499bc24194bd2bb68d5d2d8b11dd4bd6a8d4",
       "executable": false
     },
     "tests/nectar/commitments.mjs": {
@@ -6122,7 +6122,7 @@
       "executable": false
     },
     "tests/nectar/isolated-cases.mjs": {
-      "sha256": "7ad209242b0d2c437f74a17c357aecfe1155057e7aadf7ea707ec4001c147635",
+      "sha256": "fae48a6090e6f7687a9a2a9d432c3003fbf0e0efc6059592ef47a3f5302bc443",
       "executable": false
     },
     "tests/nectar/isolated.mjs": {
@@ -6662,7 +6662,7 @@
       "executable": false
     },
     "verification.json": {
-      "sha256": "cf024be1d2959c7c97edd15e85cff539b85a0d2c6464faff1af120ab2ec6bc2d",
+      "sha256": "6e817f496286a9a51afc38f70b21707a2b6f8d384d043a8883720e3e38647022",
       "executable": false
     },
     "VERIFY-WORKFLOW.md": {
