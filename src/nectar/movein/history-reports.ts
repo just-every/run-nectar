@@ -1,13 +1,23 @@
 // Historical financial projections use retained provider facts, never the live
 // catalogue or invoice engine. Native and imported identities stay separate.
 import type { Bindings } from '../../auth.server'
+import { canRead, requireRead, type Actor } from '../actor'
 import { all, insist, parseJson, type Row } from '../core'
 import { daysBetween, isDate } from '../dates'
 import type { Report, ReportEntry, ReportInvoice, ReportMetric } from '../reports'
 import { importedCashCollections } from '../processor-cash-imported'
 
 export const historicalHref = (customer: string, id: string) => `/app/customers/${customer}#history-${id}`
-export async function customerHistory(env: Bindings, customer: string) {
+export async function customerHistory(env: Bindings, actor: Actor, customer: string) {
+  requireRead(actor, 'customers')
+  if (!canRead(actor, 'invoices') || !canRead(actor, 'payments')) {
+    const records = canRead(actor, 'subscriptions') ? await all(env, "SELECT * FROM nc_incumbent_history WHERE customer_id=? AND kind='subscription-event' ORDER BY occurred_on,id", customer) : []
+    return {
+      totals: { invoicedCents: null, creditedCents: null, paymentsCents: null, refundsCents: null, remainingCents: null },
+      documents: [],
+      records: records.map(row => ({ ...historicalFinancialFacts(row), timeline: subscriptionSnapshot(parseJson<Row>(row.payload_json, {})) })),
+    }
+  }
   const documents = await all(env, 'SELECT * FROM nc_incumbent_invoices WHERE customer_id=? ORDER BY COALESCE(issue_date,period_start),id', customer)
   const records = await all(env, 'SELECT * FROM nc_incumbent_history WHERE customer_id=? ORDER BY occurred_on,id', customer)
   const cash=await importedCashCollections(env,customer)

@@ -264,6 +264,8 @@ export async function billingRolesFlow(h, owner) {
   await h.api('answer.propose', who.answers, suggestion, 403)
   assert.equal((await h.api(`proposals/${proposal.id}`, owner)).status, 'pending', 'GOV-001 a suggestion never approves itself')
 
+  await financialVisibilityFlow(h, owner, { sales: who.sales, finance: who.finance })
+
   // GOV-007 inheritance: changing the support limit asks for a fresh factor; credits within it do not.
   let clock = Date.now()
   const at = async ms => { clock = ms; await h.advanceClock(new Date(ms).toISOString()) }
@@ -283,4 +285,141 @@ export async function billingRolesFlow(h, owner) {
   // "Chosen roles" now defaults to every role that can credit or manage credentials.
   assert.deepEqual((await h.api('mfa.policy', owner, { scope: 'roles' })).roles, ['developer', 'finance', 'owner', 'support'])
   console.log('GOV-001 preset and custom roles reach exactly their capabilities, support credit limit, next-request revocation, notes, alerts, metadata and answers passed')
+}
+
+
+// A customer read must not inherit financial authority from its legacy ledger.
+// Keep this regression in the existing Worker/D1 role journey, including both
+// an entitlement-bearing customer and a customer with no entitlement subtree.
+export async function financialVisibilityFlow(h, owner, { sales, finance, onReady = async () => {} } = {}) {
+  const api = (path, body, status) => h.api(path, owner, body, status)
+  const member = async role => {
+    const email = `financial-visibility-${role}@example.test`
+    await api('access.give', { email, name: `Financial visibility ${role}`, role })
+    return h.signIn(email, { requested: true })
+  }
+  sales ??= await member('sales')
+  finance ??= await member('finance')
+  const custom = await api('role.define', { name: 'Invoice reader without payments', capabilities: ['read.customers', 'read.invoices', 'export'] })
+  await api('access.give', { email: 'financial-visibility-custom@example.test', name: 'Invoice only', role: 'custom', custom_role: custom.id })
+  const invoiceOnly = await h.signIn('financial-visibility-custom@example.test', { requested: true })
+  const fixtures = []
+  for (const entitled of [false, true]) {
+    const code = `financial-visibility-${entitled ? 'inside' : 'outside'}`
+    const customer = (await api('customer.create', { external_id: code, name: `Financial visibility ${entitled ? 'inside' : 'outside'}`, billing_email: `${code}@example.test` })).id
+    await api('contact.add', { customer, name: 'Billing contact', email: `${code}-contact@example.test` })
+    const product = (await api('product.create', { code, name: code })).id
+    const price = (await api('price.create', { product, kind: 'flat', unit_amount: '100', taxable: false })).id
+    if (entitled) await api('feature.grant', { product, feature: 'financial-visibility-feature' })
+    const subscription = (await api('subscription.create', { customer, start_date: '2026-08-01', price: [price] })).id
+    // A manual invoice confines this journey to its own records when the full
+    // role journey has already prepared its ordinary recurring bill run.
+    const charge = await api('charge.add', { customer, amount: '100', description: 'Synthetic financial visibility service', effective_date: '2026-08-01', taxable: false })
+    const invoice = (await api('invoice.manual', { customer, charges: [charge.charge], service_date: '2026-08-01' })).id
+    await api('invoice.approve', { invoice, acknowledge: true })
+    await api('invoice.finalise', { invoice, issue_date: '2026-09-01' })
+    await api('credit.issue', { invoice, amount: '1', reason: 'Synthetic financial visibility adjustment' })
+    const reference = `FINANCIAL-VISIBILITY-${entitled ? 'INSIDE' : 'OUTSIDE'}-WIRE`
+    const payment = (await api('payment.record', { customer, amount: '12', received_on: '2026-09-02', method: 'bank_transfer', reference })).payment
+    await api('payment.allocate', { payment, invoice, amount: '10' })
+    const before = await api(`customers/${customer}`)
+    assert.deepEqual([before.ledger.invoicedCents, before.ledger.creditedCents, before.ledger.paidCents, before.ledger.balanceCents, before.ledger.unallocatedCents], [10000, 100, 1000, 8900, 200])
+    assert.equal(before.entitlements.length > 0, entitled)
+    fixtures.push({ customer, invoice, subscription, reference, before })
+  }
+  await api('hierarchy.configure', { customer: fixtures[1].customer, parent: fixtures[0].customer, billing_mode: 'separate', revision: 0, consent: true })
+  const totals = ['invoicedCents', 'creditedCents', 'paidCents', 'writtenOffCents', 'balanceCents', 'unallocatedCents']
+  const assertHidden = ledger => {
+    for (const key of ['invoices', 'payments', 'credits', 'carriedUsageCredits']) assert.deepEqual(ledger[key], [], `Customer reader must not receive ledger ${key}`)
+    for (const key of totals) assert.equal(ledger[key], null, `Customer reader must not receive ledger ${key}`)
+  }
+  const audit = await api('audit')
+  for (const fixture of fixtures) {
+    for (const [role, who, authorized] of [['sales', sales, false], ['invoice-only', invoiceOnly, false], ['finance', finance, true], ['owner', owner, true]]) {
+      const record = await h.api(`customers/${fixture.customer}`, who)
+      assert.equal(record.id, fixture.customer)
+      assert.equal(record.contacts[0].email, fixture.before.contacts[0].email, 'Permitted contacts remain readable')
+      assert.deepEqual(record.subscriptions, fixture.before.subscriptions.map(sub => role === 'invoice-only' ? { ...sub, state: null } : sub), 'Permitted subscription content is retained')
+      assert.equal(record.entitlements.length, fixture.before.entitlements.length, 'Feature decisions remain readable')
+      if (authorized) assert.deepEqual(record.ledger, fixture.before.ledger, `${role} keeps the exact existing ledger`)
+      else assertHidden(record.ledger)
+      for (const child of record.childAccounts ?? []) {
+        if (authorized) assert.deepEqual(child.record.ledger, fixtures[1].before.ledger)
+        else assertHidden(child.record.ledger)
+      }
+      const html = await h.page(`/app/customers/${fixture.customer}`, who)
+      const invoice = fixture.before.ledger.invoices[0]
+      assert.equal(html.includes(invoice.number), authorized, `${role} invoice evidence on the customer page follows the ledger rule`)
+      assert.equal(html.includes(fixture.reference), authorized, `${role} payment reference on the customer page follows the ledger rule`)
+      assert.equal(html.includes('$89.00'), authorized, `${role} outstanding balance on the customer page follows the ledger rule`)
+      console.log(`FINANCIAL VISIBILITY ${role} ${fixture.before.entitlements.length ? 'inside' : 'outside'} entitlement subtree: ledger ${authorized ? 'preserved' : 'withheld'} on HTTP JSON and HTML`)
+    }
+  }
+  assert.deepEqual(await api('audit'), audit, 'Customer reads never change financial or audit records')
+  const credential = await api('credential.issue', { name: 'Financial visibility revoked credential', scopes: ['prepare'] })
+  const agent = { bearer: credential.key }
+  assert.deepEqual((await h.api(`customers/${fixtures[0].customer}`, agent)).ledger, fixtures[0].before.ledger)
+  await api('credential.revoke', { key: credential.id })
+  for (const fixture of fixtures) {
+    await h.api(`customers/${fixture.customer}`, agent, undefined, 401)
+    await h.api(`customers/${fixture.customer}`, undefined, undefined, 401)
+    const response = await h.raw(`/app/customers/${fixture.customer}`, agent)
+    assert.equal(response.status, 403, 'The member-only HTML door refuses application credentials')
+    await response.text()
+  }
+  // The customer CSV and moved-history card are alternative representations
+  // of the same invoice/payment ledger, not grants of financial authority.
+  const { stripeHistoryCapture } = await import('../fixtures/stripe-history.mjs')
+  const { file } = await import('./harness.mjs')
+  const capture = stripeHistoryCapture()
+  const files = Object.fromEntries(Object.entries(capture).map(([name, value]) => [name, file(`${name}.json`, JSON.stringify(value), 'application/json')]))
+  const preview = await api('import.preview', files)
+  assert.deepEqual(preview.rejected, [])
+  await api('import.apply', { ...files, fingerprint: preview.fingerprint })
+  const importedCustomer = (await api('customers')).find(row => row.external_id === 'synthetic-nectar-1').id
+  const imported = await api(`customers/${importedCustomer}`)
+  assert.ok(imported.incumbentHistory.documents.length > 0 && imported.incumbentHistory.records.some(row => row.kind === 'payment'))
+  const timeline = imported.incumbentHistory.records.filter(row => row.kind === 'subscription-event')
+  assert.ok(timeline.length > 0, 'The imported fixture includes permitted non-financial subscription history')
+  for (const [role, who, authorized] of [['sales', sales, false], ['invoice-only', invoiceOnly, false], ['finance', finance, true], ['owner', owner, true]]) {
+    const record = await h.api(`customers/${importedCustomer}`, who)
+    if (authorized) {
+      assert.deepEqual(record.incumbentHistory, imported.incumbentHistory, `${role} keeps the exact imported ledger`)
+      assert.deepEqual(record.incumbentInvoices, imported.incumbentInvoices)
+    } else {
+      assert.deepEqual(record.incumbentInvoices, [])
+      assert.deepEqual(record.importedCollections, [])
+      assert.deepEqual(record.incumbentHistory.documents, [])
+      assert.deepEqual(record.incumbentHistory.records, role === 'sales' ? timeline : [])
+      assert.ok(Object.values(record.incumbentHistory.totals).every(value => value === null))
+    }
+    const html = await h.page(`/app/customers/${importedCustomer}`, who)
+    assert.equal(html.includes(imported.incumbentHistory.documents[0].number), authorized, `${role} moved invoice evidence follows the same rule`)
+    assert.equal(html.includes('synthetic-nectar-payment-annual'), authorized, `${role} moved payment evidence follows the same rule`)
+    if (role === 'sales') await h.page('/app/exports/customers.csv', who, 403)
+    else {
+      const csv = await h.page('/app/exports/customers.csv', who)
+      assert.equal(csv.includes('synthetic-nectar-payment-annual'), authorized, `${role} customer CSV follows the same financial rule`)
+      assert.equal(csv.includes(imported.incumbentHistory.documents[0].number), authorized)
+    }
+  }
+  await onReady({ fixtures, sales, finance, invoiceOnly })
+  // Erasure has a separate customerView branch but retains the same financial
+  // ledger for statutory custody. That branch must not restore sales access.
+  const erasure = await api('erasure.request', { customer: fixtures[0].customer })
+  const message = h.mails.findLast(mail => [mail.to].flat().includes(fixtures[0].before.billing_email))
+  const verification = new URL(`${message.text ?? ''} ${message.html ?? ''}`.match(/https?:\/\/[^\s"<]+\/erase\/[a-f0-9]{64}/)[0]).pathname
+  assert.equal((await h.raw(verification, { form: new URLSearchParams({ confirm: 'yes' }) })).status, 200)
+  await api('erasure.approve', { request: erasure.id, confirm: true })
+  const erased = await api(`customers/${fixtures[0].customer}`)
+  assert.ok(erased.erased_at)
+  assert.equal(erased.ledger.balanceCents, 8900, 'Required financial records remain in authorized custody')
+  assert.deepEqual((await h.api(`customers/${fixtures[0].customer}`, finance)).ledger, erased.ledger)
+  for (const who of [sales, invoiceOnly]) {
+    assertHidden((await h.api(`customers/${fixtures[0].customer}`, who)).ledger)
+    const html = await h.page(`/app/customers/${fixtures[0].customer}`, who)
+    assert.ok(!html.includes(fixtures[0].before.ledger.invoices[0].number))
+    assert.ok(!html.includes('$100.00'))
+  }
+  console.log('FINANCIAL VISIBILITY role matrix, child ledgers, unchanged authorized output and revoked credentials passed')
 }
