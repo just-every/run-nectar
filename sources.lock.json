@@ -194,7 +194,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "cfbba801281a5cfdf7a84ac6dd92418550ca7cc181a39a10fa2ed44b45aa15b3",
+      "sha256": "5e0661b1da4d2d4ee38f80abab05eef065c1ffb020d5988f96514647035e4f39",
       "executable": false
     },
     "DEMO.md": {
@@ -4170,7 +4170,7 @@
       "executable": false
     },
     "src/nectar/entitlements.ts": {
-      "sha256": "90f3edf9de6d16f3acaaac4fae76a126455329f36aba64fd834f10a56bb6e783",
+      "sha256": "1bb43ca171172a83dd19e294c284fc815181976e0a8f450ca0b46ca96dcc9b3d",
       "executable": false
     },
     "src/nectar/erasure-checkpoint.ts": {
@@ -6038,7 +6038,7 @@
       "executable": false
     },
     "tests/nectar/entitlement-visibility.mjs": {
-      "sha256": "6a6bbaac5f29543c3d1093c5e74ad2bb23ba53b86c08842f1b2edd1318e3e6e8",
+      "sha256": "d9ff8752fa307fed77df9fc0a200bab4cdee6e339a4027ba19cc9896dba0baa2",
       "executable": false
     },
     "tests/nectar/entity-revenue.mjs": {

@@ -11,7 +11,7 @@ export const harnessOptions = () => {
 
 // One real-money-record journey: every source is created through Worker HTTP,
 // with only the processor boundary substituted, as in the collection journey.
-export async function entitlementVisibilityFlow(h, owner) {
+export async function entitlementVisibilityFlow(h, owner, { onState = async () => {} } = {}) {
   const api = (path, body, status) => h.api(path, owner, body, status)
   const email = label => [`synthetic-nectar-${label}`, 'example.test'].join(String.fromCharCode(64))
   let instant = Date.parse('2026-10-22T10:00:00Z')
@@ -120,6 +120,7 @@ export async function entitlementVisibilityFlow(h, owner) {
     }
     assert.deepEqual(await sources(), before, 'Entitlement reads mutate no financial or lifecycle source or audit')
     assert.equal(edge.calls.length, writes, 'Entitlement reads make no provider request')
+    await onState({ label, records, readers, feature, shared })
     console.log(`PROBE ENT-001 ${label}: feature-specific, all-feature and customer-nested HTTP -> correct access and capability projection; sources unchanged`)
   }
   // No invoice is a genuine current control, rather than an empty restriction list.
@@ -179,4 +180,42 @@ export async function entitlementVisibilityFlow(h, owner) {
   for (const door of [path, `entitlements/${grace.customer}`, `customers/${grace.customer}`]) await h.api(door, application, undefined, 401)
   assert.deepEqual(await sources(), before, 'Revoked application reads expose no data and mutate no source')
   console.log('PROBE ENT-001 revoked-credential: all three HTTP doors -> 401; sources unchanged')
+
+  // Erasure withdraws operational access even though invoices and allocations
+  // remain in the required financial retention store.
+  const peerBefore = await read(dunning, readers[0])
+  const erasure = await api('erasure.request', { customer: grace.customer })
+  const message = h.mails.findLast(mail => [mail.to].flat().includes(email('customer-0')))
+  const confirmation = `${message.text ?? ''} ${message.html ?? ''}`.match(/https?:\/\/[^\s"<]+\/erase\/[a-f0-9]{64}/)[0]
+  assert.equal((await h.raw(new URL(confirmation).pathname, { form: new URLSearchParams({ confirm: 'yes' }) })).status, 200)
+  await api('erasure.approve', { request: erasure.id, confirm: true })
+  const retained = async () => ({
+    invoices: await Promise.all(records.map(record => api(`invoices/${record.invoice.id}`))),
+    payments: await api('payments'), dunning: await api('dunning'), audit: await api('audit'),
+  })
+  const retainedBefore = await retained(), providerCalls = edge.calls.length
+  assert.equal(retainedBefore.invoices[0].paidCents, 12000)
+  assert.equal(retainedBefore.invoices[0].balanceCents, 0)
+  for (const reader of [...readers, { name: 'owner', who: owner }]) {
+    const refusal = await h.api(`entitlements/${grace.customer}?feature=${feature}`, reader.who, undefined, 410)
+    assert.equal(refusal.error, 'customer_erased', 'An erased operational entitlement is withdrawn for every role')
+    assert.deepEqual(await h.api(`entitlements/${grace.customer}`, reader.who), [], 'Retained financial records confer no current feature grants')
+    const customer = await h.api(`customers/${grace.customer}`, reader.who)
+    assert.deepEqual(customer.entitlements, [], 'The nested door agrees with the withdrawn entitlement list')
+    assert.deepEqual(await h.api(`entitlements/${customer.external_id}`, reader.who), [], 'The erased external alias cannot reopen retained grants')
+    await h.api(`entitlements/${grace.external}?feature=${feature}`, reader.who, undefined, 404)
+  }
+  assert.deepEqual(await retained(), retainedBefore, 'Erased entitlement reads preserve retained money and audit evidence')
+  await onState({ label: 'erased', records, readers, feature, shared })
+  const replay = await api('usage.submit', { events: [{ event_id: `${grace.external}-usage`, customer: grace.external, meter: meter.code, quantity: '12.5', occurred_at: '2026-10-21T12:00:00Z' }] })
+  assert.equal(replay.accepted, 0)
+  assert.equal(replay.rejected, 1, 'A replayed pre-erasure capture cannot recreate the old customer identity')
+  await api('payment.record', { customer: grace.customer, amount: '120', received_on: '2026-11-01', method: 'bank_transfer', reference: 'synthetic-nectar-visibility-payment-0' }, 409)
+  await api(`entitlements/${grace.customer}?feature=${feature}`, undefined, 410)
+  assert.deepEqual(await api(`entitlements/${grace.customer}`), [])
+  assert.deepEqual((await retained()).invoices, retainedBefore.invoices, 'Replayed captures cannot change retained invoice balances')
+  assert.deepEqual((await retained()).payments, retainedBefore.payments, 'Replayed captures record no new received funds')
+  assert.deepEqual(await read(dunning, readers[0]), peerBefore, 'Erasure leaves the unrelated customer access decision unchanged')
+  assert.equal(edge.calls.length, providerCalls, 'Erasure and replay qualification issues no provider request')
+  console.log('PROBE ENT-001 erased-and-replayed: feature HTTP -> 410, all-feature and nested HTTP -> empty; old capture rejected, retained money and peer unchanged')
 }
