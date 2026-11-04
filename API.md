@@ -26,6 +26,8 @@ Each door answers only within the caller's record families (`GOV-001`): a
 collections, sales, support or custom-role member gets 403 `forbidden` on
 records their role does not read.
 
+Customer detail, child accounts and customer exports project invoice facts only with `read.invoices`. Customer-context payment references and `GET /api/nectar/customers/{id}/balance` require both `read.invoices` and `read.payments`; `read.customers` continues to open the customer record. Financial notes, metadata search and retained anonymized invoice facts follow the same gates.
+
 ## Actions (POST, JSON body)
 
 | Action | Who | Body |

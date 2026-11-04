@@ -1,5 +1,11 @@
 if (process.argv[2] === '--browser') {
  const journeys={
+  "customer-visibility": async () => {
+    const { customerVisibilityBrowserJourney } = await import('./billing-roles.mjs')
+    const { chromium } = await import('@playwright/test')
+    const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH, headless: true, args: ['--no-sandbox'] })
+    try { await customerVisibilityBrowserJourney(browser) } finally { await browser.close() }
+  },
   "clause-browser": clauseBrowserJourney,
   "customer-record-browser": customerRecordBrowserJourney,
   "customer-child-browser": customerChildBrowserJourney,
@@ -253,6 +259,7 @@ try {
   const recorded=(await h.api('payments',owner)).find(p=>p.reference==='CHK-2001')
   assert.equal(recorded.amount_cents,5000)
   console.log('JOURNEY PASS phone screens and payment')
+  await (await import('./billing-roles.mjs')).customerVisibilityBrowserJourney(browser)
 } finally {await browser?.close();await h.close();await rm(scratch,{recursive:true,force:true})}
 
 // clause-browser: retained public-door assertions with one shared entry point.
