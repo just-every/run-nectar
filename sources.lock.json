@@ -174,7 +174,7 @@
       "executable": false
     },
     "ACCEPTANCE.md": {
-      "sha256": "4e7fd48272129e6a1b64be106091a10c3ecc8a59159c9109666153605324d50e",
+      "sha256": "419a4cfbae96519d3fc855415c668cc1c76961af2e02a17249f2b1cb3b1d119d",
       "executable": false
     },
     "AGENTS.consumer.md": {
@@ -194,7 +194,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "5e0661b1da4d2d4ee38f80abab05eef065c1ffb020d5988f96514647035e4f39",
+      "sha256": "ec1618281233b725695f6f5f95df3867d4d0330e3d2ad946226c6043a555ca47",
       "executable": false
     },
     "DEMO.md": {
@@ -230,11 +230,15 @@
       "executable": false
     },
     "docs/CLAIMS.md": {
-      "sha256": "104fcaa61610003d3ace32865aa569cfec26904b7d415ee3d9250273ccd76051",
+      "sha256": "3d7588c5e8368b95c745f279b559f7072a57b36b6c8e72c9649777d9a26c6454",
       "executable": false
     },
     "docs/composition-baseline.json": {
       "sha256": "19746a5bf331475f7f341ca89200e7aba24889caef15dcd28fd7dc5708fe750d",
+      "executable": false
+    },
+    "docs/contract/GOV-008-rubric.md": {
+      "sha256": "2365166ea4ee4a602e6f564f33e51902648120767cad49f5d2c4c6028d1a5575",
       "executable": false
     },
     "docs/contract/sx-nectar-c22/native-two-accounts.json": {
@@ -1083,6 +1087,10 @@
     },
     "rer-setup.json": {
       "sha256": "438f7f9e4ffabff0ecb789837359e59ab76c05dae6f5500d2a7214f4c95f9361",
+      "executable": false
+    },
+    "RULINGS.md": {
+      "sha256": "e7a41537b44d167b13277994e83a4d185bcbe4210ff64500928fe242156ca0db",
       "executable": false
     },
     "RUN-LOCALLY.md": {
