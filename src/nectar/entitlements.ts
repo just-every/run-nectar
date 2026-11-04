@@ -16,13 +16,14 @@ export async function explainEntitlement(env: Bindings, actor: Actor, customerId
   const customer = await one(env, 'SELECT id, name, external_id, status FROM nc_customers WHERE id = ? OR external_id = ?', customerId, customerId)
   insist(customer, 'customer_not_found', 404)
   const subs = await all(env, 'SELECT * FROM nc_subscriptions WHERE customer_id = ? ORDER BY created_at', customer.id)
+  const financialEvidence = canRead(actor, 'payments') && canRead(actor, 'invoices')
   const paths = []
   for (const sub of subs) {
     const steps: string[] = []
     const decisions: Row[] = []
     let granted = false
     const state = await entitlementState(env, sub, day)
-    const visibleState = !canRead(actor, 'payments') || !canRead(actor, 'invoices') ? { lifecycle: state.lifecycle, suspended: state.suspended }
+    const visibleState = !financialEvidence ? { lifecycle: state.lifecycle, suspended: state.suspended }
       : actor.kind === 'member' && actor.role === 'owner' ? state
       : { ...state, payment: { status: state.payment.status } }
     if (sub.start_date > day) steps.push(`Subscription starts ${sub.start_date}, after ${day}.`)
@@ -34,11 +35,11 @@ export async function explainEntitlement(env: Bindings, actor: Actor, customerId
         LEFT JOIN nc_features f ON f.product_id = pr.id AND f.feature = ? WHERE i.subscription_id = ? AND i.effective_from <= ? AND (i.effective_to IS NULL OR i.effective_to > ?)`, feature, sub.id, day, day)
       if (!items.length) steps.push('No plan item is in effect on this date.')
       for (const item of items as Row[]) {
-        if (item.feature && !decisions.some(d => d.product === item.product_id)) { const decision = await featureDecision(env, sub, item.product_id, feature, day, business.timezone); decisions.push({ ...decision, product: item.product_id }); granted ||= decision.allowed; steps.push(...decision.steps); steps.push(`${item.product_name} (price v${item.version}, ${item.price_id}) grants "${feature}".`) }
+        if (item.feature && !decisions.some(d => d.product === item.product_id)) { const decision = await featureDecision(env, sub, item.product_id, feature, day, business.timezone, financialEvidence); decisions.push({ ...decision, product: item.product_id }); granted ||= decision.allowed; steps.push(...decision.steps); steps.push(`${item.product_name} (price v${item.version}, ${item.price_id}) grants "${feature}".`) }
         else if (!item.feature) steps.push(`${item.product_name} (price v${item.version}, ${item.price_id}) does not grant "${feature}".`)
       }
     }
-    paths.push({ subscription: sub.id, state: visibleState, granted, steps, decisions, ...(decisions.length === 1 ? { numericLimit: granted ? decisions[0].numericLimit : null, quota: decisions[0].quota, payment: decisions[0].payment, warning: decisions[0].warning } : {}) })
+    paths.push({ subscription: sub.id, state: visibleState, granted, steps, decisions, ...(decisions.length === 1 ? { numericLimit: granted ? decisions[0].numericLimit : null, quota: decisions[0].quota, ...(financialEvidence ? { payment: decisions[0].payment } : {}), warning: decisions[0].warning } : {}) })
   }
   if (!subs.length) paths.push({ subscription: null, granted: false, steps: ['The customer has no subscriptions.'] })
   return { customer: { id: customer.id, name: customer.name, externalId: customer.external_id }, feature, date: day, allowed: paths.some(path => path.granted), paths }

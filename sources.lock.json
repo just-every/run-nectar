@@ -194,7 +194,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "5c7b12a0e6f7358ab1ca95daec219a034c2c857ad86f2c1a531528bbfdd7926b",
+      "sha256": "cfbba801281a5cfdf7a84ac6dd92418550ca7cc181a39a10fa2ed44b45aa15b3",
       "executable": false
     },
     "DEMO.md": {
@@ -4170,7 +4170,7 @@
       "executable": false
     },
     "src/nectar/entitlements.ts": {
-      "sha256": "8801e62c5385cf16ad0ee59713460155ab87528540741d536f6875706eb982cf",
+      "sha256": "90f3edf9de6d16f3acaaac4fae76a126455329f36aba64fd834f10a56bb6e783",
       "executable": false
     },
     "src/nectar/erasure-checkpoint.ts": {
@@ -4214,7 +4214,7 @@
       "executable": false
     },
     "src/nectar/feature-policy.ts": {
-      "sha256": "1ca9d04144a53019df767ad9ad62a7fbb4d5c37cc505020a268bfcef3e61b104",
+      "sha256": "374fdaf8052aab59a9c1a5e8ae68a0eb0cceac2adabff3aac2105d62d5a2969f",
       "executable": false
     },
     "src/nectar/financial-balance.ts": {
@@ -6037,6 +6037,10 @@
       "sha256": "930bb9d598cfd2ee55d57974be0ca34456ef2f5febc34b7d6fc5593551f29a4b",
       "executable": false
     },
+    "tests/nectar/entitlement-visibility.mjs": {
+      "sha256": "6a6bbaac5f29543c3d1093c5e74ad2bb23ba53b86c08842f1b2edd1318e3e6e8",
+      "executable": false
+    },
     "tests/nectar/entity-revenue.mjs": {
       "sha256": "290fb1e8ddd4ac62349938aa8da27fc2f612af5344d190977527575fe51c78e2",
       "executable": false
@@ -6138,7 +6142,7 @@
       "executable": false
     },
     "tests/nectar/journeys.json": {
-      "sha256": "3fe0fd08cc50526d02a23da0ee25d405e07f225d8bf16ab83cc0bb1c6a7c1fd4",
+      "sha256": "4f1c96349aa5686ae1a4208361f7117e88f0a8b9ecef6574979e2507d5f696c4",
       "executable": false
     },
     "tests/nectar/lifecycle-cancel.mjs": {
@@ -6662,7 +6666,7 @@
       "executable": false
     },
     "verification.json": {
-      "sha256": "6e817f496286a9a51afc38f70b21707a2b6f8d384d043a8883720e3e38647022",
+      "sha256": "d384533018d6c3740d25d677860b472e8b23b013a3c4c166499c69c7859ebd79",
       "executable": false
     },
     "VERIFY-WORKFLOW.md": {
