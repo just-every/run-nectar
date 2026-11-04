@@ -158,7 +158,10 @@ export async function prepaidRefundFlow(h,owner,{onState=async()=>{},onTypedStat
     assert.equal(sharedCustomer.ledger.credits.find(credit=>credit.id===refunded.credit).reason,'unused_paid_credit',`${role} customer credit has only a typed reason category`)
     if(role!=='agent')for(const path of [`/app/invoices/${rows[0].invoice}`,`/app/customers/${rows[0].customer}`])assert.ok(!(await h.page(path,who)).includes(first.reason),`${role} shared page excludes private refund narrative`)
   }
-  assert.equal((await h.api(`customers/${rows[0].customer}`,sales)).ledger.credits.find(credit=>credit.id===refunded.credit).reason,'unused_paid_credit')
+  const salesLedger=(await h.api(`customers/${rows[0].customer}`,sales)).ledger
+  assert.deepEqual(salesLedger.credits,[],'Sales cannot read refund credits through the legacy customer ledger')
+  assert.deepEqual(salesLedger.payments,[],'Sales cannot read customer payments')
+  assert.equal(salesLedger.balanceCents,null,'Sales cannot read the customer balance')
   assert.ok(!(await h.page(`/app/customers/${rows[0].customer}`,sales)).includes(first.reason))
   await h.api(`invoices/${rows[0].invoice}`,sales,undefined,403)
   assert.equal((await h.api(`prepaid/refunds?subscription=${rows[0].subscription}`,finance)).find(row=>row.id===first.id).reason,first.reason,'Finance keeps private request narrative')
