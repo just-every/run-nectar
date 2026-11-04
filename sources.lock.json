@@ -194,7 +194,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "5e0661b1da4d2d4ee38f80abab05eef065c1ffb020d5988f96514647035e4f39",
+      "sha256": "a90360f3cde8fcc6921b8ce07df5c26656cd9a372cf771c7174bcf313e68ffb8",
       "executable": false
     },
     "DEMO.md": {
@@ -6038,7 +6038,7 @@
       "executable": false
     },
     "tests/nectar/entitlement-visibility.mjs": {
-      "sha256": "d9ff8752fa307fed77df9fc0a200bab4cdee6e339a4027ba19cc9896dba0baa2",
+      "sha256": "9af333a37172076a1a0640e106e917a0d702111a70bfa3f1ce027672dbb19b8d",
       "executable": false
     },
     "tests/nectar/entity-revenue.mjs": {
