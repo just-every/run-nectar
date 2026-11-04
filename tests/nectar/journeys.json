@@ -393,6 +393,15 @@
     ]
   },
   {
+    "name": "entitlementVisibilityFlow",
+    "steps": [
+      [
+        "entitlement-visibility",
+        "entitlementVisibilityFlow"
+      ]
+    ]
+  },
+  {
     "name": "dunning-sequences",
     "steps": [
       [

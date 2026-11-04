@@ -199,11 +199,14 @@ export async function openInvoices(env: Bindings, customerId?: string) {
     FROM nc_invoices i JOIN nc_customers c ON c.id = i.customer_id WHERE i.status = 'issued' ${customerId ? 'AND i.customer_id = ?' : ''} AND ${BALANCE_SQL} > 0 ORDER BY i.due_date, i.number`, ...(customerId ? [customerId] : []))
 }
 
+/** Customer projections combining invoice and payment evidence require both reads. */
+export const canReadCustomerFinancials = (actor: Actor) => canRead(actor, 'invoices') && canRead(actor, 'payments')
+
 export async function customerLedger(env: Bindings, actor: Actor, customerId: string) {
   requireRead(actor, 'customers')
   // This projection combines invoice and payment evidence. Customer access,
   // including access through a parent record, grants neither financial read.
-  if (!canRead(actor, 'invoices') || !canRead(actor, 'payments')) {
+  if (!canReadCustomerFinancials(actor)) {
     const customer = await one(env, 'SELECT currency FROM nc_customers WHERE id=?', customerId)
     return {
       currency: billingCurrency(customer?.currency),

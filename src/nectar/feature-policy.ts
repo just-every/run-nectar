@@ -53,7 +53,7 @@ export async function configureFeaturePolicy(env: Bindings, actor: Actor, input:
   return await preparePolicyChange(env, actor, 'feature', { product, productName: grant.name, feature, meter: meter?.id ?? null, meterName: meter?.name ?? null, quota, policy, graceDays: grace, numericLimit })
 }
 
-export async function featureDecision(env: Bindings, sub: Row, product: string, feature: string, day: string, timezone: string) {
+export async function featureDecision(env: Bindings, sub: Row, product: string, feature: string, day: string, timezone: string, financialEvidence = true) {
   const policy = await one(env, 'SELECT * FROM nc_feature_policies WHERE product_id=? AND feature=?', product, feature)
   const steps: string[] = [], invoices: Row[] = []
   let quota: Row | null = null, denied = false, warning = false
@@ -85,12 +85,13 @@ export async function featureDecision(env: Bindings, sub: Row, product: string, 
       WHERE i.subscription_id=? AND i.status='issued' AND ${BALANCE_SQL}>0`, sub.id)) {
       if (day >= addDays(invoice.due_date, policy.grace_days)) invoices.push({ id: invoice.id, number: invoice.number, dueDate: invoice.due_date, balanceCents: invoice.balance_cents })
     }
-    if (invoices.length) steps.push(`Unpaid after ${policy.grace_days} calendar days from the due date: ${invoices.map(i => i.number).join(', ')}; access restricted until settled.`)
+    if (financialEvidence && invoices.length) steps.push(`Unpaid after ${policy.grace_days} calendar days from the due date: ${invoices.map(i => i.number).join(', ')}; access restricted until settled.`)
   }
   const dunning=await all(env,`SELECT i.id,i.number,i.due_date,${BALANCE_SQL} AS balance_cents FROM nc_dunning_series s JOIN nc_invoices i ON i.id=s.invoice_id JOIN nc_customers c ON c.id=s.customer_id
     WHERE i.subscription_id=? AND i.status='issued' AND s.status='restrict' AND s.end_date<=? AND c.erased_at IS NULL AND ${BALANCE_SQL}>0`,sub.id,day)
   for(const i of dunning)if(!invoices.some(v=>v.id===i.id))invoices.push({id:i.id,number:i.number,dueDate:i.due_date,balanceCents:i.balance_cents})
-  if(dunning.length)steps.push(`Owner-confirmed dunning restriction: ${dunning.map(i=>i.number).join(', ')}; access restores after settlement.`)
+  if(financialEvidence && dunning.length)steps.push(`Owner-confirmed dunning restriction: ${dunning.map(i=>i.number).join(', ')}; access restores after settlement.`)
+  if (!financialEvidence && invoices.length) steps.push('Access is restricted by the recorded feature policy.')
   return { allowed: !denied && invoices.length === 0, warning, quota, numericLimit,
-    payment: { restricted: invoices.length > 0, graceDays: policy?.grace_days ?? null, invoices }, steps }
+    ...(financialEvidence ? { payment: { restricted: invoices.length > 0, graceDays: policy?.grace_days ?? null, invoices } } : {}), steps }
 }
