@@ -61,6 +61,17 @@ export async function entitlementVisibilityFlow(h, owner, { onState = async () =
     const nested = (await h.api(`customers/${record.customer}`, reader.who)).entitlements
     assert.deepEqual(all.find(row => row.feature === feature), one, 'Feature-specific and all-feature doors agree')
     assert.deepEqual(nested, all, 'Customer-nested entitlements use the identical capability projection')
+    const html = await h.page(`/app/customers/${record.customer}`, reader.who)
+    const section = html.match(/<section\b[^>]*aria-labelledby="ents"[^>]*>([\s\S]*?)<\/section>/)?.[1]
+    assert.ok(section, 'The ordinary customer page renders its entitlement explanation')
+    const escape = value => String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;')
+    for (const answer of all) {
+      assert.ok(section.includes(escape(answer.feature)), 'Every returned feature appears on the customer page')
+      for (const path of answer.paths) for (const step of path.steps) assert.ok(section.includes(escape(step)), 'Rendered explanations retain the same permitted decision facts')
+    }
+    if (!reader.financial && record.invoice) for (const fact of [record.invoice.id, record.invoice.number, record.invoice.due_date]) {
+      assert.ok(!section.includes(fact), `${reader.name}: the rendered entitlement explanation discloses no forbidden invoice fact`)
+    }
     return all
   }
   const auditVisibility = (answers, record, reader, allowed, balance, restricted) => {
@@ -158,6 +169,20 @@ export async function entitlementVisibilityFlow(h, owner, { onState = async () =
     await api('role.update', { role: evolving.role.id, revision, capabilities })
     auditVisibility(await read(grace, { ...evolving, financial }), grace, { ...evolving, financial }, false, 12000, true)
   }
+  await api('role.update', { role: evolving.role.id, revision: 5, capabilities: ['read.invoices', 'read.payments'] })
+  const beforeRevocation = await sources(), beforeCalls = edge.calls.length
+  // Financial reads alone do not confer customer or feature access, including
+  // a previously permitted session and an explicit historical date.
+  for (const door of [
+    `entitlements/${grace.customer}?feature=${feature}&date=2026-10-22`,
+    `entitlements/${grace.external}`, `customers/${grace.customer}`,
+  ]) await h.api(door, evolving.who, undefined, 403)
+  await h.page(`/app/customers/${grace.customer}`, evolving.who, 403)
+  assert.deepEqual(await sources(), beforeRevocation, 'Refused customer reads change no financial or lifecycle source or audit')
+  assert.equal(edge.calls.length, beforeCalls, 'Revoked customer reads issue no provider request')
+  await api('role.update', { role: evolving.role.id, revision: 6, capabilities: base })
+  auditVisibility(await read(grace, evolving), grace, evolving, false, 12000, true)
+  console.log('PROBE ENT-001 customer-read-revocation: prior session with financial reads -> 403 at all HTTP doors; restored customer read -> redacted decision, money unchanged')
   // Recorded funds alone cannot restore access; only the separately allocated cents do.
   for (const record of records) {
     const amount = record.index ? '100' : '120'
@@ -203,6 +228,11 @@ export async function entitlementVisibilityFlow(h, owner, { onState = async () =
     const customer = await h.api(`customers/${grace.customer}`, reader.who)
     assert.deepEqual(customer.entitlements, [], 'The nested door agrees with the withdrawn entitlement list')
     assert.deepEqual(await h.api(`entitlements/${customer.external_id}`, reader.who), [], 'The erased external alias cannot reopen retained grants')
+    for (const identity of [grace.customer, customer.external_id]) {
+      for (const date of ['2026-10-22', '2026-11-01']) {
+        await h.api(`entitlements/${identity}?feature=${feature}&date=${date}`, reader.who, undefined, 410)
+      }
+    }
     await h.api(`entitlements/${grace.external}?feature=${feature}`, reader.who, undefined, 404)
   }
   assert.deepEqual(await retained(), retainedBefore, 'Erased entitlement reads preserve retained money and audit evidence')
