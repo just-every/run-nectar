@@ -13,8 +13,9 @@ export async function explainEntitlement(env: Bindings, actor: Actor, customerId
   requireRead(actor, 'customers')
   const business = await requireBusiness(env)
   const day = date && isDate(date) ? date : today(business.timezone, clockInstant(env))
-  const customer = await one(env, 'SELECT id, name, external_id, status FROM nc_customers WHERE id = ? OR external_id = ?', customerId, customerId)
+  const customer = await one(env, 'SELECT id, name, external_id, status, erased_at FROM nc_customers WHERE id = ? OR external_id = ?', customerId, customerId)
   insist(customer, 'customer_not_found', 404)
+  insist(!customer.erased_at, 'customer_erased', 410)
   const subs = await all(env, 'SELECT * FROM nc_subscriptions WHERE customer_id = ? ORDER BY created_at', customer.id)
   const financialEvidence = canRead(actor, 'payments') && canRead(actor, 'invoices')
   const paths = []
@@ -48,7 +49,7 @@ export async function explainEntitlement(env: Bindings, actor: Actor, customerId
 /** Every feature the customer holds today, each with its explanation. */
 export async function entitlements(env: Bindings, actor: Actor, customerId: string) {
   requireRead(actor, 'customers')
-  const features = await all(env, 'SELECT DISTINCT f.feature FROM nc_features f JOIN nc_prices p ON p.product_id = f.product_id JOIN nc_items i ON i.price_id = p.id JOIN nc_subscriptions s ON s.id = i.subscription_id WHERE s.customer_id = (SELECT id FROM nc_customers WHERE id=? OR external_id=?) ORDER BY f.feature', customerId, customerId)
+  const features = await all(env, 'SELECT DISTINCT f.feature FROM nc_features f JOIN nc_prices p ON p.product_id = f.product_id JOIN nc_items i ON i.price_id = p.id JOIN nc_subscriptions s ON s.id = i.subscription_id WHERE s.customer_id = (SELECT id FROM nc_customers WHERE (id=? OR external_id=?) AND erased_at IS NULL) ORDER BY f.feature', customerId, customerId)
   return await Promise.all(features.map(row => explainEntitlement(env, actor, customerId, row.feature)))
 }
 
