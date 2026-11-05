@@ -1,8 +1,9 @@
 // Original-source collection sits beside its read-only history, never in the
 // native invoice approval forms.
-import type { Actor } from '../actor'
+import { canRead, type Actor } from '../actor'
 import { cents,check,details,form,h,hidden,select,tag } from './html'
 export function importedCollectionsSection(customer:any,actor:Actor) {
+  if (!canRead(actor,'invoices') || !canRead(actor,'payments')) return ''
   const requests=customer.importedCollections??[],owner=actor.kind==='member'&&actor.role==='owner'
   const sources=customer.incumbentHistory.documents.filter((row:any)=>row.provider==='stripe'&&row.document_kind==='invoice'&&row.status==='open'&&row.remaining_cents>0&&!requests.some((request:any)=>request.invoice_id===row.id))
   if(!requests.length&&!sources.length)return ''

@@ -10,22 +10,19 @@ import { importedCashCollections } from '../processor-cash-imported'
 export const historicalHref = (customer: string, id: string) => `/app/customers/${customer}#history-${id}`
 export async function customerHistory(env: Bindings, actor: Actor, customer: string) {
   requireRead(actor, 'customers')
-  if (!canRead(actor, 'invoices') || !canRead(actor, 'payments')) {
-    const records = canRead(actor, 'subscriptions') ? await all(env, "SELECT * FROM nc_incumbent_history WHERE customer_id=? AND kind='subscription-event' ORDER BY occurred_on,id", customer) : []
-    return {
-      totals: { invoicedCents: null, creditedCents: null, paymentsCents: null, refundsCents: null, remainingCents: null },
-      documents: [],
-      records: records.map(row => ({ ...historicalFinancialFacts(row), timeline: subscriptionSnapshot(parseJson<Row>(row.payload_json, {})) })),
-    }
-  }
-  const documents = await all(env, 'SELECT * FROM nc_incumbent_invoices WHERE customer_id=? ORDER BY COALESCE(issue_date,period_start),id', customer)
-  const records = await all(env, 'SELECT * FROM nc_incumbent_history WHERE customer_id=? ORDER BY occurred_on,id', customer)
-  const cash=await importedCashCollections(env,customer)
-  const collected=[...await all(env,"SELECT p.* FROM nc_imported_collections p WHERE p.customer_id=? AND p.charge_ref IS NOT NULL AND p.collected_on IS NOT NULL",customer),...cash]
+  const invoices = canRead(actor, 'invoices'), payments = invoices && canRead(actor, 'payments')
+  const documents = invoices ? await all(env, 'SELECT * FROM nc_incumbent_invoices WHERE customer_id=? ORDER BY COALESCE(issue_date,period_start),id', customer) : []
+  const records = (await all(env, 'SELECT * FROM nc_incumbent_history WHERE customer_id=? ORDER BY occurred_on,id', customer))
+    .filter(row => row.kind === 'subscription-event' ? canRead(actor, 'subscriptions') : payments)
+  const cash=payments?await importedCashCollections(env,customer):[]
+  const collected=payments?[...await all(env,"SELECT p.* FROM nc_imported_collections p WHERE p.customer_id=? AND p.charge_ref IS NOT NULL AND p.collected_on IS NOT NULL",customer),...cash]:[]
   const additional=collected.filter(payment=>!records.some(record=>record.kind==='payment'&&record.status==='succeeded'&&(record.id===payment.history_payment_id||record.provider_ref===payment.charge_ref)))
   const cashRecords=cash.filter(row=>additional.includes(row)).map(row=>historicalFinancialFacts({...row,provider:'stripe',provider_ref:row.charge_ref,kind:'payment',status:'succeeded',occurred_on:row.collected_on}))
-  return { totals:{invoicedCents:documents.filter(row=>row.document_kind==='invoice'&&['paid','open','uncollectible'].includes(row.status)).reduce((n,row)=>n+row.total_cents,0), creditedCents:documents.filter(row=>row.document_kind==='credit-note'&&row.status==='issued').reduce((n,row)=>n+row.total_cents,0),paymentsCents:records.filter(row=>row.kind==='payment'&&row.status==='succeeded').reduce((n,row)=>n+row.amount_cents,0)+additional.reduce((n,row)=>n+row.amount_cents,0),refundsCents:records.filter(row=>row.kind==='refund'&&row.status==='succeeded').reduce((n,row)=>n+row.amount_cents,0),remainingCents:documents.filter(row=>row.document_kind==='invoice'&&row.status==='open').reduce((n,row)=>n+Math.max(0,row.remaining_cents-collected.filter(payment=>payment.invoice_id===row.id).reduce((sum,payment)=>sum+payment.amount_cents,0)),0)}, documents: documents.map(row => ({ ...historicalFinancialFacts(row), lines: publicLines(row.lines_json) })), records: [...records.map(row => ({ ...historicalFinancialFacts(row), ...(row.kind==='subscription-event'?{timeline:subscriptionSnapshot(parseJson<Row>(row.payload_json,{}))}:{}) })),...cashRecords] }
+  // Reconcile captured invoice balances even when payment references are withheld.
+  const invoiceCollections = invoices ? [...await all(env,"SELECT invoice_id,amount_cents FROM nc_imported_collections WHERE customer_id=? AND charge_ref IS NOT NULL AND collected_on IS NOT NULL",customer), ...(payments?cash:await importedCashCollections(env,customer))] : []
+  return { totals:{invoicedCents:invoices?documents.filter(row=>row.document_kind==='invoice'&&['paid','open','uncollectible'].includes(row.status)).reduce((n,row)=>n+row.total_cents,0):null, creditedCents:invoices?documents.filter(row=>row.document_kind==='credit-note'&&row.status==='issued').reduce((n,row)=>n+row.total_cents,0):null,paymentsCents:payments?records.filter(row=>row.kind==='payment'&&row.status==='succeeded').reduce((n,row)=>n+row.amount_cents,0)+additional.reduce((n,row)=>n+row.amount_cents,0):null,refundsCents:payments?records.filter(row=>row.kind==='refund'&&row.status==='succeeded').reduce((n,row)=>n+row.amount_cents,0):null,remainingCents:invoices?documents.filter(row=>row.document_kind==='invoice'&&row.status==='open').reduce((n,row)=>n+Math.max(0,row.remaining_cents-invoiceCollections.filter(payment=>payment.invoice_id===row.id).reduce((sum,payment)=>sum+payment.amount_cents,0)),0):null}, documents: documents.map(row => ({ ...historicalFinancialFacts(row), lines: publicLines(row.lines_json) })), records: [...records.map(row => ({ ...historicalFinancialFacts(row), ...(row.kind==='subscription-event'?{timeline:subscriptionSnapshot(parseJson<Row>(row.payload_json,{}))}:{}) })),...cashRecords] }
 }
+
 // CT 21 October: originals are opaque downloads, never inline evidence for
 // any role. Every projection below selects typed facts, never provider prose.
 const object = (value: unknown): value is Row => !!value && typeof value === 'object' && !Array.isArray(value)

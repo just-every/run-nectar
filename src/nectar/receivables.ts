@@ -203,7 +203,7 @@ export async function customerLedger(env: Bindings, actor: Actor, customerId: st
   requireRead(actor, 'customers')
   // This projection combines invoice and payment evidence. Customer access,
   // including access through a parent record, grants neither financial read.
-  if (!canRead(actor, 'invoices') || !canRead(actor, 'payments')) {
+  if (!canRead(actor, 'invoices')) {
     const customer = await one(env, 'SELECT currency FROM nc_customers WHERE id=?', customerId)
     return {
       currency: billingCurrency(customer?.currency),
@@ -216,8 +216,9 @@ export async function customerLedger(env: Bindings, actor: Actor, customerId: st
     COALESCE((SELECT SUM(COALESCE(applied_cents,amount_cents)) FROM nc_credit_notes WHERE invoice_id = i.id), 0) + ${CARRIED_APPLICATION_SQL} + ${GOODWILL_APPLIED_SQL} AS credited_cents,
     COALESCE((SELECT SUM(amount_cents) FROM nc_allocations WHERE invoice_id = i.id), 0) - ${PROCESSOR_REVERSED_SQL} AS paid_cents, ${WRITE_OFF_NET_SQL} AS written_off_cents
     FROM nc_invoices i WHERE i.customer_id = ? AND i.status = 'issued' ORDER BY i.issue_date, i.number`, customerId)
-  // Both financial capabilities were checked before selecting any ledger facts.
-  const pays = await paymentRows(env, customerId)
+  // Invoice facts and balances need invoice authority; payment references need both.
+  const paymentEvidence = canRead(actor, 'payments')
+  const pays = paymentEvidence ? await paymentRows(env, customerId) : []
   const credits = await sharedCreditNotes(env,'n.customer_id=?',customerId)
   const customer = await one(env, 'SELECT currency FROM nc_customers WHERE id=?', customerId)
   const business = await requireBusiness(env)
@@ -233,7 +234,7 @@ export async function customerLedger(env: Bindings, actor: Actor, customerId: st
     paidCents: invoices.reduce((sum, row) => sum + row.paid_cents, 0),
     writtenOffCents: invoices.reduce((sum, row) => sum + row.written_off_cents, 0),
     balanceCents: invoices.reduce((sum, row) => sum + row.balance_cents, 0),
-    unallocatedCents: pays.reduce((sum, row) => sum + row.unallocated_cents, 0),
+    unallocatedCents: paymentEvidence ? pays.reduce((sum, row) => sum + row.unallocated_cents, 0) : null,
   }
 }
 

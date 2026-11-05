@@ -1,7 +1,7 @@
 // Flow 2: customers and their billing contacts, each customer keyed by the
 // business's own external id (the id their CRM or previous biller uses).
 import type { Bindings } from '../auth.server'
-import { requireRead, actorLabel, requireCapability, type Actor } from './actor'
+import { canRead, requireRead, actorLabel, requireCapability, type Actor } from './actor'
 import { all, commit, guard, insist, newId, now, one, stmt } from './core'
 import { withMetadata } from './metadata'
 import { metadataFilter,metadataPredicate } from './metadata-query'
@@ -26,6 +26,7 @@ export async function customers(env: Bindings, actor: Actor,url?:URL) {
   const matches=await all(env,`SELECT m.kind,m.record_id,m.metadata_json FROM nc_metadata_revisions m WHERE m.revision=(SELECT MAX(x.revision) FROM nc_metadata_revisions x WHERE x.kind=m.kind AND x.record_id=m.record_id)`)
   const found=await customerEvidenceMatches(env,search,actor)
   for(const m of matches){
+    if (['invoice','credit-note'].includes(m.kind) && !canRead(actor,'invoices') || m.kind==='payment' && (!canRead(actor,'invoices') || !canRead(actor,'payments')) || m.kind==='subscription' && !canRead(actor,'subscriptions') || m.kind==='price' && !canRead(actor,'catalog')) continue
     if(!Object.values(JSON.parse(m.metadata_json)).some(v=>String(v).toLowerCase().includes(search.toLowerCase())))continue
     if(m.kind==='customer')found.add(m.record_id)
     else if(m.kind==='price'){for(const r of await all(env,'SELECT DISTINCT s.customer_id FROM nc_items i JOIN nc_subscriptions s ON s.id=i.subscription_id WHERE i.price_id=?',m.record_id))found.add(r.customer_id)}

@@ -5,7 +5,7 @@
 // the journal posting in the same transaction and stops collection. A recovery
 // pairs a recorded payment allocation with the write-off it reverses.
 import type { Bindings } from '../auth.server'
-import { actorLabel, requireMember, requireRead, type Actor } from './actor'
+import { actorLabel, requireMember, canRead, requireRead, type Actor } from './actor'
 import { UNALLOCATED_SQL, issuedInvoice } from './receivables'
 import { BALANCE_SQL } from './balance-sql'
 import { all, canonical, commit, fingerprint, guard, insist, newId, one, parseJson, stmt, type Row } from './core'
@@ -142,7 +142,7 @@ export interface WriteOffView { id: string; invoice: string; invoiceNumber: stri
   approvedBy: string | null; approvedAt: number | null; approval: string | null; recoveredCents: number; netCents: number; recoveries: Row[]; postings: LedgerPosting[] }
 
 /** Callers authorize with invoice reads. Statuses and amounts only; ledger error text is a code. */
-export async function writeOffsFor(env: Bindings, invoiceId?: string): Promise<WriteOffView[]> {
+export async function writeOffsFor(env: Bindings, invoiceId?: string, paymentEvidence = true): Promise<WriteOffView[]> {
   const rows = await all(env, `SELECT w.*,i.number AS invoice_number FROM nc_write_offs w JOIN nc_invoices i ON i.id=w.invoice_id ${invoiceId ? 'WHERE w.invoice_id=?' : ''} ORDER BY w.prepared_at,w.id`, ...(invoiceId ? [invoiceId] : []))
   const recoveries = await all(env, `SELECT r.*,p.reference FROM nc_write_off_recoveries r JOIN nc_payments p ON p.id=r.payment_id ${invoiceId ? 'WHERE r.invoice_id=?' : ''} ORDER BY r.recorded_at,r.id`, ...(invoiceId ? [invoiceId] : []))
   const postings = await all(env, `SELECT * FROM nc_ledger_postings ${invoiceId ? 'WHERE invoice_id=?' : ''} ORDER BY created_at,id`, ...(invoiceId ? [invoiceId] : []))
@@ -151,12 +151,12 @@ export async function writeOffsFor(env: Bindings, invoiceId?: string): Promise<W
     return { id: row.id, invoice: row.invoice_id, invoiceNumber: row.invoice_number, customer: row.customer_id, amountCents: row.amount_cents, reason: row.reason, status: row.status, balanceCents: row.balance_cents,
       effect: parseJson<Row>(row.effect_json, {}), preparedBy: row.prepared_name, preparedAt: row.prepared_at, approvedBy: row.approved_name, approvedAt: row.approved_at, approval: row.approval_mode,
       recoveredCents: recovered, netCents: row.status === 'executed' ? row.amount_cents - recovered : 0,
-      recoveries: mine.map(r => ({ id: r.id, payment: r.payment_id, reference: r.reference, amountCents: r.amount_cents, recordedBy: r.recorded_by, recordedAt: r.recorded_at })),
+      recoveries: (paymentEvidence ? mine : []).map(r => ({ id: r.id, payment: r.payment_id, reference: r.reference, amountCents: r.amount_cents, recordedBy: r.recorded_by, recordedAt: r.recorded_at })),
       postings: postings.filter(p => p.write_off_id === row.id).map(ledgerPostingView) }
   })
 }
 
 export async function writeOffList(env: Bindings, actor: Actor, invoiceId?: string) {
   requireRead(actor, 'invoices')
-  return { writeOffs: await writeOffsFor(env, invoiceId) }
+  return { writeOffs: await writeOffsFor(env, invoiceId, canRead(actor, 'payments')) }
 }
