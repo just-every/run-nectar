@@ -406,6 +406,11 @@ export async function financialVisibilityFlow(h, owner, { sales, finance, onRead
       if (!reader.invoices) assert.ok(!csv.includes(`Invoice note ${fixture.code}`), 'Customer CSV omits unauthorized invoice notes')
       if (erased) for (const value of [fixture.before.billing_email, fixture.reference, fixture.before.name]) assert.ok(!csv.includes(value))
     }
+    const balance = await h.api(`customers/${fixture.customer}/balance`, reader.who, undefined, reader.payments ? 200 : 403)
+    if (reader.payments) {
+      assert.equal(balance.cashCents, 200)
+      assert.ok(balance.ledger.some(entry => entry.invoice === invoice.number))
+    }
     if (reader.invoices) {
       const invoiceRecord = await h.api(`invoices/${fixture.invoice}`, reader.who)
       assert.equal(invoiceRecord.balanceCents, 8900)

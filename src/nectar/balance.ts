@@ -162,6 +162,7 @@ async function sourceFromRequest(env: Bindings, actor: Actor, request: Row): Pro
 
 /** The customer's balance with its own ledger, for the customer record and the JSON door. */
 export async function balanceView(env: Bindings, actor: Actor, customerId: string) {
+  requireRead(actor, 'invoices')
   requireRead(actor, 'payments')
   const sources = await balanceSources(env, customerId)
   const requests = await all(env, 'SELECT * FROM nc_balance_requests WHERE customer_id=? ORDER BY prepared_at,id', customerId)
