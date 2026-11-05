@@ -373,6 +373,7 @@ export async function financialVisibilityFlow(h, owner, { sales, finance, onRead
     assert.equal(html.includes(invoice.number), reader.invoices, `${reader.name} permitted invoice number`)
     assert.equal(html.includes('$89.00'), reader.invoices, `${reader.name} independently reconciled outstanding balance`)
     assert.equal(html.includes(fixture.reference), reader.payments && !erased, `${reader.name} payment reference`)
+    assert.equal(JSON.stringify(record).includes(fixture.reference), reader.payments && !erased, 'Customer JSON exposes only permitted payment fields')
     if (!reader.invoices) {
       for (const hint of ['Invoices and payments', 'No issued invoices', 'Credit notes', 'No credit notes', 'Invoiced', 'Owed now', 'One-time charges', 'No one-time charges', 'Stripe invoiced']) assert.ok(!html.includes(hint), `${reader.name} has no financial section or existence hint: ${hint}`)
       assert.ok(!html.includes('$100.00'), 'Unauthorized invoice totals are absent')
