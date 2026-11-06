@@ -5862,7 +5862,7 @@
       "executable": false
     },
     "tests/nectar/automatic-collection-archive.mjs": {
-      "sha256": "e1c7ba91afacb1d05c2d3e1e982688e92bea9c84fb6b5979149824635de502ae",
+      "sha256": "e8fd07928421ad5aee6d19abbbf9082ebc1c7efa60a7bb5cb63da12072465514",
       "executable": false
     },
     "tests/nectar/automatic-collection-browser.mjs": {
