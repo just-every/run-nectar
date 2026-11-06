@@ -10,7 +10,8 @@ import { processorSetup } from './processor-events.mjs'
 import { automaticEdge } from './automatic-collection.mjs'
 import { totp } from './mfa.mjs'
 
-const day='2026-10-22',instant=day+'T10:00:00Z'
+let day='2026-10-22'
+const instant=day+'T10:00:00Z'
 const email=n=>[`synthetic-nectar-${n}`,'example.test'].join('@')
 async function archiveItems(path){
  const bytes=await readFile(path),items=[]
@@ -135,11 +136,19 @@ export async function automaticCollectionArchiveJourney(){
   await issue(active.invoice)
   assert.equal((await list()).find(row=>row.id===active.id).status,'active','Restored unclaimed terms remain inert historical evidence')
   assert.equal(writes(),writeCount)
+  // A mismatched provider amount is never cash, even for a retained claim.
+  const uncertainIntent=[...edge.intents.values()].find(item=>item.value.metadata.nectar_native_collection_request===uncertain.id).value
+  uncertainIntent.amount=10001
+  assert.equal((await api('automatic.collection.reconcile',{request:uncertain.id})).status,'uncertain')
+  assert.equal((await api('invoices/'+uncertain.invoice)).paidCents,0)
+  assert.equal((await api('reports/collections?period=2026-10')).totalCents,10000)
+  uncertainIntent.amount=10000
   const competing=await Promise.all([
+   h.raw('/api/nectar/automatic.collection.reconcile',{cookie:owner,body:{request:claimed.id}}),
    h.raw('/api/nectar/automatic.collection.reconcile',{cookie:owner,body:{request:claimed.id}}),
    h.raw('/api/nectar/collection.prepare',{cookie:owner,body:{invoice:claimed.invoice}}),
   ])
-  assert.deepEqual(competing.map(response=>response.status),[200,409],'Reading the original claimed outcome cannot admit a competing native debit')
+  assert.deepEqual(competing.map(response=>response.status),[200,200,409],'Concurrent original-outcome reads record cash once and refuse a competing native debit')
   await tick()
   const reconciled=await list()
   for(const target of [claimed,uncertain])assert.equal(reconciled.find(row=>row.id===target.id).status,'collected')
@@ -182,11 +191,71 @@ export async function automaticCollectionArchiveJourney(){
   assert.equal((await api('reports/billings?period=2026-10')).totalCents,60000)
   assert.equal((await api('reports/collections?period=2026-10')).totalCents,40000)
   assert.equal((await api('reports/ar')).totalCents,20000)
+  // Terminal evidence and a bank debit erased before settlement take the
+  // same real portability path. Their business outcomes must survive too.
+  day='2026-10-28'
+  const refused=await prepare(await draft())
+  edge.refuseNext('processing_error');await issue(refused.invoice)
+  const returned=await prepare(await draft(customers[1]),'active',true)
+  await issue(returned.invoice);edge.returnLastBank()
+  assert.equal((await api('automatic.collection.reconcile',{request:returned.id})).status,'returned')
+  const withdrawn=await prepare(await draft())
+  assert.equal((await h.raw(`/portal/automatic-collections/${withdrawn.id}?session=${withdrawn.session.token}`,{body:{request:withdrawn.id,withdraw:true}})).status,200)
+  await issue(withdrawn.invoice)
+  const invalidated=await prepare(await draft())
+  const method=edge.customers.get('synthetic-nectar-native-customer-1').method
+  edge.customers.get('synthetic-nectar-native-customer-1').method='synthetic-nectar-archive-changed-method'
+  await issue(invalidated.invoice)
+  edge.customers.get('synthetic-nectar-native-customer-1').method=method
+  const pending=await prepare(await draft(customers[1]),'active',true)
+  await issue(pending.invoice)
+  const terminal=[refused,returned,withdrawn,invalidated,pending]
+  const expectedStates=['refused','returned','revoked','invalidated','pending_settlement']
+  const terminalRows=await list()
+  assert.deepEqual(terminal.map(target=>terminalRows.find(row=>row.id===target.id).status),expectedStates)
+  const terminalWrites=writes()
+  assert.equal(terminalWrites,writeCount+3)
+  const terminalRecovery=await api('recovery')
+  assert.deepEqual([terminalRecovery.totals.failedInvoices,terminalRecovery.totals.failedAmountCents,terminalRecovery.totals.recoveredAmountCents],[2,20000,0])
+  await close()
+  await command(root,['export','--output',archive('terminal')])
+  const terminalItems=await archiveItems(archive('terminal'))
+  await command(root,['reset','--yes'])
+  await command(root,['import','--input',archive('terminal'),'--yes'])
+  await command(root,['export','--output',archive('terminal-restored')])
+  const restoredItems=await archiveItems(archive('terminal-restored'))
+  const financialTables=new Set(['nc_automatic_collections','nc_payments','nc_allocations','nc_retry_series','nc_retry_attempts'])
+  assert.deepEqual(restoredItems.filter(item=>financialTables.has(item.table)),terminalItems.filter(item=>financialTables.has(item.table)),
+   'Terminal and pending claims, original failure dates and outcomes restore exactly')
+  await open()
+  const historical=await list()
+  assert.deepEqual(terminal.map(target=>historical.find(row=>row.id===target.id).status),expectedStates)
+  assert.ok(historical.every(row=>row.historical))
+  assert.deepEqual(await api('recovery'),terminalRecovery)
+  for(const target of terminal){
+   const invoice=await api('invoices/'+target.invoice)
+   assert.deepEqual([invoice.paidCents,invoice.balanceCents,invoice.allocations.length],[0,10000,0])
+   await api('automatic.collection.decide',{request:target.id,basis_hash:target.basis,decision:'approved',confirm:true,confirm_single:true},409)
+   await api('invoice.finalise',{invoice:target.invoice},409)
+   assert.equal((await h.raw(`/portal/automatic-collections/${target.id}?session=${target.session.token}`,{body:{request:target.id,basis_hash:target.basis,accept:true}})).status,401)
+  }
+  for(const target of [refused,returned,pending]){
+   await api('collection.prepare',{invoice:target.invoice},409)
+   assert.equal((await api('automatic.collection.reconcile',{request:target.id})).status,expectedStates[terminal.indexOf(target)])
+  }
+  await tick()
+  assert.equal(writes(),terminalWrites,'Restored refusal and return histories confer no retry authority')
+  assert.equal((await api('reports/billings?period=2026-10')).totalCents,110000)
+  assert.equal((await api('reports/collections?period=2026-10')).totalCents,40000)
+  assert.equal((await api('reports/ar')).totalCents,70000)
   const erasure=await api('erasure.request',{customer:customers[1]})
   await api('erasure.verify',{request:erasure.id,reason:'Synthetic independent account verification',evidence:file('synthetic-nectar-933.txt','Synthetic signed identity verification')})
   await api('erasure.approve',{request:erasure.id,confirm:true})
   await api('automatic.collection.reconcile',{request:bank.id},404)
   await api('automatic.collection.event',{request:bank.id,event_ref:event},404)
+  await api('automatic.collection.reconcile',{request:pending.id},404)
+  const pendingInvoice=await api('invoices/'+pending.invoice)
+  assert.deepEqual([pendingInvoice.paidCents,pendingInvoice.balanceCents,pendingInvoice.allocations.length],[0,10000,0])
   const erasedInvoice=await api('invoices/'+bank.invoice)
   assert.equal(erasedInvoice.paidCents,10000);assert.equal(erasedInvoice.balanceCents,0)
   await close()
@@ -195,18 +264,24 @@ export async function automaticCollectionArchiveJourney(){
   assert.ok(!JSON.stringify(erasedItems).includes(email(3)))
   assert.equal(attempts(erasedItems).find(row=>row.id===bank.id).amount_cents,10000)
   await command(root,['reset','--yes'])
-  const refused=await command(root,['import','--input',archive('pending'),'--journal',relative(root,archive('erased')),'--yes'],{refuse:true})
-  assert.match(refused,/later_journal|erased_row|erasure_epoch/)
+  for(const name of ['pending','terminal']){
+   const refusedImport=await command(root,['import','--input',archive(name),'--journal',relative(root,archive('erased')),'--yes'],{refuse:true})
+   assert.match(refusedImport,/later_journal|erased_row|erasure_epoch/)
+  }
   await command(root,['import','--input',archive('erased'),'--yes'])
   await command(root,['export','--output',archive('erased-restored')])
   assert.deepEqual(custody(await archiveItems(archive('erased-restored'))),custody(erasedItems),'Anonymized financial custody restores exactly')
-  await open('2026-10-28T10:01:00Z')
+  await open('2026-10-28T10:02:00Z')
   await api('automatic.collection.reconcile',{request:bank.id},404)
+  await api('automatic.collection.reconcile',{request:pending.id},404)
+  edge.settle()
   assert.equal((await h.raw(`/portal/automatic-collections/${bank.id}?session=${bank.session.token}`)).status,401)
   await tick()
   assert.equal((await api('invoices/'+bank.invoice)).paidCents,10000)
-  assert.equal(writes(),writeCount,'Erasure and anonymized restoration revive no provider write')
-  console.log('automaticCollectionArchiveJourney: real export, reset and import preserve claimed, uncertain, pending ACH and collected custody; restored authority is inert; reads reconcile original cash once; erasure checkpoints refuse older archives')
+  const restoredPending=await api('invoices/'+pending.invoice)
+  assert.deepEqual([restoredPending.paidCents,restoredPending.balanceCents,restoredPending.allocations.length],[0,10000,0])
+  assert.equal(writes(),terminalWrites,'Erasure before settlement and anonymized restoration revive no provider write or cash')
+  console.log('automaticCollectionArchiveJourney: real export, reset and import preserve claimed, uncertain, pending ACH, collected, refused, returned, revoked and invalidated custody; restored authority is inert; reads reconcile original cash once; erasure checkpoints refuse older archives')
  }finally{await h?.close();await rm(scratch,{recursive:true,force:true})}
 }
 if(process.argv[1]===new URL(import.meta.url).pathname)await automaticCollectionArchiveJourney()
