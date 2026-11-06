@@ -6618,7 +6618,7 @@
       "executable": false
     },
     "tests/nectar/tax-source-report.mjs": {
-      "sha256": "58149273a45cbc7701bd04d6a7f330dac87bba63e77943d8737b251329facdfa",
+      "sha256": "827ad3774e677bd28b3f42ed89a3f2fc2e609e3a3b3e11fcfb9235d4166eb16a",
       "executable": false
     },
     "tests/nectar/test-mode-archive.mjs": {

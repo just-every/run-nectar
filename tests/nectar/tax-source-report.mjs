@@ -1,7 +1,7 @@
 // Ordinary source creation and read-only quarter reconciliation through Worker
 // and D1 doors. No tax provider or filing authority is simulated here.
 import assert from 'node:assert/strict'
-import { mkdir } from 'node:fs/promises'
+import { mkdir, readFile } from 'node:fs/promises'
 import { chromium } from '@playwright/test'
 import { applyPolicy } from './policy-helper.mjs'
 import { csvRows } from './financial-reports.mjs'
@@ -180,8 +180,29 @@ async function browserProof(h, owner, sourcePath, state) {
       if (width===1440) {
         if(name==='report') {
           await page.getByRole('heading',{name:'TX',exact:true}).waitFor();await page.getByRole('heading',{name:'NY',exact:true}).waitFor()
-          await page.getByRole('link',{name:'Download source CSV'}).waitFor()
+          const tx = page.locator('article').filter({has:page.getByRole('heading',{name:'TX',exact:true})})
+          const ny = page.locator('article').filter({has:page.getByRole('heading',{name:'NY',exact:true})})
+          const displayed = async (root, label) => root.getByRole('row').filter({has:page.getByRole('cell',{name:label,exact:true})}).getByRole('cell').last().innerText()
+          assert.equal(await displayed(tx,'Taxable base'),'$130.00')
+          assert.equal(await displayed(tx,'Exempt base'),state==='known'?'$50.00':'$0.00')
+          assert.equal(await displayed(tx,'Non-taxable base'),state==='known'?'$25.00':'$20.00')
+          assert.equal(await displayed(tx,'Attributed credit tax adjustment'),'−$3.00')
+          assert.equal(await displayed(tx,'Unattributed credits, tax unknown'),'$11.00')
+          assert.equal(await displayed(ny,'Taxable base'),'$200.00')
+          assert.equal(await displayed(ny,'Known tax after attributed adjustments'),'$20.00')
+          if(state==='missing') {
+            const missing = page.locator('article').filter({has:page.getByRole('heading',{name:'Missing declared jurisdiction',exact:true})})
+            assert.equal(await displayed(missing,'Unknown base'),'$55.00')
+          }
+          const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('link',{name:'Download source CSV'}).click()])
+          const exported = csvRows(await readFile(await download.path(),'utf8'))
+          assert.equal(exported.find(row=>row.source==='TOTAL').knownTaxCents,'30.00')
           assert.ok((await page.locator('main').innerText()).includes('Unknown, unnetted'))
+        }
+        if(name==='source') {
+          const displayed = async label => page.getByRole('row').filter({has:page.getByRole('cell',{name:label,exact:true})}).getByRole('cell').last().innerText()
+          assert.equal(await displayed(state==='known'?'Original taxable base':'Unknown original base'),state==='known'?'$100.00':'$55.00')
+          assert.equal(await displayed('Known tax contribution'),state==='known'?'$10.00':'$0.00')
         }
         assert.deepEqual(await page.locator('main').evaluate(root=>[...root.querySelectorAll('p,h1,h2,h3,label,input,button,td,th,a,summary')].filter(e=>parseFloat(getComputedStyle(e).fontSize)<13).map(e=>e.tagName)),[])
       }
