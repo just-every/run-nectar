@@ -194,7 +194,7 @@
       "executable": false
     },
     "CONTRACT.md": {
-      "sha256": "2ac3c438dad57eb94c037383dfed9f21f48b9c54241b1c7c6849a65bbc1a2b8d",
+      "sha256": "927cb102702d7b4fa1bfec2747748f7fe0869f63a720b072c06d4b9b7d18d879",
       "executable": false
     },
     "DEMO.md": {
@@ -4238,7 +4238,7 @@
       "executable": false
     },
     "src/nectar/financial-reports.ts": {
-      "sha256": "2db8625095ad53c053d0bde44e486a03de2e6dab57b6ff4648105a33b610c3f0",
+      "sha256": "f4115fdf0d712360dcf96d13df939b9b97e48145fdbda89c36bd5d40f104ac1a",
       "executable": false
     },
     "src/nectar/hierarchies.ts": {
@@ -5022,7 +5022,7 @@
       "executable": false
     },
     "src/nectar/report-csv.ts": {
-      "sha256": "53360d29bacbb2a2be795fb33135e990b07bc39e209f3cb0b9164eb675aaa4b5",
+      "sha256": "48fb9ade484a2cba627507d6dcabd32897c1ad8c1fbf1cbbe4796382260c51b4",
       "executable": false
     },
     "src/nectar/report-lines.ts": {
@@ -5203,6 +5203,10 @@
     },
     "src/nectar/subscriptions.ts": {
       "sha256": "5a57326a254909115ca9887adf0a2017d4fe5b396ce69aee8b2b6b3a48b34ca4",
+      "executable": false
+    },
+    "src/nectar/tax-source-report.ts": {
+      "sha256": "bbefdc67f1a3288d24bb447c805d9fe3d8a7f8865d35abdc5b86101bdda0fb69",
       "executable": false
     },
     "src/nectar/test-billing.ts": {
@@ -5506,7 +5510,7 @@
       "executable": false
     },
     "src/nectar/ui/reports.ts": {
-      "sha256": "1e3806bd8bd003a46e85ea3a5ab50c35ba4d175c6f49dbe5fd89dbe790453735",
+      "sha256": "081c1b2e984bb6ab828d697c19284073808d7e71731b0506709a41a062862ce7",
       "executable": false
     },
     "src/nectar/ui/retention.ts": {
@@ -5539,6 +5543,10 @@
     },
     "src/nectar/ui/sso.ts": {
       "sha256": "a1f7b1fd412f22c8a409269524507abe68f050fa398b4edace872d148a4a6d7c",
+      "executable": false
+    },
+    "src/nectar/ui/tax-source-report.ts": {
+      "sha256": "8410329703a86d511bc1b149f896ad5fd13013b217a054ebe7c4b0dbf81c494e",
       "executable": false
     },
     "src/nectar/ui/test-mode.ts": {
@@ -5602,7 +5610,7 @@
       "executable": false
     },
     "src/nectar/views.ts": {
-      "sha256": "e93004fe54b8434d89532162af0723191caa407e6b401afa9972f9368bcb529c",
+      "sha256": "668276abb7ca0d60f9ccac7abcd22592826bd0073502d07931e9e77b6dfab86c",
       "executable": false
     },
     "src/nectar/webauthn.ts": {
@@ -6134,7 +6142,7 @@
       "executable": false
     },
     "tests/nectar/isolated-cases.mjs": {
-      "sha256": "fae48a6090e6f7687a9a2a9d432c3003fbf0e0efc6059592ef47a3f5302bc443",
+      "sha256": "84dd9eb0b19951bb9dbd700d655bf19f9278a2b70daaa326bc1f351901f00ad9",
       "executable": false
     },
     "tests/nectar/isolated.mjs": {
@@ -6607,6 +6615,10 @@
     },
     "tests/nectar/subscription-states.mjs": {
       "sha256": "224786fb85132e790b7b2e77cf7104fadc951e68e44333976caa8f8ca4db3658",
+      "executable": false
+    },
+    "tests/nectar/tax-source-report.mjs": {
+      "sha256": "cadc01922a48334526b99a21f3c2793f8b6895a2d50e22f0411f706c51f81942",
       "executable": false
     },
     "tests/nectar/test-mode-archive.mjs": {

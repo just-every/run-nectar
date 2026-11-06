@@ -1,0 +1,21 @@
+import type { Bindings } from '../../auth.server'
+import { can, type Actor } from '../actor'
+import { taxSourceReport, taxSourceDetail } from '../tax-source-report'
+import { cents, details, h, hidden, page, table } from './html'
+
+export async function taxSourceReportPage(env: Bindings, actor: Actor, url: URL) {
+  const r = await taxSourceReport(env, actor, url)
+  return page(r.title, actor, h`<p class="crumbs"><a href="/app/reports/tax">Monthly invoice tax</a></p><h1>${r.title}</h1><p class="lede">${r.period} · USD · ${r.timezone}</p>
+    ${can(actor, 'export') ? h`<p><a href="/app/exports/reports/tax-sources.csv${url.search}">Download source CSV</a></p>` : ''}
+    <section class="card"><h2>Report basis</h2><p>${r.definition}</p><form method="get">${url.searchParams.has('customer') ? hidden('customer', url.searchParams.get('customer')) : ''}<label>Quarter <input name="period" value="${r.period}" pattern="[0-9]{4}-Q[1-4]" required></label><button type="submit">Show quarter</button></form></section>
+    <section class="card"><h2>Frozen declared jurisdictions</h2><p>Original bases remain separate from later credit subtotals. Known tax is original tax plus attributed adjustments; unknown credit tax is unnetted.</p>
+      ${r.groups.map(g => h`<article><h3>${g.jurisdiction ?? 'Missing declared jurisdiction'}</h3>${table(['Original source fact', 'USD'], [['Taxable base', cents(g.taxableBaseCents)], ['Exempt base', cents(g.exemptBaseCents)], ['Non-taxable base', cents(g.nonTaxableBaseCents)], ['Unknown base', cents(g.unknownBaseCents)], ['Original tax', cents(g.originalTaxCents)], ['Attributed credit tax adjustment', cents(g.attributedTaxAdjustmentCents)], ['Known tax after attributed adjustments', cents(g.knownTaxCents)], ['Attributed credit subtotal, base class unknown', cents(g.attributedCreditSubtotalCents)], ['Unattributed credits, tax unknown', cents(g.unattributedCreditCents)]])}<p>${g.sourceIds.map(id => { const entry = r.entries.find(e => e.id === id)!; return h`<a href="${entry.href}">${entry.number}</a> ` })}</p></article>`)}
+      ${!r.groups.length ? h`<p>No issued source records in this quarter.</p>` : ''}</section>
+    <section class="card"><h2>Quarter totals</h2>${table(['Source fact', 'USD'], [['Original tax', cents(r.totals.originalTaxCents)], ['Attributed credit tax adjustment', cents(r.totals.attributedTaxAdjustmentCents)], ['Known tax after attributed adjustments', cents(r.totals.knownTaxCents)], ['Unattributed credits, tax unknown', cents(r.totals.unattributedCreditCents)]])}</section>
+    <section class="card"><h2>Source records</h2>${table(['Source', 'Customer', 'Issue date', 'Frozen jurisdiction', 'Base evidence', 'Tax evidence'], r.entries.map(e => [h`<a href="${e.href}">${e.number}</a>`, e.customerName, e.date, e.jurisdiction ?? 'Missing declared jurisdiction', e.baseState === 'credit_not_allocated' ? 'Credit base not allocated' : e.baseState === 'unknown' ? 'Unknown base' : 'Frozen invoice lines', e.taxState === 'unknown_credit' ? 'Unknown, unnetted' : cents(e.knownTaxCents)]))}</section>
+    <section class="card"><h2>Coverage still owed</h2><p>Provider recorded transactions and reversals, provider filing formats, imported history and credit base allocation are not covered. Native declared tax is not a provider commitment.</p>${table(['Excluded invoice', 'Currency', 'Reason'], r.unsupported.map(e => [e.number, e.currency, e.reason]), { empty: 'No unsupported native invoice sources in this selection.' })}</section>`, { current: '/app/billing', url })
+}
+export async function taxSourceDetailPage(env: Bindings, actor: Actor, id: string, url: URL) {
+  const r = await taxSourceDetail(env, actor, id, url)
+  return page('Declared tax source', actor, h`<p class="crumbs"><a href="/app/reports/tax-sources${url.search}">Back to quarter report</a></p><h1>Declared tax source</h1><p class="lede">${r.entry.number} · ${r.period}</p><section class="card"><h2>Frozen source evidence</h2><p>${r.definition}</p><p>Jurisdiction: ${r.entry.jurisdiction ?? 'Missing declared jurisdiction'}. Unknown credit tax remains unnetted; credit bases are not allocated.</p>${details({ ...r.entry }, 'Report contribution')}${details(r.evidence ?? {}, 'Saved source facts')}</section>`, { current: '/app/billing', url })
+}

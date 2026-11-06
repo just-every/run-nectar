@@ -1,3 +1,4 @@
+import { taxSourceReport, taxSourceDetail } from './tax-source-report'
 import { closeTieout } from './close-tieout'
 import { sandboxView } from './test-mode'
 import { sandboxCustomerView } from './test-clock'
@@ -191,8 +192,8 @@ export const views: Record<string, View> = {
   credentials: (env, actor) => agentKeys(env, actor),
   audit: (env, actor) => audit(env, actor),
   mfa: (env, actor) => mfaView(env, actor),
-  report: (env, actor, _r, id, url) => report(env, actor, id, url),
-  reportInvoice: (env, actor, _r, id, url) => { const [metric, invoice] = id.split('/'); return reportInvoice(env, actor, metric, invoice, url) },
+  report: (env, actor, _r, id, url) => id === 'tax-sources' ? taxSourceReport(env, actor, url) : report(env, actor, id, url),
+  reportInvoice: (env, actor, _r, id, url) => { const [metric, invoice] = id.split('/'); return metric === 'tax-sources' ? taxSourceDetail(env, actor, invoice, url) : reportInvoice(env, actor, metric, invoice, url) },
   reportLine: (env, actor, _r, id) => { const [invoice, , line] = id.split('/'); return reportLine(env, actor, invoice, line) },
 }
 

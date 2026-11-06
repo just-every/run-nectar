@@ -272,3 +272,11 @@ export async function financialReportSource(env: Bindings, actor: Actor, metric:
       : { calculation: { inputs: saved.inputs, fingerprint: saved.fingerprint ?? invoice.source_fingerprint,
         version: saved.version ?? invoice.calc_version, tax: saved.tax } }) }
 }
+
+/** A saved tax component is authoritative only for a typed source correction.
+ * Ordinary credits have no tax attribution even when default columns are zero. */
+export function attributedCreditTax(credit: Row): number | null {
+  return (credit.correction_id || credit.cancellation_id || credit.void_replacement_id)
+    && Number.isSafeInteger(credit.subtotal_cents) && Number.isSafeInteger(credit.tax_cents)
+    && credit.subtotal_cents + credit.tax_cents === credit.amount_cents ? credit.tax_cents : null
+}
