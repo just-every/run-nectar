@@ -1,6 +1,5 @@
 // Explicit modules keep each isolated journey visible to Verify tooling.
 export const isolatedJourneys = [
-  { file: 'tax-source-report', name: 'taxSourceReportFlow', load: () => import('./tax-source-report.mjs') },
   { file: 'transfer-instructions', name: 'transferInstructionsFlow', load: () => import('./transfer-instructions.mjs') },
   { file: 'remittance-files', name: 'remittanceFilesFlow', load: () => import('./remittance-files.mjs') },
   { file: 'portal-renewal', name: 'portalRenewalFlow', load: () => import('./portal-renewal.mjs') },
@@ -100,4 +99,5 @@ export const isolatedJourneys = [
   { file: 'test-mode', name: 'testModeFlow', load: () => import('./test-mode.mjs') },
   { file: 'job-runs', name: 'jobRunsFlow', load: () => import('./job-runs.mjs') },
   { file: 'collection-diagnosis', name: 'collectionDiagnosisFlow', load: () => import('./collection-diagnosis.mjs') },
+  { file: 'tax-source-report', name: 'taxSourceReportFlow', load: () => import('./tax-source-report.mjs') },
 ]

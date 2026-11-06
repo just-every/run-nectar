@@ -61,6 +61,7 @@ export async function taxSourceReportFlow(h, owner) {
   const unknown = before.entries.find(e => e.taxState === 'unknown_credit')
   assert.equal(unknown.amountCents, 1100); assert.equal(unknown.knownTaxCents, 0)
   assert.equal(before.entries.find(e => e.id === replacement.credit).knownTaxCents, -300)
+  assert.equal((await api('reports/tax-sources')).period, '2026-Q4', 'Default quarter uses the pinned installation clock')
   const financialSnapshot = async () => ({ invoices: await Promise.all([first, certificateInvoice, reversed, last, outside, next, draft].map(i => api(`invoices/${i.id}`))), payments: await api('payments'), tax: await api('reports/tax?period=2026-09'), audit: await api('audit') })
   const original = await financialSnapshot()
   const csvPath = '/app/exports/reports/tax-sources.csv?period=2026-Q3'
@@ -72,6 +73,12 @@ export async function taxSourceReportFlow(h, owner) {
     assert.equal(cents(total[field]), value, `CSV total ${field}`)
     assert.equal(rows.filter(row => row.source_kind !== 'total').reduce((sum, row) => sum + cents(row[field]), 0), value, `CSV source sum ${field}`)
   }
+  for (const entry of before.entries) {
+    const csv = rows.find(row => row.source_id === entry.id)
+    assert.equal(csv.invoice_id, entry.invoiceId)
+    assert.equal(Math.round(Number(csv.source_amount.replace(/^'/, '')) * 100), entry.amountCents)
+    assert.equal(csv.frozen_jurisdiction, entry.jurisdiction)
+  }
   const pageHtml = await h.page('/app/reports/tax-sources?period=2026-Q3', owner)
   for (const entry of before.entries) {
     assert.ok(pageHtml.includes(entry.href.replaceAll('&','&amp;')))
@@ -81,6 +88,8 @@ export async function taxSourceReportFlow(h, owner) {
     assert.equal(source.evidence.original.taxCents, invoice.tax_cents)
     assert.equal(source.evidence.original.fingerprint, invoice.source_fingerprint)
     assert.deepEqual(source.evidence.original.lines.map(l => [l.id,l.amount_cents,l.taxable]), invoice.lines.map(l => [l.id,l.amount_cents,l.taxable]))
+    if (entry.id === replacement.credit) assert.deepEqual([source.evidence.credit.subtotalCents, source.evidence.credit.taxCents], [3000,300])
+    if (entry.taxState === 'unknown_credit') assert.deepEqual([source.evidence.credit.subtotalCents, source.evidence.credit.taxCents], [null,null])
     if (entry.kind === 'invoice') assert.equal(source.evidence.original.lines.reduce((sum,l) => sum+l.amount_cents,0), entry.taxableBaseCents+entry.exemptBaseCents+entry.nonTaxableBaseCents)
     await h.page(entry.href, owner)
   }
@@ -114,6 +123,12 @@ export async function taxSourceReportFlow(h, owner) {
   await h.api(path, accountant, undefined, 403)
   await h.api(sourcePath.replace('/app/',''), accountant, undefined, 403)
   assert.equal((await h.raw(csvPath, {cookie:accountant})).status, 403, 'Current role is rechecked on export')
+  await h.page('/app/reports/tax-sources?period=2026-Q3', accountant, 403)
+  await h.page(sourcePath, accountant, 403)
+  const afterRefusals = await financialSnapshot()
+  assert.deepEqual(afterRefusals.invoices, original.invoices)
+  assert.deepEqual(afterRefusals.payments, original.payments)
+  assert.deepEqual(afterRefusals.tax, original.tax, 'All permission refusals preserve financial sources')
 
   await policy('WA')
   const record = await api(`customers/${exempt}`)
@@ -139,6 +154,10 @@ export async function taxSourceReportFlow(h, owner) {
   const erasedSource = await api(erasedEntry.href.replace('/app/',''))
   assert.ok(!JSON.stringify(erasedSource).includes('Certificate source customer'))
   assert.ok(!JSON.stringify(erasedSource).includes('Changed destination'))
+  const erasedCsv = csvRows(await (await h.raw(csvPath, {cookie:owner})).text()).find(row => row.source_id === certificateInvoice.id)
+  assert.equal(erasedCsv.frozen_jurisdiction, 'Missing declared jurisdiction')
+  assert.equal(erasedCsv.base_state, 'unknown'); assert.equal(erasedCsv.unknownBaseCents, '55.00')
+  assert.equal(erasedCsv.customer, 'Erased customer')
   assert.deepEqual(await read(), erased, 'Replayed reads cannot resurrect erased source facts')
   await browserProof(h, owner, erasedEntry.href, 'missing')
   console.log('PROBE TAX-003 native quarter: API, page, source and CSV equal frozen bases 33000, 5000, 2500 and tax 3300 less attributed 300; ordinary credit 1100 remains unnetted')
@@ -166,6 +185,7 @@ async function browserProof(h, owner, sourcePath, state) {
         }
         assert.deepEqual(await page.locator('main').evaluate(root=>[...root.querySelectorAll('p,h1,h2,h3,label,input,button,td,th,a,summary')].filter(e=>parseFloat(getComputedStyle(e).fontSize)<13).map(e=>e.tagName)),[])
       }
+      if (name==='source') await page.getByText('Saved source facts', {exact:true}).click()
       await page.screenshot({path:`${directory}/${width}-${state}-${name}.png`,fullPage:true})
       console.log(`BROWSER TAX-003 ${width} ${state} ${name}`)
     }
