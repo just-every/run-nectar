@@ -1,0 +1,4 @@
+
+> @billing/nectar@0.1.1 typecheck /home/agent/rer-consolidation/work/sx-nectar-c-f106/run-nectar
+> tsc --build --incremental
+

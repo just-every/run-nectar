@@ -1,0 +1,114 @@
+{
+  "repository": "just-every/run-nectar",
+  "branch": "cloud/sx-nectar-c-f106",
+  "head": "8d2f9661f3268826e3ec922c9b0d722131d3220a",
+  "base": "1b5b0249a43f7483e8d6baa16d09436becff8d6c",
+  "product_push": "success",
+  "pull_request": null,
+  "commits": [
+    {
+      "head": "8d2f9661f3268826e3ec922c9b0d722131d3220a",
+      "author": "Run Edit Run fleet",
+      "author_email": "fleet@runeditrun.com",
+      "committer": "Run Edit Run fleet",
+      "committer_email": "fleet@runeditrun.com",
+      "trailers": []
+    },
+    {
+      "head": "506501242cec4a9ca9b64432361046125fbe4170",
+      "author": "Run Edit Run fleet",
+      "author_email": "fleet@runeditrun.com",
+      "committer": "Run Edit Run fleet",
+      "committer_email": "fleet@runeditrun.com",
+      "trailers": []
+    },
+    {
+      "head": "1cf7e0927860520d128fac2157d16aae14b22de5",
+      "author": "Run Edit Run fleet",
+      "author_email": "fleet@runeditrun.com",
+      "committer": "Run Edit Run fleet",
+      "committer_email": "fleet@runeditrun.com",
+      "trailers": []
+    }
+  ],
+  "changed_files": [
+    "API.md",
+    "CONTRACT.md",
+    "sources.lock.json",
+    "src/nectar/financial-reports.ts",
+    "src/nectar/report-csv.ts",
+    "src/nectar/tax-source-report.ts",
+    "src/nectar/ui/reports.ts",
+    "src/nectar/ui/tax-source-report.ts",
+    "src/nectar/views.ts",
+    "tests/nectar/isolated-cases.mjs",
+    "tests/nectar/tax-source-report.mjs"
+  ],
+  "source_counts_before": {
+    "done": 62,
+    "partial": 41,
+    "missing": 29,
+    "total": 132
+  },
+  "source_counts_after": {
+    "done": 62,
+    "partial": 41,
+    "missing": 29,
+    "total": 132
+  },
+  "claim": "PARTIAL",
+  "acceptance_points_fully_closed": [],
+  "planner_native_point": "proved",
+  "status_cells_unchanged": true,
+  "publication_scan": {
+    "commit": "8d2f9661f3268826e3ec922c9b0d722131d3220a",
+    "complete": false,
+    "historyScanned": false,
+    "findings": null,
+    "reason": "Cloud branch push delegates publication scanning to the maintained Mac lander"
+  },
+  "main_equals_candidate": false,
+  "run_site": "pending_landing",
+  "github_calls": 4,
+  "ci_observed_at_epoch": 1793972309.163975,
+  "screens": [
+    {
+      "path": "screens/1440-known-report.png",
+      "sha256": "6d6c7d4f65879c1463b97878a18f9ca2e2c9320159748a338f6e7326d034c73a"
+    },
+    {
+      "path": "screens/1440-known-source.png",
+      "sha256": "0d3bc2142374ce2b34dd82b6a578885e4e3c71f5981bbc3cdedb243ee97caa47"
+    },
+    {
+      "path": "screens/1440-missing-report.png",
+      "sha256": "efd97d42cf353ab80126f3d5d447ca183651356966cd8b88b32b33752a9a2a26"
+    },
+    {
+      "path": "screens/1440-missing-source.png",
+      "sha256": "eb39632d65144a2bed502f94c14209b1d7cdd9d0cd9588c0ba42135d9f04d764"
+    },
+    {
+      "path": "screens/390-known-report.png",
+      "sha256": "40576c85ae00b593438208fab5a98e50a488c5d4a35032f7190807a799a08dad"
+    },
+    {
+      "path": "screens/390-known-source.png",
+      "sha256": "26cc2830bd54901390e533b7fe9c58ae72c25113d67a8597bd71c9df95924a91"
+    },
+    {
+      "path": "screens/390-missing-report.png",
+      "sha256": "dfc6debe01f2565b31daf3e86d70ea53c7d269aef2dd9bea605126a4d300718f"
+    },
+    {
+      "path": "screens/390-missing-source.png",
+      "sha256": "91cfd11cf8b2006979e38b3d039bd9f4b82a60af9d7b74b3f0bd4b4b96914ac7"
+    }
+  ],
+  "candidate_ci": {
+    "conclusion": null,
+    "head_sha": "8d2f9661f3268826e3ec922c9b0d722131d3220a",
+    "html_url": "https://github.com/just-every/run-nectar/actions/runs/42226352937",
+    "status": "in_progress"
+  }
+}

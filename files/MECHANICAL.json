@@ -1,0 +1,30 @@
+{
+  "head": "8d2f9661f3268826e3ec922c9b0d722131d3220a",
+  "base": "1b5b0249a43f7483e8d6baa16d09436becff8d6c",
+  "lock": {
+    "command": "node node_modules/@runeditrun/rer/edition-authoring/cli.mjs lock",
+    "exit": 0,
+    "check_command": "node node_modules/@runeditrun/rer/edition-authoring/cli.mjs check",
+    "check_exit": 0,
+    "ok": true
+  },
+  "views": {
+    "write_command": "node scripts/contract-docs.mjs write",
+    "write_exit": 0,
+    "check_command": "node scripts/contract-docs.mjs check",
+    "check_exit": 0,
+    "restored": [
+      "ACCEPTANCE.md",
+      "docs/CLAIMS.md"
+    ]
+  },
+  "ledger": {
+    "command": null,
+    "exit": 0,
+    "reason": "No migration changed"
+  },
+  "status_cells_unchanged": true,
+  "acceptance_evidence_unchanged": true,
+  "generated_views_committed": false,
+  "full_history": true
+}

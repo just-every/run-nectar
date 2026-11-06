@@ -1,0 +1,15 @@
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+JOURNEY tax-source-report taxSourceReportFlow
+JOURNEY READY tax-source-report
+BROWSER TAX-003 1440 known report
+BROWSER TAX-003 1440 known source
+BROWSER TAX-003 390 known report
+BROWSER TAX-003 390 known source
+BROWSER TAX-003 1440 missing report
+BROWSER TAX-003 1440 missing source
+BROWSER TAX-003 390 missing report
+BROWSER TAX-003 390 missing source
+PROBE TAX-003 native quarter: API, page, source and CSV equal frozen bases 33000, 5000, 2500 and tax 3300 less attributed 300; ordinary credit 1100 remains unnetted
+PROBE TAX-003 authority: current role, revoked credential, source membership and export refusals preserve financial records

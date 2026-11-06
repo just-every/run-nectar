@@ -1,0 +1,17 @@
+{
+  "repository": "just-every/run-nectar",
+  "branch": "cloud/sx-nectar-c-f106",
+  "head": "8d2f9661f3268826e3ec922c9b0d722131d3220a",
+  "remote_head": "8d2f9661f3268826e3ec922c9b0d722131d3220a",
+  "custody": "PUSHED",
+  "local_checks": "passed",
+  "verify_run": 42226352937,
+  "verify_status": "in_progress",
+  "verify_conclusion": null,
+  "claim": "PARTIAL",
+  "acceptance_points_fully_closed": [],
+  "publication_scan": "lander_pending",
+  "run_site": "landing_pending",
+  "pull_request": null,
+  "github_api_calls": 4
+}

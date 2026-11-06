@@ -1,0 +1,77 @@
+{
+  "head": "8d2f9661f3268826e3ec922c9b0d722131d3220a",
+  "node": "v22.20.0",
+  "checks": [
+    {
+      "name": "typecheck",
+      "command": [
+        "pnpm",
+        "typecheck"
+      ],
+      "head": "8d2f9661f3268826e3ec922c9b0d722131d3220a",
+      "exit": 0,
+      "duration_seconds": 0.32,
+      "log": "typecheck.log"
+    },
+    {
+      "name": "tax-source",
+      "command": [
+        "timeout",
+        "1200",
+        "node",
+        "tests/nectar/clause-runner.mjs",
+        "tax-source-report",
+        "taxSourceReportFlow"
+      ],
+      "head": "8d2f9661f3268826e3ec922c9b0d722131d3220a",
+      "exit": 0,
+      "duration_seconds": 14.71,
+      "log": "tax-source.log"
+    },
+    {
+      "name": "financial-reports",
+      "command": [
+        "timeout",
+        "1200",
+        "node",
+        "tests/nectar/clause-runner.mjs",
+        "financial-reports",
+        "financialReportsFlow"
+      ],
+      "head": "8d2f9661f3268826e3ec922c9b0d722131d3220a",
+      "exit": 0,
+      "duration_seconds": 12.57,
+      "log": "financial-reports.log"
+    },
+    {
+      "name": "certificates",
+      "command": [
+        "timeout",
+        "1200",
+        "node",
+        "tests/nectar/clause-runner.mjs",
+        "certificates",
+        "exemptionCertificates"
+      ],
+      "head": "8d2f9661f3268826e3ec922c9b0d722131d3220a",
+      "exit": 0,
+      "duration_seconds": 8.63,
+      "log": "certificates.log"
+    },
+    {
+      "name": "first-party",
+      "command": [
+        "npx",
+        "-y",
+        "@runeditrun/rer",
+        "check",
+        "--profile",
+        "first-party"
+      ],
+      "head": "8d2f9661f3268826e3ec922c9b0d722131d3220a",
+      "exit": 0,
+      "duration_seconds": 0.93,
+      "log": "first-party.log"
+    }
+  ]
+}
