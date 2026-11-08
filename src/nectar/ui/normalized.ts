@@ -7,7 +7,7 @@ export function normalizedEffectBody(value: NormalizedCorrection) {
   return h`<h3>Normalized subscription run rate</h3><p>${value.policyVersion} · month-end fixed and seat terms. Metered usage and one-time credits have no effect.</p>
     ${table(['As of','MRR before$','MRR after$','MRR change$','ARR before$','ARR after$'],value.periods.filter(effect=>effect.before.supported&&effect.after.supported).map(effect=>[
       effect.before.asOf, cents(effect.before.mrrCents), cents(effect.after.mrrCents), cents(effect.deltaMrrCents), cents(effect.before.arrCents), cents(effect.after.arrCents)]))}
-    ${value.periods.some(effect=>!effect.before.supported||!effect.after.supported)?h`<p>These instruments are outside the supported USD simple fixed and seat definition. No normalized metric is claimed.</p>`:''}`
+    ${value.periods.some(effect=>!effect.before.supported||!effect.after.supported)?h`<p>The retained contract inputs do not establish a supported normalized run rate. No normalized metric is claimed.</p>`:''}`
 }
 
 export function normalizedSourceBody(value: NonNullable<ReportInvoice['normalized']>, actor: Actor) {

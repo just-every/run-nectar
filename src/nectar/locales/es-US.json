@@ -435,7 +435,7 @@
   "dunning.note": "Este enlace vence en quince minutos como máximo. Guardar una tarjeta no autoriza un pago.",
   "correction.mrr.heading": "Importe recurrente normalizado de la suscripción según {policy}; condiciones fijas y por asiento al cierre del mes, sin consumo ni créditos únicos.",
   "correction.mrr.period": "Al {date}: MRR anterior {before}, posterior {after}, cambio {change}; ARR anterior {arrBefore}, posterior {arrAfter}, cambio {arrChange}.",
-  "correction.mrr.unsupported": "Estos instrumentos contractuales no están incluidos en la definición admitida de importes simples fijos y por asiento en USD; no se afirma una métrica normalizada.",
+  "correction.mrr.unsupported": "Los datos contractuales conservados no permiten establecer un importe recurrente normalizado admitido. No se afirma una métrica normalizada.",
   "portal.change.heading": "Solicitudes de cambio de plan",
   "portal.change.pendingOnly": "Solicite un cambio a un plan inferior para que el comercio lo revise. Su plan, facturas y pagos no cambian hasta que una persona use el proceso de cambio aprobado por separado.",
   "portal.change.subscription": "Suscripción {number}",

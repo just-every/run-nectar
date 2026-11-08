@@ -286,11 +286,11 @@
       "executable": false
     },
     "docs/saas-metrics.md": {
-      "sha256": "c98b4c1b97499f4dd88fa36946065eb33b5deaa2521ce5442209a4b8dbf2ae5c",
+      "sha256": "a1b777fd968ea73d0c2572ff78be3c4d6088fa414b90bf26b18039ae627ea914",
       "executable": false
     },
     "docs/site.json": {
-      "sha256": "613091308168be01e8bc2c8d6e72e36a0868d9a01a04371b823faea63b20181e",
+      "sha256": "7b96ec18fe216b91a2bd92f2ba9b73bbe32a0bbc531ea598255bf1c4937b62d6",
       "executable": false
     },
     "docs/usage.md": {
@@ -4430,11 +4430,11 @@
       "executable": false
     },
     "src/nectar/locales/en.json": {
-      "sha256": "7218e26558e5e30a598f8cbc07f32cf0f1ad6edfa9db008e180a4a3f74cf3b46",
+      "sha256": "21a336b8fc2201661a21c945ae650f4918b93f446440eef968c63b5aa8db073b",
       "executable": false
     },
     "src/nectar/locales/es-US.json": {
-      "sha256": "d2a97acedf63f6067bff6c72cf851411317755b2909acf85967cef6e7f2d4d39",
+      "sha256": "827e9c4c4febb92b0cfb471b098aa9195836beedef0eae4225806178ab88cfbd",
       "executable": false
     },
     "src/nectar/manual-invoices.ts": {
@@ -4550,7 +4550,7 @@
       "executable": false
     },
     "src/nectar/normalized-correction.ts": {
-      "sha256": "adda132a8175c4a7ba3c92f465017d206ee9556562edd9d8878285e53aa7f06e",
+      "sha256": "57d8926f908776ef766ace080c7878974c5dd49de2cef65e6759dbf6b2991257",
       "executable": false
     },
     "src/nectar/normalized-metrics.ts": {
@@ -5450,7 +5450,7 @@
       "executable": false
     },
     "src/nectar/ui/normalized.ts": {
-      "sha256": "f387f3f0b48f766c11d4f043f603f42e0f375eb8f1265b00540e7ec915a67cf8",
+      "sha256": "a1b0bebf79b9bfb6f14ec2e6fdc6fec614c4f837a6fb2f80829cd33d11ceedf5",
       "executable": false
     },
     "src/nectar/ui/notes.ts": {
@@ -5714,7 +5714,7 @@
       "executable": false
     },
     "src/site/docs/pages.ts": {
-      "sha256": "c3e9adf51b59167da7fe6091ffa4cace7fb70511ce08c15726c6bcae1d7aae48",
+      "sha256": "af611847f5a38c648a72b0d7acebe6e3a515944f38d0be0f9f7168f0cb4791bf",
       "executable": false
     },
     "src/site/docs/render.ts": {
@@ -5858,7 +5858,7 @@
       "executable": false
     },
     "tests/fixtures/locales/fr.json": {
-      "sha256": "d3668583b88a200fee733773c3c7df6042da75afbc2b9fcca07393405597a78f",
+      "sha256": "35a0f1c7951f6166153185d2f3c71e9eb79f12bdfbbaf59f8c57fb69457fd8cb",
       "executable": false
     },
     "tests/fixtures/stripe-collection-edge.mjs": {
