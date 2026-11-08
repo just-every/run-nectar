@@ -1,0 +1,54 @@
+Using project Node 22.20.0 (current Node 24.19.0).
+Heavy job admitted: Nectar build:workflow [dc3387f21e20]
+Checking pinned pnpm
+10.12.4
+Building your application
+build:app
+▲ [WARNING] Proxy environment variables detected. We'll use your proxy for fetch requests.
+
+
+vite v8.2.2 building client environment for production...
+transforming...
+✓ 135 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/client/.assetsignore               0.02 kB
+dist/client/assets/index-B_mkuos_.js  311.21 kB │ gzip: 100.87 kB
+
+✓ built in 272ms
+vite v8.2.2 building ssr environment for production...
+transforming...
+✓ 1142 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/server/wrangler.json                                      1.51 kB │ gzip:   0.78 kB
+dist/server/.vite/manifest.json                                5.82 kB │ gzip:   0.97 kB
+dist/server/assets/empty-plugin-adapters-D_0twvAa.js           0.28 kB │ gzip:   0.18 kB
+dist/server/assets/start-F3eVvvda.js                           0.28 kB │ gzip:   0.20 kB
+dist/server/assets/_tanstack-start-manifest_v-T4GxCYX-.js      0.35 kB │ gzip:   0.25 kB
+dist/server/assets/font-head-jF9pKUoY.js                       0.46 kB │ gzip:   0.30 kB
+dist/server/assets/rolldown-runtime-7_rZTKki.js                1.79 kB │ gzip:   0.80 kB
+dist/server/assets/trial-collection-invoice-1DlJD7fk.js        3.22 kB │ gzip:   1.33 kB
+dist/server/assets/hash-C7jMOBZd.js                            4.70 kB │ gzip:   2.16 kB
+dist/server/assets/source-B6ZTGNQY.js                          5.03 kB │ gzip:   1.62 kB
+dist/server/assets/state-d8AD1_yY.js                           5.80 kB │ gzip:   1.83 kB
+dist/server/assets/prepaid-records-CVQ7lkYg.js                10.00 kB │ gzip:   3.02 kB
+dist/server/assets/card-lifecycle-CQb0ptF9.js                 15.03 kB │ gzip:   4.29 kB
+dist/server/assets/prepaid-refund-processor-DQvv07Ei.js       33.74 kB │ gzip:   8.80 kB
+dist/server/assets/router-KLa7cbaS.js                         37.26 kB │ gzip:  10.08 kB
+dist/server/assets/locale-D35gRsEk.js                         89.71 kB │ gzip:  24.06 kB
+dist/server/assets/Match-Cd5Y-xn4.js                         161.10 kB │ gzip:  40.32 kB
+dist/server/assets/undo-snapshot-BRBkNVi8.js                 416.56 kB │ gzip: 104.82 kB
+dist/server/assets/actor-_ex2ZuSU.js                         798.77 kB │ gzip: 197.00 kB
+dist/server/assets/payment-links-DMK-rBN5.js                 839.01 kB │ gzip: 196.54 kB
+dist/server/index.js                                       3,644.19 kB │ gzip: 816.79 kB
+
+[INEFFECTIVE_DYNAMIC_IMPORT] src/nectar/processor-cash-imported.ts is dynamically imported by src/nectar/processor-facts.ts, src/nectar/processor-source.ts but also statically imported by src/nectar/actions.ts, src/nectar/erasure.ts, src/nectar/movein/history-reports.ts, src/nectar/processor-cash.ts, src/nectar/ui/processor-events.ts, dynamic import will not move module into another chunk.
+
+[INEFFECTIVE_DYNAMIC_IMPORT] src/nectar/movein/history-revenue.ts is dynamically imported by src/nectar/movein/history-reports.ts but also statically imported by src/nectar/erasure.ts, src/nectar/movein/history-metrics.ts, src/nectar/revenue-records.ts, dynamic import will not move module into another chunk.
+
+[INEFFECTIVE_DYNAMIC_IMPORT] src/nectar/billruns.ts is dynamically imported by src/nectar/hierarchies.ts, src/nectar/payment-links-provider.ts, src/nectar/plan-changes.ts but also statically imported by src/demo/billing.ts, src/nectar/actions.ts, src/nectar/billing-answer-sources.ts, src/nectar/invoice-automation.ts, src/nectar/invoice-expansions.ts, ..., dynamic import will not move module into another chunk.
+
+✓ built in 1.30s
+Your application is built
+build: complete (exit 0)

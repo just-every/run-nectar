@@ -1,0 +1,35 @@
+{
+  "probe": "INV-007 address edit after provider submission",
+  "results": [
+    {
+      "kind": "card",
+      "reconcileStatus": 409,
+      "result": "invoice_partial_source_changed",
+      "paidCents": 0,
+      "balanceCents": 100000,
+      "allocations": 0,
+      "requestStatus": "open",
+      "allocationRecoveryStatus": 409,
+      "allocationRecoveryResult": "invoice_partial_reserved",
+      "pagedListStatus": 400,
+      "pagedListError": "not_a_list",
+      "pagedListRows": null,
+      "providerWritesDuringReconciliation": 0
+    },
+    {
+      "kind": "scheduled_ach",
+      "reconcileStatus": 409,
+      "result": "invoice_partial_source_changed",
+      "paidCents": 0,
+      "balanceCents": 100000,
+      "allocations": 0,
+      "requestStatus": "open",
+      "allocationRecoveryStatus": 409,
+      "allocationRecoveryResult": "invoice_partial_reserved",
+      "pagedListStatus": 400,
+      "pagedListError": "not_a_list",
+      "pagedListRows": null,
+      "providerWritesDuringReconciliation": 0
+    }
+  ]
+}

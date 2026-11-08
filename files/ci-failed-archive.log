@@ -1,0 +1,59 @@
+shards (processor-supplemental-archive)	Run this shard	﻿2026-11-08T15:33:30.8531667Z ##[group]Run node scripts/verify-ci.mjs "$SHARD"
+shards (processor-supplemental-archive)	Run this shard	2026-11-08T15:33:30.8532372Z [36;1mnode scripts/verify-ci.mjs "$SHARD"[0m
+shards (processor-supplemental-archive)	Run this shard	2026-11-08T15:33:30.8552442Z shell: /usr/bin/bash -e {0}
+shards (processor-supplemental-archive)	Run this shard	2026-11-08T15:33:30.8554466Z ##[endgroup]
+shards (processor-supplemental-archive)	Run this shard	2026-11-08T15:33:30.8890808Z > pnpm run verify:app
+shards (processor-supplemental-archive)	Run this shard	2026-11-08T15:33:31.1692358Z 
+shards (processor-supplemental-archive)	Run this shard	2026-11-08T15:33:31.1693343Z > @billing/nectar@0.1.1 verify:app /home/runner/work/run-nectar/run-nectar
+shards (processor-supplemental-archive)	Run this shard	2026-11-08T15:33:31.1693935Z > node scripts/verify-app.mjs
+shards (processor-supplemental-archive)	Run this shard	2026-11-08T15:33:31.1694160Z 
+shards (processor-supplemental-archive)	Run this shard	2026-11-08T15:33:31.2003183Z > NECTAR_TEST_CHECKOUT=1 node tests/nectar/processor-archive.mjs supplemental
+shards (processor-supplemental-archive)	Run this shard	2026-11-08T15:33:32.5680250Z CLI PASS reset 0.25s
+shards (processor-supplemental-archive)	Run this shard	2026-11-08T15:34:39.4486785Z CLI PASS export 66.88s
+shards (processor-supplemental-archive)	Run this shard	2026-11-08T15:35:16.5956526Z CLI PASS export 30.83s
+shards (processor-supplemental-archive)	Run this shard	2026-11-08T15:35:50.0091574Z CLI PASS export 29.47s
+shards (processor-supplemental-archive)	Run this shard	2026-11-08T15:35:50.7678104Z CLI PASS reset 0.27s
+shards (processor-supplemental-archive)	Run this shard	2026-11-08T15:37:42.9985559Z CLI PASS import 112.23s
+shards (processor-supplemental-archive)	Run this shard	2026-11-08T15:38:13.6142540Z CLI PASS export 30.62s
+shards (processor-supplemental-archive)	Run this shard	2026-11-08T15:38:14.3581524Z CLI PASS reset 0.28s
+shards (processor-supplemental-archive)	Run this shard	2026-11-08T15:39:23.0540857Z CLI PASS export 68.69s
+shards (processor-supplemental-archive)	Run this shard	2026-11-08T15:40:05.1056856Z CLI PASS export 35.16s
+shards (processor-supplemental-archive)	Run this shard	2026-11-08T15:40:41.4294216Z CLI PASS export 32.41s
+shards (processor-supplemental-archive)	Run this shard	2026-11-08T15:40:42.2284716Z CLI PASS reset 0.28s
+shards (processor-supplemental-archive)	Run this shard	2026-11-08T15:42:46.0330231Z CLI PASS import 123.80s
+shards (processor-supplemental-archive)	Run this shard	2026-11-08T15:43:20.3872108Z CLI PASS export 34.35s
+shards (processor-supplemental-archive)	Run this shard	2026-11-08T15:43:20.8646395Z Processor archive supplemental phase: public capture, exact rer restore, owner-only due removal, unchanged peers and older-archive refusal passed
+shards (processor-supplemental-archive)	Run this shard	2026-11-08T15:54:43.2474723Z automatic archive: prepare real installation
+shards (processor-supplemental-archive)	Run this shard	2026-11-08T15:54:43.2475444Z CLI PASS export 66.07s
+shards (processor-supplemental-archive)	Run this shard	2026-11-08T15:54:43.2476094Z automatic archive: export pending custody
+shards (processor-supplemental-archive)	Run this shard	2026-11-08T15:54:43.2476694Z CLI PASS export 26.32s
+shards (processor-supplemental-archive)	Run this shard	2026-11-08T15:54:43.2477601Z CLI PASS reset 0.27s
+shards (processor-supplemental-archive)	Run this shard	2026-11-08T15:54:43.2478072Z CLI PASS import 105.08s
+shards (processor-supplemental-archive)	Run this shard	2026-11-08T15:54:43.2478511Z CLI PASS export 26.86s
+shards (processor-supplemental-archive)	Run this shard	2026-11-08T15:54:43.2478973Z automatic archive: restored public doors
+shards (processor-supplemental-archive)	Run this shard	2026-11-08T15:54:43.2479438Z automatic archive: export terminal and second-account custody
+shards (processor-supplemental-archive)	Run this shard	2026-11-08T15:54:43.2480155Z CLI PASS export 28.28s
+shards (processor-supplemental-archive)	Run this shard	2026-11-08T15:54:43.2480527Z CLI PASS reset 0.28s
+shards (processor-supplemental-archive)	Run this shard	2026-11-08T15:54:43.2480952Z CLI PASS import 110.91s
+shards (processor-supplemental-archive)	Run this shard	2026-11-08T15:54:43.2481473Z CLI PASS export 28.43s
+shards (processor-supplemental-archive)	Run this shard	2026-11-08T15:54:43.2482277Z automatic archive: restored terminal and second-account public doors
+shards (processor-supplemental-archive)	Run this shard	2026-11-08T15:54:43.2483059Z CLI PASS export 30.21s
+shards (processor-supplemental-archive)	Run this shard	2026-11-08T15:54:43.2483531Z CLI PASS reset 0.26s
+shards (processor-supplemental-archive)	Run this shard	2026-11-08T15:54:43.2483989Z CLI PASS import 94.01s
+shards (processor-supplemental-archive)	Run this shard	2026-11-08T15:54:43.2484448Z CLI PASS import 52.25s
+shards (processor-supplemental-archive)	Run this shard	2026-11-08T15:54:43.2484906Z CLI PASS import 68.57s
+shards (processor-supplemental-archive)	Run this shard	2026-11-08T15:54:43.2485374Z CLI PASS export 29.37s
+shards (processor-supplemental-archive)	Run this shard	2026-11-08T15:54:43.2488151Z automaticCollectionArchiveJourney: real export, reset and import preserve claimed, uncertain, pending ACH, collected, refused, returned, revoked and invalidated custody; restored authority is inert; reads reconcile original cash once; erasure checkpoints refuse older archives
+shards (processor-supplemental-archive)	Run this shard	2026-11-08T15:54:43.2490103Z 
+shards (processor-supplemental-archive)	Run this shard	2026-11-08T15:54:43.3682669Z > NECTAR_TEST_CHECKOUT=1 node tests/nectar/invoice-partial-payments-archive.mjs
+shards (processor-supplemental-archive)	Run this shard	2026-11-08T15:54:44.1556418Z file:///home/runner/work/run-nectar/run-nectar/tests/nectar/invoice-partial-payments-archive.mjs:14
+shards (processor-supplemental-archive)	Run this shard	2026-11-08T15:54:44.1560291Z for(const path of ['.dev.vars','.wrangler/state'])await access(join(root,path)).then(()=>{throw new Error('A fresh unconfigured checkout is required')},error=>{if(error.code!=='ENOENT')throw error})
+shards (processor-supplemental-archive)	Run this shard	2026-11-08T15:54:44.1561563Z                                                                                                 ^
+shards (processor-supplemental-archive)	Run this shard	2026-11-08T15:54:44.1561923Z 
+shards (processor-supplemental-archive)	Run this shard	2026-11-08T15:54:44.1562184Z Error: A fresh unconfigured checkout is required
+shards (processor-supplemental-archive)	Run this shard	2026-11-08T15:54:44.1563615Z     at mkdir.recursive (file:///home/runner/work/run-nectar/run-nectar/tests/nectar/invoice-partial-payments-archive.mjs:14:97)
+shards (processor-supplemental-archive)	Run this shard	2026-11-08T15:54:44.1565236Z     at async file:///home/runner/work/run-nectar/run-nectar/tests/nectar/invoice-partial-payments-archive.mjs:14:51
+shards (processor-supplemental-archive)	Run this shard	2026-11-08T15:54:44.1566268Z 
+shards (processor-supplemental-archive)	Run this shard	2026-11-08T15:54:44.1566492Z Node.js v22.20.0
+shards (processor-supplemental-archive)	Run this shard	2026-11-08T15:54:44.1894210Z  ELIFECYCLE  Command failed with exit code 1.
+shards (processor-supplemental-archive)	Run this shard	2026-11-08T15:54:44.2129528Z ##[error]Process completed with exit code 1.

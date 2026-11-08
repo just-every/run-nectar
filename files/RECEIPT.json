@@ -1,0 +1,378 @@
+{
+  "repository": "just-every/run-nectar",
+  "branch": "cloud/sx-nectar-f96fix1",
+  "head": "1c2e40b4dbc06b27c8a80798ac7ca0c1fb7e987d",
+  "tree": "795be717b5bdfcffb57cfbdb7bff1033e4b139cd",
+  "integrated_main": "2df41cec83e718b014cf90827a32af5d68fdb38f",
+  "candidate_commits": [
+    "1c2e40b4dbc06b27c8a80798ac7ca0c1fb7e987d",
+    "f5d69c89053d90a4ba99162d7db377ad64dd44eb",
+    "7a744cc29228037d66d9702a051e58ee3f67eb13",
+    "d875ed767cb04e9acfa1f159c7fb63fc5682cd0a",
+    "0a1c4c3cf49761087004f419a469c4fcdb19d0b5",
+    "04bd50dc9b9175dc39f5be662c57f160833ffc5a",
+    "ccb2084bd400222f910018a3ddf30d0bc3a8b617",
+    "699e503478de6b93a63b1f5b928c8dbe0f7274c2"
+  ],
+  "checks": [
+    {
+      "command": "node scripts/contract-docs.mjs check",
+      "exit": 0,
+      "output": "Contract documents current: 132 clauses: 62 done, 41 partial, 29 missing.\n",
+      "stderr": ""
+    },
+    {
+      "command": "node scripts/build-deployment-spec.mjs --check",
+      "exit": 0,
+      "output": "Deployment specification matches the real build and source policy.\n",
+      "stderr": ""
+    },
+    {
+      "command": "node node_modules/@runeditrun/rer/edition-authoring/cli.mjs check",
+      "exit": 0,
+      "output": "Source lock check returned ok=true; complete tool JSON retained outside packet.",
+      "stderr": ""
+    },
+    {
+      "command": "git diff --check",
+      "exit": 0,
+      "output": "",
+      "stderr": ""
+    },
+    {
+      "command": "node scripts/verify-ci.mjs --matrix push; node scripts/verify-ci.mjs --check-workflows; node node_modules/@runeditrun/rer/edition-authoring/cli.mjs check",
+      "exit": 0,
+      "output": "Verification plan, workflow permissions and regenerated source lock pass after the metadata-only CI repair."
+    }
+  ],
+  "focused_commands": [
+    {
+      "command": "pnpm run typecheck",
+      "exit": 0,
+      "log": "typecheck.log"
+    },
+    {
+      "command": "node tests/nectar/clause-runner.mjs api-platform apiPlatformFlow",
+      "exit": 0,
+      "log": "api-platform.log"
+    },
+    {
+      "command": "node tests/nectar/clause-runner.mjs invoice-partial-payments invoicePartialPaymentsFlow",
+      "exit": 0,
+      "log": "partial-payments.log"
+    },
+    {
+      "command": "PROBE_RECEIPT=<packet>/before-probe.json node .probe-inv007.mjs",
+      "exit": 0,
+      "log": "before-probe.log",
+      "observed_failures": "before-probe.json"
+    },
+    {
+      "command": "PROBE_RECEIPT=<packet>/after-probe.json node .probe-inv007.mjs",
+      "exit": 0,
+      "log": "after-probe.log",
+      "observed_results": "after-probe.json"
+    },
+    {
+      "command": "NECTAR_CHROMIUM_PATH=/usr/bin/chromium NECTAR_EVIDENCE_DIR=<packet>/browser node tests/nectar/invoice-partial-payments-browser.mjs",
+      "exit": 0,
+      "log": "partial-payments-browser.log",
+      "screenshots": 32,
+      "assertion_width": 1440,
+      "capture_widths": [
+        1440,
+        390
+      ]
+    },
+    {
+      "command": "NECTAR_TEST_CHECKOUT=1 node tests/nectar/invoice-partial-payments-archive.mjs",
+      "exit": 0,
+      "log": "partial-payments-archive.log",
+      "checkout": "separate fresh worktree at exact product HEAD"
+    },
+    {
+      "command": "NECTAR_CHROMIUM_PATH=/usr/bin/chromium NECTAR_EVIDENCE_DIR=<packet>/browser node tests/nectar/invoice-partial-payments-browser.mjs",
+      "head": "1c2e40b4dbc06b27c8a80798ac7ca0c1fb7e987d",
+      "exit": 0,
+      "log": "partial-payments-browser.log",
+      "screenshots": 32,
+      "assertion_width": 1440,
+      "capture_widths": [
+        1440,
+        390
+      ]
+    }
+  ],
+  "counts": {
+    "contract_before_main": {
+      "done": 62,
+      "partial": 41,
+      "missing": 29,
+      "total": 132
+    },
+    "contract_after": {
+      "done": 62,
+      "partial": 41,
+      "missing": 29,
+      "total": 132
+    },
+    "fix_new_registrations": 0,
+    "new_pagination_assertions": 1,
+    "payment_assertions_removed_or_weakened": 0,
+    "main_isolated_registrations": 100,
+    "merged_isolated_registrations": 101,
+    "original_candidate_contract": {
+      "done": 61,
+      "partial": 42,
+      "missing": 28,
+      "total": 131
+    }
+  },
+  "clause_changes": [],
+  "publication_scan": "Not run, as explicitly required by the FIX brief; Mac lander owns it.",
+  "browser_artifacts": [
+    {
+      "path": "browser/approved-en-1440.png",
+      "sha256": "8f77be98ab8bf5ef1ae9b99b5618992afd52b19eb1ff3c0207caa7125098e4be",
+      "bytes": 139682,
+      "head": "1c2e40b4dbc06b27c8a80798ac7ca0c1fb7e987d"
+    },
+    {
+      "path": "browser/approved-en-390.png",
+      "sha256": "f8f65f148c8e9a036d33c27af9897ef5b705e9fb1041fd7a282e01725fbcfde7",
+      "bytes": 128853,
+      "head": "1c2e40b4dbc06b27c8a80798ac7ca0c1fb7e987d"
+    },
+    {
+      "path": "browser/approved-es-1440.png",
+      "sha256": "d97cd5a4f67e28828feeade0826beb6bbb53ac192b88be92dd4307d4331648c2",
+      "bytes": 151417,
+      "head": "1c2e40b4dbc06b27c8a80798ac7ca0c1fb7e987d"
+    },
+    {
+      "path": "browser/approved-es-390.png",
+      "sha256": "4844e3ef875e912b62e6242685440b35d862641a346df8ab894dfcd8f5000488",
+      "bytes": 143164,
+      "head": "1c2e40b4dbc06b27c8a80798ac7ca0c1fb7e987d"
+    },
+    {
+      "path": "browser/awaiting-payment-1440.png",
+      "sha256": "4052cf6fe2ab7d06749111cc2b183015eaf910e3ec635864da7c2502c961664b",
+      "bytes": 131997,
+      "head": "1c2e40b4dbc06b27c8a80798ac7ca0c1fb7e987d"
+    },
+    {
+      "path": "browser/awaiting-payment-390.png",
+      "sha256": "5e2542aa123f709bfeb17aa1df497ec77c8d13fb27230e50262130795bc29064",
+      "bytes": 121271,
+      "head": "1c2e40b4dbc06b27c8a80798ac7ca0c1fb7e987d"
+    },
+    {
+      "path": "browser/captured-en-1440.png",
+      "sha256": "759588162bce98b7a576e0ba9fc7ae783938e7b72af109900612ccf282ef88e4",
+      "bytes": 135392,
+      "head": "1c2e40b4dbc06b27c8a80798ac7ca0c1fb7e987d"
+    },
+    {
+      "path": "browser/captured-en-390.png",
+      "sha256": "151c34e4019fd8d5be94e56790d1d78ad577e341e37819c7755833e2cd1c7020",
+      "bytes": 125332,
+      "head": "1c2e40b4dbc06b27c8a80798ac7ca0c1fb7e987d"
+    },
+    {
+      "path": "browser/captured-es-1440.png",
+      "sha256": "c0d48015f479863bd8b180f466f51a101b4de205b685ccba51275d6a76fbec1b",
+      "bytes": 147169,
+      "head": "1c2e40b4dbc06b27c8a80798ac7ca0c1fb7e987d"
+    },
+    {
+      "path": "browser/captured-es-390.png",
+      "sha256": "34459f36a9e80457d58178c519ebadc164540a604c1c8ec3f39e0a33f51c521c",
+      "bytes": 139586,
+      "head": "1c2e40b4dbc06b27c8a80798ac7ca0c1fb7e987d"
+    },
+    {
+      "path": "browser/expired-1440.png",
+      "sha256": "e5034e6c50d430a0183767a7485377e6c02b10d3cb429b82b033ddd79467b785",
+      "bytes": 135474,
+      "head": "1c2e40b4dbc06b27c8a80798ac7ca0c1fb7e987d"
+    },
+    {
+      "path": "browser/expired-390.png",
+      "sha256": "9f2b0aabc81050486be6cadd31249abe8ceec0ef87c10aec533305ed6c4e311f",
+      "bytes": 125827,
+      "head": "1c2e40b4dbc06b27c8a80798ac7ca0c1fb7e987d"
+    },
+    {
+      "path": "browser/owner-dated-review-1440.png",
+      "sha256": "654d55e13310c1d020032556a29d6d488e5eed54164d77380333b095a11ce88c",
+      "bytes": 488607,
+      "head": "1c2e40b4dbc06b27c8a80798ac7ca0c1fb7e987d"
+    },
+    {
+      "path": "browser/owner-dated-review-390.png",
+      "sha256": "ed290765de8fbb357db06c17f58e3869559d7145d99a515a16041baf5522681c",
+      "bytes": 404779,
+      "head": "1c2e40b4dbc06b27c8a80798ac7ca0c1fb7e987d"
+    },
+    {
+      "path": "browser/owner-exact-date-submission-1440.png",
+      "sha256": "2f80ed70d8ae4eb8ef0136f51dc89c1900993b4807f00d3a743f495c8bc55cbc",
+      "bytes": 478838,
+      "head": "1c2e40b4dbc06b27c8a80798ac7ca0c1fb7e987d"
+    },
+    {
+      "path": "browser/owner-exact-date-submission-390.png",
+      "sha256": "068fdea6ae7b68d58922bd0de24002cef8fe9c3a0646f7b4fad31e0d198f4ea7",
+      "bytes": 396967,
+      "head": "1c2e40b4dbc06b27c8a80798ac7ca0c1fb7e987d"
+    },
+    {
+      "path": "browser/owner-exact-review-1440.png",
+      "sha256": "49319aebec129224012f1689b9ec6c5c792eb2b4ac1ecd41fa8d6d5e8092ffa4",
+      "bytes": 444835,
+      "head": "1c2e40b4dbc06b27c8a80798ac7ca0c1fb7e987d"
+    },
+    {
+      "path": "browser/owner-exact-review-390.png",
+      "sha256": "89e0eb4bb28fa0b2a014050415b63acb35049cf399fe7336ad116087bbb0e384",
+      "bytes": 361295,
+      "head": "1c2e40b4dbc06b27c8a80798ac7ca0c1fb7e987d"
+    },
+    {
+      "path": "browser/schedule-accepted-en-1440.png",
+      "sha256": "829ab18a1f2f6585d083c90ed8274273dad4fa131a669e959e570535c6e440ad",
+      "bytes": 202770,
+      "head": "1c2e40b4dbc06b27c8a80798ac7ca0c1fb7e987d"
+    },
+    {
+      "path": "browser/schedule-accepted-en-390.png",
+      "sha256": "5de1b4ef9b322e757d067628138595ab322401603485b924369dd720c504c2a9",
+      "bytes": 189796,
+      "head": "1c2e40b4dbc06b27c8a80798ac7ca0c1fb7e987d"
+    },
+    {
+      "path": "browser/schedule-accepted-es-1440.png",
+      "sha256": "a9887ab80940ef6aaf41b11cb71e61c00a92ee98029ea88b3989f812b180a7ec",
+      "bytes": 216414,
+      "head": "1c2e40b4dbc06b27c8a80798ac7ca0c1fb7e987d"
+    },
+    {
+      "path": "browser/schedule-accepted-es-390.png",
+      "sha256": "7ce92e643a15da16da74b60519b46aa539be595dde6d5328610904a2a984be18",
+      "bytes": 206601,
+      "head": "1c2e40b4dbc06b27c8a80798ac7ca0c1fb7e987d"
+    },
+    {
+      "path": "browser/schedule-exact-customer-review-1440.png",
+      "sha256": "37f72acbddbe597e3cd332ecb7d2b09ed2414cd24b717e19ca420c7c80c7de13",
+      "bytes": 222676,
+      "head": "1c2e40b4dbc06b27c8a80798ac7ca0c1fb7e987d"
+    },
+    {
+      "path": "browser/schedule-exact-customer-review-390.png",
+      "sha256": "09623db834dec18946ac92025895593c058a9b70d556ce521674c8529c951ce8",
+      "bytes": 211564,
+      "head": "1c2e40b4dbc06b27c8a80798ac7ca0c1fb7e987d"
+    },
+    {
+      "path": "browser/schedule-paid-en-1440.png",
+      "sha256": "66988a1bdf9366c32592575c237102c63a8e3b5b8468825d14368f14145da79c",
+      "bytes": 204151,
+      "head": "1c2e40b4dbc06b27c8a80798ac7ca0c1fb7e987d"
+    },
+    {
+      "path": "browser/schedule-paid-en-390.png",
+      "sha256": "b12fa8b9162a6d5bcdc2a90d4242388e0a1dd7fdc7e0851aaa29e8529fcfd77b",
+      "bytes": 191150,
+      "head": "1c2e40b4dbc06b27c8a80798ac7ca0c1fb7e987d"
+    },
+    {
+      "path": "browser/schedule-paid-es-1440.png",
+      "sha256": "ab0ca56597d2afe5f25e4404b0b1209752a2408e9b86117dd0926f650f7e73eb",
+      "bytes": 217683,
+      "head": "1c2e40b4dbc06b27c8a80798ac7ca0c1fb7e987d"
+    },
+    {
+      "path": "browser/schedule-paid-es-390.png",
+      "sha256": "6c4002420828fb4a246c8eb78b5e6a2a5cf5bba75b73168a3be3284080cd955d",
+      "bytes": 207572,
+      "head": "1c2e40b4dbc06b27c8a80798ac7ca0c1fb7e987d"
+    },
+    {
+      "path": "browser/schedule-pending-en-1440.png",
+      "sha256": "eeac8280bfed11214f9bc1f4d1f3c995305130ca3d41f8c4b61cdc3405248176",
+      "bytes": 203068,
+      "head": "1c2e40b4dbc06b27c8a80798ac7ca0c1fb7e987d"
+    },
+    {
+      "path": "browser/schedule-pending-en-390.png",
+      "sha256": "bcd400ffc6ce8a7bf56ab52fd83101f202f854f97ef0bfd0c953b2fd700a6de3",
+      "bytes": 190212,
+      "head": "1c2e40b4dbc06b27c8a80798ac7ca0c1fb7e987d"
+    },
+    {
+      "path": "browser/schedule-pending-es-1440.png",
+      "sha256": "289f840ee45db30e32ff223a1864efb935534d054b0d2c11c6d817f3f5dcef90",
+      "bytes": 217696,
+      "head": "1c2e40b4dbc06b27c8a80798ac7ca0c1fb7e987d"
+    },
+    {
+      "path": "browser/schedule-pending-es-390.png",
+      "sha256": "a63a5fa4fe11903633c06e9ef10fefbf1d6cfbd5ce27546bee3510578d90061b",
+      "bytes": 207527,
+      "head": "1c2e40b4dbc06b27c8a80798ac7ca0c1fb7e987d"
+    }
+  ],
+  "github_api_budget": {
+    "limit": 10,
+    "used_after_first_poll": 3,
+    "unused_discovery_calls": 1,
+    "note": "The first read-only lookup used an incorrectly expanded SHA and returned no runs; discovery was immediately corrected using git rev-parse HEAD. All observations and readiness are bound to the actual candidate SHA.",
+    "used_after_latest_poll": 10,
+    "exhausted": true
+  },
+  "product_push": {
+    "status": "pushed",
+    "head": "1c2e40b4dbc06b27c8a80798ac7ca0c1fb7e987d",
+    "branch": "cloud/sx-nectar-f96fix1",
+    "log": "product-push-final.log",
+    "attempts": 1,
+    "force": false
+  },
+  "ci_status_at_receipt_update": {
+    "repository": "just-every/run-nectar",
+    "head": "1c2e40b4dbc06b27c8a80798ac7ca0c1fb7e987d",
+    "github_calls_used": 10,
+    "budget_limit": 10,
+    "run_id": 42497610315,
+    "status": "in_progress",
+    "conclusion": null,
+    "url": "https://github.com/just-every/run-nectar/actions/runs/42497610315",
+    "workflow_runs": [
+      {
+        "id": 42497610315,
+        "name": "Verify",
+        "status": "in_progress",
+        "conclusion": null,
+        "head_sha": "1c2e40b4dbc06b27c8a80798ac7ca0c1fb7e987d",
+        "html_url": "https://github.com/just-every/run-nectar/actions/runs/42497610315"
+      }
+    ]
+  },
+  "local_validation_head": "f5d69c89053d90a4ba99162d7db377ad64dd44eb",
+  "final_metadata_only_diff": [
+    "sources.lock.json",
+    "verification.json"
+  ],
+  "initial_verify_failure": {
+    "head": "f5d69c89053d90a4ba99162d7db377ad64dd44eb",
+    "run_id": 42495316208,
+    "failed_job": 128776452968,
+    "reason": "Archive proof followed another archive suite in a configured checkout; the unchanged fresh-checkout guard refused it.",
+    "failed_log_command": "gh run view 42495316208 --repo just-every/run-nectar --job 128776452968 --log-failed",
+    "failed_log_exit": 0,
+    "failure_log": "ci-failed-archive.log",
+    "repair": "Move the same full partial-payment archive command to the existing in-memory flows-one shard, retaining every test and assertion and the number of CI shard jobs."
+  }
+}

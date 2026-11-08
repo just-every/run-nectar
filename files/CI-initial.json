@@ -1,0 +1,57 @@
+{
+  "repository": "just-every/run-nectar",
+  "head": "f5d69c89053d90a4ba99162d7db377ad64dd44eb",
+  "run_id": 42495316208,
+  "url": "https://github.com/just-every/run-nectar/actions/runs/42495316208",
+  "github_calls_used": 7,
+  "observations": [
+    {
+      "observed_at": "2026-11-08T15:32:39.452895+00:00",
+      "id": 42495316208,
+      "name": "Verify",
+      "status": "in_progress",
+      "conclusion": null,
+      "head_sha": "f5d69c89053d90a4ba99162d7db377ad64dd44eb",
+      "html_url": "https://github.com/just-every/run-nectar/actions/runs/42495316208"
+    },
+    {
+      "observed_at": "2026-11-08T15:37:40.942933+00:00",
+      "conclusion": null,
+      "head_sha": "f5d69c89053d90a4ba99162d7db377ad64dd44eb",
+      "html_url": "https://github.com/just-every/run-nectar/actions/runs/42495316208",
+      "status": "in_progress"
+    },
+    {
+      "observed_at": "2026-11-08T15:42:40.904796+00:00",
+      "conclusion": null,
+      "head_sha": "f5d69c89053d90a4ba99162d7db377ad64dd44eb",
+      "html_url": "https://github.com/just-every/run-nectar/actions/runs/42495316208",
+      "status": "in_progress"
+    },
+    {
+      "observed_at": "2026-11-08T15:47:41.112043+00:00",
+      "conclusion": null,
+      "head_sha": "f5d69c89053d90a4ba99162d7db377ad64dd44eb",
+      "html_url": "https://github.com/just-every/run-nectar/actions/runs/42495316208",
+      "status": "in_progress"
+    },
+    {
+      "observed_at": "2026-11-08T15:52:41.251026+00:00",
+      "conclusion": null,
+      "head_sha": "f5d69c89053d90a4ba99162d7db377ad64dd44eb",
+      "html_url": "https://github.com/just-every/run-nectar/actions/runs/42495316208",
+      "status": "in_progress"
+    },
+    {
+      "observed_at": "2026-11-08T15:57:42.694197+00:00",
+      "conclusion": "failure",
+      "head_sha": "f5d69c89053d90a4ba99162d7db377ad64dd44eb",
+      "html_url": "https://github.com/just-every/run-nectar/actions/runs/42495316208",
+      "status": "completed"
+    }
+  ],
+  "conclusion": "failure",
+  "head_sha": "f5d69c89053d90a4ba99162d7db377ad64dd44eb",
+  "html_url": "https://github.com/just-every/run-nectar/actions/runs/42495316208",
+  "status": "completed"
+}

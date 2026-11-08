@@ -1,0 +1,35 @@
+{
+  "probe": "INV-007 address edit after provider submission",
+  "results": [
+    {
+      "kind": "card",
+      "reconcileStatus": 200,
+      "result": "collected",
+      "paidCents": 40000,
+      "balanceCents": 60000,
+      "allocations": 1,
+      "requestStatus": "collected",
+      "allocationRecoveryStatus": 200,
+      "allocationRecoveryResult": "allocated",
+      "pagedListStatus": 200,
+      "pagedListError": null,
+      "pagedListRows": 1,
+      "providerWritesDuringReconciliation": 0
+    },
+    {
+      "kind": "scheduled_ach",
+      "reconcileStatus": 200,
+      "result": "collected",
+      "paidCents": 100000,
+      "balanceCents": 0,
+      "allocations": 1,
+      "requestStatus": "collected",
+      "allocationRecoveryStatus": 409,
+      "allocationRecoveryResult": "exceeds_balance",
+      "pagedListStatus": 200,
+      "pagedListError": null,
+      "pagedListRows": 1,
+      "providerWritesDuringReconciliation": 0
+    }
+  ]
+}
