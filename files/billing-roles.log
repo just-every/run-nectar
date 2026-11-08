@@ -1,0 +1,11 @@
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+JOURNEY billing-roles billingRolesFlow
+JOURNEY READY billing-roles
+PROBE GOV-008 1: customer detail, child, search and CSV doors -> invoice figures visible only with invoice authority
+PROBE GOV-008 2: same populated doors -> payment references visible only with both financial capabilities
+PROBE GOV-008 3: Sales and customer-only and payment-only reads -> financial sections and hints absent
+PROBE GOV-008 4: approved erasure -> private identifiers absent; retained invoice totals unchanged
+PROBE GOV-008 5: allowed reads, refused reads and next-request revocation -> no financial mutation
+GOV-001 preset and custom roles reach exactly their capabilities, support credit limit, next-request revocation, notes, alerts, metadata and answers passed

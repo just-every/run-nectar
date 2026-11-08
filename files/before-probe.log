@@ -1,0 +1,130 @@
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+JOURNEY move-investigations moveInvestigationsFlow
+JOURNEY READY move-investigations
+nectar_internal_error Error: D1_ERROR: synthetic-nectar-audit-unavailable: SQLITE_CONSTRAINT (extended: SQLITE_CONSTRAINT_TRIGGER)
+    at D1DatabaseSessionAlwaysPrimary._sendOrThrow (cloudflare-internal:d1-api:188:19)
+    at async cloudflare-internal:d1-api:137:19
+    ... 6 lines matching cause stack trace ...
+    at async Object.fetch (file:///home/agent/rer-consolidation/work/sx-nectar-f37fix1/run-nectar/dist/server/index.js:80916:18) {
+  [cause]: Error: synthetic-nectar-audit-unavailable: SQLITE_CONSTRAINT (extended: SQLITE_CONSTRAINT_TRIGGER)
+      at D1DatabaseSessionAlwaysPrimary._sendOrThrow (cloudflare-internal:d1-api:189:24)
+      at async cloudflare-internal:d1-api:137:19
+      at async commit (file:///home/agent/rer-consolidation/work/sx-nectar-f37fix1/run-nectar/dist/server/assets/actor-BwmfRHsF.js:16521:3)
+      at async saveAssuranceProofs (file:///home/agent/rer-consolidation/work/sx-nectar-f37fix1/run-nectar/dist/server/assets/payment-links-CXOJA7qa.js:12120:2)
+      at async scanCases (file:///home/agent/rer-consolidation/work/sx-nectar-f37fix1/run-nectar/dist/server/assets/payment-links-CXOJA7qa.js:12097:9)
+      at async investigateMove (file:///home/agent/rer-consolidation/work/sx-nectar-f37fix1/run-nectar/dist/server/assets/payment-links-CXOJA7qa.js:12328:9)
+      at async apiResponse (file:///home/agent/rer-consolidation/work/sx-nectar-f37fix1/run-nectar/dist/server/index.js:80708:33)
+      at async nectarResponse (file:///home/agent/rer-consolidation/work/sx-nectar-f37fix1/run-nectar/dist/server/index.js:80674:19)
+      at async Object.fetch (file:///home/agent/rer-consolidation/work/sx-nectar-f37fix1/run-nectar/dist/server/index.js:80916:18)
+}
+nectar_internal_error Error: D1_ERROR: synthetic-nectar-audit-unavailable: SQLITE_CONSTRAINT (extended: SQLITE_CONSTRAINT_TRIGGER)
+    at D1DatabaseSessionAlwaysPrimary._sendOrThrow (cloudflare-internal:d1-api:188:19)
+    at async cloudflare-internal:d1-api:137:19
+    ... 4 lines matching cause stack trace ...
+    at async Object.fetch (file:///home/agent/rer-consolidation/work/sx-nectar-f37fix1/run-nectar/dist/server/index.js:80916:18) {
+  [cause]: Error: synthetic-nectar-audit-unavailable: SQLITE_CONSTRAINT (extended: SQLITE_CONSTRAINT_TRIGGER)
+      at D1DatabaseSessionAlwaysPrimary._sendOrThrow (cloudflare-internal:d1-api:189:24)
+      at async cloudflare-internal:d1-api:137:19
+      at async commit (file:///home/agent/rer-consolidation/work/sx-nectar-f37fix1/run-nectar/dist/server/assets/actor-BwmfRHsF.js:16521:3)
+      at async decide (file:///home/agent/rer-consolidation/work/sx-nectar-f37fix1/run-nectar/dist/server/index.js:44183:3)
+      at async apiResponse (file:///home/agent/rer-consolidation/work/sx-nectar-f37fix1/run-nectar/dist/server/index.js:80708:33)
+      at async nectarResponse (file:///home/agent/rer-consolidation/work/sx-nectar-f37fix1/run-nectar/dist/server/index.js:80674:19)
+      at async Object.fetch (file:///home/agent/rer-consolidation/work/sx-nectar-f37fix1/run-nectar/dist/server/index.js:80916:18)
+}
+nectar_internal_error Error: D1_ERROR: synthetic-nectar-audit-unavailable: SQLITE_CONSTRAINT (extended: SQLITE_CONSTRAINT_TRIGGER)
+    at D1DatabaseSessionAlwaysPrimary._sendOrThrow (cloudflare-internal:d1-api:188:19)
+    at async cloudflare-internal:d1-api:137:19
+    ... 4 lines matching cause stack trace ...
+    at async Object.fetch (file:///home/agent/rer-consolidation/work/sx-nectar-f37fix1/run-nectar/dist/server/index.js:80916:18) {
+  [cause]: Error: synthetic-nectar-audit-unavailable: SQLITE_CONSTRAINT (extended: SQLITE_CONSTRAINT_TRIGGER)
+      at D1DatabaseSessionAlwaysPrimary._sendOrThrow (cloudflare-internal:d1-api:189:24)
+      at async cloudflare-internal:d1-api:137:19
+      at async commit (file:///home/agent/rer-consolidation/work/sx-nectar-f37fix1/run-nectar/dist/server/assets/actor-BwmfRHsF.js:16521:3)
+      at async recheckAssurance (file:///home/agent/rer-consolidation/work/sx-nectar-f37fix1/run-nectar/dist/server/assets/payment-links-CXOJA7qa.js:12193:2)
+      at async apiResponse (file:///home/agent/rer-consolidation/work/sx-nectar-f37fix1/run-nectar/dist/server/index.js:80708:33)
+      at async nectarResponse (file:///home/agent/rer-consolidation/work/sx-nectar-f37fix1/run-nectar/dist/server/index.js:80674:19)
+      at async Object.fetch (file:///home/agent/rer-consolidation/work/sx-nectar-f37fix1/run-nectar/dist/server/index.js:80916:18)
+}
+nectar_internal_error Error: D1_ERROR: synthetic-nectar-audit-unavailable: SQLITE_CONSTRAINT (extended: SQLITE_CONSTRAINT_TRIGGER)
+    at D1DatabaseSessionAlwaysPrimary._sendOrThrow (cloudflare-internal:d1-api:188:19)
+    at async cloudflare-internal:d1-api:137:19
+    ... 4 lines matching cause stack trace ...
+    at async Object.fetch (file:///home/agent/rer-consolidation/work/sx-nectar-f37fix1/run-nectar/dist/server/index.js:80916:18) {
+  [cause]: Error: synthetic-nectar-audit-unavailable: SQLITE_CONSTRAINT (extended: SQLITE_CONSTRAINT_TRIGGER)
+      at D1DatabaseSessionAlwaysPrimary._sendOrThrow (cloudflare-internal:d1-api:189:24)
+      at async cloudflare-internal:d1-api:137:19
+      at async commit (file:///home/agent/rer-consolidation/work/sx-nectar-f37fix1/run-nectar/dist/server/assets/actor-BwmfRHsF.js:16521:3)
+      at async recheckAssurance (file:///home/agent/rer-consolidation/work/sx-nectar-f37fix1/run-nectar/dist/server/assets/payment-links-CXOJA7qa.js:12193:2)
+      at async apiResponse (file:///home/agent/rer-consolidation/work/sx-nectar-f37fix1/run-nectar/dist/server/index.js:80708:33)
+      at async nectarResponse (file:///home/agent/rer-consolidation/work/sx-nectar-f37fix1/run-nectar/dist/server/index.js:80674:19)
+      at async Object.fetch (file:///home/agent/rer-consolidation/work/sx-nectar-f37fix1/run-nectar/dist/server/index.js:80916:18)
+}
+nectar_internal_error Error: D1_ERROR: synthetic-nectar-audit-unavailable: SQLITE_CONSTRAINT (extended: SQLITE_CONSTRAINT_TRIGGER)
+    at D1DatabaseSessionAlwaysPrimary._sendOrThrow (cloudflare-internal:d1-api:188:19)
+    at async cloudflare-internal:d1-api:137:19
+    ... 4 lines matching cause stack trace ...
+    at async Object.fetch (file:///home/agent/rer-consolidation/work/sx-nectar-f37fix1/run-nectar/dist/server/index.js:80916:18) {
+  [cause]: Error: synthetic-nectar-audit-unavailable: SQLITE_CONSTRAINT (extended: SQLITE_CONSTRAINT_TRIGGER)
+      at D1DatabaseSessionAlwaysPrimary._sendOrThrow (cloudflare-internal:d1-api:189:24)
+      at async cloudflare-internal:d1-api:137:19
+      at async commit (file:///home/agent/rer-consolidation/work/sx-nectar-f37fix1/run-nectar/dist/server/assets/actor-BwmfRHsF.js:16521:3)
+      at async recheckAssurance (file:///home/agent/rer-consolidation/work/sx-nectar-f37fix1/run-nectar/dist/server/assets/payment-links-CXOJA7qa.js:12193:2)
+      at async apiResponse (file:///home/agent/rer-consolidation/work/sx-nectar-f37fix1/run-nectar/dist/server/index.js:80708:33)
+      at async nectarResponse (file:///home/agent/rer-consolidation/work/sx-nectar-f37fix1/run-nectar/dist/server/index.js:80674:19)
+      at async Object.fetch (file:///home/agent/rer-consolidation/work/sx-nectar-f37fix1/run-nectar/dist/server/index.js:80916:18)
+}
+nectar_internal_error Error: D1_ERROR: synthetic-nectar-audit-unavailable: SQLITE_CONSTRAINT (extended: SQLITE_CONSTRAINT_TRIGGER)
+    at D1DatabaseSessionAlwaysPrimary._sendOrThrow (cloudflare-internal:d1-api:188:19)
+    at async cloudflare-internal:d1-api:137:19
+    ... 4 lines matching cause stack trace ...
+    at async Object.fetch (file:///home/agent/rer-consolidation/work/sx-nectar-f37fix1/run-nectar/dist/server/index.js:80916:18) {
+  [cause]: Error: synthetic-nectar-audit-unavailable: SQLITE_CONSTRAINT (extended: SQLITE_CONSTRAINT_TRIGGER)
+      at D1DatabaseSessionAlwaysPrimary._sendOrThrow (cloudflare-internal:d1-api:189:24)
+      at async cloudflare-internal:d1-api:137:19
+      at async commit (file:///home/agent/rer-consolidation/work/sx-nectar-f37fix1/run-nectar/dist/server/assets/actor-BwmfRHsF.js:16521:3)
+      at async prepareMoveRollback (file:///home/agent/rer-consolidation/work/sx-nectar-f37fix1/run-nectar/dist/server/index.js:62496:2)
+      at async apiResponse (file:///home/agent/rer-consolidation/work/sx-nectar-f37fix1/run-nectar/dist/server/index.js:80708:33)
+      at async nectarResponse (file:///home/agent/rer-consolidation/work/sx-nectar-f37fix1/run-nectar/dist/server/index.js:80674:19)
+      at async Object.fetch (file:///home/agent/rer-consolidation/work/sx-nectar-f37fix1/run-nectar/dist/server/index.js:80916:18)
+}
+nectar_internal_error Error: D1_ERROR: synthetic-nectar-audit-unavailable: SQLITE_CONSTRAINT (extended: SQLITE_CONSTRAINT_TRIGGER)
+    at D1DatabaseSessionAlwaysPrimary._sendOrThrow (cloudflare-internal:d1-api:188:19)
+    at async cloudflare-internal:d1-api:137:19
+    ... 4 lines matching cause stack trace ...
+    at async Object.fetch (file:///home/agent/rer-consolidation/work/sx-nectar-f37fix1/run-nectar/dist/server/index.js:80916:18) {
+  [cause]: Error: synthetic-nectar-audit-unavailable: SQLITE_CONSTRAINT (extended: SQLITE_CONSTRAINT_TRIGGER)
+      at D1DatabaseSessionAlwaysPrimary._sendOrThrow (cloudflare-internal:d1-api:189:24)
+      at async cloudflare-internal:d1-api:137:19
+      at async commit (file:///home/agent/rer-consolidation/work/sx-nectar-f37fix1/run-nectar/dist/server/assets/actor-BwmfRHsF.js:16521:3)
+      at async confirmMoveRollback (file:///home/agent/rer-consolidation/work/sx-nectar-f37fix1/run-nectar/dist/server/index.js:62531:2)
+      at async apiResponse (file:///home/agent/rer-consolidation/work/sx-nectar-f37fix1/run-nectar/dist/server/index.js:80708:33)
+      at async nectarResponse (file:///home/agent/rer-consolidation/work/sx-nectar-f37fix1/run-nectar/dist/server/index.js:80674:19)
+      at async Object.fetch (file:///home/agent/rer-consolidation/work/sx-nectar-f37fix1/run-nectar/dist/server/index.js:80916:18)
+}
+node:internal/modules/run_main:123
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: identical mixed-case subscription event items open no investigation
++ actual - expected
+
++ [
++   'e99d2d9c-148d-498c-a7f3-f1229db402ac'
++ ]
+- []
+
+    at Module.moveInvestigationsFlow (file:///home/agent/rer-consolidation/work/sx-nectar-f37fix1/run-nectar/tests/nectar/move-investigations.mjs:253:10)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async runIsolated (file:///home/agent/rer-consolidation/work/sx-nectar-f37fix1/run-nectar/tests/nectar/isolated.mjs:19:5)
+    at async file:///tmp/nectar-run-probe.mjs:2:1 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: [ 'e99d2d9c-148d-498c-a7f3-f1229db402ac' ],
+  expected: [],
+  operator: 'deepStrictEqual',
+  diff: 'simple'
+}
+
+Node.js v22.20.0

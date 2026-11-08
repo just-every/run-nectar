@@ -1,0 +1,55 @@
+{
+  "kind": "move-investigations",
+  "captures": [
+    {
+      "label": "three-differences",
+      "width": 1440,
+      "file": "1440-three-differences.png"
+    },
+    {
+      "label": "three-differences",
+      "width": 390,
+      "file": "390-three-differences.png"
+    },
+    {
+      "label": "resolved-comparisons",
+      "width": 1440,
+      "file": "1440-resolved-comparisons.png"
+    },
+    {
+      "label": "resolved-comparisons",
+      "width": 390,
+      "file": "390-resolved-comparisons.png"
+    },
+    {
+      "label": "customer-difference",
+      "width": 1440,
+      "file": "1440-customer-difference.png"
+    },
+    {
+      "label": "customer-difference",
+      "width": 390,
+      "file": "390-customer-difference.png"
+    },
+    {
+      "label": "method-difference",
+      "width": 1440,
+      "file": "1440-method-difference.png"
+    },
+    {
+      "label": "method-difference",
+      "width": 390,
+      "file": "390-method-difference.png"
+    },
+    {
+      "label": "event-difference",
+      "width": 1440,
+      "file": "1440-event-difference.png"
+    },
+    {
+      "label": "event-difference",
+      "width": 390,
+      "file": "390-event-difference.png"
+    }
+  ]
+}
