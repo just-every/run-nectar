@@ -1,0 +1,22 @@
+{
+  "files": [
+    {
+      "blob": "dbc3ac01ba483f860fd88e83f8bf984633b5170b",
+      "bytes": 11709,
+      "path": "REPORT.md",
+      "sha256": "5fe172c1f7cb4e58a6867108db6a57c775d2935f41dcf13be71e561daf10e673"
+    },
+    {
+      "blob": "1751154c4cb6b1ddcb340ba8ad1393b563191756",
+      "bytes": 2009,
+      "path": "native-capability-receipt.json",
+      "sha256": "ce3a7b27da2d33ef8e976848c3ffa356e45ec451132e2effe9832804360965a9"
+    }
+  ],
+  "product_branch": "cloud/sx-nectar-c-f107",
+  "product_head": "2df41cec83e718b014cf90827a32af5d68fdb38f",
+  "ref": "refs/heads/evidence/sx-nectar-c-f107",
+  "repository": "just-every/run-nectar",
+  "schema": 1,
+  "tag": "sx-nectar-c-f107"
+}

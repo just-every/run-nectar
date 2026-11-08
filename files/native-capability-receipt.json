@@ -1,0 +1,94 @@
+{
+  "schema": 1,
+  "tag": "sx-nectar-c-f107",
+  "repository": "just-every/run-nectar",
+  "observed_at": "2026-11-08T14:49:44.534452+00:00",
+  "product_branch": "cloud/sx-nectar-c-f107",
+  "product_head": "2df41cec83e718b014cf90827a32af5d68fdb38f",
+  "product_commits_created": 0,
+  "product_pushed": false,
+  "checks": [
+    {
+      "command": [
+        "uname",
+        "-s"
+      ],
+      "exit": 0,
+      "stdout": "Linux",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "uname",
+        "-m"
+      ],
+      "exit": 0,
+      "stdout": "x86_64",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "xcodebuild",
+        "-version"
+      ],
+      "exit": 127,
+      "stdout": "",
+      "stderr": "bash: line 1: xcodebuild: command not found"
+    },
+    {
+      "command": [
+        "xcrun",
+        "simctl",
+        "list",
+        "devices"
+      ],
+      "exit": 127,
+      "stdout": "",
+      "stderr": "bash: line 1: xcrun: command not found"
+    },
+    {
+      "command": [
+        "adb",
+        "version"
+      ],
+      "exit": 127,
+      "stdout": "",
+      "stderr": "bash: line 1: adb: command not found"
+    },
+    {
+      "command": [
+        "emulator",
+        "-version"
+      ],
+      "exit": 127,
+      "stdout": "",
+      "stderr": "bash: line 1: emulator: command not found"
+    },
+    {
+      "command": [
+        "sdkmanager",
+        "--version"
+      ],
+      "exit": 127,
+      "stdout": "",
+      "stderr": "bash: line 1: sdkmanager: command not found"
+    }
+  ],
+  "kvm_exists": false,
+  "native_apps_present": {
+    "apps/ios/Nectar": false,
+    "apps/android": false,
+    "tests/native/ios": false,
+    "tests/native/android": false
+  },
+  "counts": {
+    "done": 62,
+    "partial": 41,
+    "missing": 29
+  },
+  "tests_run": [],
+  "ci_runs_created": [],
+  "blocker": "Required iOS Simulator build and runtime need a macOS host with Xcode and an iOS Simulator runtime; this task supplies only Linux.",
+  "clean_product_worktree": true,
+  "full_history": true
+}
