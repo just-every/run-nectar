@@ -116,8 +116,8 @@
     "workflow": "Verify",
     "run_id": 42482514923,
     "head_sha": "c7522ef6ad3ff44f13431b350d93c53e6bf06cfe",
-    "status": "in_progress",
-    "conclusion": null,
+    "status": "completed",
+    "conclusion": "success",
     "html_url": "https://github.com/just-every/run-nectar/actions/runs/42482514923",
     "polls": [
       {
@@ -140,6 +140,20 @@
         "head_sha": "c7522ef6ad3ff44f13431b350d93c53e6bf06cfe",
         "html_url": "https://github.com/just-every/run-nectar/actions/runs/42482514923",
         "status": "in_progress"
+      },
+      {
+        "file": "ci-poll-4.json",
+        "conclusion": null,
+        "head_sha": "c7522ef6ad3ff44f13431b350d93c53e6bf06cfe",
+        "html_url": "https://github.com/just-every/run-nectar/actions/runs/42482514923",
+        "status": "in_progress"
+      },
+      {
+        "file": "ci-poll-5.json",
+        "conclusion": "success",
+        "head_sha": "c7522ef6ad3ff44f13431b350d93c53e6bf06cfe",
+        "html_url": "https://github.com/just-every/run-nectar/actions/runs/42482514923",
+        "status": "completed"
       }
     ]
   },
@@ -151,6 +165,16 @@
     "31a4c2af1c2d299b8f635c46db0c907fc686785b"
   ],
   "blockers": [],
-  "github_calls_used": 4,
-  "evidence_publication_state": "Interim evidence snapshot; CI in progress"
+  "github_calls_used": 6,
+  "evidence_publication_state": "Final report and receipts for successful exact-SHA Verify",
+  "interim_evidence": {
+    "head": "b07665f6a6d7fe7514309b201e8defb89066814c",
+    "fetch_hash_verification": "pass",
+    "receipt": "evidence-transfer-check-interim.json"
+  },
+  "terminal_product_custody": {
+    "status": "READY",
+    "branch": "cloud/sx-nectar-f37fix1",
+    "head": "c7522ef6ad3ff44f13431b350d93c53e6bf06cfe"
+  }
 }

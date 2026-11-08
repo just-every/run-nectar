@@ -1,5 +1,7 @@
 # sx-nectar-f37fix1
 
+Result: the sole mixed-case item-ordering defect is fixed and pushed at c7522ef6ad3ff44f13431b350d93c53e6bf06cfe. Exact-SHA Verify run 42482514923 completed/success. The lane retains its independent R6, mixed-case and regression gate.
+
 Scope: the sole BLOCKING A item, AGENT-005 webhook event item ordering (R6 clean control and mixed-case control). No acceptance status claim or publication scan.
 
 Plan:
@@ -34,3 +36,9 @@ Authorization regression: billingRolesFlow passed across preset/custom roles, fi
 Product candidate: cloud/sx-nectar-f37fix1 at c7522ef6ad3ff44f13431b350d93c53e6bf06cfe. One new merge/fix commit combines the supplied candidate and current main. All six commits in origin/main..HEAD, including side parents, have fleet author/committer identity; trailers are absent and full messages contain no Codex/OpenAI co-author. Working tree is clean. No PR is required by the repository instructions; branch-push Verify is available.
 
 Push custody: the cloud push guard succeeded on its first attempt, publishing only refs/heads/cloud/sx-nectar-f37fix1 at c7522ef6ad3ff44f13431b350d93c53e6bf06cfe. Verify was discovered through REST as push run 42482514923 on this exact SHA; initial status in_progress. CI polling is one watcher, at most once every 300 seconds, with ten total GitHub calls available. There has been no main/default-branch push, force push, publication scan, deployment or landing submission. No product blocker is known locally; independent gate remains owned by the lane.
+
+Final CI result: REST confirmed Verify run 42482514923 completed/success on exact product SHA c7522ef6ad3ff44f13431b350d93c53e6bf06cfe, https://github.com/just-every/run-nectar/actions/runs/42482514923. Six GitHub calls were used in total: discovery and five polls, each at least 300 seconds apart. No run was dispatched or rerun, and no failure logs were needed. The workflow took longer than the historical ten-minute target; the completed exact-SHA result is retained in ci-poll-5.json.
+
+Evidence preservation: an interim packet published at evidence/sx-nectar-f37fix1 head b07665f6a6d7fe7514309b201e8defb89066814c and an independent fetch restored it with manifest/file hashes verified. The final packet adds the completed CI receipt and full GitHub call record; it is published through the same separate evidence ref. Product custody remains the named cloud branch and exact SHA; evidence publication grants no acceptance or landing authority.
+
+Before/after: false mixed-case investigation cases 1 -> 0; new test registrations 0 -> 0; one new regression assertion in the existing journey; contract counts unchanged at 132 clauses, 62 done, 41 partial, 29 missing. Clause status, Gap and Evidence changes: none. No blocker remains for this scoped fix; independent gate and landing remain with the fleet.
