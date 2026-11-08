@@ -116,14 +116,14 @@ const subscription: Kind = {
     const row = await db.prepare("SELECT * FROM nc_subscriptions WHERE id = ? AND origin = 'import'").bind(id).first<any>()
     if (!row) return undefined
     const items = (await db.prepare("SELECT id, price_id, quantity, effective_from, effective_to, provider_ref FROM nc_items WHERE subscription_id = ? AND origin = 'import' ORDER BY id").bind(id).all<any>()).results
-    const amendments = (await db.prepare("SELECT id, kind, value, effective_from, effective_to, note, status FROM nc_amendments WHERE subscription_id = ? AND origin = 'import' ORDER BY id").bind(id).all<any>()).results
+    const amendments = (await db.prepare("SELECT id, kind, value, effective_from, effective_to, note, status, item_id FROM nc_amendments WHERE subscription_id = ? AND origin = 'import' ORDER BY id").bind(id).all<any>()).results
     return {
       revision: row.revision,
       value: withDependents({
         customerId: row.customer_id, externalId: row.external_id, anchorDay: row.anchor_day, startDate: row.start_date, trialEnd: row.trial_end, endDate: row.end_date,
         providerRef: row.provider_ref, scheduleRef: row.provider_schedule_ref, collection: row.provider_collection,
         items: items.map(item => ({ id: item.id, priceId: item.price_id, quantity: item.quantity, from: item.effective_from, to: item.effective_to, providerRef: item.provider_ref })),
-        amendments: amendments.map(a => ({ id: a.id, kind: a.kind, value: a.value, from: a.effective_from, to: a.effective_to, note: a.note, status: a.status })),
+        amendments: amendments.map(a => ({ id: a.id, ...(a.item_id ? { itemId: a.item_id } : {}), kind: a.kind, value: a.value, from: a.effective_from, to: a.effective_to, note: a.note, status: a.status })),
       }, await dependents(db, SUBSCRIPTION_DEPENDENTS, id)),
     }
   },
@@ -135,7 +135,7 @@ const subscription: Kind = {
       parts.push(`EXISTS(SELECT 1 FROM nc_items WHERE origin = 'import' AND ${match.text})`); params.push(...match.params)
     }
     for (const a of value.amendments as Value[]) {
-      const match = eq([['id', a.id], ['subscription_id', id], ['kind', a.kind], ['value', a.value], ['effective_from', a.from], ['effective_to', a.to], ['note', a.note], ['status', a.status]])
+      const match = eq([['id', a.id], ['subscription_id', id], ['kind', a.kind], ['value', a.value], ['effective_from', a.from], ['effective_to', a.to], ['note', a.note], ['status', a.status], ['item_id', a.itemId ?? null]])
       parts.push(`EXISTS(SELECT 1 FROM nc_amendments WHERE origin = 'import' AND ${match.text})`); params.push(...match.params)
     }
     parts.push("(SELECT COUNT(*) FROM nc_items WHERE subscription_id = ? AND origin = 'import') = ?", "(SELECT COUNT(*) FROM nc_amendments WHERE subscription_id = ? AND origin = 'import') = ?")
@@ -148,7 +148,7 @@ const subscription: Kind = {
     sql("INSERT INTO nc_subscriptions (id, customer_id, external_id, anchor_day, start_date, trial_end, end_date, billing_mode, origin, provider_ref, provider_schedule_ref, provider_collection, revision, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'shadow', 'import', ?, ?, ?, ?, 'import:stripe', ?, ?)",
       id, value.customerId, value.externalId, value.anchorDay, value.startDate, value.trialEnd, value.endDate, value.providerRef, value.scheduleRef, value.collection, revision, at(), at()),
     ...(value.items as Value[]).map(item => sql("INSERT INTO nc_items (id, subscription_id, price_id, quantity, effective_from, effective_to, origin, provider_ref, created_at) VALUES (?, ?, ?, ?, ?, ?, 'import', ?, ?)", item.id, id, item.priceId, item.quantity, item.from, item.to, item.providerRef, at())),
-    ...(value.amendments as Value[]).map(a => sql("INSERT INTO nc_amendments (id, subscription_id, kind, value, effective_from, effective_to, note, status, origin, created_by, created_at, decided_by, decided_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'import', 'import:stripe', ?, 'import:stripe', ?)", a.id, id, a.kind, a.value, a.from, a.to, a.note, a.status, at(), at())),
+    ...(value.amendments as Value[]).map(a => sql("INSERT INTO nc_amendments (id, subscription_id, kind, value, effective_from, effective_to, note, status, item_id, origin, created_by, created_at, decided_by, decided_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'import', 'import:stripe', ?, 'import:stripe', ?)", a.id, id, a.kind, a.value, a.from, a.to, a.note, a.status, a.itemId ?? null, at(), at())),
   ],
   remove: id => [
     sql("DELETE FROM nc_amendments WHERE subscription_id = ? AND origin = 'import'", id),

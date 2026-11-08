@@ -16,6 +16,7 @@
         "node tests/nectar/dunning-browser.mjs",
         "node tests/nectar/dunning-browser.mjs custody",
         "node tests/nectar/processor-journey.mjs",
+        "node tests/nectar/normalized-browser.mjs",
         "node tests/nectar/sanity.mjs paymentRetriesFlow dunning-sequences portalSessionsFlow planChangesFlow financialReportsFlow metricsFlow contractSetup upcomingFlow assuranceScheduleFlow invoiceContentFlow card-lifecycle enterprise-identity"
       ]
     },
@@ -306,6 +307,7 @@
     "tests/nectar/subscription-states-browser.mjs": [],
     "tests/nectar/test-mode-browser.mjs": [],
     "tests/nectar/test-mode-archive.mjs": [],
-    "tests/nectar/mobile-customer.mjs": []
+    "tests/nectar/mobile-customer.mjs": [],
+    "tests/nectar/normalized-browser.mjs": []
   }
 }

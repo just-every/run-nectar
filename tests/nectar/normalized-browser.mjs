@@ -1,0 +1,61 @@
+import assert from 'node:assert/strict'
+import { mkdir } from 'node:fs/promises'
+import { chromium } from '@playwright/test'
+import { runIsolated } from './isolated.mjs'
+
+const directory = process.env.NECTAR_EVIDENCE_DIR ?? '.evidence/normalized-metrics'
+await mkdir(directory, { recursive: true })
+const browser = await chromium.launch({ headless: true, args: ['--use-mock-keychain', '--password-store=basic'] })
+try {
+  for (const [file, name] of [['normalized-metrics','normalizedMetricsFlow'], ['draft-corrections','draftCorrectionsFlow'], ['credit-correction','creditCorrectionFlow']]) {
+    const module = await import(`./${file}.mjs`)
+    await runIsolated(file, name, async () => ({ harnessOptions: () => ({ assets: true }), [name]: async (h, owner) => {
+      const context = await browser.newContext()
+      try {
+        await context.addCookies(owner.split('; ').map(part => { const at = part.indexOf('='); return { name: part.slice(0, at), value: part.slice(at+1), url: h.origin } }))
+        const page = await context.newPage(), seen = new Set()
+        await module[name](h, owner, async state => {
+          const label = `${file}-${state.label}-${state.id ?? ''}`
+          if (seen.has(label)) return
+          seen.add(label)
+          const path = state.path ?? `/app/proposals/${state.id}`
+          for (const width of [1440,390]) {
+            await page.setViewportSize({ width, height: 1000 })
+            const response = await page.goto(h.origin + path)
+            assert.equal(response.status(), 200)
+            if (state.select) {
+              await page.getByLabel(state.select.label,{exact:true}).selectOption(state.select.value)
+              await Promise.all([page.waitForURL(url=>url.searchParams.get('plan')===state.select.value),page.getByRole('button',{name:'Show month',exact:true}).click()])
+            }
+            if (state.analytics) await page.getByText('Monthly cohort retention',{exact:true}).first().click()
+            assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, `${label} fits ${width}`)
+            assert.deepEqual(await page.locator('a,button,[role=button]').evaluateAll(nodes=>nodes.filter(node=>!node.textContent.trim()&&node.querySelector('svg,img')&&!node.getAttribute('aria-describedby')).map(node=>node.outerHTML)), [], 'Icon controls have tooltips')
+            assert.ok((await page.locator('main').innerText()).length > 100)
+            if (state.amount !== undefined) {
+              const money = new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(state.amount/100)
+              const total = page.locator('main a[href="#contributions"]')
+              if (await total.count()) assert.equal(await total.innerText(),`Total ${money}`,'The rendered report total equals independent contract cents')
+              else assert.equal(await page.locator('section').filter({has:page.getByRole('heading',{name:'Calculation of this contribution',exact:true})}).locator('strong').innerText(),money,'The rendered source total equals its exact contribution')
+            }
+            if (width === 1440 && state.analytics) {
+              for (const [label,key] of [['Paying customers','customers'],['Average revenue per account','arpa'],['Logo churn','logo'],['Net revenue retention','net'],['Gross revenue retention','gross']]) {
+                const row = page.getByRole('row').filter({has:page.getByRole('cell',{name:label,exact:true})})
+                assert.equal(await row.getByRole('cell').last().innerText(),state.analytics[key],`${label} renders the independently reconciled analytics`)
+              }
+              assert.equal(await page.getByLabel('Customer segment',{exact:true}).inputValue(),'Synthetic research cohort')
+              assert.ok(await page.getByRole('heading',{name:'Customer retention cohorts',exact:true}).count())
+              assert.ok(await page.getByRole('heading',{name:'Trial conversion cohorts',exact:true}).count())
+              const cohort = page.locator('details[open]').filter({has:page.getByText('Monthly cohort retention',{exact:true})})
+              const april = cohort.getByRole('row').filter({has:page.getByRole('cell',{name:'2026-04',exact:true})})
+              const may = cohort.getByRole('row').filter({has:page.getByRole('cell',{name:'2026-05',exact:true})})
+              assert.deepEqual((await april.getByRole('cell').allInnerTexts()).slice(0,6),['2026-04','0','$0.00','0.00%','0.00%','0.00%'])
+              assert.deepEqual((await may.getByRole('cell').allInnerTexts()).slice(0,6),['2026-05','1','$150.00','100.00%','150.00%','100.00%'])
+            }
+            await page.screenshot({ path: `${directory}/${width}-${label}.jpg`, fullPage: true, type: 'jpeg', quality: 65 })
+            console.log('BROWSER',width,label)
+          }
+        })
+      } finally { await context.close() }
+    } }))
+  }
+} finally { await browser.close() }

@@ -1,6 +1,6 @@
 import type { Bindings } from '../auth.server'
 import { all,canonical,guard,insist,parseJson,type Row } from './core'
-import { rateIntervalInvoiceService,type RatingInput } from './rating'
+import { replacementDiscountScope,rateIntervalInvoiceService,type RatingInput } from './rating'
 import { BALANCE_SQL } from './balance-sql'
 
 const totals=(r:Row)=>({subtotalCents:r.subtotalCents,taxCents:r.taxCents,totalCents:r.totalCents})
@@ -39,7 +39,7 @@ export async function planChangeHistory(env:Bindings,invoice:Row,original:Rating
     const current=services[service],active=current.items.find(i=>i.id===change.item_id)!
     const before=rateIntervalInvoiceService(original,services)
     insist(canonical(totals(before))===canonical(quote.before),'plan_change_history_changed',409)
-    const next:RatingInput={...current,prices:{...current.prices,[change.new_price_id]:quote.targetPrice},items:[...current.items.map(i=>i.id===change.item_id?{...i,to:change.effective_date}:i),{id:change.new_item_id,priceId:change.new_price_id,quantity:change.new_quantity,from:change.effective_date,to:active.to}]}
+    const next:RatingInput={...current,prices:{...current.prices,[change.new_price_id]:quote.targetPrice},items:[...current.items.map(i=>i.id===change.item_id?{...i,to:change.effective_date}:i),{id:change.new_item_id,priceId:change.new_price_id,quantity:change.new_quantity,from:change.effective_date,to:active.to,...replacementDiscountScope(active,change.new_price_id)}]}
     const nextServices=services.map((input,index)=>index===service?next:input)
     // A scheduled change leaves this period's service intact.
     const after=change.mode==='period_end'?before:rateIntervalInvoiceService(original,nextServices)
@@ -51,7 +51,7 @@ export async function planChangeHistory(env:Bindings,invoice:Row,original:Rating
     services=nextServices
     const live=items.find(i=>i.id===change.item_id)
     insist(live,'plan_change_history_changed',409)
-    items=[...items.map(i=>i.id===change.item_id?{...i,to:change.effective_date}:i),{id:change.new_item_id,priceId:change.new_price_id,quantity:change.new_quantity,from:change.effective_date,to:live.to}]
+    items=[...items.map(i=>i.id===change.item_id?{...i,to:change.effective_date}:i),{id:change.new_item_id,priceId:change.new_price_id,quantity:change.new_quantity,from:change.effective_date,to:live.to,...replacementDiscountScope(live,change.new_price_id)}]
     prices={...prices,[change.new_price_id]:quote.targetPrice}
   }
   const service=services.findIndex(input=>input.items.some(i=>i.id===item.id))

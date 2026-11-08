@@ -1,3 +1,5 @@
+import { normalizedCorrectionText } from './normalized-notice'
+import type { NormalizedCorrection } from './normalized-metrics'
 // Frozen, engine-derived customer explanations. Preparation never queues or sends.
 import { closedPeriods } from './period-close-keys'
 import type { Bindings } from '../auth.server'
@@ -17,7 +19,7 @@ export interface DraftCorrectionNotice {
 }
 interface Prepared { normalized: Row; impact: any; basis: Row }
 interface EngineTotal { subtotalCents: number; taxCents: number; totalCents: number; fingerprint: string; lines: { description: string; amountCents: number }[]; revenue: RevenuePreview }
-interface PeriodImpact { subscription: string; customer?: string; period: { start: string; end: string }; before: EngineTotal; after: EngineTotal; revenueDeltas: RevenuePeriodDelta[] }
+interface PeriodImpact { subscription: string; customer?: string; period: { start: string; end: string }; before: EngineTotal; after: EngineTotal; revenueDeltas: RevenuePeriodDelta[]; normalizedMrr?: NormalizedCorrection }
 interface UsageSource { id: string; customer: string; meter: string; action: string; quantity: string; occurredAt: number }
 interface CustomerImpact { customer: Row; rows: PeriodImpact[]; subscriptions: Row[] }
 
@@ -82,6 +84,7 @@ function periodExplanation(row: PeriodImpact, L: CustomerText) {
     figures('correction.before', row.before.subtotalCents, row.before.taxCents, row.before.totalCents), figures('correction.after', row.after.subtotalCents, row.after.taxCents, row.after.totalCents),
     figures('correction.change', row.after.subtotalCents - row.before.subtotalCents, row.after.taxCents - row.before.taxCents, row.after.totalCents - row.before.totalCents),
     lineText('correction.before_lines', row.before), lineText('correction.after_lines', row.after),
+    ...(row.normalizedMrr ? [normalizedCorrectionText(row.normalizedMrr, L)] : []),
     L.t('correction.revenue.heading'), L.t('correction.revenue.policy', { policy: REVENUE_POLICY_VERSION }),
     ...row.revenueDeltas.map(entry => L.t('correction.revenue.period', { from: L.day(`${entry.period}-01`), before: L.money(entry.beforeCents), after: L.money(entry.afterCents), change: L.money(entry.deltaCents) }))].join('\n')
 }
@@ -135,8 +138,9 @@ export async function draftCorrectionPlan(env: Bindings, kind: DraftCorrectionKi
           quote: L.t('correction.revenue.schedule', { line: schedule.lineId, amount: L.money(entry.amountCents), from: L.day(`${entry.period}-01`), policy: preview.policyVersion }),
           fingerprint: preview.fingerprint, policyVersion: preview.policyVersion, recordPath: `/${side}/revenue/schedules/${index}/entries/${entryIndex}` })))
       }
+      const normalizedCitations: DraftCorrectionCitation[] = (row.normalizedMrr?.periods ?? []).flatMap((effect, index) => (['before', 'after'] as const).map(side => ({ source, quote: normalizedCorrectionText({ policyVersion: effect.policyVersion, periods: [effect] }, L), fingerprint: effect[side].fingerprint, policyVersion: effect.policyVersion, recordPath: `/normalizedMrr/periods/${index}/${side}` })))
       return [{ source, quote: `Before: subtotal ${row.before.subtotalCents} cents, tax ${row.before.taxCents} cents, total ${row.before.totalCents} cents.`, fingerprint: row.before.fingerprint },
-        { source, quote: `After: subtotal ${row.after.subtotalCents} cents, tax ${row.after.taxCents} cents, total ${row.after.totalCents} cents.`, fingerprint: row.after.fingerprint }, ...revenueCitations]
+        { source, quote: `After: subtotal ${row.after.subtotalCents} cents, tax ${row.after.taxCents} cents, total ${row.after.totalCents} cents.`, fingerprint: row.after.fingerprint }, ...revenueCitations, ...normalizedCitations]
     })
     if (ownSources.length) citations.push(...ownSources.map(source => ({ source: '/app/usage',
       quote: `${source.action} usage ${source.id}; quantity ${source.quantity}; occurred ${new Date(source.occurredAt).toISOString()}.` })))

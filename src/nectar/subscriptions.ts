@@ -15,14 +15,14 @@ import { all, commit, guard, insist, newId, now, one, parseJson, stmt, type Row 
 import { canonicalDecimal, micros } from './decimal'
 import { addMonthsClamped, isDate, periodContaining, requireDate } from './dates'
 import { nonMonthlyArrears, storedBillingTerms } from './billing-calendar'
-import { rated } from './inputs'
+import { rated, ratingInputs } from './inputs'
 import { lifecycleHistory, lifecycleIntervals } from './lifecycle-records'
 import { lifecyclePolicy } from './lifecycle-policy'
 import { sourceMeterIds,uniqueMeterItems } from './metric-ownership'
 import { contractsFor, contractBurnDown } from './contract-terms'
 import { metadataFor,withMetadata } from './metadata'
 import type { Input } from './input'
-import type { ItemIn, Line } from './rating'
+import { replacementDiscountScope, type ItemIn, type Line } from './rating'
 import { intervalChangePreview } from './interval-changes'
 import { intervalCancellations } from './interval-cancel'
 import { assertSameCurrency, customerCurrencyGuard } from './currency'
@@ -198,8 +198,8 @@ export async function prepareChange(env: Bindings, actor: Actor, input: Input) {
   insist((price.meter_id ?? '') === (old!.meter_id ?? '') || price.kind !== 'unit', 'change_meter_separately')
   const quantity = price.kind === 'seat' ? input.integer('quantity', { min: price.pricing_model === 'simple' ? 1 : 0, max: price.pricing_model === 'simple' ? 1_000_000 : 1_000_000_000 })! : 1
   insist(price.id !== item.price_id || quantity !== item.quantity, 'nothing_changes')
-  const items: ItemIn[] = (await all(env, 'SELECT * FROM nc_items WHERE subscription_id = ? ORDER BY effective_from, id', sub.id)).map(row => ({ id: row.id, priceId: row.price_id, quantity: row.quantity, from: row.effective_from, to: row.effective_to }))
-  const changed: ItemIn[] = [...items.map(row => row.id === item.id ? { ...row, to: date } : row), { id: 'change', priceId: price.id, quantity, from: date, to: item.effective_to }]
+  const items = (await ratingInputs(env, business, sub.id, period)).items
+  const changed: ItemIn[] = [...items.map(row => row.id === item.id ? { ...row, to: date } : row), { id: 'change', priceId: price.id, quantity, from: date, to: item.effective_to, ...replacementDiscountScope(items.find(row => row.id === item.id)!, price.id) }]
   await uniqueMeterItems(env,changed)
   const intervalPreview = await intervalChangePreview(env, business, sub, items, changed, item.price_id, price.id, date)
   let preview: Row | null = intervalPreview

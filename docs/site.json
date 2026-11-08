@@ -15,6 +15,7 @@
         { "slug": "usage", "title": "Usage", "file": "usage.md", "summary": "Bring usage in by file or from a pipeline, and check each period's totals before anything is rated." },
         { "slug": "bill-runs", "title": "Bill runs and invoices", "file": "bill-runs.md", "summary": "Draft a month, review its exceptions, approve and finalize numbered invoices whose every line shows its rule." },
         { "slug": "receivables", "title": "Credits, payments and reminders", "file": "receivables.md", "summary": "Credit notes, payments recorded with their reference, ageing and reminders you send from your own mail." },
+        { "slug": "saas-metrics", "title": "Subscription metrics", "file": "saas-metrics.md", "summary": "Normalized run rates, customer movements, history and the exact source definitions behind each figure." },
         { "slug": "retry-table", "title": "Nectar decline retry table", "file": "retry-table.md", "summary": "The versioned decline table, frozen retry limits and reasons that stop collection." },
         { "slug": "retry-comparison", "title": "Retry timing comparison", "file": "retry-comparison.md", "summary": "Published schedules and known outcomes, measured recovery and the live report's accounting." },
         { "slug": "agents-and-access", "title": "People, roles and agents", "file": "agents-and-access.md", "summary": "Invite a finance operator or an accountant, and let an agent prepare work that a person approves." },

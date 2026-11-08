@@ -255,13 +255,39 @@ async function build(env: Bindings, actor: Actor, input: Input) {
         const end = o.status === 'canceled' ? dateOf(o.ended_at ?? o.canceled_at) : o.cancel_at ? dateOf(o.cancel_at) : null
         const trialEnd = o.trial_end && dateOf(o.trial_end)! > start ? dateOf(o.trial_end) : null
         const amendments = []
-        const discounts = [o.discount, ...(Array.isArray(o.discounts) ? o.discounts : [])].filter(d => d && typeof d === 'object')
-        for (const discount of discounts) {
+        const discountScopes: { discount: Row; item: Row | null }[] = []
+        const addDiscounts = (owner: Row, item: Row | null) => {
+          const seen = new Set<string>()
+          for (const discount of [owner.discount, ...(Array.isArray(owner.discounts) ? owner.discounts : [])]) {
+            if (!discount || typeof discount !== 'object') continue
+            const key = String(discount.id ?? canonicalJson(discount))
+            if (seen.has(key)) continue
+            seen.add(key)
+            discountScopes.push({ discount, item })
+          }
+        }
+        addDiscounts(o, null)
+        for (const item of items) addDiscounts(item, item)
+        for (const { discount, item } of discountScopes) {
           const coupon = discount.coupon ?? discount.source?.coupon
           if (coupon?.percent_off && (coupon.duration === 'forever' || coupon.duration === 'repeating' || coupon.duration === 'once')) {
             const from = dateOf(discount.start) ?? start
             const to = discount.end ? dateOf(discount.end) : coupon.duration === 'once' ? periodContaining(anchorDay, from).end : null
-            amendments.push({ id: targetIds.amendment(discount.id ?? `${o.id}:${coupon.id}`), kind: 'discount_percent', value: decimalText(micros(String(coupon.percent_off))), from, to, note: `Stripe coupon ${coupon.name ?? coupon.id}`, status: 'approved' })
+            const products = coupon.applies_to?.products
+            const covered = (item ? [item] : items).filter((candidate: Row) => {
+              if (!Array.isArray(products)) return true
+              const price = (lists.prices ?? []).find(price => price.id === idOf(candidate.price))
+              return products.includes(idOf(price?.product))
+            })
+            // Unrestricted subscription discounts keep their original journal
+            // shape and identity. Every narrower discount binds an exact item.
+            const scoped = item !== null || Array.isArray(products)
+            const scopes = scoped ? covered.map((candidate: Row) => targetIds.item(candidate.id)) : [null]
+            for (const itemId of scopes) amendments.push({
+              id: targetIds.amendment(`${discount.id ?? `${o.id}:${coupon.id}`}${itemId ? `:item:${itemId}` : ''}`),
+              ...(itemId ? { itemId } : {}), kind: 'discount_percent', value: decimalText(micros(String(coupon.percent_off))),
+              from, to, note: `Stripe coupon ${coupon.name ?? coupon.id}`, status: 'approved',
+            })
           } else if (coupon) note(source, `coupon ${coupon.id} (${coupon.amount_off ? 'fixed amount' : 'unsupported'}) is not moved; record it as a contract exception in Nectar`)
         }
         if (o.schedule) note(source, `Stripe subscription schedule ${idOf(o.schedule)} is recorded, not executed; schedule its future phases as changes in Nectar`)
@@ -343,7 +369,13 @@ export async function applyImport(env: Bindings, actor: Actor, input: Input) {
   const undone = (await one<{ n: number }>(env, "SELECT COUNT(*) AS n FROM ik_jobs WHERE destination = ? AND fingerprint = ? AND state IN ('undone', 'rolled_back')", destination, reviewed))!.n
   const reviewedContext = { ...context, reviewedFingerprint: reviewed, ...(undone ? { operationKey: `${reviewed}:${undone}` } : {}) }
   const job = await createD1ImportJob(plan, reviewedContext)
-  const result = await applyD1ImportBatches(job.id, reviewedContext)
+  let result
+  try { result = await applyD1ImportBatches(job.id, reviewedContext) }
+  catch (error) {
+    // A retained job cannot regain its earlier source custody after erasure.
+    if (error instanceof Error && error.message === 'REVIEW_FINGERPRINT_MISMATCH') insist(false, 'reviewed_fingerprint_changed', 409)
+    throw error
+  }
   await commit(env, [], { actor: actorLabel(actor), action: 'import.apply', subject: job.id, detail: { kit: 'stripe', fingerprint: reviewed, counts: plan.counts } })
   return { job: job.id, state: result.state }
 }
