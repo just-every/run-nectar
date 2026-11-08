@@ -34,7 +34,8 @@
       "commands": [
         "NECTAR_VERIFY_SHARDS=4 NECTAR_VERIFY_CORE_SHARD=2 NECTAR_VERIFY_SHARD=1 pnpm run test:flows",
         "node tests/nectar/clause-browser.mjs collection-diagnosis",
-        "node tests/nectar/invoice-partial-payments-browser.mjs"
+        "node tests/nectar/invoice-partial-payments-browser.mjs",
+        "NECTAR_TEST_CHECKOUT=1 node tests/nectar/invoice-partial-payments-archive.mjs"
       ]
     },
     {
@@ -134,8 +135,7 @@
       "browser": false,
       "hosted": false,
       "commands": [
-        "NECTAR_TEST_CHECKOUT=1 node tests/nectar/processor-archive.mjs supplemental",
-        "NECTAR_TEST_CHECKOUT=1 node tests/nectar/invoice-partial-payments-archive.mjs"
+        "NECTAR_TEST_CHECKOUT=1 node tests/nectar/processor-archive.mjs supplemental"
       ]
     },
     {
