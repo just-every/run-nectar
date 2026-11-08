@@ -1,0 +1,19 @@
+{
+  "repository": "just-every/run-nectar",
+  "branch": "cloud/sx-nectar-f25fix1",
+  "head": "df4fdbbccf73d3f5320c8da217904c23bdb9e29c",
+  "parents": [
+    "7ee65705781d0db30b1ec46e7bfd275369153a0d"
+  ],
+  "full_history": true,
+  "worktree_clean": true,
+  "contract_and_generated_views_equal_origin_main": true,
+  "migration_renumbered": "migrations/core/0110_amendment_items.sql -> migrations/core/0128_amendment_items.sql",
+  "product_push": "both substantive commits pushed successfully on attempt one via cloud-push.py; no force",
+  "publication_scan": "not run, as explicitly required by FIX brief",
+  "identity_audit": "10 candidate commits, all parents included; permitted fleet/owner identities; no trailers",
+  "product_commits": [
+    "7ee65705781d0db30b1ec46e7bfd275369153a0d",
+    "df4fdbbccf73d3f5320c8da217904c23bdb9e29c"
+  ]
+}

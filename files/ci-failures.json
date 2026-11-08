@@ -1,0 +1,31 @@
+{
+  "head": "7ee65705781d0db30b1ec46e7bfd275369153a0d",
+  "run_id": 42495695583,
+  "conclusion": "failure",
+  "jobs": [
+    {
+      "id": 128777609031,
+      "name": "shards (source)",
+      "cause": "docs/site.json did not name saas-metrics.md; later local site build also caught its unsupported level-1 heading"
+    },
+    {
+      "id": 128777609070,
+      "name": "shards (flows-two)",
+      "cause": "moveInvestigationsFlow proposal.create received 409 normalized_history_evidence_required"
+    },
+    {
+      "id": 128777609296,
+      "name": "shards (flows-three)",
+      "cause": "same move-in correction 409 through the browser journey"
+    },
+    {
+      "id": 128782142507,
+      "name": "verify",
+      "cause": "dependent required-shard barrier"
+    }
+  ],
+  "diagnostic_log_invocations": 3,
+  "current_api_calls": 9,
+  "remaining_api_calls": 1,
+  "local_repairs": "docs registered and conformed to current main renderer; corrections bind an explicit unsupported MRR snapshot when captured history is unavailable; reporting still refuses incomplete source history"
+}

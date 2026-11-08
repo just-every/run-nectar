@@ -1,0 +1,21 @@
+{
+  "head": "df4fdbbccf73d3f5320c8da217904c23bdb9e29c",
+  "screenshots": [
+    {
+      "file": "proof-1440-unavailable-captured-mrr.png",
+      "width": 1440,
+      "status": 200,
+      "renderedUnavailableText": true,
+      "horizontalOverflow": false,
+      "sha256": "c0467f543e65d24f474a3cfd6784d94a3e0c19247bdcac6cd59f76ce1a07ac6e"
+    },
+    {
+      "file": "proof-390-unavailable-captured-mrr.png",
+      "width": 390,
+      "status": 200,
+      "renderedUnavailableText": true,
+      "horizontalOverflow": false,
+      "sha256": "9664a1f618c9e2c3be152b1bf3990ff0e00d6a2b9035a5aab4ed968b5a0632b4"
+    }
+  ]
+}

@@ -1,0 +1,3 @@
+COMMAND gh api repos/just-every/run-nectar/actions/runs?head_sha=7ee65705781d0db30b1ec46e7bfd275369153a0d&per_page=100 --jq .workflow_runs[] | {id,name,status,conclusion,head_sha,html_url}
+EXIT 0
+{"conclusion":null,"head_sha":"7ee65705781d0db30b1ec46e7bfd275369153a0d","html_url":"https://github.com/just-every/run-nectar/actions/runs/42495695583","id":42495695583,"name":"Verify","status":"in_progress"}

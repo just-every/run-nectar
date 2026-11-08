@@ -1,0 +1,24 @@
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+JOURNEY plan-changes planChangesFlow
+JOURNEY READY plan-changes
+planChangesFlow: annual upgrade exact preview/debit/PAY-008, period-end downgrade, no proration, paid carried credit, next-invoice delta and stale/duplicate refusal passed
+JOURNEY PASS planChangesFlow 22.86s
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+JOURNEY credit-correction creditCorrectionFlow
+JOURNEY READY credit-correction
+AGENT-002 issued credit corrections: exact evidence, frozen preview and mail, human approval, stale and duplicate refusal, governed threshold, durable provider outcomes passed
+JOURNEY PASS creditCorrectionFlow 16.63s
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+JOURNEY draft-corrections draftCorrectionsFlow
+JOURNEY READY draft-corrections
+AGENT-002 ordinary amendments and usage corrections: exact taxable previews, frozen customer explanations, human decisions, stale-source refusal and issued history passed
+JOURNEY PASS draftCorrectionsFlow 19.44s

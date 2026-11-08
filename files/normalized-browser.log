@@ -1,0 +1,96 @@
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+JOURNEY normalized-metrics normalizedMetricsFlow
+JOURNEY READY normalized-metrics
+BROWSER 1440 normalized-metrics-normalized-mrr-
+BROWSER 390 normalized-metrics-normalized-mrr-
+BROWSER 1440 normalized-metrics-normalized-mrr-source-
+BROWSER 390 normalized-metrics-normalized-mrr-source-
+BROWSER 1440 normalized-metrics-normalized-arr-
+BROWSER 390 normalized-metrics-normalized-arr-
+BROWSER 1440 normalized-metrics-normalized-arr-source-
+BROWSER 390 normalized-metrics-normalized-arr-source-
+BROWSER 1440 normalized-metrics-billed-recurring-
+BROWSER 390 normalized-metrics-billed-recurring-
+BROWSER 1440 normalized-metrics-billed-recurring-source-
+BROWSER 390 normalized-metrics-billed-recurring-source-
+BROWSER 1440 normalized-metrics-source-history-
+BROWSER 390 normalized-metrics-source-history-
+BROWSER 1440 normalized-metrics-nonmonthly-source-
+BROWSER 390 normalized-metrics-nonmonthly-source-
+BROWSER 1440 normalized-metrics-subscription-expanded-2026-06-report-
+BROWSER 390 normalized-metrics-subscription-expanded-2026-06-report-
+BROWSER 1440 normalized-metrics-subscription-expanded-2026-06-source-
+BROWSER 390 normalized-metrics-subscription-expanded-2026-06-source-
+BROWSER 1440 normalized-metrics-subscription-expanded-2026-07-report-
+BROWSER 390 normalized-metrics-subscription-expanded-2026-07-report-
+BROWSER 1440 normalized-metrics-subscription-expanded-2026-07-source-
+BROWSER 390 normalized-metrics-subscription-expanded-2026-07-source-
+BROWSER 1440 normalized-metrics-item-legacy-2026-06-report-
+BROWSER 390 normalized-metrics-item-legacy-2026-06-report-
+BROWSER 1440 normalized-metrics-item-legacy-2026-06-source-
+BROWSER 390 normalized-metrics-item-legacy-2026-06-source-
+BROWSER 1440 normalized-metrics-item-legacy-2026-07-report-
+BROWSER 390 normalized-metrics-item-legacy-2026-07-report-
+BROWSER 1440 normalized-metrics-item-legacy-2026-07-source-
+BROWSER 390 normalized-metrics-item-legacy-2026-07-source-
+BROWSER 1440 normalized-metrics-item-expanded-2026-06-report-
+BROWSER 390 normalized-metrics-item-expanded-2026-06-report-
+BROWSER 1440 normalized-metrics-item-expanded-2026-06-source-
+BROWSER 390 normalized-metrics-item-expanded-2026-06-source-
+BROWSER 1440 normalized-metrics-item-expanded-2026-07-report-
+BROWSER 390 normalized-metrics-item-expanded-2026-07-report-
+BROWSER 1440 normalized-metrics-item-expanded-2026-07-source-
+BROWSER 390 normalized-metrics-item-expanded-2026-07-source-
+BROWSER 1440 normalized-metrics-captured-correction-prepared-
+BROWSER 390 normalized-metrics-captured-correction-prepared-
+BROWSER 1440 normalized-metrics-captured-correction-approved-
+BROWSER 390 normalized-metrics-captured-correction-approved-
+BROWSER 1440 normalized-metrics-correction-2026-06-report-
+BROWSER 390 normalized-metrics-correction-2026-06-report-
+BROWSER 1440 normalized-metrics-correction-2026-06-source-
+BROWSER 390 normalized-metrics-correction-2026-06-source-
+BROWSER 1440 normalized-metrics-correction-2026-07-report-
+BROWSER 390 normalized-metrics-correction-2026-07-report-
+BROWSER 1440 normalized-metrics-correction-2026-07-source-
+BROWSER 390 normalized-metrics-correction-2026-07-source-
+Expanded and item discounts survive adoption, billing and replay; frozen source and native correction effects match approved reports
+BROWSER 1440 normalized-metrics-customer-movements-
+BROWSER 390 normalized-metrics-customer-movements-
+BROWSER 1440 normalized-metrics-plan-cohort-
+BROWSER 390 normalized-metrics-plan-cohort-
+BROWSER 1440 normalized-metrics-entity-cohort-
+BROWSER 390 normalized-metrics-entity-cohort-
+Native multi-subscription customer movements, churn, retention, ARPA, trial and customer cohorts, exact filters and source reconciliation passed
+Normalized native and captured history, adoption, independent MRR and ARR, fractions, sources, CSV and authority passed
+JOURNEY draft-corrections draftCorrectionsFlow
+JOURNEY READY draft-corrections
+BROWSER 1440 draft-corrections-amendment-prepared-0d5a3f76-121e-4816-b474-0dc428bdac3e
+BROWSER 390 draft-corrections-amendment-prepared-0d5a3f76-121e-4816-b474-0dc428bdac3e
+BROWSER 1440 draft-corrections-amendment-approved-0d5a3f76-121e-4816-b474-0dc428bdac3e
+BROWSER 390 draft-corrections-amendment-approved-0d5a3f76-121e-4816-b474-0dc428bdac3e
+BROWSER 1440 draft-corrections-amendment-prepared-bbb2a2bb-3e92-4359-be55-f61ba00e097d
+BROWSER 390 draft-corrections-amendment-prepared-bbb2a2bb-3e92-4359-be55-f61ba00e097d
+BROWSER 1440 draft-corrections-amendment-approved-bbb2a2bb-3e92-4359-be55-f61ba00e097d
+BROWSER 390 draft-corrections-amendment-approved-bbb2a2bb-3e92-4359-be55-f61ba00e097d
+BROWSER 1440 draft-corrections-amendment-prepared-92da8eba-c481-46bf-85f4-3bdab9538dbe
+BROWSER 390 draft-corrections-amendment-prepared-92da8eba-c481-46bf-85f4-3bdab9538dbe
+BROWSER 1440 draft-corrections-amendment-approved-92da8eba-c481-46bf-85f4-3bdab9538dbe
+BROWSER 390 draft-corrections-amendment-approved-92da8eba-c481-46bf-85f4-3bdab9538dbe
+BROWSER 1440 draft-corrections-usage_correction-prepared-c2d7b220-0c7b-4bd2-a561-091ac3e5a1d7
+BROWSER 390 draft-corrections-usage_correction-prepared-c2d7b220-0c7b-4bd2-a561-091ac3e5a1d7
+BROWSER 1440 draft-corrections-usage_correction-approved-c2d7b220-0c7b-4bd2-a561-091ac3e5a1d7
+BROWSER 390 draft-corrections-usage_correction-approved-c2d7b220-0c7b-4bd2-a561-091ac3e5a1d7
+BROWSER 1440 draft-corrections-usage_correction-prepared-4ac2562c-a64c-4cff-b701-597aa1c418aa
+BROWSER 390 draft-corrections-usage_correction-prepared-4ac2562c-a64c-4cff-b701-597aa1c418aa
+BROWSER 1440 draft-corrections-usage_correction-approved-4ac2562c-a64c-4cff-b701-597aa1c418aa
+BROWSER 390 draft-corrections-usage_correction-approved-4ac2562c-a64c-4cff-b701-597aa1c418aa
+AGENT-002 ordinary amendments and usage corrections: exact taxable previews, frozen customer explanations, human decisions, stale-source refusal and issued history passed
+JOURNEY credit-correction creditCorrectionFlow
+JOURNEY READY credit-correction
+BROWSER 1440 credit-correction-credit-prepared-fb8b5b23-17c2-4f06-b284-599a75acad39
+BROWSER 390 credit-correction-credit-prepared-fb8b5b23-17c2-4f06-b284-599a75acad39
+BROWSER 1440 credit-correction-credit-approved-fb8b5b23-17c2-4f06-b284-599a75acad39
+BROWSER 390 credit-correction-credit-approved-fb8b5b23-17c2-4f06-b284-599a75acad39
+AGENT-002 issued credit corrections: exact evidence, frozen preview and mail, human approval, stale and duplicate refusal, governed threshold, durable provider outcomes passed

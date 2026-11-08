@@ -1,0 +1,139 @@
+COMMAND gh run view 42495695583 --repo just-every/run-nectar --job 128777609070 --log-failed
+EXIT 0
+shards (flows-two)	Run this shard	﻿2026-11-08T15:37:57.6003050Z ##[group]Run node scripts/verify-ci.mjs "$SHARD"
+shards (flows-two)	Run this shard	2026-11-08T15:37:57.6003357Z [36;1mnode scripts/verify-ci.mjs "$SHARD"[0m
+shards (flows-two)	Run this shard	2026-11-08T15:37:57.6019169Z shell: /usr/bin/bash -e {0}
+shards (flows-two)	Run this shard	2026-11-08T15:37:57.6019387Z env:
+shards (flows-two)	Run this shard	2026-11-08T15:37:57.6019561Z   CI: true
+shards (flows-two)	Run this shard	2026-11-08T15:37:57.6019738Z   WRANGLER_SEND_METRICS: false
+shards (flows-two)	Run this shard	2026-11-08T15:37:57.6019959Z   PLAYWRIGHT_SKIP_BROWSER_GC: 1
+shards (flows-two)	Run this shard	2026-11-08T15:37:57.6020267Z   PLAYWRIGHT_BROWSERS_PATH: /home/runner/work/_temp/ms-playwright
+shards (flows-two)	Run this shard	2026-11-08T15:37:57.6020561Z   SHARD: flows-two
+shards (flows-two)	Run this shard	2026-11-08T15:37:57.6020750Z ##[endgroup]
+shards (flows-two)	Run this shard	2026-11-08T15:37:57.6277407Z > pnpm run verify:app
+shards (flows-two)	Run this shard	2026-11-08T15:37:57.8283427Z 
+shards (flows-two)	Run this shard	2026-11-08T15:37:57.8284335Z > @billing/nectar@0.1.1 verify:app /home/runner/work/run-nectar/run-nectar
+shards (flows-two)	Run this shard	2026-11-08T15:37:57.8284978Z > node scripts/verify-app.mjs
+shards (flows-two)	Run this shard	2026-11-08T15:37:57.8285201Z 
+shards (flows-two)	Run this shard	2026-11-08T15:37:57.8515411Z > NECTAR_VERIFY_SHARDS=4 NECTAR_VERIFY_CORE_SHARD=2 NECTAR_VERIFY_SHARD=2 node tests/nectar/flows.mjs
+shards (flows-two)	Run this shard	2026-11-08T15:37:58.4793296Z JOURNEY portal-renewal portalRenewalFlow
+shards (flows-two)	Run this shard	2026-11-08T15:38:02.9656325Z JOURNEY READY portal-renewal
+shards (flows-two)	Run this shard	2026-11-08T15:38:16.6041876Z PORT-003 portal cancellation, optional saves, dated win-back, exact invoices and capability custody passed
+shards (flows-two)	Run this shard	2026-11-08T15:38:16.6254173Z JOURNEY retry-methods retryAuthenticationFlow
+shards (flows-two)	Run this shard	2026-11-08T15:38:21.1479245Z JOURNEY READY retry-methods
+shards (flows-two)	Run this shard	2026-11-08T15:38:29.4227039Z retryAuthenticationFlow: exact customer-confirmed original-card authentication, once-only intent and cash, cancellation, lost response, dispute and erasure custody
+shards (flows-two)	Run this shard	2026-11-08T15:38:32.4226396Z JOURNEY payment-retries paymentRetriesFlow
+shards (flows-two)	Run this shard	2026-11-08T15:38:36.4952130Z JOURNEY READY payment-retries
+shards (flows-two)	Run this shard	2026-11-08T15:39:12.6399342Z paymentRetriesFlow: consented policy, exact timing, hard and ACH prohibitions, caps, dispute hold, once-only cash and page API webhook parity
+shards (flows-two)	Run this shard	2026-11-08T15:39:12.6583501Z JOURNEY enterprise-linking enterpriseLinkingFlow
+shards (flows-two)	Run this shard	2026-11-08T15:39:16.6256741Z JOURNEY READY enterprise-linking
+shards (flows-two)	Run this shard	2026-11-08T15:39:19.0960508Z nectar_internal_error Error: D1_ERROR: synthetic-nectar-audit-unavailable: SQLITE_CONSTRAINT (extended: SQLITE_CONSTRAINT_TRIGGER)
+shards (flows-two)	Run this shard	2026-11-08T15:39:19.0961550Z     at D1DatabaseSessionAlwaysPrimary._sendOrThrow (cloudflare-internal:d1-api:188:19)
+shards (flows-two)	Run this shard	2026-11-08T15:39:19.0962005Z     at async cloudflare-internal:d1-api:137:19
+shards (flows-two)	Run this shard	2026-11-08T15:39:19.0962296Z     ... 4 lines matching cause stack trace ...
+shards (flows-two)	Run this shard	2026-11-08T15:39:19.0962757Z     at async Object.fetch (file:///home/runner/work/run-nectar/run-nectar/dist/server/index.js:81081:18) {
+shards (flows-two)	Run this shard	2026-11-08T15:39:19.0963370Z   [cause]: Error: synthetic-nectar-audit-unavailable: SQLITE_CONSTRAINT (extended: SQLITE_CONSTRAINT_TRIGGER)
+shards (flows-two)	Run this shard	2026-11-08T15:39:19.0963948Z       at D1DatabaseSessionAlwaysPrimary._sendOrThrow (cloudflare-internal:d1-api:189:24)
+shards (flows-two)	Run this shard	2026-11-08T15:39:19.0964361Z       at async cloudflare-internal:d1-api:137:19
+shards (flows-two)	Run this shard	2026-11-08T15:39:19.0964824Z       at async commit (file:///home/runner/work/run-nectar/run-nectar/dist/server/assets/actor-Cd8-hQwm.js:16521:3)
+shards (flows-two)	Run this shard	2026-11-08T15:39:19.0965397Z       at async approveLink (file:///home/runner/work/run-nectar/run-nectar/dist/server/index.js:29257:2)
+shards (flows-two)	Run this shard	2026-11-08T15:39:19.0965948Z       at async apiResponse (file:///home/runner/work/run-nectar/run-nectar/dist/server/index.js:80873:33)
+shards (flows-two)	Run this shard	2026-11-08T15:39:19.0966500Z       at async nectarResponse (file:///home/runner/work/run-nectar/run-nectar/dist/server/index.js:80839:19)
+shards (flows-two)	Run this shard	2026-11-08T15:39:19.0967587Z       at async Object.fetch (file:///home/runner/work/run-nectar/run-nectar/dist/server/index.js:81081:18)
+shards (flows-two)	Run this shard	2026-11-08T15:39:19.0967963Z }
+shards (flows-two)	Run this shard	2026-11-08T15:39:23.5364154Z Enterprise linking: dual control, exact owner consent, preserved attribution, atomic audit, replay, fresh factors, SCIM and stale-source refusals passed
+shards (flows-two)	Run this shard	2026-11-08T15:39:23.5539749Z JOURNEY stripe-app stripeAppFlow
+shards (flows-two)	Run this shard	2026-11-08T15:39:27.4665299Z JOURNEY READY stripe-app
+shards (flows-two)	Run this shard	2026-11-08T15:39:28.5868653Z stripeAppFlow: explicit source write, lost-response GET recovery, cutover fence, dated quantity mirror, exact Stripe quote, cancellation and stale/role/account refusal passed
+shards (flows-two)	Run this shard	2026-11-08T15:39:28.6008755Z JOURNEY hierarchies hierarchyTaxFlow
+shards (flows-two)	Run this shard	2026-11-08T15:39:32.5460218Z JOURNEY READY hierarchies
+shards (flows-two)	Run this shard	2026-11-08T15:39:33.6051292Z hierarchyTaxFlow: exempt parent preserves each division's tax exemption and once-rounded cents, outside revenue
+shards (flows-two)	Run this shard	2026-11-08T15:39:33.6202174Z JOURNEY currency currencyFlow
+shards (flows-two)	Run this shard	2026-11-08T15:39:37.4988556Z JOURNEY READY currency
+shards (flows-two)	Run this shard	2026-11-08T15:39:40.5048668Z JOURNEY promotions promotionsFlow
+shards (flows-two)	Run this shard	2026-11-08T15:39:44.4213927Z JOURNEY READY promotions
+shards (flows-two)	Run this shard	2026-11-08T15:39:49.0077578Z CAT-005 coupons and promotion codes passed
+shards (flows-two)	Run this shard	2026-11-08T15:39:49.0294229Z JOURNEY numbering numberingFlow
+shards (flows-two)	Run this shard	2026-11-08T15:39:52.9249862Z JOURNEY READY numbering
+shards (flows-two)	Run this shard	2026-11-08T15:39:55.3264756Z MOVE-011 captured account/customer continuation, new series, collision refusal, register, gaps, CSV and authority passed
+shards (flows-two)	Run this shard	2026-11-08T15:39:55.3523035Z JOURNEY contract-setup contractIntervalSetup
+shards (flows-two)	Run this shard	2026-11-08T15:39:59.2826147Z JOURNEY READY contract-setup
+shards (flows-two)	Run this shard	2026-11-08T15:40:07.9103417Z CAT-001/AGENT-006 quoted intervals, complete finite terms, day-31 anchors, mixed advance/arrears, co-termination and ordinary issued invoice parity passed
+shards (flows-two)	Run this shard	2026-11-08T15:40:07.9433664Z JOURNEY prepaid prepaidPurchaseCreditFlow
+shards (flows-two)	Run this shard	2026-11-08T15:40:11.8204423Z JOURNEY READY prepaid
+shards (flows-two)	Run this shard	2026-11-08T15:40:12.6563170Z CAT-004 credited unpaid purchase: reduced liability without revenue, paid-reduced-consideration funding refusal and immutable source passed
+shards (flows-two)	Run this shard	2026-11-08T15:40:12.6684624Z JOURNEY prepaid-refunds prepaidRefundFlow
+shards (flows-two)	Run this shard	2026-11-08T15:40:16.5778399Z JOURNEY READY prepaid-refunds
+shards (flows-two)	Run this shard	2026-11-08T15:40:53.5773372Z CAT-004 unused paid money/units refunds: original capture, independent approval, exact zero-revenue liability/cash, reservation race, rejected/failed/stale and GET-only unknown recovery passed
+shards (flows-two)	Run this shard	2026-11-08T15:40:53.5937674Z JOURNEY prepaid-agent-corrections prepaidCommercialMigrationFlow
+shards (flows-two)	Run this shard	2026-11-08T15:40:57.5558222Z JOURNEY READY prepaid-agent-corrections
+shards (flows-two)	Run this shard	2026-11-08T15:41:04.8847025Z JOURNEY normalized-metrics normalizedMetricsFlow
+shards (flows-two)	Run this shard	2026-11-08T15:41:08.7816124Z JOURNEY READY normalized-metrics
+shards (flows-two)	Run this shard	2026-11-08T15:41:27.7382752Z Expanded and item discounts survive adoption, billing and replay; frozen source and native correction effects match approved reports
+shards (flows-two)	Run this shard	2026-11-08T15:41:29.8626130Z Native multi-subscription customer movements, churn, retention, ARPA, trial and customer cohorts, exact filters and source reconciliation passed
+shards (flows-two)	Run this shard	2026-11-08T15:41:29.8627768Z Normalized native and captured history, adoption, independent MRR and ARR, fractions, sources, CSV and authority passed
+shards (flows-two)	Run this shard	2026-11-08T15:41:29.8847658Z JOURNEY entitlement-quotas entitlementQuotasFlow
+shards (flows-two)	Run this shard	2026-11-08T15:41:33.9030099Z JOURNEY READY entitlement-quotas
+shards (flows-two)	Run this shard	2026-11-08T15:41:42.3624094Z ENT-002 exact quotas, soft warning, hard restriction, priced overage, issued-invoice grace, manual settlement, lifecycle preservation and authority passed
+shards (flows-two)	Run this shard	2026-11-08T15:41:42.3755263Z JOURNEY mfa mfaFlow
+shards (flows-two)	Run this shard	2026-11-08T15:41:46.2986526Z JOURNEY READY mfa
+shards (flows-two)	Run this shard	2026-11-08T15:41:49.5044280Z GOV-007 required multi-factor sign-in passed
+shards (flows-two)	Run this shard	2026-11-08T15:41:49.5141998Z JOURNEY revenue revenueFlow
+shards (flows-two)	Run this shard	2026-11-08T15:41:53.4169341Z JOURNEY READY revenue
+shards (flows-two)	Run this shard	2026-11-08T15:41:55.3070549Z JOURNEY cadences cadencesFlow
+shards (flows-two)	Run this shard	2026-11-08T15:41:59.2355902Z JOURNEY READY cadences
+shards (flows-two)	Run this shard	2026-11-08T15:42:20.3946248Z AR-001 scheduled transfer cadence, exact human approvals, holds, line disputes, ledger balances, roles and truthful mail outcomes passed
+shards (flows-two)	Run this shard	2026-11-08T15:42:20.4042869Z JOURNEY renewals renewalsFlow
+shards (flows-two)	Run this shard	2026-11-08T15:42:24.3542957Z JOURNEY READY renewals
+shards (flows-two)	Run this shard	2026-11-08T15:42:35.1833967Z SUB-004 annual notice, cancellation, uplift, term end, clock, custody and authority passed
+shards (flows-two)	Run this shard	2026-11-08T15:42:35.1948286Z JOURNEY financial-reports financialReportsFlow
+shards (flows-two)	Run this shard	2026-11-08T15:42:39.1127910Z JOURNEY READY financial-reports
+shards (flows-two)	Run this shard	2026-11-08T15:42:45.3850013Z RPT-002 financial source totals, scoped CSVs, ageing, self-only schedules and immutable delivery custody passed
+shards (flows-two)	Run this shard	2026-11-08T15:42:45.4172704Z JOURNEY pricing-simulation pricingSimulation
+shards (flows-two)	Run this shard	2026-11-08T15:42:49.3342902Z JOURNEY READY pricing-simulation
+shards (flows-two)	Run this shard	2026-11-08T15:43:05.1767861Z AGENT-004 six issued months, retained usage replay, independently checked deltas, governed cohort scheduling, immutable prepared notices and exact July billing passed
+shards (flows-two)	Run this shard	2026-11-08T15:43:05.2165963Z JOURNEY commitments intervalCommitmentsFlow
+shards (flows-two)	Run this shard	2026-11-08T15:43:09.1475767Z JOURNEY READY commitments
+shards (flows-two)	Run this shard	2026-11-08T15:43:17.6569284Z JOURNEY move-investigations moveInvestigationsFlow
+shards (flows-two)	Run this shard	2026-11-08T15:43:21.5978114Z JOURNEY READY move-investigations
+shards (flows-two)	Run this shard	2026-11-08T15:43:23.1602730Z nectar_internal_error Error: D1_ERROR: synthetic-nectar-audit-unavailable: SQLITE_CONSTRAINT (extended: SQLITE_CONSTRAINT_TRIGGER)
+shards (flows-two)	Run this shard	2026-11-08T15:43:23.1603773Z     at D1DatabaseSessionAlwaysPrimary._sendOrThrow (cloudflare-internal:d1-api:188:19)
+shards (flows-two)	Run this shard	2026-11-08T15:43:23.1604388Z     at async cloudflare-internal:d1-api:137:19
+shards (flows-two)	Run this shard	2026-11-08T15:43:23.1604762Z     ... 6 lines matching cause stack trace ...
+shards (flows-two)	Run this shard	2026-11-08T15:43:23.1605214Z     at async Object.fetch (file:///home/runner/work/run-nectar/run-nectar/dist/server/index.js:81081:18) {
+shards (flows-two)	Run this shard	2026-11-08T15:43:23.1605869Z   [cause]: Error: synthetic-nectar-audit-unavailable: SQLITE_CONSTRAINT (extended: SQLITE_CONSTRAINT_TRIGGER)
+shards (flows-two)	Run this shard	2026-11-08T15:43:23.1606463Z       at D1DatabaseSessionAlwaysPrimary._sendOrThrow (cloudflare-internal:d1-api:189:24)
+shards (flows-two)	Run this shard	2026-11-08T15:43:23.1606878Z       at async cloudflare-internal:d1-api:137:19
+shards (flows-two)	Run this shard	2026-11-08T15:43:23.1607632Z       at async commit (file:///home/runner/work/run-nectar/run-nectar/dist/server/assets/actor-Cd8-hQwm.js:16521:3)
+shards (flows-two)	Run this shard	2026-11-08T15:43:23.1608342Z       at async saveAssuranceProofs (file:///home/runner/work/run-nectar/run-nectar/dist/server/assets/payment-links-BELw_sN7.js:12735:2)
+shards (flows-two)	Run this shard	2026-11-08T15:43:23.1609068Z       at async scanCases (file:///home/runner/work/run-nectar/run-nectar/dist/server/assets/payment-links-BELw_sN7.js:12712:9)
+shards (flows-two)	Run this shard	2026-11-08T15:43:23.1610064Z       at async investigateMove (file:///home/runner/work/run-nectar/run-nectar/dist/server/assets/payment-links-BELw_sN7.js:12943:9)
+shards (flows-two)	Run this shard	2026-11-08T15:43:23.1610723Z       at async apiResponse (file:///home/runner/work/run-nectar/run-nectar/dist/server/index.js:80873:33)
+shards (flows-two)	Run this shard	2026-11-08T15:43:23.1611314Z       at async nectarResponse (file:///home/runner/work/run-nectar/run-nectar/dist/server/index.js:80839:19)
+shards (flows-two)	Run this shard	2026-11-08T15:43:23.1611874Z       at async Object.fetch (file:///home/runner/work/run-nectar/run-nectar/dist/server/index.js:81081:18)
+shards (flows-two)	Run this shard	2026-11-08T15:43:23.1612239Z }
+shards (flows-two)	Run this shard	2026-11-08T15:43:25.2136670Z node:internal/modules/run_main:123
+shards (flows-two)	Run this shard	2026-11-08T15:43:25.2137226Z     triggerUncaughtException(
+shards (flows-two)	Run this shard	2026-11-08T15:43:25.2137593Z     ^
+shards (flows-two)	Run this shard	2026-11-08T15:43:25.2137740Z 
+shards (flows-two)	Run this shard	2026-11-08T15:43:25.2138125Z AssertionError [ERR_ASSERTION]: proposal.create: 409 {"error":"normalized_history_evidence_required"}
+shards (flows-two)	Run this shard	2026-11-08T15:43:25.2138560Z 
+shards (flows-two)	Run this shard	2026-11-08T15:43:25.2138643Z 409 !== 200
+shards (flows-two)	Run this shard	2026-11-08T15:43:25.2138799Z 
+shards (flows-two)	Run this shard	2026-11-08T15:43:25.2139335Z     at Object.api (file:///home/runner/work/run-nectar/run-nectar/tests/nectar/harness.mjs:80:12)
+shards (flows-two)	Run this shard	2026-11-08T15:43:25.2139969Z     at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+shards (flows-two)	Run this shard	2026-11-08T15:43:25.2140673Z     at async Module.moveInvestigationsFlow (file:///home/runner/work/run-nectar/run-nectar/tests/nectar/move-investigations.mjs:99:17)
+shards (flows-two)	Run this shard	2026-11-08T15:43:25.2141498Z     at async runIsolated (file:///home/runner/work/run-nectar/run-nectar/tests/nectar/isolated.mjs:19:5)
+shards (flows-two)	Run this shard	2026-11-08T15:43:25.2142922Z     at async runIsolated (file:///home/runner/work/run-nectar/run-nectar/tests/nectar/flows.mjs:42:5)
+shards (flows-two)	Run this shard	2026-11-08T15:43:25.2143705Z     at async file:///home/runner/work/run-nectar/run-nectar/tests/nectar/flows.mjs:54:3 {
+shards (flows-two)	Run this shard	2026-11-08T15:43:25.2144214Z   generatedMessage: false,
+shards (flows-two)	Run this shard	2026-11-08T15:43:25.2144509Z   code: 'ERR_ASSERTION',
+shards (flows-two)	Run this shard	2026-11-08T15:43:25.2144776Z   actual: 409,
+shards (flows-two)	Run this shard	2026-11-08T15:43:25.2145016Z   expected: 200,
+shards (flows-two)	Run this shard	2026-11-08T15:43:25.2145258Z   operator: 'strictEqual',
+shards (flows-two)	Run this shard	2026-11-08T15:43:25.2145538Z   diff: 'simple'
+shards (flows-two)	Run this shard	2026-11-08T15:43:25.2145768Z }
+shards (flows-two)	Run this shard	2026-11-08T15:43:25.2145906Z 
+shards (flows-two)	Run this shard	2026-11-08T15:43:25.2146026Z Node.js v22.20.0
+shards (flows-two)	Run this shard	2026-11-08T15:43:25.2651353Z  ELIFECYCLE  Command failed with exit code 1.
+shards (flows-two)	Run this shard	2026-11-08T15:43:25.3775081Z ##[error]Process completed with exit code 1.

@@ -1,0 +1,28 @@
+{
+  "command": "cloud_run npx -y @runeditrun/rer build",
+  "exit": 0,
+  "runtime": "project-selected Node 22.20.0",
+  "build_log": "build.log",
+  "deployment_spec_rebuilt": "pnpm delivery:spec",
+  "deployment_spec_final_check": "passed",
+  "normalized_journey": "passed again under Node 22.20.0 after compatibility repair",
+  "related_journeys": [
+    "planChangesFlow",
+    "draftCorrectionsFlow",
+    "creditCorrectionFlow"
+  ],
+  "related_journeys_result": "passed",
+  "typecheck": "passed under Node 22.20.0",
+  "regression_assertions_added": 2,
+  "registration_count_change_in_fix": 0,
+  "browser_head": "df4fdbbccf73d3f5320c8da217904c23bdb9e29c",
+  "screenshots": 8,
+  "browser_command": "cloud_run node /tmp/sx-nectar-browser-proof.mjs; metered native-form capture refined with --metered-only",
+  "browser_script": "browser-proof.mjs",
+  "head": "df4fdbbccf73d3f5320c8da217904c23bdb9e29c",
+  "site_build": "passed: 21 pages, 56 files",
+  "move_investigations": "passed; every existing assertion retained",
+  "normalized_browser": "passed complete existing journey",
+  "move_browser": "passed complete existing journey",
+  "compatibility_browser": "passed existing full move-in journey with explicit unavailable normalized preview captured at 1440 and 390"
+}

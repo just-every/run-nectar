@@ -1,0 +1,21 @@
+{
+  "base_head": "7ee65705781d0db30b1ec46e7bfd275369153a0d",
+  "logic_source": "c268e667a84603f091672ae9e743851fa8ed1a4f",
+  "isolated_worktree": true,
+  "fixture_equals_final_head": true,
+  "source_patch": "before-source.patch",
+  "results": [
+    {
+      "command": "node tests/nectar/sanity.mjs --clause normalized-discount-capture replacementDiscountFlow",
+      "exit": 1,
+      "expected_failure": true,
+      "log": "before-discount.log"
+    },
+    {
+      "command": "node tests/nectar/sanity.mjs --clause normalized-discount-capture meteredMembershipFlow",
+      "exit": 1,
+      "expected_failure": true,
+      "log": "before-membership.log"
+    }
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "isolated_journeys": [
+    {
+      "revision": "c268e667a84603f091672ae9e743851fa8ed1a4f",
+      "isolated_journey_registrations": 89
+    },
+    {
+      "revision": "origin/main",
+      "isolated_journey_registrations": 100
+    },
+    {
+      "revision": "working candidate",
+      "isolated_journey_registrations": 101
+    }
+  ],
+  "new_regression_assertions": 2,
+  "new_registrations_in_fix": 0,
+  "removed_or_weakened_assertions": 0,
+  "contract_summary": "| Clauses | Done | Partial | Missing | Total |\n| --- | ---: | ---: | ---: | ---: |\n| Published | 16 | 0 | 0 | 16 |\n| Target and push further | 46 | 41 | 29 | 116 |\n| All | 62 | 41 | 29 | 132 |",
+  "rpt001_status": "partial (unchanged from origin/main)",
+  "contracts": {
+    "origin/main": {
+      "total": 132,
+      "done": 62,
+      "partial": 41,
+      "missing": 29
+    },
+    "HEAD": {
+      "total": 132,
+      "done": 62,
+      "partial": 41,
+      "missing": 29
+    }
+  },
+  "isolated_before_fix_after_main_merge": 101,
+  "isolated_after_fix": 101,
+  "final_head": "df4fdbbccf73d3f5320c8da217904c23bdb9e29c"
+}

@@ -1,0 +1,171 @@
+JOURNEY normalized-discount-capture replacementDiscountFlow
+JOURNEY READY normalized-discount-capture
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+node:internal/modules/run_main:123
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: Adopted scoped discounts follow repeated seat replacements, preserve sibling scope and expiry, and reconcile preview, source-traced MRR and issued money
++ actual - expected
+... Skipped lines
+
+  [
+    {
+      amounts: [
+        9000,
++       20000,
+-       18000,
+-       27000,
+        30000,
++       30000
+      ],
++     billed: 20000,
+-     billed: 18000,
+      details: [
+        [
+          9000,
+          [
+            9000
+...
+        [
++         20000,
+-         18000,
+          [
++           20000
+-           18000
+          ]
+        ],
+        [
++         30000,
+-         27000,
+          [
++           30000
+-           27000
+          ]
+        ],
+        [
+          30000,
+          [
+...
+      previews: [
++       20000,
++       30000
+-       18000,
+-       27000
+      ],
+      scope: 'product'
+    },
+    {
+      amounts: [
+        19000,
++       30000,
+-       28000,
+-       37000,
+        40000,
++       40000
+      ],
++     billed: 30000,
+-     billed: 28000,
+      details: [
+        [
+          19000,
+          [
+            9000,
+...
+        [
++         30000,
+-         28000,
+          [
+            10000,
++           20000
+-           18000
+          ]
+        ],
+        [
++         40000,
+-         37000,
+          [
+            10000,
++           30000
+-           27000
+          ]
+        ],
+        [
+          40000,
+          [
+...
+      previews: [
++       30000,
++       40000
+-       28000,
+-       37000
+      ],
+      scope: 'item'
+    }
+  ]
+
+    at Module.replacementDiscountFlow (file:///workspace/run-nectar-before/tests/nectar/normalized-discount-capture.mjs:158:10)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async runIsolated (file:///workspace/run-nectar-before/tests/nectar/isolated.mjs:19:5)
+    at async file:///workspace/run-nectar-before/tests/nectar/sanity.mjs:10:2 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: [
+    {
+      scope: 'product',
+      previews: [ 20000, 30000 ],
+      amounts: [ 9000, 20000, 30000, 30000 ],
+      details: [
+        [ 9000, [ 9000 ] ],
+        [ 20000, [ 20000 ] ],
+        [ 30000, [ 30000 ] ],
+        [ 30000, [ 30000 ] ]
+      ],
+      billed: 20000
+    },
+    {
+      scope: 'item',
+      previews: [ 30000, 40000 ],
+      amounts: [ 19000, 30000, 40000, 40000 ],
+      details: [
+        [ 19000, [ 9000, 10000 ] ],
+        [ 30000, [ 10000, 20000 ] ],
+        [ 40000, [ 10000, 30000 ] ],
+        [ 40000, [ 10000, 30000 ] ]
+      ],
+      billed: 30000
+    }
+  ],
+  expected: [
+    {
+      scope: 'product',
+      previews: [ 18000, 27000 ],
+      amounts: [ 9000, 18000, 27000, 30000 ],
+      details: [
+        [ 9000, [ 9000 ] ],
+        [ 18000, [ 18000 ] ],
+        [ 27000, [ 27000 ] ],
+        [ 30000, [ 30000 ] ]
+      ],
+      billed: 18000
+    },
+    {
+      scope: 'item',
+      previews: [ 28000, 37000 ],
+      amounts: [ 19000, 28000, 37000, 40000 ],
+      details: [
+        [ 19000, [ 9000, 10000 ] ],
+        [ 28000, [ 10000, 18000 ] ],
+        [ 37000, [ 10000, 27000 ] ],
+        [ 40000, [ 10000, 30000 ] ]
+      ],
+      billed: 28000
+    }
+  ],
+  operator: 'deepStrictEqual',
+  diff: 'simple'
+}
+
+Node.js v22.20.0

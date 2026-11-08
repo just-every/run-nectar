@@ -1,0 +1,218 @@
+diff --git a/src/nectar/inputs.ts b/src/nectar/inputs.ts
+index 7a095db..7013f26 100644
+--- a/src/nectar/inputs.ts
++++ b/src/nectar/inputs.ts
+@@ -41,22 +41,8 @@ export async function pricesById(env: Bindings, ids: string[]): Promise<Record<s
+ export async function ratingInputs(env: Bindings, business: Business, subscriptionId: string, period: { start: string; end: string }, replaceItems?: ItemIn[], billing?: BillingWindow): Promise<RatingInput> {
+   const sub = await one(env, 'SELECT s.*, c.tax_exempt, c.tax_exempt_ref FROM nc_subscriptions s JOIN nc_customers c ON c.id = s.customer_id WHERE s.id = ?', subscriptionId)
+   insist(sub, 'subscription_not_found', 404)
+-  const rows = await all(env, `SELECT i.id,i.price_id,i.quantity,i.effective_from,i.effective_to,
+-    COALESCE(c.item_id,p.item_id) AS predecessor FROM nc_items i
+-    LEFT JOIN nc_changes c ON c.id=i.change_id AND c.subscription_id=i.subscription_id AND c.status='approved'
+-    LEFT JOIN nc_plan_changes p ON p.new_item_id=i.id AND p.subscription_id=i.subscription_id AND p.status='approved'
+-    WHERE i.subscription_id=? ORDER BY i.effective_from,i.id`, sub.id)
+-  const byId = new Map(rows.map(row => [row.id, row]))
+-  const ancestry = (row: Row): string[] => {
+-    const previous = byId.get(row.predecessor)
+-    return previous && previous.price_id === row.price_id && previous.effective_from < row.effective_from
+-      ? [previous.id, ...ancestry(previous)] : []
+-  }
+-  const items: ItemIn[] = replaceItems ?? rows.map(row => {
+-    const discountItemIds = ancestry(row)
+-    return { id: row.id, priceId: row.price_id, quantity: row.quantity, from: row.effective_from, to: row.effective_to,
+-      ...(discountItemIds.length ? { discountItemIds } : {}) }
+-  })
++  const items: ItemIn[] = replaceItems ?? (await all(env, 'SELECT id, price_id, quantity, effective_from, effective_to FROM nc_items WHERE subscription_id = ? ORDER BY effective_from, id', sub.id))
++    .map(row => ({ id: row.id, priceId: row.price_id, quantity: row.quantity, from: row.effective_from, to: row.effective_to }))
+   const amendments = (await all(env, `SELECT a.*,(SELECT scope.price_id FROM nc_amendment_scopes scope WHERE scope.amendment_id=a.id) AS scope_price_id FROM nc_amendments a WHERE a.subscription_id = ? AND a.status = 'approved'
+     ${billing ? "AND (kind<>'fixed_credit' OR NOT EXISTS(SELECT 1 FROM nc_invoice_lines l JOIN nc_invoices i ON i.id=l.invoice_id WHERE i.subscription_id=a.subscription_id AND i.status='issued' AND l.kind='credit' AND json_extract(l.evidence_json,'$.amendment')=a.id))" : ''} ORDER BY effective_from, id`, sub.id))
+     .map(row => ({ id: row.id, ...(row.item_id ? { itemId: row.item_id } : {}), kind: row.kind, value: row.value, priceId: row.scope_price_id ?? row.price_id, from: row.effective_from, to: row.effective_to, note: row.note }))
+diff --git a/src/nectar/movein/normalized-history.ts b/src/nectar/movein/normalized-history.ts
+index 4c93277..fcfb185 100644
+--- a/src/nectar/movein/normalized-history.ts
++++ b/src/nectar/movein/normalized-history.ts
+@@ -21,17 +21,13 @@ export function capturedNormalizedInput(sub: Row, events: Row[], through: string
+   insist(snapshots.some(({ event }) => event.type === 'customer.subscription.created'), 'normalized_history_evidence_required', 409)
+   const { row, event } = snapshots.at(-1)!, source = event.data?.object
+   insist(source?.id === sub.provider_ref && Array.isArray(source.items?.data) && source.items.has_more !== true, 'normalized_history_evidence_required', 409)
+-  const prices: Record<string, PriceIn> = {}, items: RatingInput['items'] = [], amendments: AmendmentIn[] = [], planPriceIds: string[] = []
++  const prices: Record<string, PriceIn> = {}, items: RatingInput['items'] = [], amendments: AmendmentIn[] = []
+   const asOf = localDate(zonedStart(through, zone) - 1, zone)
+   const start = day(source.start_date, zone)
+   insist(start, 'normalized_history_evidence_required', 409)
+   for (const item of source.items.data) {
+     const price = item.price
+     insist(price && typeof price === 'object' && price.currency === 'usd' && price.recurring, 'normalized_source_price_unsupported', 409)
+-    const priceId = ref(price)
+-    insist(typeof priceId === 'string', 'normalized_history_evidence_required', 409)
+-    // Membership includes usage prices even though usage contributes no run rate.
+-    planPriceIds.push(priceId)
+     if (price.recurring.usage_type === 'metered') continue
+     insist(price.billing_scheme !== 'tiered', 'normalized_source_price_unsupported', 409)
+     const id = ref(price), unit = price.recurring.interval, count = price.recurring.interval_count ?? 1
+@@ -77,6 +73,6 @@ export function capturedNormalizedInput(sub: Row, events: Row[], through: string
+     subscription: { id: sub.id, anchorDay: sub.anchor_day, startDate: start, trialEnd: day(source.trial_end, zone),
+       endDate: [ended, cancelAt].filter((value): value is string => !!value).sort()[0] ?? null, billFrom: null },
+     period: { start: asOf, end: through }, items, prices, amendments, events: [] }
+-  return { input, planPriceIds, source: { provider: 'stripe', reference: row.provider_ref, href: historicalHref(sub.customer_id, row.id), eventCreated: event.created,
++  return { input, source: { provider: 'stripe', reference: row.provider_ref, href: historicalHref(sub.customer_id, row.id), eventCreated: event.created,
+     status: source.status, ...(source.pause_collection ? { collectionPaused: true } : {}) } }
+ }
+diff --git a/src/nectar/normalized-metrics.ts b/src/nectar/normalized-metrics.ts
+index f5bcb8e..a1d0188 100644
+--- a/src/nectar/normalized-metrics.ts
++++ b/src/nectar/normalized-metrics.ts
+@@ -50,7 +50,7 @@ export async function normalizedSnapshot(source: RatingInput, asOf: string): Pro
+     if (price.pricing) { exclusions.push('nonsimple_fixed_or_seat_price'); continue }
+     if (!active) continue
+     const scope = price.sourcePriceId ?? price.id
+-    const amendments = input.amendments.filter(a => covers(a.from, a.to, asOf) && (!a.itemId || a.itemId === item.id || item.discountItemIds?.includes(a.itemId)) && (!a.priceId || a.priceId === price.id || a.priceId === scope))
++    const amendments = input.amendments.filter(a => covers(a.from, a.to, asOf) && (!a.itemId || a.itemId === item.id) && (!a.priceId || a.priceId === price.id || a.priceId === scope))
+     const override = amendments.find(a => a.kind === 'price_override')
+     const unitAmount = override?.value ?? price.unitAmount
+     insist(Number.isSafeInteger(item.quantity) && item.quantity >= 0 && micros(unitAmount) >= 0n, 'normalized_contract_evidence_required', 409)
+diff --git a/src/nectar/normalized-reports.ts b/src/nectar/normalized-reports.ts
+index 43b6220..6e144e4 100644
+--- a/src/nectar/normalized-reports.ts
++++ b/src/nectar/normalized-reports.ts
+@@ -58,9 +58,8 @@ async function contributions(data: Awaited<ReturnType<typeof sources>>, month: s
+     const captured = useSource ? capturedNormalizedInput(sub, data.history, through, data.business.timezone) : null
+     const input = captured?.input ?? data.native.get(sub.id)!
+     insist(input, 'normalized_contract_evidence_required', 409)
+-    const planPrices = captured?.planPriceIds ?? input.items.filter(item => item.from <= asOf && (!item.to || asOf < item.to)).map(item => item.priceId)
+-    if (data.selected.plan && !planPrices.some(price => [price, data.priceAliases.get(price)].includes(data.selected.plan!)
+-      || data.priceAliases.get(data.selected.plan!) === price)) continue
++    if (data.selected.plan && !input.items.some(item => item.from <= asOf && (!item.to || asOf < item.to)
++      && ([item.priceId, data.priceAliases.get(item.priceId)].includes(data.selected.plan) || data.priceAliases.get(data.selected.plan!) === item.priceId))) continue
+     const snapshot = await normalizedSnapshot(input, asOf)
+     insist(snapshot.supported, 'normalized_instrument_unsupported', 409, { subscription: sub.id, exclusions: snapshot.exclusions })
+     const source: Source = captured?.source ?? { provider: 'nectar', reference: sub.id, href: `/app/subscriptions/${sub.id}` }
+diff --git a/src/nectar/plan-change-history.ts b/src/nectar/plan-change-history.ts
+index 0979b5f..d4df652 100644
+--- a/src/nectar/plan-change-history.ts
++++ b/src/nectar/plan-change-history.ts
+@@ -1,6 +1,6 @@
+ import type { Bindings } from '../auth.server'
+ import { all,canonical,guard,insist,parseJson,type Row } from './core'
+-import { replacementDiscountScope,rateIntervalInvoiceService,type RatingInput } from './rating'
++import { rateIntervalInvoiceService,type RatingInput } from './rating'
+ import { BALANCE_SQL } from './balance-sql'
+ 
+ const totals=(r:Row)=>({subtotalCents:r.subtotalCents,taxCents:r.taxCents,totalCents:r.totalCents})
+@@ -39,7 +39,7 @@ export async function planChangeHistory(env:Bindings,invoice:Row,original:Rating
+     const current=services[service],active=current.items.find(i=>i.id===change.item_id)!
+     const before=rateIntervalInvoiceService(original,services)
+     insist(canonical(totals(before))===canonical(quote.before),'plan_change_history_changed',409)
+-    const next:RatingInput={...current,prices:{...current.prices,[change.new_price_id]:quote.targetPrice},items:[...current.items.map(i=>i.id===change.item_id?{...i,to:change.effective_date}:i),{id:change.new_item_id,priceId:change.new_price_id,quantity:change.new_quantity,from:change.effective_date,to:active.to,...replacementDiscountScope(active,change.new_price_id)}]}
++    const next:RatingInput={...current,prices:{...current.prices,[change.new_price_id]:quote.targetPrice},items:[...current.items.map(i=>i.id===change.item_id?{...i,to:change.effective_date}:i),{id:change.new_item_id,priceId:change.new_price_id,quantity:change.new_quantity,from:change.effective_date,to:active.to}]}
+     const nextServices=services.map((input,index)=>index===service?next:input)
+     // A scheduled change leaves this period's service intact.
+     const after=change.mode==='period_end'?before:rateIntervalInvoiceService(original,nextServices)
+@@ -51,7 +51,7 @@ export async function planChangeHistory(env:Bindings,invoice:Row,original:Rating
+     services=nextServices
+     const live=items.find(i=>i.id===change.item_id)
+     insist(live,'plan_change_history_changed',409)
+-    items=[...items.map(i=>i.id===change.item_id?{...i,to:change.effective_date}:i),{id:change.new_item_id,priceId:change.new_price_id,quantity:change.new_quantity,from:change.effective_date,to:live.to,...replacementDiscountScope(live,change.new_price_id)}]
++    items=[...items.map(i=>i.id===change.item_id?{...i,to:change.effective_date}:i),{id:change.new_item_id,priceId:change.new_price_id,quantity:change.new_quantity,from:change.effective_date,to:live.to}]
+     prices={...prices,[change.new_price_id]:quote.targetPrice}
+   }
+   const service=services.findIndex(input=>input.items.some(i=>i.id===item.id))
+diff --git a/src/nectar/plan-change-preview.ts b/src/nectar/plan-change-preview.ts
+index bdced0f..3e5c5fa 100644
+--- a/src/nectar/plan-change-preview.ts
++++ b/src/nectar/plan-change-preview.ts
+@@ -2,7 +2,7 @@
+ // validated interval expansion and rating core as cancellation corrections.
+ import type { Bindings } from '../auth.server'
+ import { canonical,fingerprint,insist,one,parseJson,type Row } from './core'
+-import { replacementDiscountScope,rate,rateIntervalInvoiceService,type RatingInput,type Line } from './rating'
++import { rate,rateIntervalInvoiceService,type RatingInput,type Line } from './rating'
+ import { expandBillingWindows } from './interval-rating'
+ import { pricesById } from './inputs'
+ import { billingPeriodContaining,billingAnchor,dueBillingWindows } from './billing-calendar'
+@@ -35,7 +35,7 @@ export async function planChangeQuote(env: Bindings, sub: Row, item: Row, target
+   insist(effective>item.effective_from&&(!item.effective_to||effective<item.effective_to)&&(!sub.end_date||effective<sub.end_date),'invalid_effective_date')
+   const issued=rate(original),before=history.length?rateIntervalInvoiceService(original,services):issued
+   insist(issued.subtotalCents===invoice.subtotal_cents&&issued.taxCents===invoice.tax_cents&&issued.totalCents===invoice.total_cents,'plan_change_original_mismatch',409)
+-  const changed:RatingInput={...current,prices:{...current.prices,[target]:price},items:[...current.items.map(i=>i.id===item.id?{...i,to:effective}:i),{id:newItem,priceId:target,quantity,from:effective,to:current.items.find(i=>i.id===item.id)!.to,...replacementDiscountScope(current.items.find(i=>i.id===item.id)!,target)}]}
++  const changed:RatingInput={...current,prices:{...current.prices,[target]:price},items:[...current.items.map(i=>i.id===item.id?{...i,to:effective}:i),{id:newItem,priceId:target,quantity,from:effective,to:current.items.find(i=>i.id===item.id)!.to}]}
+   const after=mode==='period_end'?before:rateIntervalInvoiceService(original,services.map((input,index)=>index===service?changed:input))
+   insist(!after.exceptions.length,'plan_change_calculation_blocked',409,after.exceptions)
+   const delta={subtotalCents:after.subtotalCents-before.subtotalCents,taxCents:after.taxCents-before.taxCents,totalCents:after.totalCents-before.totalCents}
+@@ -44,7 +44,7 @@ export async function planChangeQuote(env: Bindings, sub: Row, item: Row, target
+   const amounts=new Map<string,number>()
+   for(const [lines,sign]of [[before.lines,-1],[after.lines,1]] as const)for(const [index,line]of lines.entries())for(const e of recognitionForLine(line,original,`plan-change:${sign}:${index}`).entries)amounts.set(e.period,(amounts.get(e.period)??0)+sign*e.amountCents)
+   const revenue=[...amounts].filter(([,n])=>n!==0).sort(([a],[b])=>a.localeCompare(b)).map(([period,amountCents])=>({period,amountCents,basis:{method:'issued-advance-plan-before-after',sourceInvoice:invoice.id}}))
+-  const newItems=[...items.map(i=>i.id===item.id?{...i,to:effective}:i),{id:newItem,priceId:target,quantity,from:effective,to:item.effective_to,...replacementDiscountScope(items.find(i=>i.id===item.id)!,target)}]
++  const newItems=[...items.map(i=>i.id===item.id?{...i,to:effective}:i),{id:newItem,priceId:target,quantity,from:effective,to:item.effective_to}]
+   const windows=mode==='immediate'?dueBillingWindows({...original,items:newItems,prices:{...prices,[target]:price}},effective,addDays(effective,1)).flatMap(w=>{const components=w.components.filter(c=>c.itemId===newItem);return components.length?[{...w,components,period:{start:components[0].from,end:components[0].to}}]:[]}):[]
+   const quote={sourceInvoice:invoice.id,sourceFingerprint:invoice.source_fingerprint,sourceBalance:invoice.balance_cents,history,effectiveDate:effective,period,policy,mode,before:{subtotalCents:before.subtotalCents,taxCents:before.taxCents,totalCents:before.totalCents},after:{subtotalCents:after.subtotalCents,taxCents:after.taxCents,totalCents:after.totalCents},delta:actual,waivedDelta:policy==='none'?delta:null,revenue,windows,originalTax:original.tax,targetPrice:price}
+   return {...quote,basis:await fingerprint(quote)}
+diff --git a/src/nectar/rating.ts b/src/nectar/rating.ts
+index 568451e..52c7b8e 100644
+--- a/src/nectar/rating.ts
++++ b/src/nectar/rating.ts
+@@ -32,12 +32,7 @@ import { prepaidLines } from './prepaid-rating'
+ export const RATING_VERSION = 'nectar-rating-1'
+ 
+ export interface PriceIn { id: string; kind: 'flat' | 'seat' | 'unit'; unitAmount: string; meterId: string | null; taxable: boolean; label: string; unitLabel: string; pricing?: QuantityPrice; metric?:MetricPrice; billing?: BillingTerms; sourcePriceId?: string }
+-export interface ItemIn { discountItemIds?: string[]; id: string; priceId: string; quantity: number; from: string; to: string | null }
+-// Same-price quantity replacements retain their original discount scope.
+-// Keep exact item ancestry in saved inputs so replay never broadens to siblings.
+-export function replacementDiscountScope(item: ItemIn, priceId: string) {
+-  return item.priceId === priceId ? { discountItemIds: [item.id, ...(item.discountItemIds ?? [])] } : {}
+-}
++export interface ItemIn { id: string; priceId: string; quantity: number; from: string; to: string | null }
+ export interface AmendmentIn { id: string; itemId?: string; kind: 'discount_percent' | 'fixed_credit' | 'price_override'; value: string; priceId: string | null; from: string; to: string | null; note: string }
+ export interface EventIn { eventId: string; meterId: string; quantity: string; occurredAt: number;properties?:Record<string,import('./metric-plan').PropertyValue>;invoiceId?:string|null }
+ export interface RatingInput {
+@@ -122,7 +117,7 @@ function rateCore(input: RatingInput, presentCancellationCredits = true): Rating
+     if (!price || price.kind === 'unit') continue
+     const from = max(item.from, billFrom), to = min(item.to ?? FAR, activeTo)
+     if (from >= to) continue
+-    const boundaries=input.amendments.filter(amendment=>(amendment.kind==='discount_percent'||amendment.kind==='price_override')&&(!amendment.itemId||amendment.itemId===item.id||item.discountItemIds?.includes(amendment.itemId))&&(!amendment.priceId||amendment.priceId===price.id||amendment.priceId===price.sourcePriceId)).flatMap(amendment=>[amendment.from,amendment.to])
++    const boundaries=input.amendments.filter(amendment=>(amendment.kind==='discount_percent'||amendment.kind==='price_override')&&(!amendment.itemId||amendment.itemId===item.id)&&(!amendment.priceId||amendment.priceId===price.id||amendment.priceId===price.sourcePriceId)).flatMap(amendment=>[amendment.from,amendment.to])
+     for (const [activeStart, activeEnd] of activeSegments(from, to, input.lifecycle ?? [])) for (const [start, end] of split(activeStart, activeEnd, boundaries)) {
+       const days = BigInt(daysBetween(start, end))
+       const { unit, override } = unitFor(input, price, start, end)
+@@ -142,7 +137,7 @@ function rateCore(input: RatingInput, presentCancellationCredits = true): Rating
+ 
+   // Contract discounts on the fixed and seat lines they cover.
+   for (const amendment of input.amendments.filter(a => a.kind === 'discount_percent')) {
+-    const covered = recurring.filter(entry => covers(amendment, entry.from, entry.to) && (!amendment.itemId || entry.line.evidence.item === amendment.itemId || input.items.find(item => item.id === entry.line.evidence.item)?.discountItemIds?.includes(amendment.itemId)) && (!amendment.priceId || entry.line.priceId === amendment.priceId || input.prices[entry.line.priceId!]?.sourcePriceId === amendment.priceId))
++    const covered = recurring.filter(entry => covers(amendment, entry.from, entry.to) && (!amendment.itemId || entry.line.evidence.item === amendment.itemId) && (!amendment.priceId || entry.line.priceId === amendment.priceId || input.prices[entry.line.priceId!]?.sourcePriceId === amendment.priceId))
+     if (!covered.length) continue
+     if (input.version === INTERVAL_RATING_VERSION) {
+       for (const entry of covered) {
+diff --git a/src/nectar/subscriptions.ts b/src/nectar/subscriptions.ts
+index a051a3f..75685a3 100644
+--- a/src/nectar/subscriptions.ts
++++ b/src/nectar/subscriptions.ts
+@@ -15,14 +15,14 @@ import { all, commit, guard, insist, newId, now, one, parseJson, stmt, type Row
+ import { canonicalDecimal, micros } from './decimal'
+ import { addMonthsClamped, isDate, periodContaining, requireDate } from './dates'
+ import { nonMonthlyArrears, storedBillingTerms } from './billing-calendar'
+-import { rated, ratingInputs } from './inputs'
++import { rated } from './inputs'
+ import { lifecycleHistory, lifecycleIntervals } from './lifecycle-records'
+ import { lifecyclePolicy } from './lifecycle-policy'
+ import { sourceMeterIds,uniqueMeterItems } from './metric-ownership'
+ import { contractsFor, contractBurnDown } from './contract-terms'
+ import { metadataFor,withMetadata } from './metadata'
+ import type { Input } from './input'
+-import { replacementDiscountScope, type ItemIn, type Line } from './rating'
++import type { ItemIn, Line } from './rating'
+ import { intervalChangePreview } from './interval-changes'
+ import { intervalCancellations } from './interval-cancel'
+ import { assertSameCurrency, customerCurrencyGuard } from './currency'
+@@ -198,8 +198,8 @@ export async function prepareChange(env: Bindings, actor: Actor, input: Input) {
+   insist((price.meter_id ?? '') === (old!.meter_id ?? '') || price.kind !== 'unit', 'change_meter_separately')
+   const quantity = price.kind === 'seat' ? input.integer('quantity', { min: price.pricing_model === 'simple' ? 1 : 0, max: price.pricing_model === 'simple' ? 1_000_000 : 1_000_000_000 })! : 1
+   insist(price.id !== item.price_id || quantity !== item.quantity, 'nothing_changes')
+-  const items = (await ratingInputs(env, business, sub.id, period)).items
+-  const changed: ItemIn[] = [...items.map(row => row.id === item.id ? { ...row, to: date } : row), { id: 'change', priceId: price.id, quantity, from: date, to: item.effective_to, ...replacementDiscountScope(items.find(row => row.id === item.id)!, price.id) }]
++  const items: ItemIn[] = (await all(env, 'SELECT * FROM nc_items WHERE subscription_id = ? ORDER BY effective_from, id', sub.id)).map(row => ({ id: row.id, priceId: row.price_id, quantity: row.quantity, from: row.effective_from, to: row.effective_to }))
++  const changed: ItemIn[] = [...items.map(row => row.id === item.id ? { ...row, to: date } : row), { id: 'change', priceId: price.id, quantity, from: date, to: item.effective_to }]
+   await uniqueMeterItems(env,changed)
+   const intervalPreview = await intervalChangePreview(env, business, sub, items, changed, item.price_id, price.id, date)
+   let preview: Row | null = intervalPreview

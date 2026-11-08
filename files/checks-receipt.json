@@ -1,0 +1,32 @@
+[
+  {
+    "head": "df4fdbbccf73d3f5320c8da217904c23bdb9e29c",
+    "command": "node scripts/contract-docs.mjs check",
+    "exit": 0,
+    "output_sha256": "6ba1efd785a094d679c93e97c7840551bfab85040c71b3cfee76597e1d89c03a",
+    "summary": [
+      "Contract documents current: 132 clauses: 62 done, 41 partial, 29 missing."
+    ],
+    "stderr": ""
+  },
+  {
+    "head": "df4fdbbccf73d3f5320c8da217904c23bdb9e29c",
+    "command": "pnpm check:deployment-spec",
+    "exit": 0,
+    "output_sha256": "152ad1056ec4970ed7f3f77b47d8de33e31e5fa2e4299eda09687e97d9e50336",
+    "summary": [
+      "Deployment specification matches the real build and source policy."
+    ],
+    "stderr": ""
+  },
+  {
+    "head": "df4fdbbccf73d3f5320c8da217904c23bdb9e29c",
+    "command": "node node_modules/@runeditrun/rer/edition-authoring/cli.mjs check",
+    "exit": 0,
+    "output_sha256": "9879333056cb6c26ae24185ebb2924e65d137842774139a13ffe46f13b05294b",
+    "summary": [
+      "Source lock check returned current lock successfully."
+    ],
+    "stderr": ""
+  }
+]

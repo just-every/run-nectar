@@ -1,0 +1,65 @@
+{
+  "calls": 10,
+  "requests": [
+    {
+      "request": "api repos/just-every/run-nectar/actions/runs?head_sha=7ee65705781d0db30b1ec46e7bfd275369153a0d&per_page=100 --jq .workflow_runs[] | {id,name,status,conclusion,head_sha,html_url}",
+      "run": null,
+      "time": 1794152236.666897,
+      "call": 1
+    },
+    {
+      "request": "api repos/just-every/run-nectar/actions/runs/42495695583 --jq {status,conclusion,head_sha,html_url}",
+      "run": "42495695583",
+      "time": 1794152536.6955547,
+      "call": 2
+    },
+    {
+      "request": "api repos/just-every/run-nectar/actions/runs/42495695583 --jq {status,conclusion,head_sha,html_url}",
+      "run": "42495695583",
+      "time": 1794152836.7029815,
+      "call": 3
+    },
+    {
+      "request": "api repos/just-every/run-nectar/actions/runs/42495695583 --jq {status,conclusion,head_sha,html_url}",
+      "run": "42495695583",
+      "time": 1794153136.7087739,
+      "call": 4
+    },
+    {
+      "request": "api repos/just-every/run-nectar/actions/runs/42495695583 --jq {status,conclusion,head_sha,html_url}",
+      "run": "42495695583",
+      "time": 1794153472.489265,
+      "call": 5
+    },
+    {
+      "request": "api repos/just-every/run-nectar/actions/runs/42495695583/jobs?per_page=100 --jq .jobs[] | select(.conclusion == \"failure\") | {id,name,conclusion,steps:[.steps[] | select(.conclusion == \"failure\") | {name,number,conclusion}]}",
+      "run": "42495695583",
+      "time": 1794153507.5046482,
+      "call": 6
+    },
+    {
+      "request": "run view 42495695583 --repo just-every/run-nectar --job 128777609031 --log-failed",
+      "run": null,
+      "time": 1794153526.9224482,
+      "call": 7
+    },
+    {
+      "request": "run view 42495695583 --repo just-every/run-nectar --job 128777609070 --log-failed",
+      "run": null,
+      "time": 1794153557.3962824,
+      "call": 8
+    },
+    {
+      "request": "run view 42495695583 --repo just-every/run-nectar --job 128777609296 --log-failed",
+      "run": null,
+      "time": 1794153557.401389,
+      "call": 9
+    },
+    {
+      "request": "api repos/just-every/run-nectar/actions/runs?head_sha=df4fdbbccf73d3f5320c8da217904c23bdb9e29c&per_page=100 --jq [.workflow_runs[] | {id,name,status,conclusion,head_sha,head_branch,event,html_url}]",
+      "run": null,
+      "time": 1794154224.898723,
+      "call": 10
+    }
+  ]
+}
