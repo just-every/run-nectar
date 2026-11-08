@@ -58,8 +58,9 @@ async function contributions(data: Awaited<ReturnType<typeof sources>>, month: s
     const captured = useSource ? capturedNormalizedInput(sub, data.history, through, data.business.timezone) : null
     const input = captured?.input ?? data.native.get(sub.id)!
     insist(input, 'normalized_contract_evidence_required', 409)
-    if (data.selected.plan && !input.items.some(item => item.from <= asOf && (!item.to || asOf < item.to)
-      && ([item.priceId, data.priceAliases.get(item.priceId)].includes(data.selected.plan) || data.priceAliases.get(data.selected.plan!) === item.priceId))) continue
+    const planPrices = captured?.planPriceIds ?? input.items.filter(item => item.from <= asOf && (!item.to || asOf < item.to)).map(item => item.priceId)
+    if (data.selected.plan && !planPrices.some(price => [price, data.priceAliases.get(price)].includes(data.selected.plan!)
+      || data.priceAliases.get(data.selected.plan!) === price)) continue
     const snapshot = await normalizedSnapshot(input, asOf)
     insist(snapshot.supported, 'normalized_instrument_unsupported', 409, { subscription: sub.id, exclusions: snapshot.exclusions })
     const source: Source = captured?.source ?? { provider: 'nectar', reference: sub.id, href: `/app/subscriptions/${sub.id}` }

@@ -2,9 +2,9 @@
   "name": "Nectar",
   "repository": "https://github.com/just-every/run-nectar",
   "clone": "npx -y @runeditrun/rer dev just-every/run-nectar",
-  "folder": "run-nectar",
-  "requirements": "Needs Node 22 or later and pnpm 10.12.4, on macOS, Linux or Windows with WSL2.",
   "licence": "MIT",
   "docs": true,
-  "hosted": []
+  "paths": {
+    "product": null
+  }
 }

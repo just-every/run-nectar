@@ -1,3 +1,6 @@
+import { moveInvestigationsFlow,harnessOptions as moveOptions } from './move-investigations.mjs'
+import { transferInstructionsFlow,harnessOptions as transferOptions } from './transfer-instructions.mjs'
+import { collectionDiagnosisFlow, harnessOptions as diagnosisOptions } from './collection-diagnosis.mjs'
 import { reconciliationFlow } from './reconciliation.mjs'
 import { commitments } from './commitments.mjs'
 import { seedPortalRecords } from './portal-sessions.mjs'
@@ -8,6 +11,7 @@ import { prepaidBrowser } from './prepaid-browser.mjs'
 import { nativeCollectionFlow,harnessOptions as nativeOptions } from './native-collection.mjs'
 // Focused real-browser use of a clause's own public pages and native forms.
 import assert from 'node:assert/strict'
+import { spawnSync } from 'node:child_process'
 import { chromium } from '@playwright/test'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { harness } from './harness.mjs'
@@ -20,10 +24,10 @@ import { contractEntitySetup } from './contract-setup.mjs'
 import { intervalCancellationFlow } from './interval-cancel.mjs'
 import { numberingEntitiesFlow } from './numbering-entities.mjs'
 const kind=process.argv[2],directory=process.env.NECTAR_EVIDENCE_DIR??`.evidence/${kind}`
-assert.ok(['assurance','entitlements','portal-usage','erasure','history','collection','numbering','intervals','cancellation','entity-setup','prepaid','native-collection'].includes(kind))
+assert.ok(['move-investigations','transfer-instructions','assurance','entitlements','portal-usage','erasure','history','collection','numbering','intervals','cancellation','entity-setup','prepaid','native-collection','collection-diagnosis'].includes(kind))
 await mkdir(directory,{recursive:true})
 const captures=[]
-const h=await harness({assets:true,...(kind==='collection'?collectionOptions():kind==='native-collection'?nativeOptions():{})});let browser
+const h=await harness({assets:true,...(kind==='move-investigations'?moveOptions():kind==='transfer-instructions'?transferOptions():kind==='collection'?collectionOptions():kind==='native-collection'?nativeOptions():kind==='collection-diagnosis'?diagnosisOptions():{})});let browser
 try {
   await h.raw('/auth/bootstrap',{body:{token:h.vars.SETUP_TOKEN,displayName:'Nectar Owner'}})
   const owner=await h.signIn(h.vars.OWNER_EMAIL)
@@ -31,7 +35,7 @@ try {
   await h.api('business.configure',owner,{legal_name:'Alder Research Software',timezone:'UTC',invoice_prefix:'ALDER',payment_terms_days:30})
   await applyPolicy(h,owner,'tax.declare',{tax_jurisdiction:'CA',tax_mode:'no_tax',tax_note:'Reviewed focused browser journey'})
   await h.api('tax.review',owner,{revision:(await h.api('business',owner)).revision})
-  browser=await chromium.launch({headless:true,args:['--use-mock-keychain','--password-store=basic']})
+  browser=await chromium.launch({headless:true,...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?{executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH}:{}),args:['--use-mock-keychain','--password-store=basic','--no-sandbox']})
   const context=await browser.newContext()
   await context.addCookies(owner.split('; ').map(value=>{const i=value.indexOf('=');return {name:value.slice(0,i),value:value.slice(i+1),url:h.origin}}))
   const page=await context.newPage()
@@ -57,7 +61,96 @@ try {
     const url=new URL(page.url())
     assert.equal(url.searchParams.get('error'),null,`Native form submission ${url.pathname}: ${url.searchParams.get('error')}`)
   }
-  if(kind==='assurance') {
+  if(kind==='move-investigations') {
+    await moveInvestigationsFlow(h,owner,{onState:async state=>{
+      await page.setViewportSize({width:1440,height:950})
+      await page.goto(h.origin+state.path)
+      assert.equal(await page.locator('[data-move-case]').count(),state.cases.length)
+      if(state.label==='three-differences') {
+        assert.match(await page.locator('main').innerText(),/Quantity/)
+        assert.match(await page.locator('main').innerText(),/Unit price/)
+        assert.match(await page.locator('main').innerText(),/Service ends/)
+        await submit(form('move.investigate'))
+        assert.equal(await page.locator('[data-move-case]').count(),3,'native repeated investigation keeps three cases')
+      } else if(state.label==='method-difference') {
+        assert.match(await page.locator('main').innerText(),/Captured saved method/)
+      } else if(state.label==='event-difference') {
+        assert.match(await page.locator('main').innerText(),/Subscription event items/)
+        assert.match(await page.locator('main').innerText(),/4 at synthetic-nectar-price-1/)
+      } else if(state.label==='customer-difference') {
+        assert.match(await page.locator('main').innerText(),/Billing address/)
+        assert.match(await page.locator('main').innerText(),/Changed value/)
+      } else {
+        assert.equal(await form('assurance.approve').count(),0,'resolved cases need no further confirmation')
+        await submit(form('assurance.recheck').first())
+        assert.match(await page.locator('[data-move-case]').first().innerText(),/resolved/)
+      }
+      assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false)
+      assert.equal(await page.locator('main button').evaluateAll(nodes=>nodes.filter(node=>!node.textContent.trim()).length),0)
+      for(const width of [1440,390]) {
+        await page.setViewportSize({width,height:950})
+        await page.screenshot({path:`${directory}/${width}-${state.label}.png`,fullPage:true})
+        captures.push({label:state.label,width,file:`${width}-${state.label}.png`})
+        console.log(`BROWSER ${width} ${state.label}`)
+      }
+    }})
+  }
+  else if(kind==='transfer-instructions')await transferInstructionsFlow(h,owner,{onState:async state=>{
+    await both(state.label,state.path,async()=>{
+      if(page.viewportSize().width===1440){
+        const section=page.locator('section[aria-label]').first()
+        for(const value of [state.fields.bankName,state.fields.accountHolderName,state.fields.accountNumber,state.fields.routingNumber])assert.ok((await section.innerText()).includes(value))
+        const small=await page.locator('main *').evaluateAll(nodes=>nodes.filter(n=>n.textContent.trim()&&getComputedStyle(n).display!=='none'&&Number.parseFloat(getComputedStyle(n).fontSize)<13).map(n=>n.tagName))
+        assert.deepEqual(small,[],'Customer instruction text is at least 13px')
+        assert.equal(await page.locator('button:has(svg),a:has(svg)').count(),0,'Every customer control has a visible label')
+      }
+    })
+  }})
+  else if(kind==='collection-diagnosis') {
+    await collectionDiagnosisFlow(h,owner,{
+      onState:async state=>{
+        const path=`/app/proposals/${state.proposal}`
+        for(const width of [1440,390]) {
+          await page.setViewportSize({width,height:950})
+          await page.goto(h.origin+path)
+          if(width===1440) {
+            const text=await page.locator('main').innerText()
+            assert.ok(text.includes(state.label==='stale-evidence'?'Stale':state.label==='approved-download'?'Approved':'Expired card'))
+            if(state.label==='expired-card-review') {
+              assert.ok(text.includes(state.review.payload.recipient) && text.includes(state.review.payload.body))
+              assert.equal(await page.locator('a', {hasText:'Invoice-linked payment failure'}).count(),1)
+            }
+            if(state.label==='approved-download') {
+              const [download]=await Promise.all([page.waitForEvent('download'),page.getByRole('link',{name:'Download approved reminder'}).click()])
+              assert.equal(await download.failure(),null)
+              const stream=await download.createReadStream(), chunks=[]
+              for await(const chunk of stream)chunks.push(chunk)
+              assert.ok(Buffer.concat(chunks).toString().includes('card ending 4242 expired'))
+            }
+            assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false)
+            const unlabeled=await page.locator('button,a,[role="button"]').evaluateAll(nodes=>nodes.filter(n=>getComputedStyle(n).display!=='none'&&!n.textContent.trim()&&n.querySelector('svg,img')).length)
+            assert.equal(unlabeled,0,'All proposal controls have visible text labels')
+            const small=await page.locator('main article,main pre.message,main button,main h4').evaluateAll(nodes=>nodes.filter(node=>parseFloat(getComputedStyle(node).fontSize)<13).length)
+            assert.equal(small,0,'Changed proposal content is readable')
+          }
+          await page.screenshot({path:`${directory}/${width}-${state.label}.png`,fullPage:true})
+          captures.push({label:state.label,width,file:`${width}-${state.label}.png`})
+          console.log(`BROWSER ${width} ${state.label}`)
+        }
+      },
+      approve:async({proposal,review})=>{
+        await page.setViewportSize({width:1440,height:950})
+        await page.goto(`${h.origin}/app/proposals/${proposal}`)
+        const approval=form('proposal.decide').filter({has:page.locator('input[name="decision"][value="approved"]')})
+        assert.equal(await approval.locator('input[name="recipient"]').inputValue(),review.payload.recipient)
+        await submit(approval)
+        const saved=await h.api(`proposals/${proposal}`,owner)
+        assert.equal(saved.status,'approved')
+        return {id:proposal,status:saved.status,notice:saved.result.notice}
+      },
+    })
+  }
+  else if(kind==='assurance') {
     await reconciliationFlow(h,owner,async state=>{
       await both(`assurance-${state.label}`,state.path,async()=>{
         if(state.label==='assignee-demoted') {
@@ -134,7 +227,7 @@ try {
     })
   }
   else if(kind==='prepaid')await prepaidBrowser({h,owner,page,context,both,form,submit})
-  else if(kind==='native-collection')await nativeCollectionFlow(h,owner,{confirm:async payload=>{await page.goto(h.origin+`/app/invoices/${(await h.api('native-collections',owner)).find(row=>row.id===payload.request).invoice_id}`);const consent=form('collection.confirm').filter({has:page.locator(`input[name="request"][value="${payload.request}"]`)}).filter({has:page.locator('button')});await consent.locator('input[name="confirm"]').check();await submit(consent);return (await h.api('native-collections',owner)).find(row=>row.id===payload.request)},onState:async state=>{await both(`native-${state.label}-${state.request?.id??state.invoice}`,`/app/invoices/${state.invoice}#collection`)}})
+  else if(kind==='native-collection')await nativeCollectionFlow(h,owner,{prepareRecovery:async request=>{const row=(await h.api('native-collections',owner)).find(r=>r.id===request);await page.goto(h.origin+`/app/invoices/${row.invoice_id}`);const review=form('collection.recovery.prepare').filter({has:page.locator(`input[name="request"][value="${request}"]`)});await submit(review);return (await h.api('native-collections',owner)).find(r=>r.id===request)},confirmRecovery:async payload=>{const row=(await h.api('native-collections',owner)).find(r=>r.id===payload.request);await page.goto(h.origin+`/app/invoices/${row.invoice_id}`);const review=form('collection.recovery.confirm').filter({has:page.locator(`input[name="recovery"][value="${payload.recovery}"]`)});await review.locator('input[name="confirm"]').check();await submit(review);return (await h.api('native-collections',owner)).find(r=>r.id===row.id)},confirm:async payload=>{await page.goto(h.origin+`/app/invoices/${(await h.api('native-collections',owner)).find(row=>row.id===payload.request).invoice_id}`);const consent=form('collection.confirm').filter({has:page.locator(`input[name="request"][value="${payload.request}"]`)}).filter({has:page.locator('button')});await consent.locator('input[name="confirm"]').check();await submit(consent);return (await h.api('native-collections',owner)).find(row=>row.id===payload.request)},onState:async state=>{await both(`native-${state.label}-${state.request?.id??state.invoice}`,`/app/invoices/${state.invoice}#collection`)}})
   else if(kind==='entity-setup')await contractEntitySetup(h,owner,{
     decideSetup:async(payload,actor)=>{
       assert.equal(actor,owner)
@@ -255,6 +348,12 @@ try {
   }})
   await writeFile(`${directory}/screens.json`,JSON.stringify({kind,captures},null,2))
 } finally {await browser?.close();await h.close()}
+// Keep the transfer screen proof in Verify's existing native-collection entry point.
+if(kind==='native-collection'){
+  const result=spawnSync(process.execPath,[process.argv[1],'transfer-instructions'],{stdio:'inherit',env:{...process.env,NECTAR_EVIDENCE_DIR:`${directory}/transfer-instructions`}})
+  assert.equal(result.status,0,'Customer transfer instruction browser journey')
+}
+
 
 async function nativeIntervalForms({h,owner,page,both,form,submit}) {
   await h.advanceClock('2034-01-01T20:00:00Z')

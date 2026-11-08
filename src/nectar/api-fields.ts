@@ -114,6 +114,30 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "reason": "text",
     "reference": "text"
   },
+  "bank.deposit.upload": {
+    "bank_source_id": "text",
+    "file": "file"
+  },
+  "billing.notice.configure": {
+    "body": "text",
+    "confirm": "flag",
+    "kind": "text",
+    "language": "text",
+    "revision": "integer",
+    "sender": "text",
+    "subject": "text"
+  },
+  "billing.notice.prepare": {
+    "confirm": "flag",
+    "event": "text",
+    "invoice": "text",
+    "kind": "text"
+  },
+  "billing.notice.send": {
+    "basis_hash": "text",
+    "confirm": "flag",
+    "notice": "text"
+  },
   "billrun.prepare": {
     "period": "text"
   },
@@ -242,6 +266,11 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "customer": "text",
     "method": "text"
   },
+  "close.scan": {
+    "basis": "text",
+    "owner": "text",
+    "period": "text"
+  },
   "collection.confirm": {
     "account_ref": "text",
     "amount_cents": "integer",
@@ -261,6 +290,19 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "invoice": "text"
   },
   "collection.reconcile": {
+    "request": "text"
+  },
+  "collection.recovery.confirm": {
+    "account_ref": "text",
+    "amount_cents": "integer",
+    "basis_hash": "text",
+    "confirm": "flag",
+    "payment_method_ref": "text",
+    "recovery": "text",
+    "request": "text",
+    "stripe_customer_ref": "text"
+  },
+  "collection.recovery.prepare": {
     "request": "text"
   },
   "contact.add": {
@@ -542,6 +584,7 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "confirm": "flag",
     "destination": "text",
     "invoice": "text",
+    "proposal": "text",
     "reason": "text",
     "refund": "text"
   },
@@ -550,6 +593,7 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "basis": "text",
     "destination": "text",
     "invoice": "text",
+    "proposal": "text",
     "reason": "text"
   },
   "invoice.refund.preview": {
@@ -679,6 +723,21 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
   "mfa.verify": {
     "code": "text"
   },
+  "move.investigate": {
+    "owner": "text"
+  },
+  "move.rollback.confirm": {
+    "acknowledge_discrepancies": "flag",
+    "basis": "text",
+    "confirm": "flag",
+    "request": "text"
+  },
+  "move.rollback.prepare": {
+    "cutover_start": "text",
+    "instructions": "text",
+    "processor_ref": "text",
+    "subscription": "text"
+  },
   "note.add": {
     "body": "text",
     "kind": "text",
@@ -766,6 +825,11 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "confirm_single": "flag",
     "decision": "text",
     "request": "text"
+  },
+  "portal.change.policy": {
+    "minimum_seats": "integer",
+    "pause_allowed": "flag",
+    "prices": "list"
   },
   "portal.configure": {
     "brand_color": "text",
@@ -984,6 +1048,33 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
   "reminder.prepare": {
     "customer": "text"
   },
+  "remittance.allocate": {
+    "amount": "text",
+    "confirm": "flag",
+    "fingerprint": "text",
+    "invoice": "text",
+    "receipt": "text"
+  },
+  "remittance.allocate.preview": {
+    "amount": "text",
+    "invoice": "text",
+    "receipt": "text"
+  },
+  "remittance.confirm": {
+    "confirm": "flag",
+    "customer": "text",
+    "fingerprint": "text",
+    "receipt": "text",
+    "source": "text"
+  },
+  "remittance.preview": {
+    "customer": "text",
+    "receipt": "text",
+    "source": "text"
+  },
+  "remittance.upload": {
+    "file": "file"
+  },
   "report.schedule": {
     "day": "integer",
     "enabled": "flag"
@@ -1055,6 +1146,34 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "revision": "integer",
     "role": "text"
   },
+  "sandbox.billing.reconcile": {
+    "confirm": "flag",
+    "customer": "text"
+  },
+  "sandbox.catalog.copy": {
+    "confirm": "flag",
+    "source_fingerprint": "text"
+  },
+  "sandbox.clock.advance": {
+    "clock": "text",
+    "confirm": "flag",
+    "customer": "text",
+    "revision": "integer"
+  },
+  "sandbox.customer.create": {
+    "catalog": "text",
+    "clock": "text",
+    "label": "text",
+    "price": "list",
+    "quantity": "list",
+    "trial_end": "text"
+  },
+  "sandbox.processor.bind": {
+    "confirm": "flag",
+    "customer": "text",
+    "stripe_customer_ref": "text",
+    "test_method_ref": "text"
+  },
   "setup.resolve": {
     "proposal": "text",
     "resolution": "list"
@@ -1083,6 +1202,10 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "issuer": "text",
     "revision": "integer",
     "role_map": "json"
+  },
+  "sso.link.approve": {
+    "basis": "text",
+    "link": "text"
   },
   "subscription.addon": {
     "effective_date": "text",
@@ -1184,6 +1307,21 @@ export const API_FIELDS: Record<string, Record<string, FieldKind>> = {
     "subscription": "text",
     "term_start": "text",
     "uplift_percent": "text"
+  },
+  "transfer.instructions.confirm": {
+    "account_ref": "text",
+    "basis_hash": "text",
+    "binding_revision": "text",
+    "confirm": "flag",
+    "currency": "text",
+    "customer": "text",
+    "request": "text",
+    "stripe_customer_ref": "text",
+    "test_mode": "flag"
+  },
+  "transfer.instructions.prepare": {
+    "account_ref": "text",
+    "customer": "text"
   },
   "trial.collection.approve": {
     "basis_hash": "text",

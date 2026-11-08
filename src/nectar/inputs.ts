@@ -41,8 +41,22 @@ export async function pricesById(env: Bindings, ids: string[]): Promise<Record<s
 export async function ratingInputs(env: Bindings, business: Business, subscriptionId: string, period: { start: string; end: string }, replaceItems?: ItemIn[], billing?: BillingWindow): Promise<RatingInput> {
   const sub = await one(env, 'SELECT s.*, c.tax_exempt, c.tax_exempt_ref FROM nc_subscriptions s JOIN nc_customers c ON c.id = s.customer_id WHERE s.id = ?', subscriptionId)
   insist(sub, 'subscription_not_found', 404)
-  const items: ItemIn[] = replaceItems ?? (await all(env, 'SELECT id, price_id, quantity, effective_from, effective_to FROM nc_items WHERE subscription_id = ? ORDER BY effective_from, id', sub.id))
-    .map(row => ({ id: row.id, priceId: row.price_id, quantity: row.quantity, from: row.effective_from, to: row.effective_to }))
+  const rows = await all(env, `SELECT i.id,i.price_id,i.quantity,i.effective_from,i.effective_to,
+    COALESCE(c.item_id,p.item_id) AS predecessor FROM nc_items i
+    LEFT JOIN nc_changes c ON c.id=i.change_id AND c.subscription_id=i.subscription_id AND c.status='approved'
+    LEFT JOIN nc_plan_changes p ON p.new_item_id=i.id AND p.subscription_id=i.subscription_id AND p.status='approved'
+    WHERE i.subscription_id=? ORDER BY i.effective_from,i.id`, sub.id)
+  const byId = new Map(rows.map(row => [row.id, row]))
+  const ancestry = (row: Row): string[] => {
+    const previous = byId.get(row.predecessor)
+    return previous && previous.price_id === row.price_id && previous.effective_from < row.effective_from
+      ? [previous.id, ...ancestry(previous)] : []
+  }
+  const items: ItemIn[] = replaceItems ?? rows.map(row => {
+    const discountItemIds = ancestry(row)
+    return { id: row.id, priceId: row.price_id, quantity: row.quantity, from: row.effective_from, to: row.effective_to,
+      ...(discountItemIds.length ? { discountItemIds } : {}) }
+  })
   const amendments = (await all(env, `SELECT a.*,(SELECT scope.price_id FROM nc_amendment_scopes scope WHERE scope.amendment_id=a.id) AS scope_price_id FROM nc_amendments a WHERE a.subscription_id = ? AND a.status = 'approved'
     ${billing ? "AND (kind<>'fixed_credit' OR NOT EXISTS(SELECT 1 FROM nc_invoice_lines l JOIN nc_invoices i ON i.id=l.invoice_id WHERE i.subscription_id=a.subscription_id AND i.status='issued' AND l.kind='credit' AND json_extract(l.evidence_json,'$.amendment')=a.id))" : ''} ORDER BY effective_from, id`, sub.id))
     .map(row => ({ id: row.id, ...(row.item_id ? { itemId: row.item_id } : {}), kind: row.kind, value: row.value, priceId: row.scope_price_id ?? row.price_id, from: row.effective_from, to: row.effective_to, note: row.note }))

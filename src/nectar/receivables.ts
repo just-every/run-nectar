@@ -13,7 +13,7 @@ import { deliverAlerts } from './notification-mail'
 // invoices. For every invoice: total = credited + paid + balance, and no
 // credit or allocation can take a balance below zero (checked in the batch).
 import type { Bindings } from '../auth.server'
-import { actorLabel, can, requireAny, requireCapability, requireMember, requireRead, type Actor } from './actor'
+import { actorLabel, can, canRead, requireAny, requireCapability, requireMember, requireRead, type Actor } from './actor'
 import { requireBusiness } from './business'
 import { all, commit, guard, insist, newId, now, one, stmt, type Row } from './core'
 import { authorizeCredit, prepareCreditRequest } from './credit-policy'
@@ -168,6 +168,7 @@ export async function allocate(env: Bindings, actor: Actor, input: Input) {
   requireCapability(actor, 'receivables')
   const payment = await one(env, `SELECT p.*, ${UNALLOCATED_SQL} AS unallocated FROM nc_payments p WHERE p.id = ?`, input.text('payment', { max: 100 }))
   insist(payment, 'payment_not_found', 404)
+  insist(!await one(env, 'SELECT 1 FROM nc_remittances WHERE payment_id=?', payment.id), 'remittance_confirmation_required', 409)
   const invoice = await issuedInvoice(env, input.text('invoice', { max: 100 }))
   insist(invoice.customer_id === payment.customer_id, 'different_customer', 409)
   assertSameCurrency(payment.currency, invoice.currency)
@@ -188,24 +189,36 @@ export async function payments(env: Bindings, actor: Actor, customerId?: string,
 /** Callers authorize first: the payments door, or a customer record's own ledger (GOV-001). */
 async function paymentRows(env: Bindings, customerId?: string,url?:URL) {
   const filter=metadataPredicate('payment','p.id',url?metadataFilter(url):null)
-  const rows = await all(env, `SELECT p.*, c.name AS customer_name, ${UNALLOCATED_SQL} AS unallocated_cents FROM nc_payments p JOIN nc_customers c ON c.id = p.customer_id WHERE ${filter.sql} ${customerId ? 'AND p.customer_id = ?' : ''} ORDER BY p.received_on DESC, p.recorded_at DESC ${customerId ? '' : 'LIMIT 200'}`, ...filter.params,...(customerId ? [customerId] : []))
+  const rows = await all(env, `SELECT p.*, (SELECT r.id FROM nc_remittances r WHERE r.payment_id=p.id) AS remittance_id, c.name AS customer_name, ${UNALLOCATED_SQL} AS unallocated_cents FROM nc_payments p JOIN nc_customers c ON c.id = p.customer_id WHERE ${filter.sql} ${customerId ? 'AND p.customer_id = ?' : ''} ORDER BY p.received_on DESC, p.recorded_at DESC ${customerId ? '' : 'LIMIT 200'}`, ...filter.params,...(customerId ? [customerId] : []))
   return withMetadata(env, 'payment', await Promise.all(rows.map(row => currencyRecord(env, row, row.amount_cents, row.received_on))))
 }
 
 /** Open (issued, unpaid) invoices with their balances. */
 export async function openInvoices(env: Bindings, customerId?: string) {
-  return await all(env, `SELECT i.id, i.number, i.customer_id, c.name AS customer_name, c.billing_email, i.issue_date, i.due_date, i.currency, i.total_cents, ${BALANCE_SQL} AS balance_cents
+  return await all(env, `SELECT i.id, i.number, i.source_fingerprint, i.customer_id, c.name AS customer_name, c.billing_email, i.issue_date, i.due_date, i.currency, i.total_cents, ${BALANCE_SQL} AS balance_cents
     FROM nc_invoices i JOIN nc_customers c ON c.id = i.customer_id WHERE i.status = 'issued' ${customerId ? 'AND i.customer_id = ?' : ''} AND ${BALANCE_SQL} > 0 ORDER BY i.due_date, i.number`, ...(customerId ? [customerId] : []))
 }
 
 export async function customerLedger(env: Bindings, actor: Actor, customerId: string) {
   requireRead(actor, 'customers')
+  // This projection combines invoice and payment evidence. Customer access,
+  // including access through a parent record, grants neither financial read.
+  if (!canRead(actor, 'invoices')) {
+    const customer = await one(env, 'SELECT currency FROM nc_customers WHERE id=?', customerId)
+    return {
+      currency: billingCurrency(customer?.currency),
+      carriedUsageCredits: [], invoices: [], payments: [], credits: [],
+      invoicedCents: null, creditedCents: null, paidCents: null,
+      writtenOffCents: null, balanceCents: null, unallocatedCents: null,
+    }
+  }
   const invoices = await all(env, `SELECT i.id, i.number, i.issue_date, i.due_date, i.currency, i.total_cents, ${BALANCE_SQL} AS balance_cents,
     COALESCE((SELECT SUM(COALESCE(applied_cents,amount_cents)) FROM nc_credit_notes WHERE invoice_id = i.id), 0) + ${CARRIED_APPLICATION_SQL} + ${GOODWILL_APPLIED_SQL} AS credited_cents,
     COALESCE((SELECT SUM(amount_cents) FROM nc_allocations WHERE invoice_id = i.id), 0) - ${PROCESSOR_REVERSED_SQL} AS paid_cents, ${WRITE_OFF_NET_SQL} AS written_off_cents
     FROM nc_invoices i WHERE i.customer_id = ? AND i.status = 'issued' ORDER BY i.issue_date, i.number`, customerId)
-  // The customer record includes its own payments, so customer readers see them here.
-  const pays = await paymentRows(env, customerId)
+  // Invoice facts and balances need invoice authority; payment references need both.
+  const paymentEvidence = canRead(actor, 'payments')
+  const pays = paymentEvidence ? await paymentRows(env, customerId) : []
   const credits = await sharedCreditNotes(env,'n.customer_id=?',customerId)
   const customer = await one(env, 'SELECT currency FROM nc_customers WHERE id=?', customerId)
   const business = await requireBusiness(env)
@@ -221,7 +234,7 @@ export async function customerLedger(env: Bindings, actor: Actor, customerId: st
     paidCents: invoices.reduce((sum, row) => sum + row.paid_cents, 0),
     writtenOffCents: invoices.reduce((sum, row) => sum + row.written_off_cents, 0),
     balanceCents: invoices.reduce((sum, row) => sum + row.balance_cents, 0),
-    unallocatedCents: pays.reduce((sum, row) => sum + row.unallocated_cents, 0),
+    unallocatedCents: paymentEvidence ? pays.reduce((sum, row) => sum + row.unallocated_cents, 0) : null,
   }
 }
 

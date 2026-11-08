@@ -85,5 +85,109 @@ export async function discountedCaptureFlow(h, owner, onState) {
       await onState({ label: `${mode}-${month}-source`, path: value.entries[0].href, amount: value.totalCents })
     }
   }
+  await replacementDiscountFlow(h, owner)
+  await meteredMembershipFlow(h, owner)
   console.log('Expanded and item discounts survive adoption, billing and replay; frozen source and native correction effects match approved reports')
+}
+
+async function regressionCapture(h, owner, tag, configure) {
+  await h.api('business.configure', owner, { ...(await h.api('business', owner)), timezone: 'UTC' })
+  await h.advanceClock('2026-08-01T16:00:00Z')
+  const data = JSON.parse(JSON.stringify(stripeHistoryCapture()).replaceAll('synthetic-nectar-', `synthetic-nectar-${tag}-`))
+  configure(data)
+  const sub = data.subscriptions.data[0]
+  data.subscription_events.data = [{ id: `synthetic-nectar-${tag}-created`, object: 'event', type: 'customer.subscription.created', created: sub.start_date, data: { object: structuredClone(sub) } }]
+  for (const [name, value] of Object.entries(data)) if (name !== 'manifest') data.manifest.files[name].count = value.data.length
+  const files = Object.fromEntries(Object.entries(data).map(([name, value]) => [name, file(`${name}.json`, JSON.stringify(value), 'application/json')]))
+  const api = (path, body) => h.api(path, owner, body)
+  const preview = await api('import.preview', files)
+  await api('import.apply', { ...files, fingerprint: preview.fingerprint })
+  const customer = (await api('customers')).find(row => row.external_id === sub.customer).id
+  const subscription = (await api(`customers/${customer}`)).subscriptions[0].id
+  return { api, customer, subscription }
+}
+
+// Folded into the existing normalized journey: one aggregate assertion covers
+// the same scoped discount through reviewed replacements, reports and billing.
+export async function replacementDiscountFlow(h, owner, onState = async () => {}) {
+  const actual = [], expected = []
+  for (const scope of ['product', 'item']) {
+    const { api, customer, subscription } = await regressionCapture(h, owner, `replacement-${scope}`, data => {
+      const sub = data.subscriptions.data[0], price = data.prices.data[0]
+      price.metadata.nectar_kind = 'seat'
+      sub.items.data[0].price = price
+      const discount = { id: `synthetic-nectar-${scope}-discount`, start: sub.start_date, end: Date.parse('2026-10-01T00:00:00Z') / 1000,
+        coupon: { id: `synthetic-nectar-${scope}-coupon`, percent_off: 10, duration: 'repeating', duration_in_months: 20,
+          ...(scope === 'product' ? { applies_to: { products: [price.product] } } : {}) } }
+      if (scope === 'product') sub.discounts = [discount]
+      else {
+        sub.items.data[0].discounts = [discount]
+        sub.items.data.push({ id: 'synthetic-nectar-undiscounted-sibling', price, quantity: 1 })
+      }
+    })
+    await api('subscription.adopt', { subscription, cutover_start: '2026-07-01', acknowledge_unreconciled: true })
+    const previews = []
+    let itemId = (await api(`subscriptions/${subscription}`)).amendments.find(row => row.item_id).item_id
+    for (const [quantity, date] of [[2, '2026-07-01'], [3, '2026-08-01']]) {
+      const change = await api('change.prepare', { subscription, item: itemId, quantity, effective_date: date })
+      previews.push(change.preview.nextPeriod.cents)
+      await api('change.decide', { change: change.change, decision: 'approved' })
+      itemId = (await api(`subscriptions/${subscription}`)).items.find(row => row.change_id === change.change).id
+    }
+    const amounts = [], details = []
+    for (const month of ['2026-06', '2026-07', '2026-08', '2026-10']) {
+      const report = await api(`reports/normalized-mrr?period=${month}&customer=${customer}`)
+      const detail = await api(report.entries[0].href.replace('/app/', ''))
+      if (scope === 'product' && month === '2026-07') {
+        await onState({label:'discounted-seat-report',path:`/app/reports/normalized-mrr?period=${month}&customer=${customer}`,amount:18000})
+        await onState({label:'discounted-seat-source',path:report.entries[0].href,amount:18000})
+      }
+      amounts.push(report.totalCents)
+      details.push([detail.totalCents, detail.normalized.snapshot.components.map(row => row.mrrCents).sort((a,b) => a-b)])
+    }
+    const run = await api('billrun.prepare', { period: '2026-07' })
+    const invoice = (await api(`runs/${run.id}`)).invoices.find(row => row.subscription_id === subscription)
+    await api('invoice.approve', { invoice: invoice.id, acknowledge: true })
+    await api('invoice.finalise', { invoice: invoice.id, issue_date: '2026-08-01' })
+    const billed = await api(`invoices/${invoice.id}`)
+    actual.push({ scope, previews, amounts, details, billed: billed.subtotal_cents })
+    const sibling = scope === 'item' ? 10000 : 0, values = [9000, 18000, 27000, 30000]
+    expected.push({ scope, previews: [18000+sibling, 27000+sibling], amounts: values.map(n => n+sibling),
+      details: values.map(n => [n+sibling, [...(sibling ? [sibling] : []), n].sort((a,b) => a-b)]), billed: 18000+sibling })
+  }
+  assert.deepEqual(actual, expected, 'Adopted scoped discounts follow repeated seat replacements, preserve sibling scope and expiry, and reconcile preview, source-traced MRR and issued money')
+  return actual
+}
+
+export async function meteredMembershipFlow(h, owner, onState = async () => {}) {
+  let sourcePrice
+  const { api, customer, subscription } = await regressionCapture(h, owner, 'metered-membership', data => {
+    const fixed = data.prices.data[0], meter = 'synthetic-nectar-membership-meter'
+    sourcePrice = 'synthetic-nectar-membership-price'
+    const metered = { ...fixed, id: sourcePrice, unit_amount: 3, recurring: { interval: 'month', interval_count: 1, usage_type: 'metered', meter } }
+    data.meters.data.push({ id: meter, object: 'billing.meter', event_name: 'synthetic_nectar_membership', display_name: 'Research events', default_aggregation: { formula: 'sum' } })
+    data.prices.data.push(metered)
+    data.subscriptions.data[0].items.data.push({ id: 'synthetic-nectar-membership-item', price: metered, quantity: 1 })
+  })
+  const nativePrice = (await api(`subscriptions/${subscription}`)).items.find(row => row.kind === 'unit').price_id
+  const actual = []
+  for (const stage of ['captured', 'adopted']) {
+    if (stage === 'adopted') await api('subscription.adopt', { subscription, cutover_start: '2026-07-01', acknowledge_unreconciled: true })
+    for (const plan of [sourcePrice, nativePrice]) for (const metric of ['normalized-mrr', 'normalized-arr']) {
+      const report = await api(`reports/${metric}?period=2026-07&customer=${customer}&plan=${plan}`)
+      const details = await Promise.all(report.entries.map(row => api(row.href.replace('/app/', ''))))
+      if (stage === 'adopted' && plan === sourcePrice && metric === 'normalized-mrr')
+        await onState({label:'metered-plan-history',path:`/app/reports/${metric}?period=2026-07&customer=${customer}&plan=${plan}`,amount:10000})
+      actual.push({ stage, plan, metric, series: report.series.map(row => row.amountCents),
+        growth: report.saas.months.map(row => [row.newMrrCents, row.expansionMrrCents]),
+        sources: details.map(row => [row.totalCents, row.components.map(component => component.amountCents)]) })
+    }
+  }
+  const expected = actual.map(({ stage, plan, metric }) => {
+    const amount = metric === 'normalized-mrr' ? 10000 : 120000
+    return { stage, plan, metric, series: Array(19).fill(amount),
+      growth: [[10000, 0], ...Array.from({length:18}, () => [0, 0])], sources: [[amount, [amount]]] }
+  })
+  assert.deepEqual(actual, expected, 'Metered-price filters retain the whole mixed subscription before and after adoption, with usage excluded from money and no false new growth at cutover')
+  return actual
 }

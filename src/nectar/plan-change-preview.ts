@@ -2,7 +2,7 @@
 // validated interval expansion and rating core as cancellation corrections.
 import type { Bindings } from '../auth.server'
 import { canonical,fingerprint,insist,one,parseJson,type Row } from './core'
-import { rate,rateIntervalInvoiceService,type RatingInput,type Line } from './rating'
+import { replacementDiscountScope,rate,rateIntervalInvoiceService,type RatingInput,type Line } from './rating'
 import { expandBillingWindows } from './interval-rating'
 import { pricesById } from './inputs'
 import { billingPeriodContaining,billingAnchor,dueBillingWindows } from './billing-calendar'
@@ -35,7 +35,7 @@ export async function planChangeQuote(env: Bindings, sub: Row, item: Row, target
   insist(effective>item.effective_from&&(!item.effective_to||effective<item.effective_to)&&(!sub.end_date||effective<sub.end_date),'invalid_effective_date')
   const issued=rate(original),before=history.length?rateIntervalInvoiceService(original,services):issued
   insist(issued.subtotalCents===invoice.subtotal_cents&&issued.taxCents===invoice.tax_cents&&issued.totalCents===invoice.total_cents,'plan_change_original_mismatch',409)
-  const changed:RatingInput={...current,prices:{...current.prices,[target]:price},items:[...current.items.map(i=>i.id===item.id?{...i,to:effective}:i),{id:newItem,priceId:target,quantity,from:effective,to:current.items.find(i=>i.id===item.id)!.to}]}
+  const changed:RatingInput={...current,prices:{...current.prices,[target]:price},items:[...current.items.map(i=>i.id===item.id?{...i,to:effective}:i),{id:newItem,priceId:target,quantity,from:effective,to:current.items.find(i=>i.id===item.id)!.to,...replacementDiscountScope(current.items.find(i=>i.id===item.id)!,target)}]}
   const after=mode==='period_end'?before:rateIntervalInvoiceService(original,services.map((input,index)=>index===service?changed:input))
   insist(!after.exceptions.length,'plan_change_calculation_blocked',409,after.exceptions)
   const delta={subtotalCents:after.subtotalCents-before.subtotalCents,taxCents:after.taxCents-before.taxCents,totalCents:after.totalCents-before.totalCents}
@@ -44,7 +44,7 @@ export async function planChangeQuote(env: Bindings, sub: Row, item: Row, target
   const amounts=new Map<string,number>()
   for(const [lines,sign]of [[before.lines,-1],[after.lines,1]] as const)for(const [index,line]of lines.entries())for(const e of recognitionForLine(line,original,`plan-change:${sign}:${index}`).entries)amounts.set(e.period,(amounts.get(e.period)??0)+sign*e.amountCents)
   const revenue=[...amounts].filter(([,n])=>n!==0).sort(([a],[b])=>a.localeCompare(b)).map(([period,amountCents])=>({period,amountCents,basis:{method:'issued-advance-plan-before-after',sourceInvoice:invoice.id}}))
-  const newItems=[...items.map(i=>i.id===item.id?{...i,to:effective}:i),{id:newItem,priceId:target,quantity,from:effective,to:item.effective_to}]
+  const newItems=[...items.map(i=>i.id===item.id?{...i,to:effective}:i),{id:newItem,priceId:target,quantity,from:effective,to:item.effective_to,...replacementDiscountScope(items.find(i=>i.id===item.id)!,target)}]
   const windows=mode==='immediate'?dueBillingWindows({...original,items:newItems,prices:{...prices,[target]:price}},effective,addDays(effective,1)).flatMap(w=>{const components=w.components.filter(c=>c.itemId===newItem);return components.length?[{...w,components,period:{start:components[0].from,end:components[0].to}}]:[]}):[]
   const quote={sourceInvoice:invoice.id,sourceFingerprint:invoice.source_fingerprint,sourceBalance:invoice.balance_cents,history,effectiveDate:effective,period,policy,mode,before:{subtotalCents:before.subtotalCents,taxCents:before.taxCents,totalCents:before.totalCents},after:{subtotalCents:after.subtotalCents,taxCents:after.taxCents,totalCents:after.totalCents},delta:actual,waivedDelta:policy==='none'?delta:null,revenue,windows,originalTax:original.tax,targetPrice:price}
   return {...quote,basis:await fingerprint(quote)}

@@ -34,3 +34,5 @@ Reports retain their existing read authority. Segment filtering additionally req
 ## Source comparison boundary
 
 These definitions deliberately differ from billed recurring revenue and can differ from a Stripe account's analytics settings: calendar month-end, fixed 52-week and 365-day conventions, additive percentage discounts, per-item rounding and excluded instruments are explicit. The original source's analytics report and settings are not imported or represented as verified. A live source import and cutover and an actual comparison with that account's analytics report remain unqualified. The uploaded capture journey is synthetic public-door proof, not a live-provider receipt.
+
+Same-price seat replacements retain the adopted item discount and its original dates through each approved replacement. An item discount never spreads to a sibling sharing its price. Metered prices remain part of whole-subscription plan membership in captured history, even though their usage contributes no normalized MRR or ARR.

@@ -1,7 +1,7 @@
 import { unusableMethodGuard } from '../card-lifecycle'
 import { refusedPaymentWithLifecycle } from './refusal'
 // Explicit manual collection only. A durable invoice claim precedes the one
-// off-session confirmation; all recovery reads Stripe without another POST.
+// off-session confirmation. Uncertain outcomes are reconciled by reads only.
 import type { Bindings } from '../../auth.server'
 import { actorLabel, requireOwner, type Actor } from '../actor'
 import { requireBusiness } from '../business'
@@ -47,7 +47,7 @@ export async function prepareNativeCollection(env: Bindings, actor: Actor, input
   return nativeCollectionView(await storedNativeCollection(env, id))
 }
 
-async function changeOutcome(env: Bindings, actor: Actor, row: Row, values: Row, action: string) {
+export async function changeOutcome(env: Bindings, actor: Actor, row: Row, values: Row, action: string) {
   const entries = Object.entries({ ...values, revision: newId(), reconciled_at: clockInstant(env) })
   await commit(env, [collectionAuthority(env, actor),
     guard(env, 'native_collection_state_changed', "EXISTS(SELECT 1 FROM nc_native_collections WHERE id=? AND revision=? AND status IN ('claimed','uncertain'))", row.id, row.revision),
@@ -81,7 +81,7 @@ async function recordCaptured(env: Bindings, actor: Actor, row: Row, proof: Capt
   return nativeCollectionView(await storedNativeCollection(env, held.id))
 }
 
-async function recordIntentOutcome(env: Bindings, actor: Actor, row: Row, stripe: Awaited<ReturnType<typeof stripeForAccount>>['stripe'], intent: Row, identity: ReturnType<typeof paymentIdentity>) {
+export async function recordIntentOutcome(env: Bindings, actor: Actor, row: Row, stripe: Awaited<ReturnType<typeof stripeForAccount>>['stripe'], intent: Row, identity: ReturnType<typeof paymentIdentity>) {
   const intentRef = verifyIntent(intent, identity)
   const current = await changeOutcome(env, actor, row, { payment_intent_ref: intentRef }, 'intent.record')
   const refusal = await refusedPaymentWithLifecycle(env,stripe, intent, identity)
@@ -147,12 +147,18 @@ export async function reconcileNativeCollection(env: Bindings, actor: Actor, inp
   if (['collected', 'declined', 'customer_action_required'].includes(row.status)) return nativeCollectionView(row)
   insist(['claimed', 'uncertain'].includes(row.status), 'native_collection_not_reconcilable', 409)
   const { basis } = await currentNativeCollection(env, actor, row)
+  const recoveryInFlight = row.status === 'claimed' && !!row.reconfirmation?.claimed_at
   try {
     const selected = await stripeForAccount(env, basis.accountRef)
     const identity = paymentIdentity(row, basis), intent = await readIntent(selected.stripe, identity, row.payment_intent_ref, row.claimed_at, clockInstant(env))
+    // A recovery POST may still be in flight while Stripe exposes its prior
+    // refusal. Keep that claim open so the eventual capture can be allocated.
+    if (recoveryInFlight && intent.status !== 'succeeded')
+      return nativeCollectionView(await storedNativeCollection(env, row.id))
     return await recordIntentOutcome(env, actor, row, selected.stripe, intent, identity)
   } catch {
     row = await storedNativeCollection(env, row.id)
+    if (recoveryInFlight) return nativeCollectionView(row)
     if (['collected', 'declined', 'customer_action_required'].includes(row.status)) return nativeCollectionView(row)
     return nativeCollectionView(await changeOutcome(env, actor, row, { status: 'uncertain', error_code: row.charge_ref ? 'native_payment_record_pending' : 'native_payment_unconfirmed' }, 'uncertain'))
   }

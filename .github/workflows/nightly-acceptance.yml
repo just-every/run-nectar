@@ -1,82 +1,27 @@
 name: Nightly acceptance
 
 on:
+  push:
+    tags: ['v*']
   schedule:
-    - cron: '37 18 * * *'
+    - cron: '51 4 * * 1,4'
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  installations:
-    strategy:
-      fail-fast: false
-      max-parallel: 2
-      matrix:
-        command:
-          - pnpm run test:journey
-          - node tests/nectar/portal-journey.mjs
-          - node tests/nectar/erasure-archive.mjs
-          - node tests/nectar/mfa-archive.mjs
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    env:
-      CI: 'true'
-      NECTAR_TEST_CHECKOUT: '1'
-      WRANGLER_SEND_METRICS: 'false'
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
-        with:
-          node-version: '22.20.0'
-          package-manager-cache: false
-      - run: npm install --global pnpm@10.12.4
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm run deps
-      - run: pnpm exec playwright install chromium
-      - run: ${{ matrix.command }}
-
-  focused:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      max-parallel: 2
-      matrix:
-        command:
-          - node tests/nectar/clause-browser.mjs intervals
-          - node tests/nectar/clause-browser.mjs prepaid
-          - node tests/nectar/clause-browser.mjs erasure
-          - node tests/nectar/clause-browser.mjs history
-          - node tests/nectar/prepaid-topup-browser.mjs
-          - node tests/nectar/prepaid-refund-browser.mjs
-          - node tests/nectar/portal-prepaid-browser.mjs
-          - node tests/nectar/mfa-passkey.mjs
-          - node tests/nectar/clause-runner.mjs erasure erasureScaleFlow
-          - node tests/nectar/clause-runner.mjs prepaid prepaidScaleErasureFlow
-          - node tests/nectar/clause-runner.mjs move-history moveHistoryErasureFlow
-    env:
-      CI: 'true'
-      WRANGLER_SEND_METRICS: 'false'
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
-        with:
-          node-version: '22.20.0'
-          package-manager-cache: false
-      - run: npm install --global pnpm@10.12.4
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm run deps
-      - run: pnpm exec playwright install chromium
-      - run: pnpm run build
-      - run: ${{ matrix.command }}
+  verify:
+    permissions:
+      contents: read
+      actions: read
+    uses: ./.github/workflows/verify.yml
+    with:
+      tier: ${{ github.event_name == 'schedule' && 'nightly' || 'all' }}
+      timeout: 25
 
   stripe-history:
+    if: github.event_name != 'push' || startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
@@ -92,8 +37,8 @@ jobs:
           node-version: '22.20.0'
           package-manager-cache: false
       - run: npm install --global pnpm@10.12.4
+      - run: pnpm config set store-dir "$RUNNER_TEMP/pnpm-store"
       - run: pnpm install --frozen-lockfile
       - run: pnpm run deps
-      - run: pnpm exec playwright install chromium
       - run: pnpm run build
       - run: node tests/nectar/stripe-history-sandbox.mjs

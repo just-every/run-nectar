@@ -1,4 +1,5 @@
 import { normalizedSourceBody, saasBody } from './normalized'
+import { taxSourceReportPage, taxSourceDetailPage } from './tax-source-report'
 import type { ReportCurrencyEvidence } from '../currency-report-translation'
 // The existing table/card language, with every total leading to its sources.
 import type { Bindings } from '../../auth.server'
@@ -16,11 +17,12 @@ const opens = (actor: Actor, href: string) => {
   if (/^\/app\/customers\//.test(href)) return canRead(actor, 'customers')
   return true
 }
-const tabs = (search: string, actor: Actor) => { const params = new URLSearchParams(search); params.delete('bucket'); const query = params.size ? `?${params}` : ''; return h`<p class="crumbs">${can(actor, 'read') ? h`<a href="/app/billing">Billing</a> · ` : ''}<a href="/app/reports/mrr${query}">Billed recurring</a> · <a href="/app/reports/normalized-mrr${query}">Normalized MRR</a> · <a href="/app/reports/normalized-arr${query}">Normalized ARR</a> · <a href="/app/reports/billings${query}">Billings</a> · <a href="/app/reports/ar${query}">AR</a> · <a href="/app/reports/collections${query}">Collections</a> · <a href="/app/reports/settlements${query}">Processor settlements</a> · <a href="/app/reports/refunds${query}">Cash refunds</a> · <a href="/app/reports/credits${query}">Credits</a> · <a href="/app/reports/credit-balances${query}">Credit balances</a> · <a href="/app/reports/tax${query}">Invoice tax</a> · <a href="/app/reports/unbilled${query}">Unbilled usage</a></p>` }
+const tabs = (search: string, actor: Actor) => { const params = new URLSearchParams(search); params.delete('bucket'); const query = params.size ? `?${params}` : ''; return h`<p class="crumbs">${can(actor, 'read') ? h`<a href="/app/billing">Billing</a> · ` : ''}<a href="/app/reports/mrr${query}">Billed recurring</a> · <a href="/app/reports/normalized-mrr${query}">Normalized MRR</a> · <a href="/app/reports/normalized-arr${query}">Normalized ARR</a> · <a href="/app/reports/billings${query}">Billings</a> · <a href="/app/reports/ar${query}">AR</a> · <a href="/app/reports/collections${query}">Collections</a> · <a href="/app/reports/settlements${query}">Processor settlements</a> · <a href="/app/reports/refunds${query}">Cash refunds</a> · <a href="/app/reports/credits${query}">Credits</a> · <a href="/app/reports/credit-balances${query}">Credit balances</a> · <a href="/app/reports/tax${query}">Invoice tax</a> · <a href="/app/reports/unbilled${query}">Unbilled usage</a> · <a href="/app/reports/tax-sources">Declared tax sources</a></p>` }
 
 const valuation = (value: ReportCurrencyEvidence) => value.reporting ? h`${cents(value.nativeAmountCents,value.nativeCurrency)}<br>${value.reporting.rate} USD / ${value.nativeCurrency} · ${value.reporting.rateDate}<br>${value.reporting.source}` : 'USD'
 
 export async function reportPage(env: Bindings, actor: Actor, metric: string, url: URL) {
+  if (metric === 'tax-sources') return taxSourceReportPage(env, actor, url)
   const r = await report(env, actor, metric, url)
   const normalized = metric === 'normalized-mrr' || metric === 'normalized-arr'
   const translated=r.entries.some(entry=>entry.reporting)
@@ -37,6 +39,7 @@ export async function reportPage(env: Bindings, actor: Actor, metric: string, ur
 }
 
 export async function reportInvoicePage(env: Bindings, actor: Actor, metric: string, invoice: string, url: URL) {
+  if (metric === 'tax-sources') return taxSourceDetailPage(env, actor, invoice, url)
   const r = await reportInvoice(env, actor, metric, invoice, url)
   const sourceTitle=r.normalized?'Subscription':r.sourceKind==='processor_settlement'?'Processor settlement':r.sourceKind==='processor_refund'||r.sourceKind==='invoice_refund'||r.refund?'Cash refund':r.sourceKind==='processor_payment'?'Processor payment':r.prepaid?'Prepaid credit':r.unbilled?'Unbilled usage':r.credit||r.sourceKind==='credit_note'?'Credit note':r.sourceKind==='customer_balance'?'Customer credit balance':r.payment||r.sourceKind==='payment'?'Payment':'Invoice'
   return page(`${sourceTitle} contribution`, actor, h`${tabs(url.search, actor)}<h1 class="processor-source-title">${sourceTitle} ${r.number}</h1><p class="lede">${r.title} · ${r.customerName}</p>

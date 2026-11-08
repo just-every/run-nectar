@@ -54,7 +54,8 @@ export async function webhooksFlow(h,owner,{onState=async()=>{},register}={}){
     const payment=(await api('payment.record',{customer,amount:'90',received_on:'2026-10-02',method:'bank_transfer',reference:'synthetic-nectar-webhook-1'})).payment
     for(const [kind,id]of [['invoice',invoice],['payment',payment],['credit-note',credit]])await annotate(kind,id,`synthetic-nectar-${kind}`)
     await api('payment.allocate',{payment,invoice,amount:'90'})
-    const log=await api('webhooks'),paid=log.deliveries.find(d=>d.type==='invoice.paid')
+    let log=await api('webhooks')
+    const paid=log.deliveries.find(d=>d.type==='invoice.paid')
     assert.ok(paid)
     const snapshot=(await api(`webhooks/${paid.id}`)).event.payload_json
     const payload=JSON.parse(snapshot)
@@ -68,6 +69,14 @@ export async function webhooksFlow(h,owner,{onState=async()=>{},register}={}){
     await tick(60000)
     const scheduled=await h.raw(`/cdn-cgi/local/scheduled?time=${clock}&cron=${encodeURIComponent('* * * * *')}`)
     assert.equal(scheduled.status,200,await scheduled.text())
+    const afterTick=await api('webhooks')
+    const observations=afterTick.deliveries.filter(d=>!log.deliveries.some(prior=>prior.id===d.id))
+    const history=(await api(`subscriptions/${subscription}?include_state=true`)).stateHistory
+    assert.equal(observations.length,0,'The scheduler does not duplicate source-recorded subscription state events')
+    assert.ok(history.length>0)
+    for(const transition of history)assert.equal(log.deliveries.filter(d=>d.type==='subscription.state_changed'&&d.event_id===transition.id).length,1,'Each saved state has exactly one delivery before the observer tick')
+    assert.equal(history.at(-1).state,'active')
+    log=afterTick
     assert.ok(requests.length>=6)
     assert.ok((await api('webhooks')).deliveries.every(d=>d.status==='pending'&&d.attempts===1))
     const mails=h.mails.slice(before)
@@ -82,6 +91,7 @@ export async function webhooksFlow(h,owner,{onState=async()=>{},register}={}){
     await onState({label:'failed',delivery:paid.id,finance})
     await Promise.all([dispatch(),dispatch()])
     assert.equal(requests.length,log.deliveries.length,'not due, no extra send')
+    assert.deepEqual(requests.map(r=>JSON.parse(r.body).id).sort(),log.deliveries.map(d=>d.event_id).sort(),'Each event has exactly its first send, with no premature retry')
     await tick(3600000);online=true
     const rotated=await api('webhook.rotate',{endpoint:endpoint.id,revision:1,overlap_seconds:3600})
     // Receiver still knows only the old secret; the overlap signature works.

@@ -10,6 +10,11 @@ import type { Input } from './input'
 export async function previewInvoiceRefund(env: Bindings, actor: Actor, input: Input) {
   requireRead(actor, 'invoices')
   requireRead(actor, 'payments')
+  return invoiceRefundQuote(env, input)
+}
+
+/** Internal calculation; public callers enforce record authority first. */
+export async function invoiceRefundQuote(env: Bindings, input: Input) {
   const invoice = await one(env, `SELECT i.*,${BALANCE_SQL} AS balance_cents FROM nc_invoices i JOIN nc_customers c ON c.id=i.customer_id WHERE i.id=? AND c.erased_at IS NULL`, input.text('invoice', { max: 100 }))
   insist(invoice, 'invoice_not_found', 404)
   insist(invoice.status === 'issued' && invoice.balance_cents === 0 && invoice.total_cents > 0 && invoice.currency === 'USD', 'paid_invoice_required', 409)

@@ -29,7 +29,16 @@ async function outcome(env:Bindings,row:Row,status:string,values:Row={},facts:D1
 }
 export async function settleAutomaticIntent(env:Bindings,row:Row,stripe:StripeClient,intent:Row,identity:PaymentIdentity){
  const intentRef=verifyIntent(intent,identity)
- if(!row.payment_intent_ref)row=await outcome(env,row,'uncertain',{payment_intent_ref:intentRef})
+ if(!row.payment_intent_ref){
+  try{row=await outcome(env,row,'uncertain',{payment_intent_ref:intentRef})}catch(error){
+   const current=await storedAutomaticCollection(env,row.id)
+   // A concurrent reconciler already bound this verified intent. Its captured
+   // cash transaction owns the new revision; a stale reader must not replace it
+   // with another uncertain revision while that transaction is still running.
+   if(error instanceof NectarError&&current.revision!==row.revision&&current.payment_intent_ref===intentRef)return automaticView(current)
+   throw error
+  }
+ }
  if(intent.status==='processing')return automaticView(await outcome(env,row,'pending_settlement',{error_code:null}))
  if(row.method_kind==='us_bank_account'&&intent.status==='requires_payment_method'&&intent.amount_received===0&&intent.last_payment_error){
   const history=await stripe(`/charges?${new URLSearchParams({payment_intent:intentRef,limit:'100'})}`)
@@ -86,7 +95,10 @@ export async function reconcileAutomaticCollection(env:Bindings,id:string){
  }
 }
 export async function collectAutomaticInvoice(env:Bindings,invoice:string){
- let row=await one(env,"SELECT * FROM nc_automatic_collections WHERE invoice_id=? AND status='active' ORDER BY prepared_at DESC LIMIT 1",invoice)
+ // Restored unclaimed terms are evidence. Only installation-local authority
+ // admits a new provider attempt; reconciliation of existing claims stays read-only.
+ let row=await one(env,`SELECT a.* FROM nc_automatic_collections a JOIN nc_automatic_collection_authorizations z
+ ON z.id=a.id AND z.basis_hash=a.basis_hash WHERE a.invoice_id=? AND a.status='active' ORDER BY a.prepared_at DESC LIMIT 1`,invoice)
  if(!row)return
  try{
   insist(!await one(env,'SELECT 1 FROM nc_prepaid_topup_claims WHERE invoice_id=?',invoice),'prepaid_topup_invoice_managed',409)

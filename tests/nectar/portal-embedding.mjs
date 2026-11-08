@@ -118,7 +118,7 @@ export async function portalEmbeddingFlow(h, owner) {
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`PORT-005 ${name} fits merchant app`)
       if (evidence) { await mkdir(evidence,{recursive:true});await page.screenshot({path:join(evidence,`${page.viewportSize().width}-${name}.jpg`),type:'jpeg',quality:82,fullPage:true}) }
     }
-    for (const width of [1440,390]) {
+    for (const [pass,width] of [1440,390].entries()) {
       await h.advanceClock('2026-10-21T09:00:00Z')
       await page.setViewportSize({width,height:844})
       hosted=await issue(customers[0],'hosted');embedded=await issue(customers[0],'embedded');active=embedded
@@ -185,7 +185,9 @@ export async function portalEmbeddingFlow(h, owner) {
       assert.equal(submitted.status(),303,'PORT-005 embedded privacy form uses the ordinary scoped redirect')
       assert.equal(submitted.request().headers().origin,portalOrigin,'PORT-005 native form proves its exact origin')
       assert.ok(!submitted.request().headers().referer?.includes('session='),'PORT-005 native form never discloses a session in its referrer')
-      await frame.getByRole('heading',{name:'Solicitud registrada.',exact:false}).waitFor()
+      const recorded=frame.getByRole('heading',{name:'Solicitud registrada.',exact:false})
+      await recorded.nth(pass).waitFor()
+      assert.equal(await recorded.count(),pass+1,'PORT-005 each embedded privacy submission records exactly one request')
       await shot('sample-app-spanish-privacy-requested')
       await h.advanceClock(new Date(hosted.expiresAt).toISOString())
       assert.equal((await page.goto(hosted.url)).status(),401,'PORT-005 branded expired session is refused at its exact deadline')

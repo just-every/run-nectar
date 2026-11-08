@@ -16,7 +16,7 @@ try{
  await h.api('business.configure',owner,{legal_name:'Cedar Software Inc',timezone:'UTC',invoice_prefix:'RETRY',payment_terms_days:30})
  await applyPolicy(h,owner,'tax.declare',{tax_jurisdiction:'CA',tax_mode:'no_tax',tax_note:'Reviewed retry journey'})
  await h.api('tax.review',owner,{revision:(await h.api('business',owner)).revision})
- browser=await chromium.launch({headless:true,args:['--use-mock-keychain','--password-store=basic']})
+ browser=await chromium.launch({headless:true,...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?{executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH}:{}),args:['--use-mock-keychain','--password-store=basic','--no-sandbox']})
  const context=await browser.newContext();await context.addCookies(owner.split('; ').map(part=>{const at=part.indexOf('=');return {name:part.slice(0,at),value:part.slice(at+1),url:h.origin}}))
  const page=await context.newPage(),customer=await (await browser.newContext()).newPage(),seen=new Set()
  const shot=async(target,label)=>{
@@ -73,6 +73,11 @@ try{
   },
   onState:async state=>{
    if(state.state==='consent')return
+   if(state.state==='billing-notice'){
+    await customer.setContent(state.html)
+    await shot(customer,`billing-notice-${state.kind}-${state.language}-${state.outcome}`)
+    return
+   }
    if(state.state==='report'||state.state.startsWith('churn-')){
     await page.goto(h.origin+'/app/reports/recovery');await page.getByText('Configured policy comparisons',{exact:true}).click();await shot(page,state.state==='report'?'recovery-report':state.state)
     await page.goto(h.origin+'/app/settings#payment-retries');await page.locator('#payment-retries > details > summary').first().click();await shot(page,'retry-settings')

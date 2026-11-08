@@ -22,16 +22,17 @@ export async function declineSaveStatements(env:Bindings,term:Row,reason:string)
   const offer=await savedOffer(env,term)
   return offer?[stmt(env,"UPDATE nc_retention_offers SET status='declined',reason=?,decided_at=?,token_hash=NULL WHERE id=? AND status='offered'",reason,now(),offer.id)]:[]
 }
-export async function acceptSave(env:Bindings,term:Row,offerId:string,reason:string) {
-  const offer=await savedOffer(env,term);insist(offer&&offer.id===offerId,'offer_not_found',404)
+export async function acceptSave(env:Bindings,term:Row,offerId:string,reason:string,guards:D1PreparedStatement[]=[],prepared?:Row) {
+  const offer=prepared??await savedOffer(env,term);insist(offer&&offer.id===offerId,'offer_not_found',404)
   const sequence=(await one(env,'SELECT COALESCE(MAX(seq),0) AS n FROM nc_audit'))!.n
   const terms=parseJson<Row>(offer.terms_json,{}),fresh=await retentionTerms(env,term.subscription_id,'save',terms.from),b=(await business(env))!
   insist(localDate(clockInstant(env),b.timezone)<=offer.to_date,'offer_expired',409)
   insist(fresh.basis===offer.source_revision,'offer_stale',409)
   const issued=retentionIssuedCondition(terms.priceId??null,terms.kind)
-  const author=(await one(env,'SELECT * FROM nc_retention_policies WHERE id=?',offer.policy_id))!,statements=[
+  const author=(await one(env,'SELECT * FROM nc_retention_policies WHERE id=?',offer.policy_id))!,statements=[...guards,
+    ...(prepared ? [stmt(env,"INSERT INTO nc_retention_offers(id,subscription_id,kind,policy_id,source_revision,terms_json,from_date,to_date,created_at) VALUES(?,?,'save',?,?,?,?,?,?)",offer.id,term.subscription_id,offer.policy_id,offer.source_revision,offer.terms_json,offer.from_date,offer.to_date,now())] : []),
     guard(env,'offer_stale',"(SELECT COALESCE(MAX(seq),0) FROM nc_audit)=? AND (SELECT id FROM nc_retention_policies WHERE status='approved' ORDER BY decided_at DESC,id DESC LIMIT 1)=?",sequence,offer.policy_id),
-    guard(env,'offer_stale',"EXISTS(SELECT 1 FROM nc_retention_offers WHERE id=? AND status='offered') AND EXISTS(SELECT 1 FROM nc_subscriptions WHERE id=? AND revision=?) AND EXISTS(SELECT 1 FROM nc_renewal_terms WHERE id=? AND revision=? AND token_hash=? AND cancelled_at IS NULL AND status='active')",offer.id,term.subscription_id,terms.sourceRevision,term.id,term.revision,term.token_hash),guard(env,'period_already_invoiced',issued.sql,...(issued.scoped?[term.subscription_id,terms.priceId,terms.from]:[term.subscription_id,terms.from]))]
+    guard(env,'offer_stale',"EXISTS(SELECT 1 FROM nc_retention_offers WHERE id=? AND status='offered') AND EXISTS(SELECT 1 FROM nc_subscriptions WHERE id=? AND revision=?) AND EXISTS(SELECT 1 FROM nc_renewal_terms WHERE id=? AND revision=? AND token_hash IS ? AND cancelled_at IS NULL AND status='active')",offer.id,term.subscription_id,terms.sourceRevision,term.id,term.revision,term.token_hash),guard(env,'period_already_invoiced',issued.sql,...(issued.scoped?[term.subscription_id,terms.priceId,terms.from]:[term.subscription_id,terms.from]))]
   if(terms.kind==='discount'&&terms.percent>0) {
     const amendment=newId()
     statements.push(stmt(env,"INSERT INTO nc_amendments(id,subscription_id,kind,value,price_id,effective_from,effective_to,note,clause,status,origin,created_by,created_at,decided_by,decided_at,prepared_by_id) VALUES(?,?,'discount_percent',?,?,?,?,'Accepted retention save',?,'approved','native','customer:save-offer',?,?,?,?)",amendment,term.subscription_id,String(terms.percent),null,terms.from,terms.to,`Policy ${offer.policy_id}`,now(),`policy:${offer.policy_id}`,author.decided_at,author.prepared_by_id),...retentionScopeStatements(env,amendment,term.subscription_id,terms.priceId??null))

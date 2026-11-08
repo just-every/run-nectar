@@ -309,6 +309,7 @@ export async function dunningSequenceFlow(h,owner,{onState=async()=>{},createPol
  const scheduledCancel=await api('subscription.cancel',{subscription:trial.sub,revision:beforeScheduledCancel.revision,mode:'immediate',effective_date:'2026-11-20',reason:'Synthetic scheduled cancellation'})
  const canceledHistory=await observe(trial,'canceled')
  assert.equal(canceledHistory.at(-1).cause.scheduledCancellation,scheduledCancel.transition)
+ assert.equal(canceledHistory.at(-1).cause.lifecycle.find(row=>row.id===scheduledCancel.transition).effective_date,'2026-11-20','The cancellation cause preserves its exact effective date')
  assert.equal((await api(`entitlements/${trialCustomer}?feature=api_access`)).allowed,true,'Scheduling cancellation preserves service until the agreed end date')
  await move(29)
  const endedHistory=await observe(trial,'ended')

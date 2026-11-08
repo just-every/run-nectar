@@ -142,6 +142,7 @@ export async function invoiceRefundExecutionFlow(h, owner, {account,customerRef,
     assert.equal(lost.status,'uncertain')
     const writes=processor.refunds.size
     await api('invoice.refund.execute',{refund:request.id,basis:request.basis,confirm:true},409)
+  await h.api('invoice.refund.execute',finance,{refund:request.id,basis:request.basis,confirm:true},409)
     const recovered=await api('invoice.refund.reconcile',{refund:request.id})
     assert.equal(recovered.status,'completed');assert.equal(processor.refunds.size,writes)
     assert.equal((await api('invoice.refund.reconcile',{refund:request.id})).credit,recovered.credit)
@@ -174,12 +175,184 @@ export async function invoiceRefundExecutionFlow(h, owner, {account,customerRef,
   assert.equal((await api(`customers/${customer}/balance`)).carriedCents,0)
   await api('invoice.finalise',{invoice:future.id,issue_date:later},409)
   assert.deepEqual((await api(`invoices/${future.id}`)).carriedApplications,applied.carriedApplications)
+  await invoiceRefundCorrectionFlow(h,owner,{invoice:await paid('3000'),customer,finance,reader,agent,processor,onState})
   const erasure=await api('erasure.request',{customer})
   const link=h.mails.at(-1).text.match(/https?:\/\/[^\s"<]+\/erase\/[a-f0-9]{64}/)[0]
   assert.equal((await h.raw(new URL(link).pathname,{form:new URLSearchParams({confirm:'yes'})})).status,200)
   await api('erasure.approve',{request:erasure.id,confirm:true})
   await api('invoice.refund.reconcile',{refund:cash.id},404)
+  await h.assertStorageExcludes(['Synthetic source-bound correction','Synthetic reviewed invoice refund'])
   assert.deepEqual((await api(`invoices/${original.id}`)).refunds.map(row=>[row.amountCents,row.cashAmountCents,row.destination]).sort((a,b)=>a[2].localeCompare(b[2])),[[150000,0,'balance'],[150000,-150000,'original']])
   console.log('INV-005 card refund and balance credit: exact half allocations, immutable originals, independent approval, low direct execution, refusal, stale, replay and cash custody passed')
   return {customer,invoice:original.id,cash,balance,low:lowRefund,original}
+}
+
+// The existing refund journey also drives the ordinary agent and human review doors.
+async function invoiceRefundCorrectionFlow(h,owner,{invoice,customer,finance,reader,agent,processor,onState}) {
+  const api=(path,body,status)=>h.api(path,owner,body,status), detail=id=>api(`proposals/${id}`)
+  const closedPeriod=invoice.issue_date.slice(0,7), text=async path=>(await h.raw(path,{cookie:owner})).text()
+  await api('revenue.close',{period:closedPeriod})
+  const closedPacket=await api(`period-closes/${closedPeriod}`), closedRevenue=await text(`/app/exports/revenue.csv?period=${closedPeriod}`), closedJournal=await text(`/app/exports/revenue-journal.csv?period=${closedPeriod}`)
+  const line=invoice.lines[0], recipient=(await api(`customers/${customer}`)).billing_email
+  const payload={invoice_refund:true,invoice:invoice.id,amount:'1500',destination:'original',reason:'Synthetic source-bound correction',
+    explanation:'The cited $3,000 service was reduced by $1,500; original tax is $0 and reversing tax is $0.',
+    subject:'Synthetic reviewed invoice refund',body:'The cited $3,000 service was reduced by $1,500. A $1,500 original-method refund reduces revenue by $1,500. Tax remains $0. The issued invoice remains unchanged.',
+    citations:[{line_id:line.id,source:`/app/invoices/${invoice.id}/lines/${line.id}`,quote:line.description}]}
+  const propose=(value=payload,status=200)=>h.api('proposal.create',agent,{kind:'amendment',title:payload.reason,payload:value},status)
+  const decide=(id,who=owner,status=200)=>h.api('proposal.decide',who,{proposal:id,decision:'approved'},status)
+  const mails=()=>h.mails.filter(m=>m.subject===payload.subject)
+  const beforePosts=processor?.calls.filter(c=>c.method==='POST').length??0
+  const before=await api(`invoices/${invoice.id}`)
+  await propose({...payload,recipient:'synthetic-nectar-foreign@example.test'},400)
+  await propose({...payload,citations:[{...payload.citations[0],source:'/app/invoices/synthetic-nectar-foreign/lines/synthetic-nectar-foreign'}]},400)
+  await propose({...payload,citations:[{...payload.citations[0],quote:'Synthetic absent source wording'}]},400)
+  const rejected=await propose()
+  await api('proposal.decide',{proposal:rejected.id,decision:'rejected'})
+  await api('invoice.refund.prepare',{proposal:rejected.id},409)
+  assert.equal((await detail(rejected.id)).correctionMail,null)
+  const stale=await propose(), customerBefore=await api(`customers/${customer}`)
+  await api('customer.update',{...customerBefore,customer,billing_email:'synthetic-nectar-new@example.test'})
+  await api('invoice.refund.prepare',{proposal:stale.id},409)
+  assert.equal((await detail(stale.id)).stale,true)
+  await api('customer.update',{...await api(`customers/${customer}`),customer,billing_email:recipient})
+  // Case-linked financial approval must still hold its proposer and assignee authority.
+  await api('meter.create',{code:'synthetic-nectar-refund-events',name:'Synthetic refund events',unit_label:'events'})
+  const product=(await api('product.create',{code:'synthetic-nectar-refund-source',name:'Synthetic refund source'})).id
+  const price=(await api('price.create',{product,kind:'unit',meter:'synthetic-nectar-refund-events',unit_amount:'1'})).id
+  const subscription=(await api('subscription.create',{customer,start_date:invoice.issue_date,price:[price],quantity:['']})).id
+  await api('usage.control',{customer,meter:'synthetic-nectar-refund-events',day:invoice.issue_date,expected_count:1,expected_quantity:'1'})
+  const ownerId=(await api('me')).id, financeId=(await h.api('me',finance)).id
+  await api('assurance.scan',{period:closedPeriod,owner:ownerId})
+  const sourceCase=(await api('assurance-cases')).find(row=>row.customer_id===customer&&row.kind==='usage_source_control')
+  assert.ok(sourceCase,'A real source mismatch supplies the case link')
+  const foreignCustomer=(await api('customer.create',{external_id:'synthetic-nectar-refund-case-foreign',name:'Synthetic separate case customer',billing_email:'synthetic-nectar-refund-case-foreign@example.test'})).id
+  const foreignSubscription=(await api('subscription.create',{customer:foreignCustomer,start_date:invoice.issue_date,price:[price],quantity:['']})).id
+  await api('usage.control',{customer:foreignCustomer,meter:'synthetic-nectar-refund-events',day:invoice.issue_date,expected_count:1,expected_quantity:'1'})
+  await api('assurance.scan',{period:closedPeriod,owner:ownerId})
+  const foreignCase=(await api('assurance-cases')).find(row=>row.customer_id===foreignCustomer&&row.kind==='usage_source_control')
+  assert.ok(foreignCase)
+  assert.equal((await h.api('proposal.create',agent,{assurance_case:foreignCase.id,kind:'amendment',title:payload.reason,payload:{...payload,subscription:foreignSubscription}},409)).error,'assurance_fix_customer_mismatch','A case cannot authorize another customer invoice refund')
+  const refusalResults=[]
+  for(const change of ['credential-revoked','case-reassigned']) {
+    const name='Synthetic refund authority '+change
+    const credential=await api('credential.issue',{name,scopes:['prepare']})
+    const proposer={bearer:credential.key}
+    const linked=await h.api('proposal.create',proposer,{assurance_case:sourceCase.id,kind:'amendment',title:payload.reason,payload:{...payload,subscription}})
+    const request=await api('invoice.refund.prepare',{proposal:linked.id})
+    const frozen={invoice:await api(`invoices/${invoice.id}`),balance:await api(`customers/${customer}/balance`),mails:h.mails.length,posts:processor?.calls.filter(c=>c.method==='POST').length??0}
+    if(change==='credential-revoked') {
+      const key=(await api('credentials')).find(row=>row.name===name)
+      await api('credential.revoke',{key:key.id})
+    } else await api('assurance.assign',{case:sourceCase.id,owner:financeId})
+    const response=await h.raw('/api/nectar/proposal.decide',{cookie:finance,body:{proposal:linked.id,decision:'approved'}})
+    const result=await response.json()
+    refusalResults.push([change,response.status,result.error])
+    if(response.status===409) {
+      assert.equal((await detail(linked.id)).status,'pending')
+      assert.equal((await detail(linked.id)).refundRequest.status,'pending')
+      assert.equal((await detail(linked.id)).correctionMail,null)
+      assert.deepEqual(await api(`invoices/${invoice.id}`),frozen.invoice)
+      assert.deepEqual(await api(`customers/${customer}/balance`),frozen.balance)
+      assert.equal(h.mails.length,frozen.mails)
+      assert.equal(processor?.calls.filter(c=>c.method==='POST').length??0,frozen.posts)
+      assert.equal((await api('audit')).some(row=>row.action==='invoice.refund.claim'&&row.subject===request.id),false)
+      await api('proposal.decide',{proposal:linked.id,decision:'rejected'})
+    }
+    await api('assurance.assign',{case:sourceCase.id,owner:ownerId})
+  }
+  assert.deepEqual(refusalResults,[
+    ['credential-revoked',409,'assurance_proposer_unavailable'],
+    ['case-reassigned',409,'assurance_case_changed'],
+  ],'Both changed-authority sequences refuse without claiming or adjusting the refund')
+  console.log('INV-005 case-linked refund current-authority refusals passed')
+  const beforeReview=await api(`invoices/${invoice.id}`)
+  const proposed=await h.api('proposal.create',agent,{assurance_case:sourceCase.id,kind:'amendment',title:payload.reason,payload:{...payload,subscription}}), saved=await detail(proposed.id)
+  assert.deepEqual(saved.impact.refund.original,{totalCents:300000,subtotalCents:300000,taxCents:0,payment:invoice.allocations[0].payment_id,capture:saved.impact.refund.original.capture})
+  assert.deepEqual(saved.impact.refund.reversing,{totalCents:150000,subtotalCents:150000,taxCents:0})
+  assert.deepEqual(saved.impact.refund.effects,{owedBeforeCents:0,owedAfterCents:0,cashCents:-150000,customerBalanceCents:0,revenueCents:-150000})
+  assert.equal(saved.impact.mail.recipient,recipient)
+  assert.equal(saved.impact.mail.body,payload.body)
+  assert.deepEqual(saved.impact.mail.citations,payload.citations)
+  assert.deepEqual(await api(`invoices/${invoice.id}`),beforeReview)
+  assert.equal(mails().length,0)
+  assert.equal(processor?.calls.filter(c=>c.method==='POST').length??0,beforePosts)
+  await onState({label:'refund-correction-pending',id:proposed.id,kind:'proposal',owner})
+  await decide(proposed.id,owner,409)
+  for(const who of [agent,reader]) {
+    await h.api('invoice.refund.prepare',who,{proposal:proposed.id},403)
+    await decide(proposed.id,who,403)
+  }
+  const request=await api('invoice.refund.prepare',{proposal:proposed.id})
+  await api('invoice.refund.prepare',{proposal:proposed.id},409)
+  await api('invoice.refund.execute',{refund:request.id,basis:request.basis,confirm:true},409)
+  await decide(proposed.id,owner,409)
+  assert.equal((await detail(proposed.id)).correctionMail,null)
+  await h.rejectAudit('invoice.refund.claim')
+  await decide(proposed.id,finance,500)
+  await h.rejectAudit(null)
+  assert.equal((await detail(proposed.id)).status,'pending')
+  assert.equal(mails().length,0)
+  assert.equal(processor?.calls.filter(c=>c.method==='POST').length??0,beforePosts)
+  // A crash after the cash write must not separate the local credit from its mail.
+  if(processor) await h.rejectAudit('invoice.refund.complete')
+  const approved=await decide(proposed.id,finance)
+  if(processor) {
+    assert.equal((await detail(proposed.id)).status,'approved')
+    assert.equal((await detail(proposed.id)).correctionMail,null)
+    assert.equal((await api(`invoices/${invoice.id}`)).credits.length,0)
+    assert.equal(mails().length,0)
+    await h.rejectAudit(null)
+    const recovered=await api('invoice.refund.reconcile',{refund:approved.refund})
+    assert.equal(recovered.status,'completed')
+    assert.equal(processor.calls.filter(c=>c.method==='POST').length,beforePosts+1)
+  }
+  const completed=await detail(proposed.id), after=await api(`invoices/${invoice.id}`)
+  assert.equal(completed.correctionMail.status,'accepted')
+  assert.equal(completed.correctionMail.credit_id,after.credits[0].id)
+  assert.equal(completed.correctionMail.body,payload.body)
+  assert.equal(completed.correctionMail.recipient,recipient)
+  assert.deepEqual(JSON.parse(completed.correctionMail.citations_json),payload.citations)
+  assert.equal(mails().length,1)
+  assert.equal(mails()[0].text,payload.body)
+  assert.deepEqual(after.lines,before.lines)
+  assert.deepEqual([after.subtotal_cents,after.tax_cents,after.total_cents,after.balanceCents],[300000,0,300000,0])
+  assert.deepEqual(after.credits.map(c=>c.amount_cents),[150000])
+  await decide(proposed.id,finance,409)
+  await api('invoice.refund.reconcile',{refund:approved.refund})
+  assert.equal(mails().length,1)
+  assert.deepEqual(await api(`period-closes/${closedPeriod}`),closedPacket)
+  assert.equal(await text(`/app/exports/revenue.csv?period=${closedPeriod}`),closedRevenue)
+  assert.equal(await text(`/app/exports/revenue-journal.csv?period=${closedPeriod}`),closedJournal)
+  const revenue=await api(`revenue/${invoice.id}`)
+  assert.deepEqual(revenue.contributions.filter(c=>c.kind.startsWith('credit')).map(c=>[c.kind,c.period,c.amountCents]),[['credit-billing',closedPacket.open,-150000],['credit-recognition',closedPacket.open,-150000]])
+  await onState({label:'refund-correction-completed',id:proposed.id,kind:'proposal',owner})
+  const balanceBefore=(await api(`customers/${customer}/balance`)).carriedCents
+  const low=await propose({...payload,amount:'900',destination:'balance',body:'A reviewed $900 balance credit; cash does not change.'})
+  const lowRequest=await api('invoice.refund.prepare',{proposal:low.id})
+  h.mailResponses.push({status:500,body:{name:'synthetic_provider_uncertain'}})
+  const lowResult=await decide(low.id,owner)
+  assert.equal(lowResult.refund,lowRequest.id)
+  assert.equal((await detail(low.id)).refundRequest.status,'completed')
+  assert.equal((await detail(low.id)).correctionMail.status,'uncertain')
+  assert.equal((await api(`customers/${customer}/balance`)).carriedCents,balanceBefore+90000)
+  await api('invoice.refund.reconcile',{refund:lowRequest.id})
+  assert.equal(mails().length,2,'Reconciliation never retries an uncertain customer message')
+  if(processor) {
+    const late=await propose({...payload,amount:'100',subject:'Synthetic refund recipient race'})
+    await api('invoice.refund.prepare',{proposal:late.id})
+    const held=processor.pauseNext(), pending=decide(late.id)
+    await held.arrived
+    try { await api('customer.update',{...await api(`customers/${customer}`),customer,billing_email:'synthetic-nectar-changed@example.test'}) }
+    finally { held.release() }
+    const result=await pending
+    assert.equal((await detail(late.id)).refundRequest.status,'completed')
+    assert.equal((await detail(late.id)).correctionMail.status,'suppressed')
+    assert.equal(h.mails.filter(m=>m.subject==='Synthetic refund recipient race').length,0)
+    await api('invoice.refund.reconcile',{refund:result.refund})
+    assert.equal(h.mails.filter(m=>m.subject==='Synthetic refund recipient race').length,0)
+    assert.ok((await api('audit')).some(row=>row.subject===late.id&&JSON.parse(row.detail).reason==='refund_recipient_changed'))
+    await onState({label:'refund-correction-suppressed',id:late.id,kind:'proposal',owner})
+    await api('customer.update',{...await api(`customers/${customer}`),customer,billing_email:recipient})
+  }
+  console.log('INV-005 refund correction: cited exact preview, refusal and rejection, human preparation, independent approval, recipient staleness, audit rollback, atomic credit and frozen mail, and once-only reconciliation passed')
 }

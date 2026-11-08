@@ -154,3 +154,8 @@ export function providerUnavailable(error: unknown): never {
   if (error instanceof NativeStripeError) throw new NectarError('native_collection_provider_unavailable', 502)
   throw error
 }
+
+export async function confirmExistingCardIntent(stripe: StripeClient, identity: PaymentIdentity, intentRef: string, key: string) {
+  return stripe(`/payment_intents/${encodeURIComponent(providerReference(intentRef))}/confirm`,
+    new URLSearchParams({payment_method:identity.paymentMethodRef,off_session:'true',error_on_requires_action:'true'}),key)
+}

@@ -2,7 +2,7 @@
 // Never resolve an operator Actor from one of these tokens.
 import type { Bindings } from '../auth.server'
 import { clockInstant } from './clock'
-import { insist, one, sha256Hex, type Row } from './core'
+import { guard, insist, one, sha256Hex, type Row } from './core'
 import { b64url, fromB64url } from './mfa-crypto'
 
 export const PORTAL_LIFETIME = 15 * 60 * 1000
@@ -41,4 +41,17 @@ export async function customerSession(env: Bindings, request: Request): Promise<
     claims!.jti, claims!.customer, await sha256Hex(token), claims!.origin, claims!.audience, claims!.parent, claims!.iat, claims!.exp, at, at)
   insist(row, 'invalid_customer_session', 401)
   return { ...claims!, language: row.language,currency:row.currency }
+}
+
+/** Recheck the short-lived capability inside the same transaction as its effect. */
+export function customerSessionGuard(env: Bindings, session: CustomerSession) {
+  const at=clockInstant(env)
+  return guard(env,'invalid_customer_session',`EXISTS(SELECT 1 FROM nc_portal_sessions s
+    JOIN nc_customers c ON c.id=s.customer_id
+    JOIN nc_portal_policy p ON p.singleton=1 AND p.revision=s.policy_revision
+    WHERE s.id=? AND s.customer_id=? AND s.origin=? AND s.audience=? AND s.parent_origin=?
+    AND s.issued_at=? AND s.expires_at=? AND s.issued_at<=? AND s.expires_at>? AND s.revoked_at IS NULL AND c.erased_at IS NULL
+    AND NOT EXISTS(SELECT 1 FROM nc_dunning_mail_authority a JOIN nc_dunning_deliveries d ON d.id=a.id WHERE a.portal_session_id=s.id AND d.expires_at<=?)
+    AND NOT EXISTS(SELECT 1 FROM nc_card_expiry_notice_authority a JOIN nc_card_expiry_notices n ON n.id=a.id WHERE a.portal_session_id=s.id AND n.expires_at<=?))`,
+    session.jti,session.customer,session.origin,session.audience,session.parent,session.iat,session.exp,at,at,at,at)
 }

@@ -4,8 +4,8 @@ import type { Row } from '../core'
 import { policyChanges } from '../policy-changes'
 import { cents, check, form, h, hidden, table, tag, who } from './html'
 
-const labels: Record<string, string> = { usage: 'Historical usage disposition', feature: 'Feature access policy', credit: 'Credit and write-off approval threshold', certificate: 'Certificate reminder mail', tax: 'Declared tax policy', lifecycle: 'Cancellation, reactivation and proration policy' }
-const value = (row: Row) => row.kind === 'usage' ? row.payload.disposition.replaceAll('_',' ') : row.kind === 'feature'
+const labels: Record<string, string> = { portal_change: 'Portal change restrictions', usage: 'Historical usage disposition', feature: 'Feature access policy', credit: 'Credit and write-off approval threshold', certificate: 'Certificate reminder mail', tax: 'Declared tax policy', lifecycle: 'Cancellation, reactivation and proration policy' }
+const value = (row: Row) => row.kind === 'portal_change' ? `${row.payload.prices.length} catalog choices; minimum ${row.payload.minimumSeats} seats; pause ${row.payload.pauseAllowed ? 'permitted by merchant, execution unavailable' : 'forbidden'}` : row.kind === 'usage' ? row.payload.disposition.replaceAll('_',' ') : row.kind === 'feature'
   ? `${row.payload.productName} / ${row.payload.feature}: ${row.payload.quota === null ? 'no usage limit' : `${row.payload.quota} ${row.payload.meterName}`}; ${row.payload.policy}; unpaid grace ${row.payload.graceDays === null ? 'disabled' : `${row.payload.graceDays} days`}`
   : row.kind === 'credit'
   ? row.payload.twoPersonAboveCents === null ? 'No second-person credit threshold' : h`Second person above ${cents(row.payload.twoPersonAboveCents)}`

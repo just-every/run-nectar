@@ -50,7 +50,7 @@ export async function normalizedSnapshot(source: RatingInput, asOf: string): Pro
     if (price.pricing) { exclusions.push('nonsimple_fixed_or_seat_price'); continue }
     if (!active) continue
     const scope = price.sourcePriceId ?? price.id
-    const amendments = input.amendments.filter(a => covers(a.from, a.to, asOf) && (!a.itemId || a.itemId === item.id) && (!a.priceId || a.priceId === price.id || a.priceId === scope))
+    const amendments = input.amendments.filter(a => covers(a.from, a.to, asOf) && (!a.itemId || a.itemId === item.id || item.discountItemIds?.includes(a.itemId)) && (!a.priceId || a.priceId === price.id || a.priceId === scope))
     const override = amendments.find(a => a.kind === 'price_override')
     const unitAmount = override?.value ?? price.unitAmount
     insist(Number.isSafeInteger(item.quantity) && item.quantity >= 0 && micros(unitAmount) >= 0n, 'normalized_contract_evidence_required', 409)

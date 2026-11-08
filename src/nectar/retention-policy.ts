@@ -112,6 +112,7 @@ export async function decideRetentionPolicy(env: Bindings, actor: Actor, input: 
     statements.push(guard(env, 'policy_changed', `${REVISION}=?`, row.base_revision),
       guard(env, 'policy_preparer_inactive', ACTIVE_OWNER, row.prepared_by_id))
   }
+  if(decision==='approved')statements.push(stmt(env,'INSERT INTO nc_portal_retention_authority(policy_id) VALUES(?)',row.id))
   const by = actorLabel(actor)
   statements.push(stmt(env, 'UPDATE nc_retention_policies SET status=?,decided_by_id=?,decided_by=?,decided_at=?,approval_mode=? WHERE id=?', decision, actor.id, by, at, mode, row.id))
   await commit(env, statements, { actor: by, action: 'retention.policy.decide', subject: row.id,

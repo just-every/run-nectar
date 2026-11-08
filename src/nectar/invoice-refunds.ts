@@ -1,3 +1,6 @@
+import { assuranceProposalGuards } from './assurance'
+import { checkedRefundCorrection, refundProposalGuard, refundCorrectionMailStatements } from './invoice-refund-correction'
+import { deliverCorrectionMail } from './credit-correction-mail'
 import type { Bindings } from '../auth.server'
 import { actorLabel, requireMember, requireRead, type Actor } from './actor'
 import { requireBusiness } from './business'
@@ -45,12 +48,16 @@ async function outcome(env: Bindings, actor: Actor, r: Row, fields: Row) {
 }
 export async function prepareInvoiceRefund(env: Bindings, actor: Actor, input: Input) {
   await authority(env,actor)
+  const correction = input.has('proposal') ? await checkedRefundCorrection(env,input.text('proposal',{max:100})) : null
+  if(correction) insist(!await one(env,"SELECT 1 FROM nc_invoice_refunds WHERE json_extract(quote_json,'$.correction.proposal.id')=?",correction.proposal.id),'invoice_refund_already_prepared',409)
+  if(correction) input=Input.of({...correction.plan.normalized,basis:correction.plan.impact.refund.basis})
+  const authorityGuards = await assuranceProposalGuards(env, correction ? parseJson<Row>(correction.proposal.evidence_json,{}).assurance ?? null : null)
   const source = await current(env,actor,input), reason=input.text('reason',{max:500})
   insist(input.text('basis',{max:100})===source.preview.basis,'invoice_refund_stale',409)
   const captured=await inspectRefundCharge(env,chargeQuote(source.proof,source.preview.original.totalCents,source.preview.destination==='original'?source.preview.amountCents:0))
   const policy=await creditPolicy(env), id=newId(), at=clockInstant(env)
-  const quote={...source.preview,proof:source.proof,refundedBeforeCents:captured.charge.amount_refunded,preparedName:actorLabel(actor),policyRevision:policy.revision,customerRevision:source.customer.revision,businessRevision:source.business.revision,entityId:source.invoice.billing_entity_id,routeJson:source.invoice.billing_route_json}
-  await commit(env,[refundActorGuard(env,actor),guard(env,'invoice_refund_stale','COALESCE((SELECT revision FROM nc_credit_policy WHERE singleton=1),0)=?',policy.revision),
+  const quote={...source.preview,proof:source.proof,refundedBeforeCents:captured.charge.amount_refunded,preparedName:actorLabel(actor),policyRevision:policy.revision,customerRevision:source.customer.revision,businessRevision:source.business.revision,entityId:source.invoice.billing_entity_id,routeJson:source.invoice.billing_route_json,...(correction?{correction:{proposal:correction.proposal,mail:correction.plan.impact.mail}}:{})}
+  await commit(env,[refundActorGuard(env,actor),...authorityGuards,...(correction?[refundProposalGuard(env,correction.proposal)]:[]),guard(env,'invoice_refund_stale','COALESCE((SELECT revision FROM nc_credit_policy WHERE singleton=1),0)=?',policy.revision),
     guard(env,'invoice_refund_stale','(SELECT value FROM nc_privacy_generation WHERE id=1)=?',source.generation),
     guard(env,'invoice_refund_unresolved',"NOT EXISTS(SELECT 1 FROM nc_invoice_refunds WHERE invoice_id=? AND status IN ('claimed','uncertain'))",quote.invoice),
     stmt(env,"INSERT INTO nc_invoice_refunds(id,invoice_id,customer_id,payment_id,amount_cents,destination,basis_hash,quote_json,reason,prepared_by_id,prepared_at,status,intent_key,revision) VALUES(?,?,?,?,?,?,?,?,?,?,?,'pending',?,?)",id,quote.invoice,quote.customer,quote.original.payment,quote.amountCents,quote.destination,quote.basis,canonical(quote),reason,actor.id,at,newId(),newId())],{actor:actorLabel(actor),action:'invoice.refund.prepare',subject:id,detail:{invoice:quote.invoice,basis:quote.basis,amountCents:quote.amountCents,destination:quote.destination}})
@@ -81,10 +88,18 @@ async function complete(env: Bindings, actor: Actor, r: Row, stripe?: StripeClie
   await commit(env,[refundActorGuard(env,actor),state(env,r),...number.statements,
     stmt(env,'INSERT INTO nc_credit_notes(id,number,invoice_id,customer_id,amount_cents,reason,issued_by,issued_at,applied_cents,subtotal_cents,tax_cents,billing_entity_id,billing_route_json,invoice_refund_id) VALUES(?,?,?,?,?,?,?,?,0,?,0,?,?,?)',credit,number.number,r.invoice_id,r.customer_id,r.amount_cents,'Invoice refund',actorLabel(actor),at,r.amount_cents,number.entityId,number.routeJson,r.id),
     ...await revenueCreditStatements(env,{id:credit,invoice:r.invoice_id,customer:r.customer_id,amountCents:r.amount_cents,subtotalCents:r.amount_cents,issuedAt:at}),
+    ...(q.correction?refundCorrectionMailStatements(env,q.correction,credit,r.customer_id,at):[]),
     stmt(env,"UPDATE nc_invoice_refunds SET status='completed',credit_id=?,completed_at=?,proof_json=?,error_code=NULL,revision=? WHERE id=?",credit,at,canonical(proof),newId(),r.id)],{actor:actorLabel(actor),action:'invoice.refund.complete',subject:r.id,detail:{invoice:r.invoice_id,credit,amountCents:r.amount_cents,destination:r.destination,preparedBy:q.preparedName,approvedBy:actorLabel(actor),refundRef:r.refund_ref??null}})
+  if(q.correction) await deliverCorrectionMail(env,q.correction.proposal.id)
   return view(await stored(env,r.id))
 }
 export async function executeInvoiceRefund(env: Bindings, actor: Actor, input: Input) {
+  return executeInvoiceRefundRequest(env,actor,input)
+}
+export async function executeRefundCorrection(env: Bindings, actor: Actor, input: Input, proposal: Row) {
+  return executeInvoiceRefundRequest(env,actor,input,proposal)
+}
+async function executeInvoiceRefundRequest(env: Bindings, actor: Actor, input: Input, proposal?: Row) {
   await authority(env,actor);insist(input.flag('confirm'),'confirmation_required')
   let r:Row
   if(input.has('refund'))r=await stored(env,input.text('refund',{max:100}))
@@ -94,20 +109,29 @@ export async function executeInvoiceRefund(env: Bindings, actor: Actor, input: I
     r=await stored(env,(await prepareInvoiceRefund(env,actor,input)).id)
   }
   insist(r.status==='pending','invoice_refund_not_pending',409)
-  const q=parseJson<Row>(r.quote_json,{}),source=await current(env,actor,Input.of({invoice:r.invoice_id,amount:String(r.amount_cents/100),destination:r.destination}))
+  const q=parseJson<Row>(r.quote_json,{})
+  insist(!q.correction || proposal?.id===q.correction.proposal.id,'invoice_refund_proposal_required',409)
+  if(proposal) {
+    const checked=await checkedRefundCorrection(env,proposal.id)
+    insist(q.correction && checked.plan.impact.refund.basis===r.basis_hash,'proposal_stale',409)
+  }
+  const source=await current(env,actor,Input.of({invoice:r.invoice_id,amount:String(r.amount_cents/100),destination:r.destination}))
   insist(input.text('basis',{max:100})===r.basis_hash&&source.preview.basis===r.basis_hash&&source.customer.revision===q.customerRevision&&source.business.revision===q.businessRevision,'invoice_refund_stale',409)
   insist(!source.preview.needsSecondApprover||actor.id!==r.prepared_by_id,'second_approver_required',409)
   const live=await inspectRefundCharge(env,chargeQuote(q.proof,q.original.totalCents,r.destination==='original'?r.amount_cents:0))
   insist(live.charge.amount_refunded===q.refundedBeforeCents,'invoice_refund_capture_changed',409)
   const actors=()=>guard(env,'invoice_refund_authority_changed',"EXISTS(SELECT 1 FROM nc_members m JOIN oa_operators o ON o.email=m.email WHERE m.id=? AND m.role IN ('owner','finance') AND m.status='active' AND o.status='active' AND (m.role<>'owner' OR o.role='owner'))",r.prepared_by_id)
+  const link = proposal ? parseJson<Row>(proposal.evidence_json,{}).assurance ?? null : null
+  const authorityGuards = await assuranceProposalGuards(env,link)
   const revision=newId(),at=clockInstant(env)
-  await commit(env,[refundActorGuard(env,actor),actors(),state(env,r),guard(env,'invoice_refund_stale','COALESCE((SELECT revision FROM nc_credit_policy WHERE singleton=1),0)=?',q.policyRevision),
+  await commit(env,[refundActorGuard(env,actor),actors(),...authorityGuards,state(env,r),...(proposal?[refundProposalGuard(env,proposal)]:[]),guard(env,'invoice_refund_stale','COALESCE((SELECT revision FROM nc_credit_policy WHERE singleton=1),0)=?',q.policyRevision),
     guard(env,'invoice_refund_stale','(SELECT value FROM nc_privacy_generation WHERE id=1)=?',source.generation),
-    stmt(env,"UPDATE nc_invoice_refunds SET status='claimed',approved_by_id=?,approved_at=?,claimed_at=?,revision=? WHERE id=?",actor.id,at,at,revision,r.id)],{actor:actorLabel(actor),action:'invoice.refund.claim',subject:r.id,detail:{invoice:r.invoice_id,basis:r.basis_hash,amountCents:r.amount_cents,preparedBy:r.prepared_by_id,approvedBy:actor.id}})
+    ...(proposal?[stmt(env,"UPDATE nc_proposals SET status='approved',decided_by=?,decided_at=?,decision_note=?,result_json=? WHERE id=?",actorLabel(actor),at,proposal.decision_note??'',canonical({refund:r.id,invoice:r.invoice_id}),proposal.id)]:[]),
+    stmt(env,"UPDATE nc_invoice_refunds SET status='claimed',approved_by_id=?,approved_at=?,claimed_at=?,revision=? WHERE id=?",actor.id,at,at,revision,r.id)],[{actor:actorLabel(actor),action:'invoice.refund.claim',subject:r.id,detail:{invoice:r.invoice_id,basis:r.basis_hash,amountCents:r.amount_cents,preparedBy:r.prepared_by_id,approvedBy:actor.id}},...(proposal?[{actor:actorLabel(actor),action:'proposal.approve',subject:proposal.id,detail:{refund:r.id,note:proposal.decision_note??''}}]:[])])
   r={...r,status:'claimed',approved_by_id:actor.id,revision}
   if(r.destination==='balance')return complete(env,actor,r)
   try {
-    await commit(env,[refundActorGuard(env,actor),actors(),state(env,r)],{actor:actorLabel(actor),action:'invoice.refund.preflight',subject:r.id,detail:{basis:r.basis_hash}})
+    await commit(env,[refundActorGuard(env,actor),actors(),...await assuranceProposalGuards(env,link),state(env,r)],{actor:actorLabel(actor),action:'invoice.refund.preflight',subject:r.id,detail:{basis:r.basis_hash}})
     const refund=await live.stripe('/refunds',new URLSearchParams({charge:q.proof.chargeRef,amount:String(r.amount_cents),'metadata[nectar_invoice_refund]':r.id,'metadata[nectar_refund_key]':r.intent_key}),`nectar-invoice-refund-${r.intent_key}`)
     return await complete(env,actor,r,live.stripe,refund)
   } catch {

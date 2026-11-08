@@ -1,3 +1,4 @@
+import { transferInstructionFacts } from './transfer-instruction-presentation'
 import { customerLineFacts } from './customer-invoice'
 // Small PDF writer with byte-accurate offsets and separate text and image objects.
 import { insist, type Row } from './core'
@@ -12,6 +13,7 @@ export function invoicePdf(data: Row): Uint8Array {
     content.paymentTermsDays?`${L.t('invoice.terms')}: Net ${content.paymentTermsDays}`:'',
     content.poNumber?`${L.t('invoice.po')}: ${content.poNumber}`:'',content.memo,
     ...Object.entries(content.customFields).map(([key,value])=>`${key}: ${value}`),brand.remitTo,
+    ...(row.transferInstructions?[L.t('transfer.heading'),L.t('transfer.testMode'),...transferInstructionFacts(row.transferInstructions,L).map(([label,value])=>`${label}: ${value}`)]:[]),
     L.t('portal.lines'),...data.lines.flatMap((line:Row)=>[`${line.description}: ${money(line.amount_cents)}`,...customerLineFacts(line,L,row.currency)]),
     `${L.t('portal.subtotal')}: ${money(row.subtotal_cents)}`,`${L.t('portal.tax')}: ${money(row.tax_cents)}`,`${L.t('portal.total')}: ${money(row.total_cents)}`,
     ...data.credits.map((credit:Row)=>`${credit.number}: ${money(credit.amount_cents)}`),

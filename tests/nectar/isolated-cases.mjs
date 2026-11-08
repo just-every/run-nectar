@@ -1,5 +1,8 @@
 // Explicit modules keep each isolated journey visible to Verify tooling.
 export const isolatedJourneys = [
+  { file: 'transfer-instructions', name: 'transferInstructionsFlow', load: () => import('./transfer-instructions.mjs') },
+  { file: 'remittance-files', name: 'remittanceFilesFlow', load: () => import('./remittance-files.mjs') },
+  { file: 'portal-renewal', name: 'portalRenewalFlow', load: () => import('./portal-renewal.mjs') },
   { file: 'sdk-typescript', name: 'sdkTypescriptFlow', load: () => import('./sdk-typescript.mjs') },
   { file: 'invoice-refund-preview', name: 'invoiceRefundPreviewFlow', load: () => import('./invoice-refund-preview.mjs') },
   { file: 'one-time', name: 'invoiceVoidFlow', load: () => import('./one-time.mjs') },
@@ -11,6 +14,7 @@ export const isolatedJourneys = [
   { file: 'card-lifecycle-webhook', name: 'cardLifecycleWebhookFlow', load: () => import('./card-lifecycle-webhook.mjs') },
   { file: 'card-expiry-notices', name: 'cardExpiryNoticesFlow', load: () => import('./card-expiry-notices.mjs') },
   { file: 'card-lifecycle', name: 'lifecycleFlow', load: () => import('./card-lifecycle.mjs') },
+  { file: 'enterprise-linking', name: 'enterpriseLinkingFlow', load: () => import('./enterprise-linking.mjs') },
   { file: 'enterprise-identity', name: 'enterpriseIdentityFlow', load: () => import('./enterprise-identity.mjs') },
   { file: 'payment-links', name: 'paymentLinksFlow', load: () => import('./payment-links.mjs') },
   { file: 'automatic-collection', name: 'automaticCollectionFlow', load: () => import('./automatic-collection.mjs') },
@@ -86,7 +90,15 @@ export const isolatedJourneys = [
   { file: 'metrics', name: 'metricsFlow', load: () => import('./metrics.mjs') },
   { file: 'metric-zones', name: 'metricZones', load: () => import('./metric-zones.mjs') },
   { file: 'usage-replay', name: 'usageReplayFlow', load: () => import('./usage-replay.mjs') },
+  { file: 'move-investigations', name: 'moveInvestigationsFlow', load: () => import('./move-investigations.mjs') },
   { file: 'reconciliation', name: 'reconciliationFlow', load: () => import('./reconciliation.mjs') },
   { file: 'assurance-detectors', name: 'assuranceDetectorsFlow', load: () => import('./assurance-detectors.mjs') },
   { file: 'assurance-detectors', name: 'assuranceScheduleFlow', load: () => import('./assurance-detectors.mjs') },
+  { file: 'portal-change-requests', name: 'portalChangeRequestsFlow', load: () => import('./portal-change-requests.mjs') },
+  { file: 'subscription-states', name: 'subscriptionStatesFlow', load: () => import('./subscription-states.mjs') },
+  { file: 'close-tieout', name: 'closeTieoutFlow', load: () => import('./close-tieout.mjs') },
+  { file: 'test-mode', name: 'testModeFlow', load: () => import('./test-mode.mjs') },
+  { file: 'job-runs', name: 'jobRunsFlow', load: () => import('./job-runs.mjs') },
+  { file: 'collection-diagnosis', name: 'collectionDiagnosisFlow', load: () => import('./collection-diagnosis.mjs') },
+  { file: 'tax-source-report', name: 'taxSourceReportFlow', load: () => import('./tax-source-report.mjs') },
 ]

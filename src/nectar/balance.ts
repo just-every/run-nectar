@@ -22,18 +22,19 @@ import { assuranceExecution } from './assurance'
 const GRANT_REMAINING_SQL = `g.amount_cents - COALESCE((SELECT SUM(a.amount_cents) FROM nc_balance_entries a WHERE a.grant_id=g.id),0)`
 
 export async function balanceSources(env: Bindings, customerId: string) {
-  const payments = (await all(env, `SELECT p.id,p.reference,p.received_on,p.amount_cents,${UNALLOCATED_SQL} AS unallocated FROM nc_payments p WHERE p.customer_id=? ORDER BY p.received_on,p.id`, customerId)).filter(row => row.unallocated > 0)
+  const payments = (await all(env, `SELECT p.id,p.reference,p.received_on,p.amount_cents,(SELECT r.id FROM nc_remittances r WHERE r.payment_id=p.id) AS remittance_id,${UNALLOCATED_SQL} AS unallocated FROM nc_payments p WHERE p.customer_id=? ORDER BY p.received_on,p.id`, customerId)).filter(row => row.unallocated > 0)
   const grants = (await all(env, `SELECT g.*,${GRANT_REMAINING_SQL} AS remaining FROM nc_balance_entries g WHERE g.kind='goodwill' AND g.customer_id=? ORDER BY g.created_at,g.id`, customerId)).filter(row => row.remaining > 0)
   const carried = await carriedUsageCredits(env, customerId)
   const cashCents = payments.reduce((n, row) => n + row.unallocated, 0), goodwillCents = grants.reduce((n, row) => n + row.remaining, 0), carriedCents = carried.reduce((n, row) => n + row.availableCents, 0)
-  return { payments, grants, carried, cashCents, goodwillCents, carriedCents, totalCents: cashCents + goodwillCents + carriedCents }
+  const queuedCashCents = payments.filter(row => row.remittance_id).reduce((sum,row) => sum + row.unallocated,0)
+  return { payments, grants, carried, cashCents, queuedCashCents, goodwillCents, carriedCents, totalCents: cashCents + goodwillCents + carriedCents }
 }
 
 /** Goodwill applies first, then the oldest cash, never more than the invoice owes. */
 export function applicationPlan(sources: Awaited<ReturnType<typeof balanceSources>>, owedCents: number) {
   let left = Math.max(0, owedCents)
   const take = (rows: Row[], field: string) => rows.flatMap(row => { const amount = Math.min(left, row[field]); left -= amount; return amount ? [{ id: row.id as string, amount }] : [] })
-  return { grants: take(sources.grants, 'remaining'), payments: take(sources.payments, 'unallocated') }
+  return { grants: take(sources.grants, 'remaining'), payments: take(sources.payments.filter(row => !row.remittance_id), 'unallocated') }
 }
 
 export function applicationStatements(env: Bindings, plan: ReturnType<typeof applicationPlan>, invoice: { id: string; customer_id: string }, by: string, at: number) {
@@ -161,6 +162,7 @@ async function sourceFromRequest(env: Bindings, actor: Actor, request: Row): Pro
 
 /** The customer's balance with its own ledger, for the customer record and the JSON door. */
 export async function balanceView(env: Bindings, actor: Actor, customerId: string) {
+  requireRead(actor, 'invoices')
   requireRead(actor, 'payments')
   const sources = await balanceSources(env, customerId)
   const requests = await all(env, 'SELECT * FROM nc_balance_requests WHERE customer_id=? ORDER BY prepared_at,id', customerId)

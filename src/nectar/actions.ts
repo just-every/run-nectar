@@ -1,3 +1,10 @@
+import { prepareMoveRollback,confirmMoveRollback } from './movein/rollback'
+import { scanCloseTieout } from './close-tieout'
+import { prepareTransferInstructions, confirmTransferInstructions } from './transfer-instructions'
+import { approveLink } from './sso-linking'
+import { preparePortalChangePolicy } from './portal-change-policy'
+import { uploadBankDeposit, uploadRemittances, previewRemittance, confirmRemittance, previewRemittanceAllocation, allocateRemittance } from './remittances'
+import { bindSandboxProcessor, reconcileSandboxBilling } from './test-billing'
 import { consumeProcessorEvent } from './processor-events'
 import { allocateProcessorCash } from './processor-cash-queue'
 import { prepareImportedCashTakeover, confirmImportedCashTakeover } from './processor-cash-imported'
@@ -5,6 +12,7 @@ import { previewProcessorCashReturn, prepareProcessorCashReturn, executeProcesso
 import { prepareInvoiceRefund, executeInvoiceRefund, reconcileInvoiceRefund } from './invoice-refunds'
 import { previewInvoiceRefund } from './invoice-refund-preview'
 import { prepareInvoiceVoid, voidInvoice } from './invoice-voids'
+import { configureBillingNotice, prepareBillingNotice, sendBillingNotice } from './billing-notices'
 import { createDunningPolicy, enrollDunning } from './dunning-policy'
 import { prepareDunningMail, sendDunningMail } from './dunning-mail'
 import { endDunning, revokeDunning } from './dunning'
@@ -21,7 +29,7 @@ import { configureRetryPolicy } from './retry-policy'
 import { prepareAutomaticCollection,decideAutomaticCollection,revokeAutomaticCollection } from './automatic-collection'
 import { checkAutomaticCollection,consumeAutomaticEvent } from './automatic-collection-events'
 import { prepareHostedSetup } from './hosted-setup'
-import { scanAssurance,assignAssurance,approveAssurance,recheckAssurance } from './assurance'
+import { investigateMove,scanAssurance,assignAssurance,approveAssurance,recheckAssurance } from './assurance'
 import { prepareInvoiceAutomation,decideInvoiceAutomation,runInvoiceAutomationDoor } from './invoice-automation'
 import { prepareShadowAppChange,confirmShadowAppChange,reconcileShadowAppChange,shadowInvoicePreview,appInvoicePreview } from './shadow-app'
 import { consumeStripeWebhookEvent } from './webhook-stripe'
@@ -44,6 +52,7 @@ import { preparePrepaidRefund, decidePrepaidRefund, reconcilePrepaidRefund } fro
 import { preparePrepaidTopupAuthorization, decidePrepaidTopupAuthorization, revokePrepaidTopupAuthorization } from './prepaid-topup-authorization'
 import { reconcilePrepaidTopup } from './prepaid-topup-charge'
 import { runPrepaidTopupFromDoor } from './prepaid-topup-actions'
+import { prepareNativeReconfirmation, confirmNativeReconfirmation } from './payments/reconfirmation'
 import { bindNativeCollectionCustomer, prepareNativeCollection, confirmNativeCollection, reconcileNativeCollection } from './payments/collection'
 import { preparePrepaid, decidePrepaid, revokePrepaidConsent } from './prepaid-terms'
 import { preparePrepaidPurchase } from './prepaid-purchase'
@@ -113,8 +122,21 @@ import { prepareMetric,previewMetric,activateMetric } from './meter-definitions'
 
 type Handler = (env: Bindings, actor: Actor, input: Input, request: Request) => Promise<unknown>
 
+import { copySandboxCatalog } from './test-mode'
+import { createSandboxCustomer, advanceSandboxClock } from './test-clock'
+
 export const actions: Record<string, Handler> = {
+  'sandbox.catalog.copy': copySandboxCatalog,
+  'sandbox.customer.create': createSandboxCustomer,
+  'sandbox.clock.advance': advanceSandboxClock,
+  'sandbox.processor.bind': bindSandboxProcessor,
+  'sandbox.billing.reconcile': reconcileSandboxBilling,
   'sso.configure': configureSso,
+  'move.rollback.prepare': prepareMoveRollback,
+  'move.rollback.confirm': confirmMoveRollback,
+  'move.investigate': investigateMove,
+  'close.scan': scanCloseTieout,
+  'sso.link.approve': approveLink,
   'assurance.scan': scanAssurance,
   'assurance.assign': assignAssurance,
   'assurance.approve': approveAssurance,
@@ -136,11 +158,16 @@ export const actions: Record<string, Handler> = {
   'webhook.disable': disableWebhook,
   'webhook.replay': replayWebhook,
   'webhook.dispatch': dispatchWebhookDoor,
+  'transfer.instructions.prepare': prepareTransferInstructions,
+  'transfer.instructions.confirm': confirmTransferInstructions,
   'collection.customer.bind': bindNativeCollectionCustomer,
   'payment_link.approve': approvePaymentLink,
   'payment_link.activate': activatePaymentLink,
   'payment_link.create': createPaymentLink,
   'payment_link.deactivate': deactivatePaymentLink,
+  'billing.notice.configure': configureBillingNotice,
+  'billing.notice.prepare': prepareBillingNotice,
+  'billing.notice.send': sendBillingNotice,
   'dunning.policy.create': createDunningPolicy,
   'dunning.enroll': enrollDunning,
   'dunning.mail.prepare': prepareDunningMail,
@@ -160,6 +187,8 @@ export const actions: Record<string, Handler> = {
   'collection.prepare': prepareNativeCollection,
   'collection.confirm': confirmNativeCollection,
   'collection.reconcile': reconcileNativeCollection,
+  'collection.recovery.prepare': prepareNativeReconfirmation,
+  'collection.recovery.confirm': confirmNativeReconfirmation,
   'payment.ach_evidence.record':recordAchPaymentEvidence,
   'customer.payment_methods.refresh':refreshCustomerPaymentMethods,
   'checkout.setup.prepare':prepareHostedSetup,
@@ -188,6 +217,7 @@ export const actions: Record<string, Handler> = {
   'prepaid.funding.confirm': confirmPrepaidFunding,
   'prepaid.consent.revoke': revokePrepaidConsent,
   'prepaid.settle': settlePrepaid,
+  'portal.change.policy': preparePortalChangePolicy,
   'portal.configure': configurePortal,
   'portal.session.issue': issuePortalSession,
   'portal.session.revoke': revokePortalSession,
@@ -329,6 +359,12 @@ export const actions: Record<string, Handler> = {
   'promotion.create': createPromotionCode,
   'trial.extend': extendTrial,
   'trial.resolve': resolveTrial,
+  'bank.deposit.upload': uploadBankDeposit,
+  'remittance.upload': uploadRemittances,
+  'remittance.preview': previewRemittance,
+  'remittance.confirm': confirmRemittance,
+  'remittance.allocate.preview': previewRemittanceAllocation,
+  'remittance.allocate': allocateRemittance,
   'payment.record': recordPayment,
   'payment.allocate': allocate,
   'reminder.prepare': prepareReminder,

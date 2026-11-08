@@ -21,13 +21,17 @@ export function capturedNormalizedInput(sub: Row, events: Row[], through: string
   insist(snapshots.some(({ event }) => event.type === 'customer.subscription.created'), 'normalized_history_evidence_required', 409)
   const { row, event } = snapshots.at(-1)!, source = event.data?.object
   insist(source?.id === sub.provider_ref && Array.isArray(source.items?.data) && source.items.has_more !== true, 'normalized_history_evidence_required', 409)
-  const prices: Record<string, PriceIn> = {}, items: RatingInput['items'] = [], amendments: AmendmentIn[] = []
+  const prices: Record<string, PriceIn> = {}, items: RatingInput['items'] = [], amendments: AmendmentIn[] = [], planPriceIds: string[] = []
   const asOf = localDate(zonedStart(through, zone) - 1, zone)
   const start = day(source.start_date, zone)
   insist(start, 'normalized_history_evidence_required', 409)
   for (const item of source.items.data) {
     const price = item.price
     insist(price && typeof price === 'object' && price.currency === 'usd' && price.recurring, 'normalized_source_price_unsupported', 409)
+    const priceId = ref(price)
+    insist(typeof priceId === 'string', 'normalized_history_evidence_required', 409)
+    // Membership includes usage prices even though usage contributes no run rate.
+    planPriceIds.push(priceId)
     if (price.recurring.usage_type === 'metered') continue
     insist(price.billing_scheme !== 'tiered', 'normalized_source_price_unsupported', 409)
     const id = ref(price), unit = price.recurring.interval, count = price.recurring.interval_count ?? 1
@@ -73,6 +77,6 @@ export function capturedNormalizedInput(sub: Row, events: Row[], through: string
     subscription: { id: sub.id, anchorDay: sub.anchor_day, startDate: start, trialEnd: day(source.trial_end, zone),
       endDate: [ended, cancelAt].filter((value): value is string => !!value).sort()[0] ?? null, billFrom: null },
     period: { start: asOf, end: through }, items, prices, amendments, events: [] }
-  return { input, source: { provider: 'stripe', reference: row.provider_ref, href: historicalHref(sub.customer_id, row.id), eventCreated: event.created,
+  return { input, planPriceIds, source: { provider: 'stripe', reference: row.provider_ref, href: historicalHref(sub.customer_id, row.id), eventCreated: event.created,
     status: source.status, ...(source.pause_collection ? { collectionPaused: true } : {}) } }
 }

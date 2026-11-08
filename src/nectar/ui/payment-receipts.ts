@@ -17,6 +17,9 @@ export async function paymentReceiptPage(env: Bindings, actor: Actor, payment: s
     <section class="card"><h2>Invoice allocations</h2>
       ${table(['Invoice', 'Amount'], receipt.allocations.map(a => [h`<a href="${a.sourcePath}">${a.invoiceNumber}</a>`, cents(a.amountCents, a.currency)]), { empty: 'No invoice allocations.' })}
     </section>
+    <section class="card"><h2>Recorded sources</h2><p>These confirmed sources reconcile to this one payment.</p>
+      ${table(['Source', 'Reference', 'Confirmed by'], receipt.recordedSources.map(s => [s.kind === 'bank_deposit' ? 'Bank deposit' : 'Ordinary remittance', s.reference, s.confirmedBy]), { empty: 'No retained remittance sources.' })}
+    </section>
     <section class="card"><h2>Processor provenance</h2>
       ${table(['Source', 'Invoice'], receipt.provenance.map(p => [({verified_external_ach:'Verified external ACH settlement',native_card_collection:'Native card collection',automatic_invoice_collection:'Automatic invoice collection',payment_link_checkout:'Payment link checkout'} as Record<string,string>)[p.kind],
         h`<a href="${p.sourcePath}">Original invoice</a>`]), { empty: 'No retained verified processor source linked to this payment.' })}

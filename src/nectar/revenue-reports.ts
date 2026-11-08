@@ -133,7 +133,14 @@ function position(rows: RevenueContribution[], before: string) {
   return { accruedContractAssetCents: Number(accrued), deferredLiabilityCents: Number(deferred), signedCents: Number(deferred - accrued) }
 }
 
-export async function revenueReport(env: Bindings, actor: Actor, url: URL): Promise<RevenueReport> {
+/** Typed native contributions for preparation views; no new snapshots or provider writes. */
+export async function nativeRevenueContributions(env: Bindings) {
+  const records = (await revenueInvoices(env)).filter(record => !record.source && !record.invoice.erased_at)
+  const active = new Set((await all(env, 'SELECT id FROM nc_customers WHERE erased_at IS NULL')).map(row => row.id))
+  return adjustForClosed(records.filter(record => active.has(record.invoice.customer_id)).flatMap(record => sourceContributions(record)), await closedPeriods(env))
+}
+
+export async function revenueReport(env: Bindings, actor: Actor, url: URL, options: { nativeActiveOnly?: boolean } = {}): Promise<RevenueReport> {
   requireRead(actor, 'reports')
   await requireUsdReporting(env)
   const business = await requireBusiness(env)
@@ -141,7 +148,11 @@ export async function revenueReport(env: Bindings, actor: Actor, url: URL): Prom
   const entities = await entitySelection(env, entity)
   const search = `?${revenueQuery({ from, to, customerId: customer, entityId: entity })}`
   const closed = await closedPeriods(env)
-  const records = await revenueInvoices(env, customer, entity)
+  let records = await revenueInvoices(env, customer, entity)
+  if (options.nativeActiveOnly) {
+    const active = new Set((await all(env, 'SELECT id FROM nc_customers WHERE erased_at IS NULL')).map(row => row.id))
+    records = records.filter(record => !record.source && active.has(record.invoice.customer_id))
+  }
   const rows: RevenueContribution[] = adjustForClosed(records.flatMap(record => sourceContributions(record, search)), closed)
   const months: RevenueMonth[] = []
   for (let index = monthIndex(from); index <= monthIndex(to); index++) {

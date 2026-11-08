@@ -1,3 +1,7 @@
+import { planInvoiceRefundCorrection, checkedRefundCorrection } from './invoice-refund-correction'
+import { executeRefundCorrection } from './invoice-refunds'
+import { accountContactHold } from './cadence-holds'
+import { collectionDiagnosis, collectionProposerGuards } from './collection-diagnosis'
 import { assuranceProposal, assuranceProposalGuards } from './assurance'
 import { amendmentPlan, correctionPlan } from './draft-correction-plan'
 import { planInvoiceCredit, invoiceCreditStatements } from './credit-correction'
@@ -16,7 +20,7 @@ import { deliverAlerts } from './notification-mail'
 import type { Bindings } from '../auth.server'
 import { actorLabel, requireCapability, requireMember, type Actor } from './actor'
 import { requireBusiness, type Business } from './business'
-import { all, canonical, commit, guard, insist, newId, now, one, parseJson, stmt, type Row } from './core'
+import { all, canonical, commit, fingerprint, guard, insist, newId, now, one, parseJson, stmt, type Row } from './core'
 import { addDays } from './dates'
 import { requirePrice } from './catalog'
 import { Input } from './input'
@@ -30,20 +34,31 @@ import { cadenceSourceGuard, cadenceSourceSequence } from './cadence-policy'
 const KINDS = ['amendment', 'price_change', 'usage_correction', 'collection'] as const
 type Kind = typeof KINDS[number]
 
-async function collectionPlan(env: Bindings, payload: Row) {
+export async function collectionPlan(env: Bindings, payload: Row) {
   const basis = await reminderBasis(env, String(payload.customer ?? ''))
+  insist(!(await accountContactHold(env, basis.customer.id)).held, 'collection_account_disputed', 409)
   insist(basis.overdue.length, 'nothing_overdue', 409)
+  const diagnoses = await collectionDiagnosis(env, basis.customer.id, basis.overdue)
   const draft = reminderDraft(basis)
-  const recipient = String(payload.recipient ?? basis.customer.billing_email ?? '').toLowerCase()
-  return {
-    normalized: { customer: basis.customer.id, recipient, subject: String(payload.subject || draft.subject).slice(0, 200), body: String(payload.body || draft.body).slice(0, 8000) },
-    impact: { overdue: basis.overdue, balanceCents: basis.balanceCents, recentPayments: basis.recentPayments },
-    basis: { balances: basisKey(basis) },
-  }
+  const expired = diagnoses.filter(diagnosis => diagnosis.cause === 'expired_card')
+  if (expired.length) draft.body = draft.body.replace('If you have already paid,',
+    `${expired.map(diagnosis => `The payment attempt for invoice ${diagnosis.number} was declined because the card ending ${diagnosis.card!.last4} expired. Please contact us to arrange an updated payment method.`).join('\n')}\n\nIf you have already paid,`)
+  const recipient = String(basis.customer.billing_email ?? '').toLowerCase()
+  insist(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient), 'invalid_recipient')
+  insist(payload.recipient === undefined || payload.recipient === recipient, 'collection_recipient_changed', 409)
+  const normalized = { customer: basis.customer.id, recipient, subject: draft.subject, body: draft.body }
+  // Saved wording is immutable; a new proposal is required after any source change.
+  insist(payload.subject === undefined || payload.subject === draft.subject, 'collection_wording_changed', 409)
+  insist(payload.body === undefined || payload.body === draft.body, 'collection_wording_changed', 409)
+  const source = { balances: basisKey(basis), customer: basis.customer, diagnoses, recentPayments: basis.recentPayments }
+  return { normalized, impact: { overdue: basis.overdue, balanceCents: basis.balanceCents, recentPayments: basis.recentPayments, diagnoses,
+    boundary: 'Human-approved downloadable reminder only. No message send, hosted recovery or debit authority.' },
+    basis: { ...source, collectionKey: await fingerprint({ normalized, source }) } }
 }
 
 async function plan(env: Bindings, kind: Kind, payload: Row, saved = false):Promise<{normalized:Row;impact:any;basis:Row}> {
   const business = await requireBusiness(env)
+  if (kind === 'amendment' && payload.invoice_refund === true) return planInvoiceRefundCorrection(env,payload)
   if (kind === 'amendment' && payload.invoice_credit === true) return await planInvoiceCredit(env,business,payload,saved)
   if (kind === 'amendment' && payload.setup === true) return await setupPlan(env,business,payload,saved)
   if (kind === 'amendment') return await draftCorrectionPlan(env,kind,await amendmentPlan(env,business,payload))
@@ -74,7 +89,7 @@ export async function proposeDraft(env: Bindings, actor: Actor, input: Input) {
   insist(payload && typeof payload === 'object' && !Array.isArray(payload), 'invalid_payload')
   const evidence = (input.has('evidence') ? input.json('evidence') : {}) as Row
   insist(evidence && typeof evidence === 'object' && !Array.isArray(evidence), 'invalid_evidence')
-  if (kind === 'amendment' && payload.setup !== true && payload.invoice_credit !== true) {
+  if (kind === 'amendment' && payload.setup !== true && payload.invoice_credit !== true && payload.invoice_refund !== true) {
     const clauses = Array.isArray(evidence.clauses) ? evidence.clauses.filter((c: Row) => typeof c?.quote === 'string' && c.quote.trim()) : []
     insist(clauses.length, 'quoted_clause_required')
   }
@@ -98,17 +113,30 @@ export async function proposeDraft(env: Bindings, actor: Actor, input: Input) {
     insist(oldIssues.every(a=>(payload.ambiguities??[]).some((b:Row)=>b.issue===a.issue&&typeof b.resolution==='string'&&b.resolution.trim())),'setup_resolutions_required')
   }
   if(payload.setup===true)insist(new TextEncoder().encode(JSON.stringify([prepared.normalized,prepared.impact,prepared.basis])).length<=1500000,'setup_proposal_too_large')
+  if (kind === 'collection') {
+    const existing = await one(env, "SELECT id,impact_json FROM nc_proposals WHERE kind='collection' AND json_extract(basis_json,'$.collectionKey')=?", prepared.basis.collectionKey)
+    if (existing) return { id: existing.id, kind, impact: parseJson(existing.impact_json, {}), replayed: true }
+    evidence.collection = { diagnoses: prepared.impact.diagnoses }
+  }
   const id = newId()
+  try {
   await commit(env, [...await assuranceProposalGuards(env,assurance),...(collectionSeq === null ? [] : [cadenceSourceGuard(env,collectionSeq)]),...await alertStatements(env,'proposals',id,`/app/proposals/${id}`),stmt(env, "INSERT INTO nc_proposals (id, kind, title, payload_json, evidence_json, impact_json, basis_json, status, created_by, created_by_kind, created_at, prepared_by_id) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?)",
     id, kind, title, JSON.stringify(prepared.normalized), JSON.stringify(evidence), JSON.stringify(prepared.impact), JSON.stringify(prepared.basis), actorLabel(actor), actor.kind, now(), actor.id)],
   { actor: actorLabel(actor), action: 'proposal.create', subject: id, detail: { kind, title } })
+  } catch (error) {
+    if (kind === 'collection') {
+      const winner = await one(env, "SELECT id,impact_json FROM nc_proposals WHERE kind='collection' AND json_extract(basis_json,'$.collectionKey')=?", prepared.basis.collectionKey)
+      if (winner) return { id: winner.id, kind, impact: parseJson(winner.impact_json, {}), replayed: true }
+    }
+    throw error
+  }
   await deliverAlerts(env,'proposals',id,actorLabel(actor))
   return { id, kind, impact: prepared.impact }
 }
 
 export async function proposals(env: Bindings, actor: Actor) {
   requireCapability(actor, 'read')
-  return await all(env, 'SELECT id, kind, json_extract(payload_json, \'$.invoice_credit\') AS invoice_credit,title, status, created_by, created_by_kind, created_at, decided_by, decided_at FROM nc_proposals ORDER BY status = \'pending\' DESC, created_at DESC LIMIT 200')
+  return await all(env, 'SELECT id, kind, json_extract(payload_json, \'$.invoice_credit\') AS invoice_credit,json_extract(payload_json, \'$.invoice_refund\') AS invoice_refund,title, status, created_by, created_by_kind, created_at, decided_by, decided_at FROM nc_proposals ORDER BY status = \'pending\' DESC, created_at DESC LIMIT 200')
 }
 
 export async function proposalDetail(env: Bindings, actor: Actor, id: string): Promise<Row> {
@@ -118,7 +146,10 @@ export async function proposalDetail(env: Bindings, actor: Actor, id: string): P
   const payload = parseJson<Row>(row.payload_json, {})
   let stale = false
   if (row.status === 'pending') {
-    try { stale = canonical(await currentBasis(env, row.kind, payload)) !== canonical(parseJson(row.basis_json, {})) } catch { stale = true }
+    try { if (row.kind === 'collection') await collectionProposerGuards(env, row); stale = canonical(await currentBasis(env, row.kind, payload)) !== canonical(parseJson(row.basis_json, {})) } catch { stale = true }
+  }
+  if(row.status==='pending' && parseJson<Row>(row.evidence_json,{}).assurance?.moveBasis) {
+    try { await assuranceProposalGuards(env,parseJson<Row>(row.evidence_json,{}).assurance) } catch { stale=true }
   }
   const changesPrice = payload.setup === true || row.kind === 'price_change' || (row.kind === 'amendment' && payload.kind === 'price_override')
   const needsPreparation = changesPrice && row.created_by_kind === 'member' && !row.prepared_by_id
@@ -126,9 +157,12 @@ export async function proposalDetail(env: Bindings, actor: Actor, id: string): P
   const correctionMail=await one(env,'SELECT * FROM nc_credit_correction_mail WHERE proposal_id=?',id)
   const binding=await one(env,'SELECT b.request_id,r.prepared_by FROM nc_credit_correction_requests b JOIN nc_credit_requests r ON r.id=b.request_id WHERE b.proposal_id=?',id)
   const customerMessages=await all(env,'SELECT * FROM nc_draft_correction_mail WHERE proposal_id=? ORDER BY customer_id',id)
+  const refundRequest=payload.invoice_refund===true?await one(env,"SELECT id,prepared_by_id,status,refund_ref,credit_id FROM nc_invoice_refunds WHERE json_extract(quote_json,'$.correction.proposal.id')=? ORDER BY prepared_at DESC LIMIT 1",id):null
+  const needsRefundPreparation=payload.invoice_refund===true&&!refundRequest
+  if(payload.invoice_refund===true&&parseJson<Row>(row.impact_json,{}).refund?.needsSecondApprover&&refundRequest?.prepared_by_id===actor.id)needsOtherApprover=true
   const needsCreditPreparation=payload.invoice_credit===true && parseJson<Row>(row.impact_json,{}).credit?.needsSecondApprover && !binding
   needsOtherApprover=needsOtherApprover || payload.invoice_credit===true && parseJson<Row>(row.impact_json,{}).credit?.needsSecondApprover && binding?.prepared_by===actor.id
-  return { ...row, needsCreditPreparation,correctionMail,creditRequest:binding?.request_id??null,customerMessages,needsPreparation, needsOtherApprover, payload, evidence: parseJson(row.evidence_json, {}), impact: parseJson(row.impact_json, {}), basis: parseJson(row.basis_json, {}), result: parseJson(row.result_json, null), stale, payload_json: undefined, evidence_json: undefined, impact_json: undefined, basis_json: undefined, result_json: undefined }
+  return { ...row, needsRefundPreparation,refundRequest, needsCreditPreparation,correctionMail,creditRequest:binding?.request_id??null,customerMessages,needsPreparation, needsOtherApprover, payload, evidence: parseJson(row.evidence_json, {}), impact: parseJson(row.impact_json, {}), basis: parseJson(row.basis_json, {}), result: parseJson(row.result_json, null), stale, payload_json: undefined, evidence_json: undefined, impact_json: undefined, basis_json: undefined, result_json: undefined }
 }
 
 /** A person approves or rejects. Approval re-reads the basis and applies the typed change through the normal records. */
@@ -150,6 +184,13 @@ export async function decide(env: Bindings, actor: Actor, input: Input) {
     return { id: row.id, status: 'rejected' }
   }
   const payload = parseJson<Row>(row.payload_json, {})
+  if(payload.invoice_refund===true) {
+    await checkedRefundCorrection(env,row.id)
+    const refund=await one(env,"SELECT id,basis_hash FROM nc_invoice_refunds WHERE json_extract(quote_json,'$.correction.proposal.id')=? AND status='pending' ORDER BY prepared_at DESC LIMIT 1",row.id)
+    insist(refund,'invoice_refund_needs_preparation',409)
+    const result=await executeRefundCorrection(env,actor,Input.of({refund:refund.id,basis:refund.basis_hash,confirm:true}),{...row,decision_note:note})
+    return {...result,refund:result.id,id:row.id,status:'approved'}
+  }
   const simulationSeq = payload.simulation === true || payload.setup === true || payload.invoice_credit === true || row.kind === 'usage_correction' || row.kind === 'amendment' || row.kind === 'collection' ? (await one(env,'SELECT COALESCE(MAX(seq),0) AS seq FROM nc_audit'))!.seq : null
   if ((payload.setup === true || row.kind === 'price_change' || (row.kind === 'amendment' && payload.kind === 'price_override')) && row.created_by_kind === 'member') {
     insist(row.prepared_by_id, 'price_proposal_needs_preparation', 409)
@@ -231,10 +272,11 @@ export async function decide(env: Bindings, actor: Actor, input: Input) {
   const recipient = input.text('recipient', { max: 200, optional: true }) || payload.recipient
   insist(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient), 'invalid_recipient')
   const subject = input.text('subject', { max: 200, optional: true }) || payload.subject
-  const body = input.text('body', { max: 8000, optional: true }) || payload.body
+  const body = (input.text('body', { max: 8000, optional: true }) || payload.body).replace(/\r\n/g, '\n')
+  insist(recipient === payload.recipient && subject === payload.subject && body === payload.body, 'collection_approval_changed', 409)
   const reminder = await reminderBasis(env, payload.customer)
   const notice = newId()
-  await commit(env, [...close({ notice }),
+  await commit(env, [...basisGuards, ...await collectionProposerGuards(env, row), ...close({ notice }),
     stmt(env, "INSERT INTO nc_notices (id, customer_id, invoice_ids, balance_cents, recipient, subject, body, basis, status, proposal_id, created_by, created_at, approved_by, approved_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'approved', ?, ?, ?, ?, ?)",
       notice, payload.customer, JSON.stringify(reminder.overdue.map(r => r.id)), reminder.balanceCents, recipient, subject, body, basisKey(reminder), row.id, row.created_by, row.created_at, by, at),
     stmt(env, "INSERT INTO nc_tasks (id, customer_id, invoice_id, title, due_date, status, created_by, created_at) VALUES (?, ?, ?, ?, ?, 'open', ?, ?)", newId(), payload.customer, reminder.overdue[0]?.id ?? null, `Follow up on the reminder to ${recipient}`, addDays(reminder.day, 7), by, at)], audit)

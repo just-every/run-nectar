@@ -1,11 +1,11 @@
+import { cancelRenewal, renewalManagement } from './renewal-management'
 import { clockInstant } from './clock'
 import { NectarError } from './core'
-import { savedOffer,declineSaveStatements,acceptSave } from './retention-offers'
-import { parseJson,type Row } from './core'
+import { acceptSave } from './retention-offers'
 // The token authorizes only ending this term's next renewal. GET is read-only.
 import type { Bindings } from '../auth.server'
 import { business } from './business'
-import { commit, guard, newId, now, one, sha256Hex, stmt } from './core'
+import { one, sha256Hex } from './core'
 import { today } from './dates'
 import { h, page } from './ui/html'
 import { customerText } from './locale'
@@ -28,11 +28,8 @@ export async function renewalPublic(request:Request,env:Bindings):Promise<Respon
     const reason=String(reasonValue??'').trim()||'not supplied'
     if(form.get('confirm')==='save'){try{const saved=await acceptSave(env,term,String(form.get('offer')??''),reason);return response(L.t('renewal.continued.title'),h`<h1>${L.t('renewal.continued.title')}</h1><p>${saved.kind==='downgrade'?L.t('renewal.continued.downgrade',{from:L.day(saved.from)}):L.t(saved.kind==='pause'?'renewal.continued.pause':'renewal.continued.discount',{from:L.day(saved.from),to:L.day(saved.to)})} ${L.t('renewal.continued.tail')}</p>`)}catch(error){if(!(error instanceof NectarError))throw error;return response(L.t('renewal.changed.title'),h`<h1>${L.t('renewal.changed.heading')}</h1><p>${L.t('renewal.changed.body')}</p>`,error.status)}}
     if(form.get('confirm')!=='cancel')return response(L.t('renewal.confirm.title'),h`<h1>${L.t('renewal.confirm.heading')}</h1><p>${L.t('renewal.confirm.button')}</p>`,400)
-    const declined=await declineSaveStatements(env,term,reason)
-    await commit(env,[...declined,guard(env,'stale',"EXISTS(SELECT 1 FROM nc_renewal_terms WHERE id=? AND token_hash=? AND revision=? AND status='active' AND cancelled_at IS NULL)",term.id,hash,term.revision),stmt(env,'UPDATE nc_renewal_terms SET auto_renew=0,cancelled_at=?,token_hash=NULL,revision=? WHERE id=?',now(),newId(),term.id)],{actor:'customer:renewal-link',action:'subscription.renewal.cancel',subject:term.subscription_id,detail:{term:term.id,end:term.end_date,reason}})
+    await cancelRenewal(env,term,reason)
     return response(L.t('renewal.cancelled.title'),h`<h1>${L.t('renewal.cancelled.title')}</h1><p>${L.t('renewal.cancelled.body',{date:L.day(term.end_date)})}</p>`)
   }
-  const offer=await savedOffer(env,term),save=offer?parseJson<Row>(offer.terms_json,{}):null
-  const saveText=save?(save.kind==='discount'?L.t(save.billing?'renewal.save.discount_periods':'renewal.save.discount',{percent:L.percent(save.percent),months:save.months}):save.kind==='pause'?L.t('renewal.save.pause',{to:L.day(save.to)}):L.t('renewal.save.downgrade',{target:save.targetLabel})):''
-  return response(L.t('renewal.manage.title'),h`<h1>${L.t('renewal.manage.heading')}</h1><section class="card"><h2>${L.t('renewal.manage.section')}</h2><p>${L.t('renewal.manage.ends',{date:L.day(term.end_date)})} ${term.auto_renew?L.t('renewal.manage.renews'):L.t('renewal.manage.ending')}</p><p>${L.t('renewal.manage.uplift',{percent:L.percent(term.uplift_percent)})}</p><form method="post" action="${url.pathname}">${save?h`<input type="hidden" name="offer" value="${offer!.id}"><p>${L.t('renewal.save.optional',{offer:saveText})} ${save.kind==='downgrade'?L.t('renewal.save.from',{from:L.day(save.from)}):L.t('renewal.save.window',{from:L.day(save.from),to:L.day(save.to)})} ${L.t('renewal.save.usage')}</p>`:''}<label>${L.t('renewal.reason')}<input name="reason" maxlength="500"></label><button type="submit" name="confirm" value="cancel">${L.t('renewal.cancel')}</button>${save?h`<button class="secondary" type="submit" name="confirm" value="save">${L.t('renewal.accept_save')}</button>`:''}</form><p>${L.t('renewal.manage.no_steps')}</p></section>`,200)
+  return response(L.t('renewal.manage.title'),await renewalManagement(env,term,url.pathname,L),200)
 }
