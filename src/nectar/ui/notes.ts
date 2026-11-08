@@ -9,12 +9,12 @@ import { noteMembers } from '../notes'
 import { area, check, form, h, hidden } from './html'
 
 export async function notesSection(env: Bindings, actor: Actor, customer: string, kind: 'customer' | 'invoice', record: string, returnTo: string) {
-  const rows = (await customerNotes(env, customer)).filter(n => kind === 'customer' || (n.kind === kind && n.record_id === record))
+  const rows = (await customerNotes(env, customer, actor)).filter(n => kind === 'customer' || (n.kind === kind && n.record_id === record))
   const writable = actor.kind === 'member' && (can(actor, 'records') || can(actor, 'notes'))
   // Each editor offers only colleagues who can read that record (GOV-001).
   const mentionable = { customer: writable ? await noteMembers(env, actor, 'customer') : [], invoice: writable ? await noteMembers(env, actor, 'invoice') : [], payment: writable ? await noteMembers(env, actor, 'payment') : [] } as Record<string, { id: string; name: string; email: string }[]>
   const business = await requireBusiness(env)
-  const paymentRows = kind === 'customer' && writable && canRead(actor, 'payments') ? await payments(env, actor, customer) : []
+  const paymentRows = kind === 'customer' && writable && canRead(actor, 'invoices') && canRead(actor, 'payments') ? await payments(env, actor, customer) : []
   const editor = (targetKind: string, target: string) => form('note.add', returnTo, h`${hidden('kind',targetKind)}${hidden('record',target)}${area('Note','body','',true,3)}
     ${mentionable[targetKind].length ? h`<fieldset><legend>@-mention colleagues (email notification)</legend>${mentionable[targetKind].map(m => check(`${m.name} (${m.email})`,'mention',{ value:m.id }))}</fieldset>` : ''}`, 'Add note', { secondary:true })
   return h`<section class="card" aria-labelledby="notes"><h2 id="notes">Notes</h2><p class="hint">Notes are dated and kept unchanged. Add a follow-up to correct or update one.</p>

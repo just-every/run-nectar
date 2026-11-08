@@ -10,6 +10,7 @@ import { setupOwner, setupOwnerFence } from '../hosted-setup-basis'
 import type { Input } from '../input'
 import { today } from '../dates'
 import { requireBusiness } from '../business'
+import { prepaidFundingForInvoice } from '../prepaid-records'
 import { nextRetry, selectedRetryPolicy, DAY } from '../retry-policy'
 import { nativeCollectionSource, nativeSourceGuard } from './source'
 import { bindingGuard, nativeCollectionView, paymentIdentity, storedNativeCollection, type NativeCollectionBasis } from './state'
@@ -31,6 +32,7 @@ async function recoverySource(env: Bindings, actor: Actor, row: Row) {
   'native_recovery_invoice_changed', 409)
   insist(!await one(env, `SELECT 1 FROM nc_automatic_collections WHERE invoice_id=? AND status NOT IN ('revoked','invalidated')`, row.invoice_id)
     && !await one(env, 'SELECT 1 FROM nc_prepaid_topup_claims WHERE invoice_id=?', row.invoice_id), 'native_recovery_invoice_managed', 409)
+  await prepaidFundingForInvoice(env, row.invoice_id)
   const selection = await selectedRetryPolicy(env, source.row), at = clockInstant(env)
   const next = nextRetry(code, 'card', 1, row.reconciled_at, row.reconciled_at, selection.policy)
   insist(next !== null && at >= next && at <= row.reconciled_at + Math.min(selection.policy.windowDays,14)*DAY,
@@ -117,6 +119,7 @@ export async function confirmNativeReconfirmation(env: Bindings, actor: Actor, i
     await setupOwner(env,actor)
     const { currentNativeCollection } = await import('./state')
     await currentNativeCollection(env,actor,claimed)
+    await prepaidFundingForInvoice(env,row.invoice_id)
     const hold = await collectionHold(env,row.invoice_id)
     insist(!hold.hold && !hold.disputedCents && hold.basis === proposal.hold_basis,'native_recovery_held',409)
     const card = await savedCard(selected.stripe,basis.customerRef)

@@ -38,7 +38,7 @@ function text(value: unknown, field: string, max: number) {
 
 /** Each quote must be present in the saved line, its evidence or its saved calculation.
  * Source references are local and invoice scoped; arbitrary URLs cannot become evidence. */
-function citationsFor(payload: Row, invoice: Row, lines: Row[]): Citation[] {
+export function citationsFor(payload: Row, invoice: Row, lines: Row[]): Citation[] {
   insist(Array.isArray(payload.citations) && payload.citations.length > 0 && payload.citations.length <= 50, 'invoice_credit_citations_required')
   return payload.citations.map((entry: Row) => {
     insist(entry && typeof entry === 'object' && !Array.isArray(entry), 'invalid_invoice_credit_citation')

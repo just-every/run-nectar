@@ -44,7 +44,7 @@ export function portalMethodActionsEdge(edge) {
 }
 
 /** Run after assertHostedSetups, before its populated customer's erasure. */
-export async function assertPortalMethodActions(h,owner,{customer,other,binding,edge,finance,onState=async()=>{},executePrepare,executeAction}) {
+export async function assertPortalMethodActions(h,owner,{customer,other,binding,edge,finance,onState=async()=>{},executePrepare,executeAction,executeUncertainAction}) {
   const api=(path,body,status)=>h.api(path,owner,body,status)
   const issue=customer=>api('portal.session.issue',{customer,origin:h.origin,audience:'hosted'})
   let session=await issue(customer)
@@ -56,6 +56,7 @@ export async function assertPortalMethodActions(h,owner,{customer,other,binding,
   }
   const post=async(action,operation='confirm',status=200,{capability=session,headers={},extra={}}={})=>{
     if(status===200&&capability===session&&executeAction)return executeAction({h,owner,customer,session,action,operation})
+    if(status===502&&capability===session&&executeUncertainAction)return executeUncertainAction({h,owner,customer,session,action,operation,expectedStatus:status})
     const consentHash=status===401?'unavailable':(await read(capability)).find(row=>row.id===action)?.consentHash??'unavailable'
     const response=await h.raw(`/portal/payment-methods/action${operation==='reconcile'?'/reconcile':''}?session=${encodeURIComponent(capability.token)}`,
       {body:{action,confirm:true,consent_hash:consentHash,...extra},headers:{accept:'application/json',...headers}})

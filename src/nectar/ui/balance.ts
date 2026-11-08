@@ -9,7 +9,7 @@ import { formatDate } from '../dates'
 import { cents, field, form, h, hidden, select, table, tag, who } from './html'
 
 export async function balanceSection(env: Bindings, actor: Actor, customerId: string) {
-  if (!canRead(actor, 'payments')) return ''
+  if (!canRead(actor, 'invoices') || !canRead(actor, 'payments')) return ''
   const view = await balanceView(env, actor, customerId), policy = await creditPolicy(env)
   const approver = can(actor, 'approve') && actor.kind === 'member', back = `/app/customers/${customerId}#balance`
   const pending = view.requests.filter(r => r.status === 'pending')

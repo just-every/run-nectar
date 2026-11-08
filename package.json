@@ -17,7 +17,7 @@
     "test:runtime": "rer queue test:runtime -- sh -c \"node tests/runtime.mjs\"",
     "onboard": "node scripts/install.mjs",
     "build:app": "rer queue build:app -- sh -c \"vite build\"",
-    "verify:app": "rer queue verify:app -- sh -c \"pnpm run build && pnpm run typecheck && pnpm run test:runtime && pnpm run test:flows\"",
+    "verify:app": "node scripts/verify-app.mjs",
     "reset": "rer reset",
     "export": "rer export",
     "import": "rer import",
@@ -27,11 +27,13 @@
     "check": "rer check",
     "deps": "rer install",
     "rer": "rer",
-    "test:flows": "rer queue test:flows -- sh -c \"node tests/nectar/flows.mjs\"",
+    "test:flows": "rer queue test:flows -- sh -c \"node tests/nectar/flows.mjs && node tests/nectar/enterprise-linking-verify.mjs\"",
     "test:journey": "node tests/nectar/journey.mjs",
     "test:passkey": "node tests/nectar/mfa-passkey.mjs",
     "delivery:spec": "node scripts/build-deployment-spec.mjs",
-    "check:deployment-spec": "node scripts/build-deployment-spec.mjs --check"
+    "check:deployment-spec": "node scripts/build-deployment-spec.mjs --check",
+    "test:recovery": "node scripts/verify-checkout.mjs",
+    "test:audit-consolidated": "node tests/nectar/sanity.mjs && node tests/nectar/processor-journey.mjs"
   },
   "dependencies": {
     "@node-saml/node-saml": "5.1.0",
@@ -45,7 +47,7 @@
     "@cloudflare/vite-plugin": "1.54.5",
     "@cloudflare/workers-types": "5.20260908.1",
     "@playwright/test": "1.63.0",
-    "@runeditrun/rer": "0.2.79",
+    "@runeditrun/rer": "0.2.86",
     "@types/node": "22.20.5",
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.7",

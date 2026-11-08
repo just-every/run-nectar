@@ -26,6 +26,8 @@ Each door answers only within the caller's record families (`GOV-001`): a
 collections, sales, support or custom-role member gets 403 `forbidden` on
 records their role does not read.
 
+Customer detail, child accounts and customer exports project invoice facts only with `read.invoices`. Customer-context payment references and `GET /api/nectar/customers/{id}/balance` require both `read.invoices` and `read.payments`; `read.customers` continues to open the customer record. Financial notes, metadata search and retained anonymized invoice facts follow the same gates.
+
 ## Actions (POST, JSON body)
 
 | Action | Who | Body |
@@ -83,7 +85,7 @@ records their role does not read.
 | `payment.record`, `payment.allocate` | owner, finance | `customer`, `amount`, `received_on`, `method`, `reference`, `evidence` / `payment`, `invoice`, `amount` |
 | `reminder.prepare`, `reminder.approve`, `reminder.discard`, `task.create`, `task.complete` | owner, finance (approve and complete: a person) | `customer` / `notice`, `recipient`, `subject`, `body` / `task`, `outcome` |
 | `proposal.create` | owner, finance, `prepare` credential | `kind`, `title`, `payload`, `evidence` (below) |
-| `proposal.decide` | a person with approval | `proposal`, `decision` (`approved`, `rejected`), `note`; collections may set `recipient`, `subject`, `body` |
+| `proposal.decide` | a person with approval | `proposal`, `decision` (`approved`, `rejected`), `note`; supplied collection `recipient`, `subject`, `body` must equal the frozen proposal |
 | `import.preview`, `import.apply`, `import.job` | owner, finance (a person) | see [IMPORTING.md](IMPORTING.md) |
 | `subscription.adopt` | owner | `subscription`, `cutover_start`, `acknowledge_unreconciled` |
 | `access.give`, `access.end` | owner | `email`, `name`, `role` (`finance`, `accountant`, `collections`, `sales`, `support`, `developer` or `custom` with `custom_role`) / `member` |
@@ -105,7 +107,9 @@ proposal (`proposal_stale`).
 - **`amendment`** — contract terms from a signed agreement. `payload`: `subscription`, `kind` (`discount_percent`, `fixed_credit`, `price_override`), `value`, `effective_from`, optional `effective_to`, `price`, `note`. `evidence.clauses` (required): `[{quote, reference}]`; `evidence.ambiguities`: what the agreement leaves open. Never guess a renewal date, tax treatment or missing commitment: list it as an ambiguity. Nectar returns the effect on the period the terms start and the next.
 - **`price_change`** — a new price version for selected subscriptions. `payload`: `product`, `kind`, `unit_amount`, `meter`, `nickname`, `taxable`, `effective_date`, `subscriptions[]`. Nectar returns each subscription's before and after for the affected and next period. Approval writes the version and moves exactly those subscriptions from that date.
 - **`usage_correction`** — bill-run exceptions. `payload`: `void: [{event_id, reason}]`, `add: [events]`, optional `run` (a draft bill run). `evidence.sources` (required). Approval voids and adds, and re-prepares the run; its invoices still need their own approval.
-- **`collection`** — a reminder. `payload`: `customer`, optional `recipient`, `subject`, `body`. The person approving sets the final recipient and wording.
+- **`collection`** — an evidence-derived reminder for the current billing contact. `payload`: `customer`; optional `recipient`, `subject`, `body` must equal Nectar's generated values. The proposal freezes the contact, exact wording, overdue balances, holds, invoice-linked payment failures and binding-valid saved-method observations. Exact-source replay returns the same proposal. A person approves those exact values; approval creates one downloadable reminder and follow-up task, with no customer send, hosted recovery or debit authority. Revocation of the original preparer, erasure, changed facts or a dispute anywhere on the account prevents approval and download. The existing manual AR-001 door separately retains its permitted undisputed-amount behavior.
+
+`GET /api/nectar/customers/{id}/collection-diagnosis` requires full read and returns current invoice diagnoses, typed source citations and the current billing recipient. An expired-card cause requires a definitive invoice-linked native payment refusal and the same card in a binding-valid provider observation, both at most fifteen minutes old, with the observation no older than the refusal. The card must actually be expired and agree with the frozen attempted method. Missing, uncertain, conflicting or stale evidence yields `unknown`; expiry alone never establishes a cause. Other causes and automatic contact remain unfinished under AGENT-003.
 
 Example, with a `prepare` credential:
 
@@ -684,6 +688,8 @@ An over-billed `seat_ramp` case accepts one linked invoice-credit `proposal.crea
 
 ## Payment method choices and lifecycle
 
+Existing-customer setup evidence is available in the customer's `billingRecord.hostedSetups` through `GET /api/nectar/customers/{id}` under the existing customer, invoice and payment read capabilities. Successful captures retain `paymentMethod.setupIntentRef`. Verified ACH additionally retains the observed `mandateStatus`, `mandateAcceptanceType` and `mandateAcceptedAt` (Unix milliseconds, supplied by the provider rather than the native consent clock). These facts are historical observations, never debit authority. Authorization wording and its version remain explicitly unavailable as `mandateText: null` and `mandateTextVersion: null`; older records with no provider outcome or acceptance time return null for those facts without reconstructing them. The permitted setup facts and their original audit events survive export and import; operational preparation, return capabilities and customer sessions do not. An operator with full read and export authority can retrieve the exact native accepted wording, digest, acceptance time and separate default choice through `GET /api/nectar/audit`, in the original `checkout.setup.start` event after restoration.
+
 `portal.method.prepare` accepts the customer, binding, completed setup, operation (`default` or `remove`) and confirmation. Only the current owner with a fresh local factor can prepare it. The authenticated hosted customer reads their choices at `./portal/payment-methods/actions`, then explicitly confirms through `./portal/payment-methods/action` with the action reference, consent digest and confirmation. `./portal/payment-methods/action/reconcile` reads an uncertain original outcome without a second processor write. These customer paths require the scoped portal capability and exact origin.
 
 `card.lifecycle.consume` accepts the binding, genuine provider event reference and confirmation. The current owner imports the event from the bound processor account; the caller cannot supply an event payload. Customer reads include safe `cardLifecycle` facts under the payment and invoice read capabilities.
@@ -957,3 +963,171 @@ The immutable plan binds the captured source customer, subscription and invoice 
 Where an uploaded customer explicitly names a default payment method and exactly one current source-customer binding has a complete retained method inventory, investigation compares that captured reference with inventory membership. This proves membership only, with no mandate, current-default or collection claim. An absent or ambiguous inventory establishes no agreement.
 
 Authenticated test-shadow subscription events captured through `webhook.stripe.consume` compare their latest active-subscription items with the native quantities effective on the event date. Current source-account binding is required; older event arrivals cannot replace the latest event. Unsupported states or conflicting events at the same timestamp withdraw this comparison. Other event kinds, complete method-detail parity and live cutover remain outside these supported comparisons. Scanning never contacts a provider or dispatches an event.
+### Bank deposits and ordinary remittances
+
+`bank.deposit.upload` stages one received bank deposit from `file` (the ordinary remittance CSV format) and a stable `bank_source_id`. Keep the original CSV `receipt_id`: it is the shared payment identity. The bank ID is a separate source reference, never a new payment identity. This is a person-reviewed record of received funds, not provider settlement verification.
+
+Both upload doors return the canonical `id` and an opaque `source`. Pass those as `receipt` and `source` to `remittance.preview`, then confirm its exact `fingerprint` through `remittance.confirm` with `confirm: true`. Confirming the first source records and allocates the received funds. Confirming the other source of an already confirmed receipt records its provenance and audit against the existing payment without adding cash or allocations. This works in either order. Conflicting reuse of either stable identity is refused; matching amounts alone do not establish identity.
+
+The payment receipt API and its native receipt page list both confirmed recorded sources. Unconfirmed sources remain in the receivables review queue. Source confirmation requires the existing member receivables capability; credentials cannot confirm. Customer erasure hides source references and preserves opaque replay tombstones, so a repeated upload cannot recreate erased money.
+
+## Explicit billing notices
+
+The current interim notice commands are owner-only and require a fresh
+authenticator or passkey verification. No notice runs unattended.
+`GET /api/nectar/billing-notices` returns sender settings and delivery outcomes.
+
+- `billing.notice.configure`: `kind`, `sender` (`off`, `nectar` or `processor`), current `revision`, `language`, `confirm:true`; optional paired `subject` and `body` edit that language's template. Empty templates restore the translation defaults. Supported placeholders are `{invoice}`, `{merchant}`, `{amount}` and `{date}`; an edited body must retain every fact.
+- `billing.notice.prepare`: `kind`, `invoice`, `confirm:true`; optionally `event` selects a specific positive allocation for a receipt. Current send kinds are `payment_failed` and `payment_receipt`. The other four settings reserve their sender choices but their send doors remain unavailable.
+- `billing.notice.send`: the prepared `notice`, its `basis_hash` and a separate `confirm:true`.
+
+A notice is informational: it grants no payment authority. Sender settings,
+recipient, language, source or wording changes invalidate its frozen basis.
+A prepared event cannot be replaced, including after expiry, provider refusal
+or uncertainty. Acceptance records provider acceptance rather than mailbox
+delivery. A receipt records an allocation, without claiming settlement.
+
+## Native close preparation
+
+`GET /api/nectar/close-tieout?period=2026-09` returns the current native USD preparation packet: source fingerprint `basis`, separate debt, received-cash, goodwill and revenue totals, exact source citations, explicit coverage states and supported case evidence. Full billing read authority is required. Issued invoices and received payments are selected through the requested month; their current allocations, credits, returns and journal outcomes are used. Customer credit movements are current. Revenue uses active native schedules and existing closed-period adjustments. Erased operational sources are withdrawn. This is a preparation view, not a frozen historical close or a provider reconciliation certificate.
+
+`POST /api/nectar/close.scan` takes `period`, the exact returned `basis` and an active owner or finance member ID in `owner`. It requires full billing read and proposal capabilities, rechecks the source basis and records cases atomically with its audit. Repeated scans reuse the same source case. Unapplied received cash is a review item; a pending existing bad-debt journal is a synchronization failure. These meanings do not establish missing processor fees, unsynced credit notes or failed provider tax commitments.
+
+Use existing ordinary authorized financial doors for any fix. `assurance.approve` only confirms agreement on the exact current case basis; `assurance.recheck` resolves it after that confirmation and a fresh successful comparison. Neither scanning nor confirming grants allocation, journal-posting or period-close authority. The accountant page is `/app/close-tieout`, linked from Revenue schedules. Complete connector, entity, currency, payout, fee and provider tax qualification remains outside this native packet.
+
+### Native sandbox clocks and test billing
+
+Under GOV-001, current owner and developer members administer Test mode under
+Settings at `/app/settings/test-mode`. Other members and application credentials
+cannot read or change this sandbox. Administration checks current membership
+and the existing fresh-factor requirements. It grants no live financial action.
+
+- `GET /api/nectar/sandbox` returns the current source fingerprint, eligible
+  active USD simple fixed and seat prices, excluded prices, immutable saved
+  catalog copies and separate sandbox customers. Copy readiness requires an
+  owner-reviewed declared tax policy and an eligible price.
+- `POST /api/nectar/sandbox.catalog.copy` accepts `source_fingerprint` and
+  `confirm: true`. It atomically copies the reviewed timezone, declared tax and
+  billing intervals and the default retry count and window with prices, using separate sandbox price identifiers.
+  A changed source is refused. Repeating an unchanged copy returns its identity.
+  Later live price retirement, new versions and tax changes do not alter it.
+- `POST /api/nectar/sandbox.customer.create` accepts `catalog`, a synthetic
+  `label`, an ISO `clock` with an explicit offset, optional `trial_end`, and
+  parallel string arrays `price` and `quantity`. Only prices from that saved
+  sandbox catalog are accepted. No live customer or saved method is copied.
+- `GET /api/nectar/sandbox/customers/{id}` returns its independent clock,
+  revision, immutable clock history, copied basis, saved billing previews and isolated test-billing invoices, attempts and timeline.
+- `POST /api/nectar/sandbox.clock.advance` accepts `customer`, its current
+  integer `revision`, an ISO `clock` and `confirm: true`. Time moves forward
+  only, within ten years of the sandbox start and 120 cumulative due windows.
+  Concurrent or stale changes are refused atomically with their previews and
+  audit. Each billing window is saved once. The same calendar and rating engine
+  handles annual terms, trials, calendar-day proration and exact declared tax.
+
+- `POST /api/nectar/sandbox.processor.bind` accepts `customer`,
+  `stripe_customer_ref`, optional `test_method_ref` and `confirm: true`. The installation-held Stripe
+  binding must return a test-mode balance. The separate provider customer must
+  have exact `nectar_sandbox_customer` and `nectar_sandbox_catalog` metadata and
+  a saved test card. An explicitly supplied unattached test card must itself carry the same exact sandbox metadata; it is never inferred from another customer. Current live Nectar associations and foreign sandbox
+  customers are refused in both directions. No key is accepted or returned.
+- With that explicit test-only consent, a clock advance issues separate sandbox
+  invoices from its immutable engine calculations and confirms test-card
+  attempts. Every invoice retains its original PaymentIntent through retries.
+  The copied default retry count and window feed the existing decline scheduler.
+  Claims and audit precede provider writes; unknown outcomes stop further work.
+- `POST /api/nectar/sandbox.billing.reconcile` accepts `customer` and
+  `confirm: true`. It reads retained unknown test outcomes without creating or
+  confirming an intent. It never treats a provider-list miss as permission to
+  write again. Each advance processes at most 64 due attempts; remaining work
+  stays visible for a later explicit advance.
+
+Forms use the same action doors. Unbound customers retain preview-only clocks.
+Bound customers have isolated test invoices, attempts, retry due times and
+invoice-state history. Sandbox inbox entries are notice and receipt previews,
+never external deliveries. No sandbox operation issues a live invoice, allocates
+live cash, sends external mail or changes production time. Provider timestamps
+remain provider facts; retry due times use the native customer's simulated time.
+Archives retain test history and test-object identity custody but exclude executable processor consent, so a
+restore cannot resume test debits. A restored customer with issued test history
+cannot be rebound; create a new sandbox customer for another execution.
+
+These native copies cover the supported pricing slice only. Full configuration
+mirroring, other pricing instruments, plan and segment policies, complete
+renewal and dunning parity and external notices remain DEV-004 work. A local
+installation journey clock is separate from this persisted product sandbox.
+Native erasure withdraws incidental personal text in copied labels, saved
+previews and sandbox invoice calculations while retaining calendar and cents.
+
+## Scheduled execution observations
+
+An authenticated owner member can read `GET /api/nectar/job-runs`.
+Finance, other roles and application credentials cannot read this door.
+It returns `runs`, the latest 50 dispatcher invocations, newest first. Each
+has an immutable invocation identity, cron expression, scheduled instant,
+actual start and finish instants, status, sanitized error category and its
+ordered jobs. Timestamps are Unix milliseconds. Repeated or concurrent
+invocations of the same scheduled instant retain separate identities.
+
+A job is `not_started` until the dispatcher reaches it, `running` during its
+call, then `completed` or `failed`. A thrown failure stops the same downstream
+work as before; those job rows retain null start and finish times. A returned
+`status: failed` is recorded without changing the job's existing continuation
+behavior. Completion means that invocation returned normally: handled
+per-item payment, delivery or synchronization failures remain in their
+existing source records and are not a claim of settlement or delivery.
+
+The dispatcher renews a heartbeat each minute and between jobs. On a later
+normal tick, an invocation with no heartbeat for thirty minutes becomes
+`interrupted`; its running job becomes interrupted and downstream jobs stay
+unstarted. This reports an expired execution lease, including a stopped Worker,
+rather than claiming to distinguish every cause of a lost heartbeat. Neither
+this classification nor reading history retries any work. Ordinary future
+ticks retain each product job's existing eligibility, authority and once-only
+claims; interrupted invoice automation is not automatically recovered.
+
+Error categories are only `storage_failure`, `job_failure`,
+`job_reported_failure` and `execution_lease_expired`. Observations store no
+customer identifiers, request or provider payloads, exception messages,
+credentials or new executable authority. They are separate from the business
+audit trail so a refused business audit can still be reported. Observation
+storage failure stops dispatch rather than silently executing unobserved work;
+if a final observation cannot be stored, the running record expires on a later
+tick. There is no operational activation, resend or retry action.
+
+Capacity remains unmeasured in `seed.json`. This history does not qualify the
+required ten-thousand-subscription billing day or its timing and restart proof.
+## Test bank-transfer instructions
+
+An owner with a current local authenticator or passkey factor calls
+`transfer.instructions.prepare` with `customer` and `account_ref` for an existing
+owner-confirmed Stripe binding. The provider customer must be in test mode and
+its cash-balance reconciliation must already be manual. Review the returned
+exact basis, then pass its `confirm` object to `transfer.instructions.confirm`
+only after explicit owner confirmation. This requests US bank-transfer funding
+instructions for USD; it changes no reconciliation policy and authorizes no
+collection, application or return. Unknown responses stay unavailable and can
+never be resent. The owner can read retained status at
+`/api/nectar/customers/{customer}/transfer-instructions`.
+
+Only validated virtual remit-to fields are retained. Newly issued native USD
+invoices freeze the instructions for their own processor route. Previously
+issued invoices keep their original evidence. The own-customer invoice page,
+PDF and portal show the frozen test instructions in the customer's language.
+Preparations are installation authority and are excluded from archives; retained
+claims prevent repeat requests after restoration. Erasure withdraws remit-to
+fields and customer access. No live processor or invoice-email qualification is
+claimed by this foundation.
+
+### Link an existing member to enterprise sign-in
+
+An active member in a preset role opens **Sign-in security**, then **Prove provider identity**. The browser must retain that exact Nectar session and the one-use SAML browser binding. A valid signed provider assertion creates a short-lived request; an email match alone grants nothing. Its mapped role must equal the member's existing role. Owner and custom-role provisioning remain unsupported.
+
+The owner reviews **Enterprise sign-in** under Access and confirms a second factor, even when the installation-wide MFA policy is off. `GET /api/nectar/sso-links` lists current owner-visible requests. `POST /api/nectar/sso.link.approve` takes `link` and the exact reviewed `basis` fingerprint. Approval rechecks the connection revision, immutable provider subject, original member session, member and operator state, role and MFA evidence. Binding, audit and termination of prior member sessions and unused sign-in tokens commit together. Member and operator identifiers and historical attribution remain unchanged.
+
+A pending request has an inactive SCIM reservation with its request identifier. SCIM can read or deactivate it; activation cannot grant authority. Deactivation invalidates pending proofs and blocks that subject until fresh owner connection authorization. Removing a linked user ends existing sessions and in-flight sign-ins immediately; reactivation never revives an old session. Configuration changes rotate provisioning credentials and invalidate pending requests. Exported archives retain billing and audit history but contain no connection, binding, enterprise session or pending-link authority. Live provider qualification and OIDC coverage remain separate obligations in GOV-003.
+
+### Declared tax sources
+
+`GET /api/nectar/reports/tax-sources?period=2026-Q3` reads ordinary issued USD invoice sources and credit notes issued in the selected business-local quarter. An optional `customer` selects one customer. The default is the current business-local quarter. Each entry links to `GET /api/nectar/reports/tax-sources/<source-id>` with the same selection; a source outside that selection is refused. Both require current report-read authority. The matching signed-in page is `/app/reports/tax-sources`; `/app/exports/reports/tax-sources.csv` additionally requires export authority.
+
+Groups retain each invoice's exact frozen declared jurisdiction, including a separate missing-jurisdiction group. Original taxable, exempt, non-taxable and unknown bases remain separate from later credit subtotals. Known tax is original invoice tax plus only explicitly saved source-attributed credit tax adjustments. Ordinary credit notes retain their whole amount as unattributed and do not invent a tax reversal or a base allocation. The CSV preserves the same amounts, evidence states and source identities. Policy and exemption edits do not rewrite issued facts; erased calculation facts remain unknown. Unsupported currencies and prepaid funding invoices are listed as excluded. Imported history, provider transaction reconciliation, complete credit attribution and provider filing formats remain owed. Reads issue no invoice, move no money and confer no filing or outbound authority.

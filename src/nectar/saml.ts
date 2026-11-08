@@ -3,10 +3,11 @@ import { operatorAuth, type Bindings } from '../auth.server'
 import { memberCapabilities, type Actor, type Role } from './actor'
 import { commit, guard, insist, now, one, sha256Hex, stmt } from './core'
 import { mfaPolicy } from './mfa'
+import { checkLinkIdentity, linkingBasis, requestLink, type LinkIdentity } from './sso-linking'
 import { mappedRole, ssoCallback, ssoConfig, ssoEntity, ssoToken, type SsoConfig } from './sso-config'
 
-type Transaction = { state_hash: string; binding_hash: string; config_revision: number; request_id: string; request_time: string; expires_at: number; consumed: number; principal: string | null }
-type Principal = { subject: string; user: string; revision: number; role: Role; authenticatedAt: number; mfa: boolean }
+type Transaction = { state_hash: string; binding_hash: string; config_revision: number; request_id: string; request_time: string; expires_at: number; consumed: number; principal: string | null; link_basis: string | null }
+type Principal = LinkIdentity & { subject: string; user: string; revision: number; role: Role; authenticatedAt: number; mfa: boolean }
 const cookieName = (env: Bindings) => 'nectar_saml_' + (new URL(env.AUTH_ORIGIN).port || '443')
 const cookie = (env: Bindings, value: string) => `${cookieName(env)}=${value}; Path=/sso; HttpOnly; SameSite=Lax; Max-Age=300${env.AUTH_ORIGIN.startsWith('https:') ? '; Secure' : ''}`
 const redirect = (path: string, headers: Record<string, string> = {}) => new Response(null, { status: 303, headers: { location: path, 'cache-control': 'no-store', 'referrer-policy': 'no-referrer', ...headers } })
@@ -27,7 +28,7 @@ function verifier(env: Bindings, config: SsoConfig, transaction: Transaction) {
 }
 
 async function principal(env: Bindings, config: SsoConfig, profile: any, transaction: Transaction): Promise<Principal> {
-  insist(profile && profile.issuer === config.issuer && typeof profile.nameID === 'string', 'invalid_identity', 403)
+  insist(profile && profile.issuer === config.issuer && typeof profile.nameID === 'string' && profile.nameID.length > 0 && profile.nameID.length <= 255, 'invalid_identity', 403)
   const assertion = profile.getAssertion()?.Assertion
   const confirmations = assertion?.Subject?.[0]?.SubjectConfirmation
   insist(confirmations?.length === 1 && confirmations[0].$.Method === 'urn:oasis:names:tc:SAML:2.0:cm:bearer', 'invalid_subject', 403)
@@ -42,12 +43,20 @@ async function principal(env: Bindings, config: SsoConfig, profile: any, transac
   // password class alone never proves a second factor.
   const methods = [profile.amr ?? []].flat().flatMap(value => String(value).split(/[ ,]+/))
   const mfa = ['https://refeds.org/profile/mfa', 'urn:oasis:names:tc:SAML:2.0:ac:classes:TimeSyncToken', 'urn:oasis:names:tc:SAML:2.0:ac:classes:SmartcardPKI'].includes(context) || methods.includes('mfa')
+  const identity: LinkIdentity = { subject: profile.nameID, email: profile.email, sourceRole: profile.role, role: mappedRole(config, profile.role), authenticatedAt, mfa }
+  if (transaction.link_basis) {
+    const basis = JSON.parse(transaction.link_basis)
+    await checkLinkIdentity(env, basis, identity)
+    const policy = await mfaPolicy(env)
+    insist(mfa || !(policy.scope === 'all' || policy.scope === 'roles' && policy.roles.includes(basis.role)), 'idp_mfa_required', 403)
+    return { ...identity, user: basis.member, revision: 0 }
+  }
   const user = await one(env, 'SELECT s.*,m.role,m.status FROM nc_scim_users s JOIN nc_members m ON m.id=s.member_id WHERE s.external_id=?', profile.nameID)
   insist(user && user.active && user.status === 'active', 'not_provisioned', 403)
   insist(profile.email === user.email && mappedRole(config, profile.role) === user.role && profile.role === user.source_role, 'identity_mapping_mismatch', 403)
   const policy = await mfaPolicy(env)
   insist(mfa || !(policy.scope === 'all' || (policy.scope === 'roles' && policy.roles.includes(user.role))), 'idp_mfa_required', 403)
-  return { subject: profile.nameID, user: user.id, revision: user.revision, role: user.role, authenticatedAt, mfa }
+  return { ...identity, user: user.id, revision: user.revision }
 }
 
 export async function samlResponse(request: Request, env: Bindings): Promise<Response | null> {
@@ -58,10 +67,11 @@ export async function samlResponse(request: Request, env: Bindings): Promise<Res
     const config = await ssoConfig(env)
     insist(config, 'sso_not_configured', 404)
     if (request.method === 'GET' && url.pathname === '/sso/start') {
+      const link = url.searchParams.get('link') === '1' ? await linkingBasis(env, request) : null
       const state = ssoToken(), binding = ssoToken(), hash = await sha256Hex(state)
       const limits = await one<{ n: number }>(env, 'SELECT COUNT(*) AS n FROM nc_saml_transactions WHERE expires_at>?', now())
       insist(limits!.n < 100, 'sign_in_busy', 429)
-      await env.DB.batch([stmt(env, 'DELETE FROM nc_saml_transactions WHERE expires_at<=?', now()), stmt(env, 'INSERT INTO nc_saml_transactions(state_hash,binding_hash,config_revision,expires_at) VALUES(?,?,?,?)', hash, await sha256Hex(binding), config.revision, now() + 300000)])
+      await env.DB.batch([stmt(env, 'DELETE FROM nc_saml_transactions WHERE expires_at<=?', now()), stmt(env, 'INSERT INTO nc_saml_transactions(state_hash,binding_hash,config_revision,expires_at,link_basis) VALUES(?,?,?,?,?)', hash, await sha256Hex(binding), config.revision, now() + 300000, link ? JSON.stringify(link) : null)])
       const transaction = (await one<Transaction>(env, 'SELECT * FROM nc_saml_transactions WHERE state_hash=?', hash))!
       const target = await verifier(env, config, transaction).getAuthorizeUrlAsync(state, undefined, {})
       return redirect(target, { 'set-cookie': cookie(env, binding) })
@@ -96,6 +106,10 @@ export async function samlResponse(request: Request, env: Bindings): Promise<Res
       const transaction = await env.DB.prepare('DELETE FROM nc_saml_transactions WHERE state_hash=? AND binding_hash=? AND consumed=1 AND principal IS NOT NULL AND expires_at>? AND config_revision=? RETURNING *').bind(await sha256Hex(state), await sha256Hex(bindings[0].slice(cookieName(env).length + 1)), now(), config.revision).first<Transaction>()
       insist(transaction, 'invalid_saml_binding', 403)
       const identity: Principal = JSON.parse(transaction.principal!)
+      if (transaction.link_basis) {
+        await requestLink(env, request, JSON.parse(transaction.link_basis), identity)
+        return redirect('/app/security?notice=Provider+identity+proved.+Ask+the+owner+to+approve+within+five+minutes.', { 'set-cookie': cookie(env, '') })
+      }
       const user = await one(env, 'SELECT s.*,m.name,m.role,m.status FROM nc_scim_users s JOIN nc_members m ON m.id=s.member_id WHERE s.id=? AND s.revision=? AND s.active=1 AND m.status=\'active\'', identity.user, identity.revision)
       insist(user && user.role === identity.role, 'not_provisioned', 403)
       const auth = operatorAuth(env)

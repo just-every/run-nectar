@@ -12,6 +12,7 @@ import { RAMP_KIND, rampEvidence } from './assurance-ramps'
 import { TRUEUP_KIND, trueUpEvidence } from './assurance-commitments'
 import { CREDIT_KIND, creditEvidence } from './assurance-credits'
 import { ACCESS_KIND, accessEvidence } from './assurance-access'
+import { CLOSE_KINDS, closeTieout } from './close-tieout'
 import { PAID_KIND, paidAccessEvidence } from './assurance-paid-access'
 
 // Each detector compares signed terms with recorded facts and returns one evidence record per subject.
@@ -45,6 +46,12 @@ function evidence(row: Row) {
 
 async function current(env: Bindings, actor: Actor, row: Row): Promise<Row> {
   insist(!await one(env,'SELECT 1 FROM nc_customers WHERE id=? AND erased_at IS NOT NULL',row.customer_id),'assurance_case_not_found',404)
+  if (CLOSE_KINDS.includes(row.kind)) {
+    const period = parseJson<Row>(row.evidence_json, {}).period
+    const proof = (await closeTieout(env, actor, period)).proofs.find(proof => proof.source === row.source_id)
+    insist(proof, 'assurance_source_unavailable', 409)
+    return proof
+  }
   const detector=detectors()[row.kind]
   if(detector) {
     const compared=(await detector(env)).find(c=>c.source===row.source_id)
@@ -87,8 +94,6 @@ export async function scanAssurance(env: Bindings, actor: Actor, input: Input) {
 export async function scanCases(env: Bindings, actor: Actor, periods: string[], owner: string, subject: string, selectedProofs?: () => Promise<Row[]>) {
   await activeOwner(env,owner)
   const seq=await sequence(env), controls=(await Promise.all(periods.map(period=>controlTotals(env,actor,period)))).flat()
-  const statements:D1PreparedStatement[]=[unchanged(env,seq),ownerGuard(env,owner)]
-  const opened:string[]=[],rechecked:string[]=[]
   const proofs:Row[]=[]
   for(const row of controls) {
     // An erased customer's source controls are retained financial facts only.
@@ -97,6 +102,15 @@ export async function scanCases(env: Bindings, actor: Actor, periods: string[], 
   }
   if(selectedProofs) proofs.push(...await selectedProofs())
   else for(const detect of Object.values(detectors()))proofs.push(...await detect(env))
+  return await saveAssuranceProofs(env,actor,proofs,owner,subject,seq,selectedProofs?[MOVE_KIND]:['usage_source_control',...Object.keys(detectors())])
+}
+
+/** Shared case custody for explicit comparisons. Callers own no financial action. */
+export async function saveAssuranceProofs(env: Bindings, actor: Actor, proofs: Row[], owner: string, subject: string, seq: number, coverage: string[], action = 'assurance.scan') {
+  investigator(actor)
+  await activeOwner(env,owner)
+  const statements:D1PreparedStatement[]=[unchanged(env,seq),ownerGuard(env,owner)]
+  const opened:string[]=[],rechecked:string[]=[]
   for(const proof of proofs) {
     const existing=await one(env,'SELECT * FROM nc_assurance_cases WHERE source_id=?',proof.source)
     if(existing) {
@@ -113,8 +127,7 @@ export async function scanCases(env: Bindings, actor: Actor, periods: string[], 
     statements.push(stmt(env,"INSERT INTO nc_assurance_cases(id,customer_id,kind,source_id,owner_id,status,basis_hash,evidence_json,created_at,checked_at) VALUES(?,?,?,?,?,'open',?,?,?,?)",id,proof.customer,proof.kind,proof.source,owner,proof.basis,canonical(proof),at,at),
       stmt(env,"INSERT INTO nc_assurance_observations(id,customer_id,case_id,basis_hash,evidence_json,status,created_by,created_at) VALUES(?,?,?,?,?,'open',?,?)",newId(),proof.customer,id,proof.basis,canonical(proof),actorLabel(actor),at))
   }
-  const coverage=selectedProofs?[MOVE_KIND]:['usage_source_control',...Object.keys(detectors())]
-  await commit(env,statements,{actor:actorLabel(actor),action:'assurance.scan',subject,detail:{coverage,compared:proofs.length,opened,rechecked}})
+  await commit(env,statements,{actor:actorLabel(actor),action,subject,detail:{coverage,compared:proofs.length,opened,rechecked}})
   return {coverage,compared:proofs.length,opened,rechecked}
 }
 
@@ -170,6 +183,11 @@ export async function assuranceProposal(env: Bindings, actor: Actor, input: Inpu
   const row=await assuranceCase(env,actor,input.text('assurance_case',{max:100}))
   insist(row.status==='open','assurance_case_resolved',409)
   await activeOwner(env,row.owner_id)
+  if(payload.invoice_refund===true) {
+    insist(kind==='amendment' && row.kind==='usage_source_control','assurance_fix_kind_unsupported',409)
+    const invoice=await one(env,'SELECT customer_id FROM nc_invoices WHERE id=?',payload.invoice)
+    insist(invoice?.customer_id===row.customer_id,'assurance_fix_customer_mismatch',409)
+  }
   if(row.kind===MOVE_KIND) {
     insist(kind==='amendment' && payload.setup!==true && payload.invoice_credit!==true,'assurance_fix_kind_unsupported',409)
     const proof=await current(env,actor,row)

@@ -1,6 +1,10 @@
 import { prepareMoveRollback,confirmMoveRollback } from './movein/rollback'
+import { scanCloseTieout } from './close-tieout'
+import { prepareTransferInstructions, confirmTransferInstructions } from './transfer-instructions'
+import { approveLink } from './sso-linking'
 import { preparePortalChangePolicy } from './portal-change-policy'
-import { uploadRemittances, previewRemittance, confirmRemittance, previewRemittanceAllocation, allocateRemittance } from './remittances'
+import { uploadBankDeposit, uploadRemittances, previewRemittance, confirmRemittance, previewRemittanceAllocation, allocateRemittance } from './remittances'
+import { bindSandboxProcessor, reconcileSandboxBilling } from './test-billing'
 import { consumeProcessorEvent } from './processor-events'
 import { allocateProcessorCash } from './processor-cash-queue'
 import { prepareImportedCashTakeover, confirmImportedCashTakeover } from './processor-cash-imported'
@@ -8,6 +12,7 @@ import { previewProcessorCashReturn, prepareProcessorCashReturn, executeProcesso
 import { prepareInvoiceRefund, executeInvoiceRefund, reconcileInvoiceRefund } from './invoice-refunds'
 import { previewInvoiceRefund } from './invoice-refund-preview'
 import { prepareInvoiceVoid, voidInvoice } from './invoice-voids'
+import { configureBillingNotice, prepareBillingNotice, sendBillingNotice } from './billing-notices'
 import { createDunningPolicy, enrollDunning } from './dunning-policy'
 import { prepareDunningMail, sendDunningMail } from './dunning-mail'
 import { endDunning, revokeDunning } from './dunning'
@@ -117,11 +122,21 @@ import { prepareMetric,previewMetric,activateMetric } from './meter-definitions'
 
 type Handler = (env: Bindings, actor: Actor, input: Input, request: Request) => Promise<unknown>
 
+import { copySandboxCatalog } from './test-mode'
+import { createSandboxCustomer, advanceSandboxClock } from './test-clock'
+
 export const actions: Record<string, Handler> = {
+  'sandbox.catalog.copy': copySandboxCatalog,
+  'sandbox.customer.create': createSandboxCustomer,
+  'sandbox.clock.advance': advanceSandboxClock,
+  'sandbox.processor.bind': bindSandboxProcessor,
+  'sandbox.billing.reconcile': reconcileSandboxBilling,
   'sso.configure': configureSso,
   'move.rollback.prepare': prepareMoveRollback,
   'move.rollback.confirm': confirmMoveRollback,
   'move.investigate': investigateMove,
+  'close.scan': scanCloseTieout,
+  'sso.link.approve': approveLink,
   'assurance.scan': scanAssurance,
   'assurance.assign': assignAssurance,
   'assurance.approve': approveAssurance,
@@ -143,11 +158,16 @@ export const actions: Record<string, Handler> = {
   'webhook.disable': disableWebhook,
   'webhook.replay': replayWebhook,
   'webhook.dispatch': dispatchWebhookDoor,
+  'transfer.instructions.prepare': prepareTransferInstructions,
+  'transfer.instructions.confirm': confirmTransferInstructions,
   'collection.customer.bind': bindNativeCollectionCustomer,
   'payment_link.approve': approvePaymentLink,
   'payment_link.activate': activatePaymentLink,
   'payment_link.create': createPaymentLink,
   'payment_link.deactivate': deactivatePaymentLink,
+  'billing.notice.configure': configureBillingNotice,
+  'billing.notice.prepare': prepareBillingNotice,
+  'billing.notice.send': sendBillingNotice,
   'dunning.policy.create': createDunningPolicy,
   'dunning.enroll': enrollDunning,
   'dunning.mail.prepare': prepareDunningMail,
@@ -339,6 +359,7 @@ export const actions: Record<string, Handler> = {
   'promotion.create': createPromotionCode,
   'trial.extend': extendTrial,
   'trial.resolve': resolveTrial,
+  'bank.deposit.upload': uploadBankDeposit,
   'remittance.upload': uploadRemittances,
   'remittance.preview': previewRemittance,
   'remittance.confirm': confirmRemittance,

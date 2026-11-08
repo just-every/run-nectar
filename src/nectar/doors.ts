@@ -4,6 +4,12 @@
 // Patterns are relative to /api/nectar/ (API) or absolute (pages).
 export const API_DOORS: [string, string][] = [
   ['^move-rollbacks/([\\w-]+)$','moveRollbacks'],
+  ['^close-tieout$', 'closeTieout'],
+  ['^sandbox$', 'sandbox'],
+  ['^sandbox/customers/([\\w-]+)$', 'sandboxCustomer'],
+  ['^job-runs$', 'jobRuns'],
+  ['^customers/([\\w-]+)/transfer-instructions$', 'transferInstructions'],
+  ['^sso-links$', 'ssoLinks'],
   ['^portal-changes$', 'portalChanges'],
   ['^remittances$','remittances'],
   ['^processor-events$','processorEvents'],
@@ -18,6 +24,7 @@ export const API_DOORS: [string, string][] = [
   ['^webhooks/([\\w-]+)$','webhookDelivery'],
   ['^period-closes(?:/(\\d{4}-\\d{2}))?$','periodCloses'],
   ['^customers/([\\w-]+)/balance$','customerBalance'],
+  ['^customers/([\\w-]+)/collection-diagnosis$','collectionDiagnosis'],
   ['^promotions$','promotions'],
   ['^write-offs$','writeOffs'],
   ['^ledger-postings$','ledgerPostings'],
@@ -28,6 +35,7 @@ export const API_DOORS: [string, string][] = [
   ['^prepaid/topup-claims$','prepaidTopupClaims'],
   ['^payment-links$','paymentLinks'],
   ['^retry-comparison$', 'retryComparison'],
+  ['^billing-notices$','billingNotices'],
   ['^dunning$', 'dunning'],
   ['^recovery$', 'retryRecovery'],
   ['^automatic-collections$','automaticCollections'],
@@ -58,9 +66,12 @@ export const API_DOORS: [string, string][] = [
 ]
 
 /** API doors whose rows page by cursor (DEV-002, list-cursor.ts); `invoices` keeps its own issuance-journal snapshot. */
-export const LIST_DOORS = ['remittances','paymentLinks','automaticCollections','assuranceCases','assuranceRuns','currencyRates','trialCollections','prepaidRefunds','prepaidTopupAuthorizations','prepaidTopupClaims','nativeCollections', 'usageCorrections', 'erasures', 'noteMembers', 'customers', 'batches', 'runs', 'payments', 'notices', 'tasks', 'policies', 'proposals', 'imports', 'shadow', 'members', 'roles', 'credentials', 'audit', 'metadataObjects', 'notes']
+export const LIST_DOORS = ['ssoLinks','remittances','paymentLinks','automaticCollections','assuranceCases','assuranceRuns','currencyRates','trialCollections','prepaidRefunds','prepaidTopupAuthorizations','prepaidTopupClaims','nativeCollections', 'usageCorrections', 'erasures', 'noteMembers', 'customers', 'batches', 'runs', 'payments', 'notices', 'tasks', 'policies', 'proposals', 'imports', 'shadow', 'members', 'roles', 'credentials', 'audit', 'metadataObjects', 'notes']
 
 export const PAGE_DOORS: [string, string][] = [
+  ['^/app/close-tieout$', 'closeTieout'],
+  ['^/app/settings/test-mode$', 'sandbox'],
+  ['^/app/settings/test-mode/([\\w-]+)$', 'sandboxCustomer'],
   ['^/app/import/investigations$', 'moveInvestigations'],
   ['^/app/settings/portal-changes$', 'portalChanges'],
   ['^/app/processor-events$','processorEvents'],

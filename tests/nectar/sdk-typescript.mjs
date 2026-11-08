@@ -15,6 +15,8 @@ export async function sdkTypescriptFlow(h, owner, { onState = async () => {} } =
   const { NectarClient, NectarApiError } = await import('../../examples/typescript-sdk/dist/sdks/typescript/src/index.js')
   const { meterThenGate, openExistingCheckout, issueHostedPortal } = await import('../../examples/typescript-sdk/dist/examples/typescript-sdk/src/index.js')
   const api = (path, body, status) => h.api(path, owner, body, status)
+  const apiDocument=await api('openapi'),latest=apiDocument.info.version
+  const oldest=apiDocument.paths['/api/nectar/customers'].get.parameters.find(p=>p.name==='Nectar-Version').schema.enum.find(v=>v!==latest)
   const headers = { cookie: owner, origin: h.origin, 'CF-Connecting-IP': '127.0.0.1' }
   const client = new NectarClient({ baseUrl: h.origin, headers })
   const refused = (operation, status, error) => assert.rejects(operation, value => value instanceof NectarApiError && value.status === status && (!error || value.body.error === error))
@@ -32,7 +34,7 @@ export async function sdkTypescriptFlow(h, owner, { onState = async () => {} } =
   await applyPolicy(h, owner, 'feature.policy', { product, feature, meter: meter.id, quota: '5', quota_policy: 'hard' })
   const subscription = (await api('subscription.create', { customer, start_date: '2026-09-01', anchor_day: 1, price: [price] })).id
   const usageKey = await api('credential.issue', { name: 'Synthetic SDK metering', scopes: ['usage'] })
-  const readerKey = await api('credential.issue', { name: 'Synthetic SDK reader', scopes: ['prepare'], api_version: '2026-10-01' })
+  const readerKey = await api('credential.issue', { name: 'Synthetic SDK reader', scopes: ['prepare'], api_version: oldest })
   const usageClient = new NectarClient({ baseUrl: h.origin, headers: { authorization: `Bearer ${usageKey.key}` } })
   const reader = new NectarClient({ baseUrl: h.origin, headers: { authorization: `Bearer ${readerKey.key}` } })
   const event = { event_id: 'synthetic-nectar-300-event', customer: external, meter: meter.code, quantity: '1.125001', occurred_at: '2026-09-02T12:00:00Z' }

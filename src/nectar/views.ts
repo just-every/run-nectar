@@ -1,7 +1,15 @@
 import { moveRollbackPlans } from './movein/rollback'
+import { taxSourceReport, taxSourceDetail } from './tax-source-report'
+import { closeTieout } from './close-tieout'
+import { sandboxView } from './test-mode'
+import { sandboxCustomerView } from './test-clock'
+import { jobRuns } from './job-runs'
+import { readTransferInstructions } from './transfer-instructions'
+import { pendingLinks } from './sso-linking'
 import { portalChangeSettings } from './portal-change-policy'
 import { readRemittances } from './remittances'
 import { processorEvents } from './processor-events'
+import { billingNotices } from './billing-notices'
 import { dunningReport } from './dunning'
 import { retryComparisonReport } from './retry-comparison'
 import { retryRecoveryReport } from './retry-report'
@@ -54,7 +62,7 @@ import { API_DOORS, match } from './doors'
 import { entitlements, explainEntitlement } from './exports'
 import { importJobs, shadowSubscriptions } from './movein/stripe'
 import { policyChanges, policySettings } from './policy-changes'
-import { proposalDetail, proposals } from './proposals'
+import { collectionPlan, proposalDetail, proposals } from './proposals'
 import { customerLedger, payments } from './receivables'
 import { lifecycleHistory, lifecycleIntervals } from './lifecycle-records'
 import { subscriptionDetail } from './subscriptions'
@@ -83,24 +91,31 @@ export async function audit(env: Bindings, actor: Actor) {
 export async function customerView(env: Bindings, actor: Actor, id: string, url?: URL, includeChildren=true): Promise<Row> {
   requireRead(actor, 'customers')
   const customer = await requireCustomer(env, id)
-  if(customer.erased_at) return {...customer,contacts:[],subscriptions:[],ledger:await customerLedger(env,actor,id),entitlements:[],incumbentInvoices:[],incumbentHistory:{documents:[],records:[]},charges:[],certificates:[],exemptionClaims:[],certificateReminders:[],notes:[],metadata:{},upcoming:null}
+  if(customer.erased_at) return {...customer,retainedImportedInvoices:canRead(actor,'invoices')?await all(env,'SELECT id,number,issue_date,due_date,total_cents,remaining_cents,currency FROM nc_incumbent_invoices WHERE customer_id=? ORDER BY issue_date,id',id):[],contacts:[],subscriptions:[],ledger:await customerLedger(env,actor,id),entitlements:[],incumbentInvoices:[],incumbentHistory:{documents:[],records:[]},charges:[],certificates:[],exemptionClaims:[],certificateReminders:[],notes:[],metadata:{},upcoming:null}
+  const invoiceEvidence = canRead(actor, 'invoices')
+  const financialEvidence = canRead(actor, 'invoices') && canRead(actor, 'payments')
   const [contacts, subscriptions, ledger, features, incumbent] = await Promise.all([
     all(env, 'SELECT * FROM nc_contacts WHERE customer_id = ? ORDER BY created_at', id),
     all(env, "SELECT s.*, (SELECT state FROM nc_subscription_states o WHERE o.subscription_id=s.id ORDER BY o.seq DESC LIMIT 1) AS state, (SELECT COUNT(*) FROM nc_items i WHERE i.subscription_id = s.id) AS items FROM nc_subscriptions s WHERE s.customer_id = ? ORDER BY s.created_at", id),
     customerLedger(env, actor, id),
     entitlements(env, actor, id),
-    all(env, "SELECT provider_ref, number, status, period_start, period_end, total_cents, paid_cents, remaining_cents FROM nc_incumbent_invoices WHERE document_kind='invoice' AND customer_id = ? ORDER BY period_start DESC", id),
+    invoiceEvidence ? all(env, "SELECT provider_ref, number, status, period_start, period_end, total_cents, paid_cents, remaining_cents FROM nc_incumbent_invoices WHERE document_kind='invoice' AND customer_id = ? ORDER BY period_start DESC", id) : [],
   ])
   const upcoming = canRead(actor, 'subscriptions') && canRead(actor, 'invoices') ? await customerUpcoming(env, actor, id, url?.searchParams.get('preview_period') || null) : null
   const links=includeChildren?await all(env,'SELECT customer_id,billing_mode FROM nc_customer_hierarchies WHERE parent_id=? ORDER BY customer_id',id):[]
   const childAccounts=await Promise.all(links.map(async link=>({relationship:{billingMode:link.billing_mode},record:await customerView(env,actor,link.customer_id,url,false)})))
-  return { ...customer,childAccounts,billingRecord:await customerBillingRecord(env,actor,id),upcoming,...await metadataFor(env,'customer',id), notes: await customerNotes(env, id), importedCollectionConfigured:actor.kind==='member'&&actor.role==='owner'&&!!env.STRIPE_BILLING_SECRET, importedCollections:actor.kind==='member'&&actor.role==='owner'?(await all(env,'SELECT * FROM nc_imported_collections WHERE customer_id=? ORDER BY prepared_at,id',id)).map(collectionView):await all(env,'SELECT id,invoice_id,number,status,amount_cents,currency,collected_on FROM nc_imported_collections WHERE customer_id=? ORDER BY prepared_at,id',id), incumbentHistory:await customerHistory(env,id), contacts, subscriptions:await withMetadata(env,'subscription',await Promise.all(subscriptions.map(async s=>({...s,state:canRead(actor,'subscriptions')?s.state:null,intervals:lifecycleIntervals(await lifecycleHistory(env,s.id))})))), ledger, entitlements: features, incumbentInvoices: incumbent, charges: await all(env, 'SELECT * FROM nc_charges WHERE customer_id=? ORDER BY effective_date,id', id), certificatePolicy: await one(env, 'SELECT enabled,revision FROM nc_certificate_policy WHERE singleton=1'), certificates: await certificates(env, actor, id), exemptionClaims: await all(env, 'SELECT state FROM nc_exemption_claims WHERE customer_id=? ORDER BY state', id), certificateReminders: await all(env, 'SELECT state,kind,status,created_at FROM nc_certificate_reminders WHERE customer_id=? ORDER BY created_at DESC', id) }
+  return { ...customer,childAccounts,billingRecord:await customerBillingRecord(env,actor,id),upcoming,...await metadataFor(env,'customer',id), notes: await customerNotes(env, id, actor), importedCollectionConfigured:actor.kind==='member'&&actor.role==='owner'&&!!env.STRIPE_BILLING_SECRET, importedCollections:!financialEvidence?[]:actor.kind==='member'&&actor.role==='owner'?(await all(env,'SELECT * FROM nc_imported_collections WHERE customer_id=? ORDER BY prepared_at,id',id)).map(collectionView):await all(env,'SELECT id,invoice_id,number,status,amount_cents,currency,collected_on FROM nc_imported_collections WHERE customer_id=? ORDER BY prepared_at,id',id), incumbentHistory:await customerHistory(env,actor,id), contacts, subscriptions:await withMetadata(env,'subscription',await Promise.all(subscriptions.map(async s=>({...s,state:canRead(actor,'subscriptions')?s.state:null,intervals:lifecycleIntervals(await lifecycleHistory(env,s.id))})))), ledger, entitlements: features, incumbentInvoices: incumbent, charges: invoiceEvidence ? await all(env, 'SELECT * FROM nc_charges WHERE customer_id=? ORDER BY effective_date,id', id) : [], certificatePolicy: await one(env, 'SELECT enabled,revision FROM nc_certificate_policy WHERE singleton=1'), certificates: await certificates(env, actor, id), exemptionClaims: await all(env, 'SELECT state FROM nc_exemption_claims WHERE customer_id=? ORDER BY state', id), certificateReminders: await all(env, 'SELECT state,kind,status,created_at FROM nc_certificate_reminders WHERE customer_id=? ORDER BY created_at DESC', id) }
 }
 
 export const views: Record<string, View> = {
   moveRollbacks: (env,actor,_r,id)=>moveRollbackPlans(env,actor,id),
+  sandbox: (env,actor) => sandboxView(env,actor),
+  sandboxCustomer: (env,actor,_r,id) => sandboxCustomerView(env,actor,id),
+  jobRuns: (env,actor) => jobRuns(env,actor),
+  ssoLinks: pendingLinks,
   portalChanges: (env,actor) => portalChangeSettings(env,actor),
   processorEvents:(env,actor,_r,_id,url)=>processorEvents(env,actor,url.searchParams.get('customer')??undefined),
+  closeTieout: (env,actor,_r,_id,url)=>closeTieout(env,actor,url.searchParams.get('period')??undefined),
   assuranceCases: (env,actor)=>assuranceCases(env,actor),
   assuranceRuns: (env,actor)=>assuranceRuns(env,actor),
   assuranceCase: (env,actor,_r,id)=>assuranceCase(env,actor,id),
@@ -116,10 +131,12 @@ export const views: Record<string, View> = {
   prepaidTopupAuthorizations:(env,actor,_r,_id,url)=>readPrepaidTopupAuthorizations(env,actor,url.searchParams.get('subscription')??undefined),
   prepaidTopupClaims:(env,actor,_r,_id,url)=>readPrepaidTopupClaims(env,actor,url.searchParams.get('subscription')??undefined),
   paymentLinks:(env,actor)=>readPaymentLinks(env,actor),
+  billingNotices:(env,actor)=>billingNotices(env,actor),
   dunning:(env,actor)=>dunningReport(env,actor),
   retryComparison:(env,actor)=>retryComparisonReport(env,actor),
   retryRecovery:(env,actor)=>retryRecoveryReport(env,actor),
   automaticCollections:(env,actor,_r,_id,url)=>automaticCollections(env,actor,url.searchParams.get('customer')??undefined),
+  transferInstructions:(env,actor,_r,id)=>readTransferInstructions(env,actor,id),
   nativeCollections:(env,actor,_r,_id,url)=>readNativeCollections(env,actor,url.searchParams.get('customer')??undefined),
   prepaid:(env,actor,_r,id,url)=>prepaidState(env,actor,id,url.searchParams.get('date')??undefined),
   prepaidSource:(env,actor,_r,id)=>{const [subscription,entry]=id.split('/entries/');return prepaidSource(env,actor,subscription,decodeURIComponent(entry))},
@@ -144,6 +161,7 @@ export const views: Record<string, View> = {
   me: async (_env, actor) => ({ id: actor.id, kind: actor.kind, name: actor.name, email: actor.email, role: actor.role, ...(actor.roleName ? { role_name: actor.roleName } : {}), capabilities: [...actor.capabilities] }),
   business: (env, actor) => businessView(env, actor),
   customers: (env, actor,_r,_id,url) => customers(env, actor,url),
+  collectionDiagnosis: async (env, actor, _r, id) => { requireCapability(actor, 'read'); const plan = await collectionPlan(env, { customer: id }); return { customer: id, ...plan.impact, recipient: plan.normalized.recipient } },
   customer: (env, actor, _request, id, url) => customerView(env, actor, id, url),
   catalog: (env, actor,_r,_id,url) => catalog(env, actor,url),
   upcoming: (env, actor, _r, id, url) => upcoming(env,actor,id,url.searchParams.get('period')),
@@ -176,8 +194,8 @@ export const views: Record<string, View> = {
   credentials: (env, actor) => agentKeys(env, actor),
   audit: (env, actor) => audit(env, actor),
   mfa: (env, actor) => mfaView(env, actor),
-  report: (env, actor, _r, id, url) => report(env, actor, id, url),
-  reportInvoice: (env, actor, _r, id, url) => { const [metric, invoice] = id.split('/'); return reportInvoice(env, actor, metric, invoice, url) },
+  report: (env, actor, _r, id, url) => id === 'tax-sources' ? taxSourceReport(env, actor, url) : report(env, actor, id, url),
+  reportInvoice: (env, actor, _r, id, url) => { const [metric, invoice] = id.split('/'); return metric === 'tax-sources' ? taxSourceDetail(env, actor, invoice, url) : reportInvoice(env, actor, metric, invoice, url) },
   reportLine: (env, actor, _r, id) => { const [invoice, , line] = id.split('/'); return reportLine(env, actor, invoice, line) },
 }
 

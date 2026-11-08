@@ -5,6 +5,9 @@ import { all, fingerprint, parseJson, type Row } from '../core'
 import { localDate } from '../dates'
 import { requireBusiness } from '../business'
 
+// Use one deterministic price order for both native and captured items.
+const byPriceRef=(a:Row,b:Row)=>a.price_ref<b.price_ref?-1:a.price_ref>b.price_ref?1:0
+
 export async function moveEventEvidence(env:Bindings):Promise<Row[]> {
   const business=await requireBusiness(env)
   // The retained event projection owns customer_id, while the binding proves
@@ -31,8 +34,8 @@ export async function moveEventEvidence(env:Bindings):Promise<Row[]> {
     const day=localDate(data.source.created_at,business.timezone)
     const itemRows=await all(env,`SELECT p.provider_ref AS price_ref,i.quantity FROM nc_items i JOIN nc_prices p ON p.id=i.price_id
       WHERE i.subscription_id=? AND i.effective_from<=? AND (i.effective_to IS NULL OR i.effective_to>?) ORDER BY p.provider_ref,i.id`,event.subscription,day,day)
-    const items=itemRows.map(item=>({price_ref:item.price_ref,quantity:Number(item.quantity)}))
-    const captured=data.items.map((item:Row)=>({price_ref:item.price_ref,quantity:item.quantity})).sort((a:Row,b:Row)=>String(a.price_ref).localeCompare(String(b.price_ref)))
+    const items=itemRows.map(item=>({price_ref:item.price_ref,quantity:Number(item.quantity)})).sort(byPriceRef)
+    const captured=data.items.map((item:Row)=>({price_ref:item.price_ref,quantity:item.quantity})).sort(byPriceRef)
     // Duplicate prices and missing quantities are ambiguous, never asserted equal.
     if(captured.some((item:Row)=>!Number.isSafeInteger(item.quantity)) || new Set(captured.map((item:Row)=>item.price_ref)).size!==captured.length || new Set(items.map(item=>item.price_ref)).size!==items.length)continue
     const mismatch=JSON.stringify(captured)!==JSON.stringify(items)

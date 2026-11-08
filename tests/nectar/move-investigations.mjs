@@ -10,10 +10,10 @@ export function harnessOptions() {
     const url=new URL(request.url),path=url.pathname.slice(3)
     provider.calls.push({path,method:request.method})
     assert.equal(request.method,'GET','investigation preparation only reads the processor edge')
-    const customer='synthetic-nectar-customer-1',method='synthetic-nectar-method-1'
+    const customer=path.match(/^\/customers\/(synthetic-nectar-customer-[14])$/)?.[1]??'synthetic-nectar-customer-1',method='synthetic-nectar-method-1'
     const card={id:method,object:'payment_method',customer,livemode:false,type:'card',card:{brand:'visa',last4:'4242',exp_month:12,exp_year:2035}}
     if(path==='/account')return Response.json({id:'synthetic-nectar-source-account-1',object:'account'})
-    if(path===`/customers/${customer}`)return Response.json({id:customer,object:'customer',livemode:false,invoice_settings:{default_payment_method:method}})
+    if(path===`/customers/${customer}`)return Response.json({id:customer,object:'customer',livemode:false,invoice_settings:{default_payment_method:customer.endsWith('-1')?method:null}})
     if(path===`/payment_methods/${method}`)return Response.json(card)
     if(path==='/payment_methods')return Response.json({object:'list',has_more:false,data:url.searchParams.get('type')==='card'&&provider.inventory?[card]:[]})
     if(path.startsWith('/events/'))return Response.json(provider.events.get(path.slice('/events/'.length)))
@@ -31,15 +31,22 @@ export async function moveInvestigationsFlow(h,owner,{onState=async()=>{}}={}) {
   const canonical=value=>Array.isArray(value)?`[${value.map(canonical).join(',')}]`:value&&typeof value==='object'?`{${Object.keys(value).sort().map(key=>`${JSON.stringify(key)}:${canonical(value[key])}`).join(',')}}`:JSON.stringify(value)
   const privateMarker='synthetic-nectar-private-original-31',records={customers:[],products:[],prices:[],subscriptions:[],invoices:[]}
   for(let index=1;index<=4;index++) {
-    const id=kind=>`synthetic-nectar-${kind}-${index}`
-    const price={id:id('price'),object:'price',product:id('product'),type:'recurring',currency:'usd',unit_amount:index===2?2000:2500,recurring:{interval:'month',interval_count:1,usage_type:'licensed'},metadata:{nectar_kind:'seat'}}
+    const id=kind=>kind==='price'&&index===4?'synthetic-nectar-price-Z':`synthetic-nectar-${kind}-${index}`
+    const price={id:id('price'),object:'price',product:id('product'),type:'recurring',currency:'usd',unit_amount:index===2?2000:index===4?1250:2500,recurring:{interval:'month',interval_count:1,usage_type:'licensed'},metadata:{nectar_kind:'seat'}}
     records.customers.push({id:id('customer'),name:`Synthetic comparison ${index}`,email:h.vars.OWNER_EMAIL.replace('owner',`synthetic-nectar-${index}`),tax_exempt:'none',...(index===1?{invoice_settings:{default_payment_method:'synthetic-nectar-method-1'}}:{})})
     records.products.push({id:id('product'),name:`Synthetic comparison product ${index}`,active:true})
     records.prices.push(price)
     records.subscriptions.push({id:id('subscription'),object:'subscription',customer:id('customer'),status:'active',start_date:stamp('2026-07-01'),billing_cycle_anchor:stamp('2026-07-01'),items:list([{id:id('item'),price,quantity:2}])})
     const amount=index===1?7500:index===3?2419:5000
-    records.invoices.push({id:id('invoice'),object:'invoice',number:`SYNTHETIC-${index}`,customer:id('customer'),subscription:id('subscription'),status:'paid',currency:'usd',period_start:stamp('2026-08-01'),period_end:stamp('2026-09-01'),created:stamp('2026-09-01'),total:amount,tax:0,amount_paid:amount,amount_remaining:0,metadata:{private:privateMarker},lines:list([{id:id('line'),description:privateMarker,amount,quantity:index===1?3:2,price:{...price,unit_amount:2500},period:{start:stamp('2026-08-01'),end:stamp(index===3?'2026-08-16':'2026-09-01')},type:'subscription',subscription:id('subscription')}])})
+    // The partial-service case and clean control have July invoice windows,
+    // while their subscription lines supply August service.
+    records.invoices.push({id:id('invoice'),object:'invoice',number:`SYNTHETIC-${index}`,customer:id('customer'),subscription:id('subscription'),status:'paid',currency:'usd',period_start:stamp(index>=3?'2026-07-01':'2026-08-01'),period_end:stamp(index>=3?'2026-08-01':'2026-09-01'),created:stamp('2026-09-01'),total:amount,tax:0,amount_paid:amount,amount_remaining:0,metadata:{private:privateMarker},lines:list([{id:id('line'),description:privateMarker,amount:index===4?2500:amount,quantity:index===1?3:2,price:{...price,unit_amount:index===4?1250:2500},period:{start:stamp('2026-08-01'),end:stamp(index===3?'2026-08-16':'2026-09-01')},type:'subscription',subscription:id('subscription')}])})
   }
+  // The clean control has two distinct prices whose byte and locale orders differ.
+  const controlPrice={...records.prices[3],id:'synthetic-nectar-price-a'}
+  records.prices.push(controlPrice)
+  records.subscriptions[3].items.data.push({id:'synthetic-nectar-item-4-extra',price:controlPrice,quantity:2})
+  records.invoices[3].lines.data.push({...records.invoices[3].lines.data[0],id:'synthetic-nectar-line-4-extra',price:controlPrice})
   const capture=Object.fromEntries(Object.entries(records).map(([name,data])=>[name,list(data)]))
   capture.manifest={source:'stripe',files:Object.fromEntries(Object.entries(records).map(([name,data])=>[name,{count:data.length,has_more:false}]))}
   const bytes=JSON.stringify(capture.invoices),artifactHash=createHash('sha256').update(bytes).digest('hex')
@@ -69,6 +76,7 @@ export async function moveInvestigationsFlow(h,owner,{onState=async()=>{}}={}) {
   const expected=[{quantity:[3,2],amountCents:[7500,5000]},{unitAmount:['25.00','20.00'],amountCents:[5000,4000]},{to:['2026-08-16','2026-09-01'],amountCents:[2419,5000]}]
   for(const [index,row] of cases.entries()) {
     assert.equal(row.owner_id,ownerId)
+    assert.deepEqual(row.evidence.period,{start:'2026-08-01',end:'2026-09-01'})
     assert.deepEqual(Object.fromEntries(row.evidence.differences.map(item=>[item.field,[item.captured,item.engine]])),expected[index])
     assert.deepEqual(row.evidence.citation,{job:imported.job,artifactHash,sourceHash:createHash('sha256').update(canonical(records.invoices[index])).digest('hex'),row:index+1})
     assert.match(row.evidence.citation.sourceHash,/^[a-f0-9]{64}$/)
@@ -233,6 +241,16 @@ export async function moveInvestigationsFlow(h,owner,{onState=async()=>{}}={}) {
     provider.events.set(event.id,event)
     return api('webhook.stripe.consume',{customer:originalCustomer.id,account_ref:plan.processor_ref,event_ref:event.id,consent:true})
   }
+  const controlCustomer=customers.find(row=>row.external_id===records.customers[3].id)
+  await api('collection.customer.bind',{customer:controlCustomer.id,account_ref:plan.processor_ref,stripe_customer_ref:records.customers[3].id,confirm:true})
+  const controlEvent=sourceEvent('synthetic-nectar-event-control',2,created)
+  controlEvent.data.object={...controlEvent.data.object,id:records.subscriptions[3].id,customer:records.customers[3].id,items:list([
+    {id:'synthetic-nectar-item-4-extra',price:controlPrice.id,quantity:2},
+    {id:'synthetic-nectar-item-4',price:records.prices[3].id,quantity:2},
+  ])}
+  provider.events.set(controlEvent.id,controlEvent)
+  await api('webhook.stripe.consume',{customer:controlCustomer.id,account_ref:plan.processor_ref,event_ref:controlEvent.id,consent:true})
+  assert.deepEqual((await scan()).opened,[],'identical mixed-case subscription event items open no investigation')
   await consume(sourceEvent('synthetic-nectar-event-2',4,created))
   assert.equal((await scan()).opened.length,1)
   const eventCase=(await h.api('assurance-cases',agent)).find(row=>row.evidence.category==='webhook')

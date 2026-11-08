@@ -18,12 +18,12 @@ const API_PROBE = { periodCloses: 'period-closes', customerBalance: 'customers/n
 const PAGE_PROBE = { prepaid:'/app/prepaid/none', prepaidSource:'/app/prepaid/none/entries/none', prepaidCsv:'/app/exports/prepaid/none.csv', importOriginals:'/app/import/none/originals/'+ '0'.repeat(64), metadata: '/app/metadata/price/none', report: '/app/reports/billings', reportInvoice: '/app/reports/billings/none', reportCsv: '/app/exports/reports/billings.csv', metadataCsv: '/app/exports/objects/customer.csv', reportLine: '/app/invoices/none/lines/none' }
 const fill = pattern => pattern.replace(/^\^|\$$/g, '').replace(/\(\[[^)]*\]\+\)/g, 'none').replace(/\\\./g, '.')
 
-const READ_ALL_API = API_DOORS.map(([, name]) => name).filter(name => !['moveRollbacks','dunning','sso','paymentLinks','trialCollections','prepaidRefundNotices','hierarchies','webhooks','webhookDelivery','members', 'roles', 'imports', 'audit', 'reportSchedule', 'reportDelivery', 'noteMembers','billingEntities','nativeCollections','prepaidTopupAuthorizations','prepaidTopupClaims'].includes(name))
-const READ_ALL_PAGES = PAGE_DOORS.map(([, name]) => name).filter(name => !['dunning','sso','paymentLinks','hierarchies','webhooks','webhookDelivery','prepaidRefundProof','prepaidRefundCsv','prepaidTopupSource','prepaidCsv', 'revenueJournalCsv', 'numberRegisterCsv', 'erasureEvidence', 'revenueCsv', 'reportSchedule', 'reportDelivery', 'reportDeliveryCsv', 'reportCsv', 'metadataCsv', 'runFile', 'import', 'exports', 'customersFile', 'invoicesFile', 'usageFile', 'subscriptionsFile', 'audit', 'noticeFile','importOriginals'].includes(name))
+const READ_ALL_API = API_DOORS.map(([, name]) => name).filter(name => !['moveRollbacks','ssoLinks','transferInstructions','jobRuns','sandbox','sandboxCustomer','billingNotices','dunning','sso','paymentLinks','trialCollections','prepaidRefundNotices','hierarchies','webhooks','webhookDelivery','members', 'roles', 'imports', 'audit', 'reportSchedule', 'reportDelivery', 'noteMembers','billingEntities','nativeCollections','prepaidTopupAuthorizations','prepaidTopupClaims'].includes(name))
+const READ_ALL_PAGES = PAGE_DOORS.map(([, name]) => name).filter(name => !['sandbox','sandboxCustomer','dunning','sso','paymentLinks','hierarchies','webhooks','webhookDelivery','prepaidRefundProof','prepaidRefundCsv','prepaidTopupSource','prepaidCsv', 'revenueJournalCsv', 'numberRegisterCsv', 'erasureEvidence', 'revenueCsv', 'reportSchedule', 'reportDelivery', 'reportDeliveryCsv', 'reportCsv', 'metadataCsv', 'runFile', 'import', 'exports', 'customersFile', 'invoicesFile', 'usageFile', 'subscriptionsFile', 'audit', 'noticeFile','importOriginals'].includes(name))
 const COMMON = { api: ['openapi', 'me', 'notifications', 'mfa'], pages: ['home', 'more', 'security', 'passkeyScript'] }
 const EXPECTED = {
   collections: {
-    actions: ['remittance.upload','remittance.preview','remittance.confirm','remittance.allocate.preview','remittance.allocate','invoice.refund.preview', 'payment.record', 'payment.allocate', 'processor.cash.allocate', 'reminder.prepare', 'reminder.approve', 'reminder.discard', 'task.create', 'task.complete', 'cadence.enroll', 'cadence.promise', 'cadence.dispute', 'cadence.resolve', 'cadence.approve', 'cadence.run', 'note.add', 'answer.read'],
+    actions: ['bank.deposit.upload','remittance.upload','remittance.preview','remittance.confirm','remittance.allocate.preview','remittance.allocate','invoice.refund.preview', 'payment.record', 'payment.allocate', 'processor.cash.allocate', 'reminder.prepare', 'reminder.approve', 'reminder.discard', 'task.create', 'task.complete', 'cadence.enroll', 'cadence.promise', 'cadence.dispute', 'cadence.resolve', 'cadence.approve', 'cadence.run', 'note.add', 'answer.read'],
     api: ['remittances','processorEvents','automaticCollections','paymentReceipt','prepaidRefunds', 'numberRegister', 'customers', 'customer', 'invoices', 'invoice', 'ageing', 'writeOffs', 'ledgerPostings', 'customerBalance', 'payments', 'notices', 'tasks', 'notes', 'noteMembers', 'entitlement', 'reportLine', 'cadences', 'metadataObjects'],
     pages: ['processorEvents','paymentReceipt','prepaidRefundList', 'prepaidRefundSource', 'numberRegister', 'customers', 'customer', 'certificateFile', 'invoice', 'receivables', 'noticeFile', 'cadences', 'billingAnswers', 'reportLine', 'metadataList'],
   },
@@ -38,8 +38,8 @@ const EXPECTED = {
     pages: ['portalChanges','processorEvents','paymentReceipt','prepaidRefundList', 'prepaidRefundSource', 'numberRegister', 'customers', 'customer', 'certificateFile', 'subscription', 'prepaid', 'prepaidSource', 'invoice', 'receivables', 'billingAnswers', 'reportLine', 'metadataList'],
   },
   developer: {
-    actions: ['invoice.refund.preview', 'credential.issue', 'credential.revoke', 'credential.version', 'webhook.stripe.consume', 'webhook.register', 'webhook.rotate', 'webhook.disable', 'webhook.replay', 'webhook.dispatch', 'answer.read', 'meter.preview', 'usage.correction.preview'],
-    api: [...READ_ALL_API,'webhooks','webhookDelivery'], pages: [...READ_ALL_PAGES,'webhooks','webhookDelivery'],
+    actions: ['sandbox.catalog.copy','sandbox.customer.create','sandbox.clock.advance','sandbox.processor.bind','sandbox.billing.reconcile','invoice.refund.preview', 'credential.issue', 'credential.revoke', 'credential.version', 'webhook.stripe.consume', 'webhook.register', 'webhook.rotate', 'webhook.disable', 'webhook.replay', 'webhook.dispatch', 'answer.read', 'meter.preview', 'usage.correction.preview'],
+    api: [...READ_ALL_API,'sandbox','sandboxCustomer','webhooks','webhookDelivery'], pages: [...READ_ALL_PAGES,'sandbox','sandboxCustomer','webhooks','webhookDelivery'],
   },
   analyst: {
     actions: ['report.schedule'],
@@ -264,6 +264,8 @@ export async function billingRolesFlow(h, owner) {
   await h.api('answer.propose', who.answers, suggestion, 403)
   assert.equal((await h.api(`proposals/${proposal.id}`, owner)).status, 'pending', 'GOV-001 a suggestion never approves itself')
 
+  await financialVisibilityFlow(h, owner, { sales: who.sales, finance: who.finance })
+
   // GOV-007 inheritance: changing the support limit asks for a fresh factor; credits within it do not.
   let clock = Date.now()
   const at = async ms => { clock = ms; await h.advanceClock(new Date(ms).toISOString()) }
@@ -283,4 +285,336 @@ export async function billingRolesFlow(h, owner) {
   // "Chosen roles" now defaults to every role that can credit or manage credentials.
   assert.deepEqual((await h.api('mfa.policy', owner, { scope: 'roles' })).roles, ['developer', 'finance', 'owner', 'support'])
   console.log('GOV-001 preset and custom roles reach exactly their capabilities, support credit limit, next-request revocation, notes, alerts, metadata and answers passed')
+}
+
+
+// A customer read must not inherit financial authority from its legacy ledger.
+// Keep this regression in the existing Worker/D1 role journey, including both
+// an entitlement-bearing customer and a customer with no entitlement subtree.
+export async function financialVisibilityFlow(h, owner, { sales, finance, onReady = async () => {} } = {}) {
+  const api = (path, body, status) => h.api(path, owner, body, status)
+  const mailbox = name => [name, 'example.test'].join('@')
+  const member = async role => {
+    const email = mailbox(`financial-visibility-${role}`)
+    await api('access.give', { email, name: `Financial visibility ${role}`, role })
+    return h.signIn(email, { requested: true })
+  }
+  sales ??= await member('sales')
+  finance ??= await member('finance')
+  const readers = []
+  for (const [name, capabilities] of [
+    ['customer-only', ['read.customers', 'export']],
+    ['invoice-only', ['read.customers', 'read.invoices', 'export']],
+    ['payment-only', ['read.customers', 'read.payments', 'export']],
+    ['combined', ['read.customers', 'read.invoices', 'read.payments', 'export']],
+  ]) {
+    const role = await api('role.define', { name: `Visibility ${name}`, capabilities })
+    const email = mailbox(`financial-visibility-${name}`)
+    await api('access.give', { email, name: `Visibility ${name}`, role: 'custom', custom_role: role.id })
+    readers.push({ name, who: await h.signIn(email, { requested: true }), role: role.id,
+      invoices: capabilities.includes('read.invoices'), payments: capabilities.includes('read.invoices') && capabilities.includes('read.payments'), subscriptions: false })
+  }
+  const matrix = [{ name: 'sales', who: sales, invoices: false, payments: false, subscriptions: true }, ...readers,
+    { name: 'finance', who: finance, invoices: true, payments: true, subscriptions: true },
+    { name: 'owner', who: owner, invoices: true, payments: true, subscriptions: true }]
+  const fixtures = []
+  for (const entitled of [false, true]) {
+    const code = `financial-visibility-${entitled ? 'inside' : 'outside'}`
+    const customer = (await api('customer.create', { external_id: code, name: `Financial visibility ${entitled ? 'inside' : 'outside'}`, billing_email: mailbox(code), address: `Private address ${code}` })).id
+    await api('contact.add', { customer, name: `Private contact ${code}`, email: mailbox(`${code}-contact`) })
+    const product = (await api('product.create', { code, name: code })).id
+    const price = (await api('price.create', { product, kind: 'flat', unit_amount: '100', taxable: false })).id
+    if (entitled) await api('feature.grant', { product, feature: 'financial-visibility-feature' })
+    const subscription = (await api('subscription.create', { customer, start_date: '2026-08-01', price: [price] })).id
+    const charge = await api('charge.add', { customer, amount: '100', description: `Private service ${code}`, effective_date: '2026-08-01', taxable: false })
+    const invoice = (await api('invoice.manual', { customer, charges: [charge.charge], service_date: '2026-08-01' })).id
+    await api('invoice.approve', { invoice, acknowledge: true })
+    await api('invoice.finalise', { invoice, issue_date: '2026-09-01' })
+    await api('credit.issue', { invoice, amount: '1', reason: `Private adjustment ${code}` })
+    const reference = `FINANCIAL-VISIBILITY-${entitled ? 'INSIDE' : 'OUTSIDE'}-WIRE`
+    const payment = (await api('payment.record', { customer, amount: '12', received_on: '2026-09-02', method: 'bank_transfer', reference })).payment
+    await api('payment.allocate', { payment, invoice, amount: '10' })
+    await api('note.add', { kind: 'invoice', record: invoice, body: `Invoice note ${code}` })
+    await api('note.add', { kind: 'payment', record: payment, body: `Payment note ${code}` })
+    await api('metadata.write', { kind: 'invoice', record: invoice, revision: 0, metadata: { visibility: `invoice-metadata-${code}` } })
+    await api('metadata.write', { kind: 'payment', record: payment, revision: 0, metadata: { visibility: `payment-metadata-${code}` } })
+    const before = await api(`customers/${customer}`)
+    assert.deepEqual([before.ledger.invoicedCents, before.ledger.creditedCents, before.ledger.paidCents, before.ledger.balanceCents, before.ledger.unallocatedCents], [10000, 100, 1000, 8900, 200])
+    assert.equal(before.entitlements.length > 0, entitled)
+    fixtures.push({ customer, invoice, payment, subscription, price, reference, before, code })
+  }
+  await api('hierarchy.configure', { customer: fixtures[1].customer, parent: fixtures[0].customer, billing_mode: 'separate', revision: 0, consent: true })
+  const invoiceTotals = ['invoicedCents', 'creditedCents', 'paidCents', 'writtenOffCents', 'balanceCents']
+  const assertLedger = (ledger, reader, expected) => {
+    for (const key of ['invoices', 'credits', 'carriedUsageCredits']) assert.deepEqual(ledger[key], reader.invoices ? expected[key] : [], `${reader.name} ${key}`)
+    for (const key of invoiceTotals) assert.equal(ledger[key], reader.invoices ? expected[key] : null, `${reader.name} ${key}`)
+    assert.deepEqual(ledger.payments, reader.payments ? expected.payments : [], `${reader.name} payment custody`)
+    assert.equal(ledger.unallocatedCents, reader.payments ? expected.unallocatedCents : null)
+  }
+  const mainHtml = html => html.slice(html.indexOf('<main'), html.indexOf('</main>'))
+  const assertProjection = async (fixture, reader, erased = false) => {
+    const expected = (await api(`customers/${fixture.customer}`)).ledger
+    const record = await h.api(`customers/${fixture.customer}`, reader.who)
+    assert.equal(record.id, fixture.customer)
+    assertLedger(record.ledger, reader, expected)
+    if (!erased) {
+      assert.equal(record.contacts[0].email, fixture.before.contacts[0].email, 'Permitted customer contacts stay readable')
+      assert.deepEqual(record.subscriptions, fixture.before.subscriptions.map(sub => reader.subscriptions ? sub : { ...sub, state: null }))
+      assert.equal(record.entitlements.length, fixture.before.entitlements.length)
+      for (const entitlement of record.entitlements) {
+        // ENT-001 deliberately keeps its stronger combined-capability evidence rule.
+        if (!reader.payments) assert.ok(!JSON.stringify(entitlement).includes('balanceCents'))
+      }
+    }
+    for (const child of record.childAccounts ?? []) assertLedger(child.record.ledger, reader, (await api(`customers/${child.record.id}`)).ledger)
+    const html = mainHtml(await h.page(`/app/customers/${fixture.customer}`, reader.who))
+    const invoice = expected.invoices[0]
+    assert.equal(JSON.stringify(record).includes(invoice.number), reader.invoices, `${reader.name} composed JSON follows invoice authority`)
+    assert.equal(html.includes(invoice.number), reader.invoices, `${reader.name} permitted invoice number`)
+    assert.equal(html.includes('$89.00'), reader.invoices, `${reader.name} independently reconciled outstanding balance`)
+    assert.equal(html.includes(fixture.reference), reader.payments && !erased, `${reader.name} payment reference`)
+    assert.equal(JSON.stringify(record).includes(fixture.reference), reader.payments && !erased, 'Customer JSON exposes only permitted payment fields')
+    if (!reader.invoices) {
+      for (const hint of ['Invoices and payments', 'No issued invoices', 'Credit notes', 'No credit notes', 'Invoiced', 'Owed now', 'One-time charges', 'No one-time charges', 'Stripe invoiced']) assert.ok(!html.includes(hint), `${reader.name} has no financial section or existence hint: ${hint}`)
+      assert.ok(!html.includes('$100.00'), 'Unauthorized invoice totals are absent')
+      assert.deepEqual(record.charges, [])
+    }
+    if (!reader.payments) {
+      for (const hint of ['Unallocated payments', 'No payments.', 'Payment receipts', 'Processor payments', 'Credit balance']) assert.ok(!html.includes(hint), `${reader.name} has no payment existence hint: ${hint}`)
+      assert.ok(!JSON.stringify(record).includes(`Payment note ${fixture.code}`))
+      assert.ok(!JSON.stringify(record).includes(`payment-metadata-${fixture.code}`))
+    }
+    if (!reader.invoices) assert.ok(!JSON.stringify(record).includes(`Invoice note ${fixture.code}`))
+    for (const [query, permitted] of [[invoice.number, reader.invoices], [fixture.reference, reader.payments && !erased],
+      [`invoice-metadata-${fixture.code}`, reader.invoices && !erased], [`payment-metadata-${fixture.code}`, reader.payments && !erased]]) {
+      const found = await h.api(`customers?search=${encodeURIComponent(query)}`, reader.who)
+      assert.equal(found.some(row => row.id === fixture.customer), permitted, `${reader.name} search matches only authorized evidence`)
+      const list = mainHtml(await h.page(`/app/customers?search=${encodeURIComponent(query)}`, reader.who))
+      assert.equal(list.includes(`/app/customers/${fixture.customer}`), permitted, `${reader.name} built search has no forbidden match`)
+    }
+    if (erased) {
+      for (const value of [fixture.before.name, fixture.before.external_id, fixture.before.billing_email, fixture.before.address, fixture.before.contacts[0].name, fixture.before.contacts[0].email, fixture.reference]) {
+        assert.ok(!JSON.stringify(record).includes(value), 'Erased customer JSON contains no personal identifier')
+        assert.ok(!html.includes(value), 'Erased built page contains no personal identifier')
+        assert.equal((await h.api(`customers?search=${encodeURIComponent(value)}`, reader.who)).some(row => row.id === fixture.customer), false, 'Erased identifiers cannot find the customer')
+      }
+    }
+    if (reader.name === 'sales') await h.page('/app/exports/customers.csv', reader.who, 403)
+    else {
+      const csv = await h.page('/app/exports/customers.csv', reader.who)
+      if (!reader.payments) assert.ok(!csv.includes(fixture.reference), 'Customer CSV omits unauthorized payment facts')
+      if (!reader.invoices) assert.ok(!csv.includes(`Invoice note ${fixture.code}`), 'Customer CSV omits unauthorized invoice notes')
+      if (erased) for (const value of [fixture.before.billing_email, fixture.reference, fixture.before.name]) assert.ok(!csv.includes(value))
+    }
+    const balance = await h.api(`customers/${fixture.customer}/balance`, reader.who, undefined, reader.payments ? 200 : 403)
+    if (reader.payments) {
+      assert.equal(balance.cashCents, 200)
+      assert.ok(balance.ledger.some(entry => entry.invoice === invoice.number))
+    }
+    if (reader.invoices) {
+      const invoiceRecord = await h.api(`invoices/${fixture.invoice}`, reader.who)
+      assert.equal(invoiceRecord.balanceCents, 8900)
+      assert.equal(JSON.stringify(invoiceRecord).includes(fixture.reference), reader.payments && !erased, 'Invoice drill-through preserves payment authority')
+      const invoiceHtml = mainHtml(await h.page(`/app/invoices/${fixture.invoice}`, reader.who))
+      assert.equal(invoiceHtml.includes(fixture.reference), reader.payments && !erased)
+      if (!reader.payments) assert.ok(!invoiceHtml.includes('No payments allocated.'))
+      if (erased) for (const value of [fixture.before.name, fixture.before.billing_email, fixture.reference]) assert.ok(!invoiceHtml.includes(value), 'Invoice drill-through renders no erased identifiers')
+    } else await h.api(`invoices/${fixture.invoice}`, reader.who, undefined, 403)
+
+  }
+  const beforeReads = await Promise.all(fixtures.map(f => api(`customers/${f.customer}`)))
+  const financialSnapshot = async () => ({ invoices: await Promise.all(fixtures.map(f => api(`invoices/${f.invoice}`))), payments: await api('payments') })
+  const moneyBefore = await financialSnapshot()
+  const audit = await api('audit')
+  for (const fixture of fixtures) for (const reader of matrix) await assertProjection(fixture, reader)
+  assert.deepEqual(await Promise.all(fixtures.map(f => api(`customers/${f.customer}`))), beforeReads, 'Allowed and refused reads change no customer or financial records')
+  assert.deepEqual(await api('audit'), audit, 'Customer reads never change audit records')
+  assert.deepEqual(await financialSnapshot(), moneyBefore, 'Allowed and refused reads preserve full invoice and payment records')
+  await onReady({ fixtures, matrix, phase: 'ordinary' })
+
+  // Every changed capability takes effect on the next request in the same session.
+  const combined = readers.find(r => r.name === 'combined')
+  await api('role.update', { role: combined.role, revision: 1, capabilities: ['read.customers', 'read.invoices', 'export'] })
+  const revoked = { ...combined, payments: false }
+  for (const fixture of fixtures) await assertProjection(fixture, revoked)
+  await api('role.update', { role: combined.role, revision: 2, capabilities: ['read.customers', 'export'] })
+  for (const fixture of fixtures) await assertProjection(fixture, { ...revoked, invoices: false })
+  await api('role.update', { role: combined.role, revision: 3, capabilities: ['read.customers', 'read.invoices', 'read.payments', 'export'] })
+  const credential = await api('credential.issue', { name: 'Financial visibility revoked credential', scopes: ['prepare'] })
+  const agent = { bearer: credential.key }
+  assert.deepEqual((await h.api(`customers/${fixtures[0].customer}`, agent)).ledger, fixtures[0].before.ledger)
+  await api('credential.revoke', { key: credential.id })
+  for (const fixture of fixtures) {
+    await h.api(`customers/${fixture.customer}`, agent, undefined, 401)
+    await h.api(`customers/${fixture.customer}`, undefined, undefined, 401)
+    const response = await h.raw(`/app/customers/${fixture.customer}`, agent)
+    assert.equal(response.status, 403)
+    await response.text()
+  }
+  // Imported invoice evidence follows invoice authority; payment records require both.
+  const { stripeHistoryCapture } = await import('../fixtures/stripe-history.mjs')
+  const { file } = await import('./harness.mjs')
+  const capture = stripeHistoryCapture()
+  const files = Object.fromEntries(Object.entries(capture).map(([name, value]) => [name, file(`${name}.json`, JSON.stringify(value), 'application/json')]))
+  const preview = await api('import.preview', files)
+  assert.deepEqual(preview.rejected, [])
+  await api('import.apply', { ...files, fingerprint: preview.fingerprint })
+  const importedCustomer = (await api('customers')).find(row => row.external_id === 'synthetic-nectar-1').id
+  const imported = await api(`customers/${importedCustomer}`)
+  assert.ok(imported.incumbentHistory.documents.length > 0 && imported.incumbentHistory.records.some(row => row.kind === 'payment'))
+  for (const reader of matrix) {
+    const record = await h.api(`customers/${importedCustomer}`, reader.who)
+    for (const key of ['invoicedCents','creditedCents','remainingCents','paymentsCents','refundsCents']) {
+      const permitted = ['paymentsCents','refundsCents'].includes(key) ? reader.payments : reader.invoices
+      assert.equal(record.incumbentHistory.totals[key], permitted ? imported.incumbentHistory.totals[key] : null, `${reader.name} imported totals retain their exact authorized values`)
+    }
+    assert.deepEqual(record.incumbentHistory.documents, reader.invoices ? imported.incumbentHistory.documents : [])
+    assert.deepEqual(record.incumbentInvoices, reader.invoices ? imported.incumbentInvoices : [])
+    assert.deepEqual(record.importedCollections, reader.payments ? imported.importedCollections : [])
+    assert.deepEqual(record.incumbentHistory.records, imported.incumbentHistory.records.filter(row => row.kind === 'subscription-event' ? reader.subscriptions : reader.payments))
+    const html = mainHtml(await h.page(`/app/customers/${importedCustomer}`, reader.who))
+    assert.equal(html.includes(imported.incumbentHistory.documents[0].number), reader.invoices)
+    assert.equal(html.includes('synthetic-nectar-payment-annual'), reader.payments)
+    if (!reader.invoices) for (const hint of ['Stripe invoiced', 'Moved history', 'No moved documents']) assert.ok(!html.includes(hint))
+    if (reader.name !== 'sales') {
+      const csv = await h.page('/app/exports/customers.csv', reader.who)
+      assert.equal(csv.includes('synthetic-nectar-payment-annual'), reader.payments)
+      assert.equal(csv.includes(imported.incumbentHistory.documents[0].number), reader.invoices)
+    }
+  }
+  const importedErasure = await api('erasure.request', { customer: importedCustomer })
+  const importedMessage = h.mails.findLast(mail => [mail.to].flat().includes(imported.billing_email))
+  const importedVerification = new URL(`${importedMessage.text ?? ''} ${importedMessage.html ?? ''}`.match(/https?:\/\/[^\s"<]+\/erase\/[a-f0-9]{64}/)[0]).pathname
+  assert.equal((await h.raw(importedVerification, { form: new URLSearchParams({ confirm: 'yes' }) })).status, 200)
+  await api('erasure.approve', { request: importedErasure.id, confirm: true })
+  const retainedFields = ['id','number','issue_date','due_date','total_cents','remaining_cents','currency']
+  const retainedDocuments = imported.incumbentHistory.documents.map(document => Object.fromEntries(retainedFields.map(field => [field, document[field] ?? null])))
+  const retained = await api(`customers/${importedCustomer}`)
+  for (const reader of matrix) {
+    const record = await h.api(`customers/${importedCustomer}`, reader.who)
+    assert.deepEqual(record.retainedImportedInvoices, reader.invoices ? retainedDocuments : [], 'Erased imported invoices retain only permitted closed facts')
+    const html = mainHtml(await h.page(`/app/customers/${importedCustomer}`, reader.who))
+    assert.equal(html.includes(imported.incumbentHistory.documents[0].number), reader.invoices)
+    for (const value of [imported.name, imported.billing_email, imported.external_id, 'synthetic-nectar-payment-annual']) {
+      assert.ok(!JSON.stringify(record).includes(value))
+      assert.ok(!html.includes(value))
+    }
+    assert.equal((await h.api(`customers?search=${encodeURIComponent(imported.incumbentHistory.documents[0].number)}`, reader.who)).some(row => row.id === importedCustomer), reader.invoices)
+    assert.equal((await h.api('customers?search=synthetic-nectar-payment-annual', reader.who)).some(row => row.id === importedCustomer), false)
+  }
+  assert.equal((await api('import.preview', files, 409)).error, 'erased_import_source')
+  assert.equal((await api('import.apply', { ...files, fingerprint: preview.fingerprint }, 409)).error, 'erased_import_source')
+  assert.deepEqual(await api(`customers/${importedCustomer}`), retained, 'Replayed captures cannot resurrect an erased identity or alter retained financial facts')
+  await onReady({ fixtures, matrix, phase: 'erased-import', imported: { customer: importedCustomer, before: imported } })
+  // Erase the child first: the ordinary parent must not revive private child fields.
+  for (const fixture of [...fixtures].reverse()) {
+    const erasure = await api('erasure.request', { customer: fixture.customer })
+    const message = h.mails.findLast(mail => [mail.to].flat().includes(fixture.before.billing_email))
+    const verification = new URL(`${message.text ?? ''} ${message.html ?? ''}`.match(/https?:\/\/[^\s"<]+\/erase\/[a-f0-9]{64}/)[0]).pathname
+    assert.equal((await h.raw(verification, { form: new URLSearchParams({ confirm: 'yes' }) })).status, 200)
+    await api('erasure.approve', { request: erasure.id, confirm: true })
+    const erased = await api(`customers/${fixture.customer}`)
+    assert.ok(erased.erased_at)
+    assert.deepEqual([erased.ledger.invoicedCents, erased.ledger.creditedCents, erased.ledger.paidCents, erased.ledger.balanceCents, erased.ledger.unallocatedCents], [10000, 100, 1000, 8900, 200], 'Retention preserves every independently computed financial figure')
+    const frozen = await api(`customers/${fixture.customer}`)
+    for (const reader of matrix) await assertProjection(fixture, reader, true)
+    assert.deepEqual(await api(`customers/${fixture.customer}`), frozen, 'Erased reads change no retained financial facts')
+    await onReady({ fixtures, matrix, phase: fixture === fixtures[1] ? 'erased-child' : 'erased' })
+  }
+  // A genuine recurring invoice also appears in subscription history and its minimum-spend ledger.
+  const subscriptionCustomer = (await api('customer.create', { external_id: 'synthetic-nectar-visibility-subscription', name: 'Visibility subscription', billing_email: mailbox('synthetic-nectar-visibility-subscription') })).id
+  const subscription = (await api('subscription.create', { customer: subscriptionCustomer, start_date: '2026-07-01', price: [fixtures[0].price] })).id
+  const terms = await api('contract.prepare', { subscription, revision: (await api(`subscriptions/${subscription}`)).revision,
+    clause: 'Reviewed minimum for the visibility journey', commitments: [{ from: '2026-07-01', to: '2026-08-01', minimum: '100', taxable: false }], included: [], ramps: [] })
+  await h.api('contract.decide', finance, { contract: terms.contract, decision: 'approved' })
+  const run = await api('billrun.prepare', { period: '2026-07' })
+  const recurring = (await api(`runs/${run.id}`)).invoices.find(row => row.subscription_id === subscription)
+  await api('invoice.approve', { invoice: recurring.id, acknowledge: true })
+  await api('invoice.finalise', { invoice: recurring.id, issue_date: '2026-08-01' })
+  const recurringInvoice = await api(`invoices/${recurring.id}`)
+  for (const reader of [matrix[0], matrix.find(row => row.name === 'finance')]) {
+    const detail = await h.api(`subscriptions/${subscription}`, reader.who)
+    const customer = await h.api(`customers/${subscriptionCustomer}`, reader.who)
+    assert.equal(JSON.stringify(detail).includes(recurringInvoice.number), reader.invoices, 'Subscription invoice history and minimum-spend evidence use invoice authority')
+    assert.equal(JSON.stringify(customer).includes(recurringInvoice.number), reader.invoices, 'Composed subscription records use invoice authority')
+    const html = mainHtml(await h.page(`/app/subscriptions/${subscription}`, reader.who))
+    assert.equal(html.includes(recurringInvoice.number), reader.invoices)
+    assert.equal(html.includes('No invoices yet.'), false, 'An unauthorized subscription reader gets no invoice empty state')
+  }
+  const written = await api('writeoff.issue', { invoice: recurring.id, amount: '100', reason: 'Reviewed synthetic uncollectible debt' })
+  const recoveryReference = 'synthetic-nectar-visibility-recovery'
+  const recoveryPayment = (await api('payment.record', { customer: subscriptionCustomer, amount: '25', received_on: '2026-08-02', method: 'bank_transfer', reference: recoveryReference })).payment
+  await api('writeoff.recover', { write_off: written.writeOff, payment: recoveryPayment, amount: '25' })
+  for (const reader of readers.filter(row => row.invoices)) {
+    const invoice = await h.api(`invoices/${recurring.id}`, reader.who)
+    assert.deepEqual([invoice.total_cents, invoice.paidCents, invoice.writtenOffCents, invoice.balanceCents], [10000, 2500, 7500, 0])
+    assert.equal(JSON.stringify(invoice).includes(recoveryReference), reader.payments, 'Write-off recovery cannot bypass payment reference authority')
+    assert.equal(JSON.stringify(await h.api('write-offs', reader.who)).includes(recoveryReference), reader.payments)
+    const customer = await h.api(`customers/${subscriptionCustomer}`, reader.who)
+    assert.equal(JSON.stringify(customer).includes(recoveryReference), reader.payments)
+  }
+  console.log('PROBE GOV-008 1: customer detail, child, search and CSV doors -> invoice figures visible only with invoice authority')
+  console.log('PROBE GOV-008 2: same populated doors -> payment references visible only with both financial capabilities')
+  console.log('PROBE GOV-008 3: Sales and customer-only and payment-only reads -> financial sections and hints absent')
+  console.log('PROBE GOV-008 4: approved erasure -> private identifiers absent; retained invoice totals unchanged')
+  console.log('PROBE GOV-008 5: allowed reads, refused reads and next-request revocation -> no financial mutation')
+}
+
+// The existing browser sanity journey invokes this against a fresh installation.
+// Assertions run at desktop width; the same populated screens get phone proof.
+export async function customerVisibilityBrowserJourney(browser) {
+  const { harness } = await import('./harness.mjs')
+  const { mkdir } = await import('node:fs/promises')
+  const directory = `${process.env.NECTAR_EVIDENCE_DIR ?? '.evidence'}/customer-visibility`
+  await mkdir(directory, { recursive: true })
+  const h = await harness({ assets: true, localTime: '2026-10-15T12:00:00Z' })
+  try {
+    await h.raw('/auth/bootstrap', { body: { token: h.vars.SETUP_TOKEN, displayName: 'Nectar Owner' } })
+    const owner = await h.signIn(h.vars.OWNER_EMAIL)
+    await h.raw('/setup', { cookie: owner, form: new URLSearchParams({ confirm: 'yes' }) })
+    await h.api('business.configure', owner, { legal_name: 'Cedar Software Inc', timezone: 'UTC', invoice_prefix: 'CD', payment_terms_days: 30 })
+    await applyPolicy(h, owner, 'tax.declare', { tax_jurisdiction: 'CA', tax_mode: 'no_tax', tax_note: 'Reviewed visibility journey' })
+    await h.api('tax.review', owner, { revision: (await h.api('business', owner)).revision })
+    await financialVisibilityFlow(h, owner, { onReady: async ({ fixtures, matrix, phase, imported }) => {
+      for (const reader of matrix.filter(row => ['sales', 'customer-only', 'invoice-only', 'payment-only', 'combined'].includes(row.name))) {
+        const context = await browser.newContext({ viewport: { width: 1440, height: 950 } })
+        try {
+          await context.addCookies(reader.who.split('; ').map(value => {
+            const split = value.indexOf('=')
+            return { name: value.slice(0, split), value: value.slice(split + 1), url: h.origin }
+          }))
+          const page = await context.newPage(), customer = imported ?? fixtures[0]
+          const paths = [{ name: phase, path: `/app/customers/${customer.customer}` }]
+          if (phase === 'ordinary') paths.push({ name: 'invoice-search', path: `/app/customers?search=${encodeURIComponent(customer.before.ledger.invoices[0].number)}` })
+          for (const screen of paths) {
+            await page.setViewportSize({ width: 1440, height: 950 })
+            assert.equal((await page.goto(h.origin + screen.path)).status(), 200)
+            const main = page.locator('main'), text = await main.innerText()
+            if (screen.name === 'invoice-search') {
+              assert.equal(await main.locator(`a[href="/app/customers/${customer.customer}"]`).count(), reader.invoices ? 1 : 0)
+            } else {
+              assert.equal(text.includes(imported ? customer.before.incumbentHistory.documents[0].number : customer.before.ledger.invoices[0].number), reader.invoices)
+              if (!imported) assert.equal(text.includes(customer.reference), reader.payments && phase !== 'erased')
+              else for (const value of [customer.before.name, customer.before.billing_email, 'synthetic-nectar-payment-annual']) assert.ok(!text.includes(value))
+              if (!reader.invoices) {
+                assert.equal(await main.locator('#money,#credits,#one-time').count(), 0, 'Forbidden sections are absent from the actual DOM')
+                for (const hint of ['No issued invoices', 'No credit notes', 'Invoiced', 'Owed now', 'No moved documents']) assert.ok(!text.includes(hint))
+              }
+              if (!reader.payments) for (const hint of ['Unallocated payments', 'Payment receipts', 'Processor payments', 'Credit balance']) assert.ok(!text.includes(hint))
+              if (['erased-child','erased'].includes(phase)) for (const value of [fixtures[1].before.name, fixtures[1].before.billing_email, fixtures[1].reference]) assert.ok(!text.includes(value), 'An erased child cannot revive identifiers')
+              if (phase === 'erased') for (const value of [customer.before.name, customer.before.billing_email, customer.reference]) assert.ok(!text.includes(value))
+            }
+            const icons = await page.locator('a,button,[role=button]').evaluateAll(nodes => nodes.filter(node => !node.textContent.trim() && node.querySelector('svg,img')).map(node => ({ tooltip: !!document.getElementById(node.getAttribute('aria-describedby') ?? '') })))
+            assert.ok(icons.every(icon => icon.tooltip), 'Icon-only controls have accessible tooltips')
+            for (const width of [1440, 390]) {
+              await page.setViewportSize({ width, height: 950 })
+              assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, `${reader.name} ${screen.name} fits ${width}`)
+              await page.screenshot({ path: `${directory}/${width}-${reader.name}-${screen.name}.png`, fullPage: true })
+              console.log('BROWSER GOV-008', width, reader.name, screen.name)
+            }
+          }
+        } finally { await context.close() }
+      }
+    } })
+  } finally { await h.close() }
 }
