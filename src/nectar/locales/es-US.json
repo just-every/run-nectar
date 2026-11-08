@@ -494,5 +494,20 @@
   "schedule.status.collected": "Fondos ACH verificados y asignados a esta factura.",
   "schedule.status.expired": "El procesador confirmó el rechazo sin fondos capturados. No se registró ningún pago.",
   "schedule.status.revoked": "Esta instrucción con fecha se retiró antes del envío.",
-  "schedule.status.withdrawn": "Esta instrucción con fecha no está disponible."
+  "schedule.status.withdrawn": "Esta instrucción con fecha no está disponible.",
+  "transfer.heading": "Instrucciones de transferencia bancaria",
+  "transfer.testMode": "Solo modo de prueba. Estas instrucciones no aceptan fondos reales.",
+  "transfer.bankName": "Banco",
+  "transfer.accountHolderName": "Titular de la cuenta",
+  "transfer.accountNumber": "Número de cuenta",
+  "transfer.routingNumber": "Número de ruta",
+  "transfer.accountType": "Tipo de cuenta",
+  "transfer.networks": "Redes de transferencia",
+  "transfer.currency": "Moneda",
+  "transfer.country": "País",
+  "transfer.checking": "Cuenta corriente",
+  "transfer.savings": "Cuenta de ahorros",
+  "transfer.ach": "Crédito ACH",
+  "transfer.domestic_wire_us": "Transferencia nacional de EE. UU.",
+  "transfer.US": "Estados Unidos"
 }

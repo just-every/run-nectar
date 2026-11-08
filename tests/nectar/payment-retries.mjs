@@ -1,4 +1,4 @@
-import { billingNoticeAssertions, sendBillingNoticeAssertions, billingNoticeCustodyAssertions } from './billing-notices.mjs'
+import { billingNoticeAssertions, sendBillingNoticeAssertions, billingNoticeCustodyAssertions, billingNoticeBasisAssertions } from './billing-notices.mjs'
 import assert from 'node:assert/strict'
 import { retryEdge } from './retry-edge.mjs'
 import { totp } from './mfa.mjs'
@@ -172,9 +172,12 @@ export async function paymentRetriesFlow(h,owner,{onState=async()=>{},prepareCol
  await move(instant+15*day)
  const expired=await api(`invoices/${overdue.id}`);assert.equal(expired.next_payment_attempt,null);assert.equal(expired.retry_status,'exhausted')
  await tick(instant);assert.equal(edge.writes.length,overdueWrites,'An expired window cannot send even when the scheduler missed its earlier due time')
+ await fresh()
+ await billingNoticeBasisAssertions(h,owner,()=>create('processing_error'))
  await billingNoticeCustodyAssertions(h,owner,{invoice:overdue.id,customer:customers[0],instant,refresh:async at=>{
   if(at!==undefined){instant=at;edge.setTime(at)}
-  await api('mfa.verify',{code:totp(factor.secret,instant)});verifiedAt=instant
+  if(verifiedAt!==instant)await api('mfa.verify',{code:totp(factor.secret,instant)})
+  verifiedAt=instant
  }})
  console.log('paymentRetriesFlow: consented policy, exact timing, hard and ACH prohibitions, caps, dispute hold, once-only cash and page API webhook parity')
 }

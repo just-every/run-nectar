@@ -1,8 +1,12 @@
+import { reviewer } from './policy-helper.mjs'
 import assert from 'node:assert/strict'
 import { publishPrice } from './price-helper.mjs'
 
 // SUB-004 carries CAT-001/CAT-007/AGENT-004 current pricing and full-term parity.
 export async function renewalPricing(h,owner) {
+  const me=await h.api('me',owner)
+  const singleAllowed=!(await h.api('members',owner)).some(m=>m.id!==me.id&&m.status==='active'&&['owner','finance'].includes(m.role))
+  const approver=await reviewer(h,owner,singleAllowed)
   const customer=(await h.api('customer.create',owner,{external_id:'SUB004-MODELS',name:'Term model laboratory',billing_email:'terms@laboratory.example'})).id
   const meter=(await h.api('meter.create',owner,{code:'sub004-units',name:'Measured units',unit_label:'units'})).id
   const models=[
@@ -19,7 +23,7 @@ export async function renewalPricing(h,owner) {
     const sub=(await h.api('subscription.create',owner,{customer,start_date:'2026-01-01',price:[price],quantity:['7']})).id
     const detail=await h.api(`subscriptions/${sub}`,owner)
     const term=await h.api('term.prepare',owner,{subscription:sub,revision:detail.revision,term_start:'2026-01-01',months:12,auto_renew:true,notice_days:30,uplift_percent:'5'})
-    await h.api('term.decide',owner,{term:term.term,decision:'approved',confirm_single:true})
+    await h.api('term.decide',approver,{term:term.term,decision:'approved',confirm_single:singleAllowed})
     terms.push({sub,expected,name})
     initials.push(await h.api(`subscriptions/${sub}/upcoming?period=2026-07`,owner))
   }
@@ -31,7 +35,7 @@ export async function renewalPricing(h,owner) {
   const metricPrice=(await h.api('price.create',owner,{product,kind:'unit',meter:activated.id,unit_amount:'0.0004',taxable:false})).id
   const metricSub=(await h.api('subscription.create',owner,{customer,start_date:'2026-01-01',price:[metricPrice]})).id
   const metricTerm=await h.api('term.prepare',owner,{subscription:metricSub,revision:(await h.api(`subscriptions/${metricSub}`,owner)).revision,term_start:'2026-01-01',months:12,auto_renew:true,notice_days:30,uplift_percent:'5'})
-  await h.api('term.decide',owner,{term:metricTerm.term,decision:'approved',confirm_single:true})
+  await h.api('term.decide',approver,{term:metricTerm.term,decision:'approved',confirm_single:singleAllowed})
   assert.equal((await h.api('subscription.create',owner,{customer,start_date:'2028-01-01',price:[metricPrice]},409)).error,'meter_already_billed','SUB-004 automatic future terms retain source ownership')
   assert.equal((await h.api('subscription.addon',owner,{subscription:terms[0].sub,price:metricPrice,effective_date:'2028-01-01'},409)).error,'meter_already_billed','SUB-004 add-ons cannot reclaim an automatically renewing source')
   const event=await h.api('usage.submit',owner,{events:[{event_id:'sub004-metric-renewal',customer:'SUB004-MODELS',meter:'sub004-units',quantity:'1000.5',occurred_at:'2027-01-10T12:00:00-08:00'}]})
@@ -52,7 +56,7 @@ export async function renewalPricing(h,owner) {
   const target=(await publishPrice(h,owner,{product:seatProduct,kind:'flat',unit_amount:'120',taxable:false})).id
   const historical=(await h.api('subscription.create',owner,{customer,start_date:'2025-01-01',price:[old]})).id
   const ht=await h.api('term.prepare',owner,{subscription:historical,revision:(await h.api(`subscriptions/${historical}`,owner)).revision,term_start:'2025-01-01',months:12,auto_renew:true,notice_days:30,uplift_percent:'5'})
-  await h.api('term.decide',owner,{term:ht.term,decision:'approved',confirm_single:true})
+  await h.api('term.decide',approver,{term:ht.term,decision:'approved',confirm_single:singleAllowed})
   const history=[]
   for(let m=1;m<=12;m++) {
     const period=`2025-${String(m).padStart(2,'0')}`,run=await h.api('billrun.prepare',owner,{period})

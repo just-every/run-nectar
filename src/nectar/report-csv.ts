@@ -1,3 +1,4 @@
+import { taxSourceReport } from './tax-source-report'
 import type { Bindings } from '../auth.server'
 import { requireRead, requireCapability, type Actor } from './actor'
 import { report, type Report } from './reports'
@@ -29,5 +30,14 @@ export function csvResponse(csv: string, name: string) {
 export async function reportCsv(env: Bindings, actor: Actor, metric: string, url: URL) {
   requireCapability(actor,'export')
   requireRead(actor,'reports')
+  if (metric === 'tax-sources') {
+    const r = await taxSourceReport(env, actor, url)
+    const fields = Object.keys(r.totals) as (keyof typeof r.totals)[]
+    const rows: unknown[][] = [['period','definition','source_kind','source','invoice','customer','date','frozen_jurisdiction','base_state','tax_state','currency','source_id','invoice_id','source_amount',...fields,'source_path']]
+    rows.push([r.period,r.definition,'total','TOTAL','','','','','','','USD','','','',...fields.map(key => plainMoney(r.totals[key])), ''])
+    for (const e of r.entries) rows.push([r.period,r.definition,e.kind,e.number,e.invoiceNumber,e.customerName,e.date,e.jurisdiction ?? 'Missing declared jurisdiction',e.baseState,e.taxState,'USD',e.id,e.invoiceId,plainMoney(e.amountCents),...fields.map(key => plainMoney(e[key])),e.href])
+    for (const e of r.unsupported) rows.push([r.period,r.definition,'excluded',e.number,'','','', '',e.reason,'not_covered',e.currency,e.id,'','',...fields.map(() => ''),''])
+    return csvResponse(rows.map(row => row.map(cell).join(',')).join('\r\n') + '\r\n', 'nectar-tax-sources')
+  }
   return csvResponse(reportsCsv([await report(env,actor,metric,url)]),`nectar-${metric}`)
 }

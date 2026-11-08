@@ -1,3 +1,4 @@
+import { seedCloseSources } from './close-tieout.mjs'
 // GOV-005: public rer commands over a real populated installation. Use a
 // disposable checkout only; the journey deliberately resets and restores it.
 import assert from 'node:assert/strict'
@@ -39,6 +40,11 @@ try{
  await api('business.configure',cookie,{legal_name:'Cedar Software Inc',timezone:'America/Los_Angeles',invoice_prefix:'CD',payment_terms_days:30})
  const h={api,origin,raw:(path,{body,headers={}}={})=>fetch(origin+path,{method:body===undefined?'GET':'POST',redirect:'manual',headers:{...(body===undefined?{}:{origin,'content-type':'application/json'}),...headers},body:body===undefined?undefined:JSON.stringify(body)})};await applyPolicy(h,cookie,'tax.declare',{tax_jurisdiction:'CA',tax_mode:'no_tax',tax_note:'Reviewed GOV-005 archive journey'})
  await api('tax.review',cookie,{revision:(await api('business',cookie)).revision})
+ const closeSources=await seedCloseSources(h,cookie)
+ const closeBasis=(await api('close-tieout?period=2026-09',cookie)).basis
+ await api('close.scan',cookie,{period:'2026-09',basis:closeBasis,owner:(await api('me',cookie)).id})
+ const closeCases=(await api('assurance-cases',cookie)).filter(row=>row.customer_id===closeSources.customer)
+ assert.equal(closeCases.length,2,'Close preparation keeps two distinct operational cases before export')
  const capture=Object.fromEntries(await Promise.all(['manifest','customers','products','prices','subscriptions','invoices','meters'].map(async name=>[name,file(`${name}.json`,await readFile(new URL(`../fixtures/stripe/${name}.json`,import.meta.url)),'application/json')])))
  const preview=await api('import.preview',cookie,capture);await api('import.apply',cookie,{...capture,fingerprint:preview.fingerprint})
  const customer=(await api('customers',cookie)).find(c=>c.external_id==='cus_NcAtlasFreight01')
@@ -70,6 +76,7 @@ try{
  await command(root,['export','--output',before]);assert.ok(JSON.stringify(items(await rows(before))).includes('Amelia Privatecontact'))
  assert.ok(items(await rows(before)).some(item=>item.table==='nc_portal_change_requests'&&item.row.id===portalChange.request.id),'The actual archive includes non-executable pending request evidence')
  assert.ok(!items(await rows(before)).some(i=>i.table==='nc_portal_retention_authority'),'Policy evidence exports without executable portal retention authority')
+ assert.ok(items(await rows(before)).some(i=>i.table==='nc_assurance_cases'&&closeCases.some(row=>row.id===i.row.id)),'Close cases export as evidence without financial execution authority')
  assert.ok(!items(await rows(before)).some(i=>i.table==='nc_idempotency'),'DEV-002 the idempotency replay store never enters an archive')
  await start()
  const request=await api('erasure.request',cookie,{customer:customer.id})
@@ -82,6 +89,10 @@ try{
  assert.equal(erased.receipt.retained.legacyAnchor,day,'GOV-005 missing legacy issue/payment dates use the approval business-local date')
  assert.match(erased.receipt.retained.legacyDateRule,/unavailable/,'GOV-005 the receipt identifies missing legacy date evidence')
  assert.equal(erased.receipt.retained.until,`${Number(day.slice(0,4))+7}${day.slice(4)}`,'GOV-005 legacy financial custody expires seven calendar years after approval')
+ const closeErasure=await api('erasure.request',cookie,{customer:closeSources.customer})
+ await api('erasure.verify',cookie,{request:closeErasure.id,reason:'Independent verification of close-source erasure',evidence:file('close-owner.txt','Synthetic independent verification','text/plain')})
+ await api('erasure.approve',cookie,{request:closeErasure.id,confirm:true})
+ assert.ok(!(await api('assurance-cases',cookie)).some(row=>closeCases.some(old=>old.id===row.id)))
  const historicalRequest=await api('erasure.request',cookie,{customer:historicalCustomer.id})
  await api('erasure.verify',cookie,{request:historicalRequest.id,reason:'Independently checked historical account owner',evidence:file('historical-owner.txt','Signed owner history request','text/plain')})
  const historicalErasure=await api('erasure.approve',cookie,{request:historicalRequest.id,confirm:true})
@@ -93,6 +104,8 @@ try{
  for(const item of archived){const serialized=JSON.stringify(item);for(const value of privateValues)assert.ok(!serialized.includes(value),`GOV-005 archive ${item.table} removes personal text`)
   if(item.kind==='row')for(const [column,value] of Object.entries(item.row)){if(typeof value==='object'&&value?.blob){const decoded=Buffer.from(value.blob,'base64').toString();for(const personal of privateValues)assert.ok(!decoded.includes(personal),`GOV-005 retained blob ${item.table}.${column} has no erased personal data`)}}
  }
+ assert.ok(!archived.some(r=>['nc_assurance_cases','nc_assurance_observations'].includes(r.table)&&r.row?.customer_id===closeSources.customer),'Erased close investigations never restore')
+ assert.ok(archived.some(r=>r.table==='nc_ledger_postings'&&r.row?.id===closeSources.posting),'Minimal financial posting custody remains in the archive')
  assert.ok(!archived.some(r=>r.table==='nc_portal_change_requests'),'Erased requests never enter the anonymized restore')
  assert.ok(archived.some(r=>r.kind==='row'&&r.table==='nc_incumbent_revenue'),'MOVE-007 anonymous revenue schedules are in the actual archive')
  assert.ok(archived.some(r=>r.kind==='row'&&r.table==='ik_d1_erasure_journal'),'GOV-005 import custody retirement is journalled')
@@ -103,6 +116,9 @@ try{
  assert.deepEqual(items(await rows(restored)),archived,'GOV-005 the post-erasure archive restores only anonymized records and exact retained financial custody')
  await start()
  assert.equal((await h.raw(renewalPath(liveSession),{headers:{accept:'application/json'}})).status,401,'An archived installation never restores its old customer session')
+ const restoredPacket=await api('close-tieout?period=2026-09',cookie)
+ assert.ok(!restoredPacket.proofs.some(row=>row.customer===closeSources.customer),'Restoration cannot resurrect an erased close source')
+ assert.equal((await api('close.scan',cookie,{period:'2026-09',basis:closeBasis,owner:(await api('me',cookie)).id},409)).error,'close_source_changed')
  const restoredSession=await portalSession(),restoredView=await view(restoredSession)
  assert.equal(restoredView.save,null,'Retained policy evidence cannot restore portal save execution authority')
  assert.equal((await h.raw(renewalPath(restoredSession),{body:{basis:restoredView.basis,confirm:'save',offer:liveOffer.save.id}})).status,409)

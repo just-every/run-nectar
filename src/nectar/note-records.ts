@@ -1,4 +1,5 @@
 // Resolve ownership from the recorded object; callers cannot supply a customer.
+import { canRead, type Actor } from './actor'
 import type { Bindings } from '../auth.server'
 import { all, insist, one, type Row } from './core'
 
@@ -15,8 +16,8 @@ export async function noteRecord(env: Bindings, kind: string, id: string) {
 }
 
 /** Customer projection used by the API, screens and customer CSV. */
-export async function customerNotes(env: Bindings, customer: string): Promise<(Row & { mentions: Row[] })[]> {
+export async function customerNotes(env: Bindings, customer: string, actor?: Actor): Promise<(Row & { mentions: Row[] })[]> {
   const rows = await all(env, 'SELECT * FROM nc_notes WHERE customer_id=? ORDER BY created_at,id', customer)
   const mentions = await all(env, `SELECT m.* FROM nc_note_mentions m JOIN nc_notes n ON n.id=m.note_id WHERE n.customer_id=? ORDER BY m.member_id`, customer)
-  return rows.map(row => ({ ...row, mentions: mentions.filter(m => m.note_id === row.id) }))
+  return rows.filter(row => !actor || row.kind === 'customer' || row.kind === 'invoice' && canRead(actor, 'invoices') || row.kind === 'payment' && canRead(actor, 'invoices') && canRead(actor, 'payments')).map(row => ({ ...row, mentions: mentions.filter(m => m.note_id === row.id) }))
 }

@@ -1,3 +1,4 @@
+import { transferInstructionIssue } from './transfer-instructions'
 import { invoiceRefunds } from './invoice-refunds'
 import { currencyRecord } from './currency-rates'
 import { planChangeInvoiceFingerprint } from './plan-changes'
@@ -180,7 +181,7 @@ export async function invoiceRecord(env: Bindings, actor: Actor, id: string): Pr
   const allocations = await all(env, 'SELECT a.*, p.reference, p.received_on, p.method FROM nc_allocations a JOIN nc_payments p ON p.id = a.payment_id WHERE a.invoice_id = ? ORDER BY a.allocated_at', id)
   const processorReversals=await all(env,'SELECT * FROM nc_processor_reversals WHERE invoice_id=? ORDER BY occurred_at,id',id)
   const carriedApplications=await all(env,'SELECT a.*,n.number,n.correction_id FROM nc_usage_credit_applications a JOIN nc_credit_notes n ON n.id=a.credit_id WHERE a.invoice_id=? ORDER BY a.applied_at,a.id',id)
-  const writeOffs = invoice.status === 'issued' ? await writeOffsFor(env, id) : [], writtenOff = writeOffs.reduce((sum, row) => sum + row.netCents, 0)
+  const writeOffs = invoice.status === 'issued' ? await writeOffsFor(env, id, canRead(actor,'payments')) : [], writtenOff = writeOffs.reduce((sum, row) => sum + row.netCents, 0)
   const balanceApplications = await all(env, "SELECT * FROM nc_balance_entries WHERE kind='application' AND grant_id IS NOT NULL AND invoice_id=? ORDER BY created_at,id", id)
   const credited = credits.reduce((sum, row) => sum + (row.applied_cents??row.amount_cents), 0)+carriedApplications.reduce((n,r)=>n+r.amount_cents,0)+balanceApplications.reduce((n,r)=>n+r.amount_cents,0), paid = allocations.reduce((sum, row) => sum + row.amount_cents, 0)-processorReversals.reduce((sum,row)=>sum+row.amount_cents,0)
   return {
@@ -189,7 +190,7 @@ export async function invoiceRecord(env: Bindings, actor: Actor, id: string): Pr
     lines: lines.map(line => ({ ...line, evidence: parseJson(line.evidence_json, {}), evidence_json: undefined })),
     refunds:canRead(actor,'payments')?await invoiceRefunds(env,actor,id):[],
     voidedBy:credits.find(row=>row.void_replacement_id)??null, reissuedFrom:parseJson<Row>(invoice.calculation_json,{}).inputs?.reissue??null,
-    processorReversals,carriedApplications, credits:await withMetadata(env,'credit-note',credits), allocations, balanceApplications, writeOffs, writtenOffCents: writtenOff, creditedCents: credited, paidCents: paid, balanceCents: invoice.status === 'issued' ? invoice.total_cents - credited - paid - writtenOff : null,
+    processorReversals:canRead(actor,'payments')?processorReversals:[],carriedApplications, credits:await withMetadata(env,'credit-note',credits), allocations:canRead(actor,'payments')?allocations:[], balanceApplications, writeOffs, writtenOffCents: writtenOff, creditedCents: credited, paidCents: paid, balanceCents: invoice.status === 'issued' ? invoice.total_cents - credited - paid - writtenOff : null,
   }
 }
 
@@ -320,6 +321,7 @@ async function finaliseCore(env: Bindings, actor: Actor, input: Input, trialAuth
       ...charges.map(id => guard(env, 'charges_already_billed_or_missing', 'EXISTS(SELECT 1 FROM nc_charges WHERE id=? AND invoice_id IS NULL)', id)),
       ...charges.map(id => stmt(env, 'UPDATE nc_charges SET invoice_id=? WHERE id=?', invoice.id, id)),
       ...chunk(consumed, 90).map(ids => stmt(env, `UPDATE nc_usage_events SET invoice_id = ? WHERE event_id IN (${ids.map(() => '?').join(',')})`, invoice.id, ...ids)),
+      ...await transferInstructionIssue(env,invoice,allocation.routeJson),
       stmt(env, "UPDATE nc_invoices SET legal_name=(SELECT name FROM nc_customers WHERE id=nc_invoices.customer_id), status = 'issued', number = ?, issue_date = ?, due_date = ?, issued_by = ?, issued_at = ?,billing_entity_id=?,billing_route_json=? WHERE id = ?", number, issueDate, due, actorLabel(actor), now(),allocation.entityId,allocation.routeJson, invoice.id),
       ...await hierarchyIssueStatements(env,invoice),
       ...prepaidPurchaseIssueStatements(env,invoice,calculation.inputs ?? {}),

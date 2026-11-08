@@ -494,5 +494,20 @@
   "schedule.status.collected": "ACH funds verified and allocated to this invoice.",
   "schedule.status.expired": "The processor confirmed refusal without captured cash. No payment was recorded.",
   "schedule.status.revoked": "This dated instruction was withdrawn before submission.",
-  "schedule.status.withdrawn": "This dated instruction is unavailable."
+  "schedule.status.withdrawn": "This dated instruction is unavailable.",
+  "transfer.heading": "Bank transfer instructions",
+  "transfer.testMode": "Test mode only. These instructions do not accept live funds.",
+  "transfer.bankName": "Bank",
+  "transfer.accountHolderName": "Account holder",
+  "transfer.accountNumber": "Account number",
+  "transfer.routingNumber": "Routing number",
+  "transfer.accountType": "Account type",
+  "transfer.networks": "Transfer networks",
+  "transfer.currency": "Currency",
+  "transfer.country": "Country",
+  "transfer.checking": "Checking",
+  "transfer.savings": "Savings",
+  "transfer.ach": "ACH credit",
+  "transfer.domestic_wire_us": "US domestic wire",
+  "transfer.US": "United States"
 }

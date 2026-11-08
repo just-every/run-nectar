@@ -1,11 +1,12 @@
 // One-time charges and standalone work are prepared on the customer record.
-import { can, type Actor } from '../actor'
+import { can, canRead, type Actor } from '../actor'
 import { plainMoney } from '../decimal'
 import type { Row } from '../core'
 import { priceRate } from './pricing'
 import { cents, check, field, form, h, hidden, select, table } from './html'
 
 export function chargeSection(c: Row, prices: Row[], actor: Actor, today: string) {
+  if (!canRead(actor, 'invoices')) return ''
   const pending = c.charges.filter((r: Row) => !r.invoice_id)
   return h`<section class="card" aria-labelledby="one-time"><h2 id="one-time">One-time charges</h2>
     ${table(['Charge', 'Date', 'Amount$', 'Billing'], c.charges.map((r: Row) => [r.description, r.effective_date, cents(r.amount_cents), r.invoice_id ? h`<a href="/app/invoices/${r.invoice_id}">Invoiced</a>` : r.subscription_id ? 'Next subscription invoice' : 'Ready for a standalone invoice']), { empty: 'No one-time charges.' })}

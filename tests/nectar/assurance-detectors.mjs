@@ -85,7 +85,7 @@ export async function assuranceDetectorsFlow(h, owner) {
   const runsBefore = await api('runs'), subscriptionBefore = await api(`subscriptions/${under.subscription}`), paymentsBefore = await api('payments')
   const scan = () => h.api('assurance.scan', agent, { period: '2026-07', owner: ownerId })
   const opened = await scan()
-  assert.deepEqual(opened.coverage, ['usage_source_control', 'seat_ramp', 'commitment_trueup', 'unapplied_credit', 'cancellation_access', 'paid_without_access'])
+  assert.deepEqual(opened.coverage, ['usage_source_control', 'seat_ramp', 'commitment_trueup', 'unapplied_credit', 'cancellation_access', 'paid_without_access', 'move_comparison'])
   assert.equal(opened.opened.length, 6, 'only the planted mismatches open cases; the correctly applied ramp does not')
   assert.deepEqual((await scan()).opened, [], 'repeated scans do not duplicate cases')
   assert.deepEqual(await api('runs'), runsBefore, 'a scan prepares no bill run')

@@ -1,3 +1,4 @@
+import { MOVE_KIND, moveInvestigationEvidence } from './movein/investigations'
 // Current assurance coverage: recorded source controls versus ingested usage, and signed seat and ramp
 // steps versus issued invoices. A scan owns only case records. Financial fixes keep their existing approvals.
 import type { Bindings } from '../auth.server'
@@ -11,12 +12,13 @@ import { RAMP_KIND, rampEvidence } from './assurance-ramps'
 import { TRUEUP_KIND, trueUpEvidence } from './assurance-commitments'
 import { CREDIT_KIND, creditEvidence } from './assurance-credits'
 import { ACCESS_KIND, accessEvidence } from './assurance-access'
+import { CLOSE_KINDS, closeTieout } from './close-tieout'
 import { PAID_KIND, paidAccessEvidence } from './assurance-paid-access'
 
 // Each detector compares signed terms with recorded facts and returns one evidence record per subject.
 // Built on use: the detector modules import doors that import this one.
 const detectors = (): Record<string, (env: Bindings) => Promise<Row[]>> => ({
-  [RAMP_KIND]: rampEvidence, [TRUEUP_KIND]: trueUpEvidence, [CREDIT_KIND]: creditEvidence, [ACCESS_KIND]: accessEvidence, [PAID_KIND]: paidAccessEvidence,
+  [RAMP_KIND]: rampEvidence, [TRUEUP_KIND]: trueUpEvidence, [CREDIT_KIND]: creditEvidence, [ACCESS_KIND]: accessEvidence, [PAID_KIND]: paidAccessEvidence, [MOVE_KIND]: moveInvestigationEvidence,
 })
 
 function investigator(actor: Actor) {
@@ -44,6 +46,12 @@ function evidence(row: Row) {
 
 async function current(env: Bindings, actor: Actor, row: Row): Promise<Row> {
   insist(!await one(env,'SELECT 1 FROM nc_customers WHERE id=? AND erased_at IS NOT NULL',row.customer_id),'assurance_case_not_found',404)
+  if (CLOSE_KINDS.includes(row.kind)) {
+    const period = parseJson<Row>(row.evidence_json, {}).period
+    const proof = (await closeTieout(env, actor, period)).proofs.find(proof => proof.source === row.source_id)
+    insist(proof, 'assurance_source_unavailable', 409)
+    return proof
+  }
   const detector=detectors()[row.kind]
   if(detector) {
     const compared=(await detector(env)).find(c=>c.source===row.source_id)
@@ -59,16 +67,19 @@ async function current(env: Bindings, actor: Actor, row: Row): Promise<Row> {
 
 const project = (row: Row): Row => ({...row,evidence:parseJson(row.evidence_json,{}),evidence_json:undefined})
 
-export async function assuranceCases(env: Bindings, actor: Actor) {
+export async function assuranceCases(env: Bindings, actor: Actor): Promise<Row[]> {
   requireCapability(actor,'read')
-  return await all(env,'SELECT a.* FROM nc_assurance_cases a JOIN nc_customers c ON c.id=a.customer_id WHERE c.erased_at IS NULL ORDER BY a.created_at,a.id').then(rows=>rows.map(project))
+  const rows=await all(env,'SELECT a.* FROM nc_assurance_cases a JOIN nc_customers c ON c.id=a.customer_id WHERE c.erased_at IS NULL ORDER BY a.created_at,a.id')
+  const live=rows.some(row=>row.kind===MOVE_KIND)?await moveInvestigationEvidence(env):[]
+  return rows.map(row=>({...project(row),...(row.kind===MOVE_KIND?{stale:live.find(proof=>proof.source===row.source_id)?.basis!==row.basis_hash}:{} )}))
 }
 
 export async function assuranceCase(env: Bindings, actor: Actor, id: string): Promise<Row> {
   requireCapability(actor,'read')
   const row=await one(env,'SELECT a.* FROM nc_assurance_cases a JOIN nc_customers c ON c.id=a.customer_id WHERE a.id=? AND c.erased_at IS NULL',id)
   insist(row,'assurance_case_not_found',404)
-  return {...project(row),observations:(await all(env,'SELECT * FROM nc_assurance_observations WHERE case_id=? ORDER BY created_at,id',id)).map(project)}
+  const live = row.kind===MOVE_KIND ? await current(env,actor,row).catch(()=>null) : null
+  return {...project(row),...(row.kind===MOVE_KIND?{stale:!live||live.basis!==row.basis_hash,currentEvidence:live}:{}),observations:(await all(env,'SELECT * FROM nc_assurance_observations WHERE case_id=? ORDER BY created_at,id',id)).map(project)}
 }
 
 export async function scanAssurance(env: Bindings, actor: Actor, input: Input) {
@@ -80,18 +91,26 @@ export async function scanAssurance(env: Bindings, actor: Actor, input: Input) {
 
 /** One comparison pass over every detector. The scheduled run and the explicit door share it, so a repeated
  * pass is idempotent: an existing subject is rechecked in place and a new mismatch opens exactly one case. */
-export async function scanCases(env: Bindings, actor: Actor, periods: string[], owner: string, subject: string) {
+export async function scanCases(env: Bindings, actor: Actor, periods: string[], owner: string, subject: string, selectedProofs?: () => Promise<Row[]>) {
   await activeOwner(env,owner)
   const seq=await sequence(env), controls=(await Promise.all(periods.map(period=>controlTotals(env,actor,period)))).flat()
-  const statements:D1PreparedStatement[]=[unchanged(env,seq),ownerGuard(env,owner)]
-  const opened:string[]=[],rechecked:string[]=[]
   const proofs:Row[]=[]
   for(const row of controls) {
     // An erased customer's source controls are retained financial facts only.
     if(await one(env,'SELECT 1 FROM nc_customers WHERE id=? AND erased_at IS NOT NULL',row.customer))continue
     proofs.push(evidence(row))
   }
-  for(const detect of Object.values(detectors()))proofs.push(...await detect(env))
+  if(selectedProofs) proofs.push(...await selectedProofs())
+  else for(const detect of Object.values(detectors()))proofs.push(...await detect(env))
+  return await saveAssuranceProofs(env,actor,proofs,owner,subject,seq,selectedProofs?[MOVE_KIND]:['usage_source_control',...Object.keys(detectors())])
+}
+
+/** Shared case custody for explicit comparisons. Callers own no financial action. */
+export async function saveAssuranceProofs(env: Bindings, actor: Actor, proofs: Row[], owner: string, subject: string, seq: number, coverage: string[], action = 'assurance.scan') {
+  investigator(actor)
+  await activeOwner(env,owner)
+  const statements:D1PreparedStatement[]=[unchanged(env,seq),ownerGuard(env,owner)]
+  const opened:string[]=[],rechecked:string[]=[]
   for(const proof of proofs) {
     const existing=await one(env,'SELECT * FROM nc_assurance_cases WHERE source_id=?',proof.source)
     if(existing) {
@@ -108,8 +127,7 @@ export async function scanCases(env: Bindings, actor: Actor, periods: string[], 
     statements.push(stmt(env,"INSERT INTO nc_assurance_cases(id,customer_id,kind,source_id,owner_id,status,basis_hash,evidence_json,created_at,checked_at) VALUES(?,?,?,?,?,'open',?,?,?,?)",id,proof.customer,proof.kind,proof.source,owner,proof.basis,canonical(proof),at,at),
       stmt(env,"INSERT INTO nc_assurance_observations(id,customer_id,case_id,basis_hash,evidence_json,status,created_by,created_at) VALUES(?,?,?,?,?,'open',?,?)",newId(),proof.customer,id,proof.basis,canonical(proof),actorLabel(actor),at))
   }
-  const coverage=['usage_source_control',...Object.keys(detectors())]
-  await commit(env,statements,{actor:actorLabel(actor),action:'assurance.scan',subject,detail:{coverage,compared:proofs.length,opened,rechecked}})
+  await commit(env,statements,{actor:actorLabel(actor),action,subject,detail:{coverage,compared:proofs.length,opened,rechecked}})
   return {coverage,compared:proofs.length,opened,rechecked}
 }
 
@@ -170,6 +188,13 @@ export async function assuranceProposal(env: Bindings, actor: Actor, input: Inpu
     const invoice=await one(env,'SELECT customer_id FROM nc_invoices WHERE id=?',payload.invoice)
     insist(invoice?.customer_id===row.customer_id,'assurance_fix_customer_mismatch',409)
   }
+  if(row.kind===MOVE_KIND) {
+    insist(kind==='amendment' && payload.setup!==true && payload.invoice_credit!==true,'assurance_fix_kind_unsupported',409)
+    const proof=await current(env,actor,row)
+    insist(proof.mismatch && proof.subscription===payload.subscription,'assurance_fix_source_mismatch',409)
+    insist(proof.basis===row.basis_hash,'assurance_source_changed',409)
+    return {case:row.id,owner:row.owner_id,proposer:actor.id,kind:actor.kind,moveBasis:proof.basis}
+  }
   if(row.kind===RAMP_KIND) {
     insist(kind==='amendment' && payload.invoice_credit===true,'assurance_fix_kind_unsupported',409)
     const proof=await current(env,actor,row)
@@ -213,6 +238,12 @@ export async function assuranceExecution(env: Bindings, actor: Actor, input: Inp
 
 export async function assuranceProposalGuards(env: Bindings, link: Row | null) {
   if (!link) return []
+  if (link.moveBasis) {
+    const row=await one(env,'SELECT * FROM nc_assurance_cases WHERE id=?',link.case)
+    insist(row,'assurance_case_not_found',404)
+    const proof=(await moveInvestigationEvidence(env)).find(proof=>proof.source===row.source_id)
+    insist(proof?.basis===link.moveBasis,'assurance_source_changed',409)
+  }
   const checks: [string,string,unknown[]][] = [
     ['assurance_proposer_unavailable',link.kind==='member'
       ? "EXISTS(SELECT 1 FROM nc_members WHERE id=? AND status='active' AND role IN ('owner','finance'))"
@@ -227,4 +258,10 @@ export async function assuranceProposalGuards(env: Bindings, link: Row | null) {
     guards.push(guard(env,code,condition,...params))
   }
   return guards
+}
+
+export async function investigateMove(env: Bindings, actor: Actor, input: Input) {
+  investigator(actor)
+  const owner=input.text('owner',{max:100})
+  return await scanCases(env,actor,[],owner,'move-in',()=>moveInvestigationEvidence(env))
 }

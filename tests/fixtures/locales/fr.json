@@ -494,5 +494,20 @@
   "schedule.status.collected": "Fonds ACH vérifiés et affectés à cette facture.",
   "schedule.status.expired": "Le processeur a confirmé le refus sans encaissement. Aucun paiement enregistré.",
   "schedule.status.revoked": "Cette instruction datée a été retirée avant l’envoi.",
-  "schedule.status.withdrawn": "Cette instruction datée est indisponible."
+  "schedule.status.withdrawn": "Cette instruction datée est indisponible.",
+  "transfer.heading": "Instructions de virement bancaire",
+  "transfer.testMode": "Mode test uniquement. Ces instructions ne permettent pas de recevoir des fonds réels.",
+  "transfer.bankName": "Banque",
+  "transfer.accountHolderName": "Titulaire du compte",
+  "transfer.accountNumber": "Numéro de compte",
+  "transfer.routingNumber": "Numéro de routage",
+  "transfer.accountType": "Type de compte",
+  "transfer.networks": "Réseaux de virement",
+  "transfer.currency": "Devise",
+  "transfer.country": "Pays",
+  "transfer.checking": "Compte courant",
+  "transfer.savings": "Compte épargne",
+  "transfer.ach": "Crédit ACH",
+  "transfer.domestic_wire_us": "Virement national américain",
+  "transfer.US": "États-Unis"
 }

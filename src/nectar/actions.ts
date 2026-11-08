@@ -1,7 +1,12 @@
 import { prepareInvoiceSchedule, executeInvoiceSchedule } from './invoice-payment-schedules'
 import { prepareInvoicePartial, confirmInvoicePartial, revokeInvoicePartial, reconcileInvoicePartial } from './invoice-partial-payments'
+import { prepareMoveRollback,confirmMoveRollback } from './movein/rollback'
+import { scanCloseTieout } from './close-tieout'
+import { prepareTransferInstructions, confirmTransferInstructions } from './transfer-instructions'
+import { approveLink } from './sso-linking'
 import { preparePortalChangePolicy } from './portal-change-policy'
 import { uploadBankDeposit, uploadRemittances, previewRemittance, confirmRemittance, previewRemittanceAllocation, allocateRemittance } from './remittances'
+import { bindSandboxProcessor, reconcileSandboxBilling } from './test-billing'
 import { consumeProcessorEvent } from './processor-events'
 import { allocateProcessorCash } from './processor-cash-queue'
 import { prepareImportedCashTakeover, confirmImportedCashTakeover } from './processor-cash-imported'
@@ -26,7 +31,7 @@ import { configureRetryPolicy } from './retry-policy'
 import { prepareAutomaticCollection,decideAutomaticCollection,revokeAutomaticCollection } from './automatic-collection'
 import { checkAutomaticCollection,consumeAutomaticEvent } from './automatic-collection-events'
 import { prepareHostedSetup } from './hosted-setup'
-import { scanAssurance,assignAssurance,approveAssurance,recheckAssurance } from './assurance'
+import { investigateMove,scanAssurance,assignAssurance,approveAssurance,recheckAssurance } from './assurance'
 import { prepareInvoiceAutomation,decideInvoiceAutomation,runInvoiceAutomationDoor } from './invoice-automation'
 import { prepareShadowAppChange,confirmShadowAppChange,reconcileShadowAppChange,shadowInvoicePreview,appInvoicePreview } from './shadow-app'
 import { consumeStripeWebhookEvent } from './webhook-stripe'
@@ -119,8 +124,21 @@ import { prepareMetric,previewMetric,activateMetric } from './meter-definitions'
 
 type Handler = (env: Bindings, actor: Actor, input: Input, request: Request) => Promise<unknown>
 
+import { copySandboxCatalog } from './test-mode'
+import { createSandboxCustomer, advanceSandboxClock } from './test-clock'
+
 export const actions: Record<string, Handler> = {
+  'sandbox.catalog.copy': copySandboxCatalog,
+  'sandbox.customer.create': createSandboxCustomer,
+  'sandbox.clock.advance': advanceSandboxClock,
+  'sandbox.processor.bind': bindSandboxProcessor,
+  'sandbox.billing.reconcile': reconcileSandboxBilling,
   'sso.configure': configureSso,
+  'move.rollback.prepare': prepareMoveRollback,
+  'move.rollback.confirm': confirmMoveRollback,
+  'move.investigate': investigateMove,
+  'close.scan': scanCloseTieout,
+  'sso.link.approve': approveLink,
   'assurance.scan': scanAssurance,
   'assurance.assign': assignAssurance,
   'assurance.approve': approveAssurance,
@@ -142,6 +160,8 @@ export const actions: Record<string, Handler> = {
   'webhook.disable': disableWebhook,
   'webhook.replay': replayWebhook,
   'webhook.dispatch': dispatchWebhookDoor,
+  'transfer.instructions.prepare': prepareTransferInstructions,
+  'transfer.instructions.confirm': confirmTransferInstructions,
   'collection.customer.bind': bindNativeCollectionCustomer,
   'payment_link.approve': approvePaymentLink,
   'payment_link.activate': activatePaymentLink,
