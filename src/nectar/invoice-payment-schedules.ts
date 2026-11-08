@@ -6,7 +6,7 @@ import { canonical, commit, fingerprint, guard, insist, newId, one, parseJson, s
 import { localDate, requireDate } from './dates'
 import { setupOwner, setupOwnerFence } from './hosted-setup-basis'
 import type { Input } from './input'
-import { bindingFence, currentSource, eligibleGuard, partialAuthorityGuard, partialPaymentRow, partialPaymentView, reservationGuard, rowGuard, sourceForPartial } from './invoice-partial-payments'
+import { bindingFence, currentSource, eligibleGuard, partialAuthorityGuard, partialPaymentRow, partialPaymentView, reservationGuard, rowGuard, sourceForPartial, submittedSource } from './invoice-partial-payments'
 import { customerText } from './locale'
 import { savedCollectionMethod } from './payments/default-method'
 import { nativeSourceGuard } from './payments/source'
@@ -140,7 +140,7 @@ export async function executeInvoiceSchedule(env: Bindings, actor: Actor, input:
 }
 async function settle(env: Bindings, row: Row, stripe: StripeClient, intent: Row, session?: CustomerSession) {
   const expected = identity(row), intentRef = verifyIntent(intent, expected), basis = quote(row)
-  const source = await currentSource(env, row)
+  const source = await submittedSource(env, row)
   const guards = [rowGuard(env, row), reservationGuard(env, row), nativeSourceGuard(env, source), bindingFence(env, row), ...(session ? [customerSessionGuard(env, session)] : [])]
   const refusal = await refusedPayment(stripe, intent, expected)
   if (intent.status === 'processing') {

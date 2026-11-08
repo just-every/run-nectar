@@ -1009,6 +1009,12 @@ outcomes retain the reservation and permit reads only. Archive restoration
 restores financial history and unresolved reservations with no executable
 owner or customer authority. This slice saves no method and schedules no debit.
 
+After submission, editing the customer's billing address does not prevent
+read-only reconciliation of that original card or ACH payment. The original
+invoice, customer, processor binding, amount and reserved balance still have to
+match, with verified provider cash and atomic receipt/allocation recording.
+Before submission, changed customer revisions still require fresh preparation.
+
 
 ### Dated ACH remainder instructions
 

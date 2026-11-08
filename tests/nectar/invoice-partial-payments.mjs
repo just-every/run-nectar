@@ -77,6 +77,10 @@ export async function seedPartialInvoice(h,owner,customer,{issue=true,amount='10
   if(issue){await h.api('invoice.approve',owner,{invoice:draft.id,acknowledge:true});await h.api('invoice.finalise',owner,{invoice:draft.id,issue_date:issueDate})}
   return h.api(`invoices/${draft.id}`,owner)
 }
+async function editBillingAddress(api,customer) {
+  const c=await api(`customers/${customer}`)
+  await api('customer.update',{customer,revision:c.revision,name:c.name,billing_email:c.billing_email,address:'Synthetic updated billing address'})
+}
 export async function invoicePartialPaymentsFlow(h,owner,{interaction={},onState=async()=>{}}={}) {
   const api=(path,body,status)=>h.api(path,owner,body,status),instant=Date.parse('2026-10-29T12:00:00Z')
   await h.advanceClock(new Date(instant).toISOString())
@@ -102,6 +106,14 @@ export async function invoicePartialPaymentsFlow(h,owner,{interaction={},onState
   edge.setLive(true);await api('invoice.partial.prepare',{invoice:first.id,amount_cents:40000},409);edge.setLive(false)
   const prepared=await (interaction.prepare?.({invoice:first.id})??prepare(first.id))
   const competing=await prepare(first.id)
+  const listPath=`invoice-partial-payments?customer=${encodeURIComponent(customers[0])}`,paged=[]
+  let page=await api(`${listPath}&limit=1`)
+  for(let remaining=10;remaining>0;remaining--){
+    paged.push(...page.data.map(r=>r.id))
+    if(!page.next_cursor)break
+    page=await api(`${listPath}&limit=1&cursor=${encodeURIComponent(page.next_cursor)}`)
+  }
+  assert.deepEqual(paged,(await api(listPath)).map(r=>r.id),'Partial payment cursor pages cover each request once in list order')
   for(const changed of [{amount_cents:40001},{balance_cents:99999},{account_ref:'synthetic-nectar-other-account'},{customer:customers[1]},{invoice:second.id},{stripe_customer_ref:'synthetic-nectar-other-customer'}])await api('invoice.partial.confirm',{...prepared.confirm,...changed},409)
   await h.rejectAudit('invoice.partial.approve');await api('invoice.partial.confirm',prepared.confirm,500);await h.rejectAudit(null)
   assert.equal((await api('invoice-partial-payments')).find(r=>r.id===prepared.id).status,'prepared','Audit failure rolls back reservation and approval')
@@ -136,6 +148,7 @@ export async function invoicePartialPaymentsFlow(h,owner,{interaction={},onState
   await request('/portal/invoice-payment/check',session,{request:prepared.id},409)
   await onState({label:'awaiting-payment',invoice:first.id,session,request:approved})
   edge.complete(checkout)
+  await editBillingAddress(api,customers[0])
   edge.setAccount('synthetic-nectar-foreign-account')
   await request('/portal/invoice-payment/check',session,{request:prepared.id},409)
   edge.setAccount('synthetic-nectar-partial-account');edge.wrongProof(true)
@@ -175,6 +188,7 @@ export async function invoicePartialPaymentsFlow(h,owner,{interaction={},onState
   await request('/portal/invoice-payment/check',foreign,{request:spanish.id},409)
   await api('invoice.partial.revoke',{request:spanish.id},409)
   edge.complete(lostSession)
+  await editBillingAddress(api,customers[1])
   assert.equal((await api('invoice.partial.reconcile',{request:spanish.id})).status,'collected')
   assert.equal((await api(`invoices/${second.id}`)).balanceCents,60000)
   await onState({label:'captured-es',invoice:second.id,session:foreign,request:spanish})
@@ -349,6 +363,7 @@ export async function invoiceScheduledRemainderFlow(h,owner,{edge,secret,onState
     await api('invoice.partial.schedule.execute',executeBody(s),409)
     const intent=[...edge.intents.values()].find(i=>i.metadata.nectar_native_collection_request===s.preparation.id)
     assert.ok(intent);assert.equal(intent.amount,60000)
+    await editBillingAddress(api,s.customer)
     const pending=await api('invoice.partial.reconcile',{request:s.preparation.id});assert.equal(pending.status,'open')
     assert.equal((await api(`invoices/${s.invoice}`)).balanceCents,60000,'Pending ACH is not cash')
     await onState({label:`schedule-pending-${s.label}`,invoice:s.invoice,session:s.session,request:pending})

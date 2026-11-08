@@ -92,6 +92,25 @@ export async function currentSource(env: Bindings, row: Row) {
   insist(binding, 'invoice_partial_binding_changed', 409)
   return source
 }
+export async function submittedSource(env: Bindings, row: Row) {
+  const source = await sourceForPartial(env, row.invoice_id, row.id), basis = parseJson<Row>(row.basis_json, {})
+  // Submission already froze the issued invoice and reserved its balance.
+  // A later contact edit must not strand captured cash behind the approval's
+  // customer revision. Check the original payment identity and debt instead;
+  // nativeSourceGuard still fences the current source through the cash commit.
+  // All approval, acceptance and submission doors keep currentSource's strict
+  // revision hash. This path grants no new provider write or payment authority.
+  insist(row.claimed_at && await fingerprint(basis) === row.basis_hash
+    && basis.invoice === row.invoice_id && source.row.id === row.invoice_id && basis.number === source.row.number
+    && basis.customer === row.customer_id && source.row.customer_id === row.customer_id
+    && basis.amountCents === row.amount_cents && basis.balanceCents === row.balance_cents && source.row.balance_cents === row.balance_cents
+    && basis.account === row.account_ref && (!source.accountRef || source.accountRef === row.account_ref)
+    && basis.customerRef === row.customer_ref && basis.binding === row.binding_id && basis.bindingRevision === row.binding_revision,
+    'invoice_partial_source_changed', 409)
+  insist(await one(env, 'SELECT 1 FROM nc_stripe_customer_bindings WHERE id=? AND revision=? AND customer_id=? AND account_ref=? AND stripe_customer_ref=?',
+    row.binding_id, row.binding_revision, row.customer_id, row.account_ref, row.customer_ref), 'invoice_partial_binding_changed', 409)
+  return source
+}
 export function bindingFence(env: Bindings, row: Row) {
   return guard(env, 'invoice_partial_binding_changed', 'EXISTS(SELECT 1 FROM nc_stripe_customer_bindings WHERE id=? AND revision=? AND customer_id=? AND account_ref=? AND stripe_customer_ref=?)',
     row.binding_id, row.binding_revision, row.customer_id, row.account_ref, row.customer_ref)
@@ -230,7 +249,7 @@ export async function reconcilePartial(env: Bindings,row: Row,actor?: Actor,sess
   if(['collected','expired'].includes(row.status))return row
   insist(['claimed','open','uncertain'].includes(row.status),'invoice_partial_not_reconcilable',409)
   if(session)insist(row.customer_id===session.customer&&session.audience==='hosted','forbidden',403)
-  const source=await currentSource(env,row),selected=await stripeForAccount(env,row.account_ref),checkout=await findCheckout(selected.stripe,row)
+  const source=await submittedSource(env,row),selected=await stripeForAccount(env,row.account_ref),checkout=await findCheckout(selected.stripe,row)
   const guards=[rowGuard(env,row),reservationGuard(env,row),nativeSourceGuard(env,source),bindingFence(env,row),...(session?[customerSessionGuard(env,session)]:[])]
   if(returnHash)guards.push(guard(env,'invalid_customer_session','EXISTS(SELECT 1 FROM nc_invoice_partial_returns WHERE id=? AND request_id=? AND consumed_at IS NULL AND expires_at>?)',returnHash,row.id,clockInstant(env)))
   let proof:Row|null=null
