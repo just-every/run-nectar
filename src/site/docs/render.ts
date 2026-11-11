@@ -7,7 +7,14 @@ import { Marked } from 'marked'
 
 const escape = (value: string) => value.replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]!))
 const LANGUAGES: Record<string, string> = { sh: 'Shell', json: 'JSON', text: 'Text', csv: 'CSV' }
-const slugify = (text: string) => text.toLowerCase().replace(/<[^>]+>/g, '').replace(/&[a-z#0-9]+;/g, '').replace(/[^\p{L}\p{N}\s-]/gu, '').trim().replace(/\s+/g, '-')
+// Remove until nothing matches, so a removal cannot join its neighbours into a new match ("<<b>script>").
+function removeAll(text: string, pattern: RegExp): string {
+  let previous: string
+  do { previous = text; text = text.replace(pattern, '') } while (text !== previous)
+  return text
+}
+const stripTags = (html: string) => removeAll(html, /<[^>]+>/g)
+const slugify = (text: string) => removeAll(stripTags(text.toLowerCase()), /&[a-z#0-9]+;/g).replace(/[^\p{L}\p{N}\s-]/gu, '').trim().replace(/\s+/g, '-')
 
 export interface Rendered { html: string; contents: { id: string; text: string }[] }
 
@@ -20,7 +27,7 @@ export function renderMarkdown(markdown: string, file: string, slugs: Set<string
       heading({ tokens, depth }) {
         if (depth === 1) problems.push('has a level-1 heading; the title comes from docs/site.json')
         const inner = this.parser.parseInline(tokens), id = slugify(inner)
-        if (depth === 2) contents.push({ id, text: inner.replace(/<[^>]+>/g, '') })
+        if (depth === 2) contents.push({ id, text: stripTags(inner) })
         return `<h${depth} id="${id}">${inner}</h${depth}>\n`
       },
       code({ text, lang }) {
