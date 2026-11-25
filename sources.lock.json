@@ -6265,6 +6265,10 @@
       "sha256": "32117a5044f51df98e12c03585993f0a60364f655200ed368d92a68f82428d4f",
       "executable": false
     },
+    "tests/nectar/mail-off.mjs": {
+      "sha256": "8f251cd73468827ce59c967254746c3ee08e43b0c08e808c0e6c3245bd1e9551",
+      "executable": false
+    },
     "tests/nectar/metadata-restore.mjs": {
       "sha256": "43de0d1676134f945eb405556190bac60d5370857dd6e917f67fb51d27c1d1fd",
       "executable": false
