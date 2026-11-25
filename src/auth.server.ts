@@ -38,7 +38,7 @@ export interface Bindings {
  /** PORT-005: installation-held customer-session signer; excluded from archives. */
  PORTAL_KEY?: string
  SETUP_TOKEN?: string
- MAIL_PROVIDER?: 'development' | 'rer' | 'resend' | 'sendgrid' | 'cloudflare'
+ MAIL_PROVIDER?: 'none' | 'development' | 'rer' | 'resend' | 'sendgrid' | 'cloudflare'
  MAIL_FROM?: string
  /** Owner-authorized original Stripe invoice collection; runtime secret, never archived. */
  STRIPE_BILLING_SECRET?: string
@@ -57,7 +57,8 @@ export interface Bindings {
 export const runtimeBindings = (env: Bindings): Bindings => env.RER_DEV_ORIGIN && env.AUTH_LOCAL === 'true' ? { ...env, AUTH_ORIGIN: env.RER_DEV_ORIGIN } : env
 export const authConfig = (env: Bindings): AuthConfig => ({ dependencies: true, origin: env.AUTH_ORIGIN, local: env.AUTH_LOCAL === 'true', OWNER_EMAIL: env.OWNER_EMAIL, SESSION_SECRET: env.SESSION_SECRET, SETUP_TOKEN: env.SETUP_TOKEN, MAIL_FROM: env.MAIL_FROM, branding: { productName: branding.name, accentColor: branding.primaryColor, signInPath: '/signin', theme: theme.href } })
 export function operatorAuth(env: Bindings) {
- return createOperatorAuth({ db: env.DB, config: authConfig(env), mailSender: operatorMail(env), clientIp: request => request.headers.get('CF-Connecting-IP') ?? '', hooks: {
+ const mailOff = env.MAIL_PROVIDER === 'none'
+ const auth = createOperatorAuth({ db: env.DB, config: authConfig(env), mailSender: mailOff ? undefined : operatorMail(env), clientIp: request => request.headers.get('CF-Connecting-IP') ?? '', hooks: {
   async beforeMagicLink({ email }) {
    return !await env.DB.prepare('SELECT 1 FROM nc_scim_users WHERE email=?').bind(email).first()
   },
@@ -70,6 +71,14 @@ export function operatorAuth(env: Bindings) {
    if (!managed.active || !provider) throw new AuthError('provider_required', 403)
   },
  } })
+ if (!mailOff) return auth
+ return { ...auth, async requestMagicLink(...args: Parameters<typeof auth.requestMagicLink>) {
+  try { return await auth.requestMagicLink(...args) }
+  catch (error) {
+   if (error instanceof AuthError && error.code === 'mail_unavailable') throw new AuthError('mail_off', error.status)
+   throw error
+  }
+ } }
 }
 
 

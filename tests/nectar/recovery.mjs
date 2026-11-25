@@ -215,7 +215,7 @@ const { tmpdir } = await import('node:os')
 const { join } = await import('node:path')
 const { chromium } = await import('@playwright/test')
 const { readArchive } = await import('@runeditrun/rer/modules/portability')
-const { command, devKey, signIn } = await import('./cli.mjs')
+const { command, devKey, signIn, rerEntry } = await import('./cli.mjs')
 const { seedPortalRecords } = await import('./portal-sessions.mjs')
 const { applyPolicy } = await import('./policy-helper.mjs')
 const { populateErasureKinds } = await import('./erasure-record-kinds.mjs')
@@ -227,7 +227,7 @@ const evidence = process.env.NECTAR_EVIDENCE_DIR ?? join(root, '.evidence/portal
 await mkdir(evidence, { recursive: true })
 await access(join(root, '.dev.vars')).then(() => { throw new Error('A fresh unconfigured checkout is required') }, error => { if (error.code !== 'ENOENT') throw error })
 const socket = createServer(); await new Promise(resolve => socket.listen(0, '127.0.0.1', resolve)); const port = socket.address().port; await new Promise(resolve => socket.close(resolve))
-const origin = `http://127.0.0.1:${port}`, entry = import.meta.resolve('@runeditrun/rer/internal/global/rer.mjs').replace('file://', '')
+const origin = `http://127.0.0.1:${port}`, entry = rerEntry
 let server, cookie, browser, runtimeOrigin, completed = false
 const h = { origin, raw(path, { cookie: who, form, method = form ? 'POST' : 'GET', headers = {} } = {}) {
   const scheduled=path.startsWith('/cdn-cgi/local/scheduled')
@@ -431,7 +431,7 @@ const { access,appendFile,mkdir,mkdtemp,readFile,rm,writeFile } = await import('
 const { tmpdir } = await import('node:os')
 const { join } = await import('node:path')
 const { readArchive } = await import('@runeditrun/rer/modules/portability')
-const { command,devKey,signIn } = await import('./cli.mjs')
+const { command,devKey,signIn, rerEntry } = await import('./cli.mjs')
 const { file } = await import('./harness.mjs')
 const { applyPolicy } = await import('./policy-helper.mjs')
 const { seedPendingPortalChange } = await import('./portal-change-requests.mjs')
@@ -440,7 +440,7 @@ assert.equal(process.env.NECTAR_TEST_CHECKOUT,'1','Use only a disposable checkou
 const root=process.cwd(),scratch=await mkdtemp(join(tmpdir(),'nectar-erasure-archive-'))
 await access(join(root,'.dev.vars')).then(()=>{throw new Error('A fresh unconfigured checkout is required')},e=>{if(e.code!=='ENOENT')throw e})
 const socket=createServer();await new Promise(r=>socket.listen(0,'127.0.0.1',r));const port=socket.address().port;await new Promise(r=>socket.close(r))
-const origin=`http://127.0.0.1:${port}`,entry=import.meta.resolve('@runeditrun/rer/internal/global/rer.mjs').replace('file://','')
+const origin=`http://127.0.0.1:${port}`,entry = rerEntry
 let server,cookie,serverOutput=()=>''
 async function start(){
  const child=spawn(process.execPath,[entry,'dev','--foreground','--port',String(port)],{cwd:root,stdio:['ignore','pipe','pipe'],env:{...process.env,WRANGLER_SEND_METRICS:'false'}})
@@ -551,13 +551,13 @@ const { access, mkdir, mkdtemp, readFile, rm, writeFile } = await import('node:f
 const { tmpdir } = await import('node:os')
 const { join } = await import('node:path')
 const { readArchive } = await import('@runeditrun/rer/modules/portability')
-const { command, devKey, signIn } = await import('./cli.mjs')
+const { command, devKey, signIn, rerEntry } = await import('./cli.mjs')
 const { totp } = await import('./mfa.mjs')
 assert.equal(process.env.NECTAR_TEST_CHECKOUT, '1', 'Use only a disposable checkout')
 const root = process.cwd(), scratch = await mkdtemp(join(tmpdir(), 'nectar-mfa-archive-'))
 await access(join(root, '.dev.vars')).then(() => { throw new Error('A fresh unconfigured checkout is required') }, e => { if (e.code !== 'ENOENT') throw e })
 const socket = createServer(); await new Promise(r => socket.listen(0, '127.0.0.1', r)); const port = socket.address().port; await new Promise(r => socket.close(r))
-const origin = `http://127.0.0.1:${port}`, entry = import.meta.resolve('@runeditrun/rer/internal/global/rer.mjs').replace('file://', '')
+const origin = `http://127.0.0.1:${port}`, entry = rerEntry
 let server, cookie
 async function start() {
   const child = spawn(process.execPath, [entry, 'dev', '--foreground', '--port', String(port)], { cwd: root, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, WRANGLER_SEND_METRICS: 'false' } })

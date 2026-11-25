@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { chromium } from '@playwright/test'
 import { readArchive } from '@runeditrun/rer/modules/portability'
-import { command, devKey, signIn } from './cli.mjs'
+import { command, devKey, signIn, rerEntry } from './cli.mjs'
 import { seedPortalRecords } from './portal-sessions.mjs'
 import { applyPolicy } from './policy-helper.mjs'
 import { populateErasureKinds } from './erasure-record-kinds.mjs'
@@ -20,7 +20,7 @@ const evidence = process.env.NECTAR_EVIDENCE_DIR ?? join(root, '.evidence/portal
 await mkdir(evidence, { recursive: true })
 await access(join(root, '.dev.vars')).then(() => { throw new Error('A fresh unconfigured checkout is required') }, error => { if (error.code !== 'ENOENT') throw error })
 const socket = createServer(); await new Promise(resolve => socket.listen(0, '127.0.0.1', resolve)); const port = socket.address().port; await new Promise(resolve => socket.close(resolve))
-const origin = `http://127.0.0.1:${port}`, entry = import.meta.resolve('@runeditrun/rer/internal/global/rer.mjs').replace('file://', '')
+const origin = `http://127.0.0.1:${port}`, entry = rerEntry
 let server, cookie, browser, runtimeOrigin, completed = false
 const h = { origin, raw(path, { cookie: who, form, method = form ? 'POST' : 'GET', headers = {} } = {}) {
   const scheduled=path.startsWith('/cdn-cgi/local/scheduled')

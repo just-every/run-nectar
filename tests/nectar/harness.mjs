@@ -3,7 +3,7 @@
 // and pages, signed in through ordinary email links. Mail is the network edge:
 // the Worker sends through Resend's API, which this fake answers and records.
 import assert from 'node:assert/strict'
-import { randomBytes } from 'node:crypto'
+import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { readFile, readdir } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { httpListener } from './http-listener.mjs'
@@ -18,7 +18,10 @@ export async function harness({ assets = false, localTime, wallTime = false, hos
   const vars = { AUTH_LOCAL: 'true', OWNER_EMAIL: 'owner@example.test', SESSION_SECRET: secret(), SETUP_TOKEN: secret(), MFA_KEY: secret(), PORTAL_KEY: secret(), MAIL_PROVIDER: 'resend', MAIL_API_KEY: 'test-only-resend-key', MAIL_FROM: 'auth@example.test' }
   // Persistent journeys keep their private runtime keys in memory across
   // Worker restarts, as one installation does. Never log these settings.
-  Object.assign(vars,settings)
+  for (const [name, value] of Object.entries(settings)) {
+    if (value === undefined) delete vars[name]
+    else vars[name] = value
+  }
   if(localTime)vars.NECTAR_LOCAL_TIME=localTime
   if(stripeWebhookSecret)vars.STRIPE_WEBHOOK_SECRET=stripeWebhookSecret
   if(stripeSecret)vars.STRIPE_BILLING_SECRET=stripeSecret
@@ -113,6 +116,17 @@ export async function harness({ assets = false, localTime, wallTime = false, hos
     throw new Error(`no sign-in message for ${email}`)
   }
 
+  // Stand in for the Cloudflare D1 write made by `rer signin` with the deployment credentials.
+  async function mintOwnerSignIn() {
+    const token = secret(), now = Date.now()
+    const digest = createHash('sha256').update(`owner-signin\0${token}`).digest('hex')
+    const { meta } = await db.prepare(`INSERT INTO oa_owner_signins(id,token_hash,operator_id,operator_version,created_at,expires_at)
+      SELECT ?,?,id,version,?,? FROM oa_operators WHERE email=? AND role='owner' AND status='active'`)
+      .bind(randomUUID(), digest, now, now + 300_000, vars.OWNER_EMAIL).run()
+    assert.equal(meta.changes, 1, 'the claimed owner receives one grant')
+    return token
+  }
+
   // Storage fault injection only: business records still use public HTTP doors.
   async function rejectAudit(action) {
     await db.prepare('DROP TRIGGER IF EXISTS synthetic_nectar_audit_failure').run()
@@ -147,7 +161,7 @@ export async function harness({ assets = false, localTime, wallTime = false, hos
     await mf.ready
     db = await mf.getD1Database('DB')
   }
-  return { restart,configureMail,origin, vars, raw, api, submit, page, signIn, close, mails, mailResponses,advanceClock,rejectAudit,assertStorageExcludes, dispatch: async request => mf.dispatchFetch(request.url, { redirect: 'manual', method: request.method, headers: Object.fromEntries(request.headers), ...(!['GET','HEAD'].includes(request.method) ? { body: await request.arrayBuffer() } : {}) }) }
+  return { restart,configureMail,origin, vars, raw, api, submit, page, signIn, mintOwnerSignIn, close, mails, mailResponses,advanceClock,rejectAudit,assertStorageExcludes, dispatch: async request => mf.dispatchFetch(request.url, { redirect: 'manual', method: request.method, headers: Object.fromEntries(request.headers), ...(!['GET','HEAD'].includes(request.method) ? { body: await request.arrayBuffer() } : {}) }) }
 }
 
 export const file = (filename, content, type = 'application/octet-stream') => ({ filename, base64: Buffer.from(content).toString('base64'), type })

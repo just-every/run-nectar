@@ -45,10 +45,10 @@
         "SESSION_SECRET",
         "SETUP_TOKEN",
         "MFA_KEY",
-        "PORTAL_KEY",
-        "MAIL_API_KEY"
+        "PORTAL_KEY"
       ],
       "optionalSecretNames": [
+        "MAIL_API_KEY",
         "STRIPE_BILLING_SECRET",
         "QUICKBOOKS_ACCESS_TOKEN",
         "QUICKBOOKS_ENVIRONMENT",

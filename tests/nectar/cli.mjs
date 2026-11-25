@@ -1,11 +1,11 @@
 import { readFile } from 'node:fs/promises'
-import { fileURLToPath as __rerTestEntryPath } from 'node:url'
-
-const __rerTestEntry = __rerTestEntryPath(import.meta.resolve('@runeditrun/rer/internal/global/rer.mjs'));
-
-const __rerTestEntryArgs = args => args[1] === 'dev' && !args.some(arg => ['--foreground', '--detach', '--stop', '--help'].includes(arg)) ? [...args, '--foreground'] : args;
+import { fileURLToPath } from 'node:url'
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
+import rerPackage from '@runeditrun/rer/package.json' with { type: 'json' }
+
+export const rerEntry = fileURLToPath(new URL(rerPackage.bin.rer, import.meta.resolve('@runeditrun/rer/package.json')))
+const foregroundArgs = args => args[0] === 'dev' && !args.some(arg => ['--foreground', '--detach', '--stop', '--help'].includes(arg)) ? [...args, '--foreground'] : args
 
 // Drives the public `rer` commands of a checkout. Failures show
 // the command's output with dev keys and sign-in tokens redacted.
@@ -18,7 +18,7 @@ export async function command(root, args, { refuse = false } = {}) {
   let code, output
   // A just-closed local Worker can still be releasing the checkout when the next command starts.
   for (let attempt = 0; attempt < 10; attempt++) {
-    const child = spawn(process.execPath, __rerTestEntryArgs([__rerTestEntry, ...args]), { cwd: root, stdio: ['ignore', 'pipe', 'pipe'], env: env() })
+    const child = spawn(process.execPath, [rerEntry, ...foregroundArgs(args)], { cwd: root, stdio: ['ignore', 'pipe', 'pipe'], env: env() })
     output = ''
     for (const stream of [child.stdout, child.stderr]) stream.on('data', chunk => { output += chunk })
     code = await new Promise(resolve => child.once('exit', resolve))
@@ -33,7 +33,7 @@ export async function command(root, args, { refuse = false } = {}) {
 
 /** Starts a managed dev or preview server and waits for RER_READY. */
 export async function serving(root, verb, port, extra = []) {
-  const child = spawn(process.execPath, __rerTestEntryArgs([__rerTestEntry, verb, '--port', String(port), ...extra]), { cwd: root, stdio: ['ignore', 'pipe', 'pipe'], env: env() })
+  const child = spawn(process.execPath, [rerEntry, ...foregroundArgs([verb, '--port', String(port), ...extra])], { cwd: root, stdio: ['ignore', 'pipe', 'pipe'], env: env() })
   let output = ''
   for (const stream of [child.stdout, child.stderr]) stream.on('data', chunk => { output += chunk })
   for (let attempt = 0; attempt < 1200; attempt++) {

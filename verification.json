@@ -10,6 +10,7 @@
         "pnpm run check",
         "pnpm run typecheck",
         "pnpm run test:runtime",
+        "node tests/nectar/mail-off.mjs",
         "pnpm run build --site",
         "node tests/nectar/payment-retries-browser.mjs",
         "node tests/nectar/payment-retries-browser.mjs churn",

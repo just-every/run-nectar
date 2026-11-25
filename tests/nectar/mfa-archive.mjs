@@ -10,13 +10,13 @@ import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promise
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { readArchive } from '@runeditrun/rer/modules/portability'
-import { command, devKey, signIn } from './cli.mjs'
+import { command, devKey, signIn, rerEntry } from './cli.mjs'
 import { totp } from './mfa.mjs'
 assert.equal(process.env.NECTAR_TEST_CHECKOUT, '1', 'Use only a disposable checkout')
 const root = process.cwd(), scratch = await mkdtemp(join(tmpdir(), 'nectar-mfa-archive-'))
 await access(join(root, '.dev.vars')).then(() => { throw new Error('A fresh unconfigured checkout is required') }, e => { if (e.code !== 'ENOENT') throw e })
 const socket = createServer(); await new Promise(r => socket.listen(0, '127.0.0.1', r)); const port = socket.address().port; await new Promise(r => socket.close(r))
-const origin = `http://127.0.0.1:${port}`, entry = import.meta.resolve('@runeditrun/rer/internal/global/rer.mjs').replace('file://', '')
+const origin = `http://127.0.0.1:${port}`, entry = rerEntry
 let server, cookie
 async function start() {
   const child = spawn(process.execPath, [entry, 'dev', '--foreground', '--port', String(port)], { cwd: root, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, WRANGLER_SEND_METRICS: 'false' } })

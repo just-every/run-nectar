@@ -12,6 +12,10 @@ preserving product checks, package pins and the stable `verify` aggregate.
 | Release tag beginning with `v` | Every push and nightly shard, always |
 | Nightly journeys dispatch | Every push and nightly shard |
 
+To include the Stripe history sandbox on a manual Nightly acceptance run,
+enable `stripe_sandbox` and supply the repository's `STRIPE_US_TEST_SECRET_KEY`
+GitHub Actions secret. Scheduled and release-tag acceptance run without this key.
+
 Verify retains unrestricted branch pushes and pull requests. Main's concurrency
 key contains its run ID, so main runs cannot replace one another. Other refs
 cancel superseded runs. Event names separate PR planning from its branch push
