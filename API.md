@@ -1137,18 +1137,22 @@ actual start and finish instants, status, sanitized error category and its
 ordered jobs. Timestamps are Unix milliseconds. Repeated or concurrent
 invocations of the same scheduled instant retain separate identities.
 
-A job is `not_started` until the dispatcher reaches it, `running` during its
-call, then `completed` or `failed`. A thrown failure stops the same downstream
-work as before; those job rows retain null start and finish times. A returned
+Every invocation is recorded; its jobs are recorded when they matter. A job
+appears when it changed something (it wrote a business audit event), failed, or
+ran longer than two seconds, so a quiet minute is one invocation with no jobs.
+A recorded job is `running` during its call, then `completed` or `failed`. A
+thrown failure stops the same downstream work as before; the jobs after it are
+recorded as `not_started` with null start and finish times. A returned
 `status: failed` is recorded without changing the job's existing continuation
 behavior. Completion means that invocation returned normally: handled
 per-item payment, delivery or synchronization failures remain in their
 existing source records and are not a claim of settlement or delivery.
+Invocations older than seven days are removed, a hundred at most each hour.
 
-The dispatcher renews a heartbeat each minute and between jobs. On a later
+The dispatcher renews a heartbeat each minute. On a later
 normal tick, an invocation with no heartbeat for thirty minutes becomes
-`interrupted`; its running job becomes interrupted and downstream jobs stay
-unstarted. This reports an expired execution lease, including a stopped Worker,
+`interrupted`; its recorded running job becomes interrupted and downstream jobs
+stay unstarted. This reports an expired execution lease, including a stopped Worker,
 rather than claiming to distinguish every cause of a lost heartbeat. Neither
 this classification nor reading history retries any work. Ordinary future
 ticks retain each product job's existing eligibility, authority and once-only

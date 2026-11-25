@@ -85,8 +85,8 @@ export async function jobRunsFlow(h, owner) {
   assert.equal((await tick()).status, 200)
   let [first] = await read()
   assert.equal(first.status, 'completed')
-  assert.deepEqual(first.jobs.map(job => job.job), ['subscription-states-before', 'webhooks', 'payment-link-expiry', 'automatic-collections', 'payment-retries', 'invoice-automation', 'subscription-states-after-invoices'])
-  assert.ok(first.jobs.every(job => job.status === 'completed' && job.started_at === instant && job.finished_at === instant && job.error_code === null))
+  // A quiet minute is one dispatch row: jobs that changed nothing leave no execution rows.
+  assert.deepEqual(first.jobs, [])
   assert.equal(first.cron, '* * * * *'); assert.equal(first.scheduled_at, instant)
   assert.equal(JSON.stringify([await api('runs'), await api('payments'), await api('audit'), h.mails.length]), before)
   assert.equal(writes(), 0)
@@ -103,7 +103,7 @@ export async function jobRunsFlow(h, owner) {
     assert.deepEqual(await api('assurance-runs'), [])
   } finally { await h.rejectAudit() }
   assert.equal((await tick('0 14 * * *')).status, 200)
-  assert.equal((await read())[0].jobs.length, 23)
+  assert.deepEqual((await read())[0].jobs.map(job => [job.job, job.status]), [['assurance', 'completed']], 'only the job that changed something is recorded')
   assert.equal((await api('assurance-runs'))[0].status, 'completed')
 
   await h.rejectAudit('assurance.scan')
@@ -112,7 +112,7 @@ export async function jobRunsFlow(h, owner) {
     const [reported] = await read()
     assert.equal(reported.status, 'failed'); assert.equal(reported.error_code, 'job_reported_failure')
     assert.equal(reported.jobs.find(job => job.job === 'assurance').status, 'failed')
-    assert.equal(reported.jobs.at(-1).status, 'completed')
+    assert.ok(reported.jobs.every(job => job.status !== 'not_started'), 'the run continued past the reported failure to its end')
   } finally { await h.rejectAudit() }
 
   const customer = (await api('customer.create', { external_id: 'synthetic-nectar-operations-1', name: 'Synthetic private customer', billing_email: email })).id
@@ -144,7 +144,14 @@ export async function jobRunsFlow(h, owner) {
     }
     const scheduled = tick().catch(() => null)
     await Promise.race([active.entered.promise, new Promise((_, reject) => setTimeout(() => reject(new Error('collection edge did not pause')), 15000))])
-    const [running] = await read()
+    // A job that outlasts the dispatcher's slow-job mark becomes visible as running.
+    let running
+    for (let attempts = 0; ; attempts++) {
+      [running] = await read()
+      if (running.jobs.some(job => job.job === 'automatic-collections')) break
+      assert.ok(attempts < 150, 'a slow job is recorded as running')
+      await new Promise(resolve => setTimeout(resolve, 100))
+    }
     assert.equal(running.status, 'running')
     assert.equal(running.jobs.find(job => job.job === 'automatic-collections').status, 'running')
     assert.ok(running.jobs.slice(4).every(job => job.status === 'not_started'))

@@ -7,12 +7,13 @@ import { randomBytes } from 'node:crypto'
 import { readFile, readdir } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { httpListener } from './http-listener.mjs'
+import { meterModule } from './d1-meter.mjs'
 
 // Wrangler's own Miniflare and SQL splitter, so the runtime matches `rer build`.
 const wrangler = createRequire(import.meta.url)('wrangler')
 const { Miniflare, convertV4MiniflareOptions } = createRequire(createRequire(import.meta.url).resolve('wrangler'))('miniflare')
 
-export async function harness({ assets = false, localTime, wallTime = false, hostname = '127.0.0.1', stripeFetch, stripeSecret, stripeSecondarySecret, stripeWebhookSecret, quickbooksFetch, webhookFetch, persistence, databaseId='nectar', applyMigrations=true, settings={} } = {}) {
+export async function harness({ assets = false, localTime, wallTime = false, hostname = '127.0.0.1', stripeFetch, stripeSecret, stripeSecondarySecret, stripeWebhookSecret, quickbooksFetch, webhookFetch, persistence, databaseId='nectar', applyMigrations=true, settings={}, meter=false } = {}) {
   assert.ok(!wallTime || localTime===undefined&&!('NECTAR_LOCAL_TIME' in settings),'Wall-time journeys refuse a simulated clock')
   const secret = () => randomBytes(32).toString('base64url')
   const vars = { AUTH_LOCAL: 'true', OWNER_EMAIL: 'owner@example.test', SESSION_SECRET: secret(), SETUP_TOKEN: secret(), MFA_KEY: secret(), PORTAL_KEY: secret(), MAIL_PROVIDER: 'resend', MAIL_API_KEY: 'test-only-resend-key', MAIL_FROM: 'auth@example.test' }
@@ -46,7 +47,7 @@ export async function harness({ assets = false, localTime, wallTime = false, hos
   vars.AUTH_ORIGIN = origin
   const options = {
     // Omitting port lets workerd bind a fresh port 0 on every runtime start.
-    cf: false, unsafeTriggerHandlers: true, host: '127.0.0.1', modulesRoot: 'dist/server', modules: ['index.js', ...chunks].map(path => ({ type: 'ESModule', path: `dist/server/${path}` })), compatibilityDate: '2026-09-08', compatibilityFlags: ['nodejs_compat'],
+    cf: false, unsafeTriggerHandlers: true, host: '127.0.0.1', modulesRoot: 'dist/server', modules: [...(meter ? [{ type: 'ESModule', path: 'dist/server/d1-meter-entry.mjs', contents: meterModule('index.js') }] : []), ...['index.js', ...chunks].map(path => ({ type: 'ESModule', path: `dist/server/${path}` }))], compatibilityDate: '2026-09-08', compatibilityFlags: ['nodejs_compat'],
     d1Databases: { DB: databaseId }, ...(persistence?{resourcePersistencePath:persistence}:{}), bindings: vars, outboundService,
     ...(assets ? { assets: { directory: 'dist/client', binding: 'ASSETS', run_worker_first: true, routerConfig: { has_user_worker: true, invoke_user_worker_ahead_of_assets: true } } } : {}),
   }
@@ -147,7 +148,7 @@ export async function harness({ assets = false, localTime, wallTime = false, hos
     await mf.ready
     db = await mf.getD1Database('DB')
   }
-  return { restart,configureMail,origin, vars, raw, api, submit, page, signIn, close, mails, mailResponses,advanceClock,rejectAudit,assertStorageExcludes, dispatch: async request => mf.dispatchFetch(request.url, { redirect: 'manual', method: request.method, headers: Object.fromEntries(request.headers), ...(!['GET','HEAD'].includes(request.method) ? { body: await request.arrayBuffer() } : {}) }) }
+  return { restart,configureMail,origin, vars, raw, get db() { return db }, api, submit, page, signIn, close, mails, mailResponses,advanceClock,rejectAudit,assertStorageExcludes, dispatch: async request => mf.dispatchFetch(request.url, { redirect: 'manual', method: request.method, headers: Object.fromEntries(request.headers), ...(!['GET','HEAD'].includes(request.method) ? { body: await request.arrayBuffer() } : {}) }) }
 }
 
 export const file = (filename, content, type = 'application/octet-stream') => ({ filename, base64: Buffer.from(content).toString('base64'), type })

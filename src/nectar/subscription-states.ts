@@ -6,6 +6,7 @@ import { requireBusiness } from './business'
 import { clockInstant } from './clock'
 import { today, zonedStart } from './dates'
 import { entitlementState } from './entitlement-state'
+import { ACTIVITY_SWEEP_MS, changeMarker, sweepDue } from './observation-gate'
 
 export async function subscriptionState(env: Bindings, sub: Row, day: string) {
   const input = await entitlementState(env, sub, day)
@@ -22,7 +23,17 @@ export async function observeSubscriptionStates(env: Bindings) {
   const business = await requireBusiness(env).catch(() => null)
   if (!business) return
   const at = clockInstant(env)
-  const cursor = (await one(env, 'SELECT subscription_id FROM nc_subscription_state_cursor WHERE singleton=1'))!.subscription_id
+  const gate = (await one(env, 'SELECT subscription_id,clean_at,clean_marker,sweep_at,sweep_marker FROM nc_subscription_state_cursor WHERE singleton=1'))!
+  const cursor = gate.subscription_id as string
+  let sweepAt = gate.sweep_at as number | null, sweepMarker = gate.sweep_marker as string | null
+  if (cursor === '') {
+    // Source writes record their own state in their transaction. A new sweep is
+    // for dated boundaries (a new local day), the hourly safety net, and
+    // recorded activity at most every few minutes.
+    const marker = await changeMarker(env)
+    if (!sweepDue(at, gate.clean_at, business.timezone) && (marker === gate.clean_marker || at - gate.clean_at < ACTIVITY_SWEEP_MS)) return
+    sweepAt = at; sweepMarker = marker
+  }
   const rows = await all(env, `SELECT s.* FROM nc_subscriptions s JOIN nc_customers c ON c.id=s.customer_id
     WHERE s.billing_mode='live' AND c.status='active' AND c.erased_at IS NULL AND s.id>? ORDER BY s.id LIMIT 25`, cursor)
   for (const sub of rows) {
@@ -71,10 +82,12 @@ export async function observeSubscriptionStates(env: Bindings) {
       } catch (error) {
         if (!(error instanceof NectarError && error.code === 'stale')) throw error
         // Keep the page pending so a source race is retried on the next tick.
+        await env.DB.prepare('UPDATE nc_subscription_state_cursor SET clean_at=NULL WHERE singleton=1').run()
         return
       }
     }
   }
-  await env.DB.prepare('UPDATE nc_subscription_state_cursor SET subscription_id=? WHERE singleton=1 AND subscription_id=?')
-    .bind(rows.length === 25 ? rows.at(-1)!.id : '', cursor).run()
+  const more = rows.length === 25
+  await env.DB.prepare(`UPDATE nc_subscription_state_cursor SET subscription_id=?,sweep_at=?,sweep_marker=?,clean_at=${more ? 'clean_at' : '?'},clean_marker=${more ? 'clean_marker' : '?'} WHERE singleton=1 AND subscription_id=?`)
+    .bind(...[more ? rows.at(-1)!.id : '', sweepAt, sweepMarker, ...(more ? [] : [sweepAt, sweepMarker]), cursor]).run()
 }
